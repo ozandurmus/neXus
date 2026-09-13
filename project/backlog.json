@@ -648,6 +648,33 @@
       "priority": "P0",
       "target": "CP_AND_VSX_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for discovery only",
       "note": ""
+    },
+    {
+      "id": "c7_c2_contract_shape_guard",
+      "category": "governance",
+      "title": "Contract-shape guard for C7 §5.3 and C2 §6 admission batteries",
+      "status": "planned",
+      "priority": "P1",
+      "target": "successor to the test PR #180 carried",
+      "note": ""
+    },
+    {
+      "id": "ui2_networkpolicy_in_cluster_db_reach",
+      "category": "Deployment / Security",
+      "title": "NetworkPolicy restricting in-cluster reach to PostgreSQL",
+      "status": "planned",
+      "priority": "P1",
+      "target": "UI2_0_B1_01C successor",
+      "note": ""
+    },
+    {
+      "id": "relay_id_reuse_when_record_uncommitted",
+      "category": "governance",
+      "title": "local_relay _next_id reissues an id whose JSON was never committed",
+      "status": "planned",
+      "priority": "P1",
+      "target": "GOV.ORCH successor or scripts/local_relay.py",
+      "note": ""
     }
   ]
 }

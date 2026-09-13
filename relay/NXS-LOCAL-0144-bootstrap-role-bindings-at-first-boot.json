@@ -1,0 +1,174 @@
+{
+  "created_at": "2026-09-13T12:54:11Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Immediately after first boot, with no further step, nexusadmin resolves full administrative capability. THE DECISIVE TEST -- observed to FAIL against the currently merged code before this change.",
+          "AC-2 Immediately after first boot, claudeadmin resolves role:viewer and nothing else, and a mutation path is refused for it.",
+          "AC-3 Both bindings are created in the same first-boot transaction as the identities.",
+          "AC-4 Each binding produces an audit row under the reserved bootstrap actor, carrying no credential material.",
+          "AC-5 A restart creates no duplicate identity and no duplicate or altered binding.",
+          "AC-6 The existing CLI bootstrap paths still work and still have their tests.",
+          "AC-7 No role name outside C3 section 5's vocabulary appears anywhere in the diff.",
+          "AC-8 ./ui2/gradlew -p ui2 build -x :integration-tests:test, :service:test and :architecture-tests:test pass; module listing still eleven.",
+          "AC-9 The repository privacy gate reports zero findings.",
+          "AC-10 No file under panorama/, configuration/, utils/, scripts/ or docs/design/ is modified."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3B_BOOTSTRAP_IDENTITIES_AND_ROLES.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-13, BOOT-5 corrected the same day. Section 2's BOOT-5, BOOT-5a and BOOT-5b are the specification; section 4 items 5 and 6 are the acceptance.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test and :service:test first and record the counts.",
+          "what_exists": "FirstBootIdentitySeedingRunner already implements BOOT-1 to BOOT-4 and is merged: it seeds nexusadmin and claudeadmin when local_credentials holds no rows, computes verifiers at boot, zeroes the password arrays, and audits each creation under the reserved bootstrap actor. What it does NOT do is create role bindings, which is what this movement adds.",
+          "why_it_changed": "BOOT-5 originally said seeding creates identities only, leaving a deployed product able to authenticate and unable to act until a human ran a CLI command. That was an over-reading of C3's Bootstrap clause, which forbids an HTTP path and requires a deployment-controlled action -- both of which first-boot seeding satisfies. A default administrator that cannot administer is not one."
+        },
+        "context_not_loaded": [
+          "panorama/ and configuration/ collectors",
+          "docs/history/**",
+          "Check Point and Palo Alto contracts",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/bootstrap-role-bindings-at-first-boot"
+        },
+        "invariants": [
+          "A freshly deployed product is usable by nexusadmin with no further step.",
+          "claudeadmin can read and cannot mutate.",
+          "A restart neither reseeds an identity nor re-creates or overwrites a binding.",
+          "No role name is invented; C3 section 5's vocabulary is used as it stands.",
+          "No HTTP path creates a binding.",
+          "No credential material reaches an audit row, a log line or an exception message.",
+          "No FROZEN contract is edited and no existing migration is changed."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make the freshly deployed product usable by its default administrator, per docs/design/UI2_0_C3B_BOOTSTRAP_IDENTITIES_AND_ROLES.md BOOT-5/BOOT-5a/BOOT-5b as corrected 2026-09-13: first-boot seeding creates the two bootstrap role bindings in the same transaction as the identities, so nexusadmin can administer and claudeadmin can read with no further deployment step.",
+        "output_contract": [
+          "A product whose default administrator can administer it the moment it is deployed, and whose automation identity can read and not mutate.",
+          "A test proving that, observed failing before the change.",
+          "SESSION_CLOSE naming exactly which roles were bound for nexusadmin and why that set is 'full', and the test counts before and after."
+        ],
+        "recommended_reasoning": {
+          "reason": "Small diff on an authorization boundary. The judgment is which existing roles constitute full administrative capability, and the failure modes -- an invented role, an over-granted automation identity, a restart that re-creates bindings -- are all quiet ones.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type and method carries a short comment naming the contract clause it implements.",
+          "Write the acceptance-item-6 test FIRST and confirm it fails against the currently merged code, then implement. Report both observations in the SESSION_CLOSE.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'.",
+          "Do not run the full Python pytest suite; it creates untracked data/ and logs/ directories the privacy gate flags.",
+          "The ui2 build must keep exactly eleven Gradle subprojects.",
+          "Commit early and often. Do not merge to main.",
+          "If the contract does not answer something, raise one RELAY_QUESTION rather than deciding it."
+        ],
+        "risks": [
+          "Inventing a 'superadmin' role. C3 has none and ROLE-1 means the existing roles that together give full capability.",
+          "Granting claudeadmin more than role:viewer because the seeding code makes it easy.",
+          "Breaking BOOT-2: a restart that re-creates a binding is the same class of defect as one that resets a password.",
+          "Adding an HTTP path that creates a binding, which C3 forbids.",
+          "Writing the test after the implementation, so it has never been seen to fail.",
+          "Breaking the existing CLI bootstrap paths while adding the automatic one."
+        ],
+        "scope": {
+          "in": [
+            "BOOT-5a: in the SAME first-boot transaction that creates the identities, create their role bindings -- nexusadmin with full administrative capability per ROLE-1, claudeadmin with role:viewer and nothing else per ROLE-3.",
+            "Use the role vocabulary UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md section 5 already defines. Do not invent a role name, and do not invent a 'superadmin' -- C3 has none. Full administrative capability means the existing roles that together give it; state in the SESSION_CLOSE exactly which ones you bound and why that set is 'full'.",
+            "A local identity's role binding references itself rather than a directory group, per C3A section 7.1 and the existing bootstrap-security-admin CLI path. Follow whatever that path already does rather than inventing a second shape.",
+            "BOOT-4 extends to the bindings: each binding row is audited through C1 section 3.5's existing trigger under the same reserved bootstrap actor marker the identity creation uses.",
+            "BOOT-2's idempotence must continue to hold and must now cover bindings as well: if local_credentials holds any row the runner still does nothing at all, so a restart neither reseeds an identity nor re-creates or overwrites a binding.",
+            "BOOT-5b: the existing deployment-controlled CLI paths keep working unchanged, and remain the way a binding is created or changed outside first boot.",
+            "Acceptance item 5 and 6 tests: assert that immediately after first boot, with NO further step, nexusadmin resolves full administrative capability and claudeadmin resolves role:viewer only. This is the test that proves the product is usable on deployment; write it first and confirm it fails against the current merged code before implementing.",
+            "A test that a restart does not duplicate or alter a binding."
+          ],
+          "out": [
+            "Changing C3's self-grant refusal, its audit requirement, or its prohibition on browser-created bindings. Every binding after the two bootstrap ones still goes through C3's normal authorized path.",
+            "Adding, renaming or inventing any role. C3 section 5 owns the vocabulary.",
+            "Any HTTP endpoint that creates a binding.",
+            "Changing credential storage, login, lockout, password change, or the constant-cost verification -- all frozen and implemented.",
+            "Editing any existing Flyway migration, or any FROZEN contract.",
+            "Any user-management screen, any LDAP/RADIUS/TACACS work, any device contact, any discovery work.",
+            "Anything under panorama/, configuration/, utils/ or scripts/."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T12:54:11Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0144",
+  "movement": "bootstrap_role_bindings_at_first_boot",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_C3B_BOOTSTRAP_IDENTITIES_AND_ROLES.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/FirstBootIdentitySeedingRunner.java",
+    "ui2/cli/src/main/java/com/securityexpert/nexus/ui2/cli/CliEntryPoint.java"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-13T12:54:11Z"
+}
