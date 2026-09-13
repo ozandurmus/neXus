@@ -39,17 +39,17 @@ class ManagementPlaneEnumerationAdapterTest {
     private static final String TRUST_RULE_REF = "fixture-trust-rule-ref";
 
     private static final String DOMAIN_A_GATEWAY_QUERY =
-            "mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "'; cpmiquerybin object \"\" network_objects \"type='gateway'\"";
+            "mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "'&& cpmiquerybin object \"\" network_objects \"type='gateway'\"";
     private static final String DOMAIN_A_CLUSTER_QUERY =
-            "mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "'; cpmiquerybin object \"\" network_objects \"type='gateway_cluster'\"";
+            "mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "'&& cpmiquerybin object \"\" network_objects \"type='gateway_cluster'\"";
     private static final String DOMAIN_A_MEMBER_QUERY =
-            "mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "'; cpmiquerybin object \"\" network_objects \"type='cluster_member'\"";
+            "mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "'&& cpmiquerybin object \"\" network_objects \"type='cluster_member'\"";
     private static final String DOMAIN_B_GATEWAY_QUERY =
-            "mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "'; cpmiquerybin object \"\" network_objects \"type='gateway'\"";
+            "mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "'&& cpmiquerybin object \"\" network_objects \"type='gateway'\"";
     private static final String DOMAIN_B_CLUSTER_QUERY =
-            "mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "'; cpmiquerybin object \"\" network_objects \"type='gateway_cluster'\"";
+            "mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "'&& cpmiquerybin object \"\" network_objects \"type='gateway_cluster'\"";
     private static final String DOMAIN_B_MEMBER_QUERY =
-            "mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "'; cpmiquerybin object \"\" network_objects \"type='cluster_member'\"";
+            "mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "'&& cpmiquerybin object \"\" network_objects \"type='cluster_member'\"";
 
     private static final SshCredentialResolver ALWAYS_RESOLVES =
             ref -> new SshCredentialMaterial("fixture-user", "fixture-password".toCharArray(), null);
