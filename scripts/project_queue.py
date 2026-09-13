@@ -636,13 +636,51 @@ def _history_heading_body(title: str, status: str, target: str) -> str:
     return f"# {title}\n\nstatus: {status} · target: {target}\n"
 
 
+def _set_history_status_line(text: str, status: str) -> str:
+    """Update the `status: ... · target: ...` heading line in place, leaving
+    everything else in the file untouched. GOV.ORCH.11 N-4: a field is not
+    narrative, so updating it is not a reduction."""
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if line.startswith("status: "):
+            rest = line.split(" · ", 1)
+            target_part = rest[1] if len(rest) > 1 else None
+            lines[i] = f"status: {status}" + (f" · {target_part}" if target_part else "")
+            break
+    return "\n".join(lines)
+
+
 def _move_note_to_history(item: dict) -> None:
     """Move `item['note']` verbatim to docs/history/backlog/<id>.md. Does
-    not touch item['note'] itself -- the caller replaces it afterward."""
+    not touch item['note'] itself -- the caller replaces it afterward.
+
+    GOV.ORCH.11 N-2/N-3/N-4: this write is append-only, in the same shape
+    `_migrate_note_to_history` already uses. A note that is merely the
+    pointer this call is about to leave in item['note'] carries no
+    information about itself and is never written into the file. When the
+    file already exists, only its status line is updated in place."""
     HISTORY_BACKLOG_DIR.mkdir(parents=True, exist_ok=True)
     path = HISTORY_BACKLOG_DIR / f"{item['id']}.md"
-    header = _history_heading_body(item.get("title", ""), item.get("status", ""), item.get("target", ""))
-    note = redact_narrative(item.get("note") or "")
+    status = item.get("status", "")
+    note_raw = item.get("note") or ""
+    pointer = f"see docs/history/backlog/{item['id']}.md"
+    is_pointer = note_raw == pointer
+    dated = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    if path.exists():
+        existing = _set_history_status_line(path.read_text(encoding="utf-8"), status)
+        if is_pointer:
+            path.write_text(existing, encoding="utf-8")
+            return
+        note = redact_narrative(note_raw)
+        path.write_text(existing.rstrip("\n") + f"\n\n## {dated}\n\n" + note + "\n", encoding="utf-8")
+        return
+
+    header = _history_heading_body(item.get("title", ""), status, item.get("target", ""))
+    if is_pointer:
+        path.write_text(header + "\n", encoding="utf-8")
+        return
+    note = redact_narrative(note_raw)
     path.write_text(header + "\n" + note + "\n", encoding="utf-8")
 
 
