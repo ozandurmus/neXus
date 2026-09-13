@@ -29,11 +29,12 @@ environment facts in `docs/reference/COPILOT_OPERATING_MODEL.md`.
 
 ## 3. Exact next action
 
-**Dispatch the import/enrollment contract** (record `13F` §7): candidate
-row → `devices`/`endpoints`, cluster and virtual system as `C4` §4.2
-modifiers, first contact under `13F` §2's warn-and-continue rule. Meanwhile the Product Owner runs `DiscoveryRunnerMain` against the live
-management server once the DRAFT command-gate document is approved; the Palo
-Alto transport follows.
+**Approve the two DRAFT gate documents, then run both discovery runners
+live** (`DiscoveryRunnerMain` against the MDS, `PanDiscoveryRunnerMain`
+against Panorama; counts and shapes only) and correct the `UNVERIFIED`
+bindings from what they report. Then the Product Owner's freeze review of
+`DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md`, and the per-vendor collection
+measurement briefs under `13F` §6.
 
 ## 4. Test delta
 

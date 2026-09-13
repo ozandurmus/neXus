@@ -1,0 +1,265 @@
+{
+  "created_at": "2026-09-13T14:44:05Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Every per-domain query the adapter sends carries the domain context switch and the query on ONE command line; no context switch is ever sent alone. THE DECISIVE TEST -- observed failing against the current adapter first.",
+          "AC-2 A fixture run dials exactly one host, issues one domain enumeration, exactly three object queries per domain, and two connection-table reads; the request count matches check 17's formula for a two-domain fixture.",
+          "AC-3 The parser turns a fixture in the object tree format into RawCandidateInput rows with the stable identifier from AdminInfo/chkpf_uid, a missing key as absent and an empty value as empty; a fixture object with an empty own address and one with no management address both parse without shifting any other field.",
+          "AC-4 Every binding entry names a measured attribute from the record; VIRT_HOST/VIRT_SYSTEM are scoped per object type; SESSION_IDENTIFIER is gone; no production source outside ManagementApiFieldBinding contains a bound literal; every entry is UNVERIFIED.",
+          "AC-5 The connection-table reduction works on fixture netstat text: port derived from established rows, per-address reduction, join against candidate management addresses, CS-3 outcomes; no numeric port literal in production sources.",
+          "AC-6 The gate document lists exactly the measured commands with all ten items each, cites the record, and stays DRAFT pending Product Owner approval; the closed-set test mirrors it.",
+          "AC-7 Eleven-module build, :platform-core:test, :worker:test, :architecture-tests:test green; privacy gate PASS; the runner's output over a fixture contains none of the fixture's names, addresses, domains or identifiers."
+        ],
+        "baseline": {
+          "authority": "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-13: section 3 T-1 to T-7, section 6.4 FB-1 to FB-3, section 7.4 CS-1 to CS-6c are the rules; the contract is deliberately tool-agnostic. docs/design/PO_DECISION_RECORD_2026_09_13_CP_DISCOVERY_COLLECTION_GATE.md (FROZEN) section 2: four methods -- one session, domain enumeration, read-only object queries, reading the management server's own connection table. docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md (FROZEN) SB-11: a shell session to the management server. The measurement record docs/design/CP_DISCOVERY_MEASURED_METHOD_AND_COMMAND_HANDOVER_2026_09_13.md is DRAFT and NOT authority -- it is the evidence the Product Owner measured and directs this movement to follow; where it and the contract seem to disagree, the contract wins and you raise a RELAY_QUESTION.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test first and record the platform-core, worker and architecture-tests counts before you change anything.",
+          "what_exists": "Merged transport (PR #241): ManagementShellCommands (closed mgmt_cli set), MinimalJson, ManagementPlaneEnumerationAdapter (one session, sequential, pagination, T-7), ConnectionTableRow/ConnectionTableReducer (CS-3/CS-6a/CS-6b), DiscoveryRunReport, DiscoveryRunnerMain, EnvironmentCredentialAndTrustResolvers, and eight tests including FakeDeviceTransport, ManagementShellCommandsClosedSetTest, FieldBindingIsolationTest, NoNumericPortLiteralTest. Domain core (platform-core discovery.cp): RawCandidateInput(key=(domain uid), objectType GATEWAY|CLUSTER|MEMBER, ClassificationFlags(product, virtHost, virtSystem), displayName, ownAddress, managementAddress, clusterReference, model, softwareVersion, managementPlaneConnectionState, connectionTableChannelState), CandidateRowAssembler, ManagementApiFieldBinding with 17 UNVERIFIED entries whose apiField strings are mgmt_cli guesses. The DRAFT gate document CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md documents the seven guessed commands. The measurement record's section 4 gives the measured command forms, section 5 the observed field behaviour, section 10 the five follow-up probes (stable identifier not reachable through the attr result type; absent-attribute placeholder MISSING_ATTR; empty value drops its column; the object result type with a type filter dumps every object of a type in one call with every field named; per-kind field presence). READ THE RECORD FIRST, all sections."
+        },
+        "context_not_loaded": [
+          "ui2/service, ui2/persistence, the frontend",
+          "docs/history/**",
+          "project/*.json",
+          "Every Palo Alto document and the pan packages",
+          "The Python collectors (the record already extracted what matters; PO_DECISION_RECORD_2026_09_12 section 2)"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/cp-discovery-transport-measured-method"
+        },
+        "invariants": [
+          "Only the measured commands, on one management-server session, context and query on one line, nothing uploaded, no device contacted.",
+          "Every attribute name lives in ManagementApiFieldBinding, comes from the measurement record, and is UNVERIFIED.",
+          "No raw output, name, address, domain or identifier is persisted, logged or printed.",
+          "The domain core's rules are unchanged; the flag set stays three.",
+          "No HTTP surface, no persistence, no new subproject, no new dependency."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker opens the PR and does not merge to main. The rewritten gate document still needs the Product Owner's explicit approval before any live run.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Align the merged Check Point discovery transport (ui2/worker com.securityexpert.nexus.ui2.worker.discovery.cp, PR #241) to the method the Product Owner actually measured, recorded in docs/design/CP_DISCOVERY_MEASURED_METHOD_AND_COMMAND_HANDOVER_2026_09_13.md sections 3, 4, 5 and 10: replace the guessed mgmt_cli command set with the measured management-server shell commands (domain list utility, domain context switch on the SAME shell line as the query, cpmiquerybin 'object' result type per domain per object type, operating-system connection table read twice), replace the JSON parser with a parser for the cpmiquerybin object tree format, rebind every ManagementApiFieldBinding entry to the measured attribute names (still UNVERIFIED), and rewrite the DRAFT command-gate document to the measured commands. The Product Owner directs that the implementation follow the measurement record; nothing in this movement may be a guess where the record speaks.",
+        "output_contract": [
+          "A Check Point discovery transport that issues exactly the measured commands, parses the object tree format, and binds to the measured attribute names -- every binding UNVERIFIED, one place to confirm.",
+          "The DRAFT gate document rewritten to the measured commands, citing the record.",
+          "Tests proving the same-shell constraint, the request count, the parser's absent/empty handling, the binding isolation and the connection-table reduction without a server.",
+          "SESSION_CLOSE naming commands, bindings, runner invocation and test counts before and after."
+        ],
+        "recommended_reasoning": {
+          "reason": "A rework of a merged adapter against a written measurement record: less judgment than the first transport (the commands are given), but a new tree-format parser and the same-shell constraint have quiet failure modes that only tests written first catch.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type and method carries a short comment naming the contract clause (T-n, CS-n, FB-n, CR-n) and, where a choice comes from the measurement record, the record's section.",
+          "Write the same-shell decisive test and re-run the T-4 single-host test FIRST; report in the SESSION_CLOSE what each did before and after.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. The ui2 build must keep exactly eleven subprojects.",
+          "Where the measurement record does not say and the contract does not say, do not invent: raise a RELAY_QUESTION (for example if the cluster_object reference block turns out not to carry an identifier in the record's terms). Where the record and the contract seem to disagree, the contract wins and you raise a RELAY_QUESTION.",
+          "The SESSION_CLOSE names every command in the closed set, every binding entry with its attribute name and scope, the exact runner invocation, and the test counts before and after."
+        ],
+        "risks": [
+          "Sending the context switch as its own exec -- the record measured that this silently scopes every later query to the wrong domain and produces confident wrong answers, not errors.",
+          "Parsing the object dump positionally or by line number instead of by nested key -- the format has hundreds of keys per object and their order is not a contract.",
+          "Reading the connection table through an awk pipeline on the server 'to keep the output small' -- the reduction belongs in Java so the raw text is parsed and dropped under T-7 and so no logic hides in a shell string.",
+          "Inventing the cluster_object block's inner field names instead of raising a RELAY_QUESTION if the record does not settle them.",
+          "Keeping a mgmt_cli code path 'as a fallback' -- the closed set is the measured set only."
+        ],
+        "scope": {
+          "in": [
+            "Closed command set, replaced: (1) domain enumeration -- the management-server utility that lists the domain management servers (record section 4 item 1, the '$MDSVERUTIL AllCMAs' form); (2) per domain per object type, ONE shell command line that performs the domain context switch AND the query in the same shell: the 'mdsenv <DOMAIN>' context command followed on the same line by cpmiquerybin with the 'object' result type and a type filter (record section 4 item 5 form with a type filter instead of a name filter; section 10 row 4), for exactly the three object types the contract classifies -- gateway, cluster member, cluster (type values as the record's section 4 item 3 filter shows); (3) the connection-table read -- 'netstat -an' on the management server, issued twice separated by the caller's CS-3 interval, filtered and reduced IN JAVA (never by an awk pipeline on the server, so the raw output is parsed in memory and dropped, T-7). The domain identifier and every other interpolated value is quoted as one shell argument. No mgmt_cli anywhere. No script upload. No other command (record section 0).",
+            "Same-shell constraint (record section 3 row 2, section 10): the context switch and the query are one ExecSpec command string. A test asserts that no ExecSpec the adapter ever sends contains the context command without a query on the same line, and that no query is ever sent without its context. THE DECISIVE TEST -- write it first against the current adapter and observe it failing (the current adapter has no context command at all).",
+            "Parser, replaced: a parser for the cpmiquerybin 'object' tree format as the record's section 10 row 4 describes it -- each object begins with an opening parenthesis followed by its name at column 0; fields are ':key (value)' leaves or ':key (' ... ')' nested blocks; values may be quoted or empty; the stable identifier is the 'chkpf_uid' leaf inside the 'AdminInfo' block. Parse as a stream (T-7), tolerate unknown keys (hundreds exist), never rely on column position, treat a missing key as ABSENT (contract CR-0: a '?' field may be absent) and an empty value as EMPTY (one arm of HR-2, never repaired). Remove MinimalJson if nothing else uses it. Build synthetic fixture texts in that format (invented names, addresses, identifiers -- follow the existing WorkerFixtures discipline).",
+            "Field bindings, rebound at the one site (FB-2, every entry stays UNVERIFIED): STABLE_IDENTIFIER -> the AdminInfo/chkpf_uid leaf; DISPLAY_NAME -> name; PRODUCT_FLAG -> cp_products_installed; OWN_ADDRESS -> ipaddr; MANAGEMENT_ADDRESS -> mgmt_ip; CLUSTER_REFERENCE_IDENTIFIER and CLUSTER_REFERENCE_DISPLAY_NAME -> the identifier and name carried inside the cluster_object reference (record section 5 row 4: 'a stable identifier alongside the display name' -- bind to what the block carries, mark UNVERIFIED); MODEL -> appliance_type; SOFTWARE_VERSION -> svn_version_name; MANAGEMENT_PLANE_CONNECTION_STATE -> connection_state; DOMAIN_IDENTIFIER -> the domain enumeration's per-line value; CONNECTION_TABLE_ADDRESS/PORT/STATE -> the netstat foreign-address and state columns as the record's section 4 item 6 shows. Remove SESSION_IDENTIFIER (no session token exists in the measured method). VIRT_HOST_FLAG and VIRT_SYSTEM_FLAG bind to a DIFFERENT attribute per object type (record section 10, field-binding consequence): extend ManagementApiFieldBinding so an entry may be scoped to an ObjectType (forRole(role, objectType)), keep one field per (role, object type), and state in the class comment that this is the measured shape and that whether it satisfies FB-2's 'exactly one field' is noted for the contract's freeze owner -- do not amend the contract. Keep FieldBindingIsolationTest passing against the new literals.",
+            "Object type mapping: the three type filter values map to ObjectType.GATEWAY / MEMBER / CLUSTER; the object's own 'type' leaf is read only to confirm the filter, never to classify beyond the contract's three types (CL-4). The flags feed ClassificationFlags exactly as before; nothing in the domain core's rules changes.",
+            "Connection table (section 7.4, record section 4 items 6/6a and section 6): from each 'netstat -an' reading, in Java: take rows whose state is the established state or a not-yet-established state, derive the channel port as the most frequent foreign port among established rows (CS-6b) unless a configured port is supplied, reduce to one state per foreign address (CS-6a), keep only addresses that are also a candidate's management address, and apply CS-3 across the two readings (agree failing -> FAILING_TO_COMPLETE; disagree -> IN_TRANSITION; no entry in either -> ABSENT). NoNumericPortLiteralTest must keep passing.",
+            "Check 17 request count: one session + one domain enumeration + exactly one object query per domain per object type (no pagination in the object result type) ; the two connection-table reads are not counted, as the current gate document already states. Update the adapter's count and its test.",
+            "docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md, rewritten to the measured commands with all ten gate items per entry, status unchanged 'DRAFT -- PENDING PRODUCT OWNER GATE APPROVAL', citing the measurement record's sections 4 and 10 as the evidence for each entry, and stating the same-shell constraint and the 'parse in Java, never awk on the server' rule as unsupported-behaviour/telemetry notes. ManagementShellCommandsClosedSetTest keeps mirroring the table.",
+            "Runner: keep DiscoveryRunnerMain's interface; add nothing that prints a name, address, domain or identifier. Its output additionally reports, per object type, how many objects were parsed and how many lacked the stable identifier (counts only).",
+            "Commit early and often on the lane, grouped by clause (command set + gate document; parser + fixtures; bindings; connection table; tests). Open the PR at the end; do not merge."
+          ],
+          "out": [
+            "Running anything against a real management server; flipping any binding entry to a verified status; amending the FROZEN contract or the FROZEN gate-lift record.",
+            "Any device contact, any script upload, any cprid_util path, any command outside the measured set (record section 0).",
+            "Changing the domain core's classification, host resolution, host linking or cluster resolution rules; adding a fourth flag (CL-4).",
+            "Persisting or logging any raw command output, any object name, address, domain or identifier (T-7, sensitive identity reporting law).",
+            "Any HTTP surface, persistence, new Gradle subproject or new dependency. Palo Alto in any form."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":platform-core:test"
+            ],
+            "name": "ui2_platform_core_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T14:44:05Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "ui2/worker/.../discovery/cp/ManagementShellCommands.java -- full rewrite: three-command closed set replacing the seven mgmt_cli entries.",
+          "ui2/worker/.../discovery/cp/MinimalJson.java -- deleted (no remaining caller).",
+          "ui2/worker/.../discovery/cp/CpObjectDumpParser.java -- new: cpmiquerybin object tree-format parser.",
+          "ui2/worker/.../discovery/cp/NetstatConnectionTableParser.java -- new: netstat -an text parser.",
+          "ui2/worker/.../discovery/cp/ManagementPlaneEnumerationAdapter.java -- full rewrite: no mgmt_cli login/domain-session concept, one SSH session, combined context+query exec per domain per object type, parse-count tracking.",
+          "ui2/worker/.../discovery/cp/DiscoveryRunReport.java -- appends per-object-type parse counts.",
+          "ui2/platform-core/.../discovery/cp/ManagementApiFieldBinding.java -- rebound entries, forRole(Role, ObjectType) overload, SESSION_IDENTIFIER removed.",
+          "ui2/platform-core/.../discovery/cp/ManagementPlaneEnumerationResult.java -- Completed gains parseCountsByObjectType; new nested ParseCounts(parsed, missingStableIdentifier) record.",
+          "ui2/platform-core/.../discovery/cp/ManagementApiFieldBindingTest.java -- everyRoleIsBound replaced with a per-role entry-count check (1 unscoped, or 3 scoped for VIRT_HOST_FLAG/VIRT_SYSTEM_FLAG) plus a scoped-resolution check.",
+          "docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md -- rewritten to the three measured commands.",
+          "ui2/worker/src/test/.../WorkerFixtures.java -- rewritten to the object-tree/netstat/line-based domain-list shapes.",
+          "ui2/worker/src/test/.../ManagementPlaneEnumerationAdapterTest.java -- happy-path handler and assertions updated to the new commands; pagination test removed (no pagination in the measured method); parse-count test added.",
+          "ui2/worker/src/test/.../DiscoveryRunReportTest.java -- updated sensitive-leak list, added parse-count assertions.",
+          "ui2/worker/src/test/.../SameShellContextAndQueryTest.java -- new: the decisive test.",
+          "ui2/worker/src/test/.../CpObjectDumpParserTest.java -- new: AC-3 parser coverage."
+        ],
+        "completed": [
+          "Closed command set replaced: ManagementShellCommands now issues exactly three commands -- domainList() = '$MDSVERUTIL AllCMAs' (literal, no interpolation); contextSwitchAndObjectQuery(domain, objectType) = \"mdsenv '<domain>'; cpmiquerybin object \\\"\\\" network_objects \\\"type='<gateway|gateway_cluster|cluster_member>'\\\"\" (context switch and query on ONE shell line, domain quoted as a single POSIX argument, the filter clause one of three closed code-controlled constants); connectionTable() = 'netstat -an' (literal). No mgmt_cli anywhere.",
+          "THE DECISIVE TEST (SameShellContextAndQueryTest) written first against the pre-alignment mgmt_cli adapter and observed failing there (it never issued any command containing 'mdsenv ' -- confirmed by direct inspection of the merged PR #241 ManagementShellCommands.CLOSED_COMMAND_PREFIXES, entirely mgmt_cli-shaped, before this movement's rewrite began). Passes now: ManagementShellCommands.contextSwitchAndObjectQuery is the only place either half of the command is produced, always together, so a lone context switch or a lone query is structurally unreachable.",
+          "Parser replaced: CpObjectDumpParser (new) parses the cpmiquerybin 'object' tree-format dump (nested :key (value) leaves and :key ( ... ) blocks, quoted or empty values) in a single pass; a missing key is absent, an empty value is present-but-empty (HR-2). MinimalJson removed -- no command returns JSON any more. NetstatConnectionTableParser (new) parses raw 'netstat -an' text into ConnectionTableRow values by the record's own column indexing ($5 foreign address, $6 state); ConnectionTableReducer (CS-3/CS-6a/CS-6b) is unchanged.",
+          "Field bindings rebound at the one site (ManagementApiFieldBinding, platform-core): STABLE_IDENTIFIER->AdminInfo/chkpf_uid, DISPLAY_NAME->name, PRODUCT_FLAG->cp_products_installed, OWN_ADDRESS->ipaddr, MANAGEMENT_ADDRESS->mgmt_ip, CLUSTER_REFERENCE_IDENTIFIER->cluster_object/chkpf_uid, CLUSTER_REFERENCE_DISPLAY_NAME->cluster_object/name, MODEL->appliance_type, SOFTWARE_VERSION->svn_version_name, MANAGEMENT_PLANE_CONNECTION_STATE->connection_state. DOMAIN_IDENTIFIER, CONNECTION_TABLE_ADDRESS/PORT/STATE kept as positional (documentation-only) roles -- the domain list and netstat text are not keyed records. SESSION_IDENTIFIER role removed. VIRT_HOST_FLAG/VIRT_SYSTEM_FLAG extended to forRole(Role, ObjectType): VIRT_HOST_FLAG->vsx_netobj(GATEWAY)/vsx_cluster_netobj(CLUSTER)/vsx_cluster_member(MEMBER); VIRT_SYSTEM_FLAG->vs_netobj(GATEWAY)/vs_cluster_netobj(CLUSTER)/vs_cluster_member(MEMBER). Every entry stays Status.UNVERIFIED.",
+          "Object-type mapping: GATEWAY->type='gateway', CLUSTER->type='gateway_cluster', MEMBER->type='cluster_member' (record section 10 addendum). The domain core's classification, host resolution, host linking and cluster resolution rules are untouched; the three-flag ClassificationFlags shape is unchanged (CL-4).",
+          "Connection table: adapter reads 'netstat -an' twice per run (CS-3 interval from the caller), parses in Java via NetstatConnectionTableParser, reduces via the unchanged ConnectionTableReducer -- port derived from an established row or the configured fallback, one state per address, CS-3 combine rules. No awk pipeline on the server. NoNumericPortLiteralTest passes against the rewritten adapter package.",
+          "Check 17 request count: one session (SSH connect, not counted as a distinct exec) + one domain-list exec + exactly one object-query exec per domain per object type, no pagination in the object result type; the two connection-table reads are not counted. managementPlaneRequestCount = 1 + counter.count() (the leading 1 continues the pre-existing convention of attributing one unit to the session). Two-domain fixture: 1 + (1 domain-list + 6 object queries) = 8, matching check 17's formula and AC-2.",
+          "docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md rewritten to the three measured commands, all ten gate items per entry, status unchanged 'DRAFT -- PENDING PRODUCT OWNER GATE APPROVAL', citing the measurement record's sections 4 and 10, and stating the same-shell constraint and the 'parse in Java, never awk on the server' rule. ManagementShellCommandsClosedSetTest still mirrors the table (three prefixes).",
+          "Runner: DiscoveryRunnerMain's interface unchanged. DiscoveryRunReport additionally prints objects_parsed_by_object_type and objects_missing_stable_identifier_by_object_type per ObjectType -- counts only, no name/address/domain/identifier. An object whose AdminInfo/chkpf_uid leaf is missing or blank is counted but never turned into a candidate (OpaqueId.of rejects a blank value; CandidateKey has no meaningful value to hold).",
+          "Committed on the lane grouped by clause: command set + gate document; object-tree/netstat parsers + fixtures; field bindings; adapter rewiring + report; tests. PR #247 opened against main; not merged."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- this movement touches only ui2/ (Java) and docs/design/, no Python entry point.",
+          "ui": "none -- no templates/index.html, console.html, static/*.js or payload builder touched; the HTML render harness was not run because nothing in its scope changed."
+        },
+        "integration": {
+          "branch": "feature/cp-discovery-transport-measured-method",
+          "ci": "not run in this session (no CI workflow invoked beyond the local validation commands listed above)",
+          "head_sha": "105f8904812d985b7d978c0522af76027b3d7b46",
+          "merge_commit": null,
+          "merge_decision": "not merged -- worker opens the PR and does not merge, per WORKER.md git section; awaiting Product Owner assistant review and orchestrator verify.passed",
+          "merge_state": "OPEN",
+          "pr": 247,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/247"
+        },
+        "next": {
+          "movement": "cp-discovery-transport-measured-method-po-review",
+          "movement_type": "VALIDATION",
+          "objective": "Product Owner assistant review of PR #247's diff (per WORKER.md merge gate: PO review + orchestrator verify.passed), then -- separately -- the Product Owner's own live run against the real management server to confirm or correct every UNVERIFIED command and field binding, and to approve the rewritten gate document before any such run.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "ConnectionTableReducer.java (CS-3/CS-6a/CS-6b) -- unchanged, still receives List<ConnectionTableRow>.",
+          "ConnectionTableRow.java, DiscoveryRunnerMain.java, EnvironmentCredentialAndTrustResolvers.java, Sleeper.java, ManagementPlaneQueryFailedException.java -- unchanged.",
+          "The domain core (RawCandidateInput, CandidateRowAssembler, CandidateClassifier, HostLinkResolver, ClusterLinkResolver, ClassificationFlags's three-flag shape, ObjectType's three values) -- unchanged, no fourth flag, no classification-rule change.",
+          "ManagementPlaneEnumerationRequest.java, ManagementPlaneEnumeration.java, ManagementPlaneEnumerationResult's Refused/Failed shapes -- unchanged.",
+          "ConnectionTableReducerTest.java, FieldBindingIsolationTest.java, NoNumericPortLiteralTest.java, ManagementShellCommandsClosedSetTest.java -- unchanged (generic, still pass against the new production source)."
+        ],
+        "recommended_reasoning": {
+          "reason": "Remaining work is review (PO assistant reading a bounded diff) and a live run the Product Owner alone can perform, not further implementation judgment.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [
+          "docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md rewritten in place (status unchanged: DRAFT -- PENDING PRODUCT OWNER GATE APPROVAL)."
+        ],
+        "unresolved_risks": [
+          "Every ManagementApiFieldBinding entry and every ManagementShellCommands command string is still UNVERIFIED -- this movement aligned the transport to the measurement record's evidence but did not, and could not, run it against a real management server.",
+          "The connection-table row filter (TCP-only, ESTABLISHED vs any other state as 'not yet established', wildcard foreign-address rows excluded as LISTEN sockets) is an engineering judgment call beyond what the record explicitly measured (which only confirmed the ESTABLISHED case via its own awk example) -- worth a Product Owner confirmation alongside the field bindings on the first live run.",
+          "Whether VIRT_HOST_FLAG/VIRT_SYSTEM_FLAG's new per-ObjectType scoping still satisfies FB-2's 'exactly one field per role' is left to the contract's freeze owner, as WORKER.md directed -- not resolved here, not amended in the contract.",
+          "The gate document (CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md) still needs the Product Owner's explicit approval before any of the three commands may be run for real."
+        ],
+        "validation": {
+          "affected": ":worker:test 34 tests, 0 failures (baseline discovery/cp package: 21 @Test methods across 6 files; now 27 across 8 files). :platform-core:test 68 tests, 0 failures (baseline discovery/cp package: 30 @Test methods; now 31).",
+          "diff_check": "git diff reviewed clause by clause before each grouped commit; no mgmt_cli literal, no session-token concept, no raw name/address/domain/identifier introduced outside the closed command set and the field-binding site.",
+          "full_regression": "./ui2/gradlew -p ui2 build -x :integration-tests:test -- BUILD SUCCESSFUL, eleven modules confirmed via './ui2/gradlew -p ui2 projects'. :architecture-tests:test -- 14 tests, 0 failures.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings, 1522 files scanned.",
+          "real_environment": "NOT RUN -- explicitly out of this movement's scope ('must not touch': running anything against a real management server, flipping any binding entry to verified). Every command and every binding entry remains UNVERIFIED pending the Product Owner's own live run.",
+          "state_consistency": "python3 -m pytest tests/test_contract_authority_status.py -q -- 5 passed (the rewritten DRAFT gate document cites the DRAFT measurement record, which is out of this gate's scope -- only FROZEN-cites-DRAFT is checked).",
+          "targeted": "SameShellContextAndQueryTest (THE DECISIVE TEST) run first against the pre-alignment adapter -- FAILED as expected (no context-switch command ever issued); re-run after the full rewrite -- PASSED. CpObjectDumpParserTest (5 tests, AC-3) -- PASSED."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-13T18:01:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0149",
+  "movement": "cp-discovery-transport-measured-method",
+  "next_actor": null,
+  "refs": [
+    "docs/design/CP_DISCOVERY_MEASURED_METHOD_AND_COMMAND_HANDOVER_2026_09_13.md",
+    "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md",
+    "docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13_CP_DISCOVERY_COLLECTION_GATE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md",
+    "relay/NXS-LOCAL-0145-cp-discovery-transport.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-13T18:01:23Z"
+}

@@ -11,13 +11,15 @@ under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   refusal identical in body *and* timing, and first-boot seeding of
   `nexusadmin` (full administrative capability) and `claudeadmin`
   (`role:viewer`), which a restart can never reset.
-- **Both discovery contracts are FROZEN** and both are now Java: CP domain
-  core + transport (`…ui2.discovery.cp`, `…worker.discovery.cp`, PR #241)
-  and PAN domain core (`…ui2.discovery.pan`, PR #240). Every field binding
-  and every `mgmt_cli` command is `UNVERIFIED` at one site; the CP
-  command-gate document is DRAFT pending PO approval, so nothing has run
-  against a live server. Next: PAN transport, import/enrollment contract.
-  Build order and collection decisions: `PO_DECISION_RECORD_2026_09_13E`/`13F`.
+- **Both discovery contracts are FROZEN and both transports are in Java**
+  (PRs #240, #241, #246, #247). CP reads the measured method — domain list,
+  `mdsenv && cpmiquerybin object` per domain per type, `netstat` twice —
+  per `CP_DISCOVERY_MEASURED_METHOD_AND_COMMAND_HANDOVER_2026_09_13.md`; PAN
+  uses keygen + one enumeration over the XML API, TLS always verified. Every
+  binding is `UNVERIFIED` at one site per vendor; both command/route gate
+  documents are DRAFT pending PO approval — **nothing has run live yet**.
+  `DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md` is DRAFT for PO freeze. Build
+  order and collection decisions: `PO_DECISION_RECORD_2026_09_13E`/`13F`.
 - **Services are independently deployable** (`PO_DECISION_RECORD_2026_09_13D`,
   superseding `UI2_0_B1_01C` EP-1). Its `AUTH-PLACEMENT` question is open and
   blocks a *second* authenticated surface, not the transport work.
