@@ -144,11 +144,75 @@
       },
       "seq": 1,
       "timestamp": "2026-09-13T10:35:57Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "docs/design/PAN_DISCOVERY_CONTRACT.md -- new file (DRAFT), 609 lines, one commit."
+        ],
+        "completed": [
+          "Wrote docs/design/PAN_DISCOVERY_CONTRACT.md (DRAFT), covering scope/authority, evidence basis, transport, classification, identity/addressing, virtual-system structural resolution, high-availability reciprocity, liveness, connection-timestamp/certificate separation, the discovery/import boundary, three-band acceptance checks, and a 12-row UNKNOWN register.",
+          "Ran and verified all four named validation commands (privacy gate, contract_authority_status, architecture_convergence, project_files_budget) -- all pass.",
+          "Verified the diff against origin/main is exactly one added file under docs/design/, with no address literal and no existing-Python module path named.",
+          "Committed the file on feature/pan-discovery-contract (c6da112)."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- no source file created or changed",
+          "ui": "none -- no UI module, screen, or payload builder touched"
+        },
+        "integration": {
+          "branch": "feature/pan-discovery-contract",
+          "ci": "not applicable -- no CI was run by this movement; validation was performed locally per the validation block above",
+          "head_sha": "c6da112bada3897495a244a68febcd63611f565e",
+          "merge_commit": null,
+          "merge_decision": "Deferred to the Product Owner assistant review named in this movement's merge_gate; the worker does not merge to main and has not opened a PR.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "pan_discovery_contract_po_review",
+          "movement_type": "READ_ONLY_AUDIT",
+          "objective": "Product Owner clause-by-clause review of docs/design/PAN_DISCOVERY_CONTRACT.md: resolve UNKNOWN register row U-0 (the provenance gap) by either committing the missing findings record or confirming the dispatch-brief transcription in review, then freeze or refuse the draft.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No source file (Java, Python, schema, screen, API) created or changed -- this movement produced exactly one document, per its own out-of-scope list.",
+          "CP_AND_VSX_DISCOVERY_CONTRACT.md and every other existing docs/design/*.md document left untouched.",
+          "project/*.json, CURRENT_STATE.md, and build_history.json left untouched.",
+          "The existing Python collector left untouched and cited only once, in prose, as the source of two filtering defects this contract forbids repeating."
+        ],
+        "recommended_reasoning": {
+          "reason": "Resolving U-0 and freezing or refusing the draft requires the same judgment the drafting did: separating measured behaviour from hypothesis, and deciding whether a dispatch-brief transcription is an adequate substitute for a committed findings record.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Provenance gap (UNKNOWN register row U-0): the two documents this movement's approved_task.json named as authority/evidence -- docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md and docs/design/PAN_DISCOVERY_MEASUREMENT_FINDINGS_2026_09_13.md -- do not exist in the repository or its git history. Verified by direct read attempts, a repo-wide filename search, and git log on docs/design/. Every measured claim in the contract is instead attributed to this movement's own dispatch brief, which is not itself a durable, independently-checkable repository artifact the way a committed findings document would be.",
+          "Eleven further UNKNOWN register rows (U-1 to U-11) remain open pending a live-Panorama measurement pass or vendor documentation; none was filled with an assumed value.",
+          "The liveness UNKNOWN (LV-6/LV-7 in the new document) is explicitly weaker than Check Point's own: no three-plane negative search has been run for this vendor, so the connection-state element's true meaning (VD-2) remains genuinely open, not merely declared closed."
+        ],
+        "validation": {
+          "affected": "No source file affected; docs/design/PAN_DISCOVERY_CONTRACT.md is the only changed path (git diff --name-status origin/main...HEAD confirms exactly one A line)",
+          "diff_check": "git diff --check origin/main...HEAD -> clean",
+          "full_regression": "Not run, per standing instruction: running the full pytest suite creates untracked data/ and logs/ directories the privacy gate then flags",
+          "privacy": "python3 scripts/repository_privacy_check.py -> PASS, 1275 files scanned, 0 findings",
+          "real_environment": "Not applicable -- this contract governs a future implementation's read of a management plane; no code exists yet to validate against a live Panorama server, and Band 3 of section 11 is unrun by design",
+          "state_consistency": "No project/*.json, CURRENT_STATE.md, or build_history.json touched; this movement's diff is exactly one docs/design/ file per AC-12, so no cross-authority state update was required or made",
+          "targeted": "python3 -m pytest tests/test_contract_authority_status.py tests/test_architecture_convergence.py tests/test_project_files_budget.py -q -> 37 passed in 0.60s"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-13T10:46:29Z"
     }
   ],
   "id": "NXS-LOCAL-0138",
   "movement": "pan_discovery_contract",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/PO_DECISION_RECORD_2026_09_13B_PAN_DISCOVERY_COLLECTION_GATE.md",
     "docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md",
@@ -159,6 +223,6 @@
     "AGENTS.md"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-13T10:35:57Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-13T10:46:29Z"
 }
