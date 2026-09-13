@@ -9,7 +9,8 @@ import com.securityexpert.nexus.ui2.platform.Argon2PasswordHasher;
 
 /**
  * {@code local_credentials} persistence port (C3A contract §3 placement,
- * §5). Every mutation implicitly goes through
+ * §5; extended by 13G section 4 for local identity administration). Every
+ * mutation implicitly goes through
  * {@link com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary}
  * (F3): the table carries the narrow, allowlisted audit trigger
  * {@code fn_audit_capture_local_credentials()} (§8), so a mutating call here
@@ -26,13 +27,19 @@ public interface LocalCredentialsRepository {
     String ACTION_PASSWORD_CHANGE = "local_password_change";
     /** V9 (NXS-LOCAL-0152): the audited action id {@link #markMustChangePassword} runs under. */
     String ACTION_MUST_CHANGE_PASSWORD_SEED = "local_credential_must_change_password_seed";
+    /** 13G LIA-3.2: an administrative reset, distinct from an identity's own self-service change. */
+    String ACTION_ADMIN_PASSWORD_RESET = "local_credential_admin_password_reset";
+    /** 13G LIA-3.5/3.6. */
+    String ACTION_DISABLE = "local_credential_disable";
+    String ACTION_ENABLE = "local_credential_enable";
 
     Optional<LocalCredentialRecord> findByName(String localIdentityName);
 
     Optional<LocalCredentialRecord> findById(String localIdentityId);
 
     /**
-     * Every row (NXS-LOCAL-0152's own need: resolving a session's opaque
+     * Every row -- 13G §3's local identity administration list view, and
+     * NXS-LOCAL-0152's own need: resolving a session's opaque
      * {@code actor_fingerprint} back to the local identity behind it, since
      * the fingerprint is a one-way hash of {@code "local:" + local_identity_id}
      * -- see {@link com.securityexpert.nexus.ui2.platform.PrincipalFingerprint} --
@@ -55,7 +62,14 @@ public interface LocalCredentialsRepository {
      */
     boolean anyExist();
 
-    /** Creates a new row (bootstrap seeding, §6, or a future user-management screen out of this movement's scope). */
+    /**
+     * Creates a new row (bootstrap seeding, §6, or 13G local identity
+     * administration). {@code createdByActorFingerprint} is both this
+     * mutation's audit actor and the persisted {@code created_by_actor_fingerprint}
+     * (13G section 4). The created row is {@code enabled}, has
+     * {@code password_set_at} = now, and {@code must_change_password} = true
+     * (13G LIA-3.3).
+     */
     String create(String localIdentityId, String localIdentityName, Argon2PasswordHasher.Verifier verifier,
             String createdByActorFingerprint);
 
@@ -81,6 +95,7 @@ public interface LocalCredentialsRepository {
      * the flag is cleared in the same transaction that writes the new
      * verifier -- never a separate call that could commit independently.
      */
+    /** Overwrites verifier/salt/parameters (§4/§3.2's rehash-shape) for an identity's own self-service change; attributed to the identity's own fingerprint. Updates {@code password_set_at}; does not touch {@code must_change_password} (owned by the parallel movement's own enforcement path). */
     void changePassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
             String changedByActorFingerprint);
 
@@ -94,4 +109,17 @@ public interface LocalCredentialsRepository {
      * default ({@code false}).
      */
     void markMustChangePassword(String localIdentityId, String actorFingerprint);
+
+    /**
+     * 13G LIA-3.2/LIA-3.3: an administrative reset. Overwrites
+     * verifier/salt/parameters, sets {@code password_set_at} = now and
+     * {@code must_change_password} = true, attributed to the acting
+     * administrator (distinct from {@link #changePassword}, which is
+     * self-service and attributed to the identity itself).
+     */
+    void adminSetPassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
+            String settingAdminActorFingerprint);
+
+    /** 13G LIA-3.5/LIA-3.6: sets {@code enabled}, attributed to the acting administrator. */
+    void setEnabled(String localIdentityId, boolean enabled, String actingAdminActorFingerprint);
 }

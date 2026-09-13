@@ -60,6 +60,12 @@ public final class RoleBindingAdminController {
             body.put("error", "SELF_GRANT_REFUSED");
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
         }
+        if (outcome instanceof RoleBindingAdminService.Outcome.LastSecurityAdminRefused) {
+            // 13G LIA-3.5: distinct, non-identity-bearing -- names no
+            // binding, no identity, no group reference.
+            body.put("error", "LAST_SECURITY_ADMIN_REFUSED");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+        }
         if (outcome instanceof RoleBindingAdminService.Outcome.Created created) {
             body.put("binding_id", created.bindingId());
             return ResponseEntity.ok(body);

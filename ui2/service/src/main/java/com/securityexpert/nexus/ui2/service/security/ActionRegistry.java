@@ -21,6 +21,12 @@ public final class ActionRegistry {
     public static final String RECOVERY_WRITE_EXAMPLE = "recovery_write_example";
     /** B1-4b contract §4: manual device registration, {@code role:onboarding_admin} only (C3 §4.1). */
     public static final String DEVICE_REGISTER = "device_register";
+    /** 13G LIA-5: local identity administration, {@code role:security_admin} only. */
+    public static final String LOCAL_IDENTITY_CREATE = "local_identity_create";
+    public static final String LOCAL_IDENTITY_LIST = "local_identity_list";
+    public static final String LOCAL_IDENTITY_SET_PASSWORD = "local_identity_set_password";
+    public static final String LOCAL_IDENTITY_DISABLE = "local_identity_disable";
+    public static final String LOCAL_IDENTITY_ENABLE = "local_identity_enable";
 
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
@@ -38,6 +44,14 @@ public final class ActionRegistry {
         // never granted by "admin" adjacency (test 3, C3 §4.1 separation
         // of duties).
         register(new ActionDescriptor(DEVICE_REGISTER, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        // 13G LIA-5: every local identity administration operation requires
+        // role:security_admin, through this same E4 evaluation -- no second
+        // authorization check exists.
+        register(new ActionDescriptor(LOCAL_IDENTITY_CREATE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(LOCAL_IDENTITY_LIST, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(LOCAL_IDENTITY_SET_PASSWORD, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(LOCAL_IDENTITY_DISABLE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(LOCAL_IDENTITY_ENABLE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

@@ -167,7 +167,20 @@ class GateChainTest {
                     Argon2PasswordHasher.hash("irrelevant".toCharArray(), Argon2PasswordHasher.DEFAULT_PARAMETERS);
             rows.add(new LocalCredentialRecord(localIdentityId, localIdentityId, verifier.verifier(), verifier.salt(),
                     verifier.algorithmId(), verifier.parameters().memoryCostKib(), verifier.parameters().timeCost(),
-                    verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW, mustChangePassword));
+                    verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW, true, "system:bootstrap",
+                    NOW, mustChangePassword));
+        }
+
+        /** 13G LIA-3.5/3.6 and LIA-3.2: not exercised by this gate test. */
+        @Override
+        public void setEnabled(String localIdentityId, boolean enabled, String actingAdminActorFingerprint) {
+            throw new UnsupportedOperationException("not used by GateChainTest");
+        }
+
+        @Override
+        public void adminSetPassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
+                String settingAdminActorFingerprint) {
+            throw new UnsupportedOperationException("not used by GateChainTest");
         }
 
         @Override

@@ -43,6 +43,46 @@ class CliEntryPointTest {
                 "usage output must still document bootstrap-local-identity; got: " + output);
     }
 
+    /**
+     * 13G LIA-2: every local identity administration subcommand is
+     * dispatched by name and validates its own argument count before
+     * touching any database -- this module has no database fixture, exactly
+     * like the existing bootstrap-local-identity coverage above.
+     */
+    @Test
+    void localIdentitySubcommandsAreRecognizedAndValidateTheirArgumentCountBeforeTouchingAnyDatabase() {
+        assertTrue(captureStdErr(() -> CliEntryPoint.main(new String[] {"local-identity-create"}))
+                .contains("local-identity-create requires exactly 7 arguments"));
+        assertTrue(captureStdErr(() -> CliEntryPoint.main(new String[] {"local-identity-list"}))
+                .contains("local-identity-list requires exactly 4 arguments"));
+        assertTrue(captureStdErr(() -> CliEntryPoint.main(new String[] {"local-identity-set-password"}))
+                .contains("local-identity-set-password requires exactly 7 arguments"));
+        assertTrue(captureStdErr(() -> CliEntryPoint.main(new String[] {"local-identity-disable"}))
+                .contains("local-identity-disable requires exactly 6 arguments"));
+        assertTrue(captureStdErr(() -> CliEntryPoint.main(new String[] {"local-identity-enable"}))
+                .contains("local-identity-enable requires exactly 6 arguments"));
+    }
+
+    /** 13G LIA-3.4: role-bind subcommands validate their own argument count before making any HTTP call. */
+    @Test
+    void roleBindSubcommandsAreRecognizedAndValidateTheirArgumentCountBeforeAnyHttpCall() {
+        assertTrue(captureStdErr(() -> CliEntryPoint.main(new String[] {"role-bind-create"}))
+                .contains("role-bind-create requires exactly 6 arguments"));
+        assertTrue(captureStdErr(() -> CliEntryPoint.main(new String[] {"role-bind-revoke"}))
+                .contains("role-bind-revoke requires exactly 4 arguments"));
+    }
+
+    @Test
+    void usageDocumentsEveryLocalIdentityAdministrationSubcommand() {
+        String output = captureStdOut(() -> CliEntryPoint.main(new String[0]));
+
+        for (String command : new String[] {"local-identity-create", "local-identity-list",
+                "local-identity-set-password", "local-identity-disable", "local-identity-enable",
+                "role-bind-create", "role-bind-revoke"}) {
+            assertTrue(output.contains(command), "usage output must document " + command + "; got: " + output);
+        }
+    }
+
     private static String captureStdErr(Runnable action) {
         PrintStream original = System.err;
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
