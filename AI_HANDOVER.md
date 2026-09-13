@@ -29,11 +29,11 @@ environment facts in `docs/reference/COPILOT_OPERATING_MODEL.md`.
 
 ## 3. Exact next action
 
-**Dispatch the discovery transport, Check Point first** — contract §3 and
-§7.4. The domain core is merged and waiting. The transport binds role names
-to concrete API fields at one isolated site, every entry `UNVERIFIED` until a
-Product-Owner-run confirmation. Palo Alto's follows the same shape and needs
-only two methods.
+**Dispatch the import/enrollment contract** (record `13F` §7): candidate
+row → `devices`/`endpoints`, cluster and virtual system as `C4` §4.2
+modifiers, first contact under `13F` §2's warn-and-continue rule. Meanwhile the Product Owner runs `DiscoveryRunnerMain` against the live
+management server once the DRAFT command-gate document is approved; the Palo
+Alto transport follows.
 
 ## 4. Test delta
 

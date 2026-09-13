@@ -346,7 +346,7 @@
     {
       "id": "ui2_ssh_strict_host_key_trust_in_production",
       "category": "Security / Deployment",
-      "title": "UI2 SSH host-key trust: strict enforcement mandatory in the production container runtime, validated once on the R2 production server",
+      "title": "UI2 SSH host-key trust: on mismatch connect, warn with the MDS view alongside, audit -- strict refusal is a configurable production option, off by default (PO 2026-09-13, record 13F)",
       "status": "planned",
       "priority": "P0 -- production-blocking before production deployment",
       "target": "ui2 worker HostKeyVerifier / TrustRuleResolver; successor to cp_production_ssh_host_key_trust_hardening + cp_ssh_trust_r2_prod_server",
