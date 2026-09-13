@@ -396,6 +396,15 @@
       "priority": "P0",
       "target": "PAN_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for two methods; domain core in flight as NXS-LOCAL-0146",
       "note": ""
+    },
+    {
+      "id": "device_import_enrollment_contract_implementation",
+      "category": "Architecture / Import-Enrollment",
+      "title": "Implement device import/enrollment (candidate to devices row, cluster/VS modifiers, enrollment confirm first contact) once DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md is Product-Owner frozen",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE)",
+      "note": ""
     }
   ]
 }
