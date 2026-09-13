@@ -5,42 +5,45 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and linked docs
 under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-13, the Check Point discovery domain core is
-  implemented in Java and merged; transport is next.
-  `docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md` (**FROZEN — PO APPROVED
-  2026-09-13**) is the sole authority for CP/VSX discovery semantics;
-  `docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md`
-  (DRAFT, discovery-only) maps where the existing Python fuses discovery
-  and collection. §9 checks 8/10/12/13 are real JUnit tests in
-  `ui2/platform-core` (`com.securityexpert.nexus.ui2.discovery.cp`); checks
-  7/9/11/14-18 need a management server; twelve `UNKNOWN`s stay open.
-  **Transport (§3) is deliberately unimplemented**, one isolated
-  field-binding site, every entry `UNVERIFIED`, pending PO confirmation.
+- **Checkpoint:** 2026-09-13. **Login works and the product requires it**,
+  even on localhost. `UI2_0_C3A` and `UI2_0_C3B` (both FROZEN) are
+  implemented: Argon2id with per-row parameters, per-identity lockout, a
+  refusal identical in body *and* timing, and first-boot seeding of
+  `nexusadmin` (full administrative capability) and `claudeadmin`
+  (`role:viewer`), which a restart can never reset.
+- **Both discovery contracts are FROZEN** — `CP_AND_VSX_DISCOVERY_CONTRACT.md`
+  and `PAN_DISCOVERY_CONTRACT.md`, each measured by the Product Owner against
+  a live management server, neither derived from the existing Python. CP's
+  domain core is merged: §9 checks 8/10/12/13 are real JUnit tests in
+  `ui2/platform-core` (`…ui2.discovery.cp`); the rest need a management
+  server. Both leave their field bindings `UNVERIFIED` at one isolated site
+  and their `UNKNOWN` registers open. **Transport is next for both, and is
+  the only work the product now waits on.**
+- **Services are independently deployable** (`PO_DECISION_RECORD_2026_09_13D`,
+  superseding `UI2_0_B1_01C` EP-1). Its `AUTH-PLACEMENT` question is open and
+  blocks a *second* authenticated surface, not the transport work.
 - **UI 2.0 stays incomplete and the row stays open.** Shell: navigation
-  rail, top app bar, six routed screens against the Product Owner's
-  Material 3 frames; `M3Tabs` is a real tab control, one panel per tab
-  across four screens. Default screen is the empty state; populated
-  screens sit behind the labelled preview route; per-screen fidelity is
-  the Product Owner's call. `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md`
-  and `UI2_0_B1_02A_AUDIT_REDACTION_CONTRACT.md` are FROZEN **by the
-  agent, not Product Owner reviewed**
-  (`docs/design/UI2_0_AGENT_FROZEN_CONTRACT_AUDIT.md`, DRAFT); no B1 row
-  has real-environment evidence. Detail: `project/build_history.json`.
-- **UI 2.0 runs on plain Kubernetes.**
-  `UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md` is
-  FROZEN, PO approved; `ui2_b1_12_deployment_slice` is AUTOMATED_VALIDATED:
-  in-cluster OCI build, no host toolchain, plain `kubectl` manifests,
-  PostgreSQL 16 migrations `V1`-`V7`, clean empty first state, no tracked
-  credential, arbitrary UID/group 0 (carries unchanged to the corporate
-  platform, where a `Route` replaces the `Ingress`). Decisions:
-  `docs/design/PO_DECISION_RECORD_2026_09_12B_LOCAL_KUBERNETES.md`.
+  rail, top app bar, six routed screens against the Product Owner's Material
+  3 frames, now behind an `AuthGate`. Per-screen fidelity is the Product
+  Owner's call. `UI2_0_B1_01A` and `UI2_0_B1_02A` are FROZEN **by the agent,
+  not Product Owner reviewed** (`UI2_0_AGENT_FROZEN_CONTRACT_AUDIT.md`,
+  DRAFT). No B1 row has real-environment evidence.
+- **UI 2.0 runs on plain Kubernetes.** `UI2_0_B1_01C` FROZEN, PO approved;
+  `ui2_b1_12_deployment_slice` AUTOMATED_VALIDATED: in-cluster OCI build, no
+  host toolchain, `kubectl` manifests, PostgreSQL 16 (`V1`-`V8`), clean
+  empty first state, no tracked credential, arbitrary UID/group 0. Its
+  `EP-1` one-image-only clause is **superseded** by
+  `PO_DECISION_RECORD_2026_09_13D`. Runtime decisions:
+  `PO_DECISION_RECORD_2026_09_12B_LOCAL_KUBERNETES.md`.
 - **COLLECTION GATE — HELD, ONE BOUNDED LIFT:** no vendor data-collection
   proceeds until the PO specifies, per vendor, collection type and
   methods (`docs/design/PO_DECISION_RECORD_2026_09_12.md` section 1); UI
-  2.0 shell work is exempt. **Lifted 2026-09-13 for Check Point *discovery
-  only*** (`docs/design/PO_DECISION_RECORD_2026_09_13_CP_DISCOVERY_COLLECTION_GATE.md`):
-  candidate enumeration by four management-plane methods, **no device
-  contacted**; Palo Alto untouched, per-vendor statement still required.
+  2.0 shell work is exempt. **Lifted 2026-09-13 for Check Point *and* Palo Alto
+  ***discovery only*** — per-vendor records
+  `PO_DECISION_RECORD_2026_09_13_CP_DISCOVERY_COLLECTION_GATE.md` (four
+  methods) and `..._13B_PAN_DISCOVERY_COLLECTION_GATE.md` (two):
+  candidate enumeration only, **no device contacted**. Every other
+  device-facing path stays gated for both vendors.
 - **Implementation language:** new features are Java, written from
   scratch; existing Python scripts are know-how only, never ported or
   wrapped (same record, section 2).
@@ -71,24 +74,20 @@ under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 ## Reading this file / safety status
 
 `project/roadmap.json` owns NOW/NEXT/AFTER/BLOCKED/DEFERRED;
-`project/feature_registry.json` owns feature delivery state;
-`project/backlog.json` owns open debt (`project/archive/backlog_terminal.json`
-owns terminal debt, never loaded at cold start, GOV.ORCH.9);
-`project/build_history.json` owns history. This file owns only the hot
-checkpoint and the sections below, and must not contradict them —
-`utils/project_plan._cross_authority_warnings` plus
-`tests/test_architecture_convergence.py` enforce it. Action taxonomy:
-`utils/action_taxonomy.py` is the source of truth, full table in
-`AI_START_HERE.md`, test-enforced boundaries in `AGENTS.md`
-"Architectural invariants".
+`feature_registry.json` delivery state; `backlog.json` open debt
+(`archive/backlog_terminal.json` terminal debt, never loaded at cold start,
+GOV.ORCH.9); `build_history.json` history. This file owns the hot checkpoint
+and the sections below only, and must not contradict them —
+`utils/project_plan._cross_authority_warnings` and
+`tests/test_architecture_convergence.py` enforce that. Action taxonomy:
+`utils/action_taxonomy.py`, table in `AI_START_HERE.md`, boundaries in
+`AGENTS.md`.
 
 ## Active build
 
-`ui2_d1_restore_c7_c2_amendments` — `automated_validated`.
-`UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md` applied; restore stays
-disabled in Java. Frozen successors replace the drafts in C1–C4/C7's and
-B1's authority chains; `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` §6/§9
-block `REAL_ENV_VALIDATED` for all B1. Rows: `project/QUEUE.md`.
+`ui2_d1_restore_c7_c2_amendments` — `automated_validated`; restore stays
+disabled in Java. `UI2_0_B1_01A` §6/§9 block `REAL_ENV_VALIDATED` for all
+B1. Rows: `project/QUEUE.md`.
 
 Predecessors, all **MERGED**: `project/build_history.json` /
 `docs/history/INDEX.md`, including `M3`
@@ -100,15 +99,13 @@ PAN HA serial evidence: "Open blockers" below.
 
 ## Next candidate and open mapping question
 
-`now_next.next` is unset (see checkpoint above). A future PLAN episode
-must (1) size/authorize `M10.2` or another candidate and (2) decide
-whether `utils/device_identity_relationships.py`'s `mapping_scope` may
-widen beyond `CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` to give `D4` a real
-join — `RELAY_DECISION` #11 left undecided. `M8.3` is `real_env_validated`
-(see "Real-environment validation owed"); `M7` unblocked, not started;
+A future PLAN episode must decide whether
+`utils/device_identity_relationships.py`'s `mapping_scope` may widen beyond
+`CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` to give `D4` a real join —
+`RELAY_DECISION` #11 left it undecided. `M7` is unblocked and not started;
 `operator_assertion` unaccepted; `op2_c_cp_clusterxl_adapter_scoping`
-stays `upcoming`/blocked; `OP.2.D`'s console flow belongs on the `PCP.4`
-device/HA tab, never a second one.
+`upcoming`/blocked; `OP.2.D`'s console flow belongs on the `PCP.4` device/HA
+tab, never a second one.
 
 ## Open blockers
 
@@ -162,11 +159,10 @@ None currently known (two earlier ones became passing regressions in
 
 ## Production posture
 
-Development-ready, **not** production-ready; the container runs as root by
-design. Open before any production claim: OIDC/RBAC, trusted TLS/SSH in
-production, database role separation, report-only publication surface,
-secret management, off-host recovery custody with a restore drill, audit
-retention. `.github/workflows/validation.yml` is the deterministic CI gate
-(fast PR `validate`, automatic; parallel `full-regression` via
-`workflow_dispatch` only, `DEV.TEST.1`); no device, container or registry
-step runs there.
+Development-ready, **not** production-ready. Open before any production
+claim: OIDC/RBAC, trusted TLS/SSH, database role separation and an
+in-cluster `NetworkPolicy`, report-only publication surface, secret
+management, off-host recovery custody with a restore drill, audit retention.
+`.github/workflows/validation.yml` is the CI gate — fast PR `validate`
+automatic, `full-regression` by `workflow_dispatch` only; no device,
+container or registry step runs there.
