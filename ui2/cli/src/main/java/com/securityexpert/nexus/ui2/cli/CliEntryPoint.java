@@ -1,9 +1,19 @@
 package com.securityexpert.nexus.ui2.cli;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Arrays;
+
 import com.securityexpert.nexus.ui2.jobs.JobState;
+import com.securityexpert.nexus.ui2.jobs.bootstrap.LocalIdentityAdministrationFactory;
 import com.securityexpert.nexus.ui2.jobs.bootstrap.LocalIdentityBootstrapFactory;
 import com.securityexpert.nexus.ui2.jobs.bootstrap.SecurityAdminBootstrapFactory;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
+import com.securityexpert.nexus.ui2.platform.LocalIdentityAdministrationPort;
 import com.securityexpert.nexus.ui2.platform.LocalIdentityBootstrapPort;
 import com.securityexpert.nexus.ui2.platform.SecurityAdminBootstrapPort;
 
@@ -36,6 +46,13 @@ public final class CliEntryPoint {
         switch (args[0]) {
             case "bootstrap-security-admin" -> bootstrapSecurityAdmin(args);
             case "bootstrap-local-identity" -> bootstrapLocalIdentity(args);
+            case "local-identity-create" -> localIdentityCreate(args);
+            case "local-identity-list" -> localIdentityList(args);
+            case "local-identity-set-password" -> localIdentitySetPassword(args);
+            case "local-identity-disable" -> localIdentityDisable(args);
+            case "local-identity-enable" -> localIdentityEnable(args);
+            case "role-bind-create" -> roleBindCreate(args);
+            case "role-bind-revoke" -> roleBindRevoke(args);
             default -> System.out.println("known job states: " + java.util.Arrays.toString(JobState.values()));
         }
     }
@@ -46,6 +63,19 @@ public final class CliEntryPoint {
                 + "<groupReferenceDn> <groupReferenceKeyBase64> <groupReferenceKeyId>");
         System.out.println("  bootstrap-local-identity <jdbcUrl> <migrateUser> <migratePasswordFile> "
                 + "<localIdentityName> <initialPasswordFile>");
+        System.out.println("  local-identity-create <jdbcUrl> <migrateUser> <migratePasswordFile> "
+                + "<groupReferenceKeyBase64> <localIdentityName> <initialPasswordFile> <actingAdminActorFingerprint>");
+        System.out.println("  local-identity-list <jdbcUrl> <migrateUser> <migratePasswordFile> "
+                + "<groupReferenceKeyBase64>");
+        System.out.println("  local-identity-set-password <jdbcUrl> <migrateUser> <migratePasswordFile> "
+                + "<groupReferenceKeyBase64> <localIdentityId> <newPasswordFile> <actingAdminActorFingerprint>");
+        System.out.println("  local-identity-disable <jdbcUrl> <migrateUser> <migratePasswordFile> "
+                + "<groupReferenceKeyBase64> <localIdentityId> <actingAdminActorFingerprint>");
+        System.out.println("  local-identity-enable <jdbcUrl> <migrateUser> <migratePasswordFile> "
+                + "<groupReferenceKeyBase64> <localIdentityId> <actingAdminActorFingerprint>");
+        System.out.println("  role-bind-create <baseUrl> <sessionCookieValue> <csrfToken> <roleToken> "
+                + "<groupReference> <groupReferenceKeyId>");
+        System.out.println("  role-bind-revoke <baseUrl> <sessionCookieValue> <csrfToken> <bindingId>");
     }
 
     private static void bootstrapSecurityAdmin(String[] args) {
@@ -104,5 +134,168 @@ public final class CliEntryPoint {
         }
         // Never print the password, its hash, or any parameter (C3A §3.1/§8).
         System.out.println("created local identity " + localIdentityId + " name=" + localIdentityName);
+    }
+
+    // ---------------------------------------------------------------
+    // 13G LIA-2: local identity administration CLI parity. Every
+    // operation shares LocalIdentityAdministrationPort with the HTTP API
+    // (composed here through job-engine's LocalIdentityAdministrationFactory,
+    // exactly as bootstrap-local-identity already shares its own port), so
+    // the two paths cannot drift. A password is always read from a file,
+    // never a command-line argument (it would land in shell history/process
+    // listings), and the in-memory array is zeroed immediately after use.
+    // No response ever prints a password, verifier or salt.
+    // ---------------------------------------------------------------
+
+    private static void localIdentityCreate(String[] args) {
+        if (args.length != 8) {
+            System.err.println("local-identity-create requires exactly 7 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        LocalIdentityAdministrationPort port = administrationPort(args[1], args[2], args[3], args[4]);
+        String localIdentityName = args[5];
+        char[] initialPassword = readPasswordFile(args[6], "local_identity.initial_password");
+        String actingAdminActorFingerprint = args[7];
+        try {
+            LocalIdentityAdministrationPort.LocalIdentityView view =
+                    port.create(actingAdminActorFingerprint, localIdentityName, initialPassword);
+            printView(view);
+        } finally {
+            Arrays.fill(initialPassword, '\0');
+        }
+    }
+
+    private static void localIdentityList(String[] args) {
+        if (args.length != 5) {
+            System.err.println("local-identity-list requires exactly 4 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        LocalIdentityAdministrationPort port = administrationPort(args[1], args[2], args[3], args[4]);
+        for (LocalIdentityAdministrationPort.LocalIdentityView view : port.list()) {
+            printView(view);
+        }
+    }
+
+    private static void localIdentitySetPassword(String[] args) {
+        if (args.length != 8) {
+            System.err.println("local-identity-set-password requires exactly 7 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        LocalIdentityAdministrationPort port = administrationPort(args[1], args[2], args[3], args[4]);
+        String localIdentityId = args[5];
+        char[] newPassword = readPasswordFile(args[6], "local_identity.new_password");
+        String actingAdminActorFingerprint = args[7];
+        try {
+            printResult(port.setPassword(actingAdminActorFingerprint, localIdentityId, newPassword));
+        } finally {
+            Arrays.fill(newPassword, '\0');
+        }
+    }
+
+    private static void localIdentityDisable(String[] args) {
+        if (args.length != 7) {
+            System.err.println("local-identity-disable requires exactly 6 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        LocalIdentityAdministrationPort port = administrationPort(args[1], args[2], args[3], args[4]);
+        String localIdentityId = args[5];
+        String actingAdminActorFingerprint = args[6];
+        printResult(port.disable(actingAdminActorFingerprint, localIdentityId));
+    }
+
+    private static void localIdentityEnable(String[] args) {
+        if (args.length != 7) {
+            System.err.println("local-identity-enable requires exactly 6 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        LocalIdentityAdministrationPort port = administrationPort(args[1], args[2], args[3], args[4]);
+        String localIdentityId = args[5];
+        String actingAdminActorFingerprint = args[6];
+        printResult(port.enable(actingAdminActorFingerprint, localIdentityId));
+    }
+
+    private static LocalIdentityAdministrationPort administrationPort(String jdbcUrl, String migrateUser,
+            String migratePasswordFile, String groupReferenceKeyBase64) {
+        String migratePassword = com.securityexpert.nexus.ui2.platform.SecretFile.readRequired(
+                java.nio.file.Path.of(migratePasswordFile), "ui2_migrate.password");
+        return LocalIdentityAdministrationFactory.create(jdbcUrl, migrateUser, migratePassword, groupReferenceKeyBase64);
+    }
+
+    private static char[] readPasswordFile(String path, String purpose) {
+        return com.securityexpert.nexus.ui2.platform.SecretFile.readRequired(java.nio.file.Path.of(path), purpose)
+                .toCharArray();
+    }
+
+    /** Never a password, verifier or salt -- exactly 13G section 3's allowlisted fields. */
+    private static void printView(LocalIdentityAdministrationPort.LocalIdentityView view) {
+        System.out.println("local_identity_id=" + view.localIdentityId() + " local_identity_name="
+                + view.localIdentityName() + " enabled=" + view.enabled() + " must_change_password="
+                + view.mustChangePassword() + " created_at=" + view.createdAt() + " password_set_at="
+                + view.passwordSetAt());
+    }
+
+    private static void printResult(LocalIdentityAdministrationPort.MutationResult result) {
+        if (result instanceof LocalIdentityAdministrationPort.MutationResult.Ok ok) {
+            printView(ok.view());
+        } else if (result instanceof LocalIdentityAdministrationPort.MutationResult.NotFound) {
+            System.err.println("LOCAL_IDENTITY_NOT_FOUND");
+        } else if (result instanceof LocalIdentityAdministrationPort.MutationResult.LastSecurityAdminRefused) {
+            System.err.println("LAST_SECURITY_ADMIN_REFUSED");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // 13G LIA-3.4: role assignment/revocation is NOT re-implemented here --
+    // these two subcommands call the existing, running service's own
+    // POST /role-bindings and POST /role-bindings/revoke, whose four-eyes
+    // and SELF_GRANT_REFUSED behaviour (C3 §4.3) stays exactly as frozen.
+    // No password is ever involved in either call.
+    // ---------------------------------------------------------------
+
+    private static void roleBindCreate(String[] args) {
+        if (args.length != 7) {
+            System.err.println("role-bind-create requires exactly 6 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        String body = "{\"roleToken\":\"" + jsonEscape(args[4]) + "\",\"groupReference\":\"" + jsonEscape(args[5])
+                + "\",\"groupReferenceKeyId\":\"" + jsonEscape(args[6]) + "\"}";
+        postToRoleBindings(args[1], args[2], args[3], "/role-bindings", body);
+    }
+
+    private static void roleBindRevoke(String[] args) {
+        if (args.length != 5) {
+            System.err.println("role-bind-revoke requires exactly 4 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        String body = "{\"bindingId\":\"" + jsonEscape(args[4]) + "\"}";
+        postToRoleBindings(args[1], args[2], args[3], "/role-bindings/revoke", body);
+    }
+
+    private static void postToRoleBindings(String baseUrl, String sessionCookieValue, String csrfToken, String path,
+            String jsonBody) {
+        try {
+            HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+            HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + path))
+                    .header("Content-Type", "application/json")
+                    .header("X-CSRF-Token", csrfToken)
+                    .header("Cookie", "ui2_session=" + sessionCookieValue)
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("status=" + response.statusCode() + " body=" + response.body());
+        } catch (java.io.IOException | InterruptedException e) {
+            System.err.println("role binding request failed: " + e.getMessage());
+        }
+    }
+
+    private static String jsonEscape(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }
