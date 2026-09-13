@@ -564,6 +564,11 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
         }
 
         @Override
+        public boolean anyExist() {
+            throw new AssertionError("not exercised by this test");
+        }
+
+        @Override
         public void recordFailedAttempt(String localIdentityId, java.time.Instant now, int lockoutThreshold,
                 java.time.Duration lockoutDuration) {
             throw new AssertionError("not exercised by this test");

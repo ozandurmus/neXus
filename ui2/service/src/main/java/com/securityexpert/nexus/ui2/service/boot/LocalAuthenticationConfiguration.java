@@ -16,8 +16,10 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.identity.JooqLocalCredentialsRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.JooqSessionRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.LocalIdentityBootstrap;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionRepository;
 import com.securityexpert.nexus.ui2.platform.Clock;
+import com.securityexpert.nexus.ui2.platform.LocalIdentityBootstrapPort;
 import com.securityexpert.nexus.ui2.service.security.LocalMechanism;
 import com.securityexpert.nexus.ui2.service.security.LoginFlow;
 import com.securityexpert.nexus.ui2.service.security.MechanismRegistry;
@@ -65,6 +67,12 @@ public class LocalAuthenticationConfiguration {
     @Bean
     public LocalCredentialsRepository localCredentialsRepository(TransactionBoundary transactionBoundary) {
         return new JooqLocalCredentialsRepository(transactionBoundary);
+    }
+
+    /** C3B contract §2 (BOOT-1..BOOT-4): the port {@link FirstBootIdentitySeedingRunner} seeds through. */
+    @Bean
+    public LocalIdentityBootstrapPort localIdentityBootstrapPort(LocalCredentialsRepository localCredentialsRepository) {
+        return new LocalIdentityBootstrap(localCredentialsRepository);
     }
 
     @Bean

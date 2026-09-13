@@ -28,6 +28,17 @@ public interface LocalCredentialsRepository {
 
     Optional<LocalCredentialRecord> findById(String localIdentityId);
 
+    /**
+     * BOOT-1/BOOT-2 (C3B contract §2): true when the table holds at least
+     * one row, seeded or operator-created. First-boot seeding's whole gate
+     * is this single boolean -- a partially-seeded table (one bootstrap row
+     * present, the other missing) still answers {@code true}, so seeding is
+     * skipped entirely rather than attempting to create only the missing
+     * identity (BOOT-2's decisive rule: never risk rewriting a row an
+     * operator has already touched).
+     */
+    boolean anyExist();
+
     /** Creates a new row (bootstrap seeding, §6, or a future user-management screen out of this movement's scope). */
     String create(String localIdentityId, String localIdentityName, Argon2PasswordHasher.Verifier verifier,
             String createdByActorFingerprint);

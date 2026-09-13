@@ -43,6 +43,11 @@ class MechanismRegistryTest {
         }
 
         @Override
+        public boolean anyExist() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public void recordFailedAttempt(String localIdentityId, Instant now, int lockoutThreshold,
                 java.time.Duration lockoutDuration) {
             throw new UnsupportedOperationException();

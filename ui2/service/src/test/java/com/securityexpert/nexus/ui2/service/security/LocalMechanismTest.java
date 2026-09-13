@@ -85,6 +85,11 @@ class LocalMechanismTest {
         }
 
         @Override
+        public boolean anyExist() {
+            return !byId.isEmpty();
+        }
+
+        @Override
         public void recordFailedAttempt(String localIdentityId, Instant now, int lockoutThreshold,
                 Duration lockoutDuration) {
             LocalCredentialRecord r = byId.get(localIdentityId);

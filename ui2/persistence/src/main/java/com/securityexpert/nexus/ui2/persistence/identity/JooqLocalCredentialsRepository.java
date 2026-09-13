@@ -51,6 +51,11 @@ public final class JooqLocalCredentialsRepository implements LocalCredentialsRep
     }
 
     @Override
+    public boolean anyExist() {
+        return transactionBoundary.inTransaction(dsl -> !dsl.fetch("select 1 from local_credentials limit 1").isEmpty());
+    }
+
+    @Override
     public String create(String localIdentityId, String localIdentityName, Argon2PasswordHasher.Verifier verifier,
             String createdByActorFingerprint) {
         return auditedTransactionBoundary.inTransaction(createdByActorFingerprint, ACTION_CREDENTIAL_CREATE, dsl -> {
