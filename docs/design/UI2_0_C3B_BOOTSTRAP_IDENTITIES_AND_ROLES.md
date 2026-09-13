@@ -60,13 +60,38 @@ firewall ships with its default administrator.**
   `audit_log` row through `C1` §3.5's existing trigger, attributed to a
   reserved bootstrap actor marker — the same posture `C3`'s own bootstrap
   clause already uses. No credential material reaches the row (`C3A` §8).
-- **BOOT-5. Role binding stays where `C3` put it.** `C3`'s Bootstrap clause
-  fixes that the first `role:security_admin` binding is created by a
-  **CLI-only, deployment-controlled** action, never by a running service and
-  never from the browser. BOOT-1 creates **identities**, not bindings, and
-  does not touch that clause. A freshly deployed product therefore has two
-  identities that can authenticate and, until the deployment step runs, no
-  authorization — which is the correct fail-closed order.
+- **BOOT-5. First-boot seeding creates the role bindings too, and this
+  satisfies `C3`'s Bootstrap clause rather than bending it.** A default
+  administrator that can authenticate but cannot administer is not a default
+  administrator. The Product Owner asked for the appliance model, where the
+  product is usable the moment it is deployed.
+
+  `C3`'s Bootstrap clause exists to stop two specific things: **no HTTP path
+  may create the first `role:security_admin` binding** (there is no
+  authenticated session to call it, and the self-grant refusal would block
+  the first administrator's own binding anyway), and the creation must be a
+  **deployment-controlled** action rather than a running service acting on a
+  request. First-boot seeding is exactly that: it runs as part of deploying
+  the product, from no request, with no session, and grants nothing to a
+  caller. It is not an HTTP path and it is not a self-grant.
+
+  An earlier draft of this clause read "CLI-only" as "a human must type a
+  command" and left a freshly deployed product able to authenticate and
+  unable to do anything. That was an over-reading of `C3`, not a requirement
+  of it, and it produced a product the Product Owner did not ask for.
+  Corrected here.
+
+- **BOOT-5a. What is seeded.** `nexusadmin` receives full administrative
+  capability (ROLE-1) and `claudeadmin` receives `role:viewer` and nothing
+  else (ROLE-3), in the same first-boot transaction that creates the
+  identities. Each binding is audited through `C1` §3.5 under the same
+  reserved bootstrap actor marker as the identity itself.
+
+- **BOOT-5b. The existing deployment-controlled CLI path stays.** It remains
+  the way a binding is created or changed outside first boot, and every
+  binding after the bootstrap ones goes through `C3`'s normal authorized
+  path. Nothing about `C3`'s self-grant refusal, its audit requirement or its
+  prohibition on browser-created bindings changes.
 
 ## 3. Roles
 
@@ -117,10 +142,13 @@ Owner.
    so there is one value to change and not several to hunt.
 4. Seeding produces one `audit_log` row per identity, attributed to the
    reserved bootstrap marker, carrying no credential material.
-5. First boot creates no `role_bindings` row; a test asserts the table is
-   still empty afterwards (BOOT-5).
-6. After the deployment-controlled binding step, `nexusadmin` resolves full
-   administrative capability and `claudeadmin` resolves `role:viewer` only.
+5. First boot creates the two bootstrap role bindings, and a test asserts a
+   freshly deployed product is **usable**: `nexusadmin` authenticates and
+   resolves full administrative capability without any further deployment
+   step (BOOT-5, BOOT-5a).
+6. Immediately after first boot, with no further step, `nexusadmin` resolves
+   full administrative capability and `claudeadmin` resolves `role:viewer`
+   only.
 7. A test asserts `claudeadmin`'s resolved role set permits no mutation
    path — it is refused, visible-but-refused per `C3` §5.1, never a silent
    404.
