@@ -1,0 +1,243 @@
+{
+  "created_at": "2026-09-13T08:43:43Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 docs/design/PAN_DISCOVERY_PYTHON_STEP_MAP_2026_09_13.md exists, status DRAFT -- DO NOT FREEZE, and says in its own status block that it authorizes nothing.",
+          "AC-2 Every discovery step is mapped with call, file, line range, what is parsed, what is kept, what is discarded.",
+          "AC-3 parse_pan_managed_device_entry is enumerated field by field, each with the XML element or attribute it reads and its absence behaviour.",
+          "AC-4 Any filtering or dropping of candidates is stated explicitly with its file and line.",
+          "AC-5 The virtual-system question is answered either way, and an absence is stated as an absence.",
+          "AC-6 The high-availability question is answered, including what key any pairing uses.",
+          "AC-7 A boundary table says, per step, whether it is inside the two gate-lifted methods or outside them.",
+          "AC-8 An UNKNOWN register lists every question the code cannot answer, each with what would settle it.",
+          "AC-9 The repository privacy gate reports zero findings, and no real identity appears in the document.",
+          "AC-10 The diff is exactly one added file under docs/design/."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_12.md section 2 makes the existing Python KNOW-HOW ONLY: it is read to learn what the vendor does, never to port, wrap, transliterate or invoke. This movement is exactly that reading, and it produces a document, not code.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "gate": "docs/design/PO_DECISION_RECORD_2026_09_13B_PAN_DISCOVERY_COLLECTION_GATE.md lifted the collection gate for Palo Alto DISCOVERY ONLY, two methods: one authenticated Panorama session, and one read-only <show><devices><all/></devices></show>. Reading source code contacts nothing and is inside no gate, but the map must say, for every step it describes, whether that step is inside those two methods or outside them.",
+          "predecessor": "docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md (DRAFT) section 5 already maps the Palo Alto call sites at a route level, and section 6.1 classifies its steps D/I/C/R. That is the starting point, not the deliverable: it says WHICH route is called and does not say what comes back, what is parsed, what is kept and what is thrown away. This movement goes one level deeper and only for discovery.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "shape_of_the_target": "panorama/panorama_runtime_runner.py (372 lines), configuration/panorama_config_collector.py (3063 lines), panorama/pan_identity.py, panorama/preflight_collector.py (298), panorama/pan_preflight_extraction.py (88), panorama/pan_preflight_projection.py (388)."
+        },
+        "context_not_loaded": [
+          "ui2/ sources",
+          "Check Point collectors and contracts",
+          "docs/history/**",
+          "project/*.json",
+          "orchestrator and relay internals"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pan-discovery-python-step-map"
+        },
+        "invariants": [
+          "No source file is modified.",
+          "No device is contacted and no network call is made.",
+          "No real identity, address, serial, hostname or domain enters the document.",
+          "The existing Python is described, never proposed for reuse.",
+          "The document carries a DRAFT status and authorizes nothing.",
+          "A field's meaning is never asserted from its name."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "READ_ONLY_AUDIT",
+        "objective": "Produce a step-by-step behaviour map of what the existing Python Palo Alto collectors do DURING DISCOVERY -- which call is issued at which step, what comes back from it, what is parsed out of it, and what is discarded -- so a Palo Alto discovery contract can be written from measured behaviour rather than from a script. Read-only: this movement changes no product code and produces one document.",
+        "output_contract": [
+          "One DRAFT document that turns the Palo Alto discovery path from a list of routes into a step map with inputs, outputs and discards.",
+          "A field-by-field enumeration of the one shared managed-device parser.",
+          "A boundary table separating what the current gate lift covers from what it does not.",
+          "An UNKNOWN register naming what only a measurement against a live Panorama can settle.",
+          "SESSION_CLOSE naming the measured defects found and the questions left UNKNOWN."
+        ],
+        "recommended_reasoning": {
+          "reason": "A reading task over roughly 4,300 lines across six files, where the value is entirely in precision: which line, which field, what is discarded. High effort rather than medium because the standing trap is restating a route table instead of reporting what actually comes back, and because AGENTS.md's vendor-semantics law requires constant separation of observed behaviour from inferred meaning.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every claim carries a file path and a line range. A claim without one is not a finding.",
+          "Distinguish what the code DOES from what a field MEANS. The first is observable in the source; the second is not, and belongs in the UNKNOWN register.",
+          "Where the two PAN collectors disagree -- and they do, on transport and on credential handling -- record both sides rather than picking one.",
+          "Commit early and often.",
+          "Do not merge to main. The Product Owner assistant reviews the diff and merges.",
+          "Do not run the full pytest suite. It creates untracked data/ and logs/ directories that the repository privacy gate then flags.",
+          "If something in the code is genuinely ambiguous, record it as UNKNOWN rather than resolving it by reading intent into the code."
+        ],
+        "risks": [
+          "Restating the existing route-level audit instead of going a level deeper into what comes back and what is kept.",
+          "Asserting what a field means because its name suggests it.",
+          "Drifting into the collection path, which is large and not this document's subject.",
+          "Proposing a design or a Java shape, which belongs to a later contract movement.",
+          "Quoting a literal identity out of the source.",
+          "Treating the absence of virtual-system handling as proof the vendor does not supply it."
+        ],
+        "scope": {
+          "in": [
+            "Produce ONE new document, docs/design/PAN_DISCOVERY_PYTHON_STEP_MAP_2026_09_13.md, status DRAFT -- DO NOT FREEZE, NOT implementation authority.",
+            "Map the discovery path step by step. For EACH step give: the call as issued (method, route, and the op command or xpath, verbatim as the code builds it), the source file and line range, what the response carries that the code reads, what the code PARSES out of it, what it KEEPS, what it DISCARDS, and what it WRITES to disk if anything.",
+            "Cover authentication as its own step: both PAN collectors obtain a key, and they do it differently -- one sends credentials as URL query parameters and one as POST body fields with an explicit comment that they are never in a URL. Record both, with file and line, and say which is which. Do not judge; record.",
+            "Cover the managed-device enumeration in full. parse_pan_managed_device_entry in panorama/pan_identity.py is the one shared parser both collectors go through. Enumerate EVERY field it reads, the XML element or attribute each comes from, and what it falls back to when a field is absent. This is the single most important section of the document.",
+            "Cover what the code does with the enumeration result: any filtering, any selection, any ordering, any limit. State plainly if the code DROPS candidates and on what field -- and where in the file that happens.",
+            "Cover virtual systems: whether anything in the discovery path reads a multi-vsys indicator or nested vsys entries, and if so where. If the existing code does NOT read them, say so explicitly -- an absence is a finding, and vendor documentation indicates the enumeration response can carry them.",
+            "Cover high availability: whether the discovery path obtains any peer or HA information, from which field, and whether any pairing of two devices happens and on what key. If pairing happens on anything other than a stable identifier, say so.",
+            "Give a boundary table: for every step mapped, whether it falls inside the two gate-lifted methods, or outside them -- and for anything outside, which plane it touches (Panorama configuration, per-device targeted read, or the firewall directly).",
+            "Give an UNKNOWN register: every question the code cannot answer, each with what would settle it. A field's meaning is not settled by the code reading it -- AGENTS.md vendor-semantics law is explicit that a field name is not its contract.",
+            "Record every measured defect you find in the discovery path -- a hard-coded value, a version-pinned assumption, an identity compared on something that is not a stable identifier, a raw response persisted to disk -- with file and line. Record; do not fix."
+          ],
+          "out": [
+            "Changing ANY Python source file. This movement is read-only over the code and produces one document.",
+            "Writing, porting, wrapping, transliterating or invoking any of the existing Python. It is know-how only.",
+            "Proposing a design, an architecture or a Java implementation. The contract that follows is a separate movement and this document must not pre-empt it.",
+            "Any device contact, any network call, any API call, any credential use. Read the source.",
+            "Mapping the COLLECTION path in detail -- interfaces, routes, effective-running, merged, active config, pushed-template, the direct-firewall identity gate. Name each where it is reached so the boundary is visible, then stop. This document is about discovery.",
+            "Check Point in any form.",
+            "Applying, changing or recommending a contract status.",
+            "Reproducing any real address, serial, hostname, domain or certificate subject. If the source contains a literal that looks like one, report its file and line and its classification, never its value."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T08:43:43Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added docs/design/PAN_DISCOVERY_PYTHON_STEP_MAP_2026_09_13.md (613 insertions, 1 file)."
+        ],
+        "completed": [
+          "Produced docs/design/PAN_DISCOVERY_PYTHON_STEP_MAP_2026_09_13.md, status DRAFT -- DO NOT FREEZE, authorizing nothing.",
+          "Mapped both PAN managed-device-discovery collectors step by step: call as issued, file/line, response contents, what is parsed, kept, discarded, and written to disk.",
+          "Enumerated panorama.pan_identity.parse_pan_managed_device_entry field by field with XML source and absence behaviour (AC-3).",
+          "Recorded every filter/limit/selector that narrows the discovered device list, with file and line (AC-4).",
+          "Answered the virtual-system question as an explicit absence, distinct from vendor-supplied absence (AC-5).",
+          "Answered the high-availability question: which field the discovery response itself carries, the per-device fallback read, and the one cross-device pairing key found, with its collection-path/opt-in scope (AC-6).",
+          "Built a boundary table separating the two gate-lifted discovery methods from every other step, naming the plane each outside step touches (AC-7).",
+          "Built a 7-item UNKNOWN register, each with a concrete settling method (AC-8).",
+          "Ran the repository privacy gate (0 findings) and all three named test files, all passing (AC-9).",
+          "Confirmed the diff is exactly one added file and committed it (AC-10)."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Not applicable -- no main.py/runtime entrypoint is touched by this movement; it adds one documentation file only.",
+          "ui": "None. No configuration_ui/compliance_overview/crypto/discovery/project_plan payload field or UI module changed."
+        },
+        "integration": {
+          "branch": "feature/pan-discovery-python-step-map",
+          "ci": "not run by this movement (documentation-only change; validation limited to the three named test files plus the privacy gate, per the movement's standing rule against running the full suite)",
+          "head_sha": "b46c2c6b3689498c1292c9865feb95d09637ea73",
+          "merge_commit": null,
+          "merge_decision": "PENDING_PO_REVIEW",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0137",
+          "movement_type": "READ_ONLY_AUDIT",
+          "objective": "Review the diff and docs/design/PAN_DISCOVERY_PYTHON_STEP_MAP_2026_09_13.md; if accepted, merge to main. No engineering follow-up is implied by this movement -- a future PAN discovery contract movement is separate and not opened here.",
+          "status": "complete"
+        },
+        "preserved": [
+          "Every existing source file, test, and prior docs/design/*.md document, unmodified.",
+          "The predecessor route-level audit (DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md) is deepened for PAN discovery only, never edited or superseded outright."
+        ],
+        "recommended_reasoning": {
+          "reason": "Matches the dispatched recommendation for this movement (precision reading across ~4,300 lines). The next movement (drafting the PAN discovery contract from this map) can likely run at the same or a lower tier since the hard reading is now captured in this document.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "state_updates": [
+          "None. This READ_ONLY_AUDIT movement produces one document only; no project/*.json, CURRENT_STATE.md, roadmap, or backlog entry was touched."
+        ],
+        "unresolved_risks": [
+          "UNKNOWN 1: entry.get(\"name\") as a serial fallback is asserted only by a code comment (panorama/pan_identity.py:44-46), not by cited vendor documentation or a live capture -- settle via a real Panorama capture or official schema doc.",
+          "UNKNOWN 2: <connected> field vocabulary beyond the literal \"yes\"/\"no\" the code checks is unconfirmed -- settle via vendor documentation or a multi-state live capture.",
+          "UNKNOWN 3: which PAN-OS/Panorama versions use shared-policy-status vs shared-policy, and template-status vs template (both have two-name fallbacks in the parser) -- settle via per-version vendor documentation.",
+          "UNKNOWN 4: whether Panorama's <devices><entry> emission order (which the limit truncation implicitly relies on) is stable across polls -- settle via vendor documentation or repeated live capture.",
+          "UNKNOWN 5: whether a multi-vsys firewall's discovery entry carries vsys information this response schema exposes at all, and if so whether the current unanchored-depth XPath would reach it -- settle via official schema documentation or a live capture against a known multi-vsys estate.",
+          "UNKNOWN 6: whether the discovery entry's ha-state and the per-device show-high-availability-state's local-info/state are the same semantic value or a different granularity -- settle via vendor documentation or a same-run comparison capture.",
+          "UNKNOWN 7: whether the managed-device-discovery response can paginate for a large estate -- unhandled either way in this source; settle via vendor documentation or a large-estate live capture.",
+          "Measured defect: hard-coded 10s timeout with no env override on every discovery call in panorama/panorama_runtime_runner.py (lines 71, 93, 109).",
+          "Measured defect: both collectors default TLS verification to disabled unless an env var is explicitly set.",
+          "Measured defect: advisory-only leading-zero normalization of a serial appears in an error-hint path (configuration/panorama_config_collector.py:2269-2274) -- never drives matching, flagged regardless per the identity law's letter.",
+          "Measured defect: raw per-device interface/route XML persisted unmodified to disk one step past discovery in the same run (panorama/panorama_runtime_runner.py:286-287, 316-317).",
+          "Measured asymmetry: the two get_devices implementations keep different field subsets from the identical shared parser, and only one of the two collectors filters on connected==\"yes\" -- both must be reconciled by any future single discovery contract."
+        ],
+        "validation": {
+          "affected": "docs/design/ only -- no runtime code, tests, or project-state file is affected by this change.",
+          "diff_check": "git status confirms exactly one added file, docs/design/PAN_DISCOVERY_PYTHON_STEP_MAP_2026_09_13.md, under docs/design/; no source file touched. Committed as b46c2c6 on feature/pan-discovery-python-step-map.",
+          "full_regression": "Not run, per this movement's standing rule (the full pytest suite creates untracked data/ and logs/ directories the privacy gate would then flag) -- only the three named test files and the privacy gate were run.",
+          "privacy": "python3 scripts/repository_privacy_check.py: Files scanned 1274, Findings 0, Gate PASS. No real address, serial, hostname, domain, or certificate subject appears in the document; the source's own RFC 5737 example address is described by file/line/classification only, never reproduced.",
+          "real_environment": "Not applicable. This movement contacted no device by design; every claim in the document is sourced to repository text at a cited file and line, never a live measurement.",
+          "state_consistency": "No project-state file was touched, so no JSON<->JSON or JSON<->CURRENT_STATE.md consistency question arises from this movement.",
+          "targeted": "python3 -m pytest tests/test_contract_authority_status.py -q: 5 passed; python3 -m pytest tests/test_architecture_convergence.py -q: 23 passed; python3 -m pytest tests/test_project_files_budget.py -q: 9 passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-13T08:53:31Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0137",
+  "movement": "pan_discovery_python_step_map",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13B_PAN_DISCOVERY_COLLECTION_GATE.md",
+    "docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md",
+    "docs/design/PAN_DISCOVERY_MEASUREMENT_BRIEF_2026_09_13.md",
+    "AGENTS.md",
+    "panorama/panorama_runtime_runner.py",
+    "panorama/pan_identity.py",
+    "configuration/panorama_config_collector.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-13T08:53:31Z"
+}
