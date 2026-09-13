@@ -414,6 +414,15 @@
       "priority": "P1",
       "target": "scripts/orchestrator.py decide_start -- add a resume path when the relay's last marker is RELAY_DECISION and next_actor is engineer (GOV.ORCH successor); observed on NXS-LOCAL-0147, 2026-09-13",
       "note": ""
+    },
+    {
+      "id": "pan_collection_contract_from_measurement",
+      "category": "collection",
+      "title": "Write the Palo Alto collection contract from the PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13 measurement run, blocked until the Product Owner executes it",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md",
+      "note": ""
     }
   ]
 }
