@@ -115,6 +115,20 @@ val frontendBuild = tasks.register<Exec>("frontendBuild") {
     dependsOn(frontendCi)
     workingDir = frontendDir.asFile
     commandLine("npm", "run", "build")
+
+    // Declared input/output, not merely an ordering hint: a change under
+    // any of these inputs makes this task (and anything consuming its
+    // output, e.g. :service:processResources) out of date, and Gradle's
+    // content fingerprint on `dist` is what lets a downstream Copy task
+    // detect a real change rather than only a rerun.
+    inputs.dir(frontendDir.dir("src"))
+    inputs.dir(frontendDir.dir("tests"))
+    inputs.file(frontendDir.file("index.html"))
+    inputs.file(frontendDir.file("package.json"))
+    inputs.file(frontendDir.file("package-lock.json"))
+    inputs.file(frontendDir.file("tsconfig.json"))
+    inputs.file(frontendDir.file("vite.config.ts"))
+    outputs.dir(frontendDir.dir("dist"))
 }
 
 val frontendCheck = tasks.register("frontendCheck") {

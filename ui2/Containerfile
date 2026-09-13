@@ -19,6 +19,42 @@ FROM registry.access.redhat.com/ubi9/openjdk-21@sha256:fa55b9f126da0d855e3709473
 # never ships, so the build runs with id 0 here and only here.
 USER 0
 
+# `:service:bootJar` now depends on `frontendBuild` (npm ci && npm run build
+# in ui2/frontend), so this stage — the only one that runs Gradle — needs
+# `node`/`npm` on PATH itself; contract U-1 is settled in the affirmative by
+# that dependency. Node is pinned by manifest-index digest, the same way the
+# two `FROM` bases above are, via a cross-image `COPY --from=<ref>@sha256:...`
+# rather than a second named build stage, so the two-stage shape and the
+# digest-pinning discipline both hold; the runtime stage below never sees any
+# of this, so Node never reaches the shipped image (§3.2, BP-1).
+#
+# Every COPY below names a regular file, never a symlink: this build
+# toolchain does not reliably materialize a symlink copied cross-stage
+# by `COPY --from` (a dangling `node -> node-22`, resolved only inside the
+# source image, is exactly how the first attempt at this failed). `node-22`
+# is node's real binary under the RPM's parallel-install naming; the `libv8*`
+# and `libbrotli*.so.1` sonames are recreated as plain `ln -s` to the one
+# real file each family ships, once that file is in place.
+COPY --from=registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:00f862eda4fcba6f07b1abb7b28714495f9a9b00291dc188d6c5c66cf6ff30e1 /usr/bin/node-22 /usr/bin/node
+COPY --from=registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:00f862eda4fcba6f07b1abb7b28714495f9a9b00291dc188d6c5c66cf6ff30e1 /usr/lib/node_modules /usr/lib/node_modules
+COPY --from=registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:00f862eda4fcba6f07b1abb7b28714495f9a9b00291dc188d6c5c66cf6ff30e1 /usr/lib64/libnode.so.127 /usr/lib64/libnode.so.127
+COPY --from=registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:00f862eda4fcba6f07b1abb7b28714495f9a9b00291dc188d6c5c66cf6ff30e1 /usr/lib64/libbrotlicommon.so.1.0.9 /usr/lib64/libbrotlicommon.so.1.0.9
+COPY --from=registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:00f862eda4fcba6f07b1abb7b28714495f9a9b00291dc188d6c5c66cf6ff30e1 /usr/lib64/libbrotlidec.so.1.0.9 /usr/lib64/libbrotlidec.so.1.0.9
+COPY --from=registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:00f862eda4fcba6f07b1abb7b28714495f9a9b00291dc188d6c5c66cf6ff30e1 /usr/lib64/libbrotlienc.so.1.0.9 /usr/lib64/libbrotlienc.so.1.0.9
+
+RUN ln -s /usr/lib/node_modules/npm/bin/npm-cli.js /usr/bin/npm \
+ && ln -s /usr/lib/node_modules/npm/bin/npx-cli.js /usr/bin/npx \
+ && ln -s libnode.so.127 /usr/lib64/libv8.so.12 \
+ && ln -s libnode.so.127 /usr/lib64/libv8.so.12.4 \
+ && ln -s libnode.so.127 /usr/lib64/libv8_libbase.so.12 \
+ && ln -s libnode.so.127 /usr/lib64/libv8_libbase.so.12.4 \
+ && ln -s libnode.so.127 /usr/lib64/libv8_libplatform.so.12 \
+ && ln -s libnode.so.127 /usr/lib64/libv8_libplatform.so.12.4 \
+ && ln -s libbrotlicommon.so.1.0.9 /usr/lib64/libbrotlicommon.so.1 \
+ && ln -s libbrotlidec.so.1.0.9 /usr/lib64/libbrotlidec.so.1 \
+ && ln -s libbrotlienc.so.1.0.9 /usr/lib64/libbrotlienc.so.1 \
+ && node --version && npm --version
+
 # Gradle's home lives inside the context so that nothing is resolved from,
 # or written to, a path outside this stage.
 ENV GRADLE_USER_HOME=/build/.gradle-home
@@ -29,7 +65,9 @@ COPY . /build
 # The committed wrapper is the only Gradle entry point, validated by its
 # committed distributionSha256Sum (B1-1a §4). No verification-metadata
 # write, no lock write or update, no dependency refresh and no lenient
-# verification flag is passed (§3.2).
+# verification flag is passed (§3.2). `npm ci` (invoked by the `frontendCi`
+# task `frontendBuild` depends on) resolves only from the committed
+# package-lock.json; no flag here relaxes that.
 RUN ./gradlew --no-daemon --console=plain :service:bootJar \
  && cp "$(ls /build/service/build/libs/*.jar | grep -v -- '-plain\.jar' | head -1)" \
        /build/service-boot.jar
