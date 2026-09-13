@@ -5,6 +5,7 @@ import Typography from "@mui/material/Typography";
 import { ScreenHeader, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { AddDeviceDialogTrigger } from "../shell/AddDeviceDialog";
 import { CapabilityMenu, M3Button, M3Tabs, StatusChip, ToggleRow } from "../shell/M3Widgets";
+import { LocalIdentitiesPanel } from "./LocalIdentitiesPanel";
 
 /** M3Administration with an empty registry. Enrollment is the one place a device enters the product. */
 export function AdministrationScreen() {
@@ -104,6 +105,10 @@ export function AdministrationScreen() {
                       content the canvas does not specify."
               />
             ),
+          },
+          {
+            label: "Local identities",
+            panel: <LocalIdentitiesPanel />,
           },
         ]}
       />
