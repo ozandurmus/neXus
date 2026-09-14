@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -15,6 +16,7 @@ import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceDraft;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
 
 /**
@@ -82,6 +84,11 @@ class PersistenceDeviceEnrollmentReadPortTest {
         @Override
         public Optional<com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts> findConfirmFacts(
                 String deviceId) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
+        public List<DeviceSummaryRecord> listAll() {
             throw new UnsupportedOperationException("not used by this test");
         }
     }

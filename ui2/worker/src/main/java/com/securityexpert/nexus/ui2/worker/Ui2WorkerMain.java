@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.securityexpert.nexus.ui2.capability.CapabilityRegistry;
 import com.securityexpert.nexus.ui2.jobs.device.PersistenceDeviceEnrollmentReadPort;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.lease.PersistenceJobLeaseRepository;
@@ -19,14 +20,20 @@ import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobStepAttemptDao;
 import com.securityexpert.nexus.ui2.platform.SecretFile;
+import com.securityexpert.nexus.ui2.worker.confirm.ConfirmCapabilities;
 import com.securityexpert.nexus.ui2.worker.confirm.ConfirmCapabilityExecutor;
 import com.securityexpert.nexus.ui2.worker.confirm.ConfirmJobExecutor;
 import com.securityexpert.nexus.ui2.worker.confirm.PeerFollowResolver;
 import com.securityexpert.nexus.ui2.worker.confirm.WorkerClaimLoop;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.StoreBackedSshCredentialResolver;
 import com.securityexpert.nexus.ui2.worker.discovery.pan.StoreBackedPanCredentialResolver;
+import com.securityexpert.nexus.ui2.worker.transport.CompositeDeviceTransport;
+import com.securityexpert.nexus.ui2.worker.transport.TransportRegistry;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.SshExecTransport;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.TrustRuleResolver;
+import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanTrustRuleResolver;
+import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanXmlApiTransport;
+import com.securityexpert.nexus.ui2.worker.transport.xmlapi.TrustResolution;
 
 /**
  * The worker process's own composition root and entry point (13D DS-1/DS-2:
@@ -36,22 +43,16 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.TrustRuleResolver;
  * com.securityexpert.nexus.ui2.worker.confirm.WorkerClaimLoop} until the
  * process is signalled to stop.
  *
- * <p><b>Packaging note (named at SESSION_CLOSE, not silently glossed over):</b>
- * the deployed image's fixed {@code ENTRYPOINT}
- * (["java", ..., "-jar", "/app/service.jar"]) currently launches only the
- * {@code :service} module's Spring Boot jar; wiring this class's {@code
- * main} to actually run when the image is started with the {@code worker}
- * CMD argument (deploy/ui2/52-worker-deployment.yaml's own {@code args:
- * ["worker"]}) requires either the {@code :service} bootJar's packaging to
- * include {@code :worker}'s compiled classes on its runtime classpath (a
- * build-script change, not a {@code service} source-level dependency on
- * {@code worker} -- DIR-2 stays intact either way, since no {@code service}
- * package class ever imports a {@code worker} package class) with this
- * class set as the Spring Boot {@code Start-Class} when {@code args[0]}
- * equals {@code "worker"}, or a second jar built and copied into the image
- * by the Containerfile. Neither change is made in this movement (it risks
- * the build without room left to validate it); this class is complete,
- * compiled and ready to be the target of that wiring.</p>
+ * <p><b>Packaging (NXS-LOCAL-0158 closed this gap):</b> the deployed image's
+ * fixed {@code ENTRYPOINT} runs one boot jar; {@code :worker} reaches it
+ * only through {@code :service}'s {@code runtimeOnly(project(":worker"))}
+ * classpath entry (a build-script edge, never a {@code service} source
+ * import of a {@code worker} class -- DIR-2 stays intact). {@link
+ * com.securityexpert.nexus.ui2.platform.launch.Ui2Launcher} is the boot
+ * jar's actual Spring Boot {@code Start-Class}; when
+ * {@code args[0] == "worker"} it resolves this class by name and invokes
+ * this {@code main} with the remaining arguments (deploy/ui2/
+ * 52-worker-deployment.yaml's own {@code args: ["worker"]}).</p>
  */
 public final class Ui2WorkerMain {
 
@@ -86,11 +87,34 @@ public final class Ui2WorkerMain {
                 new StoreBackedSshCredentialResolver(resolverComponents.credentialReferenceRepository(),
                         resolverComponents.credentialRepository(), resolverComponents.cipher()),
                 trustRuleResolver);
+        // Same UI2_<TRUSTRULEREF>_FINGERPRINT env convention ssh_exec's
+        // trustRuleResolver above already reads (WORKER.md: "reads no new
+        // secret; trust-rule env names stay as they are") reinterpreted as a
+        // pinned TLS certificate fingerprint rather than an SSH host key one.
+        PanTrustRuleResolver panTrustRuleResolver = trustRuleRef -> {
+            String fingerprint = System.getenv("UI2_" + trustRuleRef.toUpperCase(java.util.Locale.ROOT)
+                    .replace('.', '_') + "_FINGERPRINT");
+            return fingerprint == null || fingerprint.isBlank()
+                    ? new TrustResolution.Unresolved()
+                    : new TrustResolution.PinnedFingerprint(fingerprint);
+        };
+        PanXmlApiTransport panTransport = new PanXmlApiTransport(paloAltoTrustRuleRef, panTrustRuleResolver);
+
+        // WORKER.md "Both vendors in one worker": one composite DeviceTransport
+        // routes ssh_exec to sshTransport and pan_xml_api to panTransport; the
+        // startup check (AC-11) fails fast if either capability's transport
+        // kind were ever left unregistered.
+        CapabilityRegistry capabilityRegistry = CapabilityRegistry.of(ConfirmCapabilities.all());
+        TransportRegistry transportRegistry = WorkerBootstrap.buildTransportRegistry(sshTransport, panTransport);
+        WorkerBootstrap.boot(capabilityRegistry, transportRegistry);
+        CompositeDeviceTransport compositeTransport = new CompositeDeviceTransport(transportRegistry);
+
         StoreBackedPanCredentialResolver panCredentialResolver =
                 new StoreBackedPanCredentialResolver(resolverComponents.credentialReferenceRepository(),
                         resolverComponents.credentialRepository(), resolverComponents.cipher());
 
-        ConfirmCapabilityExecutor checkPointConfirmExecutor = new ConfirmCapabilityExecutor(sshTransport, panCredentialResolver);
+        ConfirmCapabilityExecutor checkPointConfirmExecutor =
+                new ConfirmCapabilityExecutor(compositeTransport, panCredentialResolver);
         ConfirmJobExecutor confirmJobExecutor = new ConfirmJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, checkPointConfirmExecutor,
                 new PeerFollowResolver(checkPointConfirmExecutor));

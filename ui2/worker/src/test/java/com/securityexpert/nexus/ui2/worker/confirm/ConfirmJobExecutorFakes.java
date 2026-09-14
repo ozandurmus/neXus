@@ -207,5 +207,10 @@ final class ConfirmJobExecutorFakes {
         public Optional<DeviceConfirmFacts> findConfirmFacts(String deviceId) {
             return Optional.ofNullable(lastRecordedFacts);
         }
+
+        @Override
+        public List<com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord> listAll() {
+            throw new UnsupportedOperationException("not used by this test");
+        }
     }
 }

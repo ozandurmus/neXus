@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.persistence.device;
 
+import java.util.List;
 import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
@@ -72,4 +73,7 @@ public interface DeviceRepository {
 
     /** The V12 facts a confirmed device carries, for a read model (GET /devices, GET /devices/{id}). */
     Optional<DeviceConfirmFacts> findConfirmFacts(String deviceId);
+
+    /** GET /devices (DeviceSummary rows), newest first -- every device, its vendor and its observed facts. */
+    List<DeviceSummaryRecord> listAll();
 }

@@ -21,6 +21,8 @@ public final class ActionRegistry {
     public static final String RECOVERY_WRITE_EXAMPLE = "recovery_write_example";
     /** B1-4b contract §4: manual device registration, {@code role:onboarding_admin} only (C3 §4.1). */
     public static final String DEVICE_REGISTER = "device_register";
+    /** WORKER.md "Routes": {@code GET /devices} and {@code GET /devices/{id}} -- any authenticated session. */
+    public static final String DEVICE_READ = "device_read";
     /** 13G LIA-5: local identity administration, {@code role:security_admin} only. */
     public static final String LOCAL_IDENTITY_CREATE = "local_identity_create";
     public static final String LOCAL_IDENTITY_LIST = "local_identity_list";
@@ -49,6 +51,10 @@ public final class ActionRegistry {
         // never granted by "admin" adjacency (test 3, C3 §4.1 separation
         // of duties).
         register(new ActionDescriptor(DEVICE_REGISTER, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        // WORKER.md "Routes": the two GET routes require only an authenticated
+        // session, like the other read controllers -- empty means
+        // NO_APPLICABLE_AUTHORITY at E4 (open to any authenticated session).
+        register(new ActionDescriptor(DEVICE_READ, true, Optional.empty()));
         // 13G LIA-5: every local identity administration operation requires
         // role:security_admin, through this same E4 evaluation -- no second
         // authorization check exists.

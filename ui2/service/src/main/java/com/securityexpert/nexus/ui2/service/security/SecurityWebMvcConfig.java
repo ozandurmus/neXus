@@ -22,7 +22,12 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("POST /role-bindings/revoke", ActionRegistry.ROLE_BINDING_REVOKE),
             Map.entry("POST /sessions/revoke", ActionRegistry.SESSION_REVOKE),
-            Map.entry("POST /devices", ActionRegistry.DEVICE_REGISTER),
+            Map.entry("POST /devices/add-single", ActionRegistry.DEVICE_REGISTER),
+            // GET /devices/{id} is this route map's first path-variable route --
+            // "GET /devices/*" is GateChainInterceptor's one-segment wildcard
+            // suffix, matched only after an exact-route lookup misses.
+            Map.entry("GET /devices", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /devices/*", ActionRegistry.DEVICE_READ),
             // 13G: one resource, body-only (no path variable), matching
             // /role-bindings/revoke's own shape.
             Map.entry("POST /local-identities", ActionRegistry.LOCAL_IDENTITY_CREATE),
