@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0",
+  "items": [
+    { "id": "feature_should_not_be_planned", "category": "Cat A", "title": "Terminal Backlog", "status": "done", "priority": "P2", "target": "later" }
+  ]
+}

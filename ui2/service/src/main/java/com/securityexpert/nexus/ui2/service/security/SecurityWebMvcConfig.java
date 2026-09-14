@@ -73,7 +73,10 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // affordance -- these three surface posture rows only.
             Map.entry("POST /devices/*/backup/collect", ActionRegistry.DEVICE_BACKUP_COLLECT),
             Map.entry("GET /devices/*/backups", ActionRegistry.DEVICE_BACKUP_READ),
-            Map.entry("GET /backups", ActionRegistry.DEVICE_BACKUP_READ));
+            Map.entry("GET /backups", ActionRegistry.DEVICE_BACKUP_READ),
+            // WORKER.md (movement NXS-LOCAL-0174): body-only, no path variable,
+            // same shape as /notifications' own route.
+            Map.entry("GET /project-plan", ActionRegistry.PROJECT_PLAN_READ));
 
     private final GateChain gateChain;
 

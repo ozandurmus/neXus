@@ -77,6 +77,14 @@ public final class ActionRegistry {
     /** NXS-LOCAL-0175: {@code GET /devices/{id}/backups} and {@code GET /backups} -- posture only (BK-14: never a path, never bytes), open to any authenticated session like {@link #DEVICE_READ}. */
     public static final String DEVICE_BACKUP_READ = "device_backup_read";
 
+    /**
+     * WORKER.md (movement NXS-LOCAL-0174): {@code GET /project-plan} -- any
+     * authenticated session, like {@link #DEVICE_READ} (PO-NAV-5:
+     * administration-only once real directory-backed authorization exists;
+     * not simulated now).
+     */
+    public static final String PROJECT_PLAN_READ = "project_plan_read";
+
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
     public ActionRegistry() {
@@ -127,6 +135,8 @@ public final class ActionRegistry {
         // BackupCollectService, not here -- E4 only evaluates the role).
         register(new ActionDescriptor(DEVICE_BACKUP_COLLECT, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(DEVICE_BACKUP_READ, true, Optional.empty()));
+        // WORKER.md: same open-to-any-authenticated-session gate as DEVICE_READ.
+        register(new ActionDescriptor(PROJECT_PLAN_READ, true, Optional.empty()));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "current_build": null,
+  "current_track": null,
+  "progress_contract": "weighted acceptance-criterion completion",
+  "tracks": [],
+  "now_next": {},
+  "roadmap_notes": [],
+  "open_decisions": []
+}

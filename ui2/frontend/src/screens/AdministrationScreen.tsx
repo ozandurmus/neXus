@@ -4,6 +4,7 @@ import { M3Button, M3Tabs } from "../shell/M3Widgets";
 import { CredentialsPanel } from "./CredentialsPanel";
 import { LocalIdentitiesPanel } from "./LocalIdentitiesPanel";
 import { DeviceManagementPane } from "./DeviceRegistryPanel";
+import { ProjectPlanPanel } from "./ProjectPlanPanel";
 
 /** M3Administration with an empty registry. Enrollment is the one place a device enters the product. */
 export function AdministrationScreen() {
@@ -43,14 +44,7 @@ export function AdministrationScreen() {
           },
           {
             label: "Project plan",
-            panel: (
-              <EmptyPanel
-                title="No project plan"
-                body="No delivery plan exists for this registry yet. The design canvas names this tab but does
-                      not depict a populated view for it, so this build shows its absence rather than inventing
-                      content the canvas does not specify."
-              />
-            ),
+            panel: <ProjectPlanPanel />,
           },
           {
             label: "Local identities",

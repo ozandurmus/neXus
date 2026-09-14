@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "features": [
+    { "id": "dup_feat", "title": "Dup One", "status": "done", "introduced": "0.5", "weight": 1 },
+    { "id": "dup_feat", "title": "Dup Two", "status": "done", "introduced": "0.5", "weight": 1 },
+    { "id": "feat_status_bad", "title": "Bad Status", "status": "totally_bogus", "introduced": "0.5", "weight": 1,
+      "criteria": [ { "id": "c1", "label": "C1", "state": "sideways", "weight": 1 } ] },
+    { "id": "feat_status_bad_build", "title": "Feature/Build Conflict", "status": "blocked", "introduced": "0.5", "weight": 1 },
+    { "id": "backlog_started", "title": "Backlog Started", "status": "in_progress", "introduced": "0.5", "weight": 1 },
+    { "id": "feature_should_not_be_planned", "title": "Feature Should Not Be Planned", "status": "planned", "introduced": "0.5", "weight": 1 }
+  ]
+}

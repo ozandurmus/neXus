@@ -19,6 +19,17 @@ and in what order.
 
 ## 2. Fixed choices (do not re-decide these)
 
+- **Provider default: Codex.** Since 2026-09-14 the Product Owner's Claude
+  credit is metered and their Codex use is not, so **every engineering
+  dispatch goes to Codex unless the Product Owner says otherwise** — tier
+  per the work (Terra for bounded work, Sol for heavy or novel work; Luna
+  is not used). Claude stays the Product Owner assistant's own model and
+  the fallback when a Codex dispatch fails twice for a reason that is not
+  a defect in the packet. "This packet is risky" is **not** a reason to
+  switch providers on your own judgment: say so and let the Product Owner
+  choose. Drifting back to Claude silently happened once, on movement
+  `NXS-LOCAL-0175`, and cost credit the Product Owner had asked to save.
+
 | Item | Value |
 |---|---|
 | Worker provider | `claude` unless the packet says otherwise in writing |
@@ -97,6 +108,18 @@ Do not use `start` + polling. Do not "check back later".
 A "no" to any of these is a stop, not a workaround.
 
 ## 6. Mechanics that have bitten this loop
+
+- **Never report a merge you did not verify.** `gh pr merge` can print
+  nothing, print "already merged", or fail outright -- most often with
+  `GraphQL: Pull Request has merge conflicts` when another movement landed
+  first. Its exit is not proof. After every merge, confirm with `gh`, not
+  `git`: `gh pr view <n> --json state,mergedAt` must read `MERGED`, and
+  `gh api repos/<owner>/<repo>/commits/main` must show the merge at the
+  head. Only then say it is merged. Told to the Product Owner as done when
+  it was not is the one reporting failure that costs their trust, and it
+  happened on 2026-09-14.
+- **`gh`, never `git`, for anything the remote owns** — merge state, branch
+  state, the head of main, checks. `git` is for the local worktree only.
 
 - **Quote mechanical details, never describe them from memory.** A packet
   that says "the entries' `role` field" when the writer emits `actor` costs

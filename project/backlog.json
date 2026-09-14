@@ -414,6 +414,15 @@
       "priority": "P2",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "ui2_brand_wordmark_rendering",
+      "category": "UI 2.0 (Java product line)",
+      "title": "neXus wordmark renders broken on the login screen",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }

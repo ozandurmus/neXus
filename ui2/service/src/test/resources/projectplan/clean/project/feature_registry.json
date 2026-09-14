@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "features": [
+    { "id": "f1", "title": "Feature One", "status": "done", "introduced": "0.5", "weight": 3, "summary": "s1", "why": "w1" },
+    {
+      "id": "f2", "title": "Feature Two", "status": "in_progress", "introduced": "0.5", "weight": 1, "summary": "s2", "why": "w2",
+      "criteria": [
+        { "id": "c1", "label": "C1", "state": "done", "weight": 2 },
+        { "id": "c2", "label": "C2", "state": "pending", "weight": 2 }
+      ]
+    },
+    {
+      "id": "f3", "title": "Feature Three", "status": "planned", "introduced": "0.5", "weight": 1, "summary": "s3", "why": "w3",
+      "criteria": [
+        { "id": "c1", "label": "C1", "state": "done" },
+        { "id": "c2", "label": "C2", "state": "pending", "weight": "abc" }
+      ]
+    },
+    { "id": "f4", "title": "Feature Four", "status": "done", "introduced": "0.6.1B.1.5", "weight": "oops", "summary": "s4", "why": "w4" },
+    { "id": "f5", "title": "Feature Five", "status": "planned", "introduced": "0.6.0A", "weight": -5, "summary": "s5", "why": "w5" },
+    { "id": "f6", "title": "Feature Six", "status": "done", "introduced": "0.6.3", "weight": 1, "summary": "s6", "why": "w6" },
+    { "id": "f7", "title": "Feature Seven", "status": "done", "introduced": "CON.1", "weight": 1, "summary": "s7", "why": "w7" },
+    { "id": "f8", "title": "Feature Eight", "status": "done", "weight": 1, "summary": "s8", "why": "w8" }
+  ]
+}
