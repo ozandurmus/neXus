@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.transport.xmlapi;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -38,6 +39,8 @@ import com.securityexpert.nexus.ui2.jobs.transport.TransportNotImplementedExcept
 import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
+import com.securityexpert.nexus.ui2.jobs.transport.XmlApiStreamHandler;
+import com.securityexpert.nexus.ui2.jobs.transport.XmlApiStreamOutcome;
 
 /**
  * The {@code xml_api_call} adapter (WORKER.md "ADAPTER") -- the only
@@ -112,6 +115,48 @@ public final class PanXmlApiTransport implements DeviceTransport {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new XmlApiResult.Failed("xml api call was interrupted");
+        }
+    }
+
+    /**
+     * The streaming form of {@link #xmlApiCall} (14G CG-5): the response
+     * body is handed to {@code handler} as an {@link InputStream} via
+     * {@link HttpResponse.BodyHandlers#ofInputStream()} -- never {@code
+     * ofString}, so this call never materializes the response as one
+     * in-memory {@code String} regardless of its size (T-1/T-2/T-4 govern
+     * this call exactly as {@link #xmlApiCall} above). The stream is
+     * closed before this method returns, whether or not {@code handler}
+     * consumed it fully.
+     */
+    @Override
+    public <T> XmlApiStreamOutcome<T> xmlApiCallStreaming(ApiTarget target, XmlApiSpec spec, Duration timeout,
+            XmlApiStreamHandler<T> handler) {
+        HttpClient client;
+        try {
+            client = client();
+        } catch (RuntimeException e) {
+            return new XmlApiStreamOutcome.Failed<>("trust rule could not be resolved into a usable TLS configuration");
+        }
+        try {
+            URI uri = URI.create(target.baseUrl() + API_PATH);
+            HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                    .timeout(timeout)
+                    .POST(HttpRequest.BodyPublishers.ofString(formEncode(spec.formParams()), StandardCharsets.UTF_8))
+                    .header("Content-Type", FORM_CONTENT_TYPE);
+            for (Map.Entry<String, String> header : spec.headers().entrySet()) {
+                builder.header(header.getKey(), header.getValue());
+            }
+            HttpResponse<InputStream> response =
+                    client.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
+            try (InputStream body = response.body()) {
+                T handled = handler.handle(body);
+                return new XmlApiStreamOutcome.Completed<>(response.statusCode(), handled);
+            }
+        } catch (IOException e) {
+            return new XmlApiStreamOutcome.Failed<>("xml api streaming call did not complete");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new XmlApiStreamOutcome.Failed<>("xml api streaming call was interrupted");
         }
     }
 

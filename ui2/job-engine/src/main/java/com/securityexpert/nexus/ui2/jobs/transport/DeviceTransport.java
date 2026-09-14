@@ -26,5 +26,18 @@ public interface DeviceTransport {
     /** PAN XML API -- declared, not implemented at this movement. */
     XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout);
 
+    /**
+     * The streaming form of {@link #xmlApiCall} (14G CG-5): a default
+     * method, not an abstract one, so every existing implementor and test
+     * double keeps compiling unchanged -- only {@code PanXmlApiTransport}
+     * overrides it with a real implementation; every other transport falls
+     * through to this same "not implemented" shape {@link #fetch} already
+     * uses for a capability a transport does not support.
+     */
+    default <T> XmlApiStreamOutcome<T> xmlApiCallStreaming(ApiTarget target, XmlApiSpec spec, Duration timeout,
+            XmlApiStreamHandler<T> handler) {
+        throw new TransportNotImplementedException("xml_api_call_streaming");
+    }
+
     void disconnect(TransportSession session);
 }
