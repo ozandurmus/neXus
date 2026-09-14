@@ -28,6 +28,14 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // suffix, matched only after an exact-route lookup misses.
             Map.entry("GET /devices", ActionRegistry.DEVICE_READ),
             Map.entry("GET /devices/*", ActionRegistry.DEVICE_READ),
+            // NXS-LOCAL-0160 "Routes": the id segment is not the route's
+            // last segment for these three -- GateChainInterceptor's
+            // wildcard fallback tries every interior segment, not only the
+            // last one, so a wildcard entry naming the id's own position
+            // ("*") is enough; no change to any single-segment route above.
+            Map.entry("GET /devices/*/inventory", ActionRegistry.DEVICE_READ),
+            Map.entry("POST /devices/*/inventory/collect", ActionRegistry.DEVICE_INVENTORY_COLLECT),
+            Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
             // 13G: one resource, body-only (no path variable), matching
             // /role-bindings/revoke's own shape.
             Map.entry("POST /local-identities", ActionRegistry.LOCAL_IDENTITY_CREATE),

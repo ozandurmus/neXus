@@ -235,3 +235,98 @@ export function getDevice(deviceId: string): Promise<DeviceDetail> {
 export function listDevices(): Promise<{ devices: DeviceSummary[] }> {
   return call("/devices", "GET");
 }
+
+/**
+ * Inventory read model (NXS-LOCAL-0160): the READ CONTRACT shared with
+ * NXS-LOCAL-0159's persistence layer. `collected_at` is `null` until a
+ * device's first inventory run lands -- never a placeholder timestamp.
+ */
+export interface InventoryAddress {
+  readonly address: string;
+  readonly family: "ipv4" | "ipv6";
+  readonly role: "member" | "cluster_virtual";
+}
+
+export interface InventoryInterface {
+  readonly name: string;
+  readonly parent: string | null;
+  readonly kind: string;
+  readonly state: string;
+  readonly addresses: InventoryAddress[];
+}
+
+export interface InventoryRoute {
+  readonly destination: string;
+  readonly next_hop: string | null;
+  readonly interface: string | null;
+  readonly protocol: string;
+  readonly table: string | null;
+}
+
+export interface InventoryContext {
+  readonly context: string;
+  readonly interfaces: InventoryInterface[];
+  readonly routes: InventoryRoute[];
+}
+
+export interface DeviceInventory {
+  readonly device_id: string;
+  readonly collected_at: string | null;
+  readonly job: JobView | null;
+  readonly contexts: InventoryContext[];
+}
+
+export interface ClusterMember {
+  readonly device_id: string;
+  readonly hostname: string | null;
+}
+
+/** `"all"` when every member has the row; otherwise the member device ids that do. */
+export type Presence = "all" | string[];
+
+export interface ClusterDifference {
+  readonly device_id: string;
+  readonly field: string;
+  readonly value: string;
+}
+
+export interface ClusterInterface {
+  readonly name: string;
+  readonly kind: string;
+  readonly addresses: InventoryAddress[];
+  readonly presence: Presence;
+  readonly differences: ClusterDifference[];
+}
+
+export interface ClusterRoute {
+  readonly destination: string;
+  readonly next_hop: string | null;
+  readonly interface: string | null;
+  readonly protocol: string;
+  readonly presence: Presence;
+  readonly differences: ClusterDifference[];
+}
+
+export interface ClusterContext {
+  readonly context: string;
+  readonly interfaces: ClusterInterface[];
+  readonly routes: ClusterRoute[];
+}
+
+export interface ClusterInventory {
+  readonly cluster_member_ref: string;
+  readonly members: ClusterMember[];
+  readonly contexts: ClusterContext[];
+}
+
+export function getDeviceInventory(deviceId: string): Promise<DeviceInventory> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/inventory`, "GET");
+}
+
+export function getClusterInventory(clusterMemberRef: string): Promise<ClusterInventory> {
+  return call(`/clusters/${encodeURIComponent(clusterMemberRef)}/inventory`, "GET");
+}
+
+export function requestInventoryCollect(deviceId: string, nonce?: string): Promise<{ job_id: string }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/inventory/collect`, "POST", nonce ? { nonce } : {});
+}

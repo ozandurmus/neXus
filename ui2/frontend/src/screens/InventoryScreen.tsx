@@ -10,6 +10,7 @@ import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { listDevices, type ApiError, type DeviceSummary } from "../auth/adminApi";
 import { enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
+import { DeviceInventoryPanels } from "./InventoryPanels";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -27,9 +28,29 @@ function vendorLabel(vendorHint: string): string {
   return VENDOR_LABEL[vendorHint] ?? vendorHint;
 }
 
-function DeviceRow({ device, indented = false }: { readonly device: DeviceSummary; readonly indented?: boolean }) {
+function DeviceRow({
+  device,
+  indented = false,
+  selected = false,
+  onSelect,
+}: {
+  readonly device: DeviceSummary;
+  readonly indented?: boolean;
+  readonly selected?: boolean;
+  readonly onSelect?: (device: DeviceSummary) => void;
+}) {
   return (
     <Box
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onClick={onSelect ? () => onSelect(device) : undefined}
+      onKeyDown={
+        onSelect
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") onSelect(device);
+            }
+          : undefined
+      }
       sx={{
         display: "flex",
         flexDirection: "column",
@@ -37,8 +58,9 @@ function DeviceRow({ device, indented = false }: { readonly device: DeviceSummar
         p: 1.25,
         ml: indented ? 3 : 0,
         border: "1px solid",
-        borderColor: "divider",
+        borderColor: selected ? m3.primary : "divider",
         borderRadius: 2,
+        cursor: onSelect ? "pointer" : undefined,
       }}
     >
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
@@ -61,7 +83,15 @@ function DeviceRow({ device, indented = false }: { readonly device: DeviceSummar
  * structurally required piece of this screen. A device whose
  * `cluster_member_ref` is null always renders as a normal standalone row.
  */
-function DeviceList({ devices }: { readonly devices: readonly DeviceSummary[] }) {
+function DeviceList({
+  devices,
+  selectedDeviceId,
+  onSelect,
+}: {
+  readonly devices: readonly DeviceSummary[];
+  readonly selectedDeviceId: string | null;
+  readonly onSelect: (device: DeviceSummary) => void;
+}) {
   const [collapsedRefs, setCollapsedRefs] = useState<ReadonlySet<string>>(new Set());
 
   const groups = new Map<string, DeviceSummary[]>();
@@ -115,7 +145,13 @@ function DeviceList({ devices }: { readonly devices: readonly DeviceSummary[] })
             {!isCollapsed && (
               <Stack spacing={1}>
                 {members.map((member) => (
-                  <DeviceRow key={member.device_id} device={member} indented />
+                  <DeviceRow
+                    key={member.device_id}
+                    device={member}
+                    indented
+                    selected={member.device_id === selectedDeviceId}
+                    onSelect={onSelect}
+                  />
                 ))}
               </Stack>
             )}
@@ -123,7 +159,12 @@ function DeviceList({ devices }: { readonly devices: readonly DeviceSummary[] })
         );
       })}
       {standalone.map((device) => (
-        <DeviceRow key={device.device_id} device={device} />
+        <DeviceRow
+          key={device.device_id}
+          device={device}
+          selected={device.device_id === selectedDeviceId}
+          onSelect={onSelect}
+        />
       ))}
     </Stack>
   );
@@ -135,6 +176,7 @@ export function InventoryScreen() {
     () => listDevices().then((result) => result.devices ?? []),
     describeApiError,
   );
+  const [selectedDevice, setSelectedDevice] = useState<DeviceSummary | null>(null);
 
   const devices = data;
   const total = devices?.length ?? 0;
@@ -179,60 +221,70 @@ export function InventoryScreen() {
             {!error && devices !== null && devices.length === 0 && (
               <EmptyPanel title="No devices" body="Nothing is enrolled yet." />
             )}
-            {!error && devices !== null && devices.length > 0 && <DeviceList devices={devices} />}
+            {!error && devices !== null && devices.length > 0 && (
+              <DeviceList
+                devices={devices}
+                selectedDeviceId={selectedDevice?.device_id ?? null}
+                onSelect={setSelectedDevice}
+              />
+            )}
           </Box>
         }
         detail={
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
-            <M3Tabs
-              ariaLabel="Device detail"
-              tabs={[
-                {
-                  label: "Interfaces",
-                  panel: (
-                    <Stack spacing={1.5}>
+            {selectedDevice ? (
+              <DeviceInventoryPanels key={selectedDevice.device_id} device={selectedDevice} />
+            ) : (
+              <M3Tabs
+                ariaLabel="Device detail"
+                tabs={[
+                  {
+                    label: "Interfaces",
+                    panel: (
+                      <Stack spacing={1.5}>
+                        <EmptyPanel
+                          title="No interface evidence"
+                          body="Enrol a device from Administration to see its interfaces here; none is enrolled
+                                yet."
+                        />
+                        <Typography variant="body2">
+                          Interface evidence is read over SSH or HTTPS. Values are observed, never written.
+                        </Typography>
+                      </Stack>
+                    ),
+                  },
+                  {
+                    label: "Routing",
+                    panel: (
                       <EmptyPanel
-                        title="No interface evidence"
-                        body="Enrol a device from Administration to see its interfaces here; none is enrolled
+                        title="No routing evidence"
+                        body="Routing tables are read directly from an enrolled device; no device has been
+                              enrolled or read yet."
+                      />
+                    ),
+                  },
+                  {
+                    label: "Cluster members",
+                    panel: (
+                      <EmptyPanel
+                        title="No cluster membership evidence"
+                        body="Membership needs an identity-verified read from each peer; none has been collected
                               yet."
                       />
-                      <Typography variant="body2">
-                        Interface evidence is read over SSH or HTTPS. Values are observed, never written.
-                      </Typography>
-                    </Stack>
-                  ),
-                },
-                {
-                  label: "Routing",
-                  panel: (
-                    <EmptyPanel
-                      title="No routing evidence"
-                      body="Routing tables are read directly from an enrolled device; no device has been
-                            enrolled or read yet."
-                    />
-                  ),
-                },
-                {
-                  label: "Cluster members",
-                  panel: (
-                    <EmptyPanel
-                      title="No cluster membership evidence"
-                      body="Membership needs an identity-verified read from each peer; none has been collected
-                            yet."
-                    />
-                  ),
-                },
-                {
-                  label: "Identity & provenance",
-                  panel: (
-                    <EmptyPanel
-                      title="No identity or provenance evidence"
-                      body="Identity requires a direct, verified device read; none has occurred yet."
-                    />
-                  ),
-                },
-              ]}
-            />
+                    ),
+                  },
+                  {
+                    label: "Identity & provenance",
+                    panel: (
+                      <EmptyPanel
+                        title="No identity or provenance evidence"
+                        body="Identity requires a direct, verified device read; none has occurred yet."
+                      />
+                    ),
+                  },
+                ]}
+              />
+            )}
           </Box>
         }
       />
