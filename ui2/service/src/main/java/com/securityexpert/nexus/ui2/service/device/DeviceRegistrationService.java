@@ -46,6 +46,8 @@ public final class DeviceRegistrationService {
     public static final String REASON_CREDENTIAL_REFERENCE_NOT_FOUND = "credential_reference_not_found";
     public static final String REASON_ADDRESS_REF_INVALID = "address_ref_invalid";
     public static final String REASON_VENDOR_HINT_INVALID = "vendor_hint_invalid";
+    /** 14I MS-1: the role is not one of the two values the database will accept. */
+    public static final String REASON_ROLE_INVALID = "role_invalid";
 
     private final DeviceRepository deviceRepository;
     private final CredentialReferenceRepository credentialReferenceRepository;
@@ -81,8 +83,6 @@ public final class DeviceRegistrationService {
      * {@link com.securityexpert.nexus.ui2.persistence.device.DeviceDraft}'s
      * own field javadoc).
      */
-    public static final String REASON_ROLE_INVALID = "role_invalid";
-
     public Outcome register(String registeringActorFingerprint, String role, String vendorHint, String transportKind,
             String addressRef, String credentialReferenceId, boolean isTestTarget, String registrationSource,
             Optional<String> clusterMemberRef, Optional<String> virtualSystemRef, Optional<String> discoveryMatchKey,
