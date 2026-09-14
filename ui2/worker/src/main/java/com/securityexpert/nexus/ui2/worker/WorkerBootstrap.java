@@ -5,6 +5,7 @@ import com.securityexpert.nexus.ui2.capability.TransportKind;
 import com.securityexpert.nexus.ui2.worker.transport.StartupTransportCheck;
 import com.securityexpert.nexus.ui2.worker.transport.TransportRegistry;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.SshExecTransport;
+import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanXmlApiTransport;
 
 /**
  * Worker composition root (contract §2: "worker wires the concrete adapter
@@ -19,12 +20,19 @@ public final class WorkerBootstrap {
     private WorkerBootstrap() {
     }
 
-    public static TransportRegistry buildTransportRegistry(SshExecTransport sshExecTransport) {
+    /**
+     * WORKER.md "Both vendors in one worker": both adapters are registered
+     * so a single {@link com.securityexpert.nexus.ui2.worker.transport.CompositeDeviceTransport}
+     * over this registry serves Check Point ({@code ssh_exec}) and Palo
+     * Alto ({@code pan_xml_api}) from the one worker process.
+     * {@link TransportKind#SSH_INTERACTIVE} is deliberately never
+     * registered here (contract §5: no capability declares it yet).
+     */
+    public static TransportRegistry buildTransportRegistry(SshExecTransport sshExecTransport,
+            PanXmlApiTransport panXmlApiTransport) {
         TransportRegistry registry = new TransportRegistry();
         registry.register(TransportKind.SSH_EXEC, sshExecTransport);
-        // TransportKind.SSH_INTERACTIVE and TransportKind.PAN_XML_API are
-        // deliberately never registered here (contract §5: "only the
-        // transport the first capability needs is implemented").
+        registry.register(TransportKind.PAN_XML_API, panXmlApiTransport);
         return registry;
     }
 
