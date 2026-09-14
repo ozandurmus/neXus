@@ -35,12 +35,22 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMateria
 import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolver;
 
 /**
- * The inventory-collect device contact (14C §3, D-7): {@code connect} ->
- * the closed {@link InventoryReadPlan} -> {@code disconnect}, over exactly
- * one interactive session per Check Point device (13F CL-1: never a
- * cluster virtual address) or the XML API key dance per Palo Alto firewall
- * -- mirrors {@code worker.confirm.ConfirmCapabilityExecutor}'s own
- * connect/exec/disconnect shape.
+ * The inventory-collect device contact (14D CF-1..CF-4, 14C D-7):
+ * {@code connect} -> the closed {@link InventoryReadPlan} -> {@code
+ * disconnect}, over exactly one interactive session per Check Point device
+ * (13F CL-1: never a cluster virtual address) or the XML API key dance per
+ * Palo Alto firewall -- mirrors {@code worker.confirm.ConfirmCapabilityExecutor}'s
+ * own connect/exec/disconnect shape.
+ *
+ * <p>Check Point executor order (14D §3): {@code vsx stat -v} runs first,
+ * bare -- CF-4's text detection decides VSX before any other read's form
+ * is chosen, so this one read cannot itself be issued through the {@code
+ * vsenv 0} wrapper it is deciding whether to use for the rest. The other
+ * five physical reads then run through {@link
+ * InventoryReadPlan#checkPointPhysicalCommand}, wrapped on a VSX host and
+ * bare otherwise (CF-2); per-VSID reads run last, one VSID at a time
+ * (VS0 never re-entered), each as the three {@link
+ * InventoryReadPlan#checkPointVsidSteps} composites.</p>
  *
  * <p>Identity mismatch (13F ID-M1..M4) reuses {@link
  * IdentityMismatchEvaluator} exactly as the confirm does: {@code
@@ -59,7 +69,10 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
  * persisted -- 14C D-4 names no HA-role column on {@code
  * device_inventory_run}/{@code device_interface}/{@code device_route};
  * the read exists only to keep the paced session's own command sequence
- * exactly as 14C §3 lists it.</p>
+ * exactly as 14D §3 lists it. The same is true of {@code
+ * CheckPointHaStateParser}'s per-VSID VSLS role table (14D PR-4): it is
+ * parsed off the physical {@code cphaprob stat} read for observability but
+ * has no column to persist into either.</p>
  */
 public final class InventoryCapabilityExecutor {
 
@@ -107,12 +120,16 @@ public final class InventoryCapabilityExecutor {
                         "presented identity does not match the recorded baseline; strict posture refused the contact");
             }
 
-            String ipv4 = execOutput(session, InventoryReadPlan.CP_IP_ADDR_SHOW_V4);
-            String ipv6 = execOutput(session, InventoryReadPlan.CP_IP_ADDR_SHOW_V6);
-            String routeOutput = execOutput(session, InventoryReadPlan.CP_IP_ROUTE_SHOW);
-            String vipOutput = execOutput(session, InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF);
-            execOutput(session, InventoryReadPlan.CP_CPHAPROB_STAT);
-            String vsxOutput = execOutput(session, InventoryReadPlan.CP_VSX_STAT);
+            // Executor order (14D §3): detect VSX first, bare, before any other read's form is chosen.
+            String vsxProbeOutput = execOutput(session, InventoryReadPlan.CP_VSX_STAT);
+            CheckPointVsxStatParser.VsxStatResult vsxStat = CheckPointVsxStatParser.parse(vsxProbeOutput);
+            boolean vsxHost = vsxStat.vsx();
+
+            String ipv4 = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V4, vsxHost));
+            String ipv6 = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V6, vsxHost));
+            String routeOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ROUTE_SHOW, vsxHost));
+            execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost));
+            String vipOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
 
             List<InventoryContext> contexts = new ArrayList<>();
             contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
@@ -120,17 +137,22 @@ public final class InventoryCapabilityExecutor {
                             CheckPointClusterVirtualInterfaceParser.parse(vipOutput))),
                     toInventoryRoutes(CheckPointIpRouteParser.parse(routeOutput))));
 
-            List<String> vsids = CheckPointVsxStatParser.parseVsids(vsxOutput).stream()
+            List<String> vsids = vsxStat.devices().stream()
+                    .map(CheckPointVsxStatParser.VsxDevice::vsid)
                     .filter(vsid -> !"0".equals(vsid))
                     .toList();
             for (String vsid : vsids) {
                 List<String> steps = InventoryReadPlan.checkPointVsidSteps(vsid);
                 String addrAndRouteCombined = execOutput(session, steps.get(0));
-                execOutput(session, steps.get(1));
+                String vsClusterIfOutput = execOutput(session, steps.get(1));
+                execOutput(session, steps.get(2));
                 CheckPointVsidCompositeOutputSplitter.Halves halves =
                         CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
+                List<ParsedInterface> vsInterfaces = mergeVirtualAddresses(
+                        CheckPointIpAddrParser.parse(halves.addrOutput(), ""),
+                        CheckPointClusterVirtualInterfaceParser.parse(vsClusterIfOutput));
                 contexts.add(new InventoryContext(vsid,
-                        toInventoryInterfaces(CheckPointIpAddrParser.parse(halves.addrOutput(), "")),
+                        toInventoryInterfaces(vsInterfaces),
                         toInventoryRoutes(CheckPointIpRouteParser.parse(halves.routeOutput()))));
             }
             return new InventoryResult.Completed(contexts);
@@ -212,7 +234,8 @@ public final class InventoryCapabilityExecutor {
                     }
                     List<ParsedAddress> merged = new ArrayList<>(iface.addresses());
                     merged.addAll(vips);
-                    return new ParsedInterface(iface.name(), iface.parent(), iface.kind(), iface.state(), merged);
+                    return new ParsedInterface(iface.name(), iface.parent(), iface.kind(), iface.state(), merged,
+                            iface.vlanId());
                 })
                 .toList();
     }

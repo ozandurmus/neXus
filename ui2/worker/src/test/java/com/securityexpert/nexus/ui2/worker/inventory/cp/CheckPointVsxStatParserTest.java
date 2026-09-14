@@ -1,25 +1,35 @@
 package com.securityexpert.nexus.ui2.worker.inventory.cp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.worker.inventory.Fixtures;
+import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsxStatParser.VsxDevice;
+import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsxStatParser.VsxStatResult;
 
-/** AC-2: {@code vsx stat -v} -- VSIDs only, including VS0 (the caller decides not to re-enter it). */
+/** AC-4: {@code vsx stat -v} -- VSX detection by text (CF-4), VSIDs including VS0, type letter kept. */
 class CheckPointVsxStatParserTest {
 
     @Test
-    void parsesEveryVsidIncludingVs0() {
-        List<String> vsids = CheckPointVsxStatParser.parseVsids(Fixtures.read("cp/vsx_stat_v.txt"));
+    void parsesEveryVsidIncludingVs0WithItsTypeLetter() {
+        VsxStatResult result = CheckPointVsxStatParser.parse(Fixtures.read("cp/vsx_stat_v.txt"));
 
-        assertEquals(List.of("0", "2", "5"), vsids);
+        assertTrue(result.vsx());
+        assertEquals(List.of(new VsxDevice("0", "S"), new VsxDevice("2", "S"), new VsxDevice("5", "S")),
+                result.devices());
+        assertEquals(List.of("0", "2", "5"), CheckPointVsxStatParser.parseVsids(Fixtures.read("cp/vsx_stat_v.txt")));
     }
 
     @Test
-    void nonVsxHostHasNoVsids() {
-        assertEquals(List.of(), CheckPointVsxStatParser.parseVsids("vsx stat not applicable on this platform\n"));
+    void nonVsxTextYieldsNotVsxWithoutError() {
+        VsxStatResult result = CheckPointVsxStatParser.parse(Fixtures.read("cp/vsx_stat_v_not_vsx.txt"));
+
+        assertFalse(result.vsx());
+        assertEquals(List.of(), result.devices());
     }
 }

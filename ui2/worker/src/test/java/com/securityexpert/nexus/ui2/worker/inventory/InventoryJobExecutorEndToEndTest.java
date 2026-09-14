@@ -31,30 +31,32 @@ class InventoryJobExecutorEndToEndTest {
     private static final String DEVICE_ID = "device-enrolled-1";
 
     @Test
-    void checkPointClusterMemberWithTwoVsidsRecordsOneRunWithThreeContexts() {
-        Map<String, String> outputByCommand = Map.of(
-                InventoryReadPlan.CP_IP_ADDR_SHOW_V4,
-                "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"
-                        + "    inet 192.0.2.10/24 brd 192.0.2.255 scope global eth0\n",
-                InventoryReadPlan.CP_IP_ADDR_SHOW_V6, "",
-                InventoryReadPlan.CP_IP_ROUTE_SHOW,
-                "default via 192.0.2.1 dev eth0 proto static\n",
-                InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF,
-                "Virtual cluster interfaces:\neth0        192.0.2.1\n",
-                InventoryReadPlan.CP_CPHAPROB_STAT,
-                "1 (local) 192.0.2.10 100% ACTIVE gw-a\n",
-                InventoryReadPlan.CP_VSX_STAT,
-                "VSID | Type | Name\n0 | VS0 | VS0\n2 | VS | vs-finance\n5 | VS | vs-hr\n",
-                "vsenv 2; ip -4 addr show; ip -4 route show",
-                "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"
-                        + "    inet 203.0.113.2/29 brd 203.0.113.7 scope global eth0\n"
-                        + "default via 203.0.113.1 dev eth0 proto static\n",
-                "vsenv 2; cphaprob stat", "1 (local) 203.0.113.2 100% ACTIVE gw-a\n",
-                "vsenv 5; ip -4 addr show; ip -4 route show",
-                "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"
-                        + "    inet 198.51.100.2/29 brd 198.51.100.7 scope global eth0\n"
-                        + "198.51.100.0/29 dev eth0 proto kernel scope link src 198.51.100.2\n",
-                "vsenv 5; cphaprob stat", "1 (local) 198.51.100.2 100% ACTIVE gw-a\n");
+    void checkPointVsxHostWithTwoVsidsRecordsOneRunWithThreeContexts() {
+        Map<String, String> outputByCommand = Map.ofEntries(
+                Map.entry(InventoryReadPlan.CP_VSX_STAT,
+                        "ID | Type | Name\n0 | S | VS0\n2 | S | vs-finance\n5 | S | vs-hr\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ADDR_SHOW_V4),
+                        "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"
+                                + "    inet 192.0.2.10/24 brd 192.0.2.255 scope global eth0\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ADDR_SHOW_V6), ""),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ROUTE_SHOW), "default via 192.0.2.1 dev eth0 proto 7\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_CPHAPROB_STAT), "1 (local) 192.0.2.10 100% ACTIVE gw-a\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF),
+                        "Virtual cluster interfaces: 1\neth0        192.0.2.1\n"),
+                Map.entry("bash -lc 'vsenv 2 && ip -4 addr show && ip -4 route show'",
+                        "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"
+                                + "    inet 203.0.113.2/29 brd 203.0.113.7 scope global eth0\n"
+                                + "default via 203.0.113.1 dev eth0 proto 7\n"),
+                Map.entry("bash -lc 'vsenv 2 && cphaprob -a -m if'",
+                        "Virtual cluster interfaces: 1\neth0        203.0.113.1\n"),
+                Map.entry("bash -lc 'vsenv 2 && cphaprob stat'", "1 (local) 203.0.113.2 100% ACTIVE gw-a\n"),
+                Map.entry("bash -lc 'vsenv 5 && ip -4 addr show && ip -4 route show'",
+                        "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"
+                                + "    inet 198.51.100.2/29 brd 198.51.100.7 scope global eth0\n"
+                                + "198.51.100.0/29 dev eth0 proto kernel scope link src 198.51.100.2\n"),
+                Map.entry("bash -lc 'vsenv 5 && cphaprob -a -m if'",
+                        "Virtual cluster interfaces: 1\neth0        198.51.100.1\n"),
+                Map.entry("bash -lc 'vsenv 5 && cphaprob stat'", "1 (local) 198.51.100.2 100% ACTIVE gw-a\n"));
 
         ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
         InventoryJobExecutorFakes.FakeLeaseRepository leaseRepo =
@@ -97,12 +99,21 @@ class InventoryJobExecutorEndToEndTest {
 
         InventoryContext vsid2 = contextNamed(run, "2");
         assertEquals(1, vsid2.interfaces().size());
+        assertEquals(2, vsid2.interfaces().get(0).addresses().size(), "member address plus this VS's own cluster VIP");
         assertEquals("203.0.113.2/29", vsid2.interfaces().get(0).addresses().get(0).address());
+        assertTrue(vsid2.interfaces().get(0).addresses().stream()
+                .anyMatch(a -> a.role().equals(InventoryAddress.ROLE_CLUSTER_VIRTUAL) && a.address().equals("203.0.113.1")));
         assertEquals(1, vsid2.routes().size());
 
         InventoryContext vsid5 = contextNamed(run, "5");
         assertEquals("198.51.100.2/29", vsid5.interfaces().get(0).addresses().get(0).address());
+        assertTrue(vsid5.interfaces().get(0).addresses().stream()
+                .anyMatch(a -> a.role().equals(InventoryAddress.ROLE_CLUSTER_VIRTUAL) && a.address().equals("198.51.100.1")));
         assertEquals(1, vsid5.routes().size());
+    }
+
+    private static String vsenvZero(String read) {
+        return "bash -lc 'vsenv 0 && " + read + "'";
     }
 
     @Test

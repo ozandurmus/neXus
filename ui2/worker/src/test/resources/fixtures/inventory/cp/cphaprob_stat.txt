@@ -4,3 +4,18 @@ ID  Unique Address    Assigned Load    State                 Name
 
 1 (local) 192.0.2.10       100%             ACTIVE               gw-a
 2         192.0.2.11       0%               STANDBY              gw-b
+
+Active PNOTEs:  None
+
+Last member state change event:
+        Loss of MGCP session (member 192.0.2.11)
+        Reason for state change: interface link is down
+
+Last cluster failover event:
+        Machine with higher priority now active
+        Old  active machine: 192.0.2.11
+        New  active machine: 192.0.2.10 (local)
+
+Cluster failover count:
+        Failovers since reboot :    1
+        Last failover event    :    Sep 14 08:00:00 2026

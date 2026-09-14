@@ -1,7 +1,19 @@
-1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP
-    inet 192.0.2.10/24 brd 192.0.2.255 scope global eth0
-2: eth1: <BROADCAST,MULTICAST> mtu 1500 state DOWN
-3: eth2.100@eth2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP
-    inet 198.51.100.1/25 brd 198.51.100.127 scope global eth2.100
-4: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
     inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP qlen 1000
+    link/ether 00:1c:7f:00:00:01 brd ff:ff:ff:ff:ff:ff
+    inet 192.0.2.10/24 brd 192.0.2.255 scope global eth0
+       valid_lft forever preferred_lft forever
+3: eth1: <BROADCAST,MULTICAST> mtu 1500 state DOWN qlen 1000
+    link/ether 00:1c:7f:00:00:02 brd ff:ff:ff:ff:ff:ff
+4: bond1: <BROADCAST,MULTICAST,MASTER,UP,LOWER_UP> mtu 1500 state UP qlen 1000
+    link/ether 00:1c:7f:00:00:03 brd ff:ff:ff:ff:ff:ff
+Message from syslogd@gw-a at Sep 14 10:00:00 2026
+kernel: bond1: link becomes ready
+5: bond1.3841@bond1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP qlen 1000
+    link/ether 00:1c:7f:00:00:03 brd ff:ff:ff:ff:ff:ff
+    vlan protocol 802.1Q id 3841 <REORDER_HDR>
+    inet 198.51.100.5/25 brd 198.51.100.127 scope global bond1.3841
+       valid_lft forever preferred_lft forever

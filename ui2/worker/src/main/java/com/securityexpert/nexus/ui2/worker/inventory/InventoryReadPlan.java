@@ -1,61 +1,107 @@
 package com.securityexpert.nexus.ui2.worker.inventory;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * The closed set of literal commands/calls {@code inventory_collect} may
- * ever send, transcribed from {@code PO_DECISION_RECORD_2026_09_14C}
- * §3 exactly -- the same closed-set-of-literals pattern {@code
- * worker.confirm.DeviceFirstContactCommandSet} already establishes for the
- * enrollment confirm. Named here for the gate rows a later movement
- * authors (14C §5); this movement issues none of these against a real
- * device (CAP_OFFLINE, FIXTURE_ONLY).
+ * ever send, transcribed from {@code PO_DECISION_RECORD_2026_09_14D}
+ * CF-1..CF-4 exactly (successor to {@code PO_DECISION_RECORD_2026_09_14C}
+ * §3, which this class no longer mirrors) -- the same closed-set-of-
+ * literals pattern {@code worker.confirm.DeviceFirstContactCommandSet}
+ * already establishes for the enrollment confirm. Named here for the gate
+ * rows a later movement authors (14D §3); this movement issues none of
+ * these against a real device (CAP_OFFLINE, FIXTURE_ONLY).
  *
- * <p><b>Check Point.</b> One interactive session per device, paced: the
- * six {@link #CHECK_POINT_BASE_STEPS} run first, in order, against the
- * physical context; {@link #CHECK_POINT_VSX_STEP_TEMPLATES} then run once
- * per VSID the {@code vsx stat -v} response named (VS0/the physical
- * context is never re-entered, 14C §3).</p>
+ * <p><b>Check Point (CF-1..CF-4).</b> The landing shell is Expert; reads
+ * run as typed, no {@code clish -c}, no {@code expert} step (CF-1). A
+ * fresh session may land in a non-zero virtual-system context, so no read
+ * ever relies on the session's own landing context (CF-2): the physical
+ * read set ({@link #CHECK_POINT_PHYSICAL_READS}) is issued through {@link
+ * #checkPointPhysicalCommand} -- {@code bash -lc 'vsenv 0 && <read>'} on a
+ * VSX host, bare on a non-VSX gateway (where {@code vsenv} does not
+ * exist) -- and the per-virtual-system reads are issued through {@link
+ * #checkPointVsidSteps} as three {@code bash -lc 'vsenv <VSID> && ...'}
+ * composites, the VSID validated as digits before substitution. The
+ * sourced-profile form is never used (it does not define {@code vsenv},
+ * a shell function of the interactive login profile, not a binary).</p>
  *
- * <p><b>Palo Alto.</b> The four {@link #PALO_ALTO_BASE_STEPS} XML API
- * calls run unscoped -- {@code show interface all}/{@code show routing
- * route} already return every vsys's own entries in one response (the
- * shape {@code tests/fixtures/panorama/*.xml} shows), so {@code
- * worker.inventory.pan}'s parsers assign context per entry rather than
- * this movement issuing a second, narrower call per vsys. The per-vsys
- * {@code &vsys=<id>} form is still a legal, closed-set literal request
- * shape (14C §3: "per vsys, &vsys=&lt;id&gt; on the two reads above"),
- * available via {@link #paloAltoVsysFormParam} for a later measurement-
- * driven increment; this movement's own executor never sends it.</p>
+ * <p>Executor order (14D §3's gate-consequence note): {@code vsx stat -v}
+ * runs first, bare, to decide VSX by text (CF-4) before any other read's
+ * form is chosen; the remaining five physical reads then run wrapped or
+ * bare per that decision; per-VSID reads run last, one VSID at a time,
+ * VS0 never re-entered.</p>
+ *
+ * <p><b>Palo Alto.</b> Unchanged by 14D (M-3/M-4 still owed). The four
+ * {@link #PALO_ALTO_BASE_STEPS} XML API calls run unscoped -- {@code show
+ * interface all}/{@code show routing route} already return every vsys's
+ * own entries in one response (the shape {@code tests/fixtures/panorama/
+ * *.xml} shows), so {@code worker.inventory.pan}'s parsers assign context
+ * per entry rather than this movement issuing a second, narrower call per
+ * vsys. The per-vsys {@code &vsys=<id>} form is still a legal, closed-set
+ * literal request shape, available via {@link #paloAltoVsysFormParam} for
+ * a later measurement-driven increment; this movement's own executor
+ * never sends it.</p>
  */
 public final class InventoryReadPlan {
+
+    private static final Pattern DIGITS_ONLY = Pattern.compile("\\d+");
 
     private InventoryReadPlan() {
     }
 
-    // -- Check Point -------------------------------------------------------
+    // -- Check Point (14D CF-1..CF-4) ---------------------------------------
 
     public static final String CP_IP_ADDR_SHOW_V4 = "ip -details -4 addr show";
     public static final String CP_IP_ADDR_SHOW_V6 = "ip -6 addr show";
     public static final String CP_IP_ROUTE_SHOW = "ip -4 route show table all";
-    public static final String CP_CPHAPROB_CLUSTER_IF = "cphaprob -a -m if";
     public static final String CP_CPHAPROB_STAT = "cphaprob stat";
+    public static final String CP_CPHAPROB_CLUSTER_IF = "cphaprob -a -m if";
     public static final String CP_VSX_STAT = "vsx stat -v";
 
-    /** Section 3's exact order: interfaces (v4, then v6), routes, cluster VIPs, HA state, then VSX enumeration. */
-    public static final List<String> CHECK_POINT_BASE_STEPS = List.of(
-            CP_IP_ADDR_SHOW_V4, CP_IP_ADDR_SHOW_V6, CP_IP_ROUTE_SHOW, CP_CPHAPROB_CLUSTER_IF, CP_CPHAPROB_STAT,
+    /** CF-3's exact physical read order: interfaces (v4, then v6), routes, HA state, cluster VIPs, then VSX enumeration. */
+    public static final List<String> CHECK_POINT_PHYSICAL_READS = List.of(
+            CP_IP_ADDR_SHOW_V4, CP_IP_ADDR_SHOW_V6, CP_IP_ROUTE_SHOW, CP_CPHAPROB_STAT, CP_CPHAPROB_CLUSTER_IF,
             CP_VSX_STAT);
 
-    private static final String CP_VSID_ADDR_AND_ROUTE_TEMPLATE = "vsenv %s; ip -4 addr show; ip -4 route show";
-    private static final String CP_VSID_HA_STAT_TEMPLATE = "vsenv %s; cphaprob stat";
+    private static final String CP_VSID_ADDR_AND_ROUTE_READS = "ip -4 addr show && ip -4 route show";
 
-    /** Section 3's exact per-VSID composite lines, {@code <VSID>} substituted -- one entry per vsenv channel. */
-    public static final List<String> CHECK_POINT_VSX_STEP_TEMPLATES =
-            List.of(CP_VSID_ADDR_AND_ROUTE_TEMPLATE, CP_VSID_HA_STAT_TEMPLATE);
+    /**
+     * CF-2's login-shell wrapper: {@code bash -lc 'vsenv 0 && <read>'} on a
+     * VSX host, the bare literal on a non-VSX gateway.
+     */
+    public static String checkPointPhysicalCommand(String read, boolean vsxHost) {
+        return vsxHost ? vsenvWrap("0", read) : read;
+    }
 
+    /** {@link #CHECK_POINT_PHYSICAL_READS}, each wrapped through {@link #checkPointPhysicalCommand}. */
+    public static List<String> checkPointPhysicalSteps(boolean vsxHost) {
+        return CHECK_POINT_PHYSICAL_READS.stream().map(read -> checkPointPhysicalCommand(read, vsxHost)).toList();
+    }
+
+    /**
+     * CF-2's exact per-VSID composite lines, {@code <VSID>} substituted
+     * after digit validation -- one {@code bash -lc} call per line, in
+     * CF-3's per-virtual-system order: addresses+routes, cluster VIPs, HA
+     * state.
+     */
     public static List<String> checkPointVsidSteps(String vsid) {
-        return List.of(String.format(CP_VSID_ADDR_AND_ROUTE_TEMPLATE, vsid), String.format(CP_VSID_HA_STAT_TEMPLATE, vsid));
+        String validated = requireDigitsOnly(vsid);
+        return List.of(
+                vsenvWrap(validated, CP_VSID_ADDR_AND_ROUTE_READS),
+                vsenvWrap(validated, CP_CPHAPROB_CLUSTER_IF),
+                vsenvWrap(validated, CP_CPHAPROB_STAT));
+    }
+
+    private static String vsenvWrap(String vsid, String reads) {
+        return "bash -lc 'vsenv " + vsid + " && " + reads + "'";
+    }
+
+    private static String requireDigitsOnly(String vsid) {
+        if (vsid == null || !DIGITS_ONLY.matcher(vsid).matches()) {
+            throw new IllegalArgumentException("VSID must be digits only: " + vsid);
+        }
+        return vsid;
     }
 
     // -- Palo Alto -----------------------------------------------------------

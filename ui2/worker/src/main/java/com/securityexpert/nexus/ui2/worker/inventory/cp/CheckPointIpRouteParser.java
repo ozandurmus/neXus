@@ -3,19 +3,32 @@ package com.securityexpert.nexus.ui2.worker.inventory.cp;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
 import com.securityexpert.nexus.ui2.worker.inventory.ParsedRoute;
 
 /**
- * {@code ip -4 route show table all} (14C §3). {@code UNVERIFIED} against
- * a real gateway (channel differs). 14C §4's named corrections applied
- * here: {@code local}/{@code broadcast} rows and {@code 127.0.0.0/8} rows
- * are never routes; {@code default} means {@code 0.0.0.0/0}; a {@code
- * blackhole} row's destination is its second token, never its first
- * ({@code blackhole} itself).
+ * {@code ip -4 route show table all} (14D CF-3, PR-1). {@code local}/
+ * {@code broadcast} rows and {@code 127.0.0.0/8} rows are never routes;
+ * {@code default} means {@code 0.0.0.0/0}; a {@code blackhole} row's
+ * destination is its second token, never its first ({@code blackhole}
+ * itself). PR-1's measured correction: Gaia's {@code proto} token is
+ * numeric, not textual -- {@code 7} is the routing daemon's installed
+ * route (default and static) and maps to {@link InventoryRoute#PROTOCOL_STATIC},
+ * {@code kernel} maps to {@link InventoryRoute#PROTOCOL_CONNECTED}; any
+ * other numeric token is {@link InventoryRoute#PROTOCOL_UNKNOWN} rather than
+ * guessed. A connected row may read {@code dev X proto 7 scope link}
+ * without {@code src} and is still a route. PR-5: an unsolicited syslog/
+ * kernel line interleaved into the output (its first token is neither a
+ * destination-shaped token nor {@code default}/{@code blackhole}/{@code
+ * local}/{@code broadcast}) is skipped, never treated as a route and never
+ * fatal.
  */
 public final class CheckPointIpRouteParser {
+
+    private static final Pattern DESTINATION_TOKEN =
+            Pattern.compile("^\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?$");
 
     private CheckPointIpRouteParser() {
     }
@@ -50,9 +63,12 @@ public final class CheckPointIpRouteParser {
                 }
                 destination = tokens.get(1);
                 nextIndex = 2;
-            } else {
+            } else if (DESTINATION_TOKEN.matcher(first).matches()) {
                 destination = first;
                 nextIndex = 1;
+            } else {
+                // PR-5: not a route line at all (e.g. an interleaved syslog/kernel line) -- skip, never fatal.
+                continue;
             }
             if (destination.startsWith("127.")) {
                 continue;
@@ -94,13 +110,19 @@ public final class CheckPointIpRouteParser {
         return routes;
     }
 
+    private static final java.util.regex.Pattern NUMERIC_TOKEN = java.util.regex.Pattern.compile("\\d+");
+
     private static String protocolOf(String token) {
         if (token == null) {
             return InventoryRoute.PROTOCOL_UNKNOWN;
         }
+        if (NUMERIC_TOKEN.matcher(token).matches()) {
+            // PR-1: "7" is Gaia routed's installed route (default/static); any other numeric is unclassified.
+            return "7".equals(token) ? InventoryRoute.PROTOCOL_STATIC : InventoryRoute.PROTOCOL_UNKNOWN;
+        }
         return switch (token) {
             case "static" -> InventoryRoute.PROTOCOL_STATIC;
-            case "kernel" -> InventoryRoute.PROTOCOL_KERNEL;
+            case "kernel" -> InventoryRoute.PROTOCOL_CONNECTED;
             case "connected" -> InventoryRoute.PROTOCOL_CONNECTED;
             case "ospf" -> InventoryRoute.PROTOCOL_OSPF;
             case "bgp" -> InventoryRoute.PROTOCOL_BGP;

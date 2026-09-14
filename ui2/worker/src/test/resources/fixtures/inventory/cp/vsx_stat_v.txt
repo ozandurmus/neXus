@@ -1,4 +1,13 @@
-VSID | Type | Name        | SIC Status
-0    | VS0  | VS0         | Trust
-2    | VS   | vs-finance  | Trust
-5    | VS   | vs-hr       | Trust
+VSX Gateway Status: gw-vsx
+Product: VSX
+Policy name: standard
+Policy install time: Sun Sep 14 08:00:00 2026
+SIC Status: Trust
+
+Number of Virtual Systems allowed by license: 4
+Virtual Systems [active / configured]: 2 / 2
+
+ID | Type    | Name        | SIC Status
+0  | S VS0   | VS0         | Trust
+2  | S       | vs-finance  | Trust
+5  | S       | vs-hr       | Trust

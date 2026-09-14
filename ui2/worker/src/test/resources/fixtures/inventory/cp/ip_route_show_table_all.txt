@@ -1,6 +1,22 @@
-default via 192.0.2.1 dev eth0 proto static metric 100
+default via 192.0.2.1 dev eth0 proto 7 metric 100
 192.0.2.0/24 dev eth0 proto kernel scope link src 192.0.2.10
-198.51.100.0/24 via 192.0.2.254 dev eth0 proto static
-blackhole 203.0.113.0/24 proto static
+broadcast 192.0.2.255 dev eth0 table local proto kernel scope link src 192.0.2.10
 local 192.0.2.10 dev eth0 table local proto kernel scope host src 192.0.2.10
+198.51.100.0/24 dev eth1 proto kernel scope link src 198.51.100.10
+broadcast 198.51.100.255 dev eth1 table local proto kernel scope link src 198.51.100.10
+local 198.51.100.10 dev eth1 table local proto kernel scope host src 198.51.100.10
+198.51.100.128/25 via 198.51.100.1 dev eth1 proto 7
+203.0.113.0/25 via 203.0.113.1 dev eth2 proto 7
+203.0.113.128/25 via 203.0.113.129 dev eth2 proto 7
+broadcast 203.0.113.255 dev eth2 table local proto kernel scope link src 203.0.113.10
+local 203.0.113.10 dev eth2 table local proto kernel scope host src 203.0.113.10
+Message from syslogd@gw-a at Sep 14 10:22:01 2026
+kernel: eth3: link becomes ready
 127.0.0.0/8 dev lo scope link
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 192.0.2.0 dev eth0 table local proto kernel scope link src 192.0.2.10
+broadcast 192.0.2.0 dev eth0 table local proto kernel scope link src 192.0.2.10
+local 198.51.100.0 dev eth1 table local proto kernel scope link src 198.51.100.10
+broadcast 198.51.100.0 dev eth1 table local proto kernel scope link src 198.51.100.10
+local 203.0.113.0 dev eth2 table local proto kernel scope link src 203.0.113.10
