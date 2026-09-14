@@ -42,9 +42,9 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
             for (InventoryContext context : run.contexts()) {
                 for (InventoryInterface iface : context.interfaces()) {
                     dsl.execute("insert into device_interface(interface_id, run_id, context, name, parent, kind, "
-                            + "state) values ({0}, {1}, {2}, {3}, {4}, {5}, {6})",
+                            + "state, vlan_id) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7})",
                             iface.interfaceId(), run.runId(), context.context(), iface.name(),
-                            iface.parent().orElse(null), iface.kind(), iface.state());
+                            iface.parent().orElse(null), iface.kind(), iface.state(), iface.vlanId().orElse(null));
                     for (InventoryAddress address : iface.addresses()) {
                         dsl.execute("insert into device_interface_address(address_id, interface_id, address, "
                                 + "family, role) values ({0}, {1}, {2}, {3}, {4})",
@@ -59,6 +59,12 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
                             route.nextHop().orElse(null), route.interfaceName().orElse(null), route.protocol(),
                             route.routeTable().orElse(null));
                 }
+            }
+            for (InventoryHaFact fact : run.haFacts()) {
+                dsl.execute("insert into device_inventory_ha(ha_id, run_id, context, role, cluster_mode, source) "
+                        + "values ({0}, {1}, {2}, {3}, {4}, {5})",
+                        fact.haId(), run.runId(), fact.context(), fact.role(), fact.clusterMode().orElse(null),
+                        fact.source());
             }
             return null;
         });
@@ -104,7 +110,7 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
         }
 
         Map<String, List<InventoryInterface>> interfacesByContext = new LinkedHashMap<>();
-        Result<Record> interfaceRows = dsl.fetch("select interface_id, context, name, parent, kind, state "
+        Result<Record> interfaceRows = dsl.fetch("select interface_id, context, name, parent, kind, state, vlan_id "
                 + "from device_interface where run_id = {0}", runId);
         for (Record row : interfaceRows) {
             String interfaceId = row.get("interface_id", String.class);
@@ -112,7 +118,8 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
                     .add(new InventoryInterface(interfaceId, row.get("name", String.class),
                             Optional.ofNullable(row.get("parent", String.class)), row.get("kind", String.class),
                             row.get("state", String.class),
-                            addressesByInterfaceId.getOrDefault(interfaceId, List.of())));
+                            addressesByInterfaceId.getOrDefault(interfaceId, List.of()),
+                            Optional.ofNullable(row.get("vlan_id", Integer.class))));
         }
 
         Map<String, List<InventoryRoute>> routesByContext = new LinkedHashMap<>();
@@ -137,8 +144,16 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
                         routesByContext.getOrDefault(label, List.of())))
                 .toList();
 
+        Result<Record> haRows = dsl.fetch("select ha_id, context, role, cluster_mode, source "
+                + "from device_inventory_ha where run_id = {0}", runId);
+        List<InventoryHaFact> haFacts = haRows.stream()
+                .map(row -> new InventoryHaFact(row.get("ha_id", String.class), row.get("context", String.class),
+                        row.get("role", String.class), Optional.ofNullable(row.get("cluster_mode", String.class)),
+                        row.get("source", String.class)))
+                .toList();
+
         return new InventoryRun(runId, runRow.get("device_id", String.class), runRow.get("job_id", String.class),
                 runRow.get("collected_at", Timestamp.class).toInstant(), runRow.get("context_count", Integer.class),
-                contexts);
+                contexts, haFacts);
     }
 }

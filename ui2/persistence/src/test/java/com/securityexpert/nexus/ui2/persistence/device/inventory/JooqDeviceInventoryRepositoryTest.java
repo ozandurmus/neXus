@@ -35,12 +35,15 @@ class JooqDeviceInventoryRepositoryTest {
         InventoryAddress vip = new InventoryAddress("addr-2", "192.0.2.1/24", InventoryAddress.FAMILY_IPV4,
                 InventoryAddress.ROLE_CLUSTER_VIRTUAL);
         InventoryInterface eth0 = new InventoryInterface("iface-1", "eth0", Optional.empty(),
-                InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_UP, List.of(memberAddress, vip));
+                InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_UP, List.of(memberAddress, vip),
+                Optional.of(100));
         InventoryRoute route = new InventoryRoute("route-1", "0.0.0.0/0", Optional.of("192.0.2.254"),
                 Optional.of("eth0"), InventoryRoute.PROTOCOL_DEFAULT, Optional.empty());
         InventoryContext physical = new InventoryContext(InventoryContext.PHYSICAL, List.of(eth0), List.of(route));
+        InventoryHaFact haFact = new InventoryHaFact("ha-1", InventoryContext.PHYSICAL, "ACTIVE",
+                Optional.of("High Availability"), InventoryHaFact.SOURCE_CP_CPHAPROB_STAT);
         return new InventoryRun("run-1", "device-1", "job-1", Instant.parse("2026-09-14T00:00:00Z"), 1,
-                List.of(physical));
+                List.of(physical), List.of(haFact));
     }
 
     @Test
@@ -58,8 +61,12 @@ class JooqDeviceInventoryRepositoryTest {
 
         assertTrue(executedSql.stream().anyMatch(sql -> sql.contains("insert into device_inventory_run")));
         assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into device_interface(")).count());
+        assertTrue(executedSql.stream().anyMatch(sql -> sql.contains("insert into device_interface(") && sql.contains("vlan_id")),
+                "AC-4: the VLAN id column is written");
         assertEquals(2, executedSql.stream().filter(sql -> sql.contains("insert into device_interface_address")).count());
         assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into device_route")).count());
+        assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into device_inventory_ha")).count(),
+                "AC-4: the HA fact is written");
         assertTrue(executedSql.get(0).contains("SET LOCAL app.actor_fingerprint"),
                 "the audit context is set before any child row is written");
     }
@@ -78,15 +85,20 @@ class JooqDeviceInventoryRepositoryTest {
                 new String[] { "addr-2", "iface-1", "192.0.2.1/24", "ipv4", "cluster_virtual" });
 
         Result<Record> interfaceResult = create.fetchFromStringData(
-                new String[] { "interface_id", "context", "name", "parent", "kind", "state" },
-                new String[] { "iface-1", "physical", "eth0", null, "physical", "up" });
+                new String[] { "interface_id", "context", "name", "parent", "kind", "state", "vlan_id" },
+                new String[] { "iface-1", "physical", "eth0", null, "physical", "up", "100" });
 
         Result<Record> routeResult = create.fetchFromStringData(
                 new String[] { "route_id", "context", "destination", "next_hop", "interface", "protocol",
                         "route_table" },
                 new String[] { "route-1", "physical", "0.0.0.0/0", "192.0.2.254", "eth0", "default", null });
 
-        List<Result<Record>> queue = new ArrayList<>(List.of(runResult, addressResult, interfaceResult, routeResult));
+        Result<Record> haResult = create.fetchFromStringData(
+                new String[] { "ha_id", "context", "role", "cluster_mode", "source" },
+                new String[] { "ha-1", "physical", "ACTIVE", "High Availability", "cp_cphaprob_stat" });
+
+        List<Result<Record>> queue =
+                new ArrayList<>(List.of(runResult, addressResult, interfaceResult, routeResult, haResult));
         MockDataProvider provider = ctx -> {
             Result<Record> next = queue.remove(0);
             return new MockResult[] { new MockResult(next.size(), next) };
@@ -105,8 +117,15 @@ class JooqDeviceInventoryRepositoryTest {
         assertEquals("physical", context.context());
         assertEquals(1, context.interfaces().size());
         assertEquals(2, context.interfaces().get(0).addresses().size());
+        assertEquals(Optional.of(100), context.interfaces().get(0).vlanId(), "AC-4: the VLAN id round-trips");
         assertEquals(1, context.routes().size());
         assertEquals("default", context.routes().get(0).protocol());
+        assertEquals(1, run.haFacts().size(), "AC-4: the HA fact round-trips");
+        InventoryHaFact haFact = run.haFacts().get(0);
+        assertEquals("physical", haFact.context());
+        assertEquals("ACTIVE", haFact.role());
+        assertEquals(Optional.of("High Availability"), haFact.clusterMode());
+        assertEquals(InventoryHaFact.SOURCE_CP_CPHAPROB_STAT, haFact.source());
     }
 
     @Test

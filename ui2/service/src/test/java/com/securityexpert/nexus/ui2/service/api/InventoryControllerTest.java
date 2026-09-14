@@ -21,6 +21,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
@@ -194,6 +195,39 @@ class InventoryControllerTest {
         List<Map<String, Object>> contexts = (List<Map<String, Object>>) body.get("contexts");
         assertEquals(1, contexts.size());
         assertEquals("physical", contexts.get(0).get("context"));
+    }
+
+    /** AC-4: {@code vlan_id} on an interface and {@code ha} on its context, per migration V17. */
+    @Test
+    void getDeviceInventoryReturnsHaRoleAndVlanIdWhenTheRunRecordedThem() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("device-1", device("device-1"));
+        FakeDeviceInventoryRepository inventoryRepository = new FakeDeviceInventoryRepository();
+        InventoryInterface iface = new InventoryInterface("if-1", "eth0.100", Optional.empty(),
+                InventoryInterface.KIND_VLAN, InventoryInterface.STATE_UP, List.of(), Optional.of(100));
+        InventoryContext context = new InventoryContext(InventoryContext.PHYSICAL, List.of(iface), List.of());
+        InventoryHaFact haFact = new InventoryHaFact("ha-1", InventoryContext.PHYSICAL, "ACTIVE",
+                Optional.of("High Availability"), InventoryHaFact.SOURCE_CP_CPHAPROB_STAT);
+        Instant collectedAt = Instant.parse("2026-09-14T12:00:00Z");
+        inventoryRepository.recordRun(
+                new InventoryRun("run-1", "device-1", "job-1", collectedAt, 1, List.of(context), List.of(haFact)),
+                "actor", "action-1");
+        InventoryQueryService queryService =
+                new InventoryQueryService(devices, new FakeJobRecordDao(), inventoryRepository);
+        InventoryController controller = new InventoryController(queryService, unusedCollectService());
+
+        ResponseEntity<Map<String, Object>> response = controller.getDeviceInventory("device-1");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contexts = (List<Map<String, Object>>) response.getBody().get("contexts");
+        Map<String, Object> physicalContext = contexts.get(0);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> ha = (Map<String, Object>) physicalContext.get("ha");
+        assertEquals("ACTIVE", ha.get("role"));
+        assertEquals("High Availability", ha.get("cluster_mode"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> interfaces = (List<Map<String, Object>>) physicalContext.get("interfaces");
+        assertEquals(100, interfaces.get(0).get("vlan_id"));
     }
 
     @Test

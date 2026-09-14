@@ -183,6 +183,8 @@ const CLUSTER_CANDIDATE = {
   software_version: null,
   connection_state: null,
   import_outcome: null,
+  registry_state: "new",
+  existing_device_id: null,
 };
 
 const MEMBER_ONE_CANDIDATE = {
@@ -198,6 +200,8 @@ const MEMBER_ONE_CANDIDATE = {
   software_version: null,
   connection_state: null,
   import_outcome: null,
+  registry_state: "new",
+  existing_device_id: null,
 };
 
 const MEMBER_TWO_CANDIDATE = {
@@ -213,6 +217,42 @@ const MEMBER_TWO_CANDIDATE = {
   software_version: null,
   connection_state: null,
   import_outcome: null,
+  registry_state: "new",
+  existing_device_id: null,
+};
+
+const SELECTABLE_STANDALONE_CANDIDATE = {
+  candidate_id: "c-standalone",
+  kind: "STANDALONE_PRODUCT_GATEWAY",
+  importable: true,
+  display_name: "New Gateway",
+  own_address: "10.1.1.5",
+  management_address: "10.1.1.5",
+  cluster_reference: null,
+  parent_candidate_id: null,
+  model: null,
+  software_version: null,
+  connection_state: null,
+  import_outcome: null,
+  registry_state: "new",
+  existing_device_id: null,
+};
+
+const ALREADY_IMPORTED_CANDIDATE = {
+  candidate_id: "c-existing",
+  kind: "STANDALONE_PRODUCT_GATEWAY",
+  importable: true,
+  display_name: "Edge Gateway",
+  own_address: "10.1.1.9",
+  management_address: "10.1.1.9",
+  cluster_reference: null,
+  parent_candidate_id: null,
+  model: null,
+  software_version: null,
+  connection_state: null,
+  import_outcome: null,
+  registry_state: "already_imported",
+  existing_device_id: "dev-existing-1",
 };
 
 async function openDialogAndSwitchToDiscovery(address: string) {
@@ -310,5 +350,43 @@ describe("AddDeviceDialog discovery mode", () => {
     expect(importCall).toBeDefined();
     const body = JSON.parse(importCall![1].body as string);
     expect(new Set(body.candidate_ids)).toEqual(new Set(["c-m1", "c-m2"]));
+  }, 10000);
+
+  it("marks an already-imported candidate disabled and non-selectable, and reports the counts (AC-2/AC-3)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "/credentials": CREDENTIALS_ROUTE,
+        "/session/status": { body: { csrf_token: "test-csrf" } },
+        "/discovery/runs": { status: 202, body: { run_id: "run-1", job_id: "job-1" } },
+        "/discovery/runs/run-1": {
+          body: {
+            run_id: "run-1",
+            vendor: "check_point",
+            state: "FINISHED",
+            job_id: "job-1",
+            outcome_summary: {},
+            candidates: [SELECTABLE_STANDALONE_CANDIDATE, ALREADY_IMPORTED_CANDIDATE],
+          },
+        },
+      }),
+    );
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndSwitchToDiscovery("mds.example");
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+    await waitFor(() => expect(screen.getByText("Edge Gateway")).toBeInTheDocument(), { timeout: 8000 });
+
+    // Header reports "N candidates found, M already added".
+    expect(screen.getByText("2 candidates found, 1 already added")).toBeInTheDocument();
+
+    // The already-imported row is greyed out with its badge and existing device id, and carries no checkbox.
+    expect(screen.getByText("Already added")).toBeInTheDocument();
+    expect(screen.getByText(/dev-existing-1/)).toBeInTheDocument();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+
+    // The one selectable row can still be checked -- the disabled row simply has none.
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
   }, 10000);
 });

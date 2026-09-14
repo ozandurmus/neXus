@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,15 +22,18 @@ import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
 import com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator;
 import com.securityexpert.nexus.ui2.worker.confirm.PresentedIdentity;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointClusterVirtualInterfaceParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointClusterVirtualInterfaceParser.VirtualInterfaceAddress;
+import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointHaStateParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpAddrParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpRouteParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsidCompositeOutputSplitter;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsxStatParser;
+import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoHaStateParser;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoInterfaceParseResult;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoInterfaceParser;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoRouteParser;
@@ -67,14 +71,17 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
  * path, not invented here.</p>
  *
  * <p>The HA-role reads this plan issues ({@code cphaprob stat}, both at
- * the physical context and per-VSID) are executed and parsed but never
- * persisted -- 14C D-4 names no HA-role column on {@code
- * device_inventory_run}/{@code device_interface}/{@code device_route};
- * the read exists only to keep the paced session's own command sequence
- * exactly as 14D §3 lists it. The same is true of {@code
- * CheckPointHaStateParser}'s per-VSID VSLS role table (14D PR-4): it is
- * parsed off the physical {@code cphaprob stat} read for observability but
- * has no column to persist into either.</p>
+ * the physical context and per-VSID) are executed at every position 14D §3
+ * fixes; only the physical-context read is actually parsed ({@link
+ * CheckPointHaStateParser}) -- the per-VSID reads exist solely to keep the
+ * paced session's own command sequence exactly as 14D §3 lists it, since
+ * {@link CheckPointHaStateParser#perVsidLocalRole()} already yields every
+ * virtual system's role off that one physical read (14D PR-4). Both the
+ * physical role and every per-VSID role persist into {@code
+ * device_inventory_ha} (migration V17), one row per context. Palo Alto's
+ * {@code show high-availability state} read ({@link PaloAltoHaStateParser})
+ * persists the same way, scoped to the physical context (PAN carries no
+ * per-vsys HA role).</p>
  */
 public final class InventoryCapabilityExecutor {
 
@@ -130,7 +137,7 @@ public final class InventoryCapabilityExecutor {
             String ipv4 = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V4, vsxHost));
             String ipv6 = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V6, vsxHost));
             String routeOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ROUTE_SHOW, vsxHost));
-            execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost));
+            String haStatOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost));
             String vipOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
 
             List<InventoryContext> contexts = new ArrayList<>();
@@ -138,6 +145,11 @@ public final class InventoryCapabilityExecutor {
                     toInventoryInterfaces(mergeVirtualAddresses(CheckPointIpAddrParser.parse(ipv4, ipv6),
                             CheckPointClusterVirtualInterfaceParser.parse(vipOutput))),
                     toInventoryRoutes(CheckPointIpRouteParser.parse(routeOutput))));
+
+            CheckPointHaStateParser.HaState haState = CheckPointHaStateParser.parse(haStatOutput);
+            List<InventoryHaFact> haFacts = new ArrayList<>();
+            haFacts.add(new InventoryHaFact(UUID.randomUUID().toString(), InventoryContext.PHYSICAL, haState.role(),
+                    haState.clusterMode(), InventoryHaFact.SOURCE_CP_CPHAPROB_STAT));
 
             List<String> vsids = vsxStat.devices().stream()
                     .map(CheckPointVsxStatParser.VsxDevice::vsid)
@@ -156,8 +168,13 @@ public final class InventoryCapabilityExecutor {
                 contexts.add(new InventoryContext(vsid,
                         toInventoryInterfaces(vsInterfaces),
                         toInventoryRoutes(CheckPointIpRouteParser.parse(halves.routeOutput()))));
+                String vsidRole = haState.perVsidLocalRole().get(vsid);
+                if (vsidRole != null) {
+                    haFacts.add(new InventoryHaFact(UUID.randomUUID().toString(), vsid, vsidRole, Optional.empty(),
+                            InventoryHaFact.SOURCE_CP_VSLS_TABLE));
+                }
             }
-            return new InventoryResult.Completed(contexts);
+            return new InventoryResult.Completed(contexts, haFacts);
         } finally {
             transport.disconnect(session);
         }
@@ -195,7 +212,7 @@ public final class InventoryCapabilityExecutor {
                     "presented serial does not match the recorded baseline; strict posture refused the contact");
         }
 
-        xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_HA_STATE, headers);
+        String haStateOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_HA_STATE, headers);
         String interfaceOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, headers);
         String routeOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, headers);
 
@@ -240,7 +257,12 @@ public final class InventoryCapabilityExecutor {
                     toInventoryInterfaces(parsedInterfaces.interfacesByVsys().getOrDefault(vsys, List.of())),
                     toInventoryRoutes(routesByContext.getOrDefault(vsys, List.of()))));
         }
-        return new InventoryResult.Completed(contexts);
+
+        PaloAltoHaStateParser.HaState haState = PaloAltoHaStateParser.parse(haStateOutput);
+        List<InventoryHaFact> haFacts = List.of(new InventoryHaFact(UUID.randomUUID().toString(),
+                InventoryContext.PHYSICAL, haState.role(), haState.clusterMode(),
+                InventoryHaFact.SOURCE_PAN_HIGH_AVAILABILITY_STATE));
+        return new InventoryResult.Completed(contexts, haFacts);
     }
 
     private static List<ParsedInterface> mergeVirtualAddresses(List<ParsedInterface> interfaces,

@@ -17,12 +17,11 @@ import java.util.regex.Pattern;
  * Devices Status on each Cluster Member} table giving every virtual
  * system's role on every member without ever running {@code vsenv} --
  * {@link #perVsidLocalRole()} exposes that table's {@code [local]}-marked
- * column, parsed once here rather than re-derived per VS. Persistence of
- * any HA role is out of scope: {@code device_inventory_run}/{@code
- * device_interface}/{@code device_route} name no HA-role column, so this
- * result stays a worker-only read, exactly as {@link
- * com.securityexpert.nexus.ui2.worker.inventory.ParsedInterface#vlanId()}
- * does for the VLAN id.
+ * column, parsed once here rather than re-derived per VS (no per-VSID
+ * {@code cphaprob stat} re-read is ever parsed). {@code
+ * InventoryCapabilityExecutor} persists the physical role and every
+ * per-VSID role from {@link #perVsidLocalRole()} into {@code
+ * device_inventory_ha} (migration V17), one row per context.
  */
 public final class CheckPointHaStateParser {
 

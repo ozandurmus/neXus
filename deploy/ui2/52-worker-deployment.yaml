@@ -93,9 +93,8 @@ spec:
             # NXS-LOCAL-0165: the configuration-collection artefact store's
             # own key (worker role only -- service never decrypts a raw
             # artefact; C7 section 4 minimum). UI2_ARTEFACT_STORE_ROOT is
-            # not a secret -- it is the emptyDir path below, local
-            # validation only (a persistent volume is a later, production
-            # concern this movement does not take on).
+            # not a secret -- it is the PersistentVolumeClaim path below
+            # (NXS-LOCAL-0167: 51-artefact-store-pvc.yaml).
             - name: UI2_ARTEFACT_STORE_KEY_FILE
               value: /run/secrets/ui2-artefact-store/key
             - name: UI2_ARTEFACT_STORE_ROOT

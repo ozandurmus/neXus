@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -18,6 +19,23 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import orchestrator as orch  # noqa: E402
 import orchestrator_dashboard as dash  # noqa: E402
 import local_relay as lr  # noqa: E402
+
+
+def test_dashboard_css_colours_are_root_tokens_and_provider_tokens_exist():
+    css = (ROOT / "scripts" / "dashboard_assets" / "dashboard.css").read_text(encoding="utf-8")
+    root_end = css.index("}")
+    colours = list(re.finditer(r"#[0-9a-fA-F]{3,8}\b", css))
+    assert colours
+    assert all(match.start() < root_end for match in colours)
+    assert "--provider-claude:" in css
+    assert "--provider-codex:" in css
+
+
+def test_dashboard_assets_render_provider_classes_without_changing_provider_text():
+    js = (ROOT / "scripts" / "dashboard_assets" / "dashboard.js").read_text(encoding="utf-8")
+    assert 'card.className = "board-card provider-" + providerClass' in js
+    assert 'class="provider-line provider-' in js
+    assert "fmtModelEffort(row)" in js
 
 
 # ---------------------------------------------------------------------------

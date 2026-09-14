@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.service.discovery;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -51,11 +52,32 @@ public final class DiscoveryRunService {
     }
 
     public sealed interface ReadOutcome {
-        record Found(DiscoveryRun run, List<DiscoveryCandidateRecord> candidates) implements ReadOutcome {
+        /**
+         * {@code registryStateByCandidateId} is the read-time RD-5 projection
+         * keyed by {@link DiscoveryCandidateRecord#candidateId()} -- what the
+         * device registry says right now (NXS-LOCAL-0173 AC-1). It is
+         * distinct from each candidate's own persisted {@link
+         * DiscoveryCandidateRecord#importOutcome()}, which records what an
+         * import actually did and is never overwritten by this read.
+         */
+        record Found(DiscoveryRun run, List<DiscoveryCandidateRecord> candidates,
+                Map<String, CandidateRegistryState> registryStateByCandidateId) implements ReadOutcome {
         }
 
         record NotFound() implements ReadOutcome {
         }
+    }
+
+    /**
+     * RD-5's three-outcome read-time projection for one candidate (NXS-LOCAL-0173
+     * AC-1): {@code state} is {@code new}, {@code already_imported} or
+     * {@code conflicting}; {@code existingDeviceId} is present whenever a
+     * registry match was found (both {@code already_imported} and {@code
+     * conflicting}).
+     */
+    public record CandidateRegistryState(String state, Optional<String> existingDeviceId) {
+
+        private static final CandidateRegistryState NEW = new CandidateRegistryState("new", Optional.empty());
     }
 
     /** {@code outcome} is one of {@code new}/{@code already_imported}/{@code conflicting}/{@code refused} (RD-5, AC-3). */
@@ -171,7 +193,34 @@ public final class DiscoveryRunService {
         if (run.isEmpty()) {
             return new ReadOutcome.NotFound();
         }
-        return new ReadOutcome.Found(run.get(), discoveryRunRepository.listCandidates(runId));
+        List<DiscoveryCandidateRecord> candidates = discoveryRunRepository.listCandidates(runId);
+        return new ReadOutcome.Found(run.get(), candidates, registryStateByCandidateId(candidates));
+    }
+
+    /**
+     * AC-1/AC-5: one batch registry lookup for the whole candidate set,
+     * never one per candidate. Only {@code importable} candidates carry a
+     * meaningful match key -- a cluster/virtual-system parent row is never
+     * itself imported, so it is always projected {@code new}.
+     */
+    private Map<String, CandidateRegistryState> registryStateByCandidateId(List<DiscoveryCandidateRecord> candidates) {
+        Map<String, String> matchKeyByCandidateId = new LinkedHashMap<>();
+        for (DiscoveryCandidateRecord candidate : candidates) {
+            if (candidate.importable()) {
+                matchKeyByCandidateId.put(candidate.candidateId(), DiscoveryMatchKey.of(candidate));
+            }
+        }
+        Map<String, DeviceDiscoveryMatch> matchesByKey =
+                deviceDiscoveryMatchRepository.findByDiscoveryMatchKeys(new LinkedHashSet<>(matchKeyByCandidateId.values()));
+
+        Map<String, CandidateRegistryState> result = new LinkedHashMap<>();
+        for (DiscoveryCandidateRecord candidate : candidates) {
+            String matchKey = matchKeyByCandidateId.get(candidate.candidateId());
+            Optional<DeviceDiscoveryMatch> match =
+                    matchKey == null ? Optional.empty() : Optional.ofNullable(matchesByKey.get(matchKey));
+            result.put(candidate.candidateId(), registryStateFor(candidate, match));
+        }
+        return result;
     }
 
     /** 14F section 2: {@code POST /discovery/runs/{run_id}/import}. */
@@ -240,23 +289,19 @@ public final class DiscoveryRunService {
                     Optional.of("candidate_missing_address"));
         }
 
-        boolean isVirtualSystem = isVirtualSystemKind(candidate);
-        Optional<String> virtualSystemRef = isVirtualSystem ? Optional.of(candidate.stableIdentifier()) : Optional.empty();
-        Optional<String> clusterMemberRef = isVirtualSystem ? Optional.empty() : candidate.clusterReference();
-
         String matchKey = DiscoveryMatchKey.of(candidate);
         Optional<DeviceDiscoveryMatch> existing = deviceDiscoveryMatchRepository.findByDiscoveryMatchKey(matchKey);
         if (existing.isPresent()) {
-            DeviceDiscoveryMatch match = existing.get();
-            boolean matches = match.addressRef().equals(addressRef.get())
-                    && match.clusterMemberRef().equals(clusterMemberRef)
-                    && match.virtualSystemRef().equals(virtualSystemRef);
-            String outcome = matches ? "already_imported" : "conflicting";
-            discoveryRunRepository.markImportOutcome(candidate.candidateId(), outcome, actorFingerprint,
+            CandidateRegistryState state = registryStateFor(candidate, existing);
+            discoveryRunRepository.markImportOutcome(candidate.candidateId(), state.state(), actorFingerprint,
                     ActionRegistry.DISCOVERY_RUN_IMPORT);
-            return new CandidateImportResult(candidate.candidateId(), outcome, Optional.of(match.deviceId()),
+            return new CandidateImportResult(candidate.candidateId(), state.state(), state.existingDeviceId(),
                     Optional.empty(), Optional.empty());
         }
+
+        boolean isVirtualSystem = isVirtualSystemKind(candidate);
+        Optional<String> virtualSystemRef = isVirtualSystem ? Optional.of(candidate.stableIdentifier()) : Optional.empty();
+        Optional<String> clusterMemberRef = isVirtualSystem ? Optional.empty() : candidate.clusterReference();
 
         DeviceAddSingleService.Outcome outcome = deviceAddSingleService.addFromDiscoveryImport(actorFingerprint,
                 addressRef.get(), candidate.vendor(), credentialReferenceId, clusterMemberRef, virtualSystemRef,
@@ -275,6 +320,30 @@ public final class DiscoveryRunService {
                     candidate.candidateId(), "refused", Optional.empty(), Optional.empty(),
                     Optional.of(refused.code()));
         };
+    }
+
+    /**
+     * RD-5's own three-outcome comparison, shared by the import path (§2)
+     * and the read-path projection (§3, NXS-LOCAL-0173 AC-1): no match is
+     * {@code new}; a match whose recorded address/cluster-member/virtual-
+     * system shape agrees with the candidate's own is {@code
+     * already_imported}; any other match is {@code conflicting}. Both
+     * outcomes carry the existing device id.
+     */
+    private static CandidateRegistryState registryStateFor(DiscoveryCandidateRecord candidate,
+            Optional<DeviceDiscoveryMatch> existing) {
+        if (existing.isEmpty()) {
+            return CandidateRegistryState.NEW;
+        }
+        DeviceDiscoveryMatch match = existing.get();
+        Optional<String> addressRef = endpointAddress(candidate);
+        boolean isVirtualSystem = isVirtualSystemKind(candidate);
+        Optional<String> virtualSystemRef = isVirtualSystem ? Optional.of(candidate.stableIdentifier()) : Optional.empty();
+        Optional<String> clusterMemberRef = isVirtualSystem ? Optional.empty() : candidate.clusterReference();
+        boolean matches = Objects.equals(match.addressRef(), addressRef.orElse(null))
+                && match.clusterMemberRef().equals(clusterMemberRef)
+                && match.virtualSystemRef().equals(virtualSystemRef);
+        return new CandidateRegistryState(matches ? "already_imported" : "conflicting", Optional.of(match.deviceId()));
     }
 
     /** IM-7: Check Point keys the endpoint off the candidate's management address; Palo Alto off its own address. */

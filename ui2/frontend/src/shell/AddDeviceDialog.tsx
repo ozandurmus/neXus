@@ -223,19 +223,24 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
   const childrenOf = (candidateId: string) =>
     (run?.candidates ?? []).filter((c) => c.parent_candidate_id === candidateId);
 
+  // Selection rule: a candidate whose registry_state is already_imported or
+  // conflicting is never selectable (backend RD-5 projection, AC-2).
+  const isSelectable = (candidate: DiscoveryCandidate) => candidate.importable && candidate.registry_state === "new";
+
   const toggleCandidate = (candidate: DiscoveryCandidate) => {
     setSelectedCandidateIds((prev) => {
       const next = new Set(prev);
       const children = childrenOf(candidate.candidate_id);
       if (!candidate.importable && children.length > 0) {
-        // SB-9: selecting a cluster/host parent that is not itself
-        // importable selects (or clears) every importable child instead.
-        const childIds = children.filter((c) => c.importable).map((c) => c.candidate_id);
+        // SB-9/RD-1: selecting a cluster/host parent that is not itself
+        // importable selects (or clears) every importable, not-yet-imported
+        // child instead -- already-imported/conflicting members are skipped.
+        const childIds = children.filter(isSelectable).map((c) => c.candidate_id);
         const allSelected = childIds.length > 0 && childIds.every((id) => next.has(id));
         childIds.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
         return next;
       }
-      if (candidate.importable) {
+      if (isSelectable(candidate)) {
         if (next.has(candidate.candidate_id)) next.delete(candidate.candidate_id);
         else next.add(candidate.candidate_id);
       }
@@ -246,11 +251,18 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
   const isGroupSelected = (candidate: DiscoveryCandidate) => {
     const children = childrenOf(candidate.candidate_id);
     if (!candidate.importable && children.length > 0) {
-      const childIds = children.filter((c) => c.importable).map((c) => c.candidate_id);
+      const childIds = children.filter(isSelectable).map((c) => c.candidate_id);
       return childIds.length > 0 && childIds.every((id) => selectedCandidateIds.has(id));
     }
     return selectedCandidateIds.has(candidate.candidate_id);
   };
+
+  const totalCandidateCount = run?.candidates.length ?? 0;
+  const alreadyAddedCount = (run?.candidates ?? []).filter((c) => c.registry_state === "already_imported").length;
+  const conflictingCount = (run?.candidates ?? []).filter((c) => c.registry_state === "conflicting").length;
+  const candidateSummaryLine =
+    `${totalCandidateCount} candidates found, ${alreadyAddedCount} already added` +
+    (conflictingCount > 0 ? `, ${conflictingCount} conflicting` : "");
 
   const handleImport = async () => {
     if (!runId) return;
@@ -501,6 +513,9 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
                 ))}
               </TextField>
             )}
+            <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+              {candidateSummaryLine}
+            </Typography>
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -588,12 +603,16 @@ function CandidateRows({
   const children = childrenOf(candidate.candidate_id);
   const isGroup = !candidate.importable && children.length > 0;
   const checked = isGroup ? isGroupSelected(candidate) : selected.has(candidate.candidate_id);
-  const checkable = candidate.importable || isGroup;
+  // Selection rule (AC-2): an already-imported or conflicting candidate is
+  // greyed out and cannot be selected -- rendered, never hidden (DI-3).
+  const notSelectableState =
+    candidate.importable && candidate.registry_state !== "new" ? candidate.registry_state : null;
+  const checkable = (candidate.importable && candidate.registry_state === "new") || isGroup;
   const result = importResults[candidate.candidate_id];
 
   return (
     <>
-      <TableRow>
+      <TableRow sx={notSelectableState ? { opacity: 0.6 } : undefined}>
         <TableCell padding="checkbox">
           {checkable && (
             <Checkbox
@@ -604,7 +623,27 @@ function CandidateRows({
             />
           )}
         </TableCell>
-        <TableCell sx={{ pl: depth > 0 ? 3 + depth * 2 : undefined }}>{candidate.display_name ?? "Unnamed"}</TableCell>
+        <TableCell sx={{ pl: depth > 0 ? 3 + depth * 2 : undefined }}>
+          {candidate.display_name ?? "Unnamed"}
+          {notSelectableState && (
+            <Stack spacing={0.25} sx={{ mt: 0.5 }}>
+              <StatusChip
+                tone={notSelectableState === "already_imported" ? "ok" : "warn"}
+                label={notSelectableState === "already_imported" ? "Already added" : "Conflicting"}
+                dense
+              />
+              {candidate.existing_device_id && (
+                <Typography
+                  variant="body2"
+                  sx={{ color: m3.onSurfaceVar }}
+                  title={`Existing device: ${candidate.existing_device_id}`}
+                >
+                  Existing device: {candidate.existing_device_id}
+                </Typography>
+              )}
+            </Stack>
+          )}
+        </TableCell>
         <TableCell>
           {candidate.kind}
           {!candidate.importable && !isGroup && (

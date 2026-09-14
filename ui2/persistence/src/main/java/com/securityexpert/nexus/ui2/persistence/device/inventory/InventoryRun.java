@@ -7,14 +7,15 @@ import java.util.Objects;
 /**
  * One completed {@code inventory_collect} job's own {@code
  * device_inventory_run} row (14C D-4) plus every {@link InventoryContext}
- * (physical, and each VSID/vsys) it produced. {@link
+ * (physical, and each VSID/vsys) it produced, and every {@link
+ * InventoryHaFact} the run recorded (migration V17). {@link
  * DeviceInventoryRepository#recordRun} writes the run row and every child
- * row (interfaces, addresses, routes) in one transaction -- failure leaves
- * no partial run (14C §5: the parsers/storage/plumbing are built and
- * proven against fixtures before any live run).
+ * row (interfaces, addresses, routes, HA facts) in one transaction --
+ * failure leaves no partial run (14C §5: the parsers/storage/plumbing are
+ * built and proven against fixtures before any live run).
  */
 public record InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,
-        List<InventoryContext> contexts) {
+        List<InventoryContext> contexts, List<InventoryHaFact> haFacts) {
 
     public InventoryRun {
         Objects.requireNonNull(runId, "runId");
@@ -22,5 +23,12 @@ public record InventoryRun(String runId, String deviceId, String jobId, Instant 
         Objects.requireNonNull(jobId, "jobId");
         Objects.requireNonNull(collectedAt, "collectedAt");
         contexts = contexts == null ? List.of() : List.copyOf(contexts);
+        haFacts = haFacts == null ? List.of() : List.copyOf(haFacts);
+    }
+
+    /** Pre-V17 shape, kept so every existing caller that never mentions HA facts keeps compiling unchanged. */
+    public InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,
+            List<InventoryContext> contexts) {
+        this(runId, deviceId, jobId, collectedAt, contextCount, contexts, List.of());
     }
 }

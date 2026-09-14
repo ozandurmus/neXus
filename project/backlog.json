@@ -299,15 +299,6 @@
       "note": ""
     },
     {
-      "id": "cp_discovery_java_implementation",
-      "category": "ui2",
-      "title": "CP discovery in Java: management-plane candidate enumeration under the frozen discovery contract",
-      "status": "planned",
-      "priority": "P0",
-      "target": "CP_AND_VSX_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for discovery only",
-      "note": ""
-    },
-    {
       "id": "c7_c2_contract_shape_guard",
       "category": "governance",
       "title": "Contract-shape guard for C7 §5.3 and C2 §6 admission batteries",
@@ -389,15 +380,6 @@
       "note": ""
     },
     {
-      "id": "pan_discovery_java_implementation",
-      "category": "ui2",
-      "title": "PAN discovery in Java: Panorama candidate enumeration under the frozen discovery contract (domain core, then transport)",
-      "status": "in_progress",
-      "priority": "P0",
-      "target": "PAN_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for two methods; domain core in flight as NXS-LOCAL-0146",
-      "note": ""
-    },
-    {
       "id": "device_import_enrollment_contract_implementation",
       "category": "Architecture / Import-Enrollment",
       "title": "Implement device import/enrollment (candidate to devices row, cluster/VS modifiers, enrollment confirm first contact) once DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md is Product-Owner frozen",
@@ -416,21 +398,21 @@
       "note": ""
     },
     {
-      "id": "cp_collection_contract_from_measurement",
-      "category": "collection",
-      "title": "CP collection contract: write from Product Owner measurement (CP_COLLECTION_MEASUREMENT_BRIEF)",
-      "status": "planned",
-      "priority": "P0",
-      "target": "docs/design/CP_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md; blocked on the PO running its §3/§5 command list",
-      "note": ""
-    },
-    {
       "id": "ui2_password_policy_configurable",
       "category": "identity",
       "title": "UI2 local password policy, configurable and off by default: minimum/maximum length, character classes, not equal to the username, optional expiry and history -- a production posture switch, never a development obligation (PO 2026-09-14)",
       "status": "planned",
       "priority": "P2",
       "target": "PasswordChangeService and LocalIdentityAdministration set-password paths; application.yml ui2.local-auth.*; frontend shows the active rules on the change screen",
+      "note": ""
+    },
+    {
+      "id": "device_admin_accounts_and_privileges",
+      "category": "collection",
+      "title": "Device administrator accounts and their privileges, collected and shown per device",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
       "note": ""
     }
   ]

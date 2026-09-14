@@ -1086,6 +1086,33 @@
       "priority": "P1",
       "target": "scripts/orchestrator.py decide_start -- add a resume path when the relay's last marker is RELAY_DECISION and next_actor is engineer (GOV.ORCH successor); observed on NXS-LOCAL-0147, 2026-09-13",
       "note": ""
+    },
+    {
+      "id": "cp_discovery_java_implementation",
+      "category": "ui2",
+      "title": "CP discovery in Java: management-plane candidate enumeration under the frozen discovery contract",
+      "status": "done",
+      "priority": "P0",
+      "target": "CP_AND_VSX_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for discovery only",
+      "note": ""
+    },
+    {
+      "id": "pan_discovery_java_implementation",
+      "category": "ui2",
+      "title": "PAN discovery in Java: Panorama candidate enumeration under the frozen discovery contract (domain core, then transport)",
+      "status": "done",
+      "priority": "P0",
+      "target": "PAN_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for two methods; domain core in flight as NXS-LOCAL-0146",
+      "note": ""
+    },
+    {
+      "id": "cp_collection_contract_from_measurement",
+      "category": "collection",
+      "title": "CP collection contract: write from Product Owner measurement (CP_COLLECTION_MEASUREMENT_BRIEF)",
+      "status": "done",
+      "priority": "P0",
+      "target": "docs/design/CP_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md; blocked on the PO running its §3/§5 command list",
+      "note": ""
     }
   ]
 }
