@@ -37,11 +37,34 @@ function routedFetch(routes: Readonly<Record<string, { readonly status?: number;
 
 const NO_DEVICES = { "/devices": { body: { devices: [] } } };
 
+const EMPTY_PROJECT_PLAN = {
+  "/project-plan": {
+    body: {
+      schema_version: "1.0",
+      generated_at: "2026-09-14T00:00:00Z",
+      current_build: null,
+      current_track: null,
+      progress_contract: null,
+      overall_progress_percent: 0,
+      current_track_progress_percent: 0,
+      tracks: [],
+      now_next: {},
+      roadmap_notes: [],
+      backlog: [],
+      backlog_counts: {},
+      completed_features: [],
+      build_history: [],
+      archived_build_count: 0,
+      metadata_warnings: [],
+    },
+  },
+};
+
 const TABS = [
   { label: "Device management", marker: "Device registry · 0 entries" },
   { label: "Inventory exclusions", marker: "No device excluded" },
   { label: "Credentials", marker: "No credential stored" },
-  { label: "Project plan", marker: "No project plan" },
+  { label: "Project plan", marker: "Declared roadmap completion" },
 ];
 
 describe("AdministrationScreen tabs", () => {
@@ -50,7 +73,10 @@ describe("AdministrationScreen tabs", () => {
   });
 
   it("renders each tab's own panel, and no other tab's panel, tab by tab", async () => {
-    vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, "/credentials": { body: { credentials: [] } } }));
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN, "/credentials": { body: { credentials: [] } } }),
+    );
     render(withTheme(<AdministrationScreen />));
     const tablist = screen.getByRole("tablist", { name: "Administration sections" });
 
@@ -64,18 +90,19 @@ describe("AdministrationScreen tabs", () => {
     }
   });
 
-  it("Project plan is no longer blank", () => {
-    vi.stubGlobal("fetch", routedFetch(NO_DEVICES));
+  it("Project plan renders the real roadmap, not the earlier empty placeholder", async () => {
+    vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN }));
     render(withTheme(<AdministrationScreen />));
     fireEvent.click(screen.getByRole("tab", { name: "Project plan" }));
-    expect(screen.getByText("No project plan")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Declared roadmap completion")).toBeInTheDocument());
+    expect(screen.queryByText("No project plan")).toBeNull();
   });
 
   it("defaults to the Device management tab, empty", async () => {
-    vi.stubGlobal("fetch", routedFetch(NO_DEVICES));
+    vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN }));
     render(withTheme(<AdministrationScreen />));
     await waitFor(() => expect(screen.getByText("Device registry · 0 entries")).toBeInTheDocument());
-    expect(screen.queryByText("No project plan")).toBeNull();
+    expect(screen.queryByText("Declared roadmap completion")).toBeNull();
   });
 
   it("Device management renders the real device registry once GET /devices resolves", async () => {
