@@ -105,7 +105,7 @@ CONFIG_STUCK_MIN = 30
 CONFIG_STUCK_MAX = 86400
 DEFAULT_STUCK_AFTER_SECONDS = 900
 
-#: Section 3.3's six-value health field -- `derive_health` below returns
+#: Section 3.3's health field, seven-valued since GOV.ORCH.4-B -- `derive_health` below returns
 #: exactly one of these and never anything else (AC-5).
 HEALTH_HEALTHY = "healthy"
 HEALTH_SILENT = "silent"
@@ -251,7 +251,8 @@ def derive_health(
     idle_seconds: float | None, stuck_after_seconds: int = DEFAULT_STUCK_AFTER_SECONDS,
     external_participant: bool = False,
 ) -> str:
-    """Section 3.3's six-value health field, computed only from a live pid
+    """Section 3.3's health field, seven-valued since GOV.ORCH.4-B, computed
+    only from a live pid
     check, relay status/next_actor, the record's own `phase`, and
     `.nexus/engineer.log` growth -- returns exactly one of
     `ALL_HEALTH_VALUES` (AC-5). Fixed precedence: a terminal outcome (`done`,
