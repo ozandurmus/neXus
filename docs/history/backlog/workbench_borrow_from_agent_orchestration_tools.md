@@ -1,0 +1,5 @@
+# Workbench: borrow the features that make a fleet of agents followable
+
+status: planned · target: GOV.ORCH.4 workbench successor
+
+2026-09-15, Product Owner: the workbench is weak at the one thing that matters during a dispatch, which is seeing what is happening. A public agent-orchestration desktop tool (stablyai/orca, MIT, TypeScript) was reviewed as a possible replacement and rejected: it is a cockpit with no notion of packets, frozen-contract authority, relay decisions, verify against the packet's own validation plan, merge gates or the cost ledger, so adopting it would lose the governance this loop exists for. Its ideas are worth taking though, and this item holds them: a completion notification instead of the Product Owner watching an idle screen, progress read from the lane's commits for a participant that emits no event stream, several movements shown side by side rather than one at a time, and a diff view that does not require leaving the workbench. Scope and sequence to be decided; nothing here proposes a dependency on that project.
