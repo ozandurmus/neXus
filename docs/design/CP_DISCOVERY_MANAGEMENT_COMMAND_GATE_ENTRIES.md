@@ -2,7 +2,18 @@
 
 ## Status
 
-**DRAFT — PENDING PRODUCT OWNER GATE APPROVAL.** This document records, for
+**APPROVED — PRODUCT OWNER, 2026-09-14.** The Product Owner approved the
+command literals below for their stated purpose (discovery enumeration) and
+class (read-only, class 0) in session on 2026-09-14 ("discovery komutlarını
+onaylıyorum"). This is the command-level gate approval `AGENTS.md` requires;
+the first live run of the aligned transport is now permitted, on the
+Product Owner's own management server, with the field bindings still
+`UNVERIFIED` until that run reports its counts. Nothing beyond the literals
+listed here is approved.
+
+*Status before approval, kept for provenance:*
+
+(Was: DRAFT — PENDING PRODUCT OWNER GATE APPROVAL.) This document records, for
 `docs/AI_DEVELOPMENT_PROTOCOL.md`'s "Network-device command gate", the ten
 required items for every command `ManagementPlaneEnumerationAdapter`
 (`ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/cp/`)
