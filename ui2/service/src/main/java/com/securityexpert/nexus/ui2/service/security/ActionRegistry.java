@@ -55,6 +55,29 @@ public final class ActionRegistry {
     /** 14F section 2: {@code POST /discovery/runs/{run_id}/import} -- a write action, {@code role:onboarding_admin} only. */
     public static final String DISCOVERY_RUN_IMPORT = "discovery_run_import";
     /**
+     * NXS-LOCAL-0175: {@code POST /devices/{id}/backup/collect} -- 14H
+     * BK-12: {@code role:backup_admin} plus a reason of at least eight
+     * characters (length validated in {@code
+     * service.device.backup.BackupCollectService}), manual only, one
+     * pilot device only (BK-1). This action ADMITS a job (creates a
+     * {@code REQUESTED} row); the worker executes the class-1 write
+     * asynchronously off this request's own path, exactly as every other
+     * job-admission route in this registry does for its own capability.
+     * {@code consoleSubmittable = true} here reflects BK-12's own
+     * role+reason+single-pilot-device gate as this movement's explicit,
+     * scoped authorization for the admission -- flagged for Product Owner
+     * review at the merge gate alongside {@code AGENTS.md}'s "Network
+     * action taxonomy" prose ("class 1 controlled recovery writes...
+     * are never console-submittable"): this is the first action in the
+     * repository to test that rule against a real, frozen, PO-authorized
+     * exception rather than {@link #RECOVERY_WRITE_EXAMPLE}'s own
+     * deliberately unconditional-refusal demonstration.
+     */
+    public static final String DEVICE_BACKUP_COLLECT = "device_backup_collect";
+    /** NXS-LOCAL-0175: {@code GET /devices/{id}/backups} and {@code GET /backups} -- posture only (BK-14: never a path, never bytes), open to any authenticated session like {@link #DEVICE_READ}. */
+    public static final String DEVICE_BACKUP_READ = "device_backup_read";
+
+    /**
      * WORKER.md (movement NXS-LOCAL-0174): {@code GET /project-plan} -- any
      * authenticated session, like {@link #DEVICE_READ} (PO-NAV-5:
      * administration-only once real directory-backed authorization exists;
@@ -108,6 +131,10 @@ public final class ActionRegistry {
         register(new ActionDescriptor(DISCOVERY_RUN_START, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DISCOVERY_RUN_READ, true, Optional.empty()));
         register(new ActionDescriptor(DISCOVERY_RUN_IMPORT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        // 14H BK-12: role:backup_admin plus a reason (length-checked in
+        // BackupCollectService, not here -- E4 only evaluates the role).
+        register(new ActionDescriptor(DEVICE_BACKUP_COLLECT, true, Optional.of(RoleToken.BACKUP_ADMIN)));
+        register(new ActionDescriptor(DEVICE_BACKUP_READ, true, Optional.empty()));
         // WORKER.md: same open-to-any-authenticated-session gate as DEVICE_READ.
         register(new ActionDescriptor(PROJECT_PLAN_READ, true, Optional.empty()));
         // Class 1: never console-submittable, refused by E3 unconditionally,

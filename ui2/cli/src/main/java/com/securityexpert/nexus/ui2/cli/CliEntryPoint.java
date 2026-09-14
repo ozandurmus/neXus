@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.jobs.JobState;
+import com.securityexpert.nexus.ui2.jobs.bootstrap.BackupRetrievalFactory;
 import com.securityexpert.nexus.ui2.jobs.bootstrap.CredentialAdministrationFactory;
 import com.securityexpert.nexus.ui2.jobs.bootstrap.LocalIdentityAdministrationFactory;
 import com.securityexpert.nexus.ui2.jobs.bootstrap.LocalIdentityBootstrapFactory;
@@ -61,6 +62,7 @@ public final class CliEntryPoint {
             case "credential-delete" -> credentialDelete(args);
             case "role-bind-create" -> roleBindCreate(args);
             case "role-bind-revoke" -> roleBindRevoke(args);
+            case "backup-retrieve" -> backupRetrieve(args);
             default -> System.out.println("known job states: " + java.util.Arrays.toString(JobState.values()));
         }
     }
@@ -95,6 +97,9 @@ public final class CliEntryPoint {
         System.out.println("  role-bind-create <baseUrl> <sessionCookieValue> <csrfToken> <roleToken> "
                 + "<groupReference> <groupReferenceKeyId>");
         System.out.println("  role-bind-revoke <baseUrl> <sessionCookieValue> <csrfToken> <bindingId>");
+        System.out.println("  backup-retrieve <jdbcUrl> <migrateUser> <migratePasswordFile> "
+                + "<artefactStoreKeyBase64> <artefactStoreRoot> <groupReferenceKeyBase64> <artefactId> "
+                + "<destinationPath> <reason (>= 8 chars)> <actingAdminActorFingerprint>");
     }
 
     private static void bootstrapSecurityAdmin(String[] args) {
@@ -434,5 +439,43 @@ public final class CliEntryPoint {
 
     private static String jsonEscape(String value) {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    // ---------------------------------------------------------------
+    // 14I OR-1..OR-5: the only path that ever decrypts a backup/
+    // configuration artefact -- no HTTP route does (BackupNoHttpRetrievalRouteTest
+    // greps service sources to hold that invariant). role:backup_admin and
+    // an eight-character reason are checked inside BackupArtefactRetrievalPort
+    // itself (com.securityexpert.nexus.ui2.persistence.artefact.
+    // BackupArtefactRetrieval), not re-checked here.
+    // ---------------------------------------------------------------
+
+    private static void backupRetrieve(String[] args) {
+        if (args.length != 11) {
+            System.err.println("backup-retrieve requires exactly 10 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        com.securityexpert.nexus.ui2.platform.BackupArtefactRetrievalPort port = BackupRetrievalFactory.create(args[1],
+                args[2], args[3], args[4], args[5], args[6]);
+        String artefactId = args[7];
+        String destinationPath = args[8];
+        String reason = args[9];
+        String actingAdminActorFingerprint = args[10];
+        var result = port.retrieve(actingAdminActorFingerprint, artefactId, destinationPath, reason);
+        if (result instanceof com.securityexpert.nexus.ui2.platform.BackupArtefactRetrievalPort.RetrieveResult.Ok ok) {
+            System.out.println("retrieved artefact " + artefactId + " to " + ok.destinationPath());
+            System.out.println("WARNING: this file may contain secret-bearing lines. It is your responsibility "
+                    + "from this point on -- the product does not copy it anywhere and does not retain this "
+                    + "destination.");
+        } else if (result instanceof com.securityexpert.nexus.ui2.platform.BackupArtefactRetrievalPort.RetrieveResult.ArtefactNotFound) {
+            System.err.println("ARTEFACT_NOT_FOUND");
+        } else if (result instanceof com.securityexpert.nexus.ui2.platform.BackupArtefactRetrievalPort.RetrieveResult.RoleRefused) {
+            System.err.println("ROLE_REFUSED: role:backup_admin is required");
+        } else if (result instanceof com.securityexpert.nexus.ui2.platform.BackupArtefactRetrievalPort.RetrieveResult.ReasonTooShort) {
+            System.err.println("REASON_TOO_SHORT: a reason of at least eight characters is required");
+        } else if (result instanceof com.securityexpert.nexus.ui2.platform.BackupArtefactRetrievalPort.RetrieveResult.IoFailure failure) {
+            System.err.println("IO_FAILURE: " + failure.reason());
+        }
     }
 }

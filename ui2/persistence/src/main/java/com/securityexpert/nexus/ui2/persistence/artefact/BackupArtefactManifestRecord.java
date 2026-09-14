@@ -32,10 +32,16 @@ public record BackupArtefactManifestRecord(
         ArtefactValidation validation,
         String retentionTier,
         Optional<Instant> expiresAt,
-        String recoveryVolumePath) {
+        String recoveryVolumePath,
+        Optional<String> deviationState) {
 
     public static final String VENDOR_CHECK_POINT = "check_point";
     public static final String VENDOR_PALO_ALTO = "palo_alto";
+
+    /** 14I DV-1's closed vocabulary -- {@link #deviationState}, empty for a path (configuration) that records its own change state elsewhere. */
+    public static final String DEVIATION_UNCHANGED = "unchanged";
+    public static final String DEVIATION_CHANGED = "changed";
+    public static final String DEVIATION_FIRST = "first";
 
     public BackupArtefactManifestRecord {
         Objects.requireNonNull(artefactId, "artefactId");
@@ -53,6 +59,7 @@ public record BackupArtefactManifestRecord(
         Objects.requireNonNull(retentionTier, "retentionTier");
         Objects.requireNonNull(expiresAt, "expiresAt");
         Objects.requireNonNull(recoveryVolumePath, "recoveryVolumePath");
+        Objects.requireNonNull(deviationState, "deviationState");
 
         // C7 section 3.3: refused before any byte is written -- this
         // constructor is the earliest possible point, and throwing here

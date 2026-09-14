@@ -30,7 +30,7 @@ class JooqBackupArtefactManifestRepositoryTest {
         return new BackupArtefactManifestRecord("artefact-1", "device-1", Optional.empty(),
                 ArtefactClass.CONFIGURATION, vendor, softwareVersion, "a".repeat(64), "plain-sha", 100L,
                 "cipher-sha", 132L, "v1", new byte[] { 1, 2, 3 }, ArtefactValidation.reachedWithoutRestore("V1"),
-                "standard", Optional.empty(), "/app/artefact-store");
+                "standard", Optional.empty(), "/app/artefact-store", Optional.empty());
     }
 
     @Test

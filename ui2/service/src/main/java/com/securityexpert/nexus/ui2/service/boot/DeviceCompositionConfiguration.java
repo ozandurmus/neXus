@@ -15,6 +15,7 @@ import com.securityexpert.nexus.ui2.capability.GateRegistryPort;
 import com.securityexpert.nexus.ui2.capability.MaturityState;
 import com.securityexpert.nexus.ui2.capability.StepKind;
 import com.securityexpert.nexus.ui2.capability.TransportKind;
+import com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfigurationCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfirmCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.DiscoveryCapabilityIds;
@@ -28,6 +29,8 @@ import com.securityexpert.nexus.ui2.jobs.device.PersistenceDeviceEnrollmentReadP
 import com.securityexpert.nexus.ui2.jobs.discovery.DiscoveryRunReadPort;
 import com.securityexpert.nexus.ui2.jobs.discovery.PersistenceDiscoveryRunReadPort;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRepository;
+import com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupArtefactManifestRepository;
 import com.securityexpert.nexus.ui2.persistence.device.CredentialReferenceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceDiscoveryMatchRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
@@ -48,6 +51,7 @@ import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
 import com.securityexpert.nexus.ui2.service.device.DeviceAddSingleService;
 import com.securityexpert.nexus.ui2.service.device.DeviceQueryService;
 import com.securityexpert.nexus.ui2.service.device.DeviceRegistrationService;
+import com.securityexpert.nexus.ui2.service.device.backup.BackupCollectService;
 import com.securityexpert.nexus.ui2.service.device.configuration.ConfigurationCollectService;
 import com.securityexpert.nexus.ui2.service.device.configuration.ConfigurationQueryService;
 import com.securityexpert.nexus.ui2.service.device.inventory.InventoryCollectService;
@@ -100,6 +104,13 @@ public class DeviceCompositionConfiguration {
             "<show><system><info/></system></show>", "type=config&action=show&xpath=/config",
             "<show><config><effective-running/></config></show>", "<show><config><merged/></config></show>");
 
+    // Mirrors worker.backup.BackupReadPlan's exec/poll literals exactly (14H
+    // section 5 entries 1, 2, 3, 6, 7 -- entry 4 is governed but not issued,
+    // entry 5's SFTP fetch is gate_not_applicable, neither is a step here).
+    private static final List<String> CHECK_POINT_BACKUP_LITERALS = List.of("clish -c \"show diskspace\"",
+            "clish -c \"add backup local\"", "clish -c \"show backup status\"", "sha256sum <name>",
+            "clish -c \"delete backup <name>\"");
+
     @Bean
     public DeviceRepository deviceRepository(TransactionBoundary transactionBoundary) {
         return new JooqDeviceRepository(transactionBoundary);
@@ -137,6 +148,7 @@ public class DeviceCompositionConfiguration {
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),
                 paloAltoConfigurationCapability(gateRegistryPort),
+                checkPointBackupCapability(gateRegistryPort),
                 // 14F DR-1: admitted through JobAdmissionService#submitForRun
                 // against a discovery_run row, never a device -- same
                 // gate-free placeholder shape (StepExecutor never runs
@@ -232,6 +244,40 @@ public class DeviceCompositionConfiguration {
         return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
     }
 
+    /**
+     * NXS-LOCAL-0175: 14H section 5's gated literals, mirroring {@code
+     * worker.backup.BackupCapabilities.checkPoint} exactly (docs/design/
+     * CP_BACKUP_COMMAND_GATE_ENTRIES.md). {@link #CHECK_POINT_BACKUP_LITERALS}
+     * carries entries 1, 2, 3, 6, 7 in order -- entry 3 (index 2) is the one
+     * {@code poll} kind step; entry 5 (the SFTP fetch) is declared {@code
+     * gate_not_applicable} per C4 section 2.3's sftp_get/prior-step rule,
+     * not looped from the literal list.
+     */
+    private static Capability checkPointBackupCapability(GateRegistryPort gateRegistryPort) {
+        CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep sftpGet = new CapabilityStep(StepKind.SFTP_GET, "not_applicable", null, true, Optional.empty(),
+                Optional.empty(), Optional.empty());
+        List<CapabilityStep> steps = List.of(connect,
+                new CapabilityStep(StepKind.EXEC, "expert", CHECK_POINT_BACKUP_LITERALS.get(0), false,
+                        Optional.empty(), Optional.empty(), Optional.empty()),
+                new CapabilityStep(StepKind.EXEC, "expert", CHECK_POINT_BACKUP_LITERALS.get(1), false,
+                        Optional.empty(), Optional.empty(), Optional.empty()),
+                new CapabilityStep(StepKind.POLL, "expert", CHECK_POINT_BACKUP_LITERALS.get(2), false,
+                        Optional.empty(), Optional.empty(), Optional.empty()),
+                sftpGet,
+                new CapabilityStep(StepKind.EXEC, "expert", CHECK_POINT_BACKUP_LITERALS.get(3), false,
+                        Optional.empty(), Optional.empty(), Optional.empty()),
+                new CapabilityStep(StepKind.EXEC, "expert", CHECK_POINT_BACKUP_LITERALS.get(4), false,
+                        Optional.empty(), Optional.empty(), Optional.empty()));
+        CapabilitySpec spec = new CapabilitySpec(BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, "check_point",
+                "cp_gaia_gateway", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, steps, List.of(disconnect),
+                "14H", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
+    }
+
     @Bean
     public DeviceEnrollmentReadPort deviceEnrollmentReadPort(DeviceRepository deviceRepository) {
         return new PersistenceDeviceEnrollmentReadPort(deviceRepository);
@@ -315,6 +361,38 @@ public class DeviceCompositionConfiguration {
     public ConfigurationCollectService configurationCollectService(DeviceRepository deviceRepository,
             JobAdmissionService jobAdmissionService) {
         return new ConfigurationCollectService(deviceRepository, jobAdmissionService);
+    }
+
+    @Bean
+    public BackupArtefactManifestRepository backupArtefactManifestRepository(TransactionBoundary transactionBoundary) {
+        return new JooqBackupArtefactManifestRepository(transactionBoundary);
+    }
+
+    /**
+     * 14H BK-1: the pilot-device allowlist, an env-backed configuration
+     * list -- {@code UI2_BACKUP_PILOT_DEVICE_IDS}, comma-separated,
+     * empty by default (WORKER.md: "empty means every backup is refused").
+     * Read the same way {@code Ui2WorkerMain}'s own trust-rule-ref env
+     * vars are, since neither carries a secret.
+     */
+    @Bean
+    public BackupCollectService backupCollectService(DeviceRepository deviceRepository,
+            JobAdmissionService jobAdmissionService) {
+        java.util.Set<String> allowlist = parseCsvEnv("UI2_BACKUP_PILOT_DEVICE_IDS");
+        boolean backupCredentialConfigured = !System.getenv().getOrDefault("UI2_CP_BACKUP_CREDENTIAL_REF", "").isBlank();
+        return new BackupCollectService(deviceRepository, jobAdmissionService, allowlist, backupCredentialConfigured);
+    }
+
+    private static java.util.Set<String> parseCsvEnv(String name) {
+        String raw = System.getenv().getOrDefault(name, "");
+        java.util.Set<String> values = new java.util.LinkedHashSet<>();
+        for (String value : raw.split(",")) {
+            String trimmed = value.strip();
+            if (!trimmed.isEmpty()) {
+                values.add(trimmed);
+            }
+        }
+        return values;
     }
 
     @Bean

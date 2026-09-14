@@ -19,8 +19,10 @@ import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRunRepository
 import com.securityexpert.nexus.ui2.persistence.discovery.JooqDiscoveryRunRepository;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRepository;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupEndpointEligibilityRepository;
 import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupArtefactManifestRepository;
+import com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupEndpointEligibilityRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.DeviceConfigurationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.JooqConfigurationNotificationRepository;
@@ -39,6 +41,9 @@ import com.securityexpert.nexus.ui2.worker.confirm.ConfirmCapabilities;
 import com.securityexpert.nexus.ui2.worker.confirm.ConfirmCapabilityExecutor;
 import com.securityexpert.nexus.ui2.worker.confirm.ConfirmJobExecutor;
 import com.securityexpert.nexus.ui2.worker.confirm.PeerFollowResolver;
+import com.securityexpert.nexus.ui2.worker.backup.BackupCapabilities;
+import com.securityexpert.nexus.ui2.worker.backup.BackupCapabilityExecutor;
+import com.securityexpert.nexus.ui2.worker.backup.BackupJobExecutor;
 import com.securityexpert.nexus.ui2.worker.confirm.WorkerClaimLoop;
 import com.securityexpert.nexus.ui2.worker.configuration.ConfigurationCapabilities;
 import com.securityexpert.nexus.ui2.worker.configuration.ConfigurationCapabilityExecutor;
@@ -139,6 +144,7 @@ public final class Ui2WorkerMain {
         capabilities.addAll(ConfirmCapabilities.all());
         capabilities.addAll(InventoryCapabilities.all(gateRegistry));
         capabilities.addAll(ConfigurationCapabilities.all(gateRegistry));
+        capabilities.addAll(BackupCapabilities.all(gateRegistry));
         capabilities.addAll(com.securityexpert.nexus.ui2.worker.discovery.DiscoveryCapabilities.all());
         CapabilityRegistry capabilityRegistry = CapabilityRegistry.of(capabilities);
         TransportRegistry transportRegistry = WorkerBootstrap.buildTransportRegistry(sshTransport, panTransport);
@@ -177,6 +183,28 @@ public final class Ui2WorkerMain {
                 configurationNotificationRepository, configurationCapabilityExecutor, backupArtefactManifestRepository,
                 hostnameFingerprint, artefactStoreRoot.toString());
 
+        // 14H BK-11: the distinct backup credential reference (a
+        // credential_references id, resolved through the same
+        // StoreBackedSshCredentialResolver stack -- never the device's own
+        // collection credential). Empty means unconfigured: the executor
+        // fails closed before any device contact, and BackupCollectService
+        // (service module) refuses admission for the same reason.
+        Optional<String> backupCredentialRef =
+                Optional.ofNullable(System.getenv("UI2_CP_BACKUP_CREDENTIAL_REF")).filter(value -> !value.isBlank());
+        long backupFreeSpaceThresholdBytes = Long.parseLong(
+                System.getenv().getOrDefault("UI2_BACKUP_FREE_SPACE_THRESHOLD_BYTES", "104857600"));
+        Duration backupPollInterval = Duration.ofSeconds(
+                Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_POLL_INTERVAL_SECONDS", "10")));
+        Duration backupRunDeadline = Duration.ofSeconds(
+                Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_RUN_DEADLINE_SECONDS", "1800")));
+        BackupEndpointEligibilityRepository backupEndpointEligibilityRepository =
+                new JooqBackupEndpointEligibilityRepository(transactionBoundary);
+        BackupCapabilityExecutor backupCapabilityExecutor = new BackupCapabilityExecutor(compositeTransport,
+                artefactStore, backupFreeSpaceThresholdBytes, backupPollInterval, backupRunDeadline);
+        BackupJobExecutor backupJobExecutor = new BackupJobExecutor(leaseRepository, attemptRepository,
+                deviceEnrollmentReadPort, deviceRepository, backupCapabilityExecutor, backupArtefactManifestRepository,
+                backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString());
+
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
         ManagementPlaneEnumerationAdapter checkPointDiscoveryAdapter =
                 new ManagementPlaneEnumerationAdapter(compositeTransport, sshCredentialResolver);
@@ -188,7 +216,8 @@ public final class Ui2WorkerMain {
         JobRecordDao jobRecordDao = new JooqJobRecordDao(transactionBoundary);
         WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
                 confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
-                "worker-" + UUID.randomUUID(), Duration.ofSeconds(60), checkPointTrustRuleRef, paloAltoTrustRuleRef);
+                backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofSeconds(60), checkPointTrustRuleRef,
+                paloAltoTrustRuleRef, backupCredentialRef);
 
         claimLoop.runUntilInterrupted(Duration.ofSeconds(2));
     }

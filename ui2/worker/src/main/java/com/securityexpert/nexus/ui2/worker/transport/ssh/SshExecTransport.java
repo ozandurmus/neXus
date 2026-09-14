@@ -1,7 +1,10 @@
 package com.securityexpert.nexus.ui2.worker.transport.ssh;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FilterOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Properties;
@@ -9,11 +12,13 @@ import java.util.UUID;
 
 import com.jcraft.jsch.Channel;
 import com.jcraft.jsch.ChannelExec;
+import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.HostKey;
 import com.jcraft.jsch.HostKeyRepository;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
+import com.jcraft.jsch.SftpException;
 import com.jcraft.jsch.UserInfo;
 
 import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
@@ -25,6 +30,7 @@ import com.securityexpert.nexus.ui2.jobs.transport.ExecResult;
 import com.securityexpert.nexus.ui2.jobs.transport.ExecSpec;
 import com.securityexpert.nexus.ui2.jobs.transport.FetchResult;
 import com.securityexpert.nexus.ui2.jobs.transport.FetchSpec;
+import com.securityexpert.nexus.ui2.jobs.transport.FetchStreamResult;
 import com.securityexpert.nexus.ui2.jobs.transport.TransportNotImplementedException;
 import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
@@ -135,6 +141,37 @@ public final class SshExecTransport implements DeviceTransport {
         throw new TransportNotImplementedException("sftp_get/scp_get");
     }
 
+    /**
+     * 14H BK-3: the archive is transferred by SFTP, streamed directly into
+     * the caller's sink (the artefact store's own handle) -- no whole-file
+     * buffering. {@code spec.remotePath()} is read verbatim, with no path
+     * interpolation beyond the exact archive path the caller already
+     * resolved (never a pattern, never a listing); {@code
+     * spec.maxBytes()} bounds the transfer so a mis-sized or runaway
+     * archive fails the run rather than exhausting memory or disk.
+     */
+    @Override
+    public FetchStreamResult fetchStreaming(TransportSession session, FetchSpec spec, Duration timeout,
+            OutputStream sink) {
+        if (!(session instanceof SshTransportSession sshSession)) {
+            return new FetchStreamResult.Failed("not an ssh_exec session");
+        }
+        ChannelSftp channel = null;
+        try {
+            channel = (ChannelSftp) sshSession.jschSession().openChannel("sftp");
+            channel.connect((int) timeout.toMillis());
+            BoundedCountingOutputStream bounded = new BoundedCountingOutputStream(sink, spec.maxBytes());
+            channel.get(spec.remotePath(), bounded);
+            return new FetchStreamResult.Fetched(bounded.count());
+        } catch (JSchException | SftpException e) {
+            return new FetchStreamResult.Failed(String.valueOf(e.getMessage()));
+        } finally {
+            if (channel != null) {
+                channel.disconnect();
+            }
+        }
+    }
+
     @Override
     public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
         throw new TransportNotImplementedException("xml_api_call");
@@ -186,6 +223,40 @@ public final class SshExecTransport implements DeviceTransport {
                 return new HostKey[0];
             }
         };
+    }
+
+    /** Counts bytes written and refuses to write past {@code maxBytes} -- a runaway or mis-sized archive fails the fetch rather than exhausting memory or disk. */
+    private static final class BoundedCountingOutputStream extends FilterOutputStream {
+
+        private final long maxBytes;
+        private long count;
+
+        BoundedCountingOutputStream(OutputStream out, long maxBytes) {
+            super(out);
+            this.maxBytes = maxBytes;
+        }
+
+        long count() {
+            return count;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            if (count + 1 > maxBytes) {
+                throw new IOException("fetch exceeded max_bytes=" + maxBytes);
+            }
+            out.write(b);
+            count++;
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            if (count + len > maxBytes) {
+                throw new IOException("fetch exceeded max_bytes=" + maxBytes);
+            }
+            out.write(b, off, len);
+            count += len;
+        }
     }
 
     private static String fingerprintOf(byte[] key) {

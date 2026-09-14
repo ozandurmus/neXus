@@ -1,0 +1,57 @@
+# cp_gateway_backup -- the Check Point half of the gateway backup movement
+# (PO_DECISION_RECORD_2026_09_14H section 5's seven literals), gated per
+# docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md entries 1-7, mirroring
+# cp_configuration_collect.yaml's own shape.
+#
+# The real device contact never runs this capability's own step list
+# through StepExecutor: it runs through worker.backup.BackupJobExecutor/
+# BackupCapabilityExecutor against the closed literal set
+# (worker.backup.BackupReadPlan), because the submit-then-poll,
+# digest-then-delete state machine (14H BK-3/BK-5) cannot be expressed by
+# StepExecutor's single-command-per-step shape. These steps exist so C4
+# execution eligibility is computed from real gate resolution.
+#
+# Admitted only against an ENROLLED, non-disabled device that is ALSO on
+# the pilot allowlist (14H BK-1) -- the allowlist check happens in
+# worker.backup's own admission service, never here.
+capability_id: cp_gateway_backup
+vendor: check_point
+platform_role_scope: cp_gaia_gateway
+maturity_state: CAP_VALIDATED
+transport:
+  kind: ssh_exec
+  trust_rule_ref: utils.cp_ssh_trust
+steps:
+  - kind: connect
+  - kind: exec
+    shell_context: expert
+    send: 'clish -c "show diskspace"'
+    gate_reference: cp_backup_show_diskspace
+  - kind: exec
+    shell_context: expert
+    send: 'clish -c "add backup local"'
+    gate_reference: cp_backup_add_backup_local
+  - kind: poll
+    shell_context: expert
+    send: 'clish -c "show backup status"'
+    gate_reference: cp_backup_show_backup_status
+  - kind: sftp_get
+    gate_not_applicable: true # entry 5: the path fetched is exactly the one the submit step's own output named (C4 section 2.3's sftp_get/prior-step rule) -- see the gate doc's own "Entry 5's gate is NOT_APPLICABLE" section.
+  - kind: exec
+    shell_context: expert
+    send: "sha256sum <name>"
+    gate_reference: cp_backup_archive_digest
+  - kind: exec
+    shell_context: expert
+    send: 'clish -c "delete backup <name>"'
+    gate_reference: cp_backup_delete_backup_local
+finally_steps:
+  - kind: disconnect
+parser_ref:
+  parser_version: "14H"
+  semantics_doc_ref: "docs/design/PO_DECISION_RECORD_2026_09_14H_BACKUP_STEP_SCOPE_PILOT_DEVICE_AND_THE_ASYNCHRONOUS_TRUTH.md"
+source_pointers:
+  - "worker.backup.BackupCapabilityExecutor (the closed submit-then-poll-then-fetch-then-verify-then-delete state machine this capability's own execution defers to)"
+  - "worker.backup.BackupReadPlan (14H section 5 literals)"
+validation_status: FIXTURE_ONLY
+revalidation_plan_ref: "docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md -- command forms UNVERIFIED until the first live run against the pilot device"

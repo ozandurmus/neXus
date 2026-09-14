@@ -556,3 +556,113 @@ gates:
     secret_output_risk: none
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md entry 4"
+
+  # NXS-LOCAL-0175: 14H section 5's seven-literal Check Point gateway backup
+  # gate (docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md), SIGNED_OFF for the
+  # allowlisted pilot device only. Entry 5 (the SFTP fetch) carries no row
+  # here -- its gate is NOT_APPLICABLE per C4 section 2.3's sftp_get/
+  # prior-step rule (see the gate doc's own note). These double-quoted
+  # canonical keys are distinct from BACKUP_RECOVERY_CONTRACTS.md's own
+  # single-quoted rb3b_* rows above (the superseded 900-second blocking-exec
+  # profile) -- no collision, no edit to those rows.
+  - gate_id: cp_backup_show_diskspace
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: 'clish -c "show diskspace"'
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per run, before the submit"
+    session_reuse_rule: "one session held for the whole run"
+    unsupported_behavior_ref: "CONFIRM-ON-HARDWARE (BK-7): if the Clish form fails, the Expert fallback df -P /var/log becomes primary"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md entry 1"
+
+  - gate_id: cp_backup_add_backup_local
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: 'clish -c "add backup local"'
+    action_class: recovery-write
+    sign_off_state: SIGNED_OFF
+    timeout_s: 60
+    retry_rule: "never auto-retried (class-1): a second submission would start a second concurrent backup"
+    max_frequency: "once per run"
+    session_reuse_rule: "one session held for the whole run"
+    unsupported_behavior_ref: "a vendor refusal (snapshot in progress, an open management client) is reported as the failure reason, never retried (BK-8)"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md entry 2"
+
+  - gate_id: cp_backup_show_backup_status
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: 'clish -c "show backup status"'
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "polled on a fixed interval for the duration of one run only"
+    session_reuse_rule: "same session as the submit"
+    unsupported_behavior_ref: "non-terminal output is a normal mid-run poll result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md entry 3"
+
+  - gate_id: cp_backup_show_backups
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: 'clish -c "show backups"'
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "at most once per run, if ever issued"
+    session_reuse_rule: "same session as the submit"
+    unsupported_behavior_ref: "governed for 14H section 5 completeness; not issued by this movement's own executor flow"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md entry 4"
+
+  - gate_id: cp_backup_archive_digest
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "sha256sum <name>"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 60
+    retry_rule: none
+    max_frequency: "once per run"
+    session_reuse_rule: "same session as the submit"
+    unsupported_behavior_ref: "a digest tool not on PATH is a failure, not a silent skip"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md entry 6"
+
+  - gate_id: cp_backup_delete_backup_local
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: 'clish -c "delete backup <name>"'
+    action_class: recovery-write
+    sign_off_state: SIGNED_OFF
+    timeout_s: 60
+    retry_rule: "may be retried once: a failed delete is attempted a second time before the run records cleanup_failed"
+    max_frequency: "at most twice per run"
+    session_reuse_rule: "same session as the submit"
+    unsupported_behavior_ref: "CONFIRM-ON-HARDWARE (BK-7): if the Clish form fails, the Expert fallback rm -f -- <exact path> becomes primary; a failed delete after the retry records cleanup_failed and marks the endpoint ineligible"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md entry 7"
