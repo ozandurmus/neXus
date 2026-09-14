@@ -28,7 +28,7 @@ class SensitiveFieldRedactionTest {
 
     @Test
     void deviceDraftToStringNeverContainsAddressRef() {
-        DeviceDraft draft = new DeviceDraft("device-1", "vendor-hint-synthetic", "manual_registration", false,
+        DeviceDraft draft = new DeviceDraft("device-1", "gateway", "vendor-hint-synthetic", "manual_registration", false,
                 "cred-ref-1", "endpoint-1", "ssh_exec", SYNTHETIC_ADDRESS_REF);
 
         assertFalse(draft.toString().contains(SYNTHETIC_ADDRESS_REF),

@@ -1,4 +1,5 @@
 package com.securityexpert.nexus.ui2.service.device;
+// 14I MS-1
 
 import java.util.Map;
 import java.util.Objects;
@@ -85,14 +86,14 @@ public final class DeviceAddSingleService {
         this.jobAdmissionService = Objects.requireNonNull(jobAdmissionService, "jobAdmissionService");
     }
 
-    public Outcome addSingle(String actorFingerprint, String address, String vendor, String credentialReferenceId) {
+    public Outcome addSingle(String actorFingerprint, String role, String address, String vendor, String credentialReferenceId) {
         VendorMapping mapping = VENDOR_MAPPINGS.get(vendor);
         if (mapping == null) {
             return new Outcome.ValidationFailed(DeviceRegistrationService.REASON_VENDOR_HINT_INVALID);
         }
 
         try {
-            return transactionBoundary.inTransaction(dsl -> runInTransaction(actorFingerprint, address, vendor,
+            return transactionBoundary.inTransaction(dsl -> runInTransaction(actorFingerprint, role, address, vendor,
                     credentialReferenceId, mapping, "manual_registration", Optional.empty(), Optional.empty(),
                     Optional.empty(), ActionRegistry.DEVICE_REGISTER));
         } catch (ValidationFailedSignal signal) {
@@ -110,7 +111,7 @@ public final class DeviceAddSingleService {
      * sibling candidate already imported in the same request (AC-3:
      * "refused per row, not per request").
      */
-    public Outcome addFromDiscoveryImport(String actorFingerprint, String address, String vendor,
+    public Outcome addFromDiscoveryImport(String actorFingerprint, String role, String address, String vendor,
             String credentialReferenceId, Optional<String> clusterMemberRef, Optional<String> virtualSystemRef,
             Optional<String> discoveryMatchKey, String actionId) {
         VendorMapping mapping = VENDOR_MAPPINGS.get(vendor);
@@ -119,7 +120,7 @@ public final class DeviceAddSingleService {
         }
 
         try {
-            return transactionBoundary.inTransaction(dsl -> runInTransaction(actorFingerprint, address, vendor,
+            return transactionBoundary.inTransaction(dsl -> runInTransaction(actorFingerprint, role, address, vendor,
                     credentialReferenceId, mapping, "discovery_import", clusterMemberRef, virtualSystemRef,
                     discoveryMatchKey, actionId));
         } catch (ValidationFailedSignal signal) {
@@ -129,11 +130,11 @@ public final class DeviceAddSingleService {
         }
     }
 
-    private Outcome runInTransaction(String actorFingerprint, String address, String vendor,
+    private Outcome runInTransaction(String actorFingerprint, String role, String address, String vendor,
             String credentialReferenceId, VendorMapping mapping, String registrationSource,
             Optional<String> clusterMemberRef, Optional<String> virtualSystemRef, Optional<String> discoveryMatchKey,
             String actionId) {
-        DeviceRegistrationService.Outcome registration = deviceRegistrationService.register(actorFingerprint, vendor,
+        DeviceRegistrationService.Outcome registration = deviceRegistrationService.register(actorFingerprint, role, vendor,
                 mapping.transportKind(), address, credentialReferenceId, false, registrationSource, clusterMemberRef,
                 virtualSystemRef, discoveryMatchKey, actionId);
         if (registration instanceof DeviceRegistrationService.Outcome.ValidationFailed failed) {

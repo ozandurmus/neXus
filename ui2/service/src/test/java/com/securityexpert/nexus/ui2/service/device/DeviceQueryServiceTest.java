@@ -116,7 +116,7 @@ class DeviceQueryServiceTest {
     }
 
     private static DeviceRecord draftDevice(String deviceId) {
-        return new DeviceRecord(deviceId, "check_point", "manual_registration", Instant.now(), false,
+        return new DeviceRecord(deviceId, "gateway", "check_point", "manual_registration", Instant.now(), false,
                 DeviceEnrollmentState.DRAFT, false, "cred-ref-1");
     }
 
@@ -183,7 +183,7 @@ class DeviceQueryServiceTest {
     @Test
     void listDevicesReturnsExactlyWhatTheRepositoryListsInOrder() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
-        DeviceSummaryRecord summary = new DeviceSummaryRecord("device-1", "palo_alto", DeviceEnrollmentState.ENROLLED,
+        DeviceSummaryRecord summary = new DeviceSummaryRecord("device-1", "gateway", "palo_alto", DeviceEnrollmentState.ENROLLED,
                 Optional.of("fw-01"), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
         devices.summaries = List.of(summary);
         DeviceQueryService service = new DeviceQueryService(devices, new FakeJobRecordDao());

@@ -59,7 +59,7 @@ class DeviceRegistrationServiceTest {
         @Override
         public String registerDraft(DeviceDraft draft, String actorFingerprint, String actionId) {
             registered.add(draft);
-            byId.put(draft.deviceId(), new DeviceRecord(draft.deviceId(), draft.vendorHint(),
+            byId.put(draft.deviceId(), new DeviceRecord(draft.deviceId(), draft.role(), draft.vendorHint(),
                     draft.registrationSource(), Instant.now(), draft.isTestTarget(), DeviceEnrollmentState.DRAFT,
                     false, draft.credentialReferenceId()));
             return draft.deviceId();
@@ -129,7 +129,7 @@ class DeviceRegistrationServiceTest {
         credentials.addExisting("cred-ref-1");
         DeviceRegistrationService service = new DeviceRegistrationService(devices, credentials);
 
-        DeviceRegistrationService.Outcome outcome = service.register("actor-onboarding-1", "vendor-hint-synthetic",
+        DeviceRegistrationService.Outcome outcome = service.register("actor-onboarding-1", "gateway", "vendor-hint-synthetic",
                 "ssh_exec", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
 
         assertTrue(outcome instanceof DeviceRegistrationService.Outcome.Registered);
@@ -150,9 +150,9 @@ class DeviceRegistrationServiceTest {
         credentials.addExisting("cred-ref-1");
         DeviceRegistrationService service = new DeviceRegistrationService(devices, credentials);
 
-        service.register("actor-onboarding-1", "vendor-hint-synthetic", "ssh_exec", SYNTHETIC_ADDRESS_REF,
+        service.register("actor-onboarding-1", "gateway", "vendor-hint-synthetic", "ssh_exec", SYNTHETIC_ADDRESS_REF,
                 "cred-ref-1", true);
-        service.register("actor-onboarding-1", "vendor-hint-synthetic", "ssh_exec", SYNTHETIC_ADDRESS_REF,
+        service.register("actor-onboarding-1", "gateway", "vendor-hint-synthetic", "ssh_exec", SYNTHETIC_ADDRESS_REF,
                 "cred-ref-1", false);
 
         assertEquals(2, devices.registered.size(), "is_test_target must not change whether registration succeeds");
@@ -165,7 +165,7 @@ class DeviceRegistrationServiceTest {
         FakeCredentialReferenceRepository credentials = new FakeCredentialReferenceRepository();
         DeviceRegistrationService service = new DeviceRegistrationService(devices, credentials);
 
-        DeviceRegistrationService.Outcome outcome = service.register("actor-onboarding-1", "vendor-hint-synthetic",
+        DeviceRegistrationService.Outcome outcome = service.register("actor-onboarding-1", "gateway", "vendor-hint-synthetic",
                 "ssh_exec", SYNTHETIC_ADDRESS_REF, "no-such-credential-reference", false);
 
         assertTrue(outcome instanceof DeviceRegistrationService.Outcome.ValidationFailed);
@@ -181,7 +181,7 @@ class DeviceRegistrationServiceTest {
         credentials.addExisting("cred-ref-1");
         DeviceRegistrationService service = new DeviceRegistrationService(devices, credentials);
 
-        DeviceRegistrationService.Outcome outcome = service.register("actor-onboarding-1", "vendor-hint-synthetic",
+        DeviceRegistrationService.Outcome outcome = service.register("actor-onboarding-1", "gateway", "vendor-hint-synthetic",
                 "some_future_transport", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
 
         assertTrue(outcome instanceof DeviceRegistrationService.Outcome.ValidationFailed);
@@ -198,7 +198,7 @@ class DeviceRegistrationServiceTest {
         credentials.addExisting("cred-ref-1");
         DeviceRegistrationService service = new DeviceRegistrationService(devices, credentials);
 
-        DeviceRegistrationService.Outcome outcome = service.register("actor-onboarding-1", "vendor-hint-synthetic",
+        DeviceRegistrationService.Outcome outcome = service.register("actor-onboarding-1", "gateway", "vendor-hint-synthetic",
                 "ssh_exec", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
         var registered = (DeviceRegistrationService.Outcome.Registered) outcome;
 
@@ -218,9 +218,25 @@ class DeviceRegistrationServiceTest {
         DeviceRegistrationService service = new DeviceRegistrationService(devices, credentials);
 
         DeviceRegistrationService.Outcome outcome =
-                service.register("actor-onboarding-1", "  ", "ssh_exec", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
+                service.register("actor-onboarding-1", "gateway", "  ", "ssh_exec", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
 
         assertTrue(outcome instanceof DeviceRegistrationService.Outcome.ValidationFailed);
+        assertTrue(devices.registered.isEmpty());
+    }
+
+    @Test
+    void invalidRoleIsRefused() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        FakeCredentialReferenceRepository credentials = new FakeCredentialReferenceRepository();
+        credentials.addExisting("cred-ref-1");
+        DeviceRegistrationService service = new DeviceRegistrationService(devices, credentials);
+
+        DeviceRegistrationService.Outcome outcome =
+                service.register("actor-onboarding-1", "invalid_role", "check_point", "ssh_exec", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
+
+        assertTrue(outcome instanceof DeviceRegistrationService.Outcome.ValidationFailed);
+        assertEquals(DeviceRegistrationService.REASON_ROLE_INVALID,
+                ((DeviceRegistrationService.Outcome.ValidationFailed) outcome).reasonCode());
         assertTrue(devices.registered.isEmpty());
     }
 }

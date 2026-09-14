@@ -142,7 +142,7 @@ class ConfigurationControllerTest {
     }
 
     private static DeviceRecord device(String deviceId, String vendorHint) {
-        return new DeviceRecord(deviceId, vendorHint, "manual_registration", Instant.now(), false,
+        return new DeviceRecord(deviceId, "gateway", vendorHint, "manual_registration", Instant.now(), false,
                 DeviceEnrollmentState.ENROLLED, false, "cred-ref-1");
     }
 
@@ -312,8 +312,8 @@ class ConfigurationControllerTest {
     @Test
     void listConfigurationsReturns200WithEveryDevice() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
-        devices.summaries = List.of(new DeviceSummaryRecord("device-1", "check_point", DeviceEnrollmentState.ENROLLED,
-                Optional.of("gw-a"), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
+        devices.summaries = List.of(new DeviceSummaryRecord("device-1", "gateway", "check_point", DeviceEnrollmentState.ENROLLED,
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
         ConfigurationQueryService queryService = new ConfigurationQueryService(devices, new FakeDeviceConfigurationRepository());
         ConfigurationController controller = new ConfigurationController(queryService, unusedCollectService());
 

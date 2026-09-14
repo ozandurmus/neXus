@@ -1,4 +1,5 @@
 package com.securityexpert.nexus.ui2.persistence.device;
+// 14I MS-1
 
 import java.time.Instant;
 
@@ -13,6 +14,7 @@ import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
  */
 public record DeviceRecord(
         String deviceId,
+        String role,
         String vendorHint,
         String registrationSource,
         Instant createdAt,

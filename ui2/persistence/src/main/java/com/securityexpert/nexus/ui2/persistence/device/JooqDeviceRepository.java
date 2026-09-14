@@ -1,4 +1,5 @@
 package com.securityexpert.nexus.ui2.persistence.device;
+// 14I MS-1
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -22,14 +23,14 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
  */
 public final class JooqDeviceRepository implements DeviceRepository {
 
-    private static final String DEVICE_COLUMNS = "device_id, vendor_hint, registration_source, created_at, "
+    private static final String DEVICE_COLUMNS = "device_id, role, vendor_hint, registration_source, created_at, "
             + "is_test_target, enrollment_state, disabled, credential_reference_id";
     private static final String ENDPOINT_COLUMNS = "endpoint_id, device_id, transport_kind, address_ref, created_at";
     private static final String CONFIRM_FACT_COLUMNS = "observed_hostname, observed_model, observed_software_version, "
             + "observed_ha_role, recorded_identity_primary, recorded_identity_secondary, identity_mismatch_state, "
             + "identity_mismatch_presented_primary, identity_mismatch_presented_secondary, cluster_member_ref, "
             + "virtual_system_ref, peer_follow_outcome, peer_follow_reason";
-    private static final String DEVICE_SUMMARY_COLUMNS = "device_id, vendor_hint, enrollment_state, "
+    private static final String DEVICE_SUMMARY_COLUMNS = "device_id, role, vendor_hint, enrollment_state, "
             + "observed_hostname, observed_model, observed_software_version, observed_ha_role, cluster_member_ref";
 
     private final TransactionBoundary transactionBoundary;
@@ -72,11 +73,11 @@ public final class JooqDeviceRepository implements DeviceRepository {
     public String registerDraft(DeviceDraft draft, String actorFingerprint, String actionId) {
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, (DSLContext dsl) -> {
             Timestamp now = Timestamp.from(Instant.now());
-            dsl.execute("insert into devices(device_id, vendor_hint, registration_source, created_at, "
+            dsl.execute("insert into devices(device_id, role, vendor_hint, registration_source, created_at, "
                     + "is_test_target, enrollment_state, disabled, credential_reference_id, "
                     + "cluster_member_ref, virtual_system_ref, discovery_match_key) "
-                    + "values ({0}, {1}, {2}, {3}, {4}, 'DRAFT', false, {5}, {6}, {7}, {8})",
-                    draft.deviceId(), draft.vendorHint(), draft.registrationSource(), now, draft.isTestTarget(),
+                    + "values ({0}, {1}, {2}, {3}, {4}, {5}, 'DRAFT', false, {6}, {7}, {8}, {9})",
+                    draft.deviceId(), draft.role(), draft.vendorHint(), draft.registrationSource(), now, draft.isTestTarget(),
                     draft.credentialReferenceId(), draft.clusterMemberRef().orElse(null),
                     draft.virtualSystemRef().orElse(null), draft.discoveryMatchKey().orElse(null));
             dsl.execute("insert into endpoints(endpoint_id, device_id, transport_kind, address_ref, created_at) "
@@ -157,6 +158,7 @@ public final class JooqDeviceRepository implements DeviceRepository {
     private static DeviceRecord toDeviceRecord(Record row) {
         return new DeviceRecord(
                 row.get("device_id", String.class),
+                row.get("role", String.class),
                 row.get("vendor_hint", String.class),
                 row.get("registration_source", String.class),
                 row.get("created_at", Timestamp.class).toInstant(),
@@ -186,6 +188,7 @@ public final class JooqDeviceRepository implements DeviceRepository {
     private static DeviceSummaryRecord toSummaryRecord(Record row) {
         return new DeviceSummaryRecord(
                 row.get("device_id", String.class),
+                row.get("role", String.class),
                 row.get("vendor_hint", String.class),
                 DeviceEnrollmentState.fromColumnValue(row.get("enrollment_state", String.class)),
                 Optional.ofNullable(row.get("observed_hostname", String.class)),

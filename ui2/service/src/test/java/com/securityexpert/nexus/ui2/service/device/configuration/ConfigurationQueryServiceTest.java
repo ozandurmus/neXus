@@ -88,7 +88,7 @@ class ConfigurationQueryServiceTest {
     }
 
     private static DeviceRecord device(String deviceId, String vendorHint) {
-        return new DeviceRecord(deviceId, vendorHint, "manual_registration", Instant.now(), false,
+        return new DeviceRecord(deviceId, "gateway", vendorHint, "manual_registration", Instant.now(), false,
                 DeviceEnrollmentState.ENROLLED, false, "cred-ref-1");
     }
 
@@ -177,9 +177,9 @@ class ConfigurationQueryServiceTest {
     void listDevicesReturnsEveryDeviceWithItsLatestPrimaryRunWhenAny() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.summaries = List.of(
-                new DeviceSummaryRecord("device-1", "check_point", DeviceEnrollmentState.ENROLLED,
-                        Optional.of("gw-a"), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()),
-                new DeviceSummaryRecord("device-2", "palo_alto", DeviceEnrollmentState.ENROLLED, Optional.of("fw-b"),
+                new DeviceSummaryRecord("device-1", "gateway", "check_point", DeviceEnrollmentState.ENROLLED,
+                        Optional.of("fw-a"), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()),
+                new DeviceSummaryRecord("device-2", "gateway", "palo_alto", DeviceEnrollmentState.ENROLLED, Optional.of("fw-b"),
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
         FakeDeviceConfigurationRepository configRepository = new FakeDeviceConfigurationRepository();
         configRepository.recordRun(

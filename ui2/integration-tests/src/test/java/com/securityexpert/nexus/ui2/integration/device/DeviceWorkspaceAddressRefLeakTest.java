@@ -66,8 +66,8 @@ class DeviceWorkspaceAddressRefLeakTest {
         // The marker is injected as the real column value through the
         // production registration path -- not a fixture shortcut.
         deviceRepository.registerDraft(
-                new DeviceDraft(deviceId, "harness-vendor", "manual_registration", true, credentialReferenceId,
-                        endpointId, "ssh_exec", MARKER),
+                new DeviceDraft(deviceId, "gateway", "harness-vendor", "manual_registration", true, credentialReferenceId,
+                        endpointId, "test_transport", MARKER),
                 Ui2Rows.ACTOR, Ui2Rows.ACTION);
     }
 

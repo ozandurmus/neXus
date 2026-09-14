@@ -49,7 +49,7 @@ class BackupCollectServiceTest {
         private final Map<String, DeviceRecord> devices = new HashMap<>();
 
         StubDeviceRepository put(String deviceId, String vendorHint) {
-            devices.put(deviceId, new DeviceRecord(deviceId, vendorHint, "manual", Instant.now(), false,
+            devices.put(deviceId, new DeviceRecord(deviceId, "gateway", vendorHint, "manual", Instant.now(), false,
                     DeviceEnrollmentState.ENROLLED, false, "cred-collection-1"));
             return this;
         }
