@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "current_build": "build_1",
+  "current_track": "track_a",
+  "progress_contract": "weighted acceptance-criterion completion",
+  "tracks": [
+    { "id": "track_a", "title": "Track A", "weight": 2, "status": "in_progress", "feature_ids": ["f1", "f2", "f3"] },
+    { "id": "track_b", "title": "Track B", "weight": "bogus", "status": "planned", "feature_ids": ["f4", "f5"] }
+  ],
+  "now_next": {
+    "horizon_contract": "test fixture",
+    "now": { "build": "build_1", "title": "Build One", "status": "in_progress" },
+    "next": { "build": "build_2", "title": "Build Two", "status": "planned" },
+    "upcoming": []
+  },
+  "roadmap_notes": ["a note"],
+  "open_decisions": []
+}

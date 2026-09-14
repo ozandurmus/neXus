@@ -1,0 +1,7 @@
+{
+  "schema_version": "2.0",
+  "record_contract": "test fixture",
+  "builds": [
+    { "build": "build_1", "status": "in_progress", "title": "Build One", "summary": "s" }
+  ]
+}

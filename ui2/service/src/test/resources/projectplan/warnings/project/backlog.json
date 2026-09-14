@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "items": [
+    { "id": "bl_bad_status", "category": "Cat A", "title": "Bad Status Backlog", "status": "bogus_status", "priority": "P2", "target": "soon" },
+    { "id": "backlog_started", "category": "Cat A", "title": "Backlog Started", "status": "planned", "priority": "P1", "target": "soon" }
+  ]
+}

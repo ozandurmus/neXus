@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0",
+  "items": [
+    { "id": "bl_1", "category": "Cat A", "title": "Backlog One", "status": "planned", "priority": "P2", "target": "soon", "note": "n1" }
+  ]
+}

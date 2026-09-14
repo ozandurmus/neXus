@@ -509,3 +509,91 @@ export interface ConfigurationNotificationView {
 export function listNotifications(): Promise<{ notifications: ConfigurationNotificationView[] }> {
   return call("/notifications", "GET");
 }
+
+/**
+ * Project plan read model (movement NXS-LOCAL-0174): the Administration
+ * screen's "Project plan" tab, backed by a real read of the repository's
+ * own roadmap/feature-registry/backlog/build-history sources -- the earlier
+ * product's own payload envelope, field for field.
+ */
+export interface ProjectPlanFeature {
+  readonly id: string;
+  readonly title: string;
+  readonly status: string;
+  readonly introduced: string | null;
+  readonly target: string | null;
+  readonly weight: number;
+  readonly summary: string | null;
+  readonly why: string | null;
+  readonly evidence: string | null;
+  readonly progress_percent: number;
+}
+
+export interface ProjectPlanTrack {
+  readonly id: string;
+  readonly title: string;
+  readonly theme: string | null;
+  readonly status: string;
+  readonly weight: number;
+  readonly progress_percent: number;
+  readonly done_features: number;
+  readonly feature_count: number;
+  readonly features: ProjectPlanFeature[];
+}
+
+export interface ProjectPlanHorizonEntry {
+  readonly build: string;
+  readonly title: string;
+  readonly status: string;
+  readonly goal?: string | null;
+  readonly detail?: string | null;
+}
+
+export interface ProjectPlanNowNext {
+  readonly horizon_contract?: string | null;
+  readonly now?: ProjectPlanHorizonEntry | null;
+  readonly next?: ProjectPlanHorizonEntry | null;
+  readonly upcoming?: ProjectPlanHorizonEntry[];
+}
+
+export interface ProjectPlanBacklogItem {
+  readonly id: string;
+  /** An opaque grouping key, never an enum. */
+  readonly category: string;
+  readonly title: string;
+  readonly status: string;
+  readonly priority: string | null;
+  readonly target: string | null;
+  readonly note: string | null;
+}
+
+export interface ProjectPlanBuild {
+  readonly build: string;
+  readonly status: string;
+  readonly title: string;
+  readonly summary: string | null;
+  readonly detail: string | null;
+}
+
+export interface ProjectPlanView {
+  readonly schema_version: string;
+  readonly generated_at: string;
+  readonly current_build: string | null;
+  readonly current_track: string | null;
+  readonly progress_contract: string | null;
+  readonly overall_progress_percent: number;
+  readonly current_track_progress_percent: number;
+  readonly tracks: ProjectPlanTrack[];
+  readonly now_next: ProjectPlanNowNext;
+  readonly roadmap_notes: string[];
+  readonly backlog: ProjectPlanBacklogItem[];
+  readonly backlog_counts: Record<string, number>;
+  readonly completed_features: ProjectPlanFeature[];
+  readonly build_history: ProjectPlanBuild[];
+  readonly archived_build_count: number;
+  readonly metadata_warnings: string[];
+}
+
+export function getProjectPlan(): Promise<ProjectPlanView> {
+  return call("/project-plan", "GET");
+}
