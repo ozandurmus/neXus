@@ -66,10 +66,27 @@ A "no" to any of these is a stop, not a workaround.
 git fetch origin main
 py scripts/gov_session_transfer.py validate <packet>          # must print valid: true
 py scripts/local_relay.py create --role po --start <packet>
-py scripts/orchestrator.py run --movement NXS-LOCAL-NNNN \
+nohup python3 -u scripts/orchestrator.py run --movement NXS-LOCAL-NNNN \
     --provider <default> --model <tier model> --effort medium \
-    --timeout 5400 --heartbeat-timeout 900                    # foreground; wait for it
+    --timeout 5400 --heartbeat-timeout 900 > <scratch>/run-NXS-LOCAL-NNNN.log 2>&1 &
 ```
+
+**Dispatch in the background, then watch.** A foreground `run` blocks your
+whole session for the length of the movement: you cannot report progress, you
+cannot answer a relay question, you cannot dispatch the second worker, and the
+Product Owner sees an empty workbench and assumes nothing is happening. Put
+the run in the background and arm a watch on
+`orchestrator.py status` that prints only phase changes, so you report a
+transition when it happens and stay silent otherwise.
+
+**Killing a foreground `run` does not kill the worker.** The wrapper dies; the
+engineer process keeps going and finishes. Check the state record before
+concluding anything was lost.
+
+**At most two movements run at once.** Two is the Product Owner's standing
+limit. With a slot free and work ready, dispatch it rather than waiting; a
+serial loop wastes the Product Owner's evening. Give parallel movements
+non-colliding migration numbers and separate lanes (section 6).
 
 Read the JSON the last command prints. `phase`, `failure_reason`,
 `verify.steps[*].exit_code` and `usage` are the evidence. Then:
@@ -83,7 +100,9 @@ Read the JSON the last command prints. `phase`, `failure_reason`,
   `RELAY_DECISION` if the documents answer it, otherwise put the one
   question to the human.
 
-Do not use `start` + polling. Do not "check back later".
+Do not poll blindly and do not abandon a running movement: watch for phase
+changes, report each one in a sentence, and act the moment it ends or asks
+a question.
 
 ## 4. Where the rules live (read on demand only)
 
