@@ -22,6 +22,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ChangeState;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationArtefactRecord;
+import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationSummary;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationNotificationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationOverride;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationRun;
@@ -145,13 +146,26 @@ public final class ConfigurationJobExecutor {
                     : previous.get().canonicalHash().equals(data.canonicalHash()) ? ChangeState.UNCHANGED
                             : ChangeState.CHANGED;
 
+            // 14I DV-2: compute the structural deviation summary for changed runs only (AC-4).
+            Optional<ConfigurationDeviationSummary> deviationSummary = Optional.empty();
+            if (ChangeState.CHANGED.equals(changeState)) {
+                // previous is present (CHANGED requires a predecessor). Its index list is
+                // never null (ConfigurationRun's compact constructor guarantees that). An
+                // empty list is a legitimate empty predecessor; null would mean absent, but
+                // ConfigurationRun cannot hold null (AC-5 -- IndexDeviationComputer treats
+                // null as not-computable; a non-null empty list is computable).
+                deviationSummary = Optional.of(
+                        IndexDeviationComputer.compute(previous.get().index(), data.index()));
+            }
+
             String runId = UUID.randomUUID().toString();
             if (data.primary()) {
                 primaryRunId = runId;
             }
             ConfigurationRun run = new ConfigurationRun(runId, targetDeviceId, jobId, now, vendor, data.readKind(),
                     data.primary(), data.canonicalHash(), data.rawHash(), data.rawBytes(), data.artefact().artefactRef(),
-                    data.withheldLineCount(), data.sanitizedText(), changeState, data.index(), data.overrides());
+                    data.withheldLineCount(), data.sanitizedText(), changeState, data.index(), data.overrides(),
+                    deviationSummary);
             try {
                 deviceConfigurationRepository.recordRun(run, data.artefact(), ACTOR, ACTION_COMPLETED);
             } catch (RuntimeException recordFailed) {

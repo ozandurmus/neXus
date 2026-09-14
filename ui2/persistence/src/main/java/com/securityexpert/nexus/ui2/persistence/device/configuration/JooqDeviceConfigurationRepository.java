@@ -16,7 +16,7 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
 /**
  * jOOQ-backed {@link DeviceConfigurationRepository} (migration V16, 14G
- * CG-1..CG-10). Mirrors {@code
+ * CG-1..CG-10; deviation summary migration V22, 14I DV-2). Mirrors {@code
  * com.securityexpert.nexus.ui2.persistence.device.inventory.
  * JooqDeviceInventoryRepository}'s own shape.
  */
@@ -60,6 +60,21 @@ public final class JooqDeviceConfigurationRepository implements DeviceConfigurat
                         + "element_path, panorama_source) values ({0}, {1}, {2}, {3}, {4}, {5})",
                         UUID.randomUUID().toString(), run.runId(), override.context(), override.category(),
                         override.elementPath(), override.panoramaSource().orElse(null));
+            }
+
+            // 14I DV-2: persist the deviation summary when present (changed runs only).
+            if (run.deviationSummary().isPresent()) {
+                ConfigurationDeviationSummary summary = run.deviationSummary().get();
+                String summaryId = UUID.randomUUID().toString();
+                dsl.execute("insert into configuration_run_deviation_summary(summary_id, run_id, status) "
+                        + "values ({0}, {1}, {2})",
+                        summaryId, run.runId(), summary.status().name());
+                for (ConfigurationDeviationEntry entry : summary.entries()) {
+                    dsl.execute("insert into configuration_run_deviation_entry(entry_id, summary_id, context, "
+                            + "section, kind, old_count, new_count) values ({0}, {1}, {2}, {3}, {4}, {5}, {6})",
+                            UUID.randomUUID().toString(), summaryId, entry.context(), entry.section(),
+                            entry.kind().name(), entry.oldCount(), entry.newCount());
+                }
             }
             return null;
         });
@@ -140,6 +155,9 @@ public final class JooqDeviceConfigurationRepository implements DeviceConfigurat
                     row.get("element_path", String.class), Optional.ofNullable(row.get("panorama_source", String.class))));
         }
 
+        // 14I DV-2: load the deviation summary when present (changed runs only).
+        Optional<ConfigurationDeviationSummary> deviationSummary = assembleDeviationSummary(dsl, runId);
+
         return Optional.of(new ConfigurationRun(runRow.get("run_id", String.class), runRow.get("device_id", String.class),
                 runRow.get("job_id", String.class), runRow.get("collected_at", Timestamp.class).toInstant(),
                 runRow.get("vendor", String.class), runRow.get("read_kind", String.class),
@@ -147,6 +165,33 @@ public final class JooqDeviceConfigurationRepository implements DeviceConfigurat
                 runRow.get("raw_hash", String.class), runRow.get("raw_bytes", Long.class),
                 runRow.get("artefact_ref", String.class), runRow.get("withheld_line_count", Integer.class),
                 Optional.ofNullable(runRow.get("sanitized_text", String.class)), runRow.get("change_state", String.class),
-                index, overrides));
+                index, overrides, deviationSummary));
+    }
+
+    private static Optional<ConfigurationDeviationSummary> assembleDeviationSummary(DSLContext dsl, String runId) {
+        Result<Record> summaryRows = dsl.fetch(
+                "select summary_id, status from configuration_run_deviation_summary where run_id = {0}", runId);
+        Optional<Record> summaryRowOpt = summaryRows.stream().findFirst();
+        if (summaryRowOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        Record summaryRow = summaryRowOpt.get();
+        String summaryId = summaryRow.get("summary_id", String.class);
+        ConfigurationDeviationSummary.Status status =
+                ConfigurationDeviationSummary.Status.valueOf(summaryRow.get("status", String.class));
+
+        List<ConfigurationDeviationEntry> entries = new ArrayList<>();
+        Result<Record> entryRows = dsl.fetch(
+                "select context, section, kind, old_count, new_count "
+                + "from configuration_run_deviation_entry where summary_id = {0}", summaryId);
+        for (Record row : entryRows) {
+            entries.add(new ConfigurationDeviationEntry(
+                    row.get("context", String.class),
+                    row.get("section", String.class),
+                    ConfigurationDeviationEntry.DeviationKind.valueOf(row.get("kind", String.class)),
+                    row.get("old_count", Integer.class),
+                    row.get("new_count", Integer.class)));
+        }
+        return Optional.of(new ConfigurationDeviationSummary(status, entries));
     }
 }

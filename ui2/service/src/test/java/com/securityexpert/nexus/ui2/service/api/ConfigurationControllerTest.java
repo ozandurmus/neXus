@@ -151,7 +151,8 @@ class ConfigurationControllerTest {
         ConfigurationIndexEntry index = new ConfigurationIndexEntry("physical", "arp", Optional.empty(), 1);
         return new ConfigurationRun("run-1", deviceId, "job-1", collectedAt, "check_point",
                 ConfigurationReadKind.SHOW_CONFIGURATION, true, "hash-1", "hash-1", 100L, "artefact-1", 2,
-                Optional.of("set hostname gw-a\n"), ChangeState.FIRST_RUN, List.of(index), List.of(override));
+                Optional.of("set hostname gw-a\n"), ChangeState.FIRST_RUN, List.of(index), List.of(override),
+                Optional.empty());
     }
 
     /** Satisfies {@link ConfigurationController}'s constructor for the GET-only tests below, which never invoke it. */
@@ -238,10 +239,53 @@ class ConfigurationControllerTest {
         assertEquals(ConfigurationReadKind.SHOW_CONFIGURATION, body.get("read_kind"));
         assertEquals(2, body.get("withheld_line_count"));
         assertEquals(true, body.get("sanitized_text_available"));
+        assertEquals(null, body.get("change_deviation_summary"), "first_run carries no deviation summary");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> index = (List<Map<String, Object>>) body.get("index");
         assertEquals(1, index.size());
         assertEquals(true, index.get(0).get("has_override"), "AC-2: the arp category carries the recorded override");
+    }
+
+    @Test
+    void getDeviceConfigurationExposesDeviationSummaryForChangedRun() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("device-1", device("device-1", "check_point"));
+        FakeDeviceConfigurationRepository configRepository = new FakeDeviceConfigurationRepository();
+
+        var devEntry = new com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationEntry(
+                "physical", "arp",
+                com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationEntry.DeviationKind.RECOUNTED,
+                1, 2);
+        var summary = new com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationSummary(
+                com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationSummary.Status.COMPUTED,
+                List.of(devEntry));
+        ConfigurationRun changedRun = new ConfigurationRun("run-2", "device-1", "job-2",
+                Instant.parse("2026-09-14T13:00:00Z"), "check_point",
+                ConfigurationReadKind.SHOW_CONFIGURATION, true, "hash-2", "hash-2", 100L, "artefact-2", 0,
+                Optional.of("text"), ChangeState.CHANGED, List.of(), List.of(), Optional.of(summary));
+
+        configRepository.recordRun(changedRun,
+                new ConfigurationArtefactRecord("artefact-2", "device-1", "job-2", "check_point", "h2", 1L, "h2", 1L,
+                        "none", "v1", new byte[] {1, 2, 3}),
+                "actor", "action-2");
+        ConfigurationQueryService queryService = new ConfigurationQueryService(devices, configRepository);
+        ConfigurationController controller = new ConfigurationController(queryService, unusedCollectService());
+
+        ResponseEntity<Map<String, Object>> response = controller.getDeviceConfiguration("device-1");
+
+        Map<String, Object> body = response.getBody();
+        assertEquals("changed", body.get("change_state"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> deviationSummary = (Map<String, Object>) body.get("change_deviation_summary");
+        assertEquals("computed", deviationSummary.get("status"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> entries = (List<Map<String, Object>>) deviationSummary.get("entries");
+        assertEquals(1, entries.size());
+        assertEquals("physical", entries.get(0).get("context"));
+        assertEquals("arp", entries.get(0).get("section"));
+        assertEquals("recounted", entries.get(0).get("kind"));
+        assertEquals(1, entries.get(0).get("old_count"));
+        assertEquals(2, entries.get(0).get("new_count"));
     }
 
     // -- GET /devices/{id}/configuration/text --------------------------------
