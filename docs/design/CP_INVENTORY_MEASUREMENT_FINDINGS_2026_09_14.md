@@ -99,7 +99,23 @@ on a new channel) is still owed.
 - Non-VSX member: prints `VSX is not supported on this platform` with exit
   code 0 — **VSX detection must be by that text, not by the exit code.**
 
-## 7. Still owed (M-2)
+## 7. M-2, first pass (VSX host)
+
+- `vsenv <id>` for a VSID that does not exist prints
+  `vsenv: operation failed, specified Virtual System ID does not exist.`
+  (the host's virtual systems are the two IDs `vsx stat -v` listed, not 1).
+- **`vsenv` is a function of the interactive Expert shell, not an
+  executable:** inside `sh -c` the composite line printed
+  `sh: vsenv: command not found` and the reads that followed ran in the
+  physical context unchanged. A non-interactive exec channel therefore
+  cannot call `vsenv` bare. Candidates to measure next: `bash -lc 'vsenv N
+  && …'` (login profile), sourcing the Check Point profile
+  (`$CPDIR/tmp/.CPprofile.sh`) before `vsenv`, or a persistent interactive
+  shell session per device (the pattern the earlier product's preflight
+  battery settled on). The shape script's VS section now tries the first
+  two and prints `type vsenv`.
+
+## 8. Still owed (M-2, remainder)
 
 On the VSX host: `sh cp_inventory_shape.sh <VSID>` for one of the two
 virtual systems (composite `vsenv <VSID>; ip -4 addr show; ip -4 route
