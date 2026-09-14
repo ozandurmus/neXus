@@ -16,10 +16,31 @@ public interface SessionRepository {
 
     Optional<SessionRecord> findActiveByActor(String actorFingerprint);
 
+    /** Expiry-on-read variant for login conflict decisions (C3 §3.3 rows 4-5). */
+    default Optional<SessionRecord> findActiveByActor(String actorFingerprint, Instant asOf) {
+        expirePastDeadline(asOf);
+        return findActiveByActor(actorFingerprint);
+    }
+
     Optional<SessionRecord> findBySessionId(String sessionId);
+
+    /** Expiry-on-read variant for E1 session decisions (C3 §3.3 rows 4-5). */
+    default Optional<SessionRecord> findBySessionId(String sessionId, Instant asOf) {
+        expirePastDeadline(asOf);
+        return findBySessionId(sessionId);
+    }
 
     /** {@code ACTIVE} rows whose idle or absolute deadline has already elapsed, for the reconciler (C3 §3.3 rows 4-5). */
     List<SessionRecord> findActivePastDeadline(Instant asOf);
+
+    /** Ends stale rows before a decision reads them; idle wins when both deadlines have elapsed. */
+    default void expirePastDeadline(Instant asOf) {
+        for (SessionRecord session : findActivePastDeadline(asOf)) {
+            boolean idleExpired = !asOf.isBefore(session.idleDeadlineAt());
+            expire(session.sessionId(), idleExpired ? SessionEndReason.IDLE_TIMEOUT : SessionEndReason.ABSOLUTE_LIFETIME,
+                    idleExpired ? "session_reconcile_idle_timeout" : "session_reconcile_absolute_lifetime");
+        }
+    }
 
     /**
      * Creates the first {@code ACTIVE} session for an identity that has

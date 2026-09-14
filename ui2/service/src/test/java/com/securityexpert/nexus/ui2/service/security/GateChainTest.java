@@ -63,7 +63,10 @@ class GateChainTest {
 
         @Override
         public List<SessionRecord> findActivePastDeadline(Instant asOf) {
-            throw new UnsupportedOperationException("not used by GateChainTest");
+            return bySessionId.values().stream()
+                    .filter(r -> r.state() == SessionState.ACTIVE
+                            && (!asOf.isBefore(r.idleDeadlineAt()) || !asOf.isBefore(r.absoluteExpiresAt())))
+                    .toList();
         }
 
         @Override
@@ -80,12 +83,18 @@ class GateChainTest {
 
         @Override
         public void heartbeat(String sessionId, Instant now, Duration idleTimeout) {
-            throw new UnsupportedOperationException("not used by GateChainTest");
+            SessionRecord r = bySessionId.get(sessionId);
+            bySessionId.put(sessionId, new SessionRecord(r.sessionId(), r.actorFingerprint(), r.csrfSecret(), r.state(),
+                    r.createdAt(), now, now.plus(idleTimeout), r.absoluteExpiresAt(), r.supersededBySessionId(),
+                    r.endedByActorFingerprint(), r.endReason()));
         }
 
         @Override
         public void expire(String sessionId, SessionEndReason reason, String actionId) {
-            throw new UnsupportedOperationException("not used by GateChainTest");
+            SessionRecord r = bySessionId.get(sessionId);
+            bySessionId.put(sessionId, new SessionRecord(r.sessionId(), r.actorFingerprint(), r.csrfSecret(),
+                    SessionState.EXPIRED, r.createdAt(), r.lastSeenAt(), r.idleDeadlineAt(), r.absoluteExpiresAt(),
+                    r.supersededBySessionId(), r.endedByActorFingerprint(), Optional.of(reason)));
         }
 
         @Override
@@ -264,6 +273,25 @@ class GateChainTest {
     }
 
     @Test
+    void e1ExpiresAPastDeadlineSessionInsteadOfServingIt() {
+        FakeSessionRepository sessions = new FakeSessionRepository();
+        String sessionId = SessionHasher.hash("expired-cookie");
+        sessions.put(new SessionRecord(sessionId, ACTOR, "csrf-secret", SessionState.ACTIVE,
+                NOW.minusSeconds(3600), NOW.minusSeconds(3600), NOW.minusSeconds(1), NOW.plusSeconds(30000),
+                Optional.empty(), Optional.empty(), Optional.empty()));
+        GateChain chain = newChain(sessions, new FakeRoleBindingRepository(), new FakeAuthzDecisionRepository());
+
+        GateOutcome outcome = chain.evaluate(new GateRequest("GET", Optional.of("expired-cookie"), Optional.empty(),
+                Optional.empty(), ActionRegistry.ROLE_BINDING_CREATE, Optional.empty()), NOW);
+
+        assertTrue(outcome instanceof GateOutcome.Refused);
+        assertEquals(401, ((GateOutcome.Refused) outcome).httpStatus());
+        assertEquals(SessionState.EXPIRED, sessions.findBySessionId(sessionId).orElseThrow().state());
+        assertEquals(SessionEndReason.IDLE_TIMEOUT,
+                sessions.findBySessionId(sessionId).orElseThrow().endReason().orElseThrow());
+    }
+
+    @Test
     void e2RefusesOnAnUnknownActionWithAnOtherwiseValidSession() {
         FakeSessionRepository sessions = new FakeSessionRepository();
         String sessionId = SessionHasher.hash("raw-cookie-1");
@@ -420,6 +448,7 @@ class GateChainTest {
 
         assertTrue(outcome instanceof GateOutcome.Proceed);
         assertEquals(ACTOR, ((GateOutcome.Proceed) outcome).actorFingerprint());
+        assertEquals(NOW, sessions.findBySessionId(sessionId).orElseThrow().lastSeenAt());
     }
     @Test
     void mustChangeGateIsOffByDefaultPosture() {
