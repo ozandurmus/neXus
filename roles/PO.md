@@ -109,6 +109,18 @@ A "no" to any of these is a stop, not a workaround.
 
 ## 6. Mechanics that have bitten this loop
 
+- **Never report a merge you did not verify.** `gh pr merge` can print
+  nothing, print "already merged", or fail outright -- most often with
+  `GraphQL: Pull Request has merge conflicts` when another movement landed
+  first. Its exit is not proof. After every merge, confirm with `gh`, not
+  `git`: `gh pr view <n> --json state,mergedAt` must read `MERGED`, and
+  `gh api repos/<owner>/<repo>/commits/main` must show the merge at the
+  head. Only then say it is merged. Told to the Product Owner as done when
+  it was not is the one reporting failure that costs their trust, and it
+  happened on 2026-09-14.
+- **`gh`, never `git`, for anything the remote owns** — merge state, branch
+  state, the head of main, checks. `git` is for the local worktree only.
+
 - **Quote mechanical details, never describe them from memory.** A packet
   that says "the entries' `role` field" when the writer emits `actor` costs
   a dispatch: the worker cannot tell a Product Owner slip from a contract
