@@ -88,7 +88,7 @@ public final class DiscoveryController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
         }
         DiscoveryRunService.ReadOutcome.Found found = (DiscoveryRunService.ReadOutcome.Found) outcome;
-        return ResponseEntity.ok(toRunBody(found.run(), found.candidates()));
+        return ResponseEntity.ok(toRunBody(found.run(), found.candidates(), found.registryStateByCandidateId()));
     }
 
     @PostMapping("/discovery/runs/{runId}/import")
@@ -128,18 +128,29 @@ public final class DiscoveryController {
         return (String) servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
     }
 
-    private static Map<String, Object> toRunBody(DiscoveryRun run, List<DiscoveryCandidateRecord> candidates) {
+    private static Map<String, Object> toRunBody(DiscoveryRun run, List<DiscoveryCandidateRecord> candidates,
+            Map<String, DiscoveryRunService.CandidateRegistryState> registryStateByCandidateId) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("run_id", run.runId());
         body.put("vendor", run.vendor());
         body.put("state", run.state().name());
         body.put("job_id", run.jobId().orElse(null));
         body.put("outcome_summary", run.outcomeSummary().orElse(Map.of()));
-        body.put("candidates", candidates.stream().map(DiscoveryController::toCandidateBody).toList());
+        body.put("candidates", candidates.stream()
+                .map(candidate -> toCandidateBody(candidate, registryStateByCandidateId.get(candidate.candidateId())))
+                .toList());
         return body;
     }
 
-    private static Map<String, Object> toCandidateBody(DiscoveryCandidateRecord candidate) {
+    /**
+     * {@code registry_state}/{@code existing_device_id} are the read-time
+     * RD-5 projection (NXS-LOCAL-0173 AC-1) -- what the device registry says
+     * right now. {@code import_outcome} stays exactly what it always was:
+     * {@code null} until an import runs, then what that import actually did.
+     * The two are never conflated.
+     */
+    private static Map<String, Object> toCandidateBody(DiscoveryCandidateRecord candidate,
+            DiscoveryRunService.CandidateRegistryState registryState) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("candidate_id", candidate.candidateId());
         body.put("kind", candidate.kind());
@@ -153,6 +164,8 @@ public final class DiscoveryController {
         body.put("software_version", candidate.softwareVersion().orElse(null));
         body.put("connection_state", candidate.connectionState().orElse(null));
         body.put("import_outcome", candidate.importOutcome().orElse(null));
+        body.put("registry_state", registryState.state());
+        body.put("existing_device_id", registryState.existingDeviceId().orElse(null));
         return body;
     }
 

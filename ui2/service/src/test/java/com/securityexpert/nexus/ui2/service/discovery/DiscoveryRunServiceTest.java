@@ -154,10 +154,24 @@ class DiscoveryRunServiceTest {
 
     private static final class FakeDeviceDiscoveryMatchRepository implements DeviceDiscoveryMatchRepository {
         final Map<String, DeviceDiscoveryMatch> byMatchKey = new HashMap<>();
+        int batchLookupCallCount = 0;
 
         @Override
         public Optional<DeviceDiscoveryMatch> findByDiscoveryMatchKey(String discoveryMatchKey) {
             return Optional.ofNullable(byMatchKey.get(discoveryMatchKey));
+        }
+
+        @Override
+        public Map<String, DeviceDiscoveryMatch> findByDiscoveryMatchKeys(java.util.Collection<String> discoveryMatchKeys) {
+            batchLookupCallCount++;
+            Map<String, DeviceDiscoveryMatch> result = new HashMap<>();
+            for (String key : discoveryMatchKeys) {
+                DeviceDiscoveryMatch match = byMatchKey.get(key);
+                if (match != null) {
+                    result.put(key, match);
+                }
+            }
+            return result;
         }
     }
 
@@ -360,6 +374,66 @@ class DiscoveryRunServiceTest {
         DiscoveryRunService.ReadOutcome.Found found = (DiscoveryRunService.ReadOutcome.Found) outcome;
         assertEquals(DiscoveryRunState.FINISHED, found.run().state());
         assertEquals(1, found.candidates().size());
+    }
+
+    @Test
+    void readMarksACandidateMatchingAnEnrolledDeviceAlreadyImportedWithItsDeviceId() {
+        Fixture fx = fixture();
+        DiscoveryCandidateRecord gateway = candidate("run-1", "cand-1", "check_point", "uid-1",
+                "STANDALONE_PRODUCT_GATEWAY", true, Optional.empty(), Optional.empty(), "10.1.1.1");
+        fx.runs.seedFinishedRun("run-1", "check_point", List.of(gateway));
+
+        DiscoveryRunService.ReadOutcome beforeImport = fx.service.read("run-1", ACTOR);
+        DiscoveryRunService.ReadOutcome.Found beforeFound = (DiscoveryRunService.ReadOutcome.Found) beforeImport;
+        assertEquals("new", beforeFound.registryStateByCandidateId().get("cand-1").state(),
+                "no device matches yet -- computed at read time, not frozen at run time (AC-1)");
+
+        // A device is added after the run finished -- the read must reflect it now, not what was true at run time.
+        fx.matches.byMatchKey.put("check_point|global|uid-1",
+                new DeviceDiscoveryMatch("dev-existing", "10.1.1.1", Optional.empty(), Optional.empty()));
+
+        DiscoveryRunService.ReadOutcome afterImport = fx.service.read("run-1", ACTOR);
+        DiscoveryRunService.ReadOutcome.Found afterFound = (DiscoveryRunService.ReadOutcome.Found) afterImport;
+        DiscoveryRunService.CandidateRegistryState state = afterFound.registryStateByCandidateId().get("cand-1");
+        assertEquals("already_imported", state.state());
+        assertEquals(Optional.of("dev-existing"), state.existingDeviceId());
+        // The read-path mark is never written into the persisted import_outcome column.
+        assertEquals(Optional.empty(), afterFound.candidates().get(0).importOutcome());
+    }
+
+    @Test
+    void readMarksAConflictingCandidateNotSelectableWithItsReason() {
+        Fixture fx = fixture();
+        DiscoveryCandidateRecord gateway = candidate("run-1", "cand-1", "check_point", "uid-1",
+                "STANDALONE_PRODUCT_GATEWAY", true, Optional.empty(), Optional.empty(), "10.1.1.1");
+        fx.runs.seedFinishedRun("run-1", "check_point", List.of(gateway));
+        // Same match key, different recorded address -- RD-5 conflicting.
+        fx.matches.byMatchKey.put("check_point|global|uid-1",
+                new DeviceDiscoveryMatch("dev-existing", "10.9.9.9", Optional.empty(), Optional.empty()));
+
+        DiscoveryRunService.ReadOutcome outcome = fx.service.read("run-1", ACTOR);
+        DiscoveryRunService.ReadOutcome.Found found = (DiscoveryRunService.ReadOutcome.Found) outcome;
+        DiscoveryRunService.CandidateRegistryState state = found.registryStateByCandidateId().get("cand-1");
+        assertEquals("conflicting", state.state());
+        assertEquals(Optional.of("dev-existing"), state.existingDeviceId());
+    }
+
+    @Test
+    void readConsultsTheRegistryOnceForTheWholeCandidateSetNotOncePerCandidate() {
+        Fixture fx = fixture();
+        DiscoveryCandidateRecord m1 = candidate("run-1", "cand-1", "check_point", "uid-1",
+                "STANDALONE_PRODUCT_GATEWAY", true, Optional.empty(), Optional.empty(), "10.1.1.1");
+        DiscoveryCandidateRecord m2 = candidate("run-1", "cand-2", "check_point", "uid-2",
+                "STANDALONE_PRODUCT_GATEWAY", true, Optional.empty(), Optional.empty(), "10.1.1.2");
+        DiscoveryCandidateRecord m3 = candidate("run-1", "cand-3", "check_point", "uid-3",
+                "STANDALONE_PRODUCT_GATEWAY", true, Optional.empty(), Optional.empty(), "10.1.1.3");
+        fx.runs.seedFinishedRun("run-1", "check_point", List.of(m1, m2, m3));
+        fx.matches.byMatchKey.put("check_point|global|uid-2",
+                new DeviceDiscoveryMatch("dev-existing", "10.1.1.2", Optional.empty(), Optional.empty()));
+
+        fx.service.read("run-1", ACTOR);
+
+        assertEquals(1, fx.matches.batchLookupCallCount, "one query for the whole candidate set (AC-5)");
     }
 
     @Test

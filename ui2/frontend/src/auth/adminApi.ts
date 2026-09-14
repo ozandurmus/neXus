@@ -371,6 +371,14 @@ export interface DiscoveryCandidate {
   readonly software_version: string | null;
   readonly connection_state: string | null;
   readonly import_outcome: "new" | "already_imported" | "conflicting" | null;
+  /**
+   * The read-time RD-5 projection (NXS-LOCAL-0173 AC-1): what the device
+   * registry says right now, computed on every read -- distinct from
+   * `import_outcome` above, which stays `null` until an import runs and then
+   * records what that import actually did.
+   */
+  readonly registry_state: "new" | "already_imported" | "conflicting";
+  readonly existing_device_id: string | null;
 }
 
 export interface DiscoveryRunView {
