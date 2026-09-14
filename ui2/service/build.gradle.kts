@@ -26,9 +26,25 @@ dependencies {
     // visible here.
     implementation(libs.jooq)
 
+    // PO ASSISTANT DECISION 2026-09-14 on packaging / DIR-2: the worker
+    // role's classes reach the boot jar's runtime classpath only -- no
+    // `service` source file imports a `worker` class (Ui2Launcher, in
+    // platform-core, resolves the role's main class by name via
+    // Class.forName against the boot jar's own class loader instead), so
+    // this adds no class-level dependency edge for Ui2ArchitectureTest's
+    // dir2 to catch, and dir2 stays unedited.
+    runtimeOnly(project(":worker"))
+
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.spring.boot.starter.test)
     testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+// PO ASSISTANT DECISION 2026-09-14 on packaging: the launcher, not
+// Ui2Application, is the boot jar's Start-Class -- args[0] selects the
+// workload role (service/worker) before Spring ever starts.
+springBoot {
+    mainClass.set("com.securityexpert.nexus.ui2.platform.launch.Ui2Launcher")
 }
 
 // Phase 1 step 1 wired the composition root
