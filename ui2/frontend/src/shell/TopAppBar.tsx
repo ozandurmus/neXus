@@ -4,6 +4,7 @@ import { m3 } from "../theme/m3Theme";
 import { Icon } from "./Icon";
 import { M3Button } from "./M3Widgets";
 import { useSession } from "../auth/SessionContext";
+import { NexusWordmark } from "../brand/NexusWordmark";
 
 /**
  * The canvas's top app bar: product name, a search affordance and a
@@ -23,7 +24,7 @@ export function TopAppBar() {
   const session = useSession();
   return (
     <Box sx={{ height: 64, flex: "none", display: "flex", alignItems: "center", gap: 2, px: 3, pl: 1 }}>
-      <Typography variant="h3">SecurityExpert</Typography>
+      <NexusWordmark height={28} color={m3.onSurface} />
       <Box sx={{ flex: 1, maxWidth: 520, height: 48, display: "flex", alignItems: "center", gap: 1.5,
                  px: 2, borderRadius: "24px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, fontSize: 15 }}>
         <Icon name="search" size={20} />

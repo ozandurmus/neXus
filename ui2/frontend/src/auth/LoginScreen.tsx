@@ -6,6 +6,7 @@ import Typography from "@mui/material/Typography";
 
 import { m3 } from "../theme/m3Theme";
 import { M3Button } from "../shell/M3Widgets";
+import { NexusWordmark } from "../brand/NexusWordmark";
 
 // C3A contract §5.3: every local login failure -- unknown identity, wrong
 // password, empty password, and an active lockout -- returns the identical
@@ -75,12 +76,15 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
     <Box
       sx={{
         display: "flex",
+        flexDirection: "column",
         minHeight: "100vh",
         alignItems: "center",
         justifyContent: "center",
+        gap: 3,
         bgcolor: m3.surface,
       }}
     >
+      <NexusWordmark height={56} color={m3.onSurface} />
       <Box
         component="form"
         onSubmit={handleSubmit}
@@ -95,7 +99,7 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
           border: `1px solid ${m3.outline}`,
         }}
       >
-        <Typography variant="h3">Sign in</Typography>
+        <Typography variant="h4">Sign in</Typography>
         <TextField
           label="Username"
           value={username}
