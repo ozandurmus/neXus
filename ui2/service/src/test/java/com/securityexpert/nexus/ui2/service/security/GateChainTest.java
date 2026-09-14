@@ -421,4 +421,30 @@ class GateChainTest {
         assertTrue(outcome instanceof GateOutcome.Proceed);
         assertEquals(ACTOR, ((GateOutcome.Proceed) outcome).actorFingerprint());
     }
+    @Test
+    void mustChangeGateIsOffByDefaultPosture() {
+        // PO directive 2026-09-14: the first-login gate is a production posture, off in development.
+        FakeSessionRepository sessions = new FakeSessionRepository();
+        String localIdentityId = "id-must-change-off";
+        String actorFingerprint = LocalMechanism.actorFingerprintFor(localIdentityId);
+        String sessionId = SessionHasher.hash("raw-cookie-pwd-off");
+        sessions.put(new SessionRecord(sessionId, actorFingerprint, "csrf-secret", SessionState.ACTIVE,
+                NOW.minusSeconds(60), NOW.minusSeconds(10), NOW.plusSeconds(1800), NOW.plusSeconds(36000),
+                Optional.empty(), Optional.empty(), Optional.empty()));
+        FakeLocalCredentialsRepository localCredentials = new FakeLocalCredentialsRepository();
+        localCredentials.seed(localIdentityId, true);
+        ActionRegistry registry = new ActionRegistry();
+        registry.register(new ActionDescriptor("open_to_any_session", true, Optional.empty()));
+        RbacEvaluator evaluator = new RbacEvaluator(new FakeRoleBindingRepository(),
+                new FakeActorAuthzStateRepository(), cipher());
+        GateChain chain = new GateChain(sessions, registry, evaluator, new FakeAuthzDecisionRepository(),
+                localCredentials, false);
+
+        GateRequest request = new GateRequest("GET", Optional.of("raw-cookie-pwd-off"), Optional.empty(),
+                Optional.empty(), "open_to_any_session", Optional.empty());
+        GateOutcome outcome = chain.evaluate(request, NOW);
+
+        assertTrue(outcome instanceof GateOutcome.Proceed, "with the posture off, a seeded password blocks nothing");
+    }
+
 }

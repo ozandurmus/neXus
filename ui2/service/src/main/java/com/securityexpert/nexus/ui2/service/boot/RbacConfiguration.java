@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.service.boot;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -63,8 +64,14 @@ public class RbacConfiguration {
 
     @Bean
     public GateChain gateChain(SessionRepository sessionRepository, ActionRegistry actionRegistry,
-            RbacEvaluator rbacEvaluator, AuthzDecisionRepository authzDecisionRepository) {
-        return new GateChain(sessionRepository, actionRegistry, rbacEvaluator, authzDecisionRepository);
+            RbacEvaluator rbacEvaluator, AuthzDecisionRepository authzDecisionRepository,
+            LocalCredentialsRepository localCredentialsRepository,
+            @Value("${ui2.local-auth.enforce-password-change-on-first-login:false}") boolean enforcePasswordChangeOnFirstLogin) {
+        // NXS-LOCAL-0152's server-side gate was constructed without its repository in
+        // production (the four-argument form), so it never ran; wired here, behind the
+        // PO's 2026-09-14 switch (development default: off).
+        return new GateChain(sessionRepository, actionRegistry, rbacEvaluator, authzDecisionRepository,
+                localCredentialsRepository, enforcePasswordChangeOnFirstLogin);
     }
 
     @Bean

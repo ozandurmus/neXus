@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-13T19:47:40Z
+Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-14T06:59:32Z
 
 ## Now
 - ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments (automated_validated)
@@ -52,6 +52,7 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-13T
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
 - P2/planned project_plan_build_history_archive_split_lookup
 - P2/planned project_plan_crypto_placeholder_sentinel_lost
+- P2/planned ui2_password_policy_configurable
 - P3/planned cp_cphaprob_peer_observation_corroboration
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)

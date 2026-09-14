@@ -432,6 +432,15 @@
       "priority": "P0",
       "target": "docs/design/CP_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md; blocked on the PO running its §3/§5 command list",
       "note": ""
+    },
+    {
+      "id": "ui2_password_policy_configurable",
+      "category": "identity",
+      "title": "UI2 local password policy, configurable and off by default: minimum/maximum length, character classes, not equal to the username, optional expiry and history -- a production posture switch, never a development obligation (PO 2026-09-14)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "PasswordChangeService and LocalIdentityAdministration set-password paths; application.yml ui2.local-auth.*; frontend shows the active rules on the change screen",
+      "note": ""
     }
   ]
 }

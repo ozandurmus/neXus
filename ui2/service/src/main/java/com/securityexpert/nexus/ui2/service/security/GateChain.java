@@ -34,6 +34,8 @@ public final class GateChain {
      * constructor below), which disables the gate entirely.
      */
     private final LocalCredentialsRepository localCredentialsRepository;
+    /** PO directive 2026-09-14: the first-login password-change gate is a configurable posture, off by default. */
+    private final boolean enforcePasswordChangeOnFirstLogin;
 
     public GateChain(SessionRepository sessionRepository, ActionRegistry actionRegistry,
             RbacEvaluator rbacEvaluator, AuthzDecisionRepository authzDecisionRepository) {
@@ -49,11 +51,19 @@ public final class GateChain {
     public GateChain(SessionRepository sessionRepository, ActionRegistry actionRegistry,
             RbacEvaluator rbacEvaluator, AuthzDecisionRepository authzDecisionRepository,
             LocalCredentialsRepository localCredentialsRepository) {
+        this(sessionRepository, actionRegistry, rbacEvaluator, authzDecisionRepository, localCredentialsRepository, true);
+    }
+
+    /** @param enforcePasswordChangeOnFirstLogin {@code false} (the development default) disables the must-change gate entirely. */
+    public GateChain(SessionRepository sessionRepository, ActionRegistry actionRegistry,
+            RbacEvaluator rbacEvaluator, AuthzDecisionRepository authzDecisionRepository,
+            LocalCredentialsRepository localCredentialsRepository, boolean enforcePasswordChangeOnFirstLogin) {
         this.sessionRepository = sessionRepository;
         this.actionRegistry = actionRegistry;
         this.rbacEvaluator = rbacEvaluator;
         this.authzDecisionRepository = authzDecisionRepository;
         this.localCredentialsRepository = localCredentialsRepository;
+        this.enforcePasswordChangeOnFirstLogin = enforcePasswordChangeOnFirstLogin;
     }
 
     public GateOutcome evaluate(GateRequest request, Instant now) {
@@ -96,7 +106,8 @@ public final class GateChain {
         // distinct, non-identity-bearing status. A non-local actor
         // fingerprint matches no local_credentials row and is never
         // restricted by this gate.
-        if (localCredentialsRepository != null && new LocalIdentityResolver(localCredentialsRepository)
+        if (enforcePasswordChangeOnFirstLogin && localCredentialsRepository != null
+                && new LocalIdentityResolver(localCredentialsRepository)
                 .resolve(actorFingerprint).map(LocalCredentialRecord::mustChangePassword).orElse(false)) {
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("error", "PASSWORD_CHANGE_REQUIRED");

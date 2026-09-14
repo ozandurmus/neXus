@@ -9,6 +9,7 @@ import java.util.Optional;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,11 +46,15 @@ public final class SessionStatusController {
     private final LocalIdentityResolver localIdentityResolver;
     private final LocalRoleTokenResolver localRoleTokenResolver;
 
+    private final boolean enforcePasswordChangeOnFirstLogin;
+
     public SessionStatusController(SessionRepository sessionRepository, LocalIdentityResolver localIdentityResolver,
-            LocalRoleTokenResolver localRoleTokenResolver) {
+            LocalRoleTokenResolver localRoleTokenResolver,
+            @Value("${ui2.local-auth.enforce-password-change-on-first-login:false}") boolean enforcePasswordChangeOnFirstLogin) {
         this.sessionRepository = sessionRepository;
         this.localIdentityResolver = localIdentityResolver;
         this.localRoleTokenResolver = localRoleTokenResolver;
+        this.enforcePasswordChangeOnFirstLogin = enforcePasswordChangeOnFirstLogin;
     }
 
     @GetMapping("/session/status")
@@ -71,7 +76,8 @@ public final class SessionStatusController {
         Optional<LocalCredentialRecord> identity = localIdentityResolver.resolve(session.get().actorFingerprint());
         identity.ifPresent(record -> {
             body.put("display_name", record.localIdentityName());
-            body.put("must_change_password", record.mustChangePassword());
+            // PO directive 2026-09-14: the flag is only surfaced (and the screen only forced) when the posture is on.
+            body.put("must_change_password", enforcePasswordChangeOnFirstLogin && record.mustChangePassword());
             List<String> roleTokens = localRoleTokenResolver.resolve(record.localIdentityId()).stream()
                     .map(RoleToken::token).toList();
             body.put("role_tokens", roleTokens);
