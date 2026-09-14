@@ -32,13 +32,13 @@ and in what order.
 
 | Item | Value |
 |---|---|
-| Worker provider | `claude` unless the packet says otherwise in writing |
-| Worker model / effort | The lightest that fits; state it in the packet and on the `run` command line, never leave the CLI default |
+| Worker provider | `codex` by default (see the bullet above); `claude` only on the stated exception, in writing, in the packet |
+| Worker model / effort | The lightest tier that fits the work, stated in the packet AND on the `run` command line, never the CLI default. Codex: `gpt-5.6-terra` for bounded work, `gpt-5.6-sol` for heavy or novel work, never Luna. Claude: `claude-sonnet-5`. Effort `medium` unless the packet argues for `high` |
 | Base ref | `origin/main` at its current HEAD, fetched first |
 | Branch lane | `feature/<movement-slug>` |
 | Contract status a worker may implement | FROZEN only. A DRAFT contract is a design input, never a dispatch authority |
 | Packet schema | `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` protocol 2, as validated by `scripts/gov_session_transfer.py`; whatever the validator rejects is wrong, whatever a DRAFT proposes is not yet real |
-| Merge | Only after `verify.passed` and PO review; never on a worker's own claim |
+| Merge | Only after `verify.passed` and PO review; never on a worker's own claim; and never reported before `gh pr view` says `MERGED` (section 6) |
 | Vendor measurement | A contract that names a vendor command, route or field may only be implemented once a **measurement record** exists next to it, committed, saying which tool was used, which commands were run and which field names came back (counts and shapes, never a value). No worker chooses a vendor command from product knowledge |
 | Worker's PR | The packet's `merge_gate` says in words that the worker opens the PR and does not merge. A worker that is not told this does not open one |
 
@@ -65,7 +65,7 @@ git fetch origin main
 py scripts/gov_session_transfer.py validate <packet>          # must print valid: true
 py scripts/local_relay.py create --role po --start <packet>
 py scripts/orchestrator.py run --movement NXS-LOCAL-NNNN \
-    --provider claude --model <model> --effort <effort> \
+    --provider codex --model gpt-5.6-terra --effort medium \
     --timeout 5400 --heartbeat-timeout 900                    # foreground; wait for it
 ```
 
@@ -127,6 +127,45 @@ A "no" to any of these is a stop, not a workaround.
   it must honour. Paste one redacted sample of the real shape (a relay
   entry, a response element path, a row) into `what_exists`. Two of the
   three stops of 2026-09-14 were this.
+- **Cost is the Product Owner's money: know it before and after.** The
+  ceiling comes from this movement's own scope, never the default and never
+  a round number chosen for comfort; a packet that bundles six layers costs
+  what six packets cost and is harder to review (movement `NXS-LOCAL-0165`,
+  $21, is the example). After every dispatch closes, read `usage`, render
+  the ledger (`GOV.ORCH.13`, `project/DISPATCH_LEDGER.md`) and fill that
+  row's assessment cell. A Codex figure is an estimate from the requested
+  model, marked with a trailing asterisk, and is a comparable — never
+  billed spend.
+
+- **Codex cannot always commit.** Its sandbox is frequently refused
+  `index.lock` in a linked worktree, so a movement finishes green and
+  uncommitted and the orchestrator records it `failed`. Before concluding
+  anything, read `.nexus/engineer_last_message.txt` and `git status` in the
+  worktree: if the work is there, build it, run the packet's own validation,
+  then commit, push and open the PR from the Product Owner side, saying so
+  in the PR body. Do not re-dispatch work that already exists.
+
+- **The relay file's internal `id` must equal its movement.** The create
+  tool assigns its own id; renaming the file does not change it, and the
+  worker's SESSION_CLOSE is then refused. After `local_relay.py create`,
+  set `id` to the movement and confirm it before dispatching. This cost
+  movement `NXS-LOCAL-0172` its close, and it had already done the work.
+
+- **Worktree lifecycle, in order.** A relaunch needs the worktree gone, the
+  local branch deleted and, if nothing was pushed, the remote branch too;
+  a leftover directory blocks `worktree add` and a leftover branch blocks
+  the lane. Never remove a worktree while `verify` is running against it —
+  that kills the run and the failure looks like the worker's (it was mine,
+  on `NXS-LOCAL-0178`). When a movement's work is already merged, clear its
+  state file so the workbench shows only live work.
+
+- **Two parallel movements will collide on shared numbering.** Migration
+  versions are the sharp case: the file names differ, so the merge is clean
+  and the defect only appears at rollout, where Flyway refuses to start.
+  A test now enforces uniqueness, but order still matters — a migration
+  that references another's table must run after it, so check the
+  dependency by hand when renumbering.
+
 - **Say what the worker may settle alone.** `roles/WORKER.md`'s standing
   rules now fix it: a mechanical mismatch is settled against the code and
   reported; only a decision (authority, scope, semantics, a frozen clause)
