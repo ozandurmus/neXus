@@ -1,0 +1,232 @@
+{
+  "created_at": "2026-09-14T08:53:57Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 No 'SecurityExpert' or 'Security Expert' string remains anywhere under ui2/frontend/src or ui2/frontend/index.html -- proven by a test.",
+          "AC-2 The browser title is 'neXus' and a favicon derived from the X mark is declared in index.html and present in the built dist.",
+          "AC-3 The login screen, the top app bar and the navigation rail show the option-D wordmark or its icon variant; no tagline anywhere.",
+          "AC-4 NexusWordmark and NexusMark render an svg with an accessible title and scale from 20px to 200px without raster assets.",
+          "AC-5 npm test, npm run build, the eleven-module Gradle build and NoRoleConditionalRenderingInFrontendTest are green; privacy gate PASS."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_BASELINE_CONTRACT.md -- FROZEN; its section 2 row LOGO: ACCEPTED 2026-09-09, CONDITIONAL: option D / Wordmark from docs/design/ui2_mockups/logo-identity-explorations.png -- the neXus wordmark with the accented capital X, no separate symbol, the tagline shown on the study is NOT adopted; used internally only until the Product Owner records the external-use check; a vector source does not exist yet and is to be produced from the study. Product Owner directive 2026-09-14: the product's name is neXus; the SecurityExpert name must not appear on any user-facing surface (browser tab, logo, login screen, shell). docs/design/UI2_0_MOCKUP_REFERENCE_NOTES.md carries the Material 3 token strip (primary #5754A6, surface #F7F5FC, on-surface #242337, tonal surface #E8E3F7, outline #9CA3C7) as reference.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run npm test and npm run build in ui2/frontend, and ./ui2/gradlew -p ui2 build -x :integration-tests:test, first; record the counts before you change anything.",
+          "what_exists": "ui2/frontend (Vite + React + MUI, Material 3 theme in src/theme/m3Theme.ts and tokens.ts; shared widgets in src/shell/M3Widgets.tsx). User-visible legacy name: src/shell/TopAppBar.tsx line ~26 renders the text 'SecurityExpert' as an h3; src/shell/NavigationRail.tsx line ~146 renders it as an h4. index.html title is 'UI 2.0' and declares no favicon; there is no public/ directory. src/auth/LoginScreen.tsx renders an h3 'Sign in' with no product mark. The study image shows option D: the lowercase word 'ne' + a capital X built from two chevron-like strokes (a teal left stroke and a blue right stroke, slightly interlocking) + lowercase 'us', all in a heavy geometric sans, dark navy letters; a square app-icon variant carries only the X mark on a dark tile. The frontend test runner is vitest (npm test); the architecture test NoRoleConditionalRenderingInFrontendTest scans the frontend sources."
+        },
+        "context_not_loaded": [
+          "ui2/service, ui2/worker, ui2/persistence and every Java module beyond running the build",
+          "docs/history/**",
+          "project/*.json",
+          "every vendor document"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/brand-nexus-wordmark"
+        },
+        "invariants": [
+          "The product's user-visible name is neXus and only neXus.",
+          "The mark is option D exactly: wordmark with the two-tone accented X, no symbol beside it, no tagline.",
+          "No new dependency, no raster asset, no layout restructuring.",
+          "Code-internal identifiers are untouched."
+        ],
+        "merge_gate": "Product Owner assistant review (the Product Owner will look at the rendered mark) plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "UI",
+        "objective": "Make the product present itself as neXus everywhere a user sees it: produce the vector wordmark the LOGO decision of 2026-09-09 chose (option D, the neXus wordmark with the accented capital X, no symbol, no tagline) from the concept study, and use it on the login screen, the top app bar and the navigation rail; set the browser title and favicon; remove every user-visible 'SecurityExpert' string from the frontend. Nothing else changes.",
+        "output_contract": [
+          "The product says neXus on every user-facing surface, with the option-D wordmark and matching favicon.",
+          "Two SVG brand components and a favicon, no raster, no dependency.",
+          "SESSION_CLOSE naming the components, the favicon, the cleaned files and the test counts."
+        ],
+        "recommended_reasoning": {
+          "reason": "A bounded frontend pass with one design judgment -- drawing the two-stroke X faithfully as SVG -- and otherwise mechanical replacements; medium covers it.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. The ui2 build must keep exactly eleven Gradle subprojects.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "The SESSION_CLOSE names the two brand components, the favicon path, every file where the legacy name was removed, and the test counts before and after."
+        ],
+        "risks": [
+          "Approximating the X with a plain letter instead of the two-stroke mark, which is the whole identity.",
+          "Adopting the tagline from the study because it is in the picture.",
+          "Pulling a web font to get the heavy sans, adding a dependency and an external fetch.",
+          "Renaming code identifiers 'while here' -- explicitly out of scope."
+        ],
+        "scope": {
+          "in": [
+            "Produce the wordmark as an inline React SVG component (src/brand/NexusWordmark.tsx) drawn by hand from the study: the letters 'ne' and 'us' as paths or as text in a heavy geometric sans that is guaranteed present (use the theme's font stack with a bold weight; do not add a font dependency), and the capital X as two distinct strokes -- left stroke in a teal, right stroke in a blue, matching the study's two-tone X -- so the mark reads as the study's option D at every size from 20px to 200px tall. No tagline. Accept a currentColor prop for the letters so the mark works on both the light surface and a dark tile. Also produce the square icon variant (the two-stroke X alone on a dark rounded tile) as src/brand/NexusMark.tsx.",
+            "Favicon: generate an SVG favicon from the icon variant (public/favicon.svg, checked in as a static file, no build-time image tooling) and reference it from index.html; set the document title to 'neXus'. The frontend build must copy public/ into the bundle as Vite does by default -- verify the built dist contains it.",
+            "Login screen: the wordmark above the sign-in form, sized so it is the first thing seen, with the form otherwise unchanged; the h3 'Sign in' may stay as a smaller subtitle or go -- the mark carries the identity.",
+            "Shell: TopAppBar shows the wordmark (small) where the 'SecurityExpert' text was; NavigationRail shows the icon variant when collapsed and the wordmark when expanded (or whichever single form fits the rail's existing width -- do not restructure the rail). Remove every 'SecurityExpert' / 'Security Expert' string from ui2/frontend/src; a test greps the frontend sources and fails if any remains.",
+            "Every colour used comes from the theme tokens or is declared once in src/brand/ as named constants with a comment pointing at the study; nothing is hard-coded inline in the screens.",
+            "Tests: the source-grep test above; a render test for NexusWordmark and NexusMark (they render an svg with a title element 'neXus' for accessibility); LoginScreen renders the wordmark; existing tests stay green; NoRoleConditionalRenderingInFrontendTest passes.",
+            "Commit early and often (brand components; favicon + title; login; shell; tests). Open the PR at the end; do not merge. The PR body carries a summary and a test plan only -- no tool footer, no emoji, no external URL (repository owner's rule)."
+          ],
+          "out": [
+            "Renaming the Java package com.securityexpert.*, the Gradle root project, database objects, or any repository document (AGENTS.md, CURRENT_STATE.md) -- code-internal and governance identifiers are a separate decision, not a user-facing surface.",
+            "Any external-facing use of the mark (the LOGO row's condition); any marketing page; any change to screen layouts beyond placing the mark; any new font, image-processing or icon-generation dependency; raster assets.",
+            "Adopting the study's tagline, or any of the other five explorations."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "run",
+              "build"
+            ],
+            "name": "frontend_build"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T08:53:57Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/frontend/src/brand/colors.ts (new)",
+          "ui2/frontend/src/brand/NexusXStrokes.tsx (new)",
+          "ui2/frontend/src/brand/NexusMark.tsx (new)",
+          "ui2/frontend/src/brand/NexusWordmark.tsx (new)",
+          "ui2/frontend/public/favicon.svg (new)",
+          "ui2/frontend/index.html (favicon link, title 'neXus')",
+          "ui2/frontend/src/auth/LoginScreen.tsx (wordmark placed above the form)",
+          "ui2/frontend/src/shell/TopAppBar.tsx ('SecurityExpert' text replaced with the wordmark)",
+          "ui2/frontend/src/shell/NavigationRail.tsx ('SX' tile / 'SecurityExpert' text replaced with NexusMark / NexusWordmark)",
+          "ui2/frontend/tests/brandNoLegacyName.test.tsx (new)",
+          "ui2/frontend/tests/brand.test.tsx (new)",
+          "ui2/frontend/tests/LoginScreen.test.tsx (new)",
+          "ui2/frontend/tests/App.test.tsx (SecurityExpert text assertions replaced with getByTitle('neXus'))"
+        ],
+        "completed": [
+          "Produced the option-D wordmark (ui2/frontend/src/brand/NexusWordmark.tsx) and icon variant (ui2/frontend/src/brand/NexusMark.tsx) as hand-drawn inline SVG -- 'ne' + a two-stroke capital X (teal left stroke, blue right stroke) + 'us', no tagline, currentColor prop, scales 20px-200px, no raster asset, no new dependency.",
+          "Added public/favicon.svg (the icon variant) and referenced it from index.html; set the document title to 'neXus'; verified the built dist contains favicon.svg and the correct title/link.",
+          "Placed the wordmark above the sign-in form on LoginScreen, in TopAppBar (replacing the 'SecurityExpert' h3), and in NavigationRail (NexusMark collapsed, NexusWordmark expanded, replacing the 'SX' tile and 'SecurityExpert' h4).",
+          "Removed every remaining 'SecurityExpert' / 'Security Expert' string from ui2/frontend/src and index.html; added a source-grep test that fails if the name reappears.",
+          "Declared the brand colours once in ui2/frontend/src/brand/colors.ts with a comment pointing at the concept study; nothing brand-related is hard-coded inline in the screens."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "None -- frontend-only movement, no Python entry point touched.",
+          "ui": "ui2/frontend now presents as neXus everywhere: login screen, top app bar, navigation rail, browser tab title and favicon."
+        },
+        "integration": {
+          "branch": "feature/brand-nexus-wordmark",
+          "ci": "not triggered from this session",
+          "head_sha": "5af504ce40c974f8a2bc08ed9888def292c6d1d1",
+          "merge_commit": null,
+          "merge_decision": "Not merged -- worker opens the PR only; merge gate is PO assistant review of the rendered mark plus orchestrator verify.passed.",
+          "merge_state": "OPEN",
+          "pr": 265,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/265"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0155",
+          "movement_type": "UI",
+          "objective": "PR #265 is open for Product Owner review of the rendered option-D mark; next action is that review, not further engineering.",
+          "status": "complete"
+        },
+        "preserved": [
+          "Code-internal identifiers: the com.securityexpert.* Java package, the Gradle root project name, database objects -- untouched.",
+          "Screen layouts and the navigation rail's structure/width -- only the mark was swapped in, no restructuring.",
+          "The rail's existing subtitle content ('verified state') kept as 'Verified state' next to the wordmark rather than deleted."
+        ],
+        "recommended_reasoning": {
+          "reason": "The task is closed; if a fix is needed after PO visual review it stays a bounded frontend pass -- medium continues to cover it.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [
+          "None -- this UI-only movement did not change scope, delivery state, architecture, debt or sequencing; no project/*.json or CURRENT_STATE.md update was applicable."
+        ],
+        "unresolved_risks": [
+          "The PO directive requires the Product Owner to look at the rendered mark before merge (merge_gate); the X-strokes geometry is a hand-drawn approximation of the study's two-tone chevrons and has not been visually reviewed in a running browser this session."
+        ],
+        "validation": {
+          "affected": "Full ui2/frontend vitest suite: 10 files, 43 tests, all passing (baseline was 7 files, 36 tests).",
+          "diff_check": "git status clean after each commit; only the files listed in 'changed' are touched; dist/ build artifact removed before every commit.",
+          "full_regression": "Not applicable -- no Python suite touched; ui2 Gradle build run in full below.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 1545 files scanned, 0 findings.",
+          "real_environment": "Not applicable -- local-validation-only UI movement per SESSION_START deployment_direction; no network-device or real-environment surface touched.",
+          "state_consistency": "No project/*.json or CURRENT_STATE.md changes made; none were required by this UI-only movement.",
+          "targeted": "New brand tests (brand.test.tsx, brandNoLegacyName.test.tsx, LoginScreen.test.tsx) all pass; updated App.test.tsx assertions pass."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T09:01:03Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0155",
+  "movement": "brand-nexus-wordmark",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_MOCKUP_REFERENCE_NOTES.md",
+    "docs/design/ui2_mockups/logo-identity-explorations.png",
+    "ui2/frontend/src/shell/TopAppBar.tsx",
+    "ui2/frontend/src/shell/NavigationRail.tsx",
+    "ui2/frontend/src/auth/LoginScreen.tsx",
+    "ui2/frontend/index.html"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T09:01:03Z"
+}

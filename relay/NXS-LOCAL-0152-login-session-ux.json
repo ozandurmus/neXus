@@ -153,11 +153,22 @@
       "subject": "C3 closed session end_reason vocabulary has no self-initiated sign-out transition",
       "text": "WORKER.md (NXS-LOCAL-0152) requires 'an authenticated identity can end its OWN session' (AC-4). C3 contract sec 3.1's sessions.end_reason is a DB-enforced closed vocabulary (CHECK constraint in V2__identity_sessions_rbac.sql: login_elsewhere/idle_timeout/absolute_lifetime/revoked_by_admin/access_group_lost) and sec 3.3's transition table is stated exhaustive ('No other transition exists'). Every existing REVOKED/EXPIRED transition is caused by the reconciler, role:security_admin acting on someone else, or the revalidation adapter -- none covers an identity ending its own session, and a plain viewer (no role:security_admin) has no path in the table at all. Proceeding with the minimal additive resolution: a new Flyway migration extends (never edits) the V2 CHECK constraint with one new closed-vocabulary value, and adds exactly one new self-scoped transition row (ACTIVE -> REVOKED, end_reason='signed_out_by_self', ended_by=caller's own actor_fingerprint), leaving every existing value/row/rule untouched. Flagging per AGENTS.md 'contract wins, raise a RELAY_QUESTION rather than reconciling silently' -- please confirm or override before merge; PR will state this plainly.",
       "timestamp": "2026-09-13T20:05:50Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner assistant (PO+O); reviewed and merged as PR #253 on 2026-09-13",
+      "marker": "RELAY_DECISION",
+      "scope": "C3 section 3.1 end_reason vocabulary and section 3.3 transition table: one additive self-sign-out value",
+      "seq": 3,
+      "subject": "Accepted: additive end_reason value and one self-scoped transition; C3 successor clause owed",
+      "supersedes": "none",
+      "text": "Accepted as implemented and merged (PR #253). The minimal additive resolution -- a new Flyway migration that extends V2's CHECK constraint with one closed-vocabulary value for a self-initiated sign-out, and exactly one new self-scoped ACTIVE -> REVOKED transition -- is the right shape: it edits no existing migration and widens C3 by one named value rather than reinterpreting an existing one. C3 sections 3.1 and 3.3 remain FROZEN; the new value and transition are recorded as a successor clause C3 owes, to be written into the C3 successor alongside the local identity administration clauses (13G). No further worker turn is needed.",
+      "timestamp": "2026-09-14T06:47:22Z"
     }
   ],
   "id": "NXS-LOCAL-0152",
   "movement": "login-session-ux",
-  "next_actor": "po",
+  "next_actor": "engineer",
   "refs": [
     "docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md",
     "docs/design/UI2_0_C3B_BOOTSTRAP_IDENTITIES_AND_ROLES.md",
@@ -168,6 +179,6 @@
     "ui2/frontend/src/auth/AuthGate.tsx"
   ],
   "schema_version": 1,
-  "status": "AWAITING_PO",
-  "updated_at": "2026-09-13T20:05:50Z"
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-14T06:47:22Z"
 }

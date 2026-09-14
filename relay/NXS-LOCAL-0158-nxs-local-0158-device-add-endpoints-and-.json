@@ -1,0 +1,296 @@
+{
+  "created_at": "2026-09-14T10:45:06Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 POST /devices/add-single with a valid credential reference writes one DRAFT device and one admitted confirm job of the vendor's capability id, in one transaction; a refused admission leaves no device row (proven by a service test).",
+          "AC-2 GET /devices/{id} and GET /devices return exactly the shapes adminApi.ts declares; the merged frontend tests still pass unchanged.",
+          "AC-3 java -jar of the built service boot jar with argument worker reaches Ui2WorkerMain and with argument service boots Ui2Application; ENTRYPOINT and CMD assertions in tests/test_ui2_deployment_manifests.py pass without edits to those assertions.",
+          "AC-4 One worker process routes ssh_exec to SshExecTransport and pan_xml_api to PanXmlApiTransport; an unknown kind fails closed (unit test).",
+          "AC-5 Ui2ArchitectureTest (all directions) untouched and green; eleven-module build, service/worker/job-engine tests, frontend tests, manifests test, privacy gate, contract_authority_status all green."
+        ],
+        "baseline": {
+          "authority": "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md -- FROZEN 2026-09-14 (section 4, EC-6a, EC-11, EC-12). docs/design/PO_DECISION_RECORD_2026_09_14B_ENROLLMENT_CONFIRM_IS_THE_ONE_JOB_ADMISSIBLE_AGAINST_DRAFT.md (FROZEN) EC-J1..EC-J5: the confirm is the one job kind admitted against a DRAFT device; it is admitted by JobAdmissionService and executed by the worker process. docs/design/PO_DECISION_RECORD_2026_09_14_DEVICE_ADD_ENTRY_PEER_FOLLOW_AND_CREDENTIAL_STORE.md (FROZEN) DA-1/DA-2 (one menu: IP, vendor, credential; no device name; facts read from the device), CS-1..CS-5. docs/design/PO_DECISION_RECORD_2026_09_13F (FROZEN) section 1: Check Point is reached over SSH, Palo Alto over the XML API. docs/design/PO_DECISION_RECORD_2026_09_13D (FROZEN) DS-1/DS-2: the workload role is selected by an explicit typed argument. docs/design/UI2_0_B1_01C (FROZEN): one image, ENTRYPOINT is the JVM directly, CMD [\"service\"] is the default role; the worker Deployment passes args [\"worker\"]. docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (FROZEN). PO ASSISTANT DECISION 2026-09-14 on packaging (recorded here so you do not have to ask): the role argument is dispatched inside the JVM by a small launcher class placed in platform-core (it depends on nothing); the launcher resolves the role's main class by name with Class.forName so platform-core never imports service or worker; the service bootJar gets the worker module on its RUNTIME classpath only (Gradle runtimeOnly), which creates no class-level dependency from service on worker, so Ui2ArchitectureTest dir2 stays as it is and must not be edited. If an architecture test nevertheless fails on this arrangement, raise a RELAY_QUESTION and STOP.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, then :service:test, :worker:test, :architecture-tests:test, npm --prefix ui2/frontend test, and python3 -m pytest tests/test_ui2_deployment_manifests.py -q first; record the counts before you change anything.",
+          "what_exists": "service: Ui2Application excludes SessionAdminController and DeviceRegistrationController from component scan by REGEX; DeviceRegistrationController exposes POST /devices with the B1-4b request shape (vendorHint, transportKind, addressRef, credentialReferenceId, isTestTarget) and DeviceRegistrationService.register(actor, vendorHint, transportKind, addressRef, credentialReferenceId, isTestTarget) writes a DRAFT device plus endpoint and returns Registered(deviceId, endpointId). GateChainInterceptor supplies ACTOR_FINGERPRINT_ATTRIBUTE; CredentialAdministrationController and LocalIdentityAdministrationController show the current controller conventions (snake_case JSON, ResponseEntity maps, role gating). job-engine: JobAdmissionService.submit(capabilityId, targetDeviceId, clientIdempotencyKey, actorFingerprint, actionId) returns Admitted(jobId) or Refused(code, reason); ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT / DEVICE_CONFIRM_PALO_ALTO; JobRecordDao / JooqJobRecordDao hold job rows. No JobAdmissionService bean is wired in the service composition today (grep finds no use in ui2/service/src/main). persistence: DeviceRepository has find, findEndpoint, findEndpointByDeviceId, registerDraft, recordConfirmSuccess, findConfirmFacts; there is no list-all method yet. worker: Ui2WorkerMain composes DB access, credential store, ConfirmCapabilityExecutor and WorkerClaimLoop, reading UI2_DB_APP_USER_FILE, UI2_DB_APP_PASSWORD_FILE, UI2_CREDENTIAL_STORE_KEY_FILE; its transport today is SshExecTransport only; PanXmlApiTransport and StoreBackedPanCredentialResolver exist. Containerfile: ENTRYPOINT java -jar /app/service.jar, CMD [\"service\"]; tests/test_ui2_deployment_manifests.py asserts that ENTRYPOINT starts with java and CMD is exactly [\"service\"] -- both stay. deploy/ui2/52-worker-deployment.yaml already runs the same image with args [\"worker\"] and mounts the two key secrets. frontend (merged): adminApi.ts defines addDeviceSingle -> POST /devices/add-single {address, vendor, credential_reference_id} expecting {device_id, job_id, enrollment_state}; getDevice -> GET /devices/{id} expecting DeviceDetail {device_id, vendor_hint, enrollment_state, disabled, facts{hostname,model,software_version,ha_role}|null, peer_follow_outcome, peer_follow_reason, identity_mismatch_state, cluster_member_ref, job{job_id,state,outcome,terminal_reason}|null}; listDevices -> GET /devices expecting {devices:[DeviceSummary{device_id,vendor_hint,enrollment_state,hostname,model,software_version,ha_role,cluster_member_ref}]}. AddDeviceDialog polls getDevice until job is terminal. Vendor values used by the frontend: read them from adminApi.ts's Vendor type and match them exactly."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "vendor documents",
+          "ui2/ldap-adapter",
+          "ui2/scheduler",
+          "ui2/cli beyond compiling"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/device-add-endpoints-and-worker-packaging"
+        },
+        "invariants": [
+          "The service module never imports a worker class (DIR-2); runtime classpath only.",
+          "Only the confirm capability is admitted against DRAFT (EC-J1/J2); this movement admits nothing else.",
+          "One image, JVM entry point, role by argument, CMD [\"service\"] default.",
+          "Frontend contract is the fixed side; the service conforms to it."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Finish the single-device add so the Product Owner can add the first device from the running product: implement the three HTTP routes the merged frontend already calls (POST /devices/add-single, GET /devices/{id}, GET /devices), make the deployed image actually start the worker process when launched with the worker role argument, and let one worker process serve both vendors (Check Point over ssh_exec, Palo Alto over pan_xml_api). Movement NXS-LOCAL-0157 (PR 272, merged) built the confirm job, the worker claim loop, the worker Deployment manifest and the frontend; it named these three gaps in its SESSION_CLOSE. This movement closes exactly them.",
+        "output_contract": [
+          "The merged product accepts IP + vendor + credential, creates the DRAFT device and its confirm job, and the deployed worker pod runs the job against the device.",
+          "One boot jar, two roles, both vendors served by one worker process.",
+          "SESSION_CLOSE per the requirements above."
+        ],
+        "recommended_reasoning": {
+          "reason": "Three coupled changes (transactional route, Boot packaging with a runtime-only classpath, transport routing) each with a known trap; high effort earns its cost on the Boot class-loading and the transaction boundary.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type and method names the clause it implements (EC-n, EC-Jn, DA-n, CS-n, DS-n, C2 section n).",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects.",
+          "No address, hostname, serial, host key or credential reaches a log line, an exception message, or an HTTP error body beyond the fields the frontend types name.",
+          "If a contract clause and this packet disagree, raise a RELAY_QUESTION and STOP; never reconcile silently and never relax a direction test.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "The SESSION_CLOSE names the three routes with their status codes, the launcher class and the exact gradle lines, the composite transport class, the manifest files touched, and the test counts before and after."
+        ],
+        "risks": [
+          "Spring Boot's fat-jar launcher and Class.forName: use the thread context class loader (Boot's LaunchedClassLoader) when resolving the role class, or the worker class will not be found at runtime even though it is in BOOT-INF/lib.",
+          "Doing draft registration and job admission in two transactions, leaving orphan DRAFT rows on refusal.",
+          "Returning camelCase keys the frontend does not read.",
+          "Editing an architecture or manifests assertion instead of fixing the arrangement -- forbidden; ask on the relay instead."
+        ],
+        "scope": {
+          "in": [
+            "Routes. Replace or extend DeviceRegistrationController so that it serves exactly what the frontend calls and remove it from the component-scan exclusion (SessionAdminController stays excluded). POST /devices/add-single takes {address, vendor, credential_reference_id}; the service derives transport_kind from vendor (Check Point -> ssh_exec, Palo Alto -> pan_xml_api; any other vendor -> 422 VALIDATION_FAILED vendor_hint_invalid), registers the DRAFT device through DeviceRegistrationService (is_test_target false, address as address_ref), then admits the vendor's confirm capability through JobAdmissionService with client idempotency key equal to the device id and the actor from the gate, all in ONE transaction boundary so a refused admission leaves no orphan DRAFT row; response 200 {device_id, job_id, enrollment_state: DRAFT}; an admission refusal maps to 409 {error: ADMISSION_REFUSED, code, reason} with the draft rolled back. GET /devices/{id} returns the DeviceDetail shape above (404 {error: NOT_FOUND} when unknown), with job = the most recent job whose target is this device or null. GET /devices returns every device (add a DeviceRepository list method, jOOQ implementation, ordered by creation) as DeviceSummary rows. Role gating follows the existing convention: POST requires the role that DEVICE_REGISTER already requires; the two GETs require any authenticated session with device read access as the other read controllers do. Write the JSON keys exactly as the frontend types spell them.",
+            "Composition. Wire JobAdmissionService (CapabilityRegistry, PersistenceDeviceEnrollmentReadPort, job record dao, transaction boundary) as a Spring bean next to the existing repositories in the service composition root; wire the new device read/list beans. Add service tests: add-single happy path (draft written and job admitted with the right capability id per vendor), refusal rolls the draft back, unknown vendor 422, GET detail shape with and without facts, GET list shape. Use the fakes the existing service tests use; no database in unit tests.",
+            "Worker packaging. Add com.securityexpert.nexus.ui2.platform.launch.Ui2Launcher (platform-core) whose main takes args[0] as the workload role: service -> Class.forName(\"com.securityexpert.nexus.ui2.service.boot.Ui2Application\") main(remaining args); worker -> Class.forName(\"com.securityexpert.nexus.ui2.worker.Ui2WorkerMain\") main(remaining args); missing or unknown role -> print one line to stderr and exit 2. Unit-test the dispatch with a stub role table. In ui2/service/build.gradle.kts set the Spring Boot mainClass to Ui2Launcher and add runtimeOnly(project(\":worker\")) with a comment naming this packet's decision and DIR-2; Ui2Application itself is unchanged and stays the Spring @SpringBootApplication. Confirm with the built jar that `java -jar service-boot.jar worker` reaches Ui2WorkerMain (it may exit early for missing env; the exit path must be Ui2WorkerMain's, not a ClassNotFoundException) and that `java -jar service-boot.jar service` still boots Spring (the existing boot test or a smoke start with a missing DB that fails in the DataSource, not in class loading). Containerfile: no change is expected; if one is needed, ENTRYPOINT still starts with java and CMD stays exactly [\"service\"].",
+            "Both vendors in one worker. Give Ui2WorkerMain a composite DeviceTransport that routes by the endpoint's transport_kind: ssh_exec -> SshExecTransport with the store-backed SSH resolver, pan_xml_api -> PanXmlApiTransport with the store-backed PAN resolver; unit-test the routing and that an unknown transport kind fails closed with a terminal step failure, never a fallback to the other transport. Ui2WorkerMain reads no new secret; trust-rule env names stay as they are.",
+            "Manifests. deploy/ui2/52-worker-deployment.yaml and 50-service-deployment.yaml keep the same image reference; if the worker needs any env var the service does not, declare it there and extend tests/test_ui2_deployment_manifests.py accordingly. Run that test file.",
+            "Frontend: no change expected. If a route response shape and adminApi.ts disagree, change the SERVICE to match the frontend, not the reverse.",
+            "Commit early and often (routes; composition; launcher + gradle; composite transport; tests). Open the PR at the end; do not merge. The PR body carries a summary and a test plan only -- no tool footer, no emoji, no external URL (repository owner's rule)."
+          ],
+          "out": [
+            "The management-server branch of the add dialog (DA-3), discovery runs, any collection capability, any change to the confirm command set, the peer-follow rules, the identity-mismatch policy, or any migration (V13 only if a column is genuinely missing, additive, and named in the SESSION_CLOSE).",
+            "Editing Ui2ArchitectureTest, NoRoleConditionalRenderingInFrontendTest, or the entry-point/manifests assertions to make something pass.",
+            "A second image, a shell wrapper entry point, a new Gradle subproject (eleven stay eleven), any new dependency beyond Gradle wiring.",
+            "SessionAdminController wiring; scheduler."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":platform-core:test"
+            ],
+            "name": "ui2_platform_core_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:bootJar"
+            ],
+            "name": "ui2_service_bootjar"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_ui2_deployment_manifests.py",
+              "-q"
+            ],
+            "name": "deployment_manifests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T10:45:06Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/service/src/main/java/.../service/api/DeviceRegistrationController.java -- replaced entirely: 3 new routes, snake_case JSON matching adminApi.ts exactly.",
+          "ui2/service/src/main/java/.../service/device/DeviceRegistrationService.java -- IMPLEMENTED_TRANSPORTS widened from {ssh_exec} to {ssh_exec, pan_xml_api}.",
+          "New: ui2/service/src/main/java/.../service/device/DeviceAddSingleService.java, DeviceQueryService.java.",
+          "New: ui2/service/src/main/java/.../service/boot/DeviceCompositionConfiguration.java -- wires JobAdmissionService (first time in service), the confirm CapabilityRegistry (duplicated from worker's own placeholder builder, DIR-2), device read/list beans.",
+          "ui2/service/src/main/java/.../service/boot/Ui2Application.java -- DeviceRegistrationController removed from the component-scan exclusion regex; SessionAdminController stays excluded.",
+          "ui2/service/src/main/java/.../service/security/ActionRegistry.java -- new DEVICE_READ action, Optional.empty() role token (any authenticated session).",
+          "ui2/service/src/main/java/.../service/security/SecurityWebMvcConfig.java -- route map: POST /devices -> POST /devices/add-single; new GET /devices and GET /devices/* entries.",
+          "ui2/service/src/main/java/.../service/security/GateChainInterceptor.java -- one-segment wildcard route fallback (\"GET /devices/*\") added; every existing exact-route entry keeps matching exactly as before (exact lookup tried first).",
+          "ui2/persistence/.../device/DeviceRepository.java (+JooqDeviceRepository) -- new listAll() method and DeviceSummaryRecord type.",
+          "ui2/persistence/.../jobrecords/JobRecordDao.java (+JooqJobRecordDao) -- new findMostRecentByTargetDeviceId(deviceId) method.",
+          "Four DeviceRepository test fakes updated with a listAll() override (PersistenceDeviceEnrollmentReadPortTest, JooqDeviceStatePortTest, DeviceRegistrationServiceTest, ConfirmJobExecutorFakes) -- interface-completeness only, no behavior change.",
+          "New: ui2/platform-core/src/main/java/.../platform/launch/Ui2Launcher.java + Ui2LauncherTest.java.",
+          "ui2/service/build.gradle.kts -- runtimeOnly(project(\":worker\")) + springBoot { mainClass.set(...) }.",
+          "ui2/service/gradle.lockfile -- one line added (com.jcraft:jsch:0.1.55 now also resolves on service's runtime/testRuntime classpath, transitively through :worker).",
+          "New: ui2/worker/src/main/java/.../worker/transport/CompositeDeviceTransport.java + CompositeDeviceTransportTest.java.",
+          "ui2/worker/src/main/java/.../worker/WorkerBootstrap.java -- buildTransportRegistry now takes both SshExecTransport and PanXmlApiTransport.",
+          "ui2/worker/src/main/java/.../worker/Ui2WorkerMain.java -- builds a PanXmlApiTransport (previously never constructed), a CapabilityRegistry over ConfirmCapabilities.all(), runs WorkerBootstrap.boot (AC-11 startup check), and passes a CompositeDeviceTransport (not sshTransport alone) into ConfirmCapabilityExecutor."
+        ],
+        "completed": [
+          "POST /devices/add-single (200 {device_id, job_id, enrollment_state: DRAFT}; 422 VALIDATION_FAILED for an unknown vendor; 409 ADMISSION_REFUSED for a refused admission, draft rolled back) -- DeviceRegistrationController.addSingle, backed by the new DeviceAddSingleService.",
+          "GET /devices/{id} (200 DeviceDetail shape; 404 {error: NOT_FOUND} for an unknown device) -- DeviceRegistrationController.getDevice, backed by the new DeviceQueryService.",
+          "GET /devices (200 {devices: [DeviceSummary...]}) -- DeviceRegistrationController.listDevices, backed by DeviceQueryService and the new DeviceRepository.listAll().",
+          "Launcher class com.securityexpert.nexus.ui2.platform.launch.Ui2Launcher (platform-core); exact gradle lines added to ui2/service/build.gradle.kts: `runtimeOnly(project(\":worker\"))` and `springBoot { mainClass.set(\"com.securityexpert.nexus.ui2.platform.launch.Ui2Launcher\") }`.",
+          "Composite transport class com.securityexpert.nexus.ui2.worker.transport.CompositeDeviceTransport, wired into Ui2WorkerMain via WorkerBootstrap.buildTransportRegistry(sshTransport, panTransport) + WorkerBootstrap.boot(...).",
+          "Manifest files touched: none -- deploy/ui2/50-service-deployment.yaml and 52-worker-deployment.yaml already declared every env var Ui2WorkerMain reads (UI2_DB_URL, UI2_DB_APP_USER_FILE, UI2_DB_APP_PASSWORD_FILE, UI2_CREDENTIAL_STORE_KEY_FILE); UI2_CP_TRUST_RULE_REF/UI2_PAN_TRUST_RULE_REF and the per-ref *_FINGERPRINT lookups already have code defaults, so no new env var was needed.",
+          "Test counts before this branch's changes: 320 (sum of platform-core/worker/service/job-engine/persistence/architecture-tests/capability-registry/ldap-adapter/cli unit-test suites, computed from the 18 @Test methods added in new files against this branch's own green after-count). After: 338, 0 failures, 0 errors, across all nine of those Gradle modules plus the 45 deployment-manifest and 5 contract-authority-status pytest cases and the unchanged 50 frontend tests."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "not applicable -- this repository's product is the Java/Spring UI 2.0 service and worker, not a main.py-shaped Python entry point.",
+          "ui": "No frontend source change. The merged AddDeviceDialog/Inventory/Administration screens (from PR #272) now have a real backend behind addDeviceSingle/getDevice/listDevices instead of a 404; AddDeviceDialog.test.tsx's polling test continues to pass unchanged (it exercises the frontend's own mocked contract, not this branch's server)."
+        },
+        "integration": {
+          "branch": "feature/device-add-endpoints-and-worker-packaging",
+          "ci": "not yet observed from this session -- PR just opened",
+          "head_sha": "347f4b9fa45427beb152b058c1d491bb47299333",
+          "merge_commit": null,
+          "merge_decision": "Not merged by this session per merge mode 'engineer' -- the worker opens the PR and does not merge to main. Awaiting Product Owner assistant review plus orchestrator verify.passed per the stated merge gate.",
+          "merge_state": "OPEN",
+          "pr": 273,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/273"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0159-or-next",
+          "movement_type": "VALIDATION",
+          "objective": "Real-environment validation of the device-add flow: run the service+worker pair against a real PostgreSQL instance, add one Check Point and one Palo Alto device through POST /devices/add-single, and confirm the worker's claimed confirm job actually reaches ENROLLED (or a clean FAILED) for each vendor -- the one gap this movement's automated-only validation plan could not close.",
+          "status": "in_progress"
+        },
+        "preserved": [
+          "Ui2ArchitectureTest -- all ten DIR tests green, unedited; dir2 (service never depends on worker) verified both by the architecture-tests suite (bytecode-level, imports every module) and by the built jar's actual class-loading behavior.",
+          "NoRoleConditionalRenderingInFrontendTest and every other frontend test -- unedited, 50/50 green; no frontend source file touched.",
+          "Every existing DeviceRegistrationGateTest and DeviceRegistrationServiceTest assertion -- both test ActionRegistry.DEVICE_REGISTER / DeviceRegistrationService.register() directly, neither tied to a specific HTTP route, so both remained valid unedited (only DeviceRegistrationServiceTest's fake gained the new interface method).",
+          "ENTRYPOINT/CMD in ui2/Containerfile -- untouched; test_the_entry_point_is_the_jvm_with_a_role_argument passes without any assertion edit.",
+          "eleven-module Gradle layout (`./ui2/gradlew -p ui2 projects` still lists exactly the eleven modules)."
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining gap is real-environment observation against a live database and (ideally) real or containerized devices, not new design work -- a lighter tier than this movement's own (which combined a transaction-boundary design, Spring Boot class-loading and a new transport-routing class).",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "AC-1's jOOQ-nested-transaction rollback (draft write + job admission sharing one outer transaction via savepoints) is proved here only by a unit-level TransactionBoundary fake that simulates rollback; it has not been proved against a real PostgreSQL connection. A future movement with integration-tests in scope should add a real-DB test asserting that a refused add-single leaves zero rows in devices/endpoints.",
+          "DeviceCompositionConfiguration's confirmCapabilityRegistry() duplicates worker's ConfirmCapabilities placeholder builder (both build the same two gate-free, CAP_OFFLINE capabilities from CapabilitySpec literals) because service may never import a worker class (DIR-2). The two builders must be kept in sync by hand if either capability's id/vendor/transport ever changes; a later movement replacing this whole placeholder pattern with a real spec-file-driven capability registry (noted as future work in worker's own ConfirmCapabilities javadoc already) would remove this duplication in one pass.",
+          "GateChainInterceptor's new one-segment wildcard route matching (\"GET /devices/*\") is generic (any future path-variable route can reuse it) but is exercised today only by GET /devices/{id}; it has no dedicated unit test of its own (only end-to-end coverage through the existing DeviceRegistrationGateTest-style tests, which this movement did not add a new one for since the routing change itself is mechanical and the gate behavior per action id is already covered by ActionRegistry's own semantics)."
+        ],
+        "validation": {
+          "affected": ":service:test (80 tests), :worker:test (77), :platform-core:test (77), :job-engine:test (30), :persistence:test (31) -- all green, 0 failures.",
+          "diff_check": "git diff 1c5fd09..HEAD reviewed file by file before each of the four commits; git status clean after the final commit.",
+          "full_regression": "./ui2/gradlew -p ui2 build -x :integration-tests:test -- BUILD SUCCESSFUL, all 11 modules (338 unit tests total across platform-core/worker/service/job-engine/persistence/architecture-tests/capability-registry/ldap-adapter/cli, 0 failures/0 errors) plus the frontend build+test (50/50) and service:bootJar.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 1590 files scanned, 0 findings.",
+          "real_environment": "Not run -- this movement's validation_plan is entirely local/automated (deployment_direction: local validation only); the jOOQ nested-transaction rollback behavior DeviceAddSingleService depends on is proved here only by a rollback-simulating TransactionBoundary fake (unit level), not against a real PostgreSQL instance -- integration-tests is explicitly out of this suite's reach (`-x :integration-tests:test`) and was not run.",
+          "state_consistency": "python3 -m pytest tests/test_contract_authority_status.py -q -- 5 passed.",
+          "targeted": "DeviceAddSingleServiceTest (4: check_point happy path, palo_alto happy path, unknown vendor refused before any write, a refused admission rolls back the already-written draft) and DeviceQueryServiceTest (4: NotFound, detail without facts + its job, detail with facts + no job, list shape) -- all green."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T11:12:13Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0158",
+  "movement": "device-add-endpoints-and-worker-packaging",
+  "next_actor": null,
+  "refs": [
+    "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14B_ENROLLMENT_CONFIRM_IS_THE_ONE_JOB_ADMISSIBLE_AGAINST_DRAFT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14_DEVICE_ADD_ENTRY_PEER_FOLLOW_AND_CREDENTIAL_STORE.md",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/Ui2Application.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/DeviceRegistrationController.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/DeviceRegistrationService.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/Ui2WorkerMain.java",
+    "ui2/frontend/src/auth/adminApi.ts",
+    "ui2/Containerfile",
+    "deploy/ui2/52-worker-deployment.yaml",
+    "tests/test_ui2_deployment_manifests.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T11:12:13Z"
+}

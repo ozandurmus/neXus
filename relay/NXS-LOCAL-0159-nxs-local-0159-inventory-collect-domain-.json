@@ -1,0 +1,275 @@
+{
+  "created_at": "2026-09-14T11:19:37Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 persistence.device.inventory types, DeviceInventoryRepository and V13 exist exactly as the shared read contract names them; JooqDeviceInventoryRepository round-trips a run in one transaction.",
+          "AC-2 Each of the seven parsers turns its fixture into the expected records; VIP addresses are role cluster_virtual and only they; Palo Alto interfaces keep every address and address-less interfaces; route protocol tokens are preserved.",
+          "AC-3 inventory_collect is admitted only against ENROLLED non-disabled devices (test on both sides); the confirm remains the only DRAFT exception.",
+          "AC-4 InventoryJobExecutor records one complete run per job against the fake transport, with per-context data for VSX and vsys, and records nothing when the worker dies mid-run.",
+          "AC-5 The read plan equals 14C section 3 literally (closed-set test); capabilities are CAP_OFFLINE; eleven-module build, worker/job-engine/persistence/architecture tests, privacy gate and contract_authority_status all green."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md -- FROZEN 2026-09-14: IC-1..IC-4, D-1..D-7, section 3 command sets (named for the gate, not approved), section 5 measurement (no live run before it). docs/design/PO_DECISION_RECORD_2026_09_13F_COLLECTION_TRANSPORT_AND_IDENTITY_DECISIONS.md (FROZEN) sections 1-5. docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (FROZEN). docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (FROZEN) section 4.2 target modifiers. docs/design/UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md (FROZEN) sections 3-7. docs/design/PO_DECISION_RECORD_2026_09_14B (FROZEN): only the confirm is admissible against DRAFT; inventory_collect is admitted only against ENROLLED, non-disabled devices. READ CONTRACT shared by NXS-LOCAL-0159 and NXS-LOCAL-0160 (both build to it; neither changes it without a RELAY_QUESTION). GET /devices/{id}/inventory -> 200 {device_id, collected_at (ISO-8601, nullable when no run), job: JobView|null, contexts: [{context: string (\\\"physical\\\" or the VSID / vsys id), interfaces: [{name, parent (nullable), kind (physical|vlan|subinterface|loopback|bond|tunnel|other), state (up|down|unknown), addresses: [{address (with prefix), family (ipv4|ipv6), role (member|cluster_virtual)}]}], routes: [{destination, next_hop (nullable), interface (nullable), protocol (static|connected|default|ospf|bgp|rip|host|kernel|unknown), table (nullable)}]}]}. 404 {error: NOT_FOUND}. GET /clusters/{cluster_member_ref}/inventory -> 200 {cluster_member_ref, members: [{device_id, hostname (nullable)}], contexts: [{context, interfaces: [{name, kind, addresses: [...same as above...], presence: \\\"all\\\" | [device_id...], differences: [{device_id, field, value}]}], routes: [{destination, next_hop, interface, protocol, presence, differences}]}]}. Keys exactly as spelled, snake_case. The persistence model behind it (migration V13, additive): device_inventory_run(run_id PK, device_id FK devices, job_id, collected_at, context_count), device_interface(interface_id PK, run_id FK, context, name, parent, kind, state), device_interface_address(address_id PK, interface_id FK, address, family, role), device_route(route_id PK, run_id FK, context, destination, next_hop, interface, protocol, route_table). DeviceInventoryRepository (persistence module): recordRun(InventoryRun) writes one run with all children in one transaction; findLatestRun(deviceId) -> Optional<InventoryRun>; findLatestRuns(List<String> deviceIds). InventoryRun / InventoryContext / InventoryInterface / InventoryAddress / InventoryRoute are Java records in persistence.device.inventory with exactly the fields above.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :worker:test, :job-engine:test, :persistence:test, :architecture-tests:test first; record counts.",
+          "what_exists": "Merged: devices/endpoints with V12 columns (observed_hostname/model/software_version/ha_role, cluster_member_ref, virtual_system_ref, enrollment_state, disabled); worker.confirm (ConfirmJobExecutor as a C2-compliant executor sibling of StepExecutor, WorkerClaimLoop claiming one job at a time, CheckPoint/PaloAlto confirm parsers, Vendor enum); worker.transport (SshExecTransport, PanXmlApiTransport, CompositeDeviceTransport routing by transport kind, WorkerBootstrap); job-engine: JobAdmissionService.submit(capabilityId, targetDeviceId, idempotencyKey, actor, actionId) with ConfirmCapabilityIds as the only DRAFT exception, DeviceEnrollmentReadPort, StepExecutor, StepParser(String)->ParsedStepResult, EvidenceWriterPort, JobLeaseRepository; persistence: JooqDeviceRepository, TransactionBoundary/TransactionBoundaryFactory, JobRecordDao; capability-registry: YAML specs (cp_gaia_inventory.yaml is a two-command placeholder from B1-5, superseded in scope by 13F section 7 -- replace it). Python know-how (read, never import, never port): the shapes the earlier collectors parsed. Check Point interfaces: 'ip -details -4 addr show' -- header lines start with an index digit and contain ':', name is the second colon field, '@' splits name from parent, 'inet ' lines carry CIDR in the second token; lo is a loopback; UP must be read from the flag list inside '<...>' not by substring. Routes: 'ip -4 route show table all' -- 'default' means 0.0.0.0/0, 'blackhole' rows carry the destination second, tokens 'via' next hop, 'dev' interface, 'proto' protocol, 'table' table; local/broadcast rows and 127.x rows are not routes. Cluster VIPs: 'cphaprob -a -m if' -- only the block after a line beginning 'virtual cluster interfaces:' (case-insensitive) up to the next section; first token interface name, first IPv4 literal the address; everything from this read is role cluster_virtual, everything from ip addr is role member. HA: 'cphaprob stat' -- the local row carries '(local)'; state token from the fixed vocabulary; the 'mode' line gives the cluster mode (Virtual System Load Sharing, Load Sharing multicast/unicast, High Availability / new mode, VRRP). VSX: 'vsx stat -v' -- rows begin with the VSID then '|'; the VSID column is the only trustworthy one. Palo Alto: interfaces under result/ifnet/entry with leaves name, ip, vsys, zone, fwd (fwd text contains 'vr:<name>'); a firewall may return several address elements per entry and a separate IPv6 element -- read all of them; entries without an address are still interfaces (HA links). Routes under the result's route container entries with leaves destination, nexthop ('0.0.0.0' means none), interface (strip an '@vsysN' suffix), virtual-router, flags (letters: S static, C connected, O OSPF, B BGP, R RIP, H host, A active, E ECMP). Fixture files under tests/fixtures/{cp,vsx,panorama} show these shapes with documentation addresses; write your own Java fixtures in the same spirit, do not read the Python parsers' code as a design."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "vendor documents",
+          "ui2/frontend",
+          "ui2/ldap-adapter",
+          "ui2/scheduler",
+          "the Python collectors' code beyond the fixture files named"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/inventory-collect-domain-core"
+        },
+        "invariants": [
+          "No live device contact; CAP_OFFLINE stays.",
+          "Member addresses and cluster virtual addresses never mix; a VIP is data, never a destination.",
+          "No raw output stored; only 14C D-4 columns.",
+          "The shared read contract's persistence names are exact."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Build the inventory collection service's core, offline: the inventory_collect job kind and its admission rule, the four vendor parsers (Check Point ip addr / ip route / cphaprob -a -m if / cphaprob stat / vsx stat -v; Palo Alto show interface all / show routing route), the inventory persistence model with migration V13, the worker-side InventoryJobExecutor that runs the per-context read plan through the existing DeviceTransport against a fake transport in tests and writes one InventoryRun, and the capability registry entries (CAP_OFFLINE). No live device contact: the capabilities stay CAP_OFFLINE and no gate row is authored (14C section 5). The read HTTP surface and the screens are movement NXS-LOCAL-0160, running in parallel against the shared read contract in the authority text; this movement owns the persistence module types that contract names and must deliver them first (first commit) so 0160 can compile against them after rebase.",
+        "output_contract": [
+          "Inventory job kind, parsers, storage and executor ready for the first gated live run after 14C section 5 measurement.",
+          "Persistence types published first for 0160.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "Seven parsers with vendor-shape judgment, a C2-compliant executor, and a shared contract another movement builds against in parallel.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type names the clause it implements (14C D-n, 13F section n, C2/C4 section n).",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects.",
+          "No address, hostname, serial, credential or raw command output reaches a log line, an exception message, an audit row or a stored column beyond the columns 14C D-4 names. Fixtures use RFC 5737 / RFC 3849 documentation addresses only.",
+          "If a contract clause and this packet disagree, raise a RELAY_QUESTION and STOP; never reconcile silently and never relax a direction test.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Commit early and often. Open the PR at the end; do not merge. The PR body carries a summary and a test plan only.",
+          "Commit and push the persistence types + V13 first and say so in the relay as a progress note.",
+          "The SESSION_CLOSE names the job kind and capability ids, the parser classes with fixture counts, the migration, the executor class, and the test counts before and after."
+        ],
+        "risks": [
+          "Reading the Python parser code as a design and inheriting its shortcuts (first address only, substring UP, protocol collapse) -- the packet lists the corrections; apply them.",
+          "Persisting raw route lines or raw XML.",
+          "Treating the VSX status column as HA state.",
+          "Changing the shared record shapes without a RELAY_QUESTION, which breaks 0160."
+        ],
+        "scope": {
+          "in": [
+            "FIRST COMMIT, before anything else: the persistence types and repository interface the shared read contract names (persistence.device.inventory: InventoryRun, InventoryContext, InventoryInterface, InventoryAddress, InventoryRoute records; DeviceInventoryRepository interface with recordRun, findLatestRun, findLatestRuns) plus migration V13 (additive tables exactly as the contract lists, with indexes on device_id+collected_at and run_id) and JooqDeviceInventoryRepository. Push that commit to the lane immediately so NXS-LOCAL-0160 can build on it.",
+            "Job kind and admission: InventoryCapabilityIds (cp_inventory_collect, pan_inventory_collect); JobAdmissionService admits them only when the device is ENROLLED and not disabled (existing F4 refusal for DRAFT stays; confirm stays the only exception); a test proves inventory against DRAFT is DEVICE_NOT_ELIGIBLE and against ENROLLED is Admitted. Capability YAML specs for the two, CAP_OFFLINE, FIXTURE_ONLY, revalidation_plan_ref pointing at 14C section 5; delete cp_gaia_inventory.yaml and update any test that named it.",
+            "Parsers (worker.inventory.cp and worker.inventory.pan), each a pure function from output text to the persistence records, each with fixtures and tests: CheckPointIpAddrParser (IPv4 and IPv6 forms), CheckPointIpRouteParser, CheckPointClusterVirtualInterfaceParser, CheckPointHaStateParser (role + cluster mode, local row only), CheckPointVsxStatParser (VSIDs only); PaloAltoInterfaceParser (all address elements, IPv6, address-less interfaces kept, vsys and virtual router kept), PaloAltoRouteParser (protocol from flags, virtual-router as table, container-anchored). Unknown tokens map to 'unknown', never to a guess; a malformed line is skipped and counted, never fatal.",
+            "Read plan: InventoryReadPlan per vendor as data (14C section 3 exact strings; VSX per-context composite lines; Palo Alto per-vsys parameter), with a test asserting the plan equals the section 3 set literally (the closed-set pattern DeviceFirstContactCommandSet uses). Check Point reads run in one interactive session per device, paced; the plan expresses that as ordered exec steps on one TransportSession.",
+            "InventoryJobExecutor (worker.inventory): claims inventory_collect jobs through the existing lease/fencing/heartbeat path exactly as ConfirmJobExecutor does (copy its C2 discipline, share code where a small extraction is clean), resolves the credential from the store, runs the plan through DeviceTransport, parses, assembles one InventoryRun with contexts (physical plus each VSID/vsys), and calls recordRun inside one transaction; failure leaves no partial run; identity mismatch on this contact follows 13F ID-M1..M4 (warn, audit, continue; strict posture refuses). Register the executor in WorkerClaimLoop next to the confirm so one worker process serves both kinds.",
+            "Tests: parser fixture tests; the closed-set plan test; admission test; an end-to-end executor test against a scripted fake DeviceTransport for a Check Point cluster member with two VSIDs and for a Palo Alto firewall with two vsys, asserting the recorded run's contexts, addresses (roles) and routes; a worker-dies test (lease lapses, no run recorded); repository test at the persistence unit level with the existing fakes. Architecture tests untouched and green."
+          ],
+          "out": [
+            "Any live device contact, any gate row, any change to CAP_OFFLINE; the configuration_collect kind (next movement); the HTTP read surface and the screens (0160); scheduler; changes to the confirm, peer follow or identity policy beyond reusing them; renaming Java packages."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":job-engine:test"
+            ],
+            "name": "ui2_job_engine_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":persistence:test"
+            ],
+            "name": "ui2_persistence_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":capability-registry:test"
+            ],
+            "name": "ui2_capability_registry_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T11:19:37Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "Persistence types + V13 pushed",
+      "text": "Pushed commit 3aaa6a5 to feature/inventory-collect-domain-core: persistence.device.inventory (InventoryRun/Context/Interface/Address/Route, DeviceInventoryRepository, JooqDeviceInventoryRepository) and migration V13__device_inventory.sql, plus InventoryCapabilityIds. NXS-LOCAL-0160 can rebase and build the HTTP read surface against these now. Continuing with the parsers, read plan, capability specs and InventoryJobExecutor next.",
+      "timestamp": "2026-09-14T11:39:26Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/worker/.../confirm/WorkerClaimLoop.java: added InventoryJobExecutor as a constructor dependency, extended ELIGIBLE_CAPABILITY_IDS with the two inventory ids, added capability-id dispatch to the inventory path.",
+          "ui2/worker/.../Ui2WorkerMain.java: wired DeviceInventoryRepository/InventoryCapabilityExecutor/InventoryJobExecutor and both InventoryCapabilities into the composition root.",
+          "ui2/capability-registry/.../gate_registry_fixture.yaml: header comment updated to reflect cp_gaia_inventory.yaml's removal.",
+          "ui2/capability-registry/.../CapabilitySpecLoaderTest.java: theCommittedFixtureFilesParseAndTheCapabilityIsExecutionEligibleAgainstThem now loads device_confirm_check_point.yaml (cp_gaia_inventory.yaml was deleted)."
+        ],
+        "completed": [
+          "persistence.device.inventory: InventoryRun, InventoryContext, InventoryInterface, InventoryAddress, InventoryRoute records; DeviceInventoryRepository (recordRun/findLatestRun/findLatestRuns); JooqDeviceInventoryRepository; migration V13__device_inventory.sql (device_inventory_run, device_interface, device_interface_address, device_route, additive, indexed on device_id+collected_at and run_id) -- committed and pushed first, per WORKER.md, before anything else.",
+          "job-engine: InventoryCapabilityIds (cp_inventory_collect, pan_inventory_collect); no JobAdmissionService code change was needed -- its existing DeviceEnrollmentSnapshot.permitsReadCollection() check (true only for ENROLLED/DEGRADED) already admits inventory correctly, since ConfirmCapabilityIds is the only DRAFT exception it special-cases.",
+          "capability-registry: cp_inventory_collect.yaml / pan_inventory_collect.yaml (CAP_OFFLINE, FIXTURE_ONLY, revalidation_plan_ref -> 14C section 5), each a connect/disconnect placeholder needing no gate row; deleted the superseded cp_gaia_inventory.yaml; updated CapabilitySpecLoaderTest to load device_confirm_check_point.yaml instead; updated gate_registry_fixture.yaml's header comment (its two cp_gaia_* rows now back no shipped capability, kept only for GateResolver/CapabilitySpecLoader test coverage).",
+          "worker.inventory: InventoryReadPlan (the closed literal command/call set transcribed from PO_DECISION_RECORD_2026_09_14C section 3 -- 6 Check Point base steps, 2 per-VSID templates, 4 Palo Alto base steps, plus the declared-but-unused &vsys=<id> form), proved equal to section 3 literally by InventoryReadPlanTest.",
+          "worker.inventory.cp: CheckPointIpAddrParser (IPv4+IPv6, UP read from the flag list not substring), CheckPointIpRouteParser (default/blackhole/local/127.x handling, vendor proto token preserved), CheckPointClusterVirtualInterfaceParser (only the 'Virtual cluster interfaces:' section, role=cluster_virtual only), CheckPointHaStateParser (local row only, role + cluster mode), CheckPointVsxStatParser (VSIDs only, VS0 included, caller excludes it), CheckPointVsidCompositeOutputSplitter (splits one composite exec's combined addr+route output). 10 fixture-backed tests.",
+          "worker.inventory.pan: PaloAltoInterfaceParser (every <ip> element kept, address-less interfaces kept, grouped by <vsys> leaf), PaloAltoRouteParser (flags letters as protocol token, virtual-router as table, @vsysN suffix or interface-to-vsys map for context). 3 fixture-backed tests.",
+          "worker.inventory: InventoryCapabilityExecutor (connect/exec/disconnect over one paced Check Point session or the Palo Alto XML API key dance; reuses worker.confirm.IdentityMismatchEvaluator/PresentedIdentity for warn-and-continue / strict-refuse); InventoryJobExecutor (C2 lease-fenced claim-time re-check, one pre-contact job_step_attempt row, one InventoryRun assembled and written via DeviceInventoryRepository.recordRun in one transaction; a worker crash mid-contact leaves the job reconcilable and records no run); InventoryCapabilities (Java-built CAP_OFFLINE registry entries, mirrors ConfirmCapabilities).",
+          "WorkerClaimLoop extended (both confirm and inventory capability ids in its eligible set, dispatches to InventoryJobExecutor for the two new ids) and Ui2WorkerMain wired (DeviceInventoryRepository, InventoryCapabilityExecutor, InventoryJobExecutor, both InventoryCapabilities registered) so one worker process serves both job kinds.",
+          "Tests: parser fixture tests (13); InventoryReadPlanTest closed-set test (5); InventoryCapabilityAdmissionTest (4, job-engine); JooqDeviceInventoryRepositoryTest (3, persistence, jOOQ MockDataProvider round-trip); InventoryCapabilitySpecLoaderTest (2, capability-registry); InventoryJobExecutorEndToEndTest (2: a Check Point cluster member with two VSIDs, a Palo Alto firewall with two vsys); InventoryJobExecutorWorkerDiesTest (1). Total added: 28 (worker 19, job-engine 4, persistence 3, capability-registry 2)."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- this movement is entirely inside ui2/ (Java); no Python collector or main.py path touched.",
+          "ui": "none -- the HTTP read surface and screens are NXS-LOCAL-0160's own scope, not this movement's."
+        },
+        "integration": {
+          "branch": "feature/inventory-collect-domain-core",
+          "ci": "not run in this environment; local build/test/privacy/contract-authority gates all green (see validation)",
+          "head_sha": "ce0505227c2d9d9a968bbf79422e4e9270ecf8f3",
+          "merge_commit": null,
+          "merge_decision": "Awaiting Product Owner assistant review plus orchestrator verify.passed, per WORKER.md merge gate. The worker opened the PR and does not merge to main.",
+          "merge_state": "OPEN",
+          "pr": 280,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/280"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0160",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Build the read HTTP surface (GET /devices/{id}/inventory, GET /clusters/{cluster_member_ref}/inventory) and the inventory screens against the persistence.device.inventory types and DeviceInventoryRepository this movement published first (commit 3aaa6a5, pushed before the rest of this movement's work).",
+          "status": "in_progress"
+        },
+        "preserved": [
+          "CAP_OFFLINE on both new capabilities; no gate row authored (14C section 5).",
+          "The confirm, peer-follow and identity-mismatch code paths are reused unmodified (ConfirmJobExecutor, ConfirmCapabilityExecutor, PeerFollowResolver, IdentityMismatchEvaluator all untouched).",
+          "No raw command output persisted -- only the 14C D-4 columns; parsers are pure functions with no id generation (ids assigned at executor assembly time).",
+          "Eleven Gradle subprojects, unchanged.",
+          "No Java package renamed."
+        ],
+        "recommended_reasoning": {
+          "reason": "Remaining work in this lane (if any) is deterministic cleanup inside an already-frozen contract; the next movement (0160) is a fresh session's own scope.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Every parser is UNVERIFIED against a real device/firewall (14C section 3's own status): Check Point channel differs from the earlier product's proven payload; Palo Alto show interface all / show routing route shapes are unproven. Corrections belong in these classes alone once 14C section 5's measurement lands.",
+          "Palo Alto vsys context assignment for routes falls back to an interface-name lookup or a default vsys when a route's own interface field carries no @vsysN suffix -- a documented best-effort reading of an unmeasured shape (PaloAltoRouteParser javadoc), not a fabricated certainty.",
+          "Identity mismatch on an already-ENROLLED device has no persisted warning write path today (only the confirm's own recordConfirmSuccess ever writes an identity baseline) -- 'warn and continue' currently means the run proceeds; a visible, persisted warning marker on inventory-collect contact is a successor movement's write path, not invented here.",
+          "The HA-role reads inventory issues (cphaprob stat, both physical and per-VSID) are parsed but never persisted -- V13 names no HA-role column; they exist only to keep the paced session's command sequence exactly as 14C section 3 lists it."
+        ],
+        "validation": {
+          "affected": "architecture-tests:test green (DIR-1..DIR-10 unaffected by new worker.inventory/persistence.device.inventory packages, which follow existing dependency directions).",
+          "diff_check": "git diff reviewed; only files WORKER.md scoped in (persistence/device/inventory, service migration V13, job-engine admission, capability-registry specs+tests, worker/inventory, WorkerClaimLoop, Ui2WorkerMain) were touched.",
+          "full_regression": "./ui2/gradlew -p ui2 build -x :integration-tests:test -- BUILD SUCCESSFUL, eleven modules.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings.",
+          "real_environment": "Not run -- CAP_OFFLINE, no live device contact, per 14C section 5; deferred to the gated live run after the Product Owner's measurement lands.",
+          "state_consistency": "python3 -m pytest tests/test_contract_authority_status.py -q -- 5 passed.",
+          "targeted": "worker:test (96, was 77), job-engine:test (34, was 30), persistence:test (34, was 31), capability-registry:test (21, was 19) -- all green."
+        }
+      },
+      "seq": 3,
+      "timestamp": "2026-09-14T12:00:30Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0159",
+  "movement": "inventory-collect-domain-core",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13F_COLLECTION_TRANSPORT_AND_IDENTITY_DECISIONS.md",
+    "docs/design/UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/confirm/ConfirmJobExecutor.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/confirm/CheckPointConfirmReadParser.java",
+    "ui2/job-engine/src/main/java/com/securityexpert/nexus/ui2/jobs/admission/JobAdmissionService.java",
+    "ui2/service/src/main/resources/db/migration/V12__device_first_contact_identity_and_target_modifiers.sql",
+    "tests/fixtures/cp/interfaces.txt",
+    "tests/fixtures/cp/routes.txt",
+    "tests/fixtures/vsx/ifconfig.txt",
+    "tests/fixtures/panorama/interfaces.xml",
+    "tests/fixtures/panorama/routes.xml"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T12:00:30Z"
+}

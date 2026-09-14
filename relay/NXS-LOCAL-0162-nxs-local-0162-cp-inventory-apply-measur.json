@@ -1,0 +1,231 @@
+{
+  "created_at": "2026-09-14T12:25:41Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 InventoryReadPlanTest asserts the 14D CF-2/CF-3 literals (bash -lc wrapper, vsenv 0 physical on VSX, per-VS cphaprob -a -m if) and passes.",
+          "AC-2 Route fixture with proto 7 yields static; kernel yields connected; scope-link-without-src rows are routes; table local rows are dropped.",
+          "AC-3 Per-VS cphaprob -a -m if fixture yields cluster_virtual addresses in that VS context; VMAC trailer and vsid header tolerated.",
+          "AC-4 VSLS table yields per-VSID local role; non-VSX text yields not-VSX without error; interleaved syslog lines do not fail any parser.",
+          "AC-5 Eleven-module build, worker tests, architecture tests, privacy gate, contract_authority_status green; CAP_OFFLINE unchanged."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14D_CP_INVENTORY_MEASURED_FORMS.md -- FROZEN 2026-09-14: CF-1..CF-4 command forms, PR-1..PR-5 parser rules, section 3 gate consequence. docs/design/PO_DECISION_RECORD_2026_09_14C (FROZEN) D-3/D-4 for storage; docs/design/PO_DECISION_RECORD_2026_09_13F (FROZEN) section 4/5. The observations behind 14D are docs/design/CP_INVENTORY_MEASUREMENT_FINDINGS_2026_09_14.md (DRAFT, not authority; read it for the exact shapes).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test and :worker:test first; record counts.",
+          "what_exists": "Merged (PR 280): worker.inventory with InventoryReadPlan (CP constants: 'ip -details -4 addr show', 'ip -6 addr show', 'ip -4 route show table all', 'cphaprob -a -m if', 'cphaprob stat', 'vsx stat -v'; per-VSID templates 'vsenv %s; ip -4 addr show; ip -4 route show' and 'vsenv %s; cphaprob stat'), InventoryReadPlanTest asserting the literal set, InventoryCapabilityExecutor / InventoryJobExecutor running the plan through DeviceTransport, cp parsers (IpAddr, IpRoute with protocolOf mapping only textual tokens, ClusterVirtualInterface, HaState local row + mode, VsxStat, VsidCompositeOutputSplitter), fixtures and tests; persistence.device.inventory records (InventoryRoute PROTOCOL_* constants, InventoryAddress roles). Merged (PR 277): service read routes and cluster merger -- untouched here."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "ui2/service",
+          "ui2/frontend",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/cp-inventory-measured-forms"
+        },
+        "invariants": [
+          "Context always explicit; never rely on the session's landing context.",
+          "Member and cluster_virtual addresses never mix.",
+          "No raw output stored; CAP_OFFLINE stays."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Apply the Product Owner's measured Check Point forms (record 14D, FROZEN) to the merged inventory worker: the login-shell context wrapper for every read, per-virtual-system cphaprob -a -m if, numeric proto mapping, VSLS per-VS role table, VSX detection by text, tolerance of interleaved syslog lines; refresh fixtures to the measured shapes (documentation addresses only) and keep the closed-set plan test equal to 14D CF-2/CF-3 literally. Offline only; CAP_OFFLINE stays.",
+        "output_contract": [
+          "Check Point inventory worker matching the measured forms, ready for gate rows and the first live run.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "Targeted parser and plan corrections against a written measurement; medium covers it.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every changed public type names the 14D clause it implements (CF-n / PR-n).",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects.",
+          "No estate value in fixtures, tests, comments or logs.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Open the PR at the end; do not merge. SESSION_CLOSE names each parser change, the new plan literals, and test counts before and after."
+        ],
+        "risks": [
+          "Keeping the bare 'vsenv N; ...' form that measurement proved does not resolve on an exec channel.",
+          "Mapping every numeric proto to static instead of only 7.",
+          "Putting a real address or name from the findings into a fixture -- the findings carry none; invent documentation values."
+        ],
+        "scope": {
+          "in": [
+            "InventoryReadPlan: physical reads on a VSX host issued as bash -lc 'vsenv 0 && <read>' and bare on a non-VSX gateway; per-VSID composites as bash -lc 'vsenv <VSID> && ip -4 addr show && ip -4 route show', bash -lc 'vsenv <VSID> && cphaprob -a -m if', bash -lc 'vsenv <VSID> && cphaprob stat' (single quotes literal, VSID validated as digits before substitution); the plan test updated to 14D CF-2/CF-3 literally. Executor order: detect VSX first (vsx stat -v, by text per CF-4), then choose the physical form, then per-VS reads.",
+            "CheckPointIpRouteParser: numeric proto tokens; 7 -> PROTOCOL_STATIC, kernel -> PROTOCOL_CONNECTED, other numerics -> PROTOCOL_UNKNOWN; 'dev X proto 7 scope link' without src parsed as a route; table local rows dropped (fixture from the measured shapes, 22 lines / 6 routes and 13 lines / 3 routes).",
+            "CheckPointIpAddrParser: '@ifNN' parent form and 'link-netnsid' trailer tolerated; 'vlan protocol 802.1Q id N' detail line read into the VLAN id when present; fixture with a bond VLAN subinterface and a VS-context subinterface.",
+            "CheckPointClusterVirtualInterfaceParser: 'vsid N:' header tolerated; rows with 'VMAC address:' trailer; both VLAN table shapes ignored; per-VS output produces cluster_virtual addresses attributed to that VS context (executor wiring).",
+            "CheckPointHaStateParser: the two measured mode strings; the VSLS 'Virtual Devices Status on each Cluster Member' table parsed into per-VSID role for the local member ([local] column) -- expose it on the parser result; persistence of HA role is out of scope unless a column already exists (it does not; leave a TODO-free note in the SESSION_CLOSE instead).",
+            "CheckPointVsxStatParser: 'VSX is not supported on this platform' -> not VSX (empty, flagged); rows parsed by the ID column with the type letter kept; VS0 excluded by the caller as today.",
+            "All CP parsers: unknown/interleaved lines (e.g. 'Message from syslogd@...' and kernel lines) skipped and counted, never fatal; one fixture per parser carrying such a line.",
+            "Fixtures use RFC 5737 addresses and made-up names (no estate value); every fixture mirrors a measured shape from the findings document."
+          ],
+          "out": [
+            "Palo Alto parsers (M-3/M-4 owed); live runs; gate rows; the service, frontend, persistence schema; changing the read contract."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T12:25:41Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/worker/src/main/java/.../inventory/InventoryReadPlan.java -- CF-2/CF-3 literals and wrapping methods, replacing the 14C-shaped constants",
+          "ui2/worker/src/main/java/.../inventory/InventoryCapabilityExecutor.java -- executor order (vsx stat -v bare first, then physical reads wrapped/bare, then per-VSID reads including per-VS cluster_if merge)",
+          "ui2/worker/src/main/java/.../inventory/ParsedInterface.java -- added vlanId() field (worker-only, not persisted)",
+          "ui2/worker/src/main/java/.../inventory/cp/CheckPointIpRouteParser.java -- numeric proto mapping (PR-1), interleaved-line guard (PR-5)",
+          "ui2/worker/src/main/java/.../inventory/cp/CheckPointIpAddrParser.java -- VLAN-id detail-line capture, kindOf reordered for a bond-named VLAN subinterface (PR-2)",
+          "ui2/worker/src/main/java/.../inventory/cp/CheckPointClusterVirtualInterfaceParser.java -- section-header row-count tolerance (PR-3)",
+          "ui2/worker/src/main/java/.../inventory/cp/CheckPointHaStateParser.java -- per-VSID VSLS local-role table (PR-4)",
+          "ui2/worker/src/main/java/.../inventory/cp/CheckPointVsxStatParser.java -- VsxStatResult/VsxDevice, text-based VSX detection, type letter kept (CF-4)",
+          "ui2/worker/src/main/java/.../inventory/pan/PaloAltoInterfaceParser.java -- mechanical one-arg fix (Optional.empty() vlanId) to keep ParsedInterface compiling; no Palo Alto behavior changed",
+          "10 CP fixtures under ui2/worker/src/test/resources/fixtures/inventory/cp/ refreshed or added to the measured shapes",
+          "7 test files updated to exercise the above (InventoryReadPlanTest, InventoryJobExecutorEndToEndTest, CheckPointIpRouteParserTest, CheckPointIpAddrParserTest, CheckPointClusterVirtualInterfaceParserTest, CheckPointHaStateParserTest, CheckPointVsxStatParserTest)"
+        ],
+        "completed": [
+          "AC-1: InventoryReadPlan rewritten to 14D CF-2/CF-3 -- CHECK_POINT_PHYSICAL_READS (six reads, CF-3 order), checkPointPhysicalCommand/checkPointPhysicalSteps wrapping each as bash -lc 'vsenv 0 && <read>' on a VSX host and bare otherwise, checkPointVsidSteps returning the three bash -lc 'vsenv <VSID> && ...' composites with digits-only VSID validation before substitution. InventoryReadPlanTest asserts every literal.",
+          "AC-2: CheckPointIpRouteParser.protocolOf maps numeric proto '7' to PROTOCOL_STATIC, 'kernel' to PROTOCOL_CONNECTED, other numerics to PROTOCOL_UNKNOWN; a DESTINATION_TOKEN guard added so a non-route line (default/blackhole/local/broadcast/IPv4-or-CIDR only) is skipped rather than mis-parsed. Fixtures refreshed to the measured 22-line/6-route and 13-line/3-route shapes, the latter including a 'dev X proto 7 scope link' route with no src.",
+          "AC-3: InventoryCapabilityExecutor now runs cphaprob -a -m if once per VSID and merges its cluster_virtual addresses onto that VS's own interfaces (previously only the physical context's cluster_if output was ever merged). CheckPointClusterVirtualInterfaceParser's section header now tolerates the measured row-count suffix; a leading 'vsid N:' header, a row's 'VMAC address:' trailer, and both VLAN table shapes were already tolerated by the existing skip-until-section/first-IPv4-literal logic -- confirmed with new fixtures.",
+          "AC-4: CheckPointHaStateParser.HaState gained perVsidLocalRole(), parsed from the physical cphaprob stat's 'Virtual Devices Status on each Cluster Member' table via its '[local]'-marked column. CheckPointVsxStatParser.parse() now returns a VsxStatResult(vsx, devices) that is vsx=false/devices=[] for the measured 'VSX is not supported on this platform' text, and keeps each row's type letter. Every CP parser's fixture set now carries an interleaved 'Message from syslogd@...'/kernel line; none fail on it.",
+          "AC-5: 11 Gradle subprojects unchanged. ./ui2/gradlew -p ui2 build -x :integration-tests:test, :worker:test (104 tests) and :architecture-tests:test all green; repository_privacy_check.py PASS (0 findings); tests/test_contract_authority_status.py 5 passed. CAP_OFFLINE unchanged -- no gate rows added, no live device contacted."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- Java worker module only",
+          "ui": "none -- no UI module, template, static asset or payload builder touched"
+        },
+        "integration": {
+          "branch": "feature/cp-inventory-measured-forms",
+          "ci": "not run in this environment (no CI workflow was triggered by this session)",
+          "head_sha": "5abfdabf9b9bfafde9b669ae07a900a196fe9d64",
+          "merge_commit": null,
+          "merge_decision": "Awaiting Product Owner assistant review plus orchestrator verify.passed, per the merge gate; the worker opened the PR and does not merge to main.",
+          "merge_state": "OPEN",
+          "pr": 287,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/287"
+        },
+        "next": {
+          "movement": "cp-inventory-gate-rows",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Author the CAP_OFFLINE -> CAP_LIVE gate rows for the 14D CF-3 closed command set now that the worker matches the measured forms, per 14D section 3's gate-consequence note; M-3/M-4 (Palo Alto measurement) remain separately owed.",
+          "status": "in_progress"
+        },
+        "preserved": [
+          "CheckPointVsidCompositeOutputSplitter unchanged -- still splits the addr+route composite's one combined buffer",
+          "13F CL-1 (member/cluster_virtual addresses never mix) and the connect/exec/disconnect session shape",
+          "Palo Alto read plan, parsers and executor path (M-3/M-4 owed, untouched beyond the one-arg ParsedInterface fix)",
+          "persistence schema, service, frontend -- not touched",
+          "CAP_OFFLINE -- no live device contact, no gate rows added"
+        ],
+        "recommended_reasoning": {
+          "reason": "Gate-row authoring against an already-frozen command set is bookkeeping, not new design; medium covers it unless a vendor-semantic ambiguity surfaces.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The 'counted' half of PR-5's 'unknown/interleaved lines skipped and counted' is implemented as tolerant skipping only -- no parser exposes a skipped-line count as a separate API, since no acceptance criterion tests for one and adding it to all five parsers' public surface was judged out of proportion to the smallest-diff standing rule.",
+          "HA role (local and per-VSID) and the VLAN id remain worker-only, unpersisted reads -- device_inventory_run/device_interface/device_route have no columns for either today; a future movement adding those columns should also decide whether to persist them."
+        ],
+        "validation": {
+          "affected": "InventoryJobExecutorEndToEndTest re-scripted against the new command literals and per-VS cluster_virtual merge -- passes.",
+          "diff_check": "git diff limited to ui2/worker/src/{main,test} under the inventory package; no persistence/service/frontend/Palo-Alto-parser-logic files changed (one Palo Alto file touched only for a compile-time constructor-arity fix).",
+          "full_regression": "./ui2/gradlew -p ui2 build -x :integration-tests:test -- BUILD SUCCESSFUL (includes :worker:test, :architecture-tests:test, :service:test and all other subprojects).",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings (one interim RFC1918 literal in an informational cphaprob_stat.txt line was caught by this gate and replaced with an RFC 5737 address before this final run).",
+          "real_environment": "None -- CAP_OFFLINE, offline-only movement; no device was contacted.",
+          "state_consistency": "python3 -m pytest tests/test_contract_authority_status.py -q -- 5 passed.",
+          "targeted": "New/updated JUnit tests in each changed CP parser's test class plus InventoryReadPlanTest -- all pass."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T12:47:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0162",
+  "movement": "cp-inventory-apply-measured-forms",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14D_CP_INVENTORY_MEASURED_FORMS.md",
+    "docs/design/CP_INVENTORY_MEASUREMENT_FINDINGS_2026_09_14.md",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryReadPlan.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryCapabilityExecutor.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/cp/CheckPointIpRouteParser.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/cp/CheckPointHaStateParser.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/cp/CheckPointClusterVirtualInterfaceParser.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/cp/CheckPointVsxStatParser.java"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T12:47:23Z"
+}

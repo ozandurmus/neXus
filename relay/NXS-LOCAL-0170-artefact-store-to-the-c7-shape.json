@@ -1,0 +1,286 @@
+{
+  "created_at": "2026-09-14T17:35:47Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 An artefact written through the store is encrypted under a per-artefact data key; the master key alone does not decrypt it; the wrapped key is on the manifest row (test).",
+          "AC-2 The manifest table exists with C7 section 3.2's columns, an audit trigger, and section 3.3's refusal for an unresolvable Check Point software version (test: zero rows, named failure).",
+          "AC-3 The retention ledger is append-only for the application role (UPDATE and DELETE both fail, test).",
+          "AC-4 A master-key re-wrap leaves the stored ciphertext identical and the artefact decryptable under the new key (test).",
+          "AC-5 The recovery volume is separate and worker-only, asserted by the manifests test; configuration collection still writes and reads its artefacts end to end; eleven-module build, the named module tests, manifests, migration-audit-context, privacy gate and contract_authority_status all green."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14H_BACKUP_STEP_SCOPE_PILOT_DEVICE_AND_THE_ASYNCHRONOUS_TRUTH.md -- FROZEN 2026-09-14: BK-15 per-artefact DEK wrapped by the master key, rotation re-wraps and never re-encrypts; BK-16 the C7 section 3.2 manifest table including hostname fingerprint (never a raw hostname), both digests and byte counts, artefact class, section 3.3 version locking (a Check Point artefact whose software version cannot be resolved is refused, not stored), section 3.4 validation level, and the audit trigger; BK-17 a recovery volume separate from the database volume, worker-only; BK-18 the section 3.5 retention ledger append-only from its first row, policy numbers left at the contract defaults; BK-14 no artefact byte, path or decrypt affordance in any HTTP response. docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (FROZEN 2026-09-09, amendment A-1 2026-09-12) sections 3.2, 3.3, 3.4, 3.5, 3.6 and 4.1-4.3 are the contract this implements literally; its section 8 acceptance criteria 3, 6, 12 and 13 name the tests. Restore stays disabled (C7 Status and A-1): implement no restore path, no restore column, no retrieval API beyond what the worker itself needs.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :persistence:test, :platform-core:test, :worker:test, :service:test, :architecture-tests:test and python3 -m pytest tests/test_ui2_deployment_manifests.py tests/test_migration_audit_context.py -q first; record counts.",
+          "what_exists": "ui2/persistence/.../artefact/ArtefactStore.java -- an interface with open(deviceId, jobId, vendor, gzip) and retrieve(ref, gzip), plus an ArtefactMetadata record carrying plaintextSha256, plaintextBytes, ciphertextSha256, ciphertextBytes, compression, keyId. FileArtefactStore.java -- streamed write, both SHA-256 digests in one pass, content-addressed path <root>/<vendor>/<device_id>/<ciphertext_sha256>.enc, atomic temp-to-final move, temp removed when finish() never runs. ui2/platform-core/.../ArtefactStoreCipher.java -- AES-256-GCM, 12-byte random nonce prefix, 128-bit tag, key read from UI2_ARTEFACT_STORE_KEY_FILE, KEY_ID constant \"v1\": ONE master key encrypts artefact bytes directly, which is exactly what BK-15 replaces. Migration V16 created configuration_artefact (a small table for the configuration view's own artefacts) and no C7 manifest table; V1-V4 each note that a C7 backup/artefact table is deliberately absent. The store is wired only into worker.configuration (ConfigurationJobExecutor / ConfigurationCapabilityExecutor). deploy/ui2/52-worker-deployment.yaml mounts the store at /app/artefact-store; movement NXS-LOCAL-0167 is in flight and is turning that mount into a PersistentVolumeClaim -- rebase onto origin/main before you start and build on whatever it landed rather than fighting it. Migrations V17 (0167) may be taken: use the next free number and say which you used."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "the Python collectors",
+          "vendor documents",
+          "ui2/frontend"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/artefact-store-c7-shape"
+        },
+        "invariants": [
+          "No artefact byte, path or decrypt affordance in any HTTP response.",
+          "The master key never encrypts artefact bytes directly again.",
+          "The ledger is append-only from its first row.",
+          "No device contact of any kind in this movement."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Bring the artefact store up to the C7 contract shape before anything holds a backup, per record 14H BK-15..BK-18: per-artefact data key wrapped by the vault master key with the wrapped key on the manifest row, the backup_artefact manifest table with version-locking refusal and its audit trigger, a recovery volume separate from the database volume and mounted only by the worker, and the append-only retention ledger. No device contact, no backup command, no restore. The configuration collection that uses the store today keeps working and is migrated onto the new shape.",
+        "output_contract": [
+          "An artefact store at the C7 shape, ready to hold a backup.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "Cryptographic envelope handling, a contract-literal schema with an audit trigger, and a volume split, all against a frozen contract with its own acceptance criteria.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every new type, column and test names the clause it implements (14H BK-n, C7 section n, criterion n).",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects. One additive migration, at the next free number.",
+          "No raw hostname, address, serial or credential in any column, log, audit row or test fixture; the fingerprint is an HMAC and its test proves it is not the input.",
+          "Rebase onto origin/main before starting; movement NXS-LOCAL-0167 touches the same worker Deployment and migration numbering.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Commit early and often. SESSION_CLOSE names the migration number, the manifest columns, the envelope shape, the volume decision, what happened to configuration_artefact, and test counts before and after."
+        ],
+        "risks": [
+          "Re-encrypting artefact bytes on rotation instead of re-wrapping keys.",
+          "Storing a raw hostname where the contract says fingerprint.",
+          "Letting the service Deployment mount the recovery volume.",
+          "Colliding with movement 0167's migration number or its volume change."
+        ],
+        "scope": {
+          "in": [
+            "Envelope encryption (BK-15 / C7 section 4.1): every artefact gets a fresh random 256-bit data key; the bytes are encrypted under it; the data key is wrapped with the vault master key and the wrapped form is returned in the metadata and persisted on the manifest row. The master key stays the UI2_ARTEFACT_STORE_KEY_FILE secret and an unreadable or wrong-length key remains a hard refuse at worker start. Rotation (section 4.3): a documented operation that re-wraps stored data keys under a new master key and never re-encrypts artefact bytes -- implement the re-wrap function and its test; wiring an operator entry point for it is out of scope and is named in the SESSION_CLOSE.",
+            "The manifest table (BK-16 / C7 section 3.2) in the next free migration: opaque artefact_id, device and optional virtual-system reference, artefact class, vendor, software_version with section 3.3's refusal (a check_point artefact with no resolvable software version is refused before any byte is written, zero rows, and the run fails with a named reason; palo_alto stores NULL), hostname_fingerprint as an HMAC (never a raw hostname -- derive it with the existing platform cipher/HMAC helper or add one, keyed by its own purpose), plaintext and ciphertext sha256 and byte counts, key_id and wrapped_data_key, validation JSONB with the section 3.4 levels V1-V4 (a run records the level it actually reached; V3 is NOT_APPLICABLE, never PASS; restore_proven is false without a proof record), retention tier and expires_at, recovery_volume_path SERVER-SIDE ONLY, created_at, and the audit trigger. The migration sets the audit context transaction-locally before any row it writes (tests/test_migration_audit_context.py enforces this and two rollouts crash-looped without it).",
+            "The retention ledger (BK-18 / C7 section 3.5): an append-only table with UPDATE and DELETE revoked from the application role, written whenever an artefact is created and whenever one would be removed; the GFS policy numbers stay at the contract defaults and nothing enforces deletion in this movement (no sweeper) -- the ledger and the floor check exist, the acting on them does not.",
+            "The recovery volume (BK-17): the store root becomes a path on a volume separate from the database, mounted by the worker Deployment only; the service Deployment must not mount it and a manifests test asserts both. Keep the env var name; if 0167 already made the mount a claim, extend that claim rather than adding a second.",
+            "Migrate the configuration path onto the new store shape: ConfigurationJobExecutor keeps working, now writing a manifest row per artefact with artefact class 'configuration' and the validation level it can honestly claim; the existing configuration_artefact table either becomes a view over the manifest or is left in place with a comment saying which is authoritative -- choose, and say which in the SESSION_CLOSE.",
+            "Tests: C7 section 8 criterion 3 (no artefact is readable with the master key alone -- the wrapped data key is required), criterion 6 (the ledger is append-only: an UPDATE and a DELETE by the application role both fail), criterion 12 (a re-wrap leaves ciphertext bytes byte-identical and the artefact still decryptable), version-locking refusal for check_point, the HMAC fingerprint never equalling the input, and the manifests test for the volume split. Round-trip tests for write-then-read through the new envelope."
+          ],
+          "out": [
+            "Any backup command, any device contact, the backup capability, job or screen (the next movement); restore in any form; a retention sweeper; a Panorama or Palo Alto backup path; scheduling; an HTTP surface for artefacts."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":platform-core:test"
+            ],
+            "name": "ui2_platform_core_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":persistence:test"
+            ],
+            "name": "ui2_persistence_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_ui2_deployment_manifests.py",
+              "-q"
+            ],
+            "name": "deployment_manifests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_migration_audit_context.py",
+              "-q"
+            ],
+            "name": "migration_audit_context"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T17:35:47Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/platform-core/.../ArtefactStoreCipher.java: encryptingStream/decryptingStream now require an explicit SecretKeySpec data key (the master-key-direct overloads are removed); added generateDataKey/wrapKey/unwrapKey/rewrap/keyId; fromBase64Key gained a (base64Key, keyId) overload.",
+          "ui2/persistence/.../ArtefactStore.java: ArtefactMetadata gained wrappedDataKey; retrieve() signature changed to retrieve(ArtefactRef, byte[] wrappedDataKey, boolean gzip).",
+          "ui2/persistence/.../FileArtefactStore.java: per-artefact data key generation and wrapping wired through open()/finish()/retrieve().",
+          "ui2/persistence/.../ConfigurationArtefactRecord.java: gained a wrappedDataKey field (not persisted by configuration_artefact itself; carried through so the configuration job executor can build the backup_artefact manifest row without a second metadata read).",
+          "ui2/worker/.../ConfigurationCapabilityExecutor.java: toRecord() now threads metadata.wrappedDataKey() into ConfigurationArtefactRecord.",
+          "ui2/worker/.../ConfigurationJobExecutor.java: constructor gained BackupArtefactManifestRepository, HostnameFingerprint and a recoveryVolumePath string; execute() now also calls recordBackupArtefactManifest() per artefact.",
+          "ui2/worker/Ui2WorkerMain.java: wires JooqBackupArtefactManifestRepository and HostnameFingerprint.fromBase64Key(...) (reading the new UI2_HOSTNAME_FINGERPRINT_KEY_FILE secret) and passes them plus artefactStoreRoot into ConfigurationJobExecutor.",
+          "deploy/ui2/52-worker-deployment.yaml: artefact-store volume changed from emptyDir to persistentVolumeClaim (claimName ui2-artefact-store); added the hostname-fingerprint-key secret mount/env var. Env var name UI2_ARTEFACT_STORE_ROOT unchanged.",
+          "tests/test_ui2_deployment_manifests.py: Secret count assertion 4 -> 5 (new hostname-fingerprint-key secret); added test_the_recovery_volume_is_separate_from_the_database_volume_and_worker_only and a PersistentVolumeClaim-count assertion.",
+          "tests/test_migration_audit_context.py: AUDITED_TABLES extended with backup_artefact and artefact_retention_ledger (defensive -- V17 writes no rows into either itself, so this changes no current pass/fail outcome; it only guards a future migration that might seed them)."
+        ],
+        "completed": [
+          "BK-15: ArtefactStoreCipher generates a fresh random 256-bit AES data key per artefact (generateDataKey), encrypts/decrypts artefact bytes only under an explicit data key (encryptingStream/decryptingStream now take a SecretKeySpec parameter -- no overload encrypts under the master key), and wraps/unwraps that data key under the master key (wrapKey/unwrapKey). rewrap(wrapped, newCipher) re-wraps a stored key under a new master key without ever touching artefact bytes -- the pure rotation function plus its own test (ArtefactStoreCipherTest); wiring an operator entry point to drive it across stored rows is out of scope for this movement.",
+          "FileArtefactStore.open()/finish() wired onto the per-artefact envelope: a fresh data key is generated per handle, ArtefactMetadata now carries wrappedDataKey, and retrieve(ref, wrappedDataKey, gzip) requires that wrapped key to unwrap before it can decrypt -- the master key alone can no longer read a stored artefact.",
+          "BK-16: migration V17 adds backup_artefact with C7 section 3.2's columns (opaque artefact_id, device_id + optional virtual_system_ref, artefact_class, vendor, software_version, hostname_fingerprint, both digests + byte counts, key_id + wrapped_data_key, validation JSONB, retention_tier + expires_at, recovery_volume_path, created_at) and its audit trigger. Section 3.3's version-locking refusal (a check_point artefact with no resolvable software_version is refused, zero rows, named failure) is enforced in BackupArtefactManifestRecord's own compact constructor -- constructing the value throws IllegalStateException before the repository is ever called, so JooqBackupArtefactManifestRepository.record() literally cannot run for a refused artefact.",
+          "BK-18: migration V17 also adds artefact_retention_ledger, append-only for ui2_app from its first row (REVOKE INSERT/UPDATE/DELETE then GRANT SELECT/INSERT only, mirroring authz_decisions' V2 grant exactly). JooqBackupArtefactManifestRepository.record() writes the manifest row and the ledger's 'created' event in one audited transaction.",
+          "BK-17: the artefact store root moved from an ephemeral emptyDir to ui2-artefact-store, a new PersistentVolumeClaim (deploy/ui2/35-artefact-store-pvc.yaml) separate from the database's own ui2-db-data claim, mounted by the worker Deployment only -- the service Deployment never mounts it (deploy/ui2/52-worker-deployment.yaml, asserted by a new test in tests/test_ui2_deployment_manifests.py).",
+          "Configuration path migrated onto the new shape: ConfigurationJobExecutor now also records a backup_artefact manifest row (artefact_class='configuration', validation level V1, section 3.4's V3 recorded NOT_APPLICABLE and restore_proven false) for every artefact it writes, using the same DeviceConfirmFacts it already reads for identity comparison (observedHostname/observedSoftwareVersion/virtualSystemRef). A check_point device whose software version was never resolved has its manifest write skipped (caught IllegalStateException) rather than failing the configuration run -- configuration_artefact/device_configuration_run remain this path's own, unaffected authority.",
+          "New HostnameFingerprint (platform-core): keyed HMAC-SHA256 under its own new secret (UI2_HOSTNAME_FINGERPRINT_KEY_FILE / deploy/ui2/24-secret-hostname-fingerprint-key.yaml), so hostname_fingerprint is never a raw hostname and never equals its input (tested).",
+          "audit_redaction_policy gained a tier-1 row for backup_artefact.wrapped_data_key (mirrors role_bindings.group_reference_encrypted exactly) -- otherwise fn_audit_capture's whole-row capture would have put live cryptographic material into audit_log, readable by ui2_app.",
+          "Added a real-PostgreSQL integration test (ui2/integration-tests, excluded from this movement's own build command like every other case there) proving the ledger's append-only grant is enforced by the database itself (UPDATE and DELETE both fail with SQLSTATE 42501), not merely unused by application code."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "not applicable -- this repository's runtime for this movement is the ui2/ Java/Gradle multi-module build, not a Python main.py entry point.",
+          "ui": "None. No templates/index.html, console.html, static/*.js, static/style.css, or ui2/frontend file was touched; the render harness was not applicable and was not run."
+        },
+        "integration": {
+          "branch": "feature/artefact-store-c7-shape",
+          "ci": "not observed in this session (no CI runner invoked locally; local validation commands per WORKER.md all green)",
+          "head_sha": "b4ee295d6bbd8407f12a6c51a34a82f15b3f346a",
+          "merge_commit": null,
+          "merge_decision": "Awaiting Product Owner assistant review plus orchestrator verify.passed, per WORKER.md merge gate. Worker does not merge to main.",
+          "merge_state": "OPEN",
+          "pr": 309,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/309"
+        },
+        "next": {
+          "movement": "artefact-store-to-the-c7-shape",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "PR #309 awaits Product Owner assistant review plus orchestrator verify.passed (merge gate, worker does not merge to main). Follow-on movements: (1) wire an operator entry point for BK-15 rotation; (2) the actual backup capability/job/screen (explicitly the next movement, out of this one's scope); (3) run BackupArtefactManifestDatabaseTest against a real PostgreSQL 16 server for the REAL_ENV_VALIDATED gate this movement could not reach locally.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "No backup command, capability, job or screen; no restore path in any form; no retention sweeper; no Panorama/Palo Alto backup path; no scheduling; no HTTP surface for artefacts (untouched, per WORKER.md scope).",
+          "configuration_artefact/device_configuration_run/DeviceConfigurationRepository/JooqDeviceConfigurationRepository unchanged -- the configuration read path (writes and reads) keeps working exactly as before.",
+          "Eleven Gradle subprojects, unchanged.",
+          "UI2_ARTEFACT_STORE_KEY_FILE / UI2_ARTEFACT_STORE_ROOT env var names unchanged, per WORKER.md 'keep the env var name'.",
+          "No raw hostname, address, serial or credential in any column, log, audit row or test fixture."
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work (PO review response, a real-Postgres run of one integration test) is verification and light follow-up, not new architecture or vendor-semantic ambiguity -- default down from this movement's own high-effort tier now that the contract-literal schema and envelope are implemented and green.",
+          "tier": "Sonnet 5, low effort"
+        },
+        "state_updates": [
+          "No project/*.json or CURRENT_STATE.md files were read or updated -- WORKER.md's own scope note directs pulling open work from project/QUEUE.md instead of scanning project state, and this movement's full scope came from the approved task packet with no need to consult or update the roadmap/backlog. The Product Owner assistant review is expected to record this build's outcome in the appropriate project-state file(s) as part of PR review, per the standard PO/engineer division of labor this worker session did not have authority to perform itself (it was not named in 'Files you may read')."
+        ],
+        "unresolved_risks": [
+          "BackupArtefactManifestDatabaseTest (ui2/integration-tests) has never actually run against a real PostgreSQL 16 server in this session -- it proves the ledger's REVOKE by static SQL-privilege reasoning and by mirroring an established, already-proven grant pattern (authz_decisions), but the specific new grant has not been observed to work end to end.",
+          "The manifest write for the configuration path is best-effort: a check_point device whose confirm facts never resolved a software version gets no backup_artefact row for its configuration artefacts (silently, by design) until that device is successfully confirmed with a resolvable version. This is intentional (section 3.3's refusal applied honestly) but means C7 section 3.2 coverage of configuration artefacts is incomplete for such devices until then.",
+          "Validation level V1 is the only level the configuration path claims (section 3.4) -- no independent post-write digest re-verification (a V2-equivalent) is implemented; this movement's WORKER.md did not scope that work in, but it is a real gap between 'digest computed once during write' and 'digest independently re-verified'.",
+          "Rotation (BK-15 section 4.3) has only its pure function and unit test; no operator entry point, batch job, or repository method exists yet to actually re-wrap every stored manifest row's key -- named as out of scope by WORKER.md itself, restated here so it is not mistaken for done."
+        ],
+        "validation": {
+          "affected": "platform-core 77->88 tests, persistence 34->42 tests, both green; worker 128, service 116, architecture-tests 14 unchanged in count, all still green after the ConfigurationJobExecutor/Ui2WorkerMain wiring change.",
+          "diff_check": "git status clean after 6 commits; git log reviewed; no stray files; PR #309 opened ozandurmus/neXus main <- feature/artefact-store-c7-shape.",
+          "full_regression": "Not run (WORKER.md: 'Do not run the full Python pytest suite'). Named pytest files only: test_ui2_deployment_manifests.py (52 passed), test_migration_audit_context.py (1 passed), test_contract_authority_status.py (5 passed) -- all pass, before and after identical pass counts except the two intentionally-updated manifest tests.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings, both before and after.",
+          "real_environment": "Not performed. The one criterion needing a real PostgreSQL server (BK-18's append-only grant, section 8 criterion 6) has its own integration test (BackupArtefactManifestDatabaseTest) which compiles but was not executed -- no container runtime and no UI2_TEST_JDBC_URL available in this session. This is a REAL_ENV_VALIDATED gap, named explicitly, not silently assumed passing.",
+          "state_consistency": "project/*.json and CURRENT_STATE.md not read or touched, per WORKER.md scope (pull open work from project/QUEUE.md instead -- not consulted, this movement's scope was fully specified by the approved task).",
+          "targeted": "ArtefactStoreCipherTest (7 new), HostnameFingerprintTest (4 new), FileArtefactStoreTest (4 new), JooqBackupArtefactManifestRepositoryTest (4 new) -- all pass."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T18:02:06Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0170",
+  "movement": "artefact-store-to-the-c7-shape",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14H_BACKUP_STEP_SCOPE_PILOT_DEVICE_AND_THE_ASYNCHRONOUS_TRUTH.md",
+    "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/artefact/ArtefactStore.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/artefact/FileArtefactStore.java",
+    "ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/platform/ArtefactStoreCipher.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/configuration/ConfigurationJobExecutor.java",
+    "deploy/ui2/52-worker-deployment.yaml"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T18:02:06Z"
+}

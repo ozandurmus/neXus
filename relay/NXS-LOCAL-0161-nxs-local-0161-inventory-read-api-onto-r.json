@@ -1,0 +1,228 @@
+{
+  "created_at": "2026-09-14T12:03:31Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 No file under ui2/service defines InventoryRun/Context/Interface/Address/Route, DeviceInventoryRepository, InMemoryDeviceInventoryRepository or InventoryCapabilityIds; the service imports the persistence and job-engine ones.",
+          "AC-2 One JobAdmissionService bean serves confirm and inventory; JooqDeviceInventoryRepository is the DeviceInventoryRepository bean.",
+          "AC-3 The two GET routes and the POST collect route behave exactly as before (existing tests pass, adapted only for type names).",
+          "AC-4 Eleven-module build, service tests, architecture tests, frontend tests, privacy gate and contract_authority_status green; PR 277 updated on the same lane."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md -- FROZEN 2026-09-14: D-4 storage, D-5 computed common view. The shared READ CONTRACT both 0159 and 0160 built to is the fixed side: GET /devices/{id}/inventory and GET /clusters/{cluster_member_ref}/inventory JSON shapes as InventoryController already emits them. docs/design/PO_DECISION_RECORD_2026_09_14B (FROZEN): the confirm is the only DRAFT exception; inventory_collect admits only ENROLLED/DEGRADED non-disabled devices.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "On the rebased lane run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :service:test, :architecture-tests:test, npm --prefix ui2/frontend test first; record counts.",
+          "what_exists": "main: persistence.device.inventory (InventoryRun, InventoryContext, InventoryInterface, InventoryAddress with ROLE_MEMBER/ROLE_CLUSTER_VIRTUAL, InventoryRoute with PROTOCOL_* constants, DeviceInventoryRepository recordRun/findLatestRun/findLatestRuns, JooqDeviceInventoryRepository), V13, jobs.admission.InventoryCapabilityIds, capability YAMLs, worker.inventory executor. Lane feature/inventory-read-api-and-cluster-view (PR 277, 2 commits, +2653/-60): InventoryController, InventoryQueryService, ClusterInventoryMerger, InventoryCollectService, placeholder types under service.device.inventory, DeviceCompositionConfiguration edits (separate admission/registry pair, in-memory repository bean), ActionRegistry device_inventory_collect, GateChainInterceptor interior-segment wildcard + GateChainInterceptorRouteResolutionTest, frontend panels and tests. The placeholder records were written to the same field list as the contract but accessor names, Optional-vs-nullable choices and constant names may differ from the real ones -- diff them and adapt the service code, not the persistence module."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "ui2/worker",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/inventory-read-api-and-cluster-view"
+        },
+        "invariants": [
+          "Read contract unchanged.",
+          "Persistence and worker modules untouched.",
+          "No in-memory repository in main code."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker updates PR 277 and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Land PR 277 (movement NXS-LOCAL-0160, lane feature/inventory-read-api-and-cluster-view: inventory read routes, ClusterInventoryMerger, collect action, Inventory screen panels) on top of main, which now carries NXS-LOCAL-0159's real persistence types, migration V13, JooqDeviceInventoryRepository and job-engine InventoryCapabilityIds (PR 280 merged). Remove every placeholder 0160 wrote (its own service.device.inventory copies of InventoryRun/InventoryContext/InventoryInterface/InventoryAddress/InventoryRoute, DeviceInventoryRepository, InMemoryDeviceInventoryRepository, InventoryCapabilityIds) and make the service consume the real ones; wire JooqDeviceInventoryRepository in DeviceCompositionConfiguration; make InventoryCollectService admit through the one JobAdmissionService and capability registry the service already wires for the confirm (0160 created a separate inventoryJobAdmissionService/inventoryCapabilityRegistry pair -- collapse it: the merged capability-registry YAMLs cp_inventory_collect.yaml / pan_inventory_collect.yaml resolve through the same registry). Keep the read contract and the frontend unchanged. Update PR 277 in place (same lane, force-push after rebase) so the review history stays there.",
+        "output_contract": [
+          "PR 277 rebased onto main, consuming the real inventory persistence and capability ids.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A rebase plus a mechanical type swap with clear targets.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects.",
+          "No emoji, no tool-identifying footer, no external URL in commits or the PR.",
+          "If a real type cannot express something the contract needs, raise a RELAY_QUESTION and STOP rather than editing the persistence module.",
+          "The SESSION_CLOSE names the deleted placeholders, the beans wired, and the test counts before and after."
+        ],
+        "risks": [
+          "Editing persistence records to fit the service instead of adapting the service.",
+          "Leaving the second admission/registry pair in place."
+        ],
+        "scope": {
+          "in": [
+            "Check out the lane, rebase onto origin/main, resolve conflicts (DeviceCompositionConfiguration, ActionRegistry, GateChainInterceptor are the likely spots).",
+            "Delete the eight placeholder files; import persistence.device.inventory.* and jobs.admission.InventoryCapabilityIds; adapt InventoryQueryService, ClusterInventoryMerger, InventoryCollectService, InventoryController and their tests to the real types (tests keep an in-memory fake of DeviceInventoryRepository under src/test only).",
+            "DeviceCompositionConfiguration: one JobAdmissionService and one CapabilityRegistry for confirm and inventory alike; a JooqDeviceInventoryRepository bean built like the other jOOQ repositories there; no in-memory repository in main code.",
+            "Run the validation plan; force-push the lane; confirm PR 277 shows the rebased commits; do not merge."
+          ],
+          "out": [
+            "Any change to the read contract, the frontend, the persistence module, the worker, or the parsers; the vsenv/measurement corrections (a separate movement after M-2)."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T12:03:31Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/DeviceCompositionConfiguration.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/InventoryController.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryQueryService.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/ClusterInventoryMerger.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryCollectService.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/api/InventoryControllerTest.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/inventory/ClusterInventoryMergerTest.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryCollectServiceTest.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryQueryServiceTest.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/{InventoryRun,InventoryContext,InventoryInterface,InventoryAddress,InventoryRoute,DeviceInventoryRepository,InMemoryDeviceInventoryRepository,InventoryCapabilityIds}.java deleted",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/inventory/FakeDeviceInventoryRepository.java added"
+        ],
+        "completed": [
+          "Deleted the eight placeholder service.device.inventory types (InventoryRun, InventoryContext, InventoryInterface, InventoryAddress, InventoryRoute, DeviceInventoryRepository, InMemoryDeviceInventoryRepository, InventoryCapabilityIds); InMemoryDeviceInventoryRepository's logic moved to src/test as FakeDeviceInventoryRepository, now implementing the real persistence.device.inventory.DeviceInventoryRepository interface",
+          "InventoryQueryService, ClusterInventoryMerger, InventoryCollectService, InventoryController now import persistence.device.inventory.* and jobs.admission.InventoryCapabilityIds instead of the placeholders",
+          "InventoryCollectService resolves a device's capability id through a local vendor Map (mirroring DeviceAddSingleService's pattern), since the real InventoryCapabilityIds dropped the placeholder's forVendor helper",
+          "DeviceCompositionConfiguration: DeviceInventoryRepository bean is now JooqDeviceInventoryRepository(transactionBoundary); the confirm and inventory CapabilityRegistry/JobAdmissionService bean pairs are collapsed into one shared pair (deviceCapabilityRegistry carries all four capabilities, jobAdmissionService serves both DeviceAddSingleService and InventoryCollectService)",
+          "Landed the change as a merge of origin/main into the lane (not a rebase+force-push) because the lane's local pre-push hook refuses every force push unconditionally; pushed normally and confirmed PR 277 shows the merge commit"
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change to main; PR 277 lane updated only.",
+          "ui": "No UI change -- frontend untouched per scope."
+        },
+        "integration": {
+          "branch": "feature/inventory-read-api-and-cluster-view",
+          "ci": "not triggered by this session; local validation plan green",
+          "head_sha": "882b7c5b7456ac88ab30d94d53200419bdec14b1",
+          "merge_commit": null,
+          "merge_decision": "Not merged -- WORKER.md merge gate requires Product Owner assistant review plus orchestrator verify.passed; this session only updates the lane.",
+          "merge_state": "OPEN",
+          "pr": 277,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0161",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "PR 277 lands on top of main's real inventory persistence; ready for Product Owner assistant review plus orchestrator verify.passed per the merge gate. Not merged to main by this session.",
+          "status": "complete"
+        },
+        "preserved": [
+          "GET /devices/{id}/inventory and GET /clusters/{cluster_member_ref}/inventory JSON shapes (read contract) unchanged",
+          "POST /devices/{id}/inventory/collect behavior unchanged (same 202/409 outcomes)",
+          "Frontend untouched",
+          "Persistence and worker modules untouched"
+        ],
+        "recommended_reasoning": {
+          "reason": "Task matched its predicted shape (mechanical rebase/merge plus type swap with clear targets); the one deviation (force-push refused) was a discrete technical blocker resolved by switching git strategy, not a reasoning-depth issue.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "WORKER.md instructed a rebase + force-push; the lane's pre-push hook (.nexus/hooks/pre-push -> nexus_worker_prepush.py) rejected both --force and --force-with-lease with 'nexus-engineer gate: force push is never allowed'. GitHub branch protection and repo rulesets were checked and are permissive (not the source of the block) -- this is a local, hard-coded engineer-role gate. I did not attempt to read or work around the hook script (outside the approved working directory; permission denied automatically, no approval surface available in this session). Landed the identical validated end state via a merge commit instead, pushed with a normal (non-force) push. The Product Owner should confirm this substitution (merge vs. rebase) is acceptable for PR 277's review history, and consider whether WORKER.md's git instructions should stop specifying force-push for engineer-role lanes given this gate is unconditional."
+        ],
+        "validation": {
+          "affected": "ui2_architecture_tests: BUILD SUCCESSFUL; ui2_module_listing_must_stay_eleven: confirmed 11 subprojects unchanged",
+          "diff_check": "grep confirmed zero remaining references to the eight deleted placeholder types anywhere under ui2/",
+          "full_regression": "ui2_build_excluding_db_bound_integration_tests (full eleven-module build minus :integration-tests:test): BUILD SUCCESSFUL; frontend_tests: 53 passed (53), unchanged from before this session",
+          "privacy": "python3 scripts/repository_privacy_check.py: PASS, 0 findings",
+          "real_environment": "not applicable -- no network-device or live-environment behavior touched (pure Java type/composition swap against existing persistence and job-engine code already merged to main)",
+          "state_consistency": "python3 -m pytest tests/test_contract_authority_status.py -q: 5 passed",
+          "targeted": "ui2_service_tests: BUILD SUCCESSFUL, 106 tests / 0 failures / 0 errors, including the 5 renamed inventory suites (InventoryQueryServiceTest 5, InventoryCollectServiceTest 4, ClusterInventoryMergerTest 5, InventoryControllerTest 6, GateChainInterceptorRouteResolutionTest 6)"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T12:15:30Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0161",
+  "movement": "inventory-read-api-onto-real-persistence",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/inventory/InventoryRun.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/inventory/DeviceInventoryRepository.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/inventory/JooqDeviceInventoryRepository.java",
+    "ui2/job-engine/src/main/java/com/securityexpert/nexus/ui2/jobs/admission/InventoryCapabilityIds.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/DeviceCompositionConfiguration.java"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T12:15:30Z"
+}

@@ -1,0 +1,249 @@
+{
+  "created_at": "2026-09-14T18:13:32Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 GET /project-plan returns the full envelope from the real repository files; a missing file degrades to its empty default plus a warning, never a failure.",
+          "AC-2 The three percentages match hand-computed expectations over a fixture registry, including the weight coercion rules and the track-weight-weighted overall.",
+          "AC-3 Every metadata warning rule fires on a fixture that violates it and stays silent on one that does not.",
+          "AC-4 The screen shows all seven sections with the earlier content and captions; a category group holding a P0 or an in_progress item is expanded by default.",
+          "AC-5 The active and terminal backlog files are concatenated for every count; eleven-module build, service, architecture and frontend tests, privacy gate and contract_authority_status green."
+        ],
+        "baseline": {
+          "authority": "docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md -- FROZEN 2026-09-05: section 14 and PO-NAV-5 fix Project plan as a child of the Administration group with id project-plan, name its data source, keep it visible today and make it administration-only once real directory-backed authorization exists (and forbid simulating that restriction beforehand); the same section says a movement does not redesign the Project Plan UI, so this one reproduces it rather than reinventing it. docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md (DRAFT -- not authority, cited for provenance only) F-11b is the standing requirement to serve it live; its optional GitHub-sourcing half is explicitly NOT adopted -- read the checkout, as the earlier product did. docs/design/GOV_ORCH_9_BACKLOG_ACTIVE_SET_AND_TERMINAL_RESERVE.md (FROZEN) requires the active and terminal backlog files to produce an identical payload when concatenated. PO ASSISTANT DECISION 2026-09-14: the Java screen reproduces the earlier payload and its arithmetic exactly, so the two can be compared row for row; where the earlier behaviour is plainly a defect (named below) it is fixed and the fix is reported, never silently.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :service:test, :architecture-tests:test and npm --prefix ui2/frontend test first; record counts.",
+          "what_exists": "The earlier product, as know-how to read and reproduce -- never imported, never invoked: utils/project_plan.py builds the payload (build_project_plan_payload at 277-336, helpers 28-275); static/project_plan_ui.js renders it (renderProjectPlan at 35); utils/html_export.py inlines it as a JS global at 373; static/navigation_ui.js line 107 carries the nav entry. The Java product: ui2/frontend/src/screens/AdministrationScreen.tsx lines 44-55 wire the 'Project plan' tab to an EmptyPanel titled 'No project plan' -- that panel is what this movement replaces. The data sources, all still current, all under project/: roadmap.json (schema_version, current_build, current_track, progress_contract, tracks[{id,title,theme,status,weight,feature_ids[]}], now_next{horizon_contract,now,next,upcoming[],previous_recovery} where an entry is {build,title,status,goal?,started?,completed?,detail?,contract_doc?}, roadmap_notes, engineering_tracks, open_decisions[{id,area,question,options,recommendation,decision,status,decide_by,decided_on,note,detail}]); feature_registry.json (features[{id,title,status,introduced,target,weight,summary,why,evidence,detail,note,early_foundation,criteria[{id,label,state,weight,note}]}], 56 features); backlog.json (items[{id,category,title,status,priority,target,note}], 46 active) PLUS archive/backlog_terminal.json (same shape, 124 terminal) which MUST be concatenated for every count and id set; build_history.json (schema_version 2.0, builds[{build,status,title,summary,started,completed,track,movement,supersedes,detail,docs{agreement,validation,handover}}], newest first) plus archive/build_history_*.json which are counted only, never rendered. project/QUEUE.md is generated and must not be parsed. scripts/project_queue.py is the only sanctioned write path."
+        },
+        "context_not_loaded": [
+          "ui2/worker",
+          "docs/history/**",
+          "vendor documents",
+          "the Python collectors"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/project-plan-screen"
+        },
+        "invariants": [
+          "Read-only over the checkout; the queue script stays the only writer.",
+          "The active and terminal backlogs are always concatenated.",
+          "A percentage never implies a calendar estimate, and the caption says so.",
+          "No role-conditional rendering and no simulated future restriction."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Populate the Project plan tab, which today renders an empty panel saying no plan exists. The earlier product had this screen in full: a living roadmap with weighted completion percentages, now/next/upcoming horizons, major tracks with their feature maps, backlog and technical debt grouped by category, completed features with their evidence, build history, and a metadata-warning block. Rebuild it in Java over the same four JSON sources that still exist and are still current, served through a real read endpoint (the earlier product had none -- it inlined the payload into static HTML at render time).",
+        "output_contract": [
+          "A populated Project plan screen reading the repository's own roadmap, features, backlog and build history.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A faithful reproduction of a whole screen plus exact arithmetic and six cross-file rules, over five real data sources.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Read utils/project_plan.py and static/project_plan_ui.js as know-how. Never import, invoke, transliterate or copy the Python; write Java and TypeScript from the behaviour.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects. No migration.",
+          "The payload must be reproducible from the repository checkout alone, with no network access and no environment dependency beyond the file paths.",
+          "Mechanical mismatches between this packet and the files are settled against the files and named in the SESSION_CLOSE; a RELAY_QUESTION is for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Commit early and often. SESSION_CLOSE names the endpoint, the payload fields, the two fixed defects, and the test counts before and after."
+        ],
+        "risks": [
+          "Reinventing the layout instead of reproducing it.",
+          "Weighting the overall percentage by feature count rather than track weight.",
+          "Reading only the active backlog and under-reporting by 124 items.",
+          "Parsing the generated QUEUE.md instead of the JSON."
+        ],
+        "scope": {
+          "in": [
+            "A service-side reader for the five files (roadmap, feature registry, backlog active + terminal, build history + archived count) with the payload envelope of the earlier product, field for field: schema_version, generated_at, current_build, current_track, progress_contract, overall_progress_percent, current_track_progress_percent, tracks, now_next, roadmap_notes, backlog, backlog_counts, completed_features, build_history, archived_build_count, metadata_warnings. A missing or unreadable file yields its empty default and a metadata warning; it never fails the request.",
+            "The arithmetic, exactly: FEATURE percent = 100 if status is done when the feature has no criteria, else 0; with criteria, the sum of weights of criteria whose state is literally 'done' over the sum of all criterion weights, times 100, rounded to one decimal; a weight defaults to 1, is coerced to at least 0, and a non-numeric weight becomes 1. TRACK percent = the weighted mean of its features' percents by feature weight, over only the features whose ids the track lists and which exist in the registry. OVERALL percent = the same weighted mean over the tracks, by TRACK weight (not feature count). An empty denominator is 0. done_features counts features whose status is exactly 'done'.",
+            "The metadata warnings, all of them: unknown status or criterion state, duplicate feature ids, a track feature id with no feature, an undeclared current track, a current build absent from history, and the six cross-file rules -- the now horizon's build equals the newest build-history record; current_build equals the now horizon's build; an id that is both a feature and a build carries one canonical status; the next horizon is not already terminal; an open decision has a non-empty decide_by; a backlog item is not planned while its feature has started and a feature is not planned while its backlog item is done.",
+            "GET /project-plan returning that payload, gated as a read for any authenticated session (PO-NAV-5: visible to everyone today, administration-only later; do not simulate the future restriction). Service tests over fixture JSON files, including the arithmetic against hand-computed expectations and each warning rule firing.",
+            "The screen, reproducing the earlier layout in the product's own Material 3 components: three hero cards (declared roadmap completion with its bar and the caption that this is acceptance-criterion completion and not a time estimate; current major track with its progress contract; open backlog count with a chip per status); now / next / upcoming; major tracks as cards, the current one marked, each with a collapsible feature map; backlog and technical debt grouped by category, a group expanded when it holds a P0 or an in_progress row, each row showing priority, status, target and note; completed features with summary, why it matters and validated evidence; build history with the archived count; and the warning block followed by the roadmap notes. Category is an opaque grouping key, never an enum. No role-conditional rendering.",
+            "Two earlier defects are fixed and named in the SESSION_CLOSE rather than reproduced: the open-backlog hero counted every item whose status was not 'done', which counts deferred and validated items as open -- use the terminal set (done, automated_validated, real_env_validated, deferred) instead; and completed features were sorted by their introduced string lexically -- sort by parsed order with a documented fallback for unparseable values.",
+            "Frontend tests for the hero numbers, the grouping and expansion rule, and the warning block."
+          ],
+          "out": [
+            "Writing to any project file (scripts/project_queue.py remains the only write path); parsing project/QUEUE.md; sourcing anything over the network; the milestone, board, timeline, dependency and evidence-link ideas the navigation contract lists as future candidates; changing the navigation structure."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "run",
+              "build"
+            ],
+            "name": "frontend_build"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T18:13:32Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/service/src/main/java/.../security/ActionRegistry.java: added PROJECT_PLAN_READ.",
+          "ui2/service/src/main/java/.../security/SecurityWebMvcConfig.java: added the GET /project-plan route.",
+          "ui2/service/src/main/resources/application.yml: added ui2.project-plan.directory (empty default; ProjectPlanConfiguration falls back to repository auto-discovery).",
+          "ui2/frontend/src/auth/adminApi.ts: added ProjectPlanView types and getProjectPlan().",
+          "ui2/frontend/src/screens/AdministrationScreen.tsx: the Project plan tab now renders ProjectPlanPanel instead of an EmptyPanel.",
+          "ui2/frontend/tests/AdministrationScreen.test.tsx: updated for the real panel; the two tests asserting the removed 'No project plan' placeholder text were rewritten against the new marker."
+        ],
+        "completed": [
+          "GET /project-plan endpoint (ProjectPlanController), gated as ActionRegistry.PROJECT_PLAN_READ, open to any authenticated session like DEVICE_READ/NOTIFICATIONS_READ.",
+          "ProjectPlanReader: reads roadmap.json, feature_registry.json, backlog.json, archive/backlog_terminal.json and build_history.json (plus archive/build_history_*.json, counted only) and assembles the earlier product's payload envelope field for field.",
+          "The arithmetic reproduced exactly: feature/track/overall weighted percentages, weight coercion (default 1, clamp to >=0, non-numeric -> 1), track-weight-weighted overall.",
+          "All metadata-warning rules reproduced: unknown status/criterion state, duplicate feature ids, dangling track feature id, undeclared current track, current build absent from history, and the six cross-authority rules R1-R6.",
+          "AC-1's missing/unreadable-file behaviour: each of the five sources degrades to its empty default plus one named warning, never a request failure.",
+          "The Project plan screen: three hero cards, now/next/upcoming, major tracks with collapsible feature maps, backlog/tech-debt grouped by category with the P0/in_progress default-expansion rule, completed features with evidence, build history with archived count, and the warning block followed by roadmap notes -- in this product's own Material 3 components, no role-conditional rendering.",
+          "Two earlier-product defects fixed and named: the open-backlog hero now excludes the terminal status set instead of just 'done'; completed features sort by parsed version order instead of a plain lexical string compare.",
+          "Service tests (13 reader + 1 controller) and frontend tests (14) covering AC-1 through AC-4."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- utils/project_plan.py and static/project_plan_ui.js were read as know-how only, never imported, invoked, transliterated or copied; no Python file was touched.",
+          "ui": "The Java product's Administration screen 'Project plan' tab is populated for the first time, backed by a real GET /project-plan read of the repository's own project/ JSON sources."
+        },
+        "integration": {
+          "branch": "feature/project-plan-screen",
+          "ci": "not run in this session; local Gradle/npm/pytest validation only, see validation.full_regression",
+          "head_sha": "054801a9e32344712307ef37f96674edbb878463",
+          "merge_commit": null,
+          "merge_decision": "Worker opens the PR per WORKER.md merge_gate; PO assistant review plus orchestrator verify.passed decide the merge. The worker does not merge to main.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "PO review of feature/project-plan-screen and, on approval, merge to main.",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Product Owner assistant review of the Project plan screen (ideally a real-browser look at the rendered tab) before this branch merges to main.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "Every other Administration tab (Device management, Inventory exclusions, Credentials, Local identities) untouched.",
+          "scripts/project_queue.py remains the only write path; no project/*.json file was written by this movement.",
+          "project/QUEUE.md was never read or parsed.",
+          "No existing route's gate, action id, or response shape changed."
+        ],
+        "recommended_reasoning": {
+          "reason": "A PO review of a finished, automated-validated diff plus a merge decision; no new architecture or ambiguity remains.",
+          "tier": "Sonnet 5, low effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The Containerfile does not COPY project/ into the runtime image, so a containerized deployment of this service would show five empty-default warnings for GET /project-plan rather than real data; consistent with this movement's own 'local validation only' deployment_direction and explicitly out of its named scope, not fixed here.",
+          "No human has viewed the rendered Project plan tab in a browser; only automated DOM-level frontend tests and the Gradle/vitest suites were run."
+        ],
+        "validation": {
+          "affected": "ProjectPlanPanel.test.tsx (14 tests: hero numbers, backlog grouping/expansion rule, warning block, tracks/completed-features/build-history sections, error+retry state) and the two updated AdministrationScreen.test.tsx assertions -- all green.",
+          "diff_check": "git status clean after two commits; git diff against origin/main limited to the files named in 'changed' plus the new files named in the objective.",
+          "full_regression": "./ui2/gradlew -p ui2 build -x :integration-tests:test -- BUILD SUCCESSFUL, all 11 subprojects; :service:test 154/154, :architecture-tests:test 14/14 (incl. NoRoleConditionalRenderingInFrontendTest and DIR-10's no-Python-runtime scan). npm --prefix ui2/frontend test -- 75/75. npm --prefix ui2/frontend run build -- succeeded.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings, 1771 files scanned.",
+          "real_environment": "Not run: this movement's deployment_direction is local validation only (WORKER.md), and no browser/UI real-environment session was available in this engineer session -- ProjectPlanReaderTest's readsTheRealCheckedOutRepositoryFilesWithoutThrowing test does prove the reader parses the live project/ files without error, which is the closest real-data evidence available here.",
+          "state_consistency": "No project/*.json file was written; ./ui2/gradlew -p ui2 projects still lists exactly the same 11 subprojects.",
+          "targeted": "ProjectPlanReaderTest (13 tests: arithmetic incl. weight coercion and track-weight overall, all metadata-warning rules firing/silent, missing/malformed-file degradation, real-checkout read) and ProjectPlanControllerTest (1 test) -- all green."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T18:36:21Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0174",
+  "movement": "project-plan-screen-in-java",
+  "next_actor": null,
+  "refs": [
+    "docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md",
+    "docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md",
+    "docs/design/GOV_ORCH_9_BACKLOG_ACTIVE_SET_AND_TERMINAL_RESERVE.md",
+    "utils/project_plan.py",
+    "static/project_plan_ui.js",
+    "project/roadmap.json",
+    "project/feature_registry.json",
+    "project/backlog.json",
+    "ui2/frontend/src/screens/AdministrationScreen.tsx"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T18:36:21Z"
+}

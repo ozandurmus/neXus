@@ -1,0 +1,197 @@
+{
+  "created_at": "2026-09-14T13:08:22Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Both gate entries documents exist with one entry per approved literal; V15 seeds matching gate_registry rows; a test resolves both capability specs against them to executionEligible with no ambiguity.",
+          "AC-2 The capability YAML step literals equal the worker plan literals (test) and the plan equals 14D CF-3 / 14E PF-1 literally (existing test updated).",
+          "AC-3 Palo Alto parsers implement PP-1/PP-2 (every address, address-less interfaces, hw ports, whitespace flags, virtual-router) and the executor attributes routes to vsys per PM-3 (test with two vsys and a spanning virtual router).",
+          "AC-4 JobAdmissionService admits cp_inventory_collect / pan_inventory_collect for an ENROLLED device once the registry is loaded against V15 (test), and WorkerClaimLoop lists them as eligible.",
+          "AC-5 Eleven-module build, capability-registry/worker/job-engine/service/architecture tests, privacy gate and contract_authority_status green; the two gate documents carry no estate value."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14D_CP_INVENTORY_MEASURED_FORMS.md -- FROZEN 2026-09-14: CF-1..CF-4 forms, PR-1..PR-5 parser rules, section 3 gate consequence. docs/design/PO_DECISION_RECORD_2026_09_14E_PAN_INVENTORY_MEASURED_FORMS.md -- FROZEN 2026-09-14: PF-1..PF-3 requests, PM-1..PM-4 one-box model, PP-1..PP-4 parser rules, section 4 gate consequence. docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (FROZEN) sections 2.3, 3.3, 3.5: a step's gate_reference resolves against gate_registry by canonical command key, action class must match, sign_off_state decides eligibility. docs/design/PO_DECISION_RECORD_2026_09_14C (FROZEN) D-1..D-5. docs/design/PO_DECISION_RECORD_2026_09_13F (FROZEN) sections 1, 2 (identity mismatch warn-and-continue; strict posture off by default), 4, 5. PO approval 2026-09-14, in session: the measured read-only inventory command set of both vendors is approved for live runs from the product; bindings stay UNVERIFIED until the first live run reports its counts (same wording as the discovery gate entries approved the same day).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :capability-registry:test, :worker:test, :job-engine:test, :service:test, :architecture-tests:test first; record counts.",
+          "what_exists": "capability-registry: CapabilityRegistryLoader computes executionEligible per capability by GateResolver.resolve(canonical key, declared action class, gate registry) for every step; GateRow / GateRegistryPort / GateRegistryFixtureLoader (YAML fixture for tests); MaturityState and SignOffState enums (read them for the exact vocabulary); gate_registry table (V4) with columns gate_id, vendor, platform_role_scope, shell_context, transport_kind, canonical_command_key, action_class, sign_off_state in (DRAFTED, SIGNED_OFF, SIGNED_OFF_PENDING_HARDWARE_CONFIRMATION, BLOCKED, SUPERSEDED), timeout_s, retry_rule, max_frequency, session_reuse_rule, unsupported_behavior_ref, secret_output_risk, safe_telemetry_fields, source_document_pointer. Capability YAMLs cp_inventory_collect / pan_inventory_collect are connect/disconnect placeholders, CAP_OFFLINE, FIXTURE_ONLY; device_confirm_* use the same placeholder pattern; cp_gaia_inventory.yaml (deleted) showed the exec-step shape with shell_context, send, timeout_s, expect. worker.inventory: InventoryReadPlan after 0162 (bash -lc 'vsenv 0 && <read>' physical on VSX, bare on non-VSX; per-VSID composites; PAN four requests plus the declared &vsys forms), InventoryCapabilityExecutor issuing the plan itself through DeviceTransport (the capability's YAML steps are not what runs), the CP parsers corrected to 14D, PaloAltoInterfaceParser and PaloAltoRouteParser written before measurement (single ip leaf handling exists; addr/addr6 children, hw list, whitespace flag tokens and virtual-router attribution per 14E are to be checked and fixed), InventoryJobExecutor writing InventoryRun. service: POST /devices/{id}/inventory/collect admits the vendor's inventory capability (JobAdmissionService checks executionEligible); frontend 'Collect now' polls the device. The live deployment runs one worker process with CompositeDeviceTransport (ssh_exec + pan_xml_api). Migration V14 is taken by the parallel discovery movement; use V15 here."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "the Python collectors",
+          "ui2/frontend beyond reading the collect call",
+          "ui2/worker/discovery",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/inventory-live-enable"
+        },
+        "invariants": [
+          "Only the approved literals are gated and issued.",
+          "Member and cluster_virtual addresses never mix; VIP never a destination.",
+          "No raw output stored.",
+          "Discovery movement's V14 untouched; this is V15."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Take the inventory capability from offline to live-runnable: author the network-device command gate entries for the measured Check Point (14D CF-2/CF-3) and Palo Alto (14E PF-1) inventory reads, seed the matching gate_registry rows, declare the reads as real steps on the two capability specs so C4 execution eligibility is computed from gate resolution instead of a connect-only placeholder, apply the 14E parser rules and the vsys / virtual-router attribution model to the Palo Alto side, and make the merged 'Collect now' path run against a real device through the worker. The Product Owner ran every one of these reads by hand today and, in session, asked for inventory to go live now ('Direk calisalim, baseline olusmus olsun'); that is the command-level approval this movement records in the gate entries documents.",
+        "output_contract": [
+          "Inventory capabilities gated, eligible and runnable from 'Collect now' against a real Check Point or Palo Alto device, with Palo Alto parsers matching the measurement.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "Gate authoring against a fixed measured list, YAML/migration wiring with a resolver test, and bounded parser corrections; medium covers it.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every changed public type names the clause (14D CF-n/PR-n, 14E PF-n/PM-n/PP-n, C4 section n).",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects. Migration V15 only, additive.",
+          "No estate value anywhere; fixtures use documentation addresses and invented names.",
+          "If a contract clause and this packet disagree, raise a RELAY_QUESTION and STOP; never relax a direction or closed-set test.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Open the PR at the end; do not merge. SESSION_CLOSE names the gate entries count per vendor, the maturity/sign-off values chosen and why, the parser changes, and test counts before and after."
+        ],
+        "risks": [
+          "Choosing a maturity state the admission or claim path rejects -- read both call sites before choosing.",
+          "Canonical key mismatch between YAML step and gate row -> silently ineligible; the resolver test is the guard.",
+          "Keeping the &vsys forms in the plan after 14E dropped them.",
+          "Mapping every unknown flag letter to static."
+        ],
+        "scope": {
+          "in": [
+            "Gate entries documents: docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md and docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md in the exact shape of DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md (the ten items per entry), status 'APPROVED -- PRODUCT OWNER, 2026-09-14, FOR PURPOSE AND CLASS; BINDINGS UNVERIFIED UNTIL THE FIRST LIVE RUN', one entry per literal of 14D CF-3 in the CF-2 forms (the bash -lc wrapper is part of the literal; the per-VSID composites are entries with <VSID> as the one substituted digits-only parameter) and per request of 14E PF-1; class 0 read, 30 s timeout, no retry, one session per device per run, secret_output_risk none except 'show system info' (none) -- state each honestly.",
+            "gate_registry rows: migration V15 inserting one row per entry with sign_off_state SIGNED_OFF_PENDING_HARDWARE_CONFIRMATION, canonical_command_key computed exactly as CanonicalCommandKey does for the step (write a test that loads the YAML specs against the V15 rows through the real resolver and asserts both capabilities resolve executionEligible with no AMBIGUOUS_GATE_RESOLUTION); also add the same rows to the YAML gate fixture used by capability-registry tests if the loader test relies on it.",
+            "Capability specs: replace the placeholder steps of cp_inventory_collect.yaml and pan_inventory_collect.yaml with the real read steps (kind exec with shell_context expert and the literal send for Check Point; kind api call form for Palo Alto if the spec supports it -- read CapabilitySpec/StepKind; if the spec cannot express an XML API step, keep connect/disconnect for pan and say so, gating the PAN reads through the executor's own closed-set check plus the gate rows resolved at executor start), each step carrying its gate_reference; maturity_state to the value that means runnable-but-unverified per MaturityState (read the enum; if only CAP_OFFLINE / CAP_VERIFIED-like states exist choose the one JobAdmissionService and WorkerClaimLoop accept and document the choice), validation_status to reflect approved-unverified; the closed-set test in worker (InventoryReadPlanTest) must still equal 14D/14E literally -- the YAML steps and the plan must agree (add a test that asserts the YAML step literals equal the plan's).",
+            "Palo Alto per 14E: PaloAltoInterfaceParser reads ip plus every child of addr and addr6, keeps address-less interfaces, hw/entry rows as physical ports (context physical, kind physical, state from state), vsys leaf, tag as VLAN id, fwd -> virtual router name (strip the 'vr:' prefix); PaloAltoRouteParser tokenises flags on whitespace (A active; C connected, S static, H host, R rip, O/Oi/Oo/O1/O2 ospf, B bgp; E, M, ?, ~ qualifiers), keeps virtual-router as the route table, treats result/flags legend as non-route; the executor attributes routes to vsys through virtual-router -> interfaces' fwd -> vsys (PM-3), spanning virtual routers under each vsys, unattributed under physical; drops the &vsys=<id> forms from the plan (PF-2) and updates the plan test. Fixtures mirror the measured shapes (46 ifnet rows are not needed; a dozen suffice) with documentation addresses.",
+            "Live path checks: the worker's InventoryJobExecutor already exists -- verify against the real transport wiring (CompositeDeviceTransport, store-backed resolvers, trust rule env) that a job admitted by POST /devices/{id}/inventory/collect is claimed and run; identity mismatch on this contact follows 13F ID-M1..M4 (warn-and-continue, strict posture off by default) using the confirm's existing evaluator; the pacing between Check Point reads (one interactive session or sequential exec on one connection, 300 ms gaps) per 14D CF-1 and the earlier product's finding. Add a short operator note to docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md on how the first live inventory run is triggered and where its counts appear.",
+            "Tests as listed; architecture tests untouched; eleven modules."
+          ],
+          "out": [
+            "Any command or request beyond 14D CF-3 / 14E PF-1; configuration collection; HA-role or VLAN persistence (no new inventory columns); discovery (parallel movement, V14); changing the read contract or the frontend beyond what 'Collect now' already does."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":capability-registry:test"
+            ],
+            "name": "ui2_capability_registry_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":job-engine:test"
+            ],
+            "name": "ui2_job_engine_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T13:08:22Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "V15 gate rows: SIGNED_OFF_PENDING_HARDWARE_CONFIRMATION cannot resolve executionEligible under the frozen C4 GateResolver",
+      "text": "WORKER.md and approved_task.json direct: seed gate_registry V15 rows with sign_off_state=SIGNED_OFF_PENDING_HARDWARE_CONFIRMATION, and write a resolver test asserting both cp_inventory_collect and pan_inventory_collect resolve executionEligible=true with no AMBIGUOUS_GATE_RESOLUTION (AC-1, AC-4). I read the frozen C4 implementation before touching anything: GateResolver.resolve (ui2/capability-registry/.../GateResolver.java) returns GateResolution.Unknown for ANY sign_off_state other than SIGNED_OFF -- its own javadoc names SIGNED_OFF_PENDING_HARDWARE_CONFIRMATION as the canonical example of a state that resolves UNKNOWN (C4 section 3.3 step 5). GateResolution.executionEligible() is true only for Known or NotApplicable, never Unknown. So a gate row with sign_off_state=SIGNED_OFF_PENDING_HARDWARE_CONFIRMATION structurally makes its step ineligible, and CapabilityRegistryLoader ANDs step eligibility across all steps -- the capability cannot resolve executionEligible under this sign_off_state. This is not a bug to fix quietly: GateResolver/GateResolution/GateRow enforce C4 section 3.3 step 5 as FROZEN contract law, and the task's own status-line text for the gate entries documents ('BINDINGS UNVERIFIED UNTIL THE FIRST LIVE RUN') plus DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md's own precedent both read as intentionally unverified-but-approved, which is exactly the state the frozen resolver treats as not-yet-executable. I am stopping here per AGENTS.md authority hierarchy (never silently reconcile a level-2 FROZEN contract against this packet) and the packet's own requirement to raise a RELAY_QUESTION and stop rather than relax the closed-set test or the resolver's frozen semantics. Question: for AC-1/AC-4 to be satisfiable, do you want (a) sign_off_state=SIGNED_OFF instead of SIGNED_OFF_PENDING_HARDWARE_CONFIRMATION on the V15 rows -- i.e. the PO's in-session command-level approval today is treated as the sign-off itself, with bindings-unverified expressed only in the gate entries documents' prose and gate row source_document_pointer, not in sign_off_state; or (b) keep SIGNED_OFF_PENDING_HARDWARE_CONFIRMATION and drop AC-1/AC-4's executionEligible requirement (i.e. inventory stays admission-ineligible until a follow-up movement flips sign-off after the first live run reports counts), which would mean 'Collect now' does not actually go live this movement despite the objective text; or (c) something else you intend that I have not construed. No implementation has been touched pending your answer -- I want your decision before writing the gate documents, migration, or capability YAML so I do not have to redo them.",
+      "timestamp": "2026-09-14T13:09:59Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0164",
+  "movement": "inventory-live-enable-gates-and-pan-forms",
+  "next_actor": "po",
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14D_CP_INVENTORY_MEASURED_FORMS.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14E_PAN_INVENTORY_MEASURED_FORMS.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md",
+    "ui2/capability-registry/src/main/java/com/securityexpert/nexus/ui2/capability/GateResolver.java",
+    "ui2/capability-registry/src/main/java/com/securityexpert/nexus/ui2/capability/CapabilityRegistryLoader.java",
+    "ui2/capability-registry/src/main/resources/capabilities/cp_inventory_collect.yaml",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryReadPlan.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryCapabilityExecutor.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/pan/PaloAltoInterfaceParser.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/pan/PaloAltoRouteParser.java",
+    "ui2/service/src/main/resources/db/migration/V4__collection_engine_core.sql"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_PO",
+  "updated_at": "2026-09-14T13:09:59Z"
+}

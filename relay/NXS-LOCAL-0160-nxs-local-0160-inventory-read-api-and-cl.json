@@ -1,0 +1,271 @@
+{
+  "created_at": "2026-09-14T11:19:37Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Both GET routes return exactly the shared contract shapes (tests with fakes), 404s as specified; POST collect admits the vendor's inventory capability and returns 202 {job_id}.",
+          "AC-2 ClusterInventoryMerger: identical rows appear once with presence all; a row missing on a member lists the members that have it; a differing field is listed under differences with the member id; VIPs once on the cluster row.",
+          "AC-3 Inventory screen shows interfaces with every address and role chips, routes with protocol, per-context tabs, and the cluster unified view with member markers; Collect now admits and polls.",
+          "AC-4 NoRoleConditionalRenderingInFrontendTest and Ui2ArchitectureTest untouched and green; service tests, frontend tests, eleven-module build, privacy gate, contract_authority_status green.",
+          "AC-5 After rebasing on 0159's persistence commit, no fake repository remains in main code."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md -- FROZEN 2026-09-14: IC-1..IC-4, D-1..D-7, section 3 command sets (named for the gate, not approved), section 5 measurement (no live run before it). docs/design/PO_DECISION_RECORD_2026_09_13F_COLLECTION_TRANSPORT_AND_IDENTITY_DECISIONS.md (FROZEN) sections 1-5. docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (FROZEN). docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (FROZEN) section 4.2 target modifiers. docs/design/UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md (FROZEN) sections 3-7. docs/design/PO_DECISION_RECORD_2026_09_14B (FROZEN): only the confirm is admissible against DRAFT; inventory_collect is admitted only against ENROLLED, non-disabled devices. READ CONTRACT shared by NXS-LOCAL-0159 and NXS-LOCAL-0160 (both build to it; neither changes it without a RELAY_QUESTION). GET /devices/{id}/inventory -> 200 {device_id, collected_at (ISO-8601, nullable when no run), job: JobView|null, contexts: [{context: string (\\\"physical\\\" or the VSID / vsys id), interfaces: [{name, parent (nullable), kind (physical|vlan|subinterface|loopback|bond|tunnel|other), state (up|down|unknown), addresses: [{address (with prefix), family (ipv4|ipv6), role (member|cluster_virtual)}]}], routes: [{destination, next_hop (nullable), interface (nullable), protocol (static|connected|default|ospf|bgp|rip|host|kernel|unknown), table (nullable)}]}]}. 404 {error: NOT_FOUND}. GET /clusters/{cluster_member_ref}/inventory -> 200 {cluster_member_ref, members: [{device_id, hostname (nullable)}], contexts: [{context, interfaces: [{name, kind, addresses: [...same as above...], presence: \\\"all\\\" | [device_id...], differences: [{device_id, field, value}]}], routes: [{destination, next_hop, interface, protocol, presence, differences}]}]}. Keys exactly as spelled, snake_case. The persistence model behind it (migration V13, additive): device_inventory_run(run_id PK, device_id FK devices, job_id, collected_at, context_count), device_interface(interface_id PK, run_id FK, context, name, parent, kind, state), device_interface_address(address_id PK, interface_id FK, address, family, role), device_route(route_id PK, run_id FK, context, destination, next_hop, interface, protocol, route_table). DeviceInventoryRepository (persistence module): recordRun(InventoryRun) writes one run with all children in one transaction; findLatestRun(deviceId) -> Optional<InventoryRun>; findLatestRuns(List<String> deviceIds). InventoryRun / InventoryContext / InventoryInterface / InventoryAddress / InventoryRoute are Java records in persistence.device.inventory with exactly the fields above.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :service:test, :architecture-tests:test, npm --prefix ui2/frontend test first; record counts.",
+          "what_exists": "Merged (PR 273): DeviceRegistrationController with POST /devices/add-single, GET /devices/{id}, GET /devices; DeviceQueryService; DeviceCompositionConfiguration wiring JobAdmissionService, repositories and TransactionBoundary; GateChainInterceptor with one-segment wildcard route keys ('GET /devices/*') and ActionRegistry action ids; frontend InventoryScreen with device list, cluster grouping by cluster_member_ref, detail tabs with placeholder EmptyPanels 'No interface evidence' / 'No routing evidence' / 'No cluster membership evidence'; adminApi.ts call() helper and DeviceDetail/DeviceSummary types; M3 widgets; vitest. Devices carry cluster_member_ref and virtual_system_ref (V12). JobAdmissionService.submit(capabilityId, targetDeviceId, idempotencyKey, actor, actionId); 0159 defines InventoryCapabilityIds.CP_INVENTORY_COLLECT / PAN_INVENTORY_COLLECT -- until its commit lands, declare the two id strings ('cp_inventory_collect', 'pan_inventory_collect') as constants in the service and switch to 0159's class after rebase."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "vendor documents",
+          "ui2/worker",
+          "ui2/persistence beyond reading 0159's types",
+          "the Python collectors"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/inventory-read-api-and-cluster-view"
+        },
+        "invariants": [
+          "The shared read contract is exact on both sides.",
+          "The view is computed, never stored.",
+          "VIPs shown as data on the cluster row, never as a member address.",
+          "No role-conditional rendering in the frontend."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Expose the collected inventory and build the common view: GET /devices/{id}/inventory and GET /clusters/{cluster_member_ref}/inventory exactly per the shared read contract, the ClusterInventoryMerger that unifies member data with difference markers (14C D-5, 13F CL-2), a POST /devices/{id}/inventory/collect action that admits an inventory_collect job, and the Inventory screen panels (interfaces with addresses, routes, per-context tabs, cluster unified view with member markers) fed by them. Runs in parallel with NXS-LOCAL-0159, which owns the persistence types, migration V13 and the job executor; this movement consumes those types. Until 0159's first commit is on its lane (feature/inventory-collect-domain-core, pushed early), work against your own in-memory fake of DeviceInventoryRepository shaped exactly as the contract; then rebase or cherry-pick 0159's persistence commit and drop the fake from main code (keep it in tests).",
+        "output_contract": [
+          "Inventory visible per device and unified per cluster in the product, fed by the collected runs.",
+          "Collect now action admitting the inventory job.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "Read model, a pure merge function with clear rules, and screen panels against a fixed contract; medium covers it.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type names the clause it implements (14C D-n, 13F section n, C2/C4 section n).",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects.",
+          "No address, hostname, serial, credential or raw command output reaches a log line, an exception message, an audit row or a stored column beyond the columns 14C D-4 names. Fixtures use RFC 5737 / RFC 3849 documentation addresses only.",
+          "If a contract clause and this packet disagree, raise a RELAY_QUESTION and STOP; never reconcile silently and never relax a direction test.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Commit early and often. Open the PR at the end; do not merge. The PR body carries a summary and a test plan only.",
+          "Coordinate with 0159 only through the shared contract text and its pushed lane; do not edit files under ui2/persistence or ui2/worker.",
+          "The SESSION_CLOSE names the routes with status codes, the merger class and its rules, the frontend components, and the test counts before and after."
+        ],
+        "risks": [
+          "Inventing a different JSON shape than 0159 persists -- the contract text is the fixed side.",
+          "Storing merged results.",
+          "Blocking on 0159 instead of working against the fake first."
+        ],
+        "scope": {
+          "in": [
+            "Service read model: InventoryQueryService (latest run per device -> the device inventory shape; unknown device 404; device without a run -> 200 with collected_at null and empty contexts) and ClusterInventoryMerger (pure function: list of member device ids + their latest runs -> the cluster shape; join interfaces by (context, name) and routes by (context, destination, next_hop, interface); presence 'all' when every member has the row, else the list of device ids that have it; differences list per field whose value differs across members; cluster_virtual addresses collected once on the cluster row, member addresses left under members; deterministic ordering). Unit tests for the merger: identical members, one member missing a route, differing interface state, VIP appears once, two contexts.",
+            "Routes on DeviceRegistrationController or a new InventoryController: GET /devices/{id}/inventory, GET /clusters/{cluster_member_ref}/inventory (404 when no device carries that ref), POST /devices/{id}/inventory/collect -> admits the vendor's inventory capability with idempotency key deviceId + ':inventory:' + a per-request nonce the client sends (or the minute bucket if absent), returns 202 {job_id}; 409 ADMISSION_REFUSED on refusal; gated by a new ActionRegistry action id for collection (write class) and the existing read gating for GETs; register the wildcard route keys. JSON keys exactly as the shared contract spells them.",
+            "Frontend: adminApi.ts types (DeviceInventory, ClusterInventory, the nested records) and calls getDeviceInventory, getClusterInventory, requestInventoryCollect; InventoryScreen detail: replace the placeholder panels with InterfacesPanel (table: name, kind, state, addresses with a small role chip for cluster virtual), RoutesPanel (destination, next hop, interface, protocol chip, table), per-context tabs when more than one context; cluster row detail uses the cluster inventory with a member-difference marker (chip naming the members) and VIPs on the cluster row; a 'Collect now' button calling requestInventoryCollect and polling the device until the job is terminal (reuse the AddDeviceDialog polling pattern); empty and error states kept. No role-conditional rendering (architecture test). vitest coverage for the merger-fed cluster view, the panels and the collect button.",
+            "Tests: service unit tests for InventoryQueryService and the controller (fakes), merger tests, frontend tests; architecture tests untouched and green."
+          ],
+          "out": [
+            "Persistence types, migration, parsers, executor (0159); any live device contact; configuration screens; scheduler; changing the shared contract without a RELAY_QUESTION."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "run",
+              "build"
+            ],
+            "name": "frontend_build"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T11:19:37Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryAddress.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryInterface.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryRoute.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryContext.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryRun.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/DeviceInventoryRepository.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InMemoryDeviceInventoryRepository.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryCapabilityIds.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryQueryService.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/ClusterInventoryMerger.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryCollectService.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/InventoryController.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/ActionRegistry.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/SecurityWebMvcConfig.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/GateChainInterceptor.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/DeviceCompositionConfiguration.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/inventory/ClusterInventoryMergerTest.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryQueryServiceTest.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryCollectServiceTest.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/api/InventoryControllerTest.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/security/GateChainInterceptorRouteResolutionTest.java",
+          "ui2/frontend/src/auth/adminApi.ts",
+          "ui2/frontend/src/screens/InventoryScreen.tsx",
+          "ui2/frontend/src/screens/InventoryPanels.tsx",
+          "ui2/frontend/tests/InventoryPanels.test.tsx"
+        ],
+        "completed": [
+          "GET /devices/{id}/inventory and GET /clusters/{cluster_member_ref}/inventory (InventoryController, InventoryQueryService) exactly per the shared READ CONTRACT: device shape with collected_at null / empty contexts pre-collection, 404 NOT_FOUND for an unknown device_id or an unowned cluster_member_ref.",
+          "ClusterInventoryMerger: a pure static merge over (member ids in order, latest InventoryRun per id) -> merged contexts, joining interfaces by (context, name) and routes by (context, destination, next_hop, interface), computing presence (All | Members) and per-field differences against a first-member baseline, folding only cluster_virtual addresses onto the merged row de-duplicated by (address, family) -- an identical VIP reported by every member appears exactly once, member addresses never copied onto the cluster row.",
+          "POST /devices/{id}/inventory/collect (InventoryCollectService): admits the vendor's inventory capability through a dedicated inventoryJobAdmissionService/inventoryCapabilityRegistry pair (cp_inventory_collect / pan_inventory_collect placeholders, InventoryCapabilityIds), idempotency key deviceId + ':inventory:' + client nonce or a UTC minute bucket, 202 {job_id} on admission/dedup, 409 ADMISSION_REFUSED otherwise; gated by a new device_inventory_collect ActionRegistry action (role:onboarding_admin, write class).",
+          "GateChainInterceptor's wildcard route fallback generalized from 'last segment only' to 'the first interior segment (tried right to left) whose wildcarding resolves' so the id/ref in the middle of these three new routes still gates; the pre-existing single-segment routes (GET /devices/*) resolve identically on their first attempt -- proven directly by the new GateChainInterceptorRouteResolutionTest since GateChain has no cheap test double.",
+          "adminApi.ts: DeviceInventory/ClusterInventory/InventoryContext/InventoryInterface/InventoryRoute/ClusterContext/ClusterInterface/ClusterRoute/ClusterDifference/Presence types; getDeviceInventory, getClusterInventory, requestInventoryCollect.",
+          "InventoryScreen.tsx: device rows are now selectable; a selection mounts InventoryPanels.DeviceInventoryPanels (key={device_id}, remounted per selection so useFetchOnMount's own mount effect re-runs on a changed fetcher); no selection keeps the original static empty-state tabs verbatim (existing InventoryScreen.test.tsx scenarios untouched, still green).",
+          "InventoryPanels.tsx: InterfacesPanel/RoutesPanel (per-device, tabbed by context when more than one), ClusterInterfacesPanel/ClusterRoutesPanel (presence + differences columns), ClusterMembersMarker (a chip naming each member), CollectNowButton (submits then polls GET /devices/{id} until its job is terminal -- the same cancellable-interval pattern AddDeviceDialog already uses), DeviceInventoryPanels (the composed detail view)."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "none -- ui2 (Java/TypeScript) only, no Python collector/main.py path touched",
+          "ui": "InventoryScreen's detail pane now shows real interfaces/routes/cluster data and a Collect now action for a selected device, replacing the four static placeholder EmptyPanels for the Interfaces and Routing tabs and the Cluster members tab (Identity & provenance stays a placeholder, out of this movement's scope)"
+        },
+        "integration": {
+          "branch": "feature/inventory-read-api-and-cluster-view",
+          "ci": "n/a -- local validation only (SESSION_START deployment_direction)",
+          "head_sha": "2b6b171b7d30a64e15de9c7b0ede55096b2e6d46",
+          "merge_commit": null,
+          "merge_decision": "SESSION_START merge_gate: Product Owner assistant review plus orchestrator verify.passed; worker opens the PR and does not merge",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0160 follow-up: rebase onto NXS-LOCAL-0159's persistence commit",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Once feature/inventory-collect-domain-core carries 0159's DeviceInventoryRepository/InventoryRun family and migration V13, rebase or cherry-pick that commit into this lane, repoint DeviceCompositionConfiguration's deviceInventoryRepository bean and InventoryCapabilityIds references at 0159's persistence.device.inventory types, and delete InMemoryDeviceInventoryRepository plus this movement's own InventoryAddress/InventoryInterface/InventoryRoute/InventoryContext/InventoryRun/DeviceInventoryRepository/InventoryCapabilityIds placeholders from main code, keeping an in-memory fake only in test scope (AC-5, not yet satisfiable this session -- see unresolved_risks).",
+          "status": "planned"
+        },
+        "preserved": [
+          "The shared READ CONTRACT's exact JSON key spelling on both the device and cluster routes -- no field renamed, added, or dropped relative to SESSION_START's baseline text.",
+          "DeviceRegistrationController, DeviceQueryService, DeviceAddSingleService and their existing tests -- untouched.",
+          "SecurityWebMvcConfig's pre-existing route entries and ActionRegistry's pre-existing actions -- unchanged, only new entries appended.",
+          "InventoryScreen's existing no-selection empty-state copy and its five pre-existing InventoryScreen.test.tsx scenarios -- byte-identical behavior, all still passing."
+        ],
+        "recommended_reasoning": {
+          "reason": "Read model, a pure merge function against a fixed contract, and screen panels wired to it -- as SESSION_START itself judged, medium effort covered the whole movement; no architecture/security-boundary escalation was needed beyond the one disclosed GateChainInterceptor generalization.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [
+          "None. WORKER.md's own file scope for this movement names no project/*.json, CURRENT_STATE.md, or AI_HANDOVER.md path, and its standing rules direct pulling open work from project/QUEUE.md rather than writing to project state directly -- left to the orchestrator/PO per AGENTS.md's GOV.ORCH.5 amendment (agents read project/QUEUE.md, only scripts/project_queue.py writes project/*.json)."
+        ],
+        "unresolved_risks": [
+          "AC-5 ('after rebasing on 0159's persistence commit, no fake repository remains in main code') is unmet: NXS-LOCAL-0159's lane (feature/inventory-collect-domain-core) carried zero commits beyond origin/main throughout this session, so there was nothing to rebase onto. InMemoryDeviceInventoryRepository remains the one production DeviceInventoryRepository bean; it and the InventoryRun/InventoryContext/InventoryInterface/InventoryRoute/InventoryAddress records plus InventoryCapabilityIds are explicitly-documented placeholders for 0159's eventual persistence.device.inventory types and job-engine capability ids. Tracked as the 'next' movement above.",
+          "GateChainInterceptor is a security-critical, shared file with no prior dedicated unit test; this movement both changed its wildcard-matching algorithm and added the first such test (GateChainInterceptorRouteResolutionTest, reflection-based). Flagged for extra reviewer attention given its role in AC-4's gate chain, even though the full architecture-tests and service-test suites pass and the change is backward-compatible by construction (last-segment wildcarding is tried first, matching the prior behavior exactly).",
+          "The 'protocol'/'kind'/'state' baseline in ClusterInventoryMerger is the first cluster member (in caller order, which the service sorts by device_id) that carries the row -- not a majority vote. Documented in the class's own javadoc; flagged here since 14C/13F do not spell out a tie-break rule explicitly and this is the interpretation this movement chose.",
+          "No RELAY_CORRECTION or RELAY_DECISION was appended to the canonical relay file after the original SESSION_START (re-read immediately before this report, entries checked); nothing else to reconcile."
+        ],
+        "validation": {
+          "affected": "ui2/architecture-tests: 14 tests, 0 failures (Ui2ArchitectureTest 10, NoRoleConditionalRenderingInFrontendTest 1, NoHardcodedBootstrapVerifierOrPasswordTest 3) -- unchanged pass set, confirming DIR-1..DIR-10 and AG-J3 still hold with the new service.device.inventory package and InventoryController",
+          "diff_check": "not run (no git diff --check equivalent invoked; gradle/npm builds and typecheck below are the applicable correctness gates for this stack)",
+          "full_regression": "./ui2/gradlew -p ui2 build -x :integration-tests:test -- BUILD SUCCESSFUL, all 11 subprojects; npm --prefix ui2/frontend run build -- tsc --noEmit && vite build succeeded",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings (1601 files scanned)",
+          "real_environment": "NOT_RUN -- SESSION_START deployment_direction is local validation only; no live device contact in this movement's scope",
+          "state_consistency": "python3 -m pytest tests/test_contract_authority_status.py -q -- 5 passed",
+          "targeted": "ui2/service: 106 tests, 0 failures (this movement's own 27 new tests: ClusterInventoryMergerTest 5, InventoryQueryServiceTest 5, InventoryCollectServiceTest 4, InventoryControllerTest 6, GateChainInterceptorRouteResolutionTest 6, plus 79 pre-existing pre-movement passing tests re-run unchanged, counted by subtraction rather than an isolated pre-movement measurement); npm --prefix ui2/frontend test -- 53 tests, 0 failures (50 pre-existing + 3 new in InventoryPanels.test.tsx)"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T11:44:41Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0160",
+  "movement": "inventory-read-api-and-cluster-view",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13F_COLLECTION_TRANSPORT_AND_IDENTITY_DECISIONS.md",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/DeviceRegistrationController.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/DeviceQueryService.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/DeviceCompositionConfiguration.java",
+    "ui2/frontend/src/screens/InventoryScreen.tsx",
+    "ui2/frontend/src/auth/adminApi.ts",
+    "docs/design/UI2_0_MOCKUP_REFERENCE_NOTES.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T11:44:41Z"
+}
