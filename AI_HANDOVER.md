@@ -1,51 +1,23 @@
 # AI_HANDOVER
 
 > **NON-AUTHORITATIVE DERIVED SUMMARY**
-> **DO NOT USE AS PROJECT-STATE AUTHORITY**
-> If this disagrees with `CURRENT_STATE.md` or `project/QUEUE.md`, those win.
+> If this conflicts with `CURRENT_STATE.md` or `project/QUEUE.md`, those win.
 
-## Operating role
+Read in this order: `AI_START_HERE.md`, `CURRENT_STATE.md`,
+`AI_HANDOVER.md`, `project/QUEUE.md`, then the one governing record for the
+movement. Before relying on an older frozen design record, consult
+`docs/design/DECISION_RECORD_SUCCESSOR_INDEX.md`; it is generated from Status
+blocks and shows declared amendments, corrections, and successors.
 
-`roles/PO.md` (PO+O) or `roles/ENGINEER.md`; routing and workspace
-environment facts in `docs/reference/COPILOT_OPERATING_MODEL.md`.
+Today the Java product has authenticated local administration, encrypted
+credential references, UI discovery with candidate marking, device add and
+enrollment confirm, inventory and configuration collection views, encrypted
+configuration artefacts, pilot-gated Check Point backup, and the project-plan
+screen. Live device bindings and outcomes remain UNVERIFIED unless a named
+real-environment record says otherwise. Restore and the scheduler are disabled.
 
-## 1. Snapshot
-
-- **The product runs and a human has signed in** (local Kubernetes,
-  `docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md`). Login, sign-out,
-  local identity administration and the credential store are merged; forced
-  password change is a posture switch, default off.
-- **Discovery is in Java for both vendors**; bindings `UNVERIFIED`, gate
-  documents DRAFT, **nothing has run live**.
-- `DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md` **FROZEN**; the four
-  first-contact reads approved. The product is **neXus**.
-
-## 2. What this session did
-
-- CP transport aligned to the measured method; PAN transport built.
-- Login step delivered; records `13G` and `2026-09-14` written.
-- Brand: option-D wordmark, favicon, title; governing docs renamed.
-- Deployed to minikube past VPN and TLS-interception; Containerfile builds
-  the frontend in a Node stage and accepts CA anchors (`ui2/.ca/`).
-
-## 3. Exact next action
-
-**`NXS-LOCAL-0156` (single-device add: address, vendor, credential → first
-contact → `ENROLLED`, peer follow under corroboration) — review and merge.**
-Then the management-server branch (`DA-3`) once live discovery runs confirm
-the bindings; then the collection measurement briefs (`13E` step 3). Keep the
-VM; rebuild only the image.
-
-## 4. Test delta
-
-`ui2` build and all suites green; migrations through `V11` (`V12` reserved
-for `0156`); CI `validate` green; contract-authority gate green on `main`.
-
-## 5. New risks
-
-- VPN claims all private space: VM reachable only with VPN off or a host
-  route; the `vmnet` subnet change applies after a reboot.
-- Role-binding and credential-store keys are wired by hand, not by
-  `deploy/ui2/` manifests.
-- Budget ceilings hit three times with work committed: verify from the PO
-  side and open the PR instead of re-running.
+`NXS-LOCAL-0176` is the newest merged movement: expired sessions are closed on
+read before they can block login. Project delivery state and open PO decisions
+belong to the generated queue. The next action is Product Owner review of its
+open decisions and the named real-device validation gates, not another
+implementation pass.

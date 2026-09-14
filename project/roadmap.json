@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "ui2_d1_restore_c7_c2_amendments",
+  "current_build": "NXS-LOCAL-0176",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,10 +150,10 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "ui2_d1_restore_c7_c2_amendments",
-      "title": "UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments",
+      "build": "NXS-LOCAL-0176",
+      "title": "Expire a past-deadline session on read so it never blocks a login",
       "status": "automated_validated",
-      "contract_doc": "docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md"
+      "completed": "2026-09-14"
     },
     "next": {
       "build": "M12",

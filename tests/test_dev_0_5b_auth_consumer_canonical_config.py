@@ -25,16 +25,17 @@ def test_config_exposes_only_runtime_auth_boundary():
     assert not hasattr(cfg, "password")
 
 
-def _tracked_repository_files():
+def _tracked_repository_files(extra_paths=()):
     result = subprocess.run(
         ["git", "ls-files", "-z"],
         cwd=ROOT,
         capture_output=True,
         check=True,
     )
-    for rel in result.stdout.decode("utf-8").split("\0"):
-        if rel:
-            yield ROOT / rel
+    paths = [ROOT / rel for rel in result.stdout.decode("utf-8").split("\0") if rel]
+    paths.extend(extra_paths)
+    for path in sorted(set(paths)):
+        yield path
 
 
 def test_production_python_has_no_legacy_config_auth_consumers():
@@ -48,13 +49,13 @@ def test_production_python_has_no_legacy_config_auth_consumers():
     assert findings == []
 
 
-def _repository_text_candidates():
+def _repository_text_candidates(extra_paths=()):
     suffixes = {
         ".py", ".pyi", ".sh", ".ps1", ".md", ".txt", ".json", ".yaml",
         ".yml", ".toml", ".ini", ".cfg", ".conf", ".html", ".css", ".js",
         ".xml", ".csv",
     }
-    for path in _tracked_repository_files():
+    for path in _tracked_repository_files(extra_paths):
         if path.name == ".gitignore" or path.suffix.lower() in suffixes:
             yield path
 
@@ -123,6 +124,19 @@ _KNOWN_PROSE_COLLISION_LINE_HASHES = {
         # reword.
         "19663d8275828e473b225f479c877f3e0328f26997cb07127113f697968b1e33",
     },
+    # Frozen design records quote the scanner pattern as prose. These exact
+    # historical lines are an allowlist anchor, not a file-level exclusion.
+    "docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md": {
+        "25f1be8e9e6f54f446b4bf899d24c0d2d743d470cccc51c4c7fd1d14caf1dc3f",
+        "f6e346ff38b3c7efba355b9128c02f541051f0e15ddff68d171a53b22cda97fd",
+    },
+    "docs/design/PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md": {
+        "86d364abfce8a39d652533011491b2bcb0c511e8de4fd62a659acfc1db8757a1",
+    },
+    "docs/design/PAN_DISCOVERY_PYTHON_STEP_MAP_2026_09_13.md": {
+        "2a5da9dded1cefca793a36825c43673a2747cb1d4c75e787adada73dce9f8c03",
+        "0b81a0f7b6364ee503a5dc9e86a336e69685dd77519d54756b855ab7cf9c7bd0",
+    },
 }
 
 
@@ -134,9 +148,9 @@ def _is_catalogued_prose_collision(path, line):
     return hashlib.sha256(line.encode("utf-8")).hexdigest() in catalogued
 
 
-def _uncatalogued_prose_matches(matcher):
+def _uncatalogued_prose_matches(matcher, extra_paths=()):
     findings = []
-    for path in _repository_text_candidates():
+    for path in _repository_text_candidates(extra_paths):
         for line in path.read_text(encoding="utf-8").splitlines():
             if matcher(line) and not _is_catalogued_prose_collision(path, line):
                 findings.append(path.relative_to(ROOT).as_posix())
@@ -173,11 +187,9 @@ def synthetic_prose_collision_fixture():
     rel = "_tmp_dlp_fixture_prose_collision.md"
     path = ROOT / rel
     path.write_text("Not one of the catalogued findings.\n", encoding="utf-8")
-    subprocess.run(["git", "add", rel], cwd=ROOT, check=True)
     try:
         yield rel, path
     finally:
-        subprocess.run(["git", "reset", "--", rel], cwd=ROOT, check=True)
         path.unlink(missing_ok=True)
 
 
@@ -189,11 +201,11 @@ def test_catalogued_prose_collision_exception_does_not_generalize_to_a_new_findi
     token = "pass" + "word"
     pattern = re.compile(rf"\b{token}\s*=", re.IGNORECASE)
     path.write_text("synthetic new pass" + "word = 'not-catalogued'\n", encoding="utf-8")
-    assert rel in _uncatalogued_prose_matches(pattern.search)
+    assert rel in _uncatalogued_prose_matches(pattern.search, [path])
 
     marker = "PASS" + "WORD:"
     path.write_text("synthetic new PASS" + "WORD: not-catalogued\n", encoding="utf-8")
-    assert rel in _uncatalogued_prose_matches(lambda line: marker in line)
+    assert rel in _uncatalogued_prose_matches(lambda line: marker in line, [path])
 
 
 @pytest.fixture
@@ -214,11 +226,9 @@ def tracked_and_venv_fixtures():
         encoding="utf-8",
     )
 
-    subprocess.run(["git", "add", tracked_rel, tracked_py_rel], cwd=ROOT, check=True)
     try:
         yield tracked_rel, tracked_py_rel, venv_rel
     finally:
-        subprocess.run(["git", "reset", "--", tracked_rel, tracked_py_rel], cwd=ROOT, check=True)
         tracked_path.unlink(missing_ok=True)
         tracked_py_path.unlink(missing_ok=True)
         venv_path.unlink(missing_ok=True)
@@ -232,12 +242,15 @@ def tracked_and_venv_fixtures():
 def test_candidate_scanners_catch_tracked_matches_and_ignore_venv_content(tracked_and_venv_fixtures):
     tracked_rel, tracked_py_rel, venv_rel = tracked_and_venv_fixtures
 
-    text_candidates = {path.relative_to(ROOT).as_posix() for path in _repository_text_candidates()}
+    text_candidates = {
+        path.relative_to(ROOT).as_posix()
+        for path in _repository_text_candidates([ROOT / tracked_rel, ROOT / tracked_py_rel])
+    }
     assert tracked_rel in text_candidates
     assert venv_rel not in text_candidates
 
     auth_findings = []
-    for path in _tracked_repository_files():
+    for path in _tracked_repository_files([ROOT / tracked_rel, ROOT / tracked_py_rel]):
         if path.suffix != ".py" or "tests" in path.relative_to(ROOT).parts:
             continue
         text = path.read_text(encoding="utf-8")
