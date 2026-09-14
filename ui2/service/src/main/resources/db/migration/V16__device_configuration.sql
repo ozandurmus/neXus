@@ -226,10 +226,10 @@ VALUES
      'none', '[]'::jsonb, 'docs/design/CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md entry 4'),
 
     -- Palo Alto (CG-4): identity refresh, then active/effective-running/merged, in that order.
-    ('pan_configuration_show_system_info', 'palo_alto', 'pan_firewall', 'not_applicable', 'PAN_XML_API',
-     '<show><system><info/></system></show>', 'read', 'SIGNED_OFF', 30, 'none', 'once per device per run',
-     'the one key-generation session per run', 'non-XML or error envelope is a result, not an error', 'none',
-     '[]'::jsonb, 'docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md entry 1'),
+    -- Entry 1 (show system info) issues no row of its own: its canonical key
+    -- is byte-identical to gate_id pan_inventory_show_system_info (seeded by
+    -- V15) -- one row per exact canonical key (C4 section 3.2); the
+    -- configuration-collect step resolves KNOWN against that existing row.
     ('pan_configuration_active', 'palo_alto', 'pan_firewall', 'not_applicable', 'PAN_XML_API',
      'type=config&action=show&xpath=/config', 'read', 'SIGNED_OFF', 30, 'none', 'once per device per run',
      'the one key-generation session per run', 'the read carries secret-bearing leaves -- withheld in the view, '

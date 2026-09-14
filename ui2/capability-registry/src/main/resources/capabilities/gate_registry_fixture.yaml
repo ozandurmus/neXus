@@ -498,23 +498,14 @@ gates:
     source_document_pointer: "docs/design/CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md entry 4"
 
   # NXS-LOCAL-0165: 14G CG-4 Palo Alto configuration reads. docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md.
-  - gate_id: pan_configuration_show_system_info
-    vendor: palo_alto
-    platform_role_scope: pan_firewall
-    shell_context: not_applicable
-    transport_kind: PAN_XML_API
-    canonical_command_key: "<show><system><info/></system></show>"
-    action_class: read
-    sign_off_state: SIGNED_OFF
-    timeout_s: 30
-    retry_rule: none
-    max_frequency: "once per device per run"
-    session_reuse_rule: "the one key-generation session per run"
-    unsupported_behavior_ref: "non-XML or error envelope is a result, not an error"
-    secret_output_risk: none
-    safe_telemetry_fields: []
-    source_document_pointer: "docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md entry 1"
-
+  # entry 1 (show system info) is not its own row here: its canonical key is
+  # byte-identical to pan_inventory_show_system_info above (same vendor,
+  # platform_role_scope, shell_context, transport_kind, literal) -- C4 §3.2's
+  # own uniqueness rule (one row per exact canonical key) means this
+  # configuration-collect step resolves KNOWN against that existing row
+  # rather than a second, ambiguous one (GateResolver's own "more than one
+  # row matches" validation error is exactly what a duplicate row here would
+  # trigger).
   - gate_id: pan_configuration_active
     vendor: palo_alto
     platform_role_scope: pan_firewall

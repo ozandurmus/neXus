@@ -26,7 +26,8 @@ steps:
   - kind: connect
   - kind: xml_api_call
     send: "<show><system><info/></system></show>"
-    gate_reference: pan_configuration_show_system_info
+    # Shares gate_id pan_inventory_show_system_info (identical canonical key) -- see gate_registry_fixture.yaml's own note.
+    gate_reference: pan_inventory_show_system_info
   - kind: xml_api_call
     send: "type=config&action=show&xpath=/config"
     gate_reference: pan_configuration_active
