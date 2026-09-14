@@ -91,7 +91,7 @@ public class FirstBootIdentitySeedingRunner implements ApplicationRunner {
         }
         seeder.seed(List.of(
                 new FirstBootIdentityRoleBindingSeeder.IdentitySpec(BootstrapCredentialDefaults.NEXUSADMIN_NAME,
-                        BootstrapCredentialDefaults.nexusadminInitialPassword(), NEXUSADMIN_ROLE_TOKENS),
+                        BootstrapCredentialDefaults.nexusadminInitialPassword(), NEXUSADMIN_ROLE_TOKENS, true),
                 new FirstBootIdentityRoleBindingSeeder.IdentitySpec(BootstrapCredentialDefaults.CLAUDEADMIN_NAME,
                         BootstrapCredentialDefaults.claudeadminInitialPassword(), CLAUDEADMIN_ROLE_TOKENS)));
         // Never the password or its hash (C3A §3.1/§8): counts and names only.

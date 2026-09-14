@@ -138,6 +138,44 @@ describe("AddDeviceDialog", () => {
     expect(calledPaths.some((p) => p.startsWith("/devices/") && p !== "/devices/add-single")).toBe(false);
   });
 
+  it("offers inline credential creation and selects the created credential", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "/credentials": [
+          { body: { credentials: [] } },
+          {
+            body: {
+              credential_id: "c-new",
+              credential_reference_id: "cred-ref-new",
+              display_name: "New SSH",
+              kind: "ssh_password",
+              username: "admin",
+              allows_check_point: true,
+              allows_palo_alto: false,
+              created_at: "2026-09-01T00:00:00Z",
+              secret_set_at: "2026-09-01T00:00:00Z",
+            },
+          },
+        ],
+        "/session/status": { body: { csrf_token: "test-csrf" } },
+      }),
+    );
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    fireEvent.click(screen.getByRole("button", { name: "Add device" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create credential" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
+    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "New SSH" } });
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "admin" } });
+    fireEvent.change(screen.getByLabelText("Secret"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Enrol" })).toBeDisabled());
+    fireEvent.change(screen.getByLabelText("Address"), { target: { value: "192.0.2.30" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Enrol" })).not.toBeDisabled());
+  });
+
   it("shows an identity-mismatch warning and does not show it when none is open", async () => {
     vi.stubGlobal(
       "fetch",

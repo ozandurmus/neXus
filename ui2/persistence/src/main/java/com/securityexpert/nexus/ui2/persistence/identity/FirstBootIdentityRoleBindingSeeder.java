@@ -47,19 +47,32 @@ public final class FirstBootIdentityRoleBindingSeeder {
     private final RoleBindingRepository roleBindingRepository;
     private final GroupReferenceCipher groupReferenceCipher;
     private final String groupReferenceKeyId;
+    private final RootIdentityRepository rootIdentityRepository;
 
     public FirstBootIdentityRoleBindingSeeder(TransactionBoundary transactionBoundary,
             LocalCredentialsRepository localCredentialsRepository, RoleBindingRepository roleBindingRepository,
             GroupReferenceCipher groupReferenceCipher, String groupReferenceKeyId) {
+        this(transactionBoundary, localCredentialsRepository, roleBindingRepository, groupReferenceCipher,
+                groupReferenceKeyId, null);
+    }
+
+    public FirstBootIdentityRoleBindingSeeder(TransactionBoundary transactionBoundary,
+            LocalCredentialsRepository localCredentialsRepository, RoleBindingRepository roleBindingRepository,
+            GroupReferenceCipher groupReferenceCipher, String groupReferenceKeyId, RootIdentityRepository rootIdentityRepository) {
         this.transactionBoundary = Objects.requireNonNull(transactionBoundary, "transactionBoundary");
         this.localCredentialsRepository = Objects.requireNonNull(localCredentialsRepository, "localCredentialsRepository");
         this.roleBindingRepository = Objects.requireNonNull(roleBindingRepository, "roleBindingRepository");
         this.groupReferenceCipher = Objects.requireNonNull(groupReferenceCipher, "groupReferenceCipher");
         this.groupReferenceKeyId = Objects.requireNonNull(groupReferenceKeyId, "groupReferenceKeyId");
+        this.rootIdentityRepository = rootIdentityRepository;
     }
 
     /** One identity, its initial password, and the role tokens bound to it at first boot. */
-    public record IdentitySpec(String localIdentityName, char[] initialPassword, List<RoleToken> roleTokens) {
+    public record IdentitySpec(String localIdentityName, char[] initialPassword, List<RoleToken> roleTokens,
+            boolean rootIdentity) {
+        public IdentitySpec(String localIdentityName, char[] initialPassword, List<RoleToken> roleTokens) {
+            this(localIdentityName, initialPassword, roleTokens, false);
+        }
     }
 
     /**
@@ -77,6 +90,9 @@ public final class FirstBootIdentityRoleBindingSeeder {
                             Argon2PasswordHasher.DEFAULT_PARAMETERS);
                     localCredentialsRepository.create(localIdentityId, spec.localIdentityName(), verifier,
                             SecurityAdminBootstrapPort.BOOTSTRAP_ACTOR);
+                    if (rootIdentityRepository != null && spec.rootIdentity()) {
+                        rootIdentityRepository.recordRootLocalIdentityId(localIdentityId);
+                    }
                     // NXS-LOCAL-0152 (forced password change): both bootstrap
                     // identities still hold the password they were seeded
                     // with -- set true in this same outer transaction as the

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -23,6 +24,10 @@ import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialRecord;
+import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.RootIdentityRepository;
+import com.securityexpert.nexus.ui2.platform.Argon2PasswordHasher;
 
 /**
  * Container-free, directory-free unit tests for {@code E4}'s four-outcome
@@ -34,6 +39,31 @@ import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
  * own SESSION_CLOSE reporting.
  */
 class RbacEvaluatorTest {
+
+    private static LocalCredentialsRepository localIdentity(String id, String name) {
+        LocalCredentialRecord record = new LocalCredentialRecord(id, name, new byte[0], new byte[0], "test", 1, 1, 1,
+                0, Optional.empty(), Instant.EPOCH, Instant.EPOCH, true, "test", Instant.EPOCH, false);
+        return new LocalCredentialsRepository() {
+            @Override public Optional<LocalCredentialRecord> findByName(String ignored) { return Optional.of(record).filter(r -> r.localIdentityName().equals(ignored)); }
+            @Override public Optional<LocalCredentialRecord> findById(String ignored) { return Optional.of(record).filter(r -> r.localIdentityId().equals(ignored)); }
+            @Override public List<LocalCredentialRecord> findAll() { return List.of(record); }
+            @Override public boolean anyExist() { return true; }
+            @Override public String create(String id, String name, Argon2PasswordHasher.Verifier verifier, String actor) { return id; }
+            @Override public void recordFailedAttempt(String id, Instant now, int threshold, Duration duration) { }
+            @Override public void recordSuccessfulLogin(String id, Instant now, String actor) { }
+            @Override public void changePassword(String id, Argon2PasswordHasher.Verifier verifier, String actor) { }
+            @Override public void markMustChangePassword(String id, String actor) { }
+            @Override public void adminSetPassword(String id, Argon2PasswordHasher.Verifier verifier, String actor) { }
+            @Override public void setEnabled(String id, boolean enabled, String actor) { }
+        };
+    }
+
+    private static RootIdentityRepository rootIdentity(String id) {
+        return new RootIdentityRepository() {
+            @Override public Optional<String> rootLocalIdentityId() { return Optional.of(id); }
+            @Override public void recordRootLocalIdentityId(String ignored) { }
+        };
+    }
 
     private static GroupReferenceCipher cipher() {
         byte[] key = new byte[32];
@@ -197,5 +227,43 @@ class RbacEvaluatorTest {
             assertEquals(AuthzOutcome.DENIED, decision.outcome(),
                     "an unmapped identity must never evaluate PERMITTED for " + token);
         }
+    }
+
+    @Test
+    void localBindingPermitsWithoutActorAuthzStateAndLocalMissingBindingIsDenied() {
+        GroupReferenceCipher cipher = cipher();
+        FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
+        bindings.addActive("local-security-admin", RoleToken.SECURITY_ADMIN.token(), cipher.encrypt("local-admin-id"));
+        RbacEvaluator evaluator = new RbacEvaluator(bindings, new FakeActorAuthzStateRepository(), cipher,
+                new LocalIdentityResolver(localIdentity("local-admin-id", "admin")), new LocalRoleTokenResolver(bindings, cipher),
+                rootIdentity("some-other-id"));
+
+        var permit = evaluator.evaluate(LocalMechanism.actorFingerprintFor("local-admin-id"), Optional.of(RoleToken.SECURITY_ADMIN), Instant.now());
+        var denial = evaluator.evaluate(LocalMechanism.actorFingerprintFor("local-admin-id"), Optional.of(RoleToken.BACKUP_ADMIN), Instant.now());
+
+        assertEquals(AuthzOutcome.PERMITTED, permit.outcome());
+        assertEquals(RbacEvaluator.LOCAL_AUTHORITY, permit.authority().orElseThrow());
+        assertEquals("local-security-admin", permit.bindingId().orElseThrow());
+        assertEquals(AuthzOutcome.DENIED, denial.outcome());
+        assertEquals(RbacEvaluator.REASON_ACTOR_NOT_IN_REQUIRED_GROUP, denial.reasonCode().orElseThrow());
+    }
+
+    @Test
+    void rootIsMatchedBySeededIdNotNameAndPermittedWithoutAnyBinding() {
+        GroupReferenceCipher cipher = cipher();
+        FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
+        RbacEvaluator rootEvaluator = new RbacEvaluator(bindings, new FakeActorAuthzStateRepository(), cipher,
+                new LocalIdentityResolver(localIdentity("seeded-root-id", "nexusadmin")), new LocalRoleTokenResolver(bindings, cipher),
+                rootIdentity("seeded-root-id"));
+        RbacEvaluator sameNameEvaluator = new RbacEvaluator(bindings, new FakeActorAuthzStateRepository(), cipher,
+                new LocalIdentityResolver(localIdentity("other-id", "nexusadmin")), new LocalRoleTokenResolver(bindings, cipher),
+                rootIdentity("seeded-root-id"));
+
+        var root = rootEvaluator.evaluate(LocalMechanism.actorFingerprintFor("seeded-root-id"), Optional.of(RoleToken.BACKUP_ADMIN), Instant.now());
+        var sameName = sameNameEvaluator.evaluate(LocalMechanism.actorFingerprintFor("other-id"), Optional.of(RoleToken.BACKUP_ADMIN), Instant.now());
+
+        assertEquals(AuthzOutcome.PERMITTED, root.outcome());
+        assertEquals(RbacEvaluator.ROOT_AUTHORITY, root.authority().orElseThrow());
+        assertEquals(AuthzOutcome.DENIED, sameName.outcome());
     }
 }

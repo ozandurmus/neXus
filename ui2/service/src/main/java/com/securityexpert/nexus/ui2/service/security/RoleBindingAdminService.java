@@ -11,6 +11,8 @@ import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateReposito
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.SecurityAdminLockoutGuard;
+import com.securityexpert.nexus.ui2.persistence.identity.RootIdentityRepository;
+import com.securityexpert.nexus.ui2.platform.LocalPrincipalFingerprint;
 
 /**
  * {@code role_bindings} administration: four-eyes / self-grant refusal
@@ -50,6 +52,7 @@ public final class RoleBindingAdminService {
     private final ActorAuthzStateRepository actorAuthzStateRepository;
     private final GroupReferenceCipher groupReferenceCipher;
     private final SecurityAdminLockoutGuard securityAdminLockoutGuard;
+    private final RootIdentityRepository rootIdentityRepository;
 
     public RoleBindingAdminService(RoleBindingRepository roleBindingRepository,
             ActorAuthzStateRepository actorAuthzStateRepository, GroupReferenceCipher groupReferenceCipher,
@@ -58,11 +61,22 @@ public final class RoleBindingAdminService {
         this.actorAuthzStateRepository = actorAuthzStateRepository;
         this.groupReferenceCipher = groupReferenceCipher;
         this.securityAdminLockoutGuard = securityAdminLockoutGuard;
+        this.rootIdentityRepository = null;
+    }
+
+    public RoleBindingAdminService(RoleBindingRepository roleBindingRepository,
+            ActorAuthzStateRepository actorAuthzStateRepository, GroupReferenceCipher groupReferenceCipher,
+            SecurityAdminLockoutGuard securityAdminLockoutGuard, RootIdentityRepository rootIdentityRepository) {
+        this.roleBindingRepository = roleBindingRepository;
+        this.actorAuthzStateRepository = actorAuthzStateRepository;
+        this.groupReferenceCipher = groupReferenceCipher;
+        this.securityAdminLockoutGuard = securityAdminLockoutGuard;
+        this.rootIdentityRepository = rootIdentityRepository;
     }
 
     public Outcome create(String actingAdminActorFingerprint, String roleToken, String plaintextGroupReference,
             String groupReferenceKeyId, Instant now) {
-        if (adminAlreadyInGroup(actingAdminActorFingerprint, plaintextGroupReference, now)) {
+        if (!isRoot(actingAdminActorFingerprint) && adminAlreadyInGroup(actingAdminActorFingerprint, plaintextGroupReference, now)) {
             return new Outcome.SelfGrantRefused();
         }
         String bindingId = OpaqueId.random().value();
@@ -79,12 +93,12 @@ public final class RoleBindingAdminService {
             // independent of it -- revoking the last enabled
             // role:security_admin binding is refused even when the acting
             // admin is not the one losing access.
-            if (RoleToken.SECURITY_ADMIN.token().equals(binding.get().roleToken())
+            if (!isRoot(actingAdminActorFingerprint) && RoleToken.SECURITY_ADMIN.token().equals(binding.get().roleToken())
                     && !securityAdminLockoutGuard.anyEnabledSecurityAdminRemainsIfBindingRevoked(bindingId)) {
                 return new Outcome.LastSecurityAdminRefused();
             }
             String plaintext = groupReferenceCipher.decrypt(binding.get().groupReferenceEncrypted());
-            if (adminAlreadyInGroup(actingAdminActorFingerprint, plaintext, now)) {
+            if (!isRoot(actingAdminActorFingerprint) && adminAlreadyInGroup(actingAdminActorFingerprint, plaintext, now)) {
                 return new Outcome.SelfGrantRefused();
             }
         }
@@ -100,5 +114,10 @@ public final class RoleBindingAdminService {
                 .map(state -> state.groupReferences())
                 .orElse(Set.of());
         return adminGroups.contains(plaintextGroupReference);
+    }
+
+    private boolean isRoot(String actorFingerprint) {
+        return rootIdentityRepository != null && rootIdentityRepository.rootLocalIdentityId()
+                .map(LocalPrincipalFingerprint::forLocalIdentity).filter(actorFingerprint::equals).isPresent();
     }
 }

@@ -24,12 +24,23 @@ public final class LocalIdentityAdministration implements LocalIdentityAdministr
     private final LocalCredentialsRepository localCredentialsRepository;
     private final SessionRepository sessionRepository;
     private final SecurityAdminLockoutGuard securityAdminLockoutGuard;
+    private final RootIdentityRepository rootIdentityRepository;
 
     public LocalIdentityAdministration(LocalCredentialsRepository localCredentialsRepository,
             SessionRepository sessionRepository, SecurityAdminLockoutGuard securityAdminLockoutGuard) {
         this.localCredentialsRepository = Objects.requireNonNull(localCredentialsRepository, "localCredentialsRepository");
         this.sessionRepository = Objects.requireNonNull(sessionRepository, "sessionRepository");
         this.securityAdminLockoutGuard = Objects.requireNonNull(securityAdminLockoutGuard, "securityAdminLockoutGuard");
+        this.rootIdentityRepository = null;
+    }
+
+    public LocalIdentityAdministration(LocalCredentialsRepository localCredentialsRepository,
+            SessionRepository sessionRepository, SecurityAdminLockoutGuard securityAdminLockoutGuard,
+            RootIdentityRepository rootIdentityRepository) {
+        this.localCredentialsRepository = Objects.requireNonNull(localCredentialsRepository, "localCredentialsRepository");
+        this.sessionRepository = Objects.requireNonNull(sessionRepository, "sessionRepository");
+        this.securityAdminLockoutGuard = Objects.requireNonNull(securityAdminLockoutGuard, "securityAdminLockoutGuard");
+        this.rootIdentityRepository = Objects.requireNonNull(rootIdentityRepository, "rootIdentityRepository");
     }
 
     @Override
@@ -72,6 +83,10 @@ public final class LocalIdentityAdministration implements LocalIdentityAdministr
         Optional<LocalCredentialRecord> existing = localCredentialsRepository.findById(localIdentityId);
         if (existing.isEmpty()) {
             return new MutationResult.NotFound();
+        }
+        if (rootIdentityRepository != null && rootIdentityRepository.rootLocalIdentityId()
+                .filter(localIdentityId::equals).isPresent()) {
+            return new MutationResult.LastSecurityAdminRefused();
         }
         if (existing.get().enabled()
                 && !securityAdminLockoutGuard.anyEnabledSecurityAdminRemainsIfLocalIdentityDisabled(localIdentityId)) {
