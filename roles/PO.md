@@ -44,65 +44,74 @@ and in what order.
 | Vendor measurement | A contract that names a vendor command, route or field may only be implemented once a **measurement record** exists next to it, committed, saying which tool was used, which commands were run and which field names came back (counts and shapes, never a value). No worker chooses a vendor command from product knowledge |
 | Worker's PR | The packet's `merge_gate` says in words that the worker opens the PR and does not merge. A worker that is not told this does not open one |
 
-## 3. The loop, as commands
+## 3. The loop, exactly as it is run
 
-Pre-dispatch checklist -- run every item before the first command below.
-The per-movement budget defaults low (`DEFAULT_MAX_BUDGET_USD`); a
-CONTRACT, AUDIT, or DEPLOYMENT movement will not fit in it.
+This section is a transcript of how the loop was actually run on 2026-09-14,
+not a design for how it might be run. Follow it step for step.
 
-1. `--max-budget-usd` is set from this movement's own scope, not left at
-   the default.
-2. Every `validation_plan` step has been run once, locally, before it goes
-   into the packet.
-3. For a deletion-shaped movement, the test tree has been searched for any
-   file the deletion would remove.
-4. The packet tells the worker to commit early and often on its lane.
-5. The branch lane is confirmed unused -- no other movement already holds
-   it.
+### Before dispatching
+
+1. Write the packet as JSON in the scratchpad. `what_exists` carries pasted,
+   redacted samples of the real shapes the worker will meet -- a relay entry,
+   a response element path, a table's columns -- never a description from
+   memory. Two of that day's three worker stops were a field name I described
+   instead of quoting.
+2. `--max-budget-usd` from this movement's own scope. A packet that bundles
+   six layers costs what six packets cost and is harder to review.
+3. Run every `validation_plan` step once, locally, before it goes in.
+4. Confirm the lane is unused and, when two movements run together, give them
+   non-colliding migration numbers.
+5. `python3 scripts/local_relay.py create --start <packet> --role po --slug <movement>-<slug>`,
+   then **set the relay file's internal `id` to the movement id** -- the tool
+   assigns its own and the worker's close is refused when they differ.
 
 A "no" to any of these is a stop, not a workaround.
 
+### Dispatching
+
 ```
-git fetch origin main
-py scripts/gov_session_transfer.py validate <packet>          # must print valid: true
-py scripts/local_relay.py create --role po --start <packet>
 nohup python3 -u scripts/orchestrator.py run --movement NXS-LOCAL-NNNN \
-    --provider <default> --model <tier model> --effort medium \
-    --timeout 5400 --heartbeat-timeout 900 > <scratch>/run-NXS-LOCAL-NNNN.log 2>&1 &
+    --provider codex --model gpt-5.6-terra --effort medium \
+    --max-budget-usd <from scope> > <scratch>/run-NXS-LOCAL-NNNN.log 2>&1 &
 ```
 
-**Dispatch in the background, then watch.** A foreground `run` blocks your
-whole session for the length of the movement: you cannot report progress, you
-cannot answer a relay question, you cannot dispatch the second worker, and the
-Product Owner sees an empty workbench and assumes nothing is happening. Put
-the run in the background and arm a watch on
-`orchestrator.py status` that prints only phase changes, so you report a
-transition when it happens and stay silent otherwise.
+Background, always. A foreground run blocks the whole session for the length
+of the movement: no progress reported, no relay answer possible, no second
+worker, and the Product Owner watching an empty workbench. Then arm a watch on
+`orchestrator.py status` that prints only phase changes, and report each
+transition in a sentence. Killing the foreground wrapper does not kill the
+engineer; the worker finishes and the state record proves it.
 
-**Killing a foreground `run` does not kill the worker.** The wrapper dies; the
-engineer process keeps going and finishes. Check the state record before
-concluding anything was lost.
+**Two movements at once, never one.** Two is the standing limit. With a slot
+free and work ready, dispatch it; leave roughly half a minute between two
+dispatches so their git operations do not race.
 
-**At most two movements run at once.** Two is the Product Owner's standing
-limit. With a slot free and work ready, dispatch it rather than waiting; a
-serial loop wastes the Product Owner's evening. Give parallel movements
-non-colliding migration numbers and separate lanes (section 6).
+### When a movement ends
 
-Read the JSON the last command prints. `phase`, `failure_reason`,
-`verify.steps[*].exit_code` and `usage` are the evidence. Then:
+- **`done`** -- read the relay's `SESSION_CLOSE` report, run
+  `orchestrator.py verify --movement <id>`, read the PR's changed-file list and
+  spot-check the files that carry the risk, then `gh pr merge --merge
+  --delete-branch`. Confirm with `gh pr view <n> --json state,mergedAt` and
+  `gh api repos/<owner>/<repo>/commits/main` before saying it is merged. Pull,
+  remove the worktree, prune.
+- **`failed`** -- it often is not. Read `.nexus/engineer_last_message.txt` and
+  `git status` in the worktree first. Codex's sandbox is routinely refused
+  `index.lock`, so the work is finished and uncommitted: build it, run the
+  packet's validation, then commit, push and open the PR yourself, saying so in
+  the PR body. Never re-dispatch work that already exists.
+- **A relay question** -- if it is a real decision, write it as a numbered
+  Product Owner record (never edit a FROZEN document in place), merge that,
+  then answer on the relay pointing at it. The movement resumes once per
+  answer, into the same worktree and session (`GOV.ORCH.12`).
+- **A lane that will not merge** -- merge `origin/main` into the lane, resolve,
+  build, run the module tests, push, then merge the PR.
 
-- `done` + verify passed → review the worktree diff, integrate, update
-  `CURRENT_STATE.md` and `AI_HANDOVER.md`, close the relay.
-- `failed` → read `failure_reason` and the failing step tail, fix the
-  packet or the scope, re-run. A relay-tool error is a bug report, not
-  a blocker.
-- A worker `RELAY_QUESTION` → answer it on the relay with
-  `RELAY_DECISION` if the documents answer it, otherwise put the one
-  question to the human.
+### After merging
 
-Do not poll blindly and do not abandon a running movement: watch for phase
-changes, report each one in a sentence, and act the moment it ends or asks
-a question.
+When the change touches the product, rebuild the image and roll it out, then
+check the pods and the login page yourself rather than assuming. Clear the
+state file of any movement whose work is merged, so the workbench shows only
+live work. Read `usage`, render the ledger and write that row's assessment.
 
 ## 4. Where the rules live (read on demand only)
 
