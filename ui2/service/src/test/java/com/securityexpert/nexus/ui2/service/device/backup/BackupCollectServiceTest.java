@@ -60,6 +60,12 @@ class BackupCollectServiceTest {
             return this;
         }
 
+        StubDeviceRepository putUnrecognizedRole(String deviceId, String vendorHint, String role) {
+            devices.put(deviceId, new DeviceRecord(deviceId, role, vendorHint, "manual", Instant.now(), false,
+                    DeviceEnrollmentState.ENROLLED, false, "cred-collection-1"));
+            return this;
+        }
+
         @Override
         public Optional<DeviceRecord> find(String deviceId) {
             return Optional.ofNullable(devices.get(deviceId));
@@ -184,6 +190,19 @@ class BackupCollectServiceTest {
         BackupCollectService.Outcome.AdmissionRefused refused = (BackupCollectService.Outcome.AdmissionRefused) outcome;
         assertEquals("MANAGEMENT_SERVER_UNGATED", refused.code());
         assertTrue(refused.reason().contains("14I MS-2"), "the reason must name the missing gate");
+    }
+
+    @Test
+    void refusesAnUnrecognisedRoleNamingTheRole() {
+        BackupCollectService service = new BackupCollectService(new StubDeviceRepository().putUnrecognizedRole(PILOT_DEVICE, "check_point", "future_role"),
+                admissionService(), Set.of(PILOT_DEVICE), true);
+
+        BackupCollectService.Outcome outcome = service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());
+
+        assertTrue(outcome instanceof BackupCollectService.Outcome.AdmissionRefused, "expected AdmissionRefused, got " + outcome);
+        BackupCollectService.Outcome.AdmissionRefused refused = (BackupCollectService.Outcome.AdmissionRefused) outcome;
+        assertEquals("ROLE_UNRECOGNISED", refused.code());
+        assertTrue(refused.reason().contains("future_role"), "the reason must name the unrecognised role");
     }
 
     @Test

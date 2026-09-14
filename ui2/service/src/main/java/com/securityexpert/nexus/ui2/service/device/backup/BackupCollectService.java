@@ -70,9 +70,14 @@ public final class BackupCollectService {
         if (device.isEmpty()) {
             return new Outcome.DeviceNotFound();
         }
-        if ("management_server".equals(device.get().role())) {
-            return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",
-                    "device " + deviceId + " is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)");
+        String role = device.get().role();
+        if (!"gateway".equals(role)) {
+            if ("management_server".equals(role)) {
+                return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",
+                        "device " + deviceId + " is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)");
+            }
+            return new Outcome.AdmissionRefused("ROLE_UNRECOGNISED",
+                    "device " + deviceId + " carries role '" + role + "', which is not one the product knows how to collect from, so nothing was issued");
         }
         if (!"check_point".equals(device.get().vendorHint())) {
             return new Outcome.AdmissionRefused("VENDOR_UNSUPPORTED", "device " + deviceId + " vendor_hint="
