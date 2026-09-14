@@ -93,6 +93,13 @@ class DeviceQueryServiceTest {
         }
 
         @Override
+        public Optional<String> insertRequestedIfAbsentForRun(String jobId, String idempotencyKey,
+                String capabilityId, String targetRunId, String actionClass, String jobType,
+                String actorFingerprint, String actionId) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
         public Optional<String> findJobIdByIdempotencyKey(String idempotencyKey) {
             throw new UnsupportedOperationException("not used by this test");
         }
