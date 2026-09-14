@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.worker.inventory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,6 +30,7 @@ import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpAddrParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpRouteParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsidCompositeOutputSplitter;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsxStatParser;
+import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoInterfaceParseResult;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoInterfaceParser;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoRouteParser;
 import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial;
@@ -197,24 +199,47 @@ public final class InventoryCapabilityExecutor {
         String interfaceOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, headers);
         String routeOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, headers);
 
-        Map<String, List<ParsedInterface>> interfacesByVsys = PaloAltoInterfaceParser.parse(interfaceOutput);
-        Map<String, String> interfaceNameToVsys = new java.util.HashMap<>();
-        interfacesByVsys.forEach((vsys, ifaces) -> ifaces.forEach(iface -> interfaceNameToVsys.put(iface.name(), vsys)));
-        String defaultVsys = interfacesByVsys.keySet().stream().findFirst().orElse(PaloAltoInterfaceParser.DEFAULT_VSYS);
-        Map<String, List<ParsedRoute>> routesByVsys =
-                PaloAltoRouteParser.parse(routeOutput, interfaceNameToVsys, defaultVsys);
+        PaloAltoInterfaceParseResult parsedInterfaces = PaloAltoInterfaceParser.parse(interfaceOutput);
+        Map<String, List<ParsedRoute>> routesByVirtualRouter = PaloAltoRouteParser.parse(routeOutput);
 
-        List<String> vsysIds = new ArrayList<>(interfacesByVsys.keySet());
-        for (String vsys : routesByVsys.keySet()) {
-            if (!vsysIds.contains(vsys)) {
+        // PM-3: a virtual router maps to a vsys through its own interfaces' `fwd` (this
+        // virtual router) and `vsys` leaves; a virtual router spanning more than one vsys is
+        // shown under each, one with no interface at all is shown under `physical`.
+        Map<String, java.util.Set<String>> virtualRouterToVsys = new LinkedHashMap<>();
+        parsedInterfaces.interfaceNameToVirtualRouter().forEach((interfaceName, virtualRouter) -> {
+            String vsys = parsedInterfaces.interfaceNameToVsys().get(interfaceName);
+            if (vsys != null) {
+                virtualRouterToVsys.computeIfAbsent(virtualRouter, key -> new java.util.LinkedHashSet<>()).add(vsys);
+            }
+        });
+
+        Map<String, List<ParsedRoute>> routesByContext = new LinkedHashMap<>();
+        routesByVirtualRouter.forEach((virtualRouter, routes) -> {
+            java.util.Set<String> vsysIds = virtualRouterToVsys.get(virtualRouter);
+            if (vsysIds == null || vsysIds.isEmpty()) {
+                routesByContext.computeIfAbsent(InventoryContext.PHYSICAL, key -> new ArrayList<>()).addAll(routes);
+            } else {
+                for (String vsys : vsysIds) {
+                    routesByContext.computeIfAbsent(vsys, key -> new ArrayList<>()).addAll(routes);
+                }
+            }
+        });
+
+        List<String> vsysIds = new ArrayList<>(parsedInterfaces.interfacesByVsys().keySet());
+        for (String vsys : routesByContext.keySet()) {
+            if (!InventoryContext.PHYSICAL.equals(vsys) && !vsysIds.contains(vsys)) {
                 vsysIds.add(vsys);
             }
         }
-        List<InventoryContext> contexts = vsysIds.stream()
-                .map(vsys -> new InventoryContext(vsys,
-                        toInventoryInterfaces(interfacesByVsys.getOrDefault(vsys, List.of())),
-                        toInventoryRoutes(routesByVsys.getOrDefault(vsys, List.of()))))
-                .toList();
+
+        List<InventoryContext> contexts = new ArrayList<>();
+        contexts.add(new InventoryContext(InventoryContext.PHYSICAL, toInventoryInterfaces(parsedInterfaces.physicalPorts()),
+                toInventoryRoutes(routesByContext.getOrDefault(InventoryContext.PHYSICAL, List.of()))));
+        for (String vsys : vsysIds) {
+            contexts.add(new InventoryContext(vsys,
+                    toInventoryInterfaces(parsedInterfaces.interfacesByVsys().getOrDefault(vsys, List.of())),
+                    toInventoryRoutes(routesByContext.getOrDefault(vsys, List.of()))));
+        }
         return new InventoryResult.Completed(contexts);
     }
 

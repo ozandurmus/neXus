@@ -1,32 +1,26 @@
 <response status="success">
   <result>
+    <flags>A:active, ?:loose, C:connected, S:static, R:rip, B:bgp, O:ospf, E:ecmp, M:multicast, H:host</flags>
     <entry>
       <destination>192.0.2.0/24</destination>
       <nexthop>0.0.0.0</nexthop>
       <interface>ethernet1/1</interface>
       <virtual-router>default</virtual-router>
-      <flags>AC</flags>
+      <flags>A C</flags>
     </entry>
     <entry>
-      <destination>0.0.0.0/0</destination>
-      <nexthop>192.0.2.254</nexthop>
-      <interface>ethernet1/1@vsys1</interface>
-      <virtual-router>default</virtual-router>
-      <flags>AS</flags>
+      <destination>203.0.113.0/24</destination>
+      <nexthop>0.0.0.0</nexthop>
+      <interface>ethernet1/3</interface>
+      <virtual-router>VR-DMZ</virtual-router>
+      <flags>A S</flags>
     </entry>
     <entry>
       <destination>198.51.100.0/27</destination>
-      <nexthop>0.0.0.0</nexthop>
-      <interface>ethernet1/2.100</interface>
-      <virtual-router>VR-DMZ</virtual-router>
-      <flags>AC</flags>
-    </entry>
-    <entry>
-      <destination>203.0.113.1/32</destination>
-      <nexthop>0.0.0.0</nexthop>
-      <interface>ethernet1/2.100</interface>
-      <virtual-router>VR-DMZ</virtual-router>
-      <flags>AH</flags>
+      <nexthop>192.0.2.254</nexthop>
+      <interface></interface>
+      <virtual-router>VR-ORPHAN</virtual-router>
+      <flags>A H</flags>
     </entry>
   </result>
 </response>

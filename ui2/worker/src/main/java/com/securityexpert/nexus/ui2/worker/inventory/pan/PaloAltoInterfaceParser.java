@@ -14,31 +14,36 @@ import com.securityexpert.nexus.ui2.worker.inventory.ParsedAddress;
 import com.securityexpert.nexus.ui2.worker.inventory.ParsedInterface;
 
 /**
- * {@code show interface all} (14C §3), {@code result/ifnet/entry} (14C §4
- * baseline: leaves {@code name}, {@code ip}, {@code vsys}, {@code zone},
- * {@code fwd}). {@code UNVERIFIED} -- "payload written, shape unproven"
- * (14C §3). Reads <b>every</b> {@code <ip>} element under an entry, not
- * just the first (14C §4's named correction over the earlier product's
- * "one address per Palo Alto interface"), plus any {@code <ipv6>} block's
- * own {@code <addr>} elements; an interface with no address element at all
- * (an HA link, {@code ip} literally {@code N/A}) is still kept, address-
- * less (14C §3).
+ * {@code show interface all} (14E PF-1), {@code result/ifnet/entry} and
+ * {@code result/hw/entry} (14E PP-1). Successor to the pre-measurement
+ * parser: reads {@code ip} (primary, an {@code a.b.c.d/len} token or a
+ * text token such as {@code N/A}) plus <b>every child</b> of {@code addr}
+ * and {@code addr6} (secondary IPv4 and IPv6 addresses, as {@code
+ * <entry name="...">} members -- the standard PAN-OS XML API named-list
+ * idiom), {@code tag} (VLAN id), {@code vsys}, {@code fwd} (the virtual
+ * router name, {@code vr:} prefix stripped). An interface with no address
+ * element at all is still kept, address-less (PP-1).
  *
- * <p>Grouped by the entry's own {@code <vsys>} leaf -- the single
- * unscoped call already differentiates vsys per entry ({@code
- * tests/fixtures/panorama/interfaces.xml} shows this shape); an entry
- * with no {@code <vsys>} leaf falls under {@link #DEFAULT_VSYS}.</p>
+ * <p>{@code hw/entry} rows are the box's physical ports (PM-2): kept
+ * separately from the logical {@code ifnet} interfaces, context {@code
+ * physical}, kind {@link InventoryInterface#KIND_PHYSICAL}, no address,
+ * state from the port's own {@code state} leaf.</p>
  */
 public final class PaloAltoInterfaceParser {
 
-    public static final String DEFAULT_VSYS = "vsys1";
+    /** Fallback only -- used when an {@code ifnet/entry} carries no {@code vsys} leaf at all (PP-1 does not measure this case). */
+    public static final String DEFAULT_VSYS = "1";
+    private static final String VR_PREFIX = "vr:";
 
     private static final Pattern NAME = tag("name");
     private static final Pattern VSYS = tag("vsys");
     private static final Pattern STATE = tag("state");
     private static final Pattern IP = tag("ip");
-    private static final Pattern IPV6_BLOCK = Pattern.compile("(?is)<ipv6>(.*?)</ipv6>");
-    private static final Pattern IPV6_ADDR = tag("addr");
+    private static final Pattern TAG = tag("tag");
+    private static final Pattern FWD = tag("fwd");
+    private static final Pattern ADDR_BLOCK = Pattern.compile("(?is)<addr>(.*?)</addr>");
+    private static final Pattern ADDR6_BLOCK = Pattern.compile("(?is)<addr6>(.*?)</addr6>");
+    private static final Pattern ENTRY_NAME_ATTR = Pattern.compile("(?is)<entry\\s+name=\"([^\"]*)\"\\s*/?>");
 
     private PaloAltoInterfaceParser() {
     }
@@ -47,67 +52,116 @@ public final class PaloAltoInterfaceParser {
         return Pattern.compile("(?is)<" + name + ">\\s*([^<]*?)\\s*</" + name + ">");
     }
 
-    /** @return every interface, grouped by vsys id (the run's context) -- iteration order preserves first-seen vsys. */
-    public static Map<String, List<ParsedInterface>> parse(String responseBody) {
+    public static PaloAltoInterfaceParseResult parse(String responseBody) {
         Map<String, List<ParsedInterface>> byVsys = new LinkedHashMap<>();
-        if (responseBody == null || responseBody.isBlank()) {
-            return byVsys;
-        }
-        for (String entryBody : topLevelEntries(responseBody)) {
-            String name = firstMatch(NAME, entryBody).orElse(null);
-            if (name == null) {
-                continue;
-            }
-            String vsys = firstMatch(VSYS, entryBody).filter(v -> !v.isBlank()).orElse(DEFAULT_VSYS);
-            List<ParsedAddress> addresses = new ArrayList<>();
-            Matcher ipMatcher = IP.matcher(entryBody);
-            while (ipMatcher.find()) {
-                String ip = ipMatcher.group(1).trim();
-                if (!ip.isEmpty() && !"N/A".equalsIgnoreCase(ip)) {
-                    addresses.add(new ParsedAddress(ip, InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER));
+        List<ParsedInterface> physicalPorts = new ArrayList<>();
+        Map<String, String> interfaceNameToVsys = new LinkedHashMap<>();
+        Map<String, String> interfaceNameToVirtualRouter = new LinkedHashMap<>();
+
+        if (responseBody != null && !responseBody.isBlank()) {
+            for (String entryBody : topLevelEntries(responseBody, "ifnet")) {
+                String name = firstMatch(NAME, entryBody).orElse(null);
+                if (name == null) {
+                    continue;
                 }
+                String vsys = firstMatch(VSYS, entryBody).filter(v -> !v.isBlank()).orElse(DEFAULT_VSYS);
+                List<ParsedAddress> addresses = primaryAndSecondaryAddresses(entryBody);
+                String state = stateOf(entryBody);
+                Optional<Integer> vlanId = firstMatch(TAG, entryBody).flatMap(PaloAltoInterfaceParser::parseVlanId);
+                Optional<String> parent = parentOf(name);
+                String kind = kindOf(name);
+
+                byVsys.computeIfAbsent(vsys, key -> new ArrayList<>())
+                        .add(new ParsedInterface(name, parent, kind, state, addresses, vlanId));
+                interfaceNameToVsys.put(name, vsys);
+                firstMatch(FWD, entryBody).filter(v -> !v.isBlank())
+                        .map(PaloAltoInterfaceParser::stripVrPrefix)
+                        .ifPresent(vr -> interfaceNameToVirtualRouter.put(name, vr));
             }
-            Matcher ipv6Block = IPV6_BLOCK.matcher(entryBody);
-            if (ipv6Block.find()) {
-                Matcher addrMatcher = IPV6_ADDR.matcher(ipv6Block.group(1));
-                while (addrMatcher.find()) {
-                    String addr = addrMatcher.group(1).trim();
-                    if (!addr.isEmpty()) {
-                        addresses.add(new ParsedAddress(addr, InventoryAddress.FAMILY_IPV6, InventoryAddress.ROLE_MEMBER));
-                    }
+
+            for (String hwBody : topLevelEntries(responseBody, "hw")) {
+                String name = firstMatch(NAME, hwBody).orElse(null);
+                if (name == null) {
+                    continue;
                 }
+                String state = stateOf(hwBody);
+                physicalPorts.add(new ParsedInterface(name, Optional.empty(), InventoryInterface.KIND_PHYSICAL, state,
+                        List.of(), Optional.empty()));
             }
-
-            String state = firstMatch(STATE, entryBody)
-                    .map(s -> switch (s.toLowerCase(java.util.Locale.ROOT)) {
-                        case "up" -> InventoryInterface.STATE_UP;
-                        case "down" -> InventoryInterface.STATE_DOWN;
-                        default -> InventoryInterface.STATE_UNKNOWN;
-                    })
-                    .orElse(InventoryInterface.STATE_UNKNOWN);
-
-            Optional<String> parent = parentOf(name);
-            String kind = kindOf(name);
-
-            byVsys.computeIfAbsent(vsys, key -> new ArrayList<>())
-                    .add(new ParsedInterface(name, parent, kind, state, addresses, Optional.empty()));
         }
-        return byVsys;
+
+        return new PaloAltoInterfaceParseResult(byVsys, physicalPorts, interfaceNameToVsys, interfaceNameToVirtualRouter);
+    }
+
+    private static List<ParsedAddress> primaryAndSecondaryAddresses(String entryBody) {
+        List<ParsedAddress> addresses = new ArrayList<>();
+        firstMatch(IP, entryBody).filter(ip -> !ip.isBlank() && !"N/A".equalsIgnoreCase(ip))
+                .ifPresent(ip -> addresses.add(new ParsedAddress(ip, InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER)));
+
+        Matcher addrBlock = ADDR_BLOCK.matcher(entryBody);
+        if (addrBlock.find()) {
+            for (String member : entryNameMembers(addrBlock.group(1))) {
+                addresses.add(new ParsedAddress(member, InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER));
+            }
+        }
+        Matcher addr6Block = ADDR6_BLOCK.matcher(entryBody);
+        if (addr6Block.find()) {
+            for (String member : entryNameMembers(addr6Block.group(1))) {
+                addresses.add(new ParsedAddress(member, InventoryAddress.FAMILY_IPV6, InventoryAddress.ROLE_MEMBER));
+            }
+        }
+        return addresses;
+    }
+
+    /** Every {@code <entry name="...">} child of an {@code addr}/{@code addr6} block (PP-1: "every child"). */
+    private static List<String> entryNameMembers(String blockBody) {
+        List<String> result = new ArrayList<>();
+        Matcher matcher = ENTRY_NAME_ATTR.matcher(blockBody);
+        while (matcher.find()) {
+            String value = matcher.group(1).trim();
+            if (!value.isEmpty()) {
+                result.add(value);
+            }
+        }
+        return result;
+    }
+
+    private static String stateOf(String entryBody) {
+        return firstMatch(STATE, entryBody)
+                .map(s -> switch (s.toLowerCase(java.util.Locale.ROOT)) {
+                    case "up" -> InventoryInterface.STATE_UP;
+                    case "down" -> InventoryInterface.STATE_DOWN;
+                    default -> InventoryInterface.STATE_UNKNOWN;
+                })
+                .orElse(InventoryInterface.STATE_UNKNOWN);
+    }
+
+    private static Optional<Integer> parseVlanId(String tagValue) {
+        try {
+            return Optional.of(Integer.parseInt(tagValue.trim()));
+        } catch (NumberFormatException notANumber) {
+            return Optional.empty();
+        }
+    }
+
+    private static String stripVrPrefix(String fwd) {
+        return fwd.startsWith(VR_PREFIX) ? fwd.substring(VR_PREFIX.length()) : fwd;
     }
 
     /**
-     * The {@code <ifnet>} block's own top-level {@code <entry>} elements only -- a naive
-     * non-greedy {@code <entry>(.*?)</entry>} regex mis-splits on the {@code <ipv6><entry>...
-     * </entry></ipv6>} nested entry an address-bearing interface may carry, so this walks the
-     * text tracking open/close depth instead.
+     * The named top-level container's ({@code <ifnet>} or {@code <hw>})
+     * own top-level {@code <entry>} elements only -- a naive non-greedy
+     * {@code <entry>(.*?)</entry>} regex mis-splits on a nested {@code
+     * <addr>}/{@code <addr6>} block's own {@code <entry name="...">}
+     * members, so this walks the text tracking open/close depth instead.
      */
-    private static List<String> topLevelEntries(String responseBody) {
+    private static List<String> topLevelEntries(String responseBody, String containerTag) {
         List<String> result = new ArrayList<>();
-        Matcher ifnet = Pattern.compile("(?is)<ifnet>(.*?)</ifnet>").matcher(responseBody);
-        if (!ifnet.find()) {
+        Matcher container = Pattern.compile("(?is)<" + containerTag + ">(.*?)</" + containerTag + ">").matcher(responseBody);
+        if (!container.find()) {
             return result;
         }
-        String body = ifnet.group(1);
+        String body = container.group(1);
         int i = 0;
         while (true) {
             int start = body.indexOf("<entry>", i);

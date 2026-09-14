@@ -103,3 +103,327 @@ gates:
     secret_output_risk: none
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/BACKUP_RECOVERY_CONTRACTS.md §7.8"
+
+  # NXS-LOCAL-0164: 14D CF-3 physical reads (bare form -- non-VSX gateway,
+  # and the form InventoryReadPlan/cp_inventory_collect.yaml's own exec
+  # steps reference). docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md
+  # entries 1-6.
+  - gate_id: cp_inventory_ip_addr_show_v4
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "ip -details -4 addr show"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "no interfaces configured is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 1"
+
+  - gate_id: cp_inventory_ip_addr_show_v6
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "ip -6 addr show"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "no IPv6 configured is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 2"
+
+  - gate_id: cp_inventory_ip_route_show_table_all
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "ip -4 route show table all"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "an empty table is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 3"
+
+  - gate_id: cp_inventory_cphaprob_stat
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "cphaprob stat"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "a standalone gateway reporting no cluster is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 4"
+
+  - gate_id: cp_inventory_cphaprob_a_m_if
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "cphaprob -a -m if"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "no cluster virtual interfaces is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 5"
+
+  - gate_id: cp_inventory_vsx_stat_v
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "vsx stat -v"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "'VSX is not supported on this platform', exit 0, is a result, not an error (CF-4)"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 6"
+
+  # 14D CF-2 VSX-wrapped physical forms (bash -lc 'vsenv 0 && <read>').
+  # Documentation/audit rows for the literal family the executor issues on
+  # a VSX host -- no cp_inventory_collect.yaml step references these keys
+  # (the spec's own steps carry the bare literal, see cp_inventory_collect.yaml's
+  # header comment); these back InventoryReadPlan.checkPointPhysicalCommand's
+  # wrapped branch. docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entries 7-11.
+  - gate_id: cp_inventory_ip_addr_show_v4_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && ip -details -4 addr show'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "no interfaces configured is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 7"
+
+  - gate_id: cp_inventory_ip_addr_show_v6_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && ip -6 addr show'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "no IPv6 configured is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 8"
+
+  - gate_id: cp_inventory_ip_route_show_table_all_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && ip -4 route show table all'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "an empty table is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 9"
+
+  - gate_id: cp_inventory_cphaprob_stat_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && cphaprob stat'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "a standalone gateway reporting no cluster is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 10"
+
+  - gate_id: cp_inventory_cphaprob_a_m_if_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && cphaprob -a -m if'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "no cluster virtual interfaces is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 11"
+
+  # 14D CF-2/CF-3 per-virtual-system composites. <VSID> is kept literally in
+  # the canonical key as the one substituted digits-only parameter these
+  # rows document (InventoryReadPlan.checkPointVsidSteps validates the
+  # digits-only rule and substitutes the real VSID at run time; the closed
+  # command-template set, not a per-request GateResolver lookup, is what
+  # bounds these three composites, exactly as CP_INVENTORY_COMMAND_GATE_ENTRIES.md
+  # entries 12-14 document).
+  - gate_id: cp_inventory_vsid_addr_and_route
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && ip -4 addr show && ip -4 route show'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per virtual system per run"
+    session_reuse_rule: "one session per device per run, VS0 never re-entered"
+    unsupported_behavior_ref: "an address-less/route-less virtual system is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 12"
+
+  - gate_id: cp_inventory_vsid_cphaprob_a_m_if
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && cphaprob -a -m if'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per virtual system per run"
+    session_reuse_rule: "one session per device per run, VS0 never re-entered"
+    unsupported_behavior_ref: "no cluster virtual interfaces for this VS is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 13"
+
+  - gate_id: cp_inventory_vsid_cphaprob_stat
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && cphaprob stat'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per virtual system per run"
+    session_reuse_rule: "one session per device per run, VS0 never re-entered"
+    unsupported_behavior_ref: "same standalone-result rule as entry 4"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 14"
+
+  # NXS-LOCAL-0164: 14E PF-1 requests. docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md.
+  - gate_id: pan_inventory_show_system_info
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "<show><system><info/></system></show>"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "non-XML or error envelope is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md entry 1"
+
+  - gate_id: pan_inventory_show_ha_state
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "<show><high-availability><state/></high-availability></show>"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "HA disabled means no peer, a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md entry 2"
+
+  - gate_id: pan_inventory_show_interface_all
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "<show><interface>all</interface></show>"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "a firewall with no configured interfaces beyond defaults is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md entry 3"
+
+  - gate_id: pan_inventory_show_routing_route
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "<show><routing><route/></routing></show>"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "an empty route table is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md entry 4"

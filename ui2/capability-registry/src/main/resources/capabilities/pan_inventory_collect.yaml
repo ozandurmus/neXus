@@ -1,26 +1,60 @@
 # pan_inventory_collect -- the Palo Alto half of inventory collection
-# (PO_DECISION_RECORD_2026_09_14C D-1/D-2); see cp_inventory_collect.yaml's
-# own header comment for why this capability's step list is a placeholder
-# never executed by StepExecutor (execution runs through
-# worker.inventory.InventoryJobExecutor/InventoryCapabilityExecutor
-# instead, over the closed worker.inventory.InventoryReadPlan).
+# (PO_DECISION_RECORD_2026_09_14E PF-1..PF-3, gate consequence). The four
+# xml_api_call steps below are PF-1's exact, unscoped request set --
+# worker.inventory.InventoryReadPlan.PALO_ALTO_BASE_STEPS, in order --
+# gated per docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md entries
+# 1-4, so C4 execution eligibility is computed from real gate resolution
+# rather than a connect-only placeholder. PF-2 dropped the &vsys=<id>
+# per-vsys form entirely (it narrows only the interface list and leaves
+# the route list byte-identical) -- there is no per-vsys request literal
+# to declare here, measured or otherwise.
+#
+# The real device contact still never runs this capability's own step list
+# through StepExecutor: it runs through worker.inventory.InventoryJobExecutor/
+# InventoryCapabilityExecutor against the closed read set (InventoryReadPlan),
+# because StepExecutor's single-command-per-step shape cannot express the
+# keygen-then-four-calls session, the vsys/virtual-router attribution (PM-1..
+# PM-4) or the identity-mismatch evaluation this read plan performs. The
+# `connect` step below models the `type=keygen` credential exchange
+# (C4 §2.3: "connect ... opens the transport session (SSH or, for
+# xml_api_call-only capabilities, the API key/session"); it carries no
+# command literal and is never gated (NOT_APPLICABLE).
 #
 # Admitted only against ENROLLED, non-disabled devices (14C D-1).
 capability_id: pan_inventory_collect
 vendor: palo_alto
 platform_role_scope: pan_firewall
-maturity_state: CAP_OFFLINE
+# CAP_VALIDATED, not CAP_OFFLINE: every step below now resolves gate KNOWN
+# (docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md, SIGNED_OFF). This is
+# runnable-but-unverified, not real-environment-validated: validation_status
+# stays FIXTURE_ONLY because the parser binding against a live device is
+# unverified until the first live run reports its counts.
+maturity_state: CAP_VALIDATED
 transport:
   kind: pan_xml_api
   trust_rule_ref: utils.pan_xml_api_trust
 steps:
   - kind: connect
+  - kind: xml_api_call
+    send: "<show><system><info/></system></show>"
+    gate_reference: pan_inventory_show_system_info
+  - kind: xml_api_call
+    send: "<show><high-availability><state/></high-availability></show>"
+    gate_reference: pan_inventory_show_ha_state
+  - kind: xml_api_call
+    send: "<show><interface>all</interface></show>"
+    gate_reference: pan_inventory_show_interface_all
+  - kind: xml_api_call
+    send: "<show><routing><route/></routing></show>"
+    gate_reference: pan_inventory_show_routing_route
 finally_steps:
   - kind: disconnect
 parser_ref:
-  parser_version: UNKNOWN
-  semantics_doc_ref: "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md section 3"
+  parser_version: "14E"
+  semantics_doc_ref: "docs/design/PO_DECISION_RECORD_2026_09_14E_PAN_INVENTORY_MEASURED_FORMS.md"
 source_pointers:
   - "worker.inventory.InventoryCapabilityExecutor (the closed read set this capability's own execution defers to)"
+  - "worker.inventory.InventoryReadPlan (PF-1 literals)"
+  - "worker.inventory.pan.PaloAltoInterfaceParser, worker.inventory.pan.PaloAltoRouteParser (PP-1/PP-2, PM-1..PM-4)"
 validation_status: FIXTURE_ONLY
-revalidation_plan_ref: "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md section 5"
+revalidation_plan_ref: "docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md -- parser bindings unverified until the first live run from the product"

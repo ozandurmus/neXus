@@ -12,24 +12,21 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
 import com.securityexpert.nexus.ui2.worker.inventory.ParsedRoute;
 
 /**
- * {@code show routing route} (14C §3), container-anchored on the
- * response's own {@code result} entries (14C §4 baseline: leaves {@code
- * destination}, {@code nexthop}, {@code interface}, {@code
- * virtual-router}, {@code flags}). {@code UNVERIFIED} -- "payload written,
- * shape unproven" (14C §3). Keeps the {@code flags} letters as the
- * protocol token rather than collapsing every dynamic protocol into
- * "static" (14C §4's named correction); {@code nexthop} of {@code
- * 0.0.0.0} means none; the {@code virtual-router} leaf is kept as the
- * route table.
+ * {@code show routing route} (14E PF-1), {@code result/entry} (14E PP-2).
+ * Rows are directly under {@code result} -- a {@code result/flags} legend
+ * line sits outside any {@code entry} and is never matched by the
+ * per-entry regex below, so it is never mistaken for a route (PP-2).
  *
- * <p>Context (vsys) assignment: an {@code interface} value carrying an
- * {@code @vsysN} suffix (as {@code tests/fixtures/panorama/routes.xml}
- * shows for one row) names its own vsys directly; otherwise the
- * (already-parsed) interface-to-vsys map from {@link
- * PaloAltoInterfaceParser#parse} is consulted; a route naming an unknown
- * interface falls back to {@code defaultVsys} -- this shape is explicitly
- * unmeasured (14C §5 M-3/M-4), so this is a documented best-effort
- * reading, never a fabricated certainty.</p>
+ * <p>{@code flags} is tokenised on whitespace, not treated as a single
+ * concatenated letter run (PP-2's own correction over the pre-measurement
+ * guess): {@code A} active, {@code C} connected, {@code S} static,
+ * {@code H} host, {@code R} rip, {@code O}/{@code Oi}/{@code Oo}/
+ * {@code O1}/{@code O2} ospf, {@code B} bgp; {@code E}, {@code M},
+ * {@code ?}, {@code ~} are non-protocol qualifiers and are never mapped to
+ * a protocol. Routes are grouped by their own {@code virtual-router} leaf
+ * (PM-3: "routes belong to a virtual router") -- vsys attribution is the
+ * executor's job (PM-3's virtual-router-to-vsys mapping via {@link
+ * PaloAltoInterfaceParser}), not this parser's.</p>
  */
 public final class PaloAltoRouteParser {
 
@@ -39,7 +36,6 @@ public final class PaloAltoRouteParser {
     private static final Pattern INTERFACE = tag("interface");
     private static final Pattern VIRTUAL_ROUTER = tag("virtual-router");
     private static final Pattern FLAGS = tag("flags");
-    private static final Pattern VSYS_SUFFIX = Pattern.compile("^(.*)@(vsys\\d+)$");
 
     private PaloAltoRouteParser() {
     }
@@ -48,11 +44,11 @@ public final class PaloAltoRouteParser {
         return Pattern.compile("(?is)<" + name + ">\\s*([^<]*?)\\s*</" + name + ">");
     }
 
-    public static Map<String, List<ParsedRoute>> parse(String responseBody, Map<String, String> interfaceNameToVsys,
-            String defaultVsys) {
-        Map<String, List<ParsedRoute>> byVsys = new LinkedHashMap<>();
+    /** @return every route, grouped by its own {@code virtual-router} leaf (kept as the route table, PM-3). */
+    public static Map<String, List<ParsedRoute>> parse(String responseBody) {
+        Map<String, List<ParsedRoute>> byVirtualRouter = new LinkedHashMap<>();
         if (responseBody == null || responseBody.isBlank()) {
-            return byVsys;
+            return byVirtualRouter;
         }
         Matcher entries = ENTRY.matcher(responseBody);
         while (entries.find()) {
@@ -61,51 +57,43 @@ public final class PaloAltoRouteParser {
             if (destination == null) {
                 continue;
             }
-            String rawInterface = firstMatch(INTERFACE, body).orElse(null);
-            String vsys = defaultVsys;
-            Optional<String> interfaceName = Optional.empty();
-            if (rawInterface != null && !rawInterface.isBlank()) {
-                Matcher suffix = VSYS_SUFFIX.matcher(rawInterface);
-                if (suffix.matches()) {
-                    interfaceName = Optional.of(suffix.group(1));
-                    vsys = suffix.group(2);
-                } else {
-                    interfaceName = Optional.of(rawInterface);
-                    vsys = interfaceNameToVsys.getOrDefault(rawInterface, defaultVsys);
-                }
-            }
-
+            Optional<String> interfaceName = firstMatch(INTERFACE, body).filter(v -> !v.isBlank());
             Optional<String> nextHop = firstMatch(NEXTHOP, body).filter(v -> !"0.0.0.0".equals(v));
             Optional<String> routeTable = firstMatch(VIRTUAL_ROUTER, body);
             String protocol = protocolOf(firstMatch(FLAGS, body).orElse(""));
+            String virtualRouter = routeTable.orElse("");
 
-            byVsys.computeIfAbsent(vsys, key -> new ArrayList<>())
+            byVirtualRouter.computeIfAbsent(virtualRouter, key -> new ArrayList<>())
                     .add(new ParsedRoute(destination, nextHop, interfaceName, protocol, routeTable));
         }
-        return byVsys;
+        return byVirtualRouter;
     }
 
     private static String protocolOf(String flags) {
-        // Priority order when more than one substantive letter is present is unmeasured; a real
-        // response mixes at most one of these with the "A"(active)/"E"(ecmp) modifier letters this
-        // method ignores (14C §4 baseline: "keeps the flags letters as the protocol token").
-        if (flags.contains("S")) {
-            return InventoryRoute.PROTOCOL_STATIC;
-        }
-        if (flags.contains("C")) {
-            return InventoryRoute.PROTOCOL_CONNECTED;
-        }
-        if (flags.contains("O")) {
-            return InventoryRoute.PROTOCOL_OSPF;
-        }
-        if (flags.contains("B")) {
-            return InventoryRoute.PROTOCOL_BGP;
-        }
-        if (flags.contains("R")) {
-            return InventoryRoute.PROTOCOL_RIP;
-        }
-        if (flags.contains("H")) {
-            return InventoryRoute.PROTOCOL_HOST;
+        for (String token : flags.trim().split("\\s+")) {
+            if (token.isEmpty()) {
+                continue;
+            }
+            if ("C".equals(token)) {
+                return InventoryRoute.PROTOCOL_CONNECTED;
+            }
+            if ("S".equals(token)) {
+                return InventoryRoute.PROTOCOL_STATIC;
+            }
+            if ("H".equals(token)) {
+                return InventoryRoute.PROTOCOL_HOST;
+            }
+            if ("R".equals(token)) {
+                return InventoryRoute.PROTOCOL_RIP;
+            }
+            if (token.startsWith("O")) {
+                return InventoryRoute.PROTOCOL_OSPF;
+            }
+            if ("B".equals(token)) {
+                return InventoryRoute.PROTOCOL_BGP;
+            }
+            // "A" (active), "E" (ecmp), "M" (multicast), "?" (loose), "~" (internal) are
+            // qualifiers, never a protocol (PP-2) -- fall through to the next token.
         }
         return InventoryRoute.PROTOCOL_UNKNOWN;
     }

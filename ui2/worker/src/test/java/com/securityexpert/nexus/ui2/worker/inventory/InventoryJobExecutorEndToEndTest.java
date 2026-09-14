@@ -116,17 +116,23 @@ class InventoryJobExecutorEndToEndTest {
         return "bash -lc 'vsenv 0 && " + read + "'";
     }
 
+    /**
+     * 14E PM-3: {@code default} spans both vsys1 and vsys2 (each has an interface
+     * forwarding through it) and its route is shown under both; {@code VR-DMZ} has
+     * an interface only in vsys2, so its own route is attributed there only.
+     */
     @Test
-    void paloAltoFirewallWithTwoVsysRecordsOneRunWithTwoContexts() {
+    void paloAltoFirewallWithTwoVsysAndASpanningVirtualRouterRecordsOneRunWithTwoContexts() {
         String interfaceXml = "<response><result><ifnet>"
-                + "<entry><name>ethernet1/1</name><ip>192.0.2.1/24</ip><vsys>vsys1</vsys><state>up</state></entry>"
-                + "<entry><name>ethernet1/2.100</name><ip>198.51.100.10/27</ip><vsys>vsys2</vsys><state>up</state></entry>"
+                + "<entry><name>ethernet1/1</name><ip>192.0.2.1/24</ip><vsys>1</vsys><fwd>vr:default</fwd><state>up</state></entry>"
+                + "<entry><name>ethernet1/2.100</name><ip>198.51.100.10/27</ip><vsys>2</vsys><fwd>vr:default</fwd><state>up</state></entry>"
+                + "<entry><name>ethernet1/3</name><ip>203.0.113.10/24</ip><vsys>2</vsys><fwd>vr:VR-DMZ</fwd><state>up</state></entry>"
                 + "</ifnet></result></response>";
         String routeXml = "<response><result>"
-                + "<entry><destination>192.0.2.0/24</destination><nexthop>0.0.0.0</nexthop>"
-                + "<interface>ethernet1/1</interface><virtual-router>default</virtual-router><flags>AC</flags></entry>"
-                + "<entry><destination>198.51.100.0/27</destination><nexthop>0.0.0.0</nexthop>"
-                + "<interface>ethernet1/2.100</interface><virtual-router>VR-DMZ</virtual-router><flags>AC</flags></entry>"
+                + "<entry><destination>0.0.0.0/0</destination><nexthop>192.0.2.254</nexthop>"
+                + "<interface>ethernet1/1</interface><virtual-router>default</virtual-router><flags>A S</flags></entry>"
+                + "<entry><destination>203.0.113.0/24</destination><nexthop>0.0.0.0</nexthop>"
+                + "<interface>ethernet1/3</interface><virtual-router>VR-DMZ</virtual-router><flags>A C</flags></entry>"
                 + "</result></response>";
         Map<String, String> outputByCmd = Map.of(
                 InventoryReadPlan.PAN_SHOW_SYSTEM_INFO, "<response><result><system><serial>0011223344</serial></system></result></response>",
@@ -156,18 +162,26 @@ class InventoryJobExecutorEndToEndTest {
         assertTrue(inventoryRepository.recordRunCalled);
 
         InventoryRun run = inventoryRepository.lastRecordedRun;
-        assertEquals(2, run.contexts().size());
+        assertEquals(3, run.contexts().size(), "physical (no hw ports in this scripted response) + vsys 1 + vsys 2");
 
-        InventoryContext vsys1 = contextNamed(run, "vsys1");
+        InventoryContext physical = contextNamed(run, InventoryContext.PHYSICAL);
+        assertTrue(physical.interfaces().isEmpty(), "no <hw> block in this scripted response");
+        assertTrue(physical.routes().isEmpty(), "every route here attributes to a vsys through its virtual router");
+
+        InventoryContext vsys1 = contextNamed(run, "1");
         assertEquals(1, vsys1.interfaces().size());
         assertEquals("192.0.2.1/24", vsys1.interfaces().get(0).addresses().get(0).address());
-        assertEquals(1, vsys1.routes().size());
+        assertEquals(1, vsys1.routes().size(), "the default virtual router's route, spanning into vsys1");
+        assertEquals("default", vsys1.routes().get(0).routeTable().orElseThrow());
 
-        InventoryContext vsys2 = contextNamed(run, "vsys2");
-        assertEquals("ethernet1/2.100", vsys2.interfaces().get(0).name());
-        assertEquals(Optional.of("ethernet1/2"), vsys2.interfaces().get(0).parent());
-        assertEquals(1, vsys2.routes().size());
-        assertEquals("VR-DMZ", vsys2.routes().get(0).routeTable().orElseThrow());
+        InventoryContext vsys2 = contextNamed(run, "2");
+        assertEquals(2, vsys2.interfaces().size(), "ethernet1/2.100 and ethernet1/3");
+        assertTrue(vsys2.interfaces().stream().anyMatch(i -> i.name().equals("ethernet1/2.100")
+                && i.parent().equals(Optional.of("ethernet1/2"))));
+        assertEquals(2, vsys2.routes().size(), "the spanning default route plus VR-DMZ's own route");
+        assertTrue(vsys2.routes().stream().anyMatch(r -> r.routeTable().equals(Optional.of("default"))),
+                "the default virtual router's route spans into vsys2 too (PM-3)");
+        assertTrue(vsys2.routes().stream().anyMatch(r -> r.routeTable().equals(Optional.of("VR-DMZ"))));
     }
 
     private static InventoryContext contextNamed(InventoryRun run, String context) {
