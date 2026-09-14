@@ -137,6 +137,16 @@ class InventoryCollectServiceTest {
                 DeviceEnrollmentState.ENROLLED, false, "cred-ref-1");
     }
 
+    private static DeviceRecord enrolledManagementServer(String deviceId, String vendorHint) {
+        return new DeviceRecord(deviceId, "management_server", vendorHint, "manual_registration", Instant.now(), false,
+                DeviceEnrollmentState.ENROLLED, false, "cred-ref-1");
+    }
+
+    private static DeviceRecord enrolledUnrecognizedRole(String deviceId, String vendorHint, String role) {
+        return new DeviceRecord(deviceId, role, vendorHint, "manual_registration", Instant.now(), false,
+                DeviceEnrollmentState.ENROLLED, false, "cred-ref-1");
+    }
+
     private static InventoryCollectService serviceFor(FakeDeviceRepository devices) {
         CapabilityRegistry registry = CapabilityRegistry.of(List.of(
                 inventoryCapability(InventoryCapabilityIds.CP_INVENTORY_COLLECT, "check_point"),
@@ -166,6 +176,34 @@ class InventoryCollectServiceTest {
         InventoryCollectService.Outcome outcome = service.requestCollect("device-1", "actor", Optional.of("nonce-1"));
 
         assertTrue(outcome instanceof InventoryCollectService.Outcome.Admitted, "expected Admitted, got " + outcome);
+    }
+
+    @Test
+    void aManagementServerIsRefusedNamingTheMissingGate() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("device-1", enrolledManagementServer("device-1", "check_point"));
+        InventoryCollectService service = serviceFor(devices);
+
+        InventoryCollectService.Outcome outcome = service.requestCollect("device-1", "actor", Optional.empty());
+
+        assertTrue(outcome instanceof InventoryCollectService.Outcome.AdmissionRefused, "expected AdmissionRefused, got " + outcome);
+        InventoryCollectService.Outcome.AdmissionRefused refused = (InventoryCollectService.Outcome.AdmissionRefused) outcome;
+        assertEquals("MANAGEMENT_SERVER_UNGATED", refused.code());
+        assertTrue(refused.reason().contains("14I MS-2"), "the reason must name the missing gate");
+    }
+
+    @Test
+    void anUnrecognisedRoleIsRefusedNamingTheRole() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("device-1", enrolledUnrecognizedRole("device-1", "check_point", "future_role"));
+        InventoryCollectService service = serviceFor(devices);
+
+        InventoryCollectService.Outcome outcome = service.requestCollect("device-1", "actor", Optional.empty());
+
+        assertTrue(outcome instanceof InventoryCollectService.Outcome.AdmissionRefused, "expected AdmissionRefused, got " + outcome);
+        InventoryCollectService.Outcome.AdmissionRefused refused = (InventoryCollectService.Outcome.AdmissionRefused) outcome;
+        assertEquals("ROLE_UNRECOGNISED", refused.code());
+        assertTrue(refused.reason().contains("future_role"), "the reason must name the unrecognised role");
     }
 
     @Test
