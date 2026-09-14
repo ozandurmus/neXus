@@ -244,6 +244,21 @@ describe("BackupPanel", () => {
     vi.unstubAllGlobals();
   });
 
+  it("renders a loading state rather than no-backups while the request is in flight", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === "/devices/dev-1/backups") {
+        return new Promise(() => {}); // request never resolves
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(withTheme(<BackupPanel deviceId="dev-1" />));
+
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.queryByText("No backups")).not.toBeInTheDocument();
+  });
+
   it("renders an empty panel when no backups are retained", async () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       if (String(input) === "/devices/dev-1/backups") {

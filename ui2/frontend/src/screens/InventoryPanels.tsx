@@ -495,7 +495,11 @@ export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
     );
   }
 
-  const backups = fetcher.data?.backups ?? [];
+  if (!fetcher.data) {
+    return <EmptyPanel title="Backups" body="Loading…" />;
+  }
+
+  const backups = fetcher.data.backups;
 
   if (backups.length === 0) {
     return (
