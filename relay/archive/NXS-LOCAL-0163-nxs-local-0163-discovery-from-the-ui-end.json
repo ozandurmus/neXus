@@ -1,0 +1,221 @@
+{
+  "created_at": "2026-09-14T12:50:32Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 POST /discovery/runs creates a run row and an admitted discovery job in one transaction (fake-backed service test); GET returns state and, after the worker's fake run, the candidate list with importable flags and cluster structure.",
+          "AC-2 DiscoveryJobExecutor, against scripted fake transports, persists the Check Point and Palo Alto candidate sets with the contract's kinds and importability, marks the run FINISHED with counts-only summary, and on worker death leaves the run REQUESTED/RUNNING with no candidates (test).",
+          "AC-3 Import of a selection creates DRAFT devices with registration_source discovery_import, IM-7 endpoints, cluster_member_ref / virtual_system_ref set, one confirm job admitted per device, RD-5 outcomes written and returned; importing a non-importable candidate is refused per row, not per request.",
+          "AC-4 The dialog's management-server branch runs a discovery, shows the grouped candidate table, imports a selection and shows outcomes (vitest).",
+          "AC-5 Only the two APPROVED closed command / route sets are issued (closed-set tests untouched and green); architecture tests untouched; eleven-module build, worker/job-engine/persistence/service/frontend tests, privacy gate and contract_authority_status green."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14F_DISCOVERY_FROM_THE_UI_RUN_AND_CANDIDATE_SET.md -- FROZEN 2026-09-14: DR-1..DR-4 (run row is the job target; persisted candidate set; retention; the manager is not a device), section 2 import rules (registration_source discovery_import, IM-7 endpoint mapping, RD-1/RD-5 outcomes, EC-2 import never confirms), section 3 routes and screen flow. docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md (FROZEN 2026-09-14) sections 2-4: the kind-to-importability table, match key, RD-n, EC-1..EC-9. docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md (FROZEN) section 6 candidate row, section 8 DI-2..DI-6 (DI-1 completed by 14F). docs/design/PAN_DISCOVERY_CONTRACT.md (FROZEN) sections 4-7, 10. docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md and docs/design/PAN_DISCOVERY_API_ROUTE_GATE_ENTRIES.md -- APPROVED 2026-09-14: the closed command / route sets, unchanged. docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (FROZEN). docs/design/PO_DECISION_RECORD_2026_09_14 (FROZEN) DA-1..DA-3, CS-1..CS-5. docs/design/PO_DECISION_RECORD_2026_09_14B (FROZEN): F4 refusal for DRAFT devices stays for every device-target capability.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :worker:test, :job-engine:test, :persistence:test, :service:test, :architecture-tests:test, npm --prefix ui2/frontend test first; record counts.",
+          "what_exists": "worker.discovery.cp: ManagementPlaneEnumerationAdapter(DeviceTransport, SshCredentialResolver).run(ManagementPlaneEnumerationRequest(managementHost, managementPort, credentialRef, trustRuleRef, channelObservationInterval, configuredChannelPort)) -> ManagementPlaneEnumerationResult (Completed with List<RawCandidateInput>, Failed, Refused); CandidateRowAssembler.assemble -> List<CandidateRow> (key (owningDomain, stableIdentifier), objectType, kind, displayName, ownAddress, managementAddress, clusterReference, model, softwareVersion, connection state, hostLink, clusterLink); ManagementShellCommands closed set with its test. worker.discovery.pan: PanoramaEnumerationAdapter(DeviceTransport, PanCredentialResolver, trust resolver).run(PanoramaEnumerationRequest(host, port, credentialRef, trustRuleRef)) -> PanoramaEnumerationResult (Completed with List<RawDeviceInput>, Failed, Refused); pan CandidateRowAssembler -> CandidateRow with pairing outcome and virtual systems; PanoramaApiRoutes closed set. DiscoveryRunnerMain / PanDiscoveryRunnerMain: CLI mains printing counts-only reports -- keep them. worker: WorkerClaimLoop with ELIGIBLE_CAPABILITY_IDS (two confirm + two inventory), ConfirmJobExecutor and InventoryJobExecutor as the C2 executor pattern (lease, fencing, heartbeat, terminal outcome), CompositeDeviceTransport, WorkerBootstrap. job-engine: JobAdmissionService.submit(capabilityId, targetDeviceId, idempotencyKey, actor, actionId) resolving the target through DeviceEnrollmentReadPort; ConfirmCapabilityIds, InventoryCapabilityIds; jobs table has target_device_id (see V4). persistence: devices.registration_source (always 'manual_registration' today), TransactionBoundary, jOOQ repositories, V1..V13. service: DeviceAddSingleService.addSingle(actor, address, vendor, credentialReferenceId) = register DRAFT + admit confirm in one transaction (the per-device import unit); DeviceRegistrationService.register(...) takes vendorHint, transportKind, addressRef, credentialReferenceId, isTestTarget; SecurityWebMvcConfig route map; ActionRegistry; GateChainInterceptor wildcard route keys ('GET /devices/*', interior segments supported). frontend: AddDeviceDialog with the discovery toggle disabled at the mode switch ('coming in a later release'), the 1750 ms polling pattern against getDevice, credential list filtered per vendor; adminApi.ts call() helper and types. Migrations: V14 is free."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "vendor documents beyond the gate entries",
+          "the Python collectors",
+          "ui2/ldap-adapter",
+          "ui2/scheduler"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/discovery-from-the-ui"
+        },
+        "invariants": [
+          "Only the APPROVED closed sets are issued; the closed-set tests stay as they are.",
+          "A candidate row is never a device; only import creates devices, always DRAFT, always followed by the confirm job (EC-1/EC-2).",
+          "No raw response stored; names and addresses live only in discovery_candidate and devices.",
+          "F4 for device-target capabilities unchanged."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make discovery runnable from the product's one add dialog, end to end, per record 14F: a discovery run row as the C2 job target, a DiscoveryJobExecutor in the worker that drives the merged Check Point and Palo Alto enumeration adapters and persists the candidate set (selection only, 24 h retention), three service routes (start run, read run + candidates, import selection), import through the existing register-then-confirm unit with registration_source discovery_import, and the dialog's management-server toggle made live with a candidate table (cluster as parent, multi-select, Import). The command gates for both vendors are APPROVED as of 2026-09-14; field bindings are UNVERIFIED until the Product Owner's first live run, which this movement enables but does not perform.",
+        "output_contract": [
+          "Discovery runnable from the one add dialog against a Check Point MDS or a Panorama, with a persisted candidate set, selection and import into DRAFT devices followed by the existing confirm.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A new job target kind, a new executor, persistence, three routes and a screen, all against six frozen documents; high effort earns its cost on the admission change and the import matching.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type names the clause it implements (14F DR-n / section 2-3, import contract IM-n / RD-n / EC-n, C2 section n).",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects. V14 additive only.",
+          "Sensitive identity reporting law: no address, hostname, serial or name in logs, exception messages, audit rows or outcome_summary; the candidate table itself is the one place they are shown, to the operator, from the database.",
+          "If a contract clause and this packet disagree, raise a RELAY_QUESTION and STOP; never reconcile silently and never relax a direction or closed-set test.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Commit early and often (V14 + repository first; then job engine; worker; service; frontend). Open the PR at the end; do not merge. SESSION_CLOSE names the capability ids, the tables, the executor, the routes with status codes, the dialog components, and test counts before and after."
+        ],
+        "risks": [
+          "Widening JobAdmissionService so that device-target capabilities lose the DRAFT refusal -- keep the new path separate and tested.",
+          "Persisting raw enumeration output or the management server's own name in the run row.",
+          "Filtering candidates (connected-only, serial-less dropped) -- the contracts forbid it; show everything, mark importability.",
+          "A second import of the same candidate creating a duplicate device -- RD-5 already_imported must short-circuit."
+        ],
+        "scope": {
+          "in": [
+            "Persistence (first commits): migration V14 with discovery_run and discovery_candidate exactly per 14F DR-1/DR-2 (indexes on run_id, on (run_id, stable_identifier), on finished_at for the sweep); a jobs.target kind extension the smallest honest way -- if jobs.target_device_id is NOT NULL with an FK, add a nullable target_ref + target_kind pair in V14 and keep target_device_id for device jobs; DiscoveryRunRepository (createRun, findRun, markRunning/markFinished with outcome_summary counts, replaceCandidates, listCandidates, markImportOutcome, sweepExpired(now)) with jOOQ implementation and a test-side fake.",
+            "Job engine: DiscoveryCapabilityIds (cp_discovery_enumerate, pan_discovery_enumerate); JobAdmissionService gains admission of a discovery capability against a run row (run exists, state REQUESTED) while device-target capabilities keep every existing check; tests for both sides. Capability YAMLs for the two, CAP_OFFLINE is NOT the right state here -- the gates are APPROVED: set validation_status to reflect approved-but-UNVERIFIED bindings using the registry's existing vocabulary (read the CapabilitySpec enum; if no state expresses it, keep CAP_OFFLINE and say so in the SESSION_CLOSE with the exact enum values available).",
+            "Worker: DiscoveryJobExecutor (sibling of InventoryJobExecutor, full C2 discipline) that resolves the run row, picks the vendor adapter, builds the request from the run (address, credential reference via the store-backed resolvers, trust rule ref from the existing env defaults, port 22 / 443 defaults, channel observation interval 5 s for Check Point), runs it, assembles CandidateRows, maps them to discovery_candidate rows (importable per the import contract's kind table: for Check Point only gateway / cluster / cluster member / VSX host / virtual system kinds; UNCLASSIFIED and AMBIGUOUS shown with importable=false; for Palo Alto devices importable, virtual systems importable only with their host, unpaired HA claims shown), stores them in one transaction with the run marked FINISHED and outcome_summary = the counts the existing reports render; on Failed/Refused marks the run FAILED with the reason class only (no address, no name). Register in WorkerClaimLoop. End-to-end test against scripted fake transports for both vendors (the existing adapter fixtures give the shapes) and a worker-dies test.",
+            "Service: DiscoveryRunService (start: create run + admit job in one transaction; read: run + candidates; import: for each selected importable candidate call the same register-then-admit-confirm unit as DeviceAddSingleService with registration_source discovery_import, transport kind and address per IM-7, cluster_member_ref from the candidate's cluster reference, virtual_system_ref for a VS imported with its host, RD-1 cluster selection expands to members, RD-5 outcome per candidate computed by matching the vendor stable identifier against devices' recorded identity (already_imported) or a different device carrying the same identity at another address (conflicting); write import_outcome). DiscoveryController with the three routes of 14F section 3 (POST /discovery/runs 202, GET /discovery/runs/{id} 200/404, POST /discovery/runs/{id}/import 200 with per-candidate results, 409 when the run is not FINISHED); ActionRegistry actions (write class for start and import; read for GET); SecurityWebMvcConfig entries. A read-time sweep of expired runs (DR-3) in the read path or a small scheduler-free hook. JSON keys snake_case; candidate rows carry candidate_id, kind, importable, display_name, own_address, management_address, cluster_reference, parent_candidate_id, model, software_version, connection_state, import_outcome.",
+            "Frontend: enable the toggle; the discovery branch submits POST /discovery/runs, polls GET /discovery/runs/{id} with the existing pattern until state FINISHED or FAILED, then renders the candidate table (clusters as parent rows with member children, virtual systems under their host, kind chip, importable rows selectable, non-importable rows visible but disabled with the kind as reason), a credential selector defaulting to the run's, an Import button posting the selection, then a per-row outcome column (new / already_imported / conflicting) and a link to the inventory list. adminApi.ts types and calls. vitest for the dialog's discovery branch (submit, poll, table grouping, select-cluster-selects-members, import results). No role-conditional rendering.",
+            "Tests as listed; architecture tests untouched; the two closed-set tests untouched and green; eleven modules."
+          ],
+          "out": [
+            "Any command or route beyond the two APPROVED closed sets; running discovery against a real server (the Product Owner does that after merge); management servers as first-class rows (DR-4); the Panorama target= reads; changes to the confirm, peer follow, inventory or configuration; scheduler."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":job-engine:test"
+            ],
+            "name": "ui2_job_engine_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":persistence:test"
+            ],
+            "name": "ui2_persistence_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "run",
+              "build"
+            ],
+            "name": "frontend_build"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_ui2_deployment_manifests.py",
+              "-q"
+            ],
+            "name": "deployment_manifests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T12:50:32Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0163",
+  "movement": "discovery-from-the-ui-end-to-end",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14F_DISCOVERY_FROM_THE_UI_RUN_AND_CANDIDATE_SET.md",
+    "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md",
+    "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md",
+    "docs/design/PAN_DISCOVERY_CONTRACT.md",
+    "docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md",
+    "docs/design/PAN_DISCOVERY_API_ROUTE_GATE_ENTRIES.md",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/cp/ManagementPlaneEnumerationAdapter.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/pan/PanoramaEnumerationAdapter.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/confirm/WorkerClaimLoop.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryJobExecutor.java",
+    "ui2/job-engine/src/main/java/com/securityexpert/nexus/ui2/jobs/admission/JobAdmissionService.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/DeviceAddSingleService.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/SecurityWebMvcConfig.java",
+    "ui2/frontend/src/shell/AddDeviceDialog.tsx",
+    "ui2/frontend/src/auth/adminApi.ts"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-14T12:50:32Z"
+}

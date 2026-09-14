@@ -1,0 +1,242 @@
+{
+  "created_at": "2026-09-14T16:28:15Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 _is_resumable_answered_relay_question implements RQ-2 default-closed: proven by tests for the qualifying case and for each disqualifying one (extra reason, unknown future reason, non-zero exit, answer before the question, no answer).",
+          "AC-2 decide_start returns resume for an answered question and a naming refusal otherwise; the budget branch and the alive-pid branch behave exactly as before (existing tests unchanged and green).",
+          "AC-3 RQ-3 holds: a second resume without a newer answer is refused; with a newer answer it resumes.",
+          "AC-4 The recovery note fires for this case and quotes the answering entry's marker and subject.",
+          "AC-5 tests/test_orchestrator.py, tests/test_orchestrator_preflight.py and tests/test_orchestrator_providers.py pass; privacy gate PASS; the backlog item is marked done through the queue tool."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_12_AN_ANSWERED_RELAY_QUESTION_IS_RESUMABLE.md -- FROZEN 2026-09-14: RQ-1 resumable once per answer; RQ-2 the closed signature (phase failed, exit_code 0, failure_reasons exactly {relay_not_closed}, and the relay's entries ending in a Product-Owner-authored answer -- RELAY_DECISION, RELAY_CORRECTION, or a RELAY_NOTE whose next_actor is engineer -- posted after the engineer's RELAY_QUESTION); RQ-3 one resume per answer, a later resume needs a newer answer, refusal names what is missing; RQ-4 a recovery note in the same place the budget resume carries its own; RQ-5 the prior ceiling is inherited and GOV.ORCH.10 R-3's same-or-lower-budget refusal does not apply to this path; RQ-6 provider-neutral resume. docs/design/GOV_ORCH_10_BUDGET_EXHAUSTION_IS_RESUMABLE.md (FROZEN) R-1..R-6 and docs/design/GOV_ORCH_10A_BUDGET_RESUME_ENTAILED_REASONS.md (FROZEN) R-2a..R-2c -- the budget resume this one sits beside, unchanged. docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md (FROZEN) section 2.3 -- the provider resume paths.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run python3 -m pytest tests/test_orchestrator.py tests/test_orchestrator_preflight.py tests/test_orchestrator_providers.py -q first and record the counts. Do NOT run the whole test suite.",
+          "what_exists": "scripts/orchestrator.py: decide_start(relay_obj, existing_record, is_pid_alive, active_count, max_workers, max_budget_usd, retry_limit) is the pure dispatch decision returning (action, reason) with action in {dispatch, resume, refuse-like reasons}; _is_resumable_budget_failure(record) implements GOV.ORCH.10-A's closed allowlist _BUDGET_ENTAILED_REASONS = {engineer_exit_nonzero, relay_not_closed} and is the single place that safety lives; needs_resume_recovery_note(...) decides whether the resumed engineer gets the RESUME_RECOVERY_NOTE text defined near line 153; the dispatch path calls both. A relay-question stop records phase=failed, exit_code=0, failure_reasons=['relay_not_closed'] (see line ~1509 where the reason is appended). scripts/local_relay.py owns the relay file format: a JSON object with 'entries' (each carrying marker, role, subject, text, timestamp and for some markers next_actor/outcome) and a top-level next_actor; markers are SESSION_START, SESSION_CLOSE, RELAY_ACK, RELAY_NOTE, RELAY_QUESTION, RELAY_DECISION, RELAY_CORRECTION; RELAY_DECISION additionally requires authorized_by, scope and supersedes. tests/test_orchestrator.py holds the decide_start unit tests, including the budget-resume cases -- follow their style exactly (pure function, hand-built dicts, no filesystem, no dispatch)."
+        },
+        "context_not_loaded": [
+          "ui2/**",
+          "docs/history/**",
+          "project/*.json (use the queue tool)",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/orchestrator-relay-question-resume"
+        },
+        "invariants": [
+          "One pure predicate carries the whole safety.",
+          "Default-closed: an unknown failure reason blocks the resume.",
+          "The budget resume is untouched.",
+          "No live dispatch is performed by this movement."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The orchestrator opens the PR for this provider (GOV.ORCH.2 section 2.5).",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement GOV.ORCH.12: a movement whose engineer raised a RELAY_QUESTION and exited cleanly becomes resumable once the Product Owner answers on the relay. Today such a record is terminal, so answering costs a fresh dispatch and a full baseline re-run (observed on three movements). The change is confined to scripts/orchestrator.py's pure decision layer plus its recovery note, and its tests.",
+        "output_contract": [
+          "An answered relay question resumes the same movement instead of costing a fresh dispatch.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A bounded change to one pure decision function plus tests, against a written contract; a balanced tier covers it and this is the first Codex dispatch of this loop.",
+          "tier": "Codex gpt-5.6-terra, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every new function and test names the clause it implements (GOV.ORCH.12 RQ-n).",
+          "Do NOT run the full Python test suite; run only the three orchestrator test files named in test_baseline plus the privacy gate.",
+          "The safety must live in ONE pure predicate that decide_start and its caller both read, exactly as _is_resumable_budget_failure does -- never a second re-derivation.",
+          "If a clause of GOV.ORCH.12 and this packet disagree, raise a RELAY_QUESTION and STOP.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Commit early and often. The SESSION_CLOSE names the predicate, the record field added, the decide_start branch, the note change, and the test counts before and after."
+        ],
+        "risks": [
+          "Re-deriving the condition in two places so they can drift.",
+          "Allowing a resume when the last relay entry is still the engineer's own question.",
+          "Treating any relay entry as an answer regardless of its author role.",
+          "Touching the budget branch's refusal semantics."
+        ],
+        "scope": {
+          "in": [
+            "A pure predicate beside _is_resumable_budget_failure -- name it _is_resumable_answered_relay_question(record, relay_obj) -- implementing RQ-2 exactly and default-closed: phase failed, exit_code 0, failure_reasons exactly {'relay_not_closed'}, and the relay's entry list containing an engineer-authored RELAY_QUESTION whose index is lower than the index of the last Product-Owner-authored answer entry (RELAY_DECISION or RELAY_CORRECTION, or RELAY_NOTE with next_actor == 'engineer'). Read the entries' role field to tell engineer from po; if an entry has no role, treat it as not an answer.",
+            "RQ-3: the record carries the index (or timestamp) of the answer the last resume consumed -- add one field to the process record (for example last_resumed_answer_index) written where the resume is recorded; a resume is allowed only when a qualifying answer exists strictly after that mark. With no newer answer, decide_start returns a refusal whose reason names that the relay has no Product Owner answer newer than the last resume.",
+            "decide_start: a new branch returning ('resume', '<reason naming GOV.ORCH.12 RQ-1/RQ-2>') when the predicate holds, placed so it cannot weaken the budget branch or the alive-pid branch; RQ-5: this branch must not consult max_budget_usd at all (no same-or-lower refusal).",
+            "RQ-4: needs_resume_recovery_note and the note text gain this case -- the resumed engineer is told, in one short paragraph, that its relay question was answered, with the answering entry's marker and subject quoted, and that it must read the relay file before anything else. Keep the existing budget note untouched.",
+            "Tests in tests/test_orchestrator.py, in the existing style, covering: answered question resumes; unanswered question (last entry is the RELAY_QUESTION) refuses with a reason naming the missing answer; an answer older than the question refuses; failure_reasons containing anything beyond relay_not_closed refuses (use engineer_exit_nonzero and an invented future reason, proving default-closed); exit_code non-zero refuses; a second resume with no newer answer refuses while one with a newer answer resumes; the recovery note fires for this case and its text names the answering marker; the budget-resume cases still behave exactly as before.",
+            "Update the backlog item gov_orch_resume_after_relay_question through scripts/project_queue.py only (never hand-edit project/*.json): set it to done with a note naming GOV.ORCH.12 and this movement."
+          ],
+          "out": [
+            "Any change to the relay file format or scripts/local_relay.py; the budget resume's own predicate or allowlist; the retry limit; provider adapter code (RQ-6 is satisfied by the existing per-provider resume paths -- if a provider lacks one, do not add it here); the dashboard; any live dispatch."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator.py",
+              "-q"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator_preflight.py",
+              "-q"
+            ],
+            "name": "orchestrator_preflight_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator_providers.py",
+              "-q"
+            ],
+            "name": "orchestrator_provider_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T16:28:15Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "RQ-2 relay entry role field conflict",
+      "text": "Focused CLI test shows local_relay append entries are not recognized through the required role field, so the GOV.ORCH.12 predicate default-closes every PO answer. RQ-2 requires role and says missing role is not an answer, while this movement may not change local_relay. Please authorize the exact compatible entry identity field or a scoped contract correction.",
+      "timestamp": "2026-09-14T16:32:12Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_NOTE",
+      "seq": 3,
+      "subject": "RQ-2 field names corrected: GOV.ORCH.12-A",
+      "text": "Correct, and thank you for stopping instead of substituting. The defect is the Product Owner's: RQ-2 named a per-entry 'role' field and a per-entry 'next_actor'; scripts/local_relay.py writes neither. The correction is now FROZEN on main as docs/design/GOV_ORCH_12A_THE_RELAY_FIELDS_RQ2_ACTUALLY_READS.md -- read it and implement RQ-2 from it: authorship is the entry's 'actor' field (values po and engineer; no actor means not an answer), ordering is the entry's 'seq' field (never the list position), and an answer is a po-authored entry with marker RELAY_DECISION, RELAY_CORRECTION or RELAY_NOTE whose seq is greater than the stopping RELAY_QUESTION's seq, together with the relay's top-level next_actor equal to 'engineer'. Everything else in RQ-2 stands unchanged: phase failed, exit_code 0, failure_reasons exactly {relay_not_closed}, default-closed. Nothing else in the packet changes; local_relay.py stays untouched.",
+      "timestamp": "2026-09-14T16:34:51Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 4,
+      "subject": "GOV.ORCH.12 RQ-2 answer-position conflict",
+      "text": "WORKER.md permits a qualifying Product Owner answer anywhere after the engineer RELAY_QUESTION (using the last answer index), while approved_task.json's FROZEN-contract summary requires the relay entries to end in the Product Owner answer. Which condition governs when entries are appended after the answer?",
+      "timestamp": "2026-09-14T16:37:35Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_NOTE",
+      "seq": 5,
+      "subject": "GOV.ORCH.12-A RQ-2c governs; 'entries end with' is superseded prose",
+      "text": "Good catch again, and it is the Product Owner's prose defect, not a real conflict. GOV.ORCH.12-A is the correcting amendment to RQ-2 and it restates the whole condition; where its RQ-2c and RQ-2's older sentence differ, RQ-2c governs. Concretely, the condition is NOT positional: an answer qualifies when (a) it is a po-authored entry with marker RELAY_DECISION, RELAY_CORRECTION or RELAY_NOTE, (b) its seq is greater than the seq of the engineer RELAY_QUESTION that stopped the run, and (c) the relay's top-level next_actor equals 'engineer' at the moment the decision is taken. Entries appended after the answer do not disqualify it; the top-level next_actor is what carries whose turn it is, and it is the only turn signal the decision reads. If next_actor has flipped back to 'po' (someone asked something new), that is not resumable and the refusal names it. Implement exactly this; no further authorization is needed on this point, and this note is itself an example of the shape you are matching. Nothing else in the packet changes.",
+      "timestamp": "2026-09-14T16:39:03Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "scripts/orchestrator.py: _is_resumable_answered_relay_question(record, relay_obj), last_resumed_answer_seq, decide_start relay-question resume branch, and answer recovery note.",
+          "tests/test_orchestrator.py: GOV.ORCH.12/RQ-2A decision and recovery-note coverage.",
+          "project backlog: gov_orch_resume_after_relay_question marked done."
+        ],
+        "completed": [
+          "Implemented GOV.ORCH.12-A's closed answered-relay-question predicate and recovery note.",
+          "Updated the backlog item through scripts/project_queue.py."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/orchestrator-relay-question-resume",
+          "ci": "NOT_RUN",
+          "head_sha": "NOT_CREATED",
+          "merge_commit": null,
+          "merge_decision": "ORCHESTRATOR_MERGE_MODE",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0166",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Resolve Git linked-worktree index.lock permissions, then commit, push, and open the approved PR without merging.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "GOV.ORCH.10 budget-resume predicate, allowlist, and ceiling behavior.",
+          "Alive-pid behavior, provider adapters, relay writer, retry limit, and no live dispatch."
+        ],
+        "recommended_reasoning": {
+          "reason": "Implementation and local validation are complete; only repository Git metadata access blocks handoff.",
+          "tier": "Codex gpt-5.6-terra, medium effort"
+        },
+        "state_updates": [
+          "gov_orch_resume_after_relay_question set done with GOV.ORCH.12 movement note through scripts/project_queue.py."
+        ],
+        "unresolved_risks": [
+          "Git linked-worktree metadata rejected index.lock creation; changes are unstaged and no commit, push, or PR could be made."
+        ],
+        "validation": {
+          "affected": "preflight: 17 passed; providers: 42 passed; contract authority: 5 passed",
+          "diff_check": "PASS",
+          "full_regression": "NOT_RUN (dispatch forbids the full suite)",
+          "privacy": "PASS (0 findings)",
+          "real_environment": "NOT_RUN (local validation-only movement)",
+          "state_consistency": "project_queue.py check: up to date",
+          "targeted": "tests/test_orchestrator.py: 147 passed across foreground shards (baseline 146 before added coverage)"
+        }
+      },
+      "seq": 6,
+      "timestamp": "2026-09-14T16:48:41Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0166",
+  "movement": "orchestrator-resume-after-answered-relay-question",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_ORCH_12_AN_ANSWERED_RELAY_QUESTION_IS_RESUMABLE.md",
+    "docs/design/GOV_ORCH_10_BUDGET_EXHAUSTION_IS_RESUMABLE.md",
+    "docs/design/GOV_ORCH_10A_BUDGET_RESUME_ENTAILED_REASONS.md",
+    "docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md",
+    "scripts/orchestrator.py",
+    "scripts/orchestrator_providers.py",
+    "scripts/local_relay.py",
+    "tests/test_orchestrator.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T16:48:41Z"
+}

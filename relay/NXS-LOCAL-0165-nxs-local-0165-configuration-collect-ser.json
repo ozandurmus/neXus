@@ -1,0 +1,308 @@
+{
+  "created_at": "2026-09-14T16:05:29Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A configuration_collect job for a Check Point device (fake transport, fixture in the measured shape) records one run with canonical hash over set lines, withheld count equal to the fixture's secret-bearing lines, a section index, a sanitized text artefact, and an encrypted raw artefact whose recorded hash equals the fixture's; a second identical run is marked unchanged.",
+          "AC-2 For a Palo Alto device, effective-running of several megabytes is processed as a stream (test asserts no full-document String is materialised, e.g. by a bounded-memory or streaming-parser assertion) into the category index per vsys and an encrypted, gzip-compressed raw artefact; active and merged are recorded as their own read kinds.",
+          "AC-2a A Palo Alto fixture with src attributes yields per-source counts per category and an override list for src=local elements; the Panorama cross-check fixture names the template / device-group source for each override; a notification is recorded per device per run and the view marks the categories; a fixture without local elements records no_local_override.",
+          "AC-3 Gate entries documents exist per literal; V16 seeds SIGNED_OFF rows; both capability specs resolve executionEligible (test); admission refuses DRAFT and admits ENROLLED (test); WorkerClaimLoop lists the two capabilities.",
+          "AC-4 The four routes return the specified shapes and codes; the Configuration screen lists devices, shows the index and withheld count, shows Check Point sanitized text, and Collect now admits and polls (vitest).",
+          "AC-5 Manifests declare the artefact-store key by reference only (manifest tests updated and green); eleven-module build, worker/job-engine/persistence/service/architecture/frontend tests, privacy gate and contract_authority_status green; PanoramaAssignmentReducer fixture test green."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14G_CONFIGURATION_COLLECTION_MEASURED_FORMS.md -- FROZEN 2026-09-14: CG-1..CG-11 and section 5 gate consequence (rows SIGNED_OFF on the Product Owner's hardware-run approval). docs/design/PO_DECISION_RECORD_2026_09_13F (FROZEN) section 3 CF-1..CF-3, section 2 ID-M1..M4. docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (FROZEN): the artefact store, encryption and hash rules the raw copy obeys -- read sections 1.4, 3.2, 4 and use its existing types; if C7's store is not yet implemented in Java, implement the minimum it specifies for 'store an artefact' (encrypted at rest with the product's envelope key pattern, hash recorded, opaque artefact_ref) and say so. docs/design/UI2_0_C2 (FROZEN). docs/design/PO_DECISION_RECORD_2026_09_14B (FROZEN): DRAFT refusal unchanged. docs/design/UI2_0_C4 (FROZEN) section 3.3: gate rows SIGNED_OFF resolve eligible; the relay decision of movement 0164 applies here too (SIGNED_OFF, never a weakened resolver).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :worker:test, :job-engine:test, :persistence:test, :service:test, :architecture-tests:test, npm --prefix ui2/frontend test first; record counts.",
+          "what_exists": "Merged: the inventory service as the pattern to copy end to end -- InventoryCapabilityIds, capability YAMLs with real steps and gate_reference (after 0164), gate_registry rows seeded by migration (V15, after 0164), InventoryReadPlan (closed literal set with test), InventoryCapabilityExecutor / InventoryJobExecutor (C2 discipline, per-context runs, identity-mismatch handling), DeviceInventoryRepository + V13, InventoryController routes with GateChainInterceptor wildcard keys, ClusterInventoryMerger, Inventory screen panels, Collect now with polling. Transports: SshExecTransport (exec channel; 14D CF-2 bash -lc forms), PanXmlApiTransport (JDK HttpClient; check whether it exposes a streaming body -- if not, add an InputStream-returning call to the transport port for large responses, keeping DIR rules), CompositeDeviceTransport, store-backed credential resolvers, GroupReferenceCipher-style AES-256-GCM helpers in platform-core, credential store envelope key pattern. Frontend: ConfigurationScreen exists with placeholder panels; adminApi.ts call helper. Migrations: V14 (discovery, movement 0163) and V15 (inventory gates, movement 0164) are taken -- use V16; both movements may still be open when you start: base on origin/main and, if V14/V15 are not there yet, still use V16 and note it. Measured facts (read the two findings documents): Check Point config 264-371 lines, 235-325 set lines, 21-22 secret-bearing lines, header timestamp changes the raw hash, VSX identical inside vsenv; Palo Alto effective-running 11.8 MB stable, active 5 KB, merged 220 KB, category list per vsys; Panorama config 84.8 MB with template/template-stack/device-group counts."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "the Python collectors",
+          "ui2/worker/discovery",
+          "ui2/ldap-adapter",
+          "ui2/scheduler",
+          "vendor documents beyond the findings"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/configuration-collect-service"
+        },
+        "invariants": [
+          "One read per host for Check Point; no per-VS repetition.",
+          "Raw configuration exists only encrypted in the artefact store; the view never carries a secret-bearing line or leaf.",
+          "Large responses are streamed, never held whole.",
+          "Only CG-1/CG-4 literals are gated and issued; DRAFT refusal unchanged.",
+          "Provenance and overrides come from the device's own read; Panorama is the cross-check, never the source of record."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Build the configuration collection service per record 14G: the configuration_collect job kind and its two capabilities, the worker executor that performs the measured reads (Check Point: identity refresh + one Gaia 'show configuration' per host; Palo Alto: system info, local active, effective-running streamed, merged), produces the two outputs of 13F CF-1..CF-3 (sanitized index/text view; untouched copy compressed, encrypted and hashed through the C7 artefact store), persistence (V16), gate entries and SIGNED_OFF gate rows, the read routes and the Configuration screen (device list with change state, section/category index, withheld-line count, Check Point sanitized text, Collect now). Panorama provenance (CG-7) is in scope only as the reducer and table; wiring a Panorama target waits for management-server rows (14F DR-4).",
+        "output_contract": [
+          "Configuration collection runnable from the Configuration screen for both vendors, with the index view, sanitized Check Point text and an encrypted, hashed raw copy.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "Streaming XML processing with encryption at rest, a C7 artefact store, a new job kind and a screen; high effort earns its cost on the streaming and key handling.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type names the clause it implements (14G CG-n, 13F CF-n, C7 section n, C2 section n).",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects. V16 only, additive.",
+          "No configuration content, address, hostname, serial or secret in logs, exception messages, audit rows or fixtures (fixtures are synthetic with documentation addresses); the raw copy exists only encrypted in the artefact store.",
+          "If a contract clause and this packet disagree, raise a RELAY_QUESTION and STOP; never weaken GateResolver, a direction test or a closed-set test.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Commit early and often (V16 + repositories + artefact store; gates + YAML; worker; service; frontend). Open the PR at the end; do not merge. SESSION_CLOSE names the tables, the artefact store implementation and its key handling, the capability ids, the routes with status codes, the screen components, and test counts before and after."
+        ],
+        "risks": [
+          "Reading effective-running into a String (11.8 MB measured; larger estates exist).",
+          "Hashing the raw Check Point text as the canonical hash (timestamp header) -- canonical is set lines only.",
+          "Storing the raw copy unencrypted or logging a configuration line on error.",
+          "Repeating the Gaia read per virtual system (measured identical; wasteful and misleading)."
+        ],
+        "scope": {
+          "in": [
+            "Persistence first: V16 with device_configuration_run, device_configuration_index, panorama_assignment per CG-9 (plus an artefact table if C7's store needs one and none exists), indexes on device_id+collected_at; DeviceConfigurationRepository (recordRun with index rows in one transaction, findLatestRun, findLatestRuns, findRunView) with jOOQ implementation and test fake; a C7-conformant ArtefactStore port with an encrypted-at-rest file or DB implementation (whichever C7 specifies), key from a new secret file env UI2_ARTEFACT_STORE_KEY_FILE mounted like the credential-store key (manifests + manifest tests updated; the secret is created once, never re-applied -- see docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md).",
+            "Gate entries documents CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md and PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md in the DEVICE_FIRST_CONTACT shape, one entry per CG-1 / CG-4 literal (Check Point: the three identity reads and clish -c 'show configuration'; Palo Alto: show system info, active config, effective-running, merged; Panorama own config as a separate entry marked 'target wiring later'), secret_output_risk stated honestly (the configuration reads carry secrets: withheld in the view, encrypted at rest), timeouts 60 s for the Check Point config read and 120 s for effective-running; V16 also seeds the gate rows SIGNED_OFF; capability YAMLs cp_configuration_collect / pan_configuration_collect with real steps and gate_reference; resolver test proving eligibility; ConfigurationCapabilityIds; admission against ENROLLED non-disabled only (test).",
+            "Worker: ConfigurationReadPlan (closed literal set + test = CG-1/CG-4), ConfigurationJobExecutor (C2 discipline like InventoryJobExecutor; identity mismatch per 13F ID-M1..M4), Check Point: CheckPointGaiaConfigProcessor producing canonical hash over set lines, secret-line withholding by the CG-3 keyword list with count, section index, sanitized text artefact; Palo Alto: streaming XML processing of effective-running (StAX) producing the CG-6 category index while piping the raw bytes through gzip + the ArtefactStore, merged and active handled the same way at their sizes, PanoramaAssignmentReducer (CG-7) as a pure streaming reducer with a fixture test (no live target yet); change state per CG-10. Register in WorkerClaimLoop. End-to-end tests against fake transports for both vendors with fixtures shaped like the findings (a synthetic multi-megabyte effective-running fixture generated in the test, not checked in), and a worker-dies test.",
+            "Service: ConfigurationQueryService and ConfigurationController -- GET /devices/{id}/configuration (latest run: collected_at, vendor, read_kind, canonical_hash, change_state, withheld_line_count, index [{context, section, entry_count}], sanitized_text_available), GET /devices/{id}/configuration/text (Check Point sanitized text, text/plain, gated read), POST /devices/{id}/configuration/collect (202 {job_id}, write action), GET /configuration (list: device, last collected, change_state); ActionRegistry + SecurityWebMvcConfig entries; snake_case keys.",
+            "Palo Alto local overrides (14G CG-7a..CG-7e, Product Owner directive): while streaming effective-running, read each element's src attribute (tpl/template, dg/device-group, shared, local) and count elements per source per category; record override paths (category + element name, never values) where src is local; persist device_configuration_override rows; cross-check against Panorama for Panorama-managed devices using the CG-7 assignment reducer and the device's template / device-group subtrees (fixture-driven now; live Panorama target later), naming the Panorama-side source per override; raise one notification per device per run through the product's existing notification surface (find it under ui2/service and ui2/frontend; if none exists, add a minimal notifications table + GET /notifications + a shell badge, and say so); show an 'override' marker per category on the configuration view. Know-how pointers (read, never port): configuration/pan_config_alignment.py analyze_provenance_markers and analyze_panorama_intent, configuration/pan_setting_alignment.py (vsysN vs display-name normalisation), configuration/pan_semantic_policy.py (a name mismatch is never override proof).",
+            "Frontend: ConfigurationScreen real: device list with last collected / change state / hash prefix, detail with the index table (per context), withheld-line count, sanitized text viewer for Check Point (monospace, virtualised if long), Collect now with the existing polling pattern; adminApi.ts types and calls; vitest. No role-conditional rendering.",
+            "Operator note in docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md: creating the artefact-store key secret once, and how to trigger the first configuration collection."
+          ],
+          "out": [
+            "Backup download / restore (later, under C7 access rules); diff rendering; Panorama as a live target (waits for management-server rows); scheduler; any command beyond CG-1/CG-4; changes to inventory or discovery code beyond registering the new executor."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":job-engine:test"
+            ],
+            "name": "ui2_job_engine_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":persistence:test"
+            ],
+            "name": "ui2_persistence_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":capability-registry:test"
+            ],
+            "name": "ui2_capability_registry_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "run",
+              "build"
+            ],
+            "name": "frontend_build"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_ui2_deployment_manifests.py",
+              "-q"
+            ],
+            "name": "deployment_manifests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T16:05:29Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "DeviceTransport (job-engine): new default method xmlApiCallStreaming, non-breaking for all 13 existing implementors/fakes",
+          "PanXmlApiTransport: new streaming override",
+          "WorkerClaimLoop: new constructor parameter (configurationJobExecutor), new capability ids in ELIGIBLE_CAPABILITY_IDS, new dispatch branch",
+          "Ui2WorkerMain: wires the artefact store, the two new repositories, and the configuration executor/job-executor",
+          "DeviceCompositionConfiguration (service): registers both configuration capabilities against the real gate_registry_port, adds the new repository/service beans",
+          "ActionRegistry/SecurityWebMvcConfig: four new actions/routes",
+          "ConfigurationScreen.tsx: replaced the 7-tab placeholder with real device-list-backed panels; its own vitest file rewritten to match",
+          "TopAppBar.tsx: bell glyph gains an unread-count badge",
+          "gate_registry_fixture.yaml + V16: one duplicate gate row removed after the ambiguous-resolution bug was caught by the existing capability-registry test suite"
+        ],
+        "completed": [
+          "V16 persistence: device_configuration_run/_index/_override, panorama_assignment, configuration_notification, configuration_artefact; DeviceConfigurationRepository + jOOQ impl; ConfigurationNotificationRepository + jOOQ impl",
+          "FileArtefactStore + ArtefactStoreCipher: C7 section 4 minimum viable form (one master key, streamed AES-256-GCM, content-addressed by ciphertext SHA-256), keyed by UI2_ARTEFACT_STORE_KEY_FILE -- disclosed as minimum viable, not C7's full per-artefact-DEK envelope",
+          "Gate entries CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md / PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md; V16 SIGNED_OFF gate_registry rows; cp/pan_configuration_collect.yaml; ConfigurationCapabilityIds",
+          "worker.configuration: ConfigurationReadPlan (closed CG-1/CG-4 literal set), CheckPointGaiaConfigProcessor (canonical hash over set lines only, CG-3 secret withholding, section index), PaloAltoConfigStreamProcessor (StAX category index + src=local override detection, streamed), PanoramaAssignmentReducer (CG-7 assignment index, fixture-driven), ConfigurationCapabilityExecutor/ConfigurationJobExecutor (C2 discipline, per-read-kind change-state), registered in WorkerClaimLoop/Ui2WorkerMain",
+          "DeviceTransport.xmlApiCallStreaming default method + PanXmlApiTransport override (HttpResponse.BodyHandlers.ofInputStream) so effective-running is never materialized as one String",
+          "Service: ConfigurationQueryService/CollectService, ConfigurationController (4 routes), NotificationController (GET /notifications, the minimal surface this movement adds), ActionRegistry/SecurityWebMvcConfig/DeviceCompositionConfiguration wiring",
+          "Frontend: ConfigurationScreen/ConfigurationPanels wired to real data, adminApi.ts types/calls, TopAppBar notification badge",
+          "deploy/ui2/23-secret-artefact-store-key.yaml + worker Deployment env/volume wiring; operator doc section; deployment manifest test updated (Secret count 3->4)",
+          "Fixed one bug found during validation: pan_configuration_collect's identity-refresh step duplicated the inventory movement's own gate row for an identical literal, causing AmbiguousGateResolutionException -- removed the duplicate, reused the shared gate id"
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No effect -- this movement is entirely within ui2/ (Java/TypeScript), not the Python collector tree.",
+          "ui": "New Configuration screen and a shell notification badge are the only end-user-visible changes; no other screen's behavior changed."
+        },
+        "integration": {
+          "branch": "feature/configuration-collect-service",
+          "ci": "not yet run (PR just opened)",
+          "head_sha": "60a4b2c99fb17f6ce95d29edce4a03bef660b16e",
+          "merge_commit": null,
+          "merge_decision": "Awaiting Product Owner assistant review plus orchestrator verify.passed, per WORKER.md merge gate. Worker does not merge to main.",
+          "merge_state": "OPEN",
+          "pr": 296,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/296"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0165 follow-up (or continuation of this one)",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Add ConfigurationJobExecutorEndToEndTest + WorkerDiesTest (fake-transport, full job-to-persisted-run path, both vendors), ConfigurationController/QueryService/CollectService backend JUnit tests, and a WorkerClaimLoop dispatch test naming the configuration branch explicitly -- none block PR review, but REAL_ENV_VALIDATED and full WORKER.md file-list test coverage should not be claimed until they land.",
+          "status": "complete_with_followup"
+        },
+        "preserved": [
+          "Every inventory-collect and enrollment-confirm code path: unchanged behavior, all existing worker/service/capability-registry/persistence/architecture tests still pass unmodified",
+          "DRAFT refusal (14B EC-J2): configuration collection was never added to the DRAFT exception set",
+          "One read per host for Check Point (no per-virtual-system repetition)",
+          "Raw configuration exists only encrypted in the artefact store; sanitized_text/index never carry a secret-bearing line or leaf"
+        ],
+        "recommended_reasoning": {
+          "reason": "Remaining work is filling in test coverage against an already-designed, already-compiling surface -- no new architecture or vendor-semantic ambiguity to resolve.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "No ConfigurationJobExecutorEndToEndTest/WorkerDiesTest analogous to worker.inventory's own -- individual layers (processors, repository, capability-executor compile-time wiring, gate alignment) are tested, but not stitched into one fake-transport end-to-end proof for either vendor.",
+          "No dedicated backend JUnit test for ConfigurationController/ConfigurationQueryService/ConfigurationCollectService/NotificationController -- route shapes mirror InventoryController's already-tested pattern and are exercised indirectly through the frontend's mocked-fetch tests, but not asserted directly server-side.",
+          "Sanitized-text viewer is a scrollable <pre>, not a virtualized-list component -- adequate at Check Point's measured 11-16 KB size, not a true virtualization implementation.",
+          "Artefact store: single master key (no per-artefact wrapped DEK, no rotation), and its filesystem volume is an ephemeral emptyDir at this local-validation stage -- a worker pod restart loses artefacts while device_configuration_run rows still reference them by artefact_ref. Both disclosed in the PR description, not silently shipped as C7-complete or production-durable.",
+          "Panorama cross-check has no live target (14F DR-4 unmet) -- PanoramaCrossCheckPort.NONE is what the worker composition actually wires; only the fixture test proves the cross-check logic itself."
+        ],
+        "validation": {
+          "affected": "worker (128 tests), service, persistence, job-engine, capability-registry, architecture-tests all green with no regressions; frontend 59 tests/13 files green.",
+          "diff_check": "git log/status reviewed before each commit; seven commits on feature/configuration-collect-service, PR #296 opened against main, not merged.",
+          "full_regression": "./ui2/gradlew -p ui2 build -x :integration-tests:test green across all eleven modules; npm --prefix ui2/frontend test and run build both green.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings.",
+          "real_environment": "None -- no hardware or live device/Panorama run occurred this session; every capability spec's validation_status stays FIXTURE_ONLY, matching the source contract's own status line.",
+          "state_consistency": "python3 -m pytest tests/test_contract_authority_status.py -- 5/5 pass; tests/test_ui2_deployment_manifests.py -- 47/47 pass after adding the new secret and updating the Secret-count assertion.",
+          "targeted": "New worker unit/gate-alignment tests (CheckPointGaiaConfigProcessorTest, PaloAltoConfigStreamProcessorTest incl. a bounded-read-size streaming assertion over a several-megabyte generated fixture, PanoramaAssignmentReducerTest, ConfigurationReadPlanTest, ConfigurationCapabilitiesGateAlignmentTest) and frontend tests (ConfigurationScreen.test.tsx, ConfigurationPanels.test.tsx) all pass."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T16:49:12Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0165",
+  "movement": "configuration-collect-service-and-screen",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14G_CONFIGURATION_COLLECTION_MEASURED_FORMS.md",
+    "docs/design/CP_CONFIGURATION_MEASUREMENT_FINDINGS_2026_09_14.md",
+    "docs/design/PAN_CONFIGURATION_MEASUREMENT_FINDINGS_2026_09_14.md",
+    "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13F_COLLECTION_TRANSPORT_AND_IDENTITY_DECISIONS.md",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryJobExecutor.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryReadPlan.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/InventoryController.java",
+    "ui2/frontend/src/screens/ConfigurationScreen.tsx",
+    "ui2/frontend/src/auth/adminApi.ts"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T16:49:12Z"
+}

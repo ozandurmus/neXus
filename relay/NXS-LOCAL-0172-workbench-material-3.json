@@ -1,0 +1,125 @@
+{
+ "created_at": "2026-09-14T17:44:14Z",
+ "entries": [
+  {
+   "actor": "po",
+   "marker": "SESSION_START",
+   "report": {
+    "acceptance_criteria": [
+     "AC-1 dashboard.css defines a Material 3 token set at :root and no colour literal appears outside it (test).",
+     "AC-2 A Claude movement row and a Codex movement row are visually distinguished by an accent token, and the provider is still named in text on both.",
+     "AC-3 Red and its container appear only on failure or fault states; running, waiting and paused use neutral or primary tones.",
+     "AC-4 The page shows exactly the same sections, fields, controls and labels as before, and every endpoint, poll and action behaves identically (existing tests green, unchanged except where they assert markup).",
+     "AC-5 tests/test_orchestrator_dashboard.py passes; privacy gate PASS; the assets reference nothing external."
+    ],
+    "baseline": {
+     "authority": "docs/design/GOV_ORCH_4_WORKBENCH_OBSERVABILITY_TOKENS_AND_STUCK_DETECTION.md -- FROZEN: the workbench's purpose, the fields it shows and its stuck detection; this movement changes presentation only and must not alter what is shown, polled or acted on. docs/design/UI2_0_MOCKUP_REFERENCE_NOTES.md carries the product's Material 3 token strip: primary #5754A6, surface #F7F5FC, on-surface #242337, tonal surface #E8E3F7, outline #9CA3C7, and the product's own state-vocabulary rule: red is reserved for real fault, failure and out-of-sync; an expected difference carries no warning colour and no failure wording. PO ASSISTANT DECISION 2026-09-14: the workbench keeps a dark surface as its default (it is an operator console watched for long stretches) and implements the same token set in a dark scheme; the provider accent is a token, not a hard-coded colour at a call site.",
+     "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+     "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+     "test_baseline": "Run python3 -m pytest tests/test_orchestrator_dashboard.py -q first and record the count.",
+     "what_exists": "scripts/dashboard_assets/ holds three files served by scripts/orchestrator_dashboard.py: index.html (71 lines, the page skeleton), dashboard.css (132 lines, whose :root block is a flat palette -- --bg #0f1115, --panel #171a21, --border #2a2e37, --text #e6e8eb, --muted #8b93a1, --accent #4f8cff, --danger #e35d5d, --ok #4caf7d, --warn #d9a441 -- and a system font stack), and dashboard.js (537 lines) which renders rows; its line ~136 already composes the provider line as provider + model + effort text: `esc(row.provider || \"-\") + \" \u00b7 \" + esc(model) + (effort ? \" \u00b7 \" + esc(effort) : \"\")`. The Python module serves these files and owns every endpoint and every derived field (derive_process_status, derive_work_stage, derive_health, parse_blocker_tag) -- none of that changes here."
+    },
+    "context_not_loaded": [
+     "ui2/**",
+     "docs/history/**",
+     "project/*.json",
+     "vendor documents"
+    ],
+    "deployment_direction": "local validation only",
+    "git": {
+     "base": "origin/main",
+     "lane": "feature/workbench-material-3"
+    },
+    "invariants": [
+     "Presentation only; no behaviour, data or endpoint changes.",
+     "Colour never carries meaning alone.",
+     "Three static files, no dependency, nothing external."
+    ],
+    "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The orchestrator opens the PR for this provider.",
+    "movement_type": "UI",
+    "objective": "Bring the orchestrator workbench to the product's own Material 3 language and make the provider legible at a glance: Claude-run movements carry a warm orange accent, Codex-run ones a blue accent. Product Owner directive 2026-09-14: the workbench should look like the product it serves and be easier on the eye. Behaviour, data and endpoints are untouched.",
+    "output_contract": [
+     "A workbench that looks like the product and separates Claude from Codex at a glance.",
+     "SESSION_CLOSE per requirements."
+    ],
+    "recommended_reasoning": {
+     "reason": "A self-contained restyle of three static files against a named token strip, with a clear do-not-touch boundary.",
+     "tier": "Codex gpt-5.6-terra, medium effort"
+    },
+    "requirements": [
+     "English, per AGENTS.md engineering-output language law.",
+     "Presentation only: if a change would alter what the workbench reports or how it behaves, stop and leave it.",
+     "Run only tests/test_orchestrator_dashboard.py plus the privacy gate.",
+     "No external URL, no web font, no CDN reference anywhere in the assets.",
+     "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is for a decision in conflict.",
+     "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+     "Commit early and often. SESSION_CLOSE names the token set, the two provider tokens with their values and measured contrast, and the test counts before and after."
+    ],
+    "risks": [
+     "Restructuring the page while restyling it, so the operator has to relearn it.",
+     "Hard-coding the provider colours at the call site instead of as tokens.",
+     "Using a warning colour for a movement that is merely running.",
+     "Pulling a web font or an icon set."
+    ],
+    "scope": {
+     "in": [
+      "Replace the flat palette with a Material 3 token set in dashboard.css: a surface family (surface, surface container, surface container high, outline, outline variant), an on-surface family (on-surface, on-surface variant), primary and its container, plus the semantic colours the console needs (success, warning, error, and their containers), all as CSS custom properties defined once at :root. Keep the dark scheme as the default and derive it from the product's token strip rather than inventing a second palette. Every colour used anywhere in the file must come from a token; no literal hex outside :root.",
+      "Material 3 shape and type: card-like surfaces with the M3 corner radii, an elevation expressed as surface-container tone rather than heavy shadows, 8-point spacing, and a type scale (title, body, label) applied to the existing elements. Do not restructure the page: the same sections, the same table, the same controls, the same order.",
+      "Provider accent: a token per provider (claude and codex) applied as a left edge or chip on each movement row and to the provider line, so a glance separates them -- Claude warm orange, Codex blue. Both must reach at least 4.5:1 contrast against the surface they sit on for their text form, and the accent must not be the only signal: keep the provider name in text (accessibility, and the product's own rule that colour never carries meaning alone). An unknown provider falls back to a neutral token.",
+      "State colour discipline: map the existing health and stage vocabulary onto the semantic tokens so that red means failure or a real fault only; a movement that is merely running, waiting or paused uses neutral or primary tones, never a warning colour. Keep every existing label's text exactly as it is.",
+      "Small legibility wins inside the existing structure: tabular numerals for the token, cost and duration figures; a monospace token only where an identifier is shown; consistent column alignment; a visible focus ring on every interactive element.",
+      "Update tests/test_orchestrator_dashboard.py where it asserts markup or class names, and add a small test that every colour literal in dashboard.css appears only inside the :root block (the token discipline above) and that both provider tokens are defined."
+     ],
+     "out": [
+      "Any change to scripts/orchestrator_dashboard.py's endpoints, derived fields, polling, actions, stuck detection or data shape; new dependencies, a build step, web fonts or an icon library (the console is served as three static files and stays that way); a light-theme toggle; new columns or new information."
+     ]
+    },
+    "validation_plan": [
+     {
+      "argv": [
+       "python3",
+       "-m",
+       "pytest",
+       "tests/test_orchestrator_dashboard.py",
+       "-q"
+      ],
+      "name": "dashboard_tests"
+     },
+     {
+      "argv": [
+       "python3",
+       "scripts/repository_privacy_check.py"
+      ],
+      "name": "privacy_gate"
+     },
+     {
+      "argv": [
+       "python3",
+       "-m",
+       "pytest",
+       "tests/test_contract_authority_status.py",
+       "-q"
+      ],
+      "name": "contract_authority_status"
+     }
+    ]
+   },
+   "seq": 1,
+   "timestamp": "2026-09-14T17:44:14Z"
+  }
+ ],
+ "id": "NXS-LOCAL-0172",
+ "movement": "workbench-material-3-and-provider-colour",
+ "next_actor": "engineer",
+ "refs": [
+  "docs/design/GOV_ORCH_4_WORKBENCH_OBSERVABILITY_TOKENS_AND_STUCK_DETECTION.md",
+  "docs/design/UI2_0_MOCKUP_REFERENCE_NOTES.md",
+  "scripts/dashboard_assets/index.html",
+  "scripts/dashboard_assets/dashboard.css",
+  "scripts/dashboard_assets/dashboard.js",
+  "scripts/orchestrator_dashboard.py"
+ ],
+ "schema_version": 1,
+ "status": "OPEN",
+ "updated_at": "2026-09-14T17:44:14Z"
+}

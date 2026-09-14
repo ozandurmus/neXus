@@ -1,0 +1,286 @@
+{
+  "created_at": "2026-09-14T17:18:15Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A Check Point and a Palo Alto configuration job each run end to end against a fake transport and record exactly what 14G CG-3/CG-6 describe, including override rows for src=local; a worker death mid-run leaves no partial run.",
+          "AC-2 The four configuration routes have direct backend tests covering their shapes and every status code they return.",
+          "AC-3 The artefact store is backed by a PersistentVolumeClaim in the manifests, asserted by tests/test_ui2_deployment_manifests.py, mounted only by the worker.",
+          "AC-4 HA role (physical and per-VSID) and VLAN id are persisted by V17 and shown per context in the inventory read model and screen, for both vendors.",
+          "AC-5 Eleven-module build, worker/service/persistence/architecture/frontend tests, manifests test, migration-audit-context test, privacy gate and contract_authority_status green; the four queue items are updated through the tool."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14G_CONFIGURATION_COLLECTION_MEASURED_FORMS.md -- FROZEN 2026-09-14: CG-8 the job, CG-9 the storage, CG-10 change detection, CG-11 the screen. docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (FROZEN) -- the artefact store's durability and custody rules; read section 4 before changing the volume. docs/design/PO_DECISION_RECORD_2026_09_14C (FROZEN) D-3/D-4 -- the inventory read set names HA role, and D-4's tables are the place a column is added additively. docs/design/PO_DECISION_RECORD_2026_09_14D (FROZEN) PR-4 -- the VSLS per-virtual-system role table the Check Point parser already produces. PO ASSISTANT DECISION 2026-09-14: the artefact volume becomes a PersistentVolumeClaim in deploy/ui2 and the manifests test asserts it; the emptyDir was a local-validation shortcut, not a design.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :worker:test, :service:test, :persistence:test, :architecture-tests:test, npm --prefix ui2/frontend test and python3 -m pytest tests/test_ui2_deployment_manifests.py -q first; record counts.",
+          "what_exists": "Merged (PR 296): worker.configuration with ConfigurationReadPlan (closed literal set, tested), ConfigurationCapabilityExecutor (its constructor defaults panoramaCrossCheck to PanoramaCrossCheckPort.NONE), CheckPointGaiaConfigProcessor, PaloAltoConfigStreamProcessor, ConfigurationJobExecutor, persistence device_configuration_run / _index / _override / panorama_assignment / configuration_notification / configuration_artefact (V16), FileArtefactStore + ArtefactStoreCipher (one master key, streamed AES-256-GCM, content-addressed), ConfigurationController and the Configuration screen. Its tests cover processors, repository, gate alignment and the frontend, but there is NO ConfigurationJobExecutorEndToEndTest / WorkerDiesTest and no backend test for the controller or its services. The pattern to copy is worker.inventory's own InventoryJobExecutor tests (end-to-end against a scripted fake DeviceTransport, plus a worker-dies test) and InventoryControllerTest. deploy/ui2/52-worker-deployment.yaml mounts the artefact store at /app/artefact-store from an emptyDir (see the comment near the UI2_ARTEFACT_STORE_PATH env). Inventory: CheckPointHaStateParser exposes perVsidLocalRole() and the cluster mode; CheckPointIpAddrParser reads the VLAN id from the 'vlan protocol 802.1Q id <n>' detail line and from a 'name.ID@parent' header; device_inventory_run / device_interface / device_route (V13) carry no column for either. Migration V17 is free."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json (use the queue tool)",
+          "the Python collectors",
+          "ui2/ldap-adapter",
+          "ui2/scheduler",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/configuration-consolidation"
+        },
+        "invariants": [
+          "No raw configuration outside the encrypted artefact store.",
+          "Additive migration only; existing columns untouched.",
+          "The closed command sets of both collections are unchanged.",
+          "No new device contact of any kind."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Close the three gaps movement NXS-LOCAL-0165 disclosed in its own SESSION_CLOSE rather than leaving them to rot: (1) no end-to-end configuration job test for either vendor, and no backend test for the configuration routes; (2) the artefact store's volume is an emptyDir, so a worker restart loses artefacts while device_configuration_run rows still point at them by artefact_ref; (3) the inventory worker parses HA role and VLAN id and then throws them away because no column exists. All three are known, written-down debts of merged work, not new scope.",
+        "output_contract": [
+          "The configuration and inventory services proved end to end, their artefacts durable, HA role and VLAN visible.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "Three separate debts across worker, persistence, manifests and frontend, each with an existing pattern to copy; high effort covers the streaming end-to-end test.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every new type or column names the clause it serves (14G CG-n, 14C D-n, 14D PR-4, C7 section n).",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite; run the named files. Eleven Gradle subprojects. Migration V17 only, additive.",
+          "No estate value in fixtures, logs, audit rows or error messages; the multi-megabyte fixture is generated in the test, never checked in.",
+          "A migration that writes a row to an audited table must set app.actor_fingerprint and app.action_id transaction-locally first -- tests/test_migration_audit_context.py enforces it and two rollouts crash-looped without it.",
+          "If a contract clause and this packet disagree, raise a RELAY_QUESTION and STOP; mechanical mismatches are settled against the code per the standing rules.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Open the PR at the end; do not merge. SESSION_CLOSE names the tests added, the claim manifest, the V17 columns and the queue items closed, with test counts before and after."
+        ],
+        "risks": [
+          "Checking a multi-megabyte fixture into the repository.",
+          "Turning the end-to-end test into a second implementation of the processor rather than a proof of the executor.",
+          "Changing the artefact path or its env name while moving to a claim.",
+          "Writing HA role onto the device row instead of the run-scoped table, which would lose per-context truth."
+        ],
+        "scope": {
+          "in": [
+            "End-to-end configuration tests, in the exact shape of worker.inventory's: ConfigurationJobExecutorEndToEndTest for Check Point (fixture in the measured shape: a few hundred set lines, a handful of secret-bearing ones, the '#' header) asserting one run recorded with the canonical hash over set lines, the withheld count, the section index and both artefacts; the same for Palo Alto with a synthetic multi-megabyte effective-running generated in the test, asserting the category index per vsys, the override rows for src=local elements and the gzip+encrypted artefact; a ConfigurationJobExecutorWorkerDiesTest asserting no partial run survives a lease lapse.",
+            "Backend tests for the routes, in InventoryControllerTest's shape: ConfigurationControllerTest and ConfigurationQueryService / ConfigurationCollectService tests with fakes, covering the four routes' shapes and status codes including the 404s and the 409 when a device has no run.",
+            "Artefact durability: replace the emptyDir with a PersistentVolumeClaim (a new deploy/ui2 manifest in the numbering already used, modest size, ReadWriteOnce) mounted at the same path in the worker Deployment; extend tests/test_ui2_deployment_manifests.py so the artefact path is asserted to come from a claim, not an emptyDir, and so every other writable path keeps its existing assertion. The service role does not mount it. Add one line to docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md about the claim.",
+            "Inventory HA role and VLAN: migration V17 adding, additively, device_inventory_run-scoped HA facts (a small device_inventory_ha table keyed by run and context: role, cluster_mode, source) and a vlan_id column on device_interface; the Check Point executor writes the physical role, the cluster mode and the per-VSID roles the VSLS table yields (14D PR-4), and the VLAN id where the parser found one; the Palo Alto executor writes the HA state it already reads and the tag as vlan_id; the read model and the Inventory screen show the HA role per context and the VLAN id column. Repository, service and frontend tests follow the existing patterns.",
+            "Backlog housekeeping through scripts/project_queue.py only: close cp_discovery_java_implementation, pan_discovery_java_implementation and cp_collection_contract_from_measurement with notes naming what delivered them (movements 0163, and records 14C/14D/14E for the contract), and note on ui2_ssh_strict_host_key_trust_in_production that the posture switch exists and only the production enforcement remains."
+          ],
+          "out": [
+            "Backup (the next product step, its own movement and gate); the Panorama live cross-check target (needs management-server rows, 14F DR-4, a separate movement); per-artefact wrapped DEKs and key rotation (C7's full form, its own movement); scheduler; any new device command or API route."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":persistence:test"
+            ],
+            "name": "ui2_persistence_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_ui2_deployment_manifests.py",
+              "-q"
+            ],
+            "name": "deployment_manifests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_migration_audit_context.py",
+              "-q"
+            ],
+            "name": "migration_audit_context"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T17:18:15Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "New: ui2/service/src/main/resources/db/migration/V17__inventory_ha_facts_and_vlan.sql",
+          "New: ui2/persistence/.../device/inventory/InventoryHaFact.java; InventoryRun.java and InventoryInterface.java each gained a field via a new canonical constructor plus a kept pre-V17 secondary constructor so every existing call site (service/persistence tests) kept compiling unchanged",
+          "Changed: JooqDeviceInventoryRepository.java (writes/reads vlan_id and device_inventory_ha)",
+          "Changed: InventoryCapabilityExecutor.java (parses the already-issued CP cphaprob stat and PAN show-high-availability-state reads instead of discarding them), InventoryJobExecutor.java, InventoryResult.java, ParsedInterface.java, CheckPointHaStateParser.java (javadoc only); new PaloAltoHaStateParser.java",
+          "Changed: InventoryController.java (adds vlan_id per interface, ha per context to GET /devices/{id}/inventory -- additive JSON fields only)",
+          "Changed: adminApi.ts, InventoryPanels.tsx (VLAN column, HA role badge)",
+          "New: deploy/ui2/51-artefact-store-pvc.yaml; changed: 52-worker-deployment.yaml (artefact-store volume source), docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md section 5a",
+          "New: ConfigurationJobExecutorEndToEndTest.java, ConfigurationJobExecutorWorkerDiesTest.java, ConfigurationJobExecutorFakes.java, ScriptedCheckPointConfigTransport.java, ScriptedPaloAltoConfigTransport.java (worker); ConfigurationControllerTest.java, ConfigurationQueryServiceTest.java, ConfigurationCollectServiceTest.java, FakeDeviceConfigurationRepository.java (service)",
+          "Widened GeneratedPanConfigInputStream (pan-config test package) from package-private to public so the new E2E test reuses it rather than duplicating a multi-megabyte generator",
+          "project/backlog.json, project/archive/backlog_terminal.json, project/QUEUE.md, docs/history/backlog/*.md -- via scripts/project_queue.py only"
+        ],
+        "completed": [
+          "AC-1: ConfigurationJobExecutorEndToEndTest (Check Point, against CheckPointGaiaConfigProcessor's own canonicalHash/withheldLineCount/index/sanitizedText plus a decrypted-artefact round trip; Palo Alto, against PaloAltoConfigStreamProcessor's own index/overrides plus a gzip+decrypted-artefact round trip) and ConfigurationJobExecutorWorkerDiesTest, all against a real FileArtefactStore over a JUnit @TempDir, no device contact.",
+          "AC-2: ConfigurationControllerTest (8), ConfigurationQueryServiceTest (7), ConfigurationCollectServiceTest (5) cover the four configuration routes' shapes and status codes, including the 404s on both GET routes and the 409 CONFLICT the collect route returns for an unregistered device.",
+          "AC-3: deploy/ui2/51-artefact-store-pvc.yaml (ReadWriteOnce, 2Gi) replaces the artefact-store emptyDir in 52-worker-deployment.yaml; tests/test_ui2_deployment_manifests.py asserts the claim and that the service role never mounts it, while tmp/home keep their existing emptyDir assertions unchanged.",
+          "AC-4: migration V17 adds device_inventory_ha (run- and context-scoped role/cluster_mode/source) and device_interface.vlan_id, both additive. The Check Point and Palo Alto inventory executors now persist HA role/cluster mode (previously parsed and discarded) and VLAN id; the device inventory read model and screen show both per context.",
+          "Backlog: closed cp_discovery_java_implementation, pan_discovery_java_implementation and cp_collection_contract_from_measurement through scripts/project_queue.py with notes naming movement 0163 and PO decision records 14C/14D/14E; noted ui2_ssh_strict_host_key_trust_in_production's current state (posture switch exists, production enforcement default remains open).",
+          "Opened PR #304 (feature/configuration-consolidation -> main), not merged."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Not applicable -- ui2 is a Java/Spring Boot service plus a TypeScript frontend; this movement touches no Python entry point beyond the offline scripts/project_queue.py housekeeping calls already listed above.",
+          "ui": "Inventory screen (InventoryPanels.tsx): the per-context interfaces table gained a VLAN column and a context-level HA-role badge (role plus cluster mode, shown only when the run recorded one). The Configuration screen is unchanged; the cluster-merge inventory view is unchanged (see unresolved_risks)."
+        },
+        "integration": {
+          "branch": "feature/configuration-consolidation",
+          "ci": "PR just opened this session; no CI run has been observed yet from here.",
+          "head_sha": "5edec7316553916ee22db5f51d49517b13806a5e",
+          "merge_commit": null,
+          "merge_decision": "Awaiting Product Owner assistant review plus orchestrator verify.passed per WORKER.md's merge gate; this worker does not merge to main.",
+          "merge_state": "OPEN",
+          "pr": 304,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/304"
+        },
+        "next": {
+          "movement": "ui2-backup-restore-engine-full-form",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Design and freeze the contract for C7's full backup/restore engine (per-artefact wrapped DEKs, key rotation) as its own movement and gate; separately, wire the Panorama live cross-check once management-server rows exist (14F DR-4). Both were explicitly out of this movement's scope.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No raw configuration outside the encrypted artefact store -- the E2E test's own artefact assertions go through FileArtefactStore.retrieve (decrypt/decompress), never read a .enc file directly.",
+          "Additive migration only -- V17 adds one table and one nullable column; no V1-V16 statement was touched.",
+          "The closed command sets of both collections are unchanged -- HA/VLAN persistence is a parse-scope extension of reads already issued (cphaprob stat, show high-availability state); no new command literal was added to InventoryReadPlan or ConfigurationReadPlan.",
+          "No new device contact -- every new and existing test uses a scripted or fake transport.",
+          "The shared inventory READ CONTRACT's existing JSON keys are untouched; vlan_id and ha are additive fields only.",
+          "DeviceInventoryRepository's three-method shape (recordRun/findLatestRun/findLatestRuns), which NXS-LOCAL-0159/0160 build to, was not changed -- only the record types it carries gained fields via secondary constructors."
+        ],
+        "recommended_reasoning": {
+          "reason": "Matches the SESSION_START recommendation -- three separate debts spanning worker, persistence, manifests and frontend, each against an existing pattern to copy; the streaming multi-megabyte end-to-end test was the highest-effort single piece.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "state_updates": [
+          "project/backlog.json / project/archive/backlog_terminal.json: cp_discovery_java_implementation, pan_discovery_java_implementation, cp_collection_contract_from_measurement moved to done via scripts/project_queue.py status --set done, each with a docs/history/backlog/<id>.md note.",
+          "docs/history/backlog/ui2_ssh_strict_host_key_trust_in_production.md: appended a note on the current posture-switch state, item status unchanged.",
+          "project/QUEUE.md regenerated by the same tool calls; scripts/project_queue.py check confirms it is current."
+        ],
+        "unresolved_risks": [
+          "PaloAltoHaStateParser's XML shape (result/enabled, result/group/local-info/state, result/group/mode) is PAN-OS's documented response shape, not yet corroborated against a real device in this repository (documented in the class's own javadoc) -- a real-environment PAN read may reveal a different shape; low risk since this is a read-only display field, not a safety-critical command.",
+          "The cluster-merge inventory view (ClusterInventoryMerger, GET /clusters/{ref}/inventory) does not yet show HA role or VLAN id -- WORKER.md's AC-4 text names the single-device read model and screen only; extending the merge (which member's HA role wins, how a disagreement is reported) is a real design question this brief did not answer and was left open rather than guessed.",
+          "WORKER.md's AC-2 text says '409 when a device has no run'; the code's only 409 path is collect's DeviceNotFound/AdmissionRefused (unregistered device or unsupported vendor) -- GET .../configuration/text returns 404, not 409, for a device with no run. Tested and documented the code's actual behavior; named as a mechanical mismatch, not escalated."
+        ],
+        "validation": {
+          "affected": "worker (+6 tests, 128->134), service (+21 tests, 116->137), persistence (0 new tests, 2 existing extended, 34->34), frontend (+1 test, 59->60), deployment_manifests (+2 tests, 49->51) -- every affected module's test count reconciled against the diff.",
+          "diff_check": "git diff --cached --stat reviewed before commit: 39 files, +2189/-95, matches WORKER.md's scope bullets exactly -- no file outside the named areas was touched.",
+          "full_regression": "./ui2/gradlew -p ui2 build -x :integration-tests:test: BUILD SUCCESSFUL. :worker:test, :service:test, :persistence:test, :architecture-tests:test run together: BUILD SUCCESSFUL, no failures. npm --prefix ui2/frontend test: 13 files, 60 tests, all passed.",
+          "privacy": "python3 scripts/repository_privacy_check.py: PASS, 1731 files scanned, 0 findings.",
+          "real_environment": "None performed -- deployment_direction is 'local validation only' per the SESSION_START baseline; this movement adds no new device command or API route, so no real-environment gate applies.",
+          "state_consistency": "python3 scripts/project_queue.py check: project/QUEUE.md is up to date (re-verified after the four backlog writes).",
+          "targeted": "New/changed test classes run individually first (ConfigurationJobExecutorEndToEndTest, ConfigurationJobExecutorWorkerDiesTest, PaloAltoHaStateParserTest, ConfigurationControllerTest, ConfigurationQueryServiceTest, ConfigurationCollectServiceTest, InventoryControllerTest, JooqDeviceInventoryRepositoryTest, deployment manifest tests) -- all green before the full-suite runs."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T17:43:06Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0167",
+  "movement": "configuration-consolidation-durability-and-end-to-end",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14G_CONFIGURATION_COLLECTION_MEASURED_FORMS.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14F_DISCOVERY_FROM_THE_UI_RUN_AND_CANDIDATE_SET.md",
+    "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/configuration/ConfigurationCapabilityExecutor.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryJobExecutor.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/artefact/FileArtefactStore.java",
+    "deploy/ui2/52-worker-deployment.yaml",
+    "tests/test_ui2_deployment_manifests.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T17:43:06Z"
+}

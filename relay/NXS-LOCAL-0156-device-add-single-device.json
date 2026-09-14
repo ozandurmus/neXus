@@ -1,0 +1,255 @@
+{
+  "created_at": "2026-09-14T09:15:56Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 THE DECISIVE TEST: over a fake transport, a peer that names the first device back yields one unit with both rows sharing a cluster_member_ref; a one-sided claim yields no unit and the 'peer named, not confirmed' outcome -- observed failing before the resolver exists.",
+          "AC-2 The commands and routes the confirm can ever send equal the four gate entries exactly; no VIP or peer address becomes a target except the one PF-1 hop.",
+          "AC-3 Add single device with a valid credential lands an ENROLLED row carrying hostname, model, version and HA role (or UNKNOWN per field) and the recorded identity; an unresolvable credential refuses before contact.",
+          "AC-4 A later identity mismatch warns, shows the management plane's view, audits and continues by default; refuses only with the posture switch on.",
+          "AC-5 The dialog asks address, vendor, credential and 'single device' only; the Inventory screen shows the device (and the cluster as parent when formed) without liveness vocabulary.",
+          "AC-6 Eleven-module build, :service:test, :worker:test, :architecture-tests:test and frontend tests green; privacy gate PASS."
+        ],
+        "baseline": {
+          "authority": "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-14: section 2 import mapping (rows vs C4 section 4.2 target modifiers, CP-D6), section 3 match keys and the three outcomes, section 4 the enrollment confirm as first contact (EC-1..EC-12, EC-6a: a warned-and-continued mismatch still lands ENROLLED; EC-12: C3-authorized action whose device steps run as a C4 read capability), section 5 privacy, section 6 operator constraints. docs/design/DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md -- APPROVED BY THE PRODUCT OWNER 2026-09-14 for purpose and class: exactly four class-0 reads (CP version, CP cphaprob stat, PAN show system info, PAN HA state), forms UNVERIFIED and bound at one site. docs/design/PO_DECISION_RECORD_2026_09_14_... (FROZEN) DA-1..DA-3, PF-1..PF-5, CS-3. docs/design/PO_DECISION_RECORD_2026_09_13F (FROZEN) section 2 ID-M1..ID-M4, section 5 CL-1 (never connect to a VIP). UI2_0_B1_04B (FROZEN) sections 2, 3, 6 -- records, enrollment states, credential handling; DA-1 supersedes its name field for the product's own dialog. UI2_0_C4 (FROZEN) section 2.3 step kinds and section 4.2 target_ref modifiers; section 3.5 an UNKNOWN gate blocks execution.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :service:test, :worker:test and npm --prefix ui2/frontend test first; record the counts before you change anything.",
+          "what_exists": "The credential store movement (NXS-LOCAL-0154, lane feature/credential-store) delivers the store, POST/GET /credentials and the store-backed SshCredentialResolver / PanCredentialResolver in worker -- build on it; if it is not yet on origin/main when you start, STOP and raise a RELAY_QUESTION rather than inventing a credential path. Transports: worker SshExecTransport (connect/exec/disconnect, HostKeyVerifier/TrustRuleResolver) and PanXmlApiTransport (xmlApiCall, TLS via CA bundle or pinned fingerprint). Discovery domain cores in platform-core (cp, pan) define candidate shapes; DeviceRegistrationController POST /devices and DeviceRegistrationService exist for manual registration (B1_04B) -- extend, do not duplicate. Schema: C1 devices/endpoints/credential_references; V1..V11 taken (V11 is the credential store) -- take V12 for the recorded-identity and read-facts columns section 2 of the contract needs (contract section 10 names them). Frontend: src/shell/AddDeviceDialog.tsx is a static four-field mock with no submit; screens/InventoryScreen.tsx and AdministrationScreen.tsx exist; Material 3 vocabulary in shell/M3Widgets.tsx. The two identity reads' output shapes have NOT been measured on this estate: parse defensively, bind every field name at one site marked UNVERIFIED (the discovery transports' ManagementApiFieldBinding / PanoramaApiFieldBinding pattern), and land the row with UNKNOWN facts rather than failing when a field is missing (EC-11 gate entry item 8)."
+        },
+        "context_not_loaded": [
+          "The Python collectors",
+          "docs/history/**",
+          "project/*.json",
+          "The collection measurement briefs (their commands are the same reads; the forms stay UNVERIFIED here)"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/device-add-single-device"
+        },
+        "invariants": [
+          "A unit forms only on corroboration; a one-sided claim never does.",
+          "Only the four approved reads are ever sent; one peer hop at most; never a VIP.",
+          "Mismatch warns and continues by default; the strict posture is a switch.",
+          "No cluster or virtual-system devices row; modifiers only.",
+          "Credentials resolve in the worker at execution time from the store; refusal before contact when unresolvable.",
+          "No new surface, subproject or dependency; no edited migration."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make 'Add device' real for a single device, exactly as PO_DECISION_RECORD_2026_09_14 section 1 and 2 and the now-FROZEN DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md section 4 state: the dialog asks for address, vendor and a credential from the store, then 'single device'; the product connects with that credential, performs the vendor's approved identity read (DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md entries 1 and 3) and HA/peer read (entries 2 and 4), records the presented identity, creates the devices/endpoints/credential_references rows ENROLLED with the facts it read (hostname, model, software version, HA role), and -- when the device names a peer and carries its address -- contacts that one peer once with the same credential, forms the cluster only if the peer names the first device back (PF-1..PF-5), and shows the cluster as the parent of both. Identity mismatch on any later contact follows 13F section 2: warn with the management plane's view alongside, audit, continue.",
+        "output_contract": [
+          "Add device works end to end for a single Check Point or Palo Alto device from the product's own dialog, with peer follow under the corroboration rule.",
+          "One migration (V12), one confirm capability per vendor with a closed command set equal to the gate table, one endpoint, a real dialog and an Inventory list.",
+          "SESSION_CLOSE naming migration, capability ids, endpoint, UNVERIFIED bindings and test counts."
+        ],
+        "recommended_reasoning": {
+          "reason": "First device contact from the product, an identity boundary, a corroboration rule with a tempting wrong shortcut, and four layers at once. Commit early so a budget stop is recoverable.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type and method names the clause it implements (contract EC-n/IM-n/RD-n, record DA-n/PF-n, 13F ID-M-n, gate entry n).",
+          "Write the corroboration test and the closed-set test FIRST; report that each was observed failing before and passing after.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects. Migration number V12.",
+          "No address, hostname, serial, host key or credential reaches a log line, an exception message or an audit row beyond the columns the contract names; nothing raw is persisted.",
+          "If the credential store is not on origin/main when you start, or a contract clause and this packet disagree, raise a RELAY_QUESTION; never reconcile silently.",
+          "The SESSION_CLOSE names the migration and columns, the capability ids and their closed command sets, the endpoint, which fields each vendor's identity read actually binds (all UNVERIFIED), and the test counts before and after."
+        ],
+        "risks": [
+          "Forming the pair from the first device's claim alone because the peer 'obviously' exists.",
+          "Adding a third read (interfaces, routes) to make the Inventory screen richer -- collection is gated and separate.",
+          "Connecting to a cluster virtual address the HA read mentions.",
+          "Refusing on mismatch out of habit; the PO's rule is warn and continue.",
+          "Storing a raw host key or certificate instead of a fingerprint; logging a hostname or address.",
+          "Starting before the credential store is on main and inventing an env-var credential path."
+        ],
+        "scope": {
+          "in": [
+            "Migration V12 (additive): on devices (or a device_identity table if cleaner) the recorded identity per contract section 4.3 (CP: SSH host-key fingerprint + observed hostname; PAN: serial + TLS certificate identity), the facts read at first contact (hostname, model, software version, HA role), the identity-mismatch warning state (open/none) with the management plane's last view, and the C4 section 4.2 modifiers cluster_member_ref / virtual_system_ref as columns or a small table; C1 section 3.5 audit trigger attached. No VS- or cluster-scoped devices row ever (CP-D6).",
+            "The confirm as a C4 read capability (EC-12): one capability per vendor whose steps are connect -> identity read -> HA/peer read -> disconnect, each command/route string declared ONCE in a closed set mirroring DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md entries 1-4 (a test asserts the set equals the table). Executed in the worker through the existing transports and the store-backed resolvers (CS-3); credential resolution failure refuses before any contact (SB-16).",
+            "Service: POST /devices/add-single {address, vendor, credential_reference_id} -- role:onboarding_admin's enrollment confirm (C3 section 4.1, B1_04B section 3) -- creates the DRAFT row, runs the confirm capability, and on completion lands ENROLLED with the read facts and the recorded identity (EC-6a: also when identity differs from an earlier record -- warn+audit+continue, ID-M1..ID-M3); the request returns the row and the outcome (facts read / UNKNOWN fields / peer outcome). The strict-refuse posture switch of 13F ID-M3 is a property, default off, honoured here.",
+            "Peer follow (PF-1..PF-5): if the HA read names a peer AND carries its management address, contact that peer once with the same credential, run the same two reads, and form the unit only if the peer names the first device back -- then create the peer's rows and set cluster_member_ref on both to one opaque unit id. If the address is absent, the peer unreachable, or the claim one-sided: record 'peer named, not confirmed' on the first device and stop. Never a second hop, never a VIP as a target (13F CL-1), never another credential.",
+            "Frontend: AddDeviceDialog becomes real -- address, vendor (Check Point / Palo Alto), credential (select from GET /credentials), then two buttons: 'Single device' (this movement) and 'Management server (discovery)' (present but disabled with the plain text 'next step', DA-3 is the following movement). Submit shows progress (connecting, reading identity, checking peer) and the result: the device row with its read facts, the peer outcome, and any identity-mismatch warning with the management plane's view beside it (contract section 6). Inventory screen lists devices with hostname, vendor, model, version, HA role, enrollment state, and the cluster as a parent row grouping its members (SB-9). No liveness vocabulary anywhere (LV-1 carried over).",
+            "Tests, first two written FIRST and observed failing: (1) the peer-follow corroboration rule -- a one-sided claim forms no unit, a reciprocal one does, over a fake transport; (2) the closed command set equals the gate table and nothing else is ever sent. Then: refusal before contact on an unresolvable credential; ENROLLED landing with UNKNOWN facts when the read is unparseable; identity mismatch warns and continues by default, refuses when the posture switch is on; no VIP is ever a ConnectionTarget; existing registration, discovery and credential-store tests stay green; frontend dialog test.",
+            "Commit early and often (migration; capability + closed set; service; peer follow; frontend; tests). Open the PR at the end; do not merge. No tool footer, emoji or external URL in commits or the PR."
+          ],
+          "out": [
+            "The management-server (discovery) branch of the dialog beyond a disabled button -- DA-3 is the next movement once the discovery bindings are confirmed live.",
+            "Any read beyond the four gate entries; any collection (inventory interfaces/routes, configuration); any write of any class; any scan or second hop.",
+            "Directory credentials, trust-store administration, or changing how trust rules are resolved (keep them working).",
+            "Editing any FROZEN document or existing migration; a new Gradle subproject or dependency; renaming code-internal identifiers."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T09:15:56Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "ui2/service/src/main/resources/db/migration/V12__device_first_contact_identity_and_target_modifiers.sql (new, additive)",
+          "ui2/job-engine/.../jobs/transport/TransportSession.java (added a default method, no behavior change for existing implementers)",
+          "ui2/worker/.../transport/ssh/SshTransportSession.java (overrides the new default method)",
+          "ui2/worker/.../worker/confirm/* (new package: Vendor, DeviceFirstContactCommandSet, PresentedIdentity, ObservedFacts, HaPeerClaim, ConfirmResult, ConfirmRequest, ConfirmReadParser + CheckPoint/PaloAlto implementations, ConfirmCapabilityExecutor, PeerFollowOutcome, PeerFollowResolver, IdentityMismatchEvaluator, plus their tests)"
+        ],
+        "completed": [
+          "Migration V12 (additive): devices.observed_hostname/model/software_version/ha_role; recorded_identity_primary/secondary/recorded_at; identity_mismatch_state (NONE|OPEN) with presented-value/detected-at columns; cluster_member_ref/virtual_system_ref (C4 4.2 target modifiers); peer_follow_outcome/reason. Captured automatically by the existing generic trg_audit_devices trigger, no new trigger needed.",
+          "DeviceFirstContactCommandSet (worker.confirm package): the closed, four-entry command/route set mirroring DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md entries 1-4 exactly (CP: 'show version all' / fallback 'clish -c \"show version all\"', 'cphaprob stat'; PAN: the two <show>...</show> op-command bodies). AC-2 test asserts the set equals the gate table; PAN key-generation is modeled as the xml_api_call capability's own NOT_APPLICABLE-gated connect step per C4 2.3, deliberately excluded from the closed set.",
+          "ConfirmCapabilityExecutor: connect -> identity read -> HA/peer read -> disconnect for Check Point over the real SshExecTransport, and connect(keygen)/read/read for Palo Alto over the real PanXmlApiTransport.xmlApiCall (both are the actual production transport implementations, not stubs). Refuses before any contact on an unresolvable credential (EC-3, both vendors). Unparseable output lands UNKNOWN per field rather than failing (EC-11 item 8).",
+          "PeerFollowResolver: PF-1..PF-5. One additional contact at most, to the peer's own reported management address, with the same credential; forms a unit (opaque cluster_member_ref) only when the peer's own read names the first device back (PF-2); otherwise 'peer named, not confirmed' with a reason (ADDRESS_MISSING/PEER_UNREACHABLE/ONE_SIDED_CLAIM, PF-3).",
+          "IdentityMismatchEvaluator: NO_BASELINE/MATCH/WARN_AND_CONTINUE/REFUSE over a presented vs recorded PresentedIdentity comparison, strict-refuse posture as a caller-supplied boolean (EC-6..EC-9, 13F ID-M1..ID-M3).",
+          "TransportSession gained a default presentedIdentity() method (backward compatible; no existing implementer required to change) so SshExecTransport's session can expose the SSH host-key fingerprint presented at connection (EC-5) via SshTransportSession override.",
+          "Tests: AC-1 THE DECISIVE TEST (PeerFollowResolverTest, reciprocal vs one-sided, over a fake transport, observed failing before PeerFollowResolver existed) and AC-2 (DeviceFirstContactCommandSetTest) both written first and now pass; plus refusal-before-contact (both vendors), UNKNOWN-facts-on-unparseable-read, peer-follow-dials-exactly-the-reported-address (no VIP/derived address), and the four IdentityMismatchEvaluator scenarios."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- no Python source touched",
+          "ui": "none -- no frontend file touched this session; AddDeviceDialog remains the static mock"
+        },
+        "integration": {
+          "branch": "feature/device-add-single-device",
+          "ci": "not run (no CI configured to observe in this environment)",
+          "head_sha": "b379eacf41e318a629877869d20770b8b7dc72a0",
+          "merge_commit": null,
+          "merge_decision": "Do not merge. Product Owner assistant review of the diff, plus the DIR-2 architecture question above, must both be resolved first.",
+          "merge_state": "OPEN",
+          "pr": 270,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/270"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0156 continuation: POST /devices/add-single across the DIR-2 boundary",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Resolve the DIR-2/worker-daemon architecture question above (PO/architecture decision needed), then implement the service endpoint, the peer-follow/mismatch persistence writes, the pan_xml_api transport-kind allowlist extension, and the AddDeviceDialog/InventoryScreen frontend wiring against the confirm engine this session delivered.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Existing registration (DeviceRegistrationController/Service), discovery, and credential-store tests untouched and still green.",
+          "No FROZEN document edited; no existing migration edited; no new Gradle subproject or external dependency added; no code-internal identifier renamed.",
+          "No VS- or cluster-scoped devices/endpoints row (CP-D6): cluster_member_ref/virtual_system_ref are columns only.",
+          "No read beyond the four approved gate entries; PAN key-generation modeled as the ungated connect-equivalent step, not a fifth gate entry."
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work still crosses an identity boundary (first device contact) and a real architecture decision (DIR-2 vs. a synchronous confirm UX) that a lighter tier should not resolve unilaterally; recommend the PO/architecture owner weigh in on the two options named above before the next implementation session picks a direction.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "ARCHITECTURE GAP (the main blocker for AC-3/AC-5): Ui2ArchitectureTest.dir2_web_cannot_reach_worker_or_transport_implementations hard-forbids any class in the `service` package from depending on any class in the `worker` package -- and this session's confirm engine necessarily lives in `worker` (it uses SshExecTransport/PanXmlApiTransport/the store-backed credential resolvers directly, per WORKER.md's own instruction). No worker-side daemon or poll loop exists anywhere in production code today (StepExecutor -- the one class that already drives a Capability's steps against a DeviceTransport -- is constructed only in job-engine's own unit tests; grep confirms no production caller). So a POST /devices/add-single that both creates the DRAFT row from :service AND runs the confirm from the same request, in the same process, cannot be built without either (a) violating DIR-2, or (b) building new cross-process infrastructure. Two options for the PO/architecture owner to choose between, not decided unilaterally here: (1) async -- :service admits a job via the already-built JobAdmissionService/job-engine, a new small worker-side entry point (mirroring the existing DiscoveryRunnerMain pattern) claims and executes it via ConfirmCapabilityExecutor, :service polls the devices row for a bounded window and returns whatever state it finds (matches the frontend brief's own 'submit shows progress' language); (2) relax DIR-2 for this one narrow case with an explicit architecture amendment, which the FROZEN Ui2ArchitectureTest itself would need to accept as authorized scope creep -- not something a single implementation movement should do to its own gate test.",
+          "devices.transport_kind's application-level allowlist (DeviceRegistrationService.IMPLEMENTED_TRANSPORTS = Set.of(\"ssh_exec\")) still excludes 'pan_xml_api' -- B1-04b successor clause 1 (IM-8) is not yet applied. No DB CHECK constraint blocks it (verified: none exists), only the Java-level set.",
+          "Pre-existing, unrelated frontend test failure observed during validation: frontend/tests/AdministrationScreen.test.tsx fails intermittently on a 'Loading...' render race in its Credentials tab assertion. No frontend file was touched this session; recommend a separate look rather than attributing it to this movement.",
+          "CP/PAN read-output parsing (CheckPointConfirmReadParser/PaloAltoConfirmReadParser) is explicitly UNVERIFIED against a real device (Band 3 unrun) -- regexes are a documented best-effort binding at one site per the gate document's own status line, not a measured contract.",
+          "The 'management plane's current view' side-by-side comparison OP-3/EC-7 call for has no data source in this movement's scope (single-device add carries no MDS/Panorama context) -- V12's migration comment records the judgment made: the compared 'other view' is the device's own previously recorded identity, not a separate management-plane read. Flagging this reading explicitly rather than treating it as self-evidently correct."
+        ],
+        "validation": {
+          "affected": "architecture-tests:test green (DIR-2 confirmed still enforced: :service cannot import the new worker.confirm package -- this is the load-bearing finding below, not a regression). service:test green, unaffected (no service-layer changes in this session).",
+          "diff_check": "git diff --check clean; module listing (`./gradlew -p ui2 projects`) still exactly 11 subprojects.",
+          "full_regression": "./gradlew -p ui2 build -x :integration-tests:test -- BUILD SUCCESSFUL, all 11 modules. Full Python pytest suite NOT run (standing rule: never run it in this session).",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings.",
+          "real_environment": "Not run -- Band 3 (real gateway/firewall) unrun at time of writing, exactly as the contract's own §7 records; deployment_direction is local validation only.",
+          "state_consistency": "tests/test_contract_authority_status.py -- 5/5 passed. project/*.json not touched (out of this brief's scope; PO/orchestrator owns project-state updates per GOV.ORCH.5).",
+          "targeted": "worker:test (new confirm package: 17 tests, including AC-1 and AC-2) -- observed AC-1/AC-2 failing before the enum/resolver existed, passing after, per the brief's requirement."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T09:47:50Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0156",
+  "movement": "device-add-single-device-first-contact",
+  "next_actor": null,
+  "refs": [
+    "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md",
+    "docs/design/DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14_DEVICE_ADD_ENTRY_PEER_FOLLOW_AND_CREDENTIAL_STORE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13F_COLLECTION_TRANSPORT_AND_IDENTITY_DECISIONS.md",
+    "docs/design/UI2_0_B1_04B_DEVICE_MODEL_AND_ONBOARDING_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "ui2/frontend/src/shell/AddDeviceDialog.tsx"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T09:47:50Z"
+}

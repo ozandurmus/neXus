@@ -1,0 +1,302 @@
+{
+  "created_at": "2026-09-14T18:15:22Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A backup job against the allowlisted device runs submit, poll, fetch, verify, delete in that order against a fake transport and records one artefact with its C7 manifest row; a job against any other device is refused with a reason naming the allowlist.",
+          "AC-2 A digest mismatch fails the run, deletes nothing on the device, and says which side differed; a never-terminal poll ends OUTCOME_UNKNOWN and deletes nothing; a failed delete records cleanup_failed and marks the endpoint ineligible.",
+          "AC-3 An unresolvable Check Point software version refuses the store with zero rows and a named failure; the deviation state is recorded against the previous artefact.",
+          "AC-4 The CLI retrieval decrypts to the operator's named path under the backup role with a reason, writes its audit row, and no HTTP route returns bytes, a path or a decrypt affordance (a test greps the service sources for a retrieval route and fails if one exists).",
+          "AC-5 Gate entries exist per literal, the migration seeds them SIGNED_OFF and the capability resolves executionEligible; eleven-module build, the named module tests, manifests, migration-audit-context, frontend tests, privacy gate and contract_authority_status all green."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14H_BACKUP_STEP_SCOPE_PILOT_DEVICE_AND_THE_ASYNCHRONOUS_TRUTH.md -- FROZEN 2026-09-14: BK-1 class-1 writes authorized on exactly one Product-Owner-named pilot device and refused elsewhere with a reason naming the allowlist; BK-2 every Gaia command issued as clish -c \"<command>\" from the Expert landing shell; BK-3 the archive is transferred by SFTP and a digest computed ON THE DEVICE is compared with the digest of the bytes received before anything is deleted, a mismatch leaves the device copy in place and fails the run; BK-5 submit then poll -- submit add backup local, take the archive name ONLY from that command's own output, poll show backup status until a terminal state or the run deadline, and a run that never reaches a terminal state ends OUTCOME_UNKNOWN with the device-side archive NOT deleted; BK-6 the free-space threshold is a configurable local heuristic, never presented as a vendor requirement; BK-7 show diskspace and delete backup <name> are confirmed by the pilot run, with the Expert forms as fallback, and deletion targets only the exact name this run created; BK-8 a backup and a snapshot cannot run concurrently and a vendor refusal is reported as the failure reason; BK-9 Check Point gateway only; BK-10 a cluster member is its own device, a VSX virtual system is never a target, Panorama never a source; BK-11 a distinct backup identity with no fallback to the collection credential, its absence failing closed before any device contact; BK-12 manual only, role:backup_admin plus a reason of at least eight characters; BK-13 restore stays disabled; BK-14 no artefact byte, path or decrypt affordance in any HTTP response; section 5 the seven-literal gate table this movement authors entries for. docs/design/PO_DECISION_RECORD_2026_09_14I (FROZEN) AL-1..AL-4 the store location is configuration and an unreachable artefact is reported, never success; DV-1..DV-4 deviation against the previous artefact of the same class for the same device; OR-1..OR-5 the operator retrieval through the product's own command line, audited as a typed action, never an HTTP route; RC-1..RC-3 the untouched configuration is retained beside the backup. docs/design/UI2_0_C7_... (FROZEN) sections 2.2, 3.2, 3.3, 3.4, 6.1 and its outcome rules. docs/design/UI2_0_BACKUP_OUTCOME_DECISION_2026_09_12.md (DECIDED) -- five C2 outcomes only, one device per job, cleanup_failed is a failure that marks the endpoint ineligible, OUTCOME_UNKNOWN surfaced separately.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :worker:test, :persistence:test, :service:test, :cli:test, :capability-registry:test, :architecture-tests:test, npm --prefix ui2/frontend test and python3 -m pytest tests/test_ui2_deployment_manifests.py tests/test_migration_audit_context.py -q first; record counts.",
+          "what_exists": "The configuration collection is the pattern to copy end to end: worker.configuration ConfigurationReadPlan (a closed literal set with its own equality test), ConfigurationCapabilityExecutor, ConfigurationJobExecutor (full C2 discipline: lease, fencing, heartbeat, terminal outcome, identity-mismatch handling), its gate entries documents and SIGNED_OFF gate_registry rows seeded by migration, its capability YAMLs with real steps and gate_reference, its end-to-end and worker-dies tests against a scripted fake DeviceTransport, its service routes and its screen. Merged since: the artefact store at the C7 shape -- ArtefactStore.open(deviceId, jobId, vendor, gzip) returns a handle whose metadata carries plaintext and ciphertext digests and byte counts, keyId and wrappedDataKey; ArtefactStore.retrieve(ref, wrappedDataKey, gzip) needs that wrapped key, so the master key alone decrypts nothing; BackupArtefactManifestRepository.record(manifest, actorFingerprint, actionId) writes the C7 manifest row; HostnameFingerprint.fromBase64Key(...).of(hostname) produces the HMAC fingerprint; the recovery volume is a worker-only PersistentVolumeClaim. Transport: SshExecTransport exposes exec over one session; check whether it exposes an SFTP/file-fetch call -- if it does not, add one to the transport port and the SSH adapter, streaming, with no path interpolation beyond the exact archive path the submit output named. ui2/cli holds the product's command line (the credential-* and local-identity-* commands are its existing shape). Migrations: use the next free number; a migration that writes a row to an audited table sets app.actor_fingerprint and app.action_id transaction-locally first (tests/test_migration_audit_context.py enforces it)."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "the Python collectors beyond the behaviour named here",
+          "ui2/ldap-adapter",
+          "ui2/scheduler",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/check-point-backup"
+        },
+        "invariants": [
+          "One submit per job; the archive name comes only from the submit's own output.",
+          "Nothing is deleted on the device until both digests match.",
+          "A device outside the allowlist is refused, never attempted.",
+          "No artefact byte, path or decrypt affordance in any HTTP response; restore stays disabled."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Build the Check Point gateway backup: the backup_collect job kind and its capability, the gate entries and their SIGNED_OFF rows for the seven literals record 14H lifts, the submit-then-poll executor that 14H BK-5 requires (the frozen blocking-exec profile is wrong and is not carried), the SFTP fetch with a digest verified on both sides before any deletion, the pilot-device allowlist that refuses every other device, storage as a C7 backup artefact through the store that now carries per-artefact envelope encryption, deviation against the previous artefact, the audited command-line retrieval record 14I authorizes, and the backup view. Palo Alto and management servers are later movements.",
+        "output_contract": [
+          "A Check Point gateway backup that runs on the pilot device, verifies before it deletes, stores an encrypted artefact with its manifest, and can be read back by the operator through the command line.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A class-1 device write with a state machine, a two-sided digest protocol, a gate set, an artefact manifest, a CLI retrieval and a screen, against two fresh frozen records.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type names the clause it implements (14H BK-n, 14I OR-n/DV-n, C7 section n, C2 section n).",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects. One additive migration at the next free number, setting the audit context before any row it writes.",
+          "No archive byte, no device path, no credential and no hostname reaches a log line, an exception message, an audit row beyond the columns the contract names, or any HTTP response.",
+          "The submit is issued at most once per job. Never derive an archive name from a listing, a pattern or a guess.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Commit early and often. SESSION_CLOSE names the gate entries count, the migration number, the capability id, the executor's state machine, the CLI command, the routes with status codes, and test counts before and after."
+        ],
+        "risks": [
+          "Carrying the frozen blocking-exec profile instead of submit-then-poll, which records success before the archive exists.",
+          "Deleting on the device before the digest comparison, or deleting a name derived from a listing.",
+          "Retrying the submit and creating a second concurrent backup.",
+          "Letting the allowlist default to permissive."
+        ],
+        "scope": {
+          "in": [
+            "Gate: docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md in the DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md shape, one ten-field entry per literal of 14H section 5 (the clish -c wrapper is part of the literal), each stating its class honestly -- add backup local and delete backup are class 1 -- its timeout, its retry rule (the submit is never retried; the delete may be retried once), and the CONFIRM-ON-HARDWARE note on show diskspace and delete backup. The next free migration seeds the matching gate_registry rows SIGNED_OFF, and a resolver test proves the capability resolves executionEligible.",
+            "Capability and job: BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, its YAML with the real steps and gate references, the backup_collect job kind admitted only against an ENROLLED, non-disabled device that is ALSO in the pilot allowlist; admission of a device outside the allowlist is refused with a reason naming the allowlist, and a test proves both sides. The allowlist is configuration (an env-backed list of device ids, empty by default -- empty means every backup is refused).",
+            "Worker: BackupReadPlan (the closed literal set, tested equal to 14H section 5) and BackupJobExecutor with the C2 discipline of ConfigurationJobExecutor, performing: resolve the distinct backup credential (BK-11, failing closed with a named reason before contact), read free space and compare against the configurable heuristic threshold (BK-6), submit the backup, parse the archive name from the submit output ONLY, poll the status command on a fixed interval until terminal or the run deadline (BK-5), fetch the archive over SFTP streaming straight into the artefact store, compute a digest on the device and compare it with the digest of the received bytes (BK-3) -- on mismatch fail, leave the device copy, and say so -- then delete the exact archive name and record cleanup_failed as a failure marking the endpoint ineligible if the delete fails. A poll that never terminates ends OUTCOME_UNKNOWN and deletes nothing. A vendor refusal (a snapshot in progress, an open management client) is reported as the failure reason, never retried.",
+            "Storage and deviation: the archive is stored through the artefact store with artefact class backup, and a C7 manifest row is written with both digests, byte counts, the hostname fingerprint, the software version (BK-16/C7 section 3.3: an unresolvable Check Point software version refuses the store with zero rows and a named failure), the validation level reached and the wrapped data key. DV-1: the run records unchanged / changed / first against the previous backup artefact of the same device by plaintext digest; DV-3: for the opaque archive the deviation is digest-level only and the run says so.",
+            "Operator retrieval (14I OR-1..OR-5): a command in ui2/cli that takes an artefact id, an output path, and a reason of at least eight characters, checks role:backup_admin, decrypts through the store to that path and nowhere else, writes a typed audit row with the actor, the artefact id, the reason and the destination, and prints one warning that the file contains secret-bearing lines. No HTTP route of any kind returns bytes, a path or a decrypt affordance.",
+            "Service and screen: POST /devices/{id}/backup/collect (202 {job_id}; 409 with a named reason when the device is outside the allowlist or the credential is missing), GET /devices/{id}/backups (the manifest rows for that device: when, size, digest prefix, validation level, deviation state -- never a path, never bytes), GET /backups for the fleet view; the Operations or Configuration screen gains a backup panel showing those rows and a Back up now action, with the reason field the role requires. No download affordance anywhere.",
+            "Tests: the closed-set plan test; the admission tests (in and out of the allowlist); an end-to-end executor test against a scripted fake transport covering the happy path, a digest mismatch (nothing deleted, run failed), a never-terminal poll (OUTCOME_UNKNOWN, nothing deleted), a failed delete (cleanup_failed, endpoint ineligible) and an unresolvable software version (refused, zero rows); a worker-dies test; the CLI retrieval test including the audit row and the role refusal; service tests for the three routes; a frontend test for the panel and the action."
+          ],
+          "out": [
+            "Palo Alto backup; management-server backup (14I MS-2, its own movement and its own pilot); restore in any form; the scheduler; retention sweeping; any command beyond 14H section 5's seven literals; a download affordance."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":persistence:test"
+            ],
+            "name": "ui2_persistence_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":cli:test"
+            ],
+            "name": "ui2_cli_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":capability-registry:test"
+            ],
+            "name": "ui2_capability_registry_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_ui2_deployment_manifests.py",
+              "-q"
+            ],
+            "name": "deployment_manifests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_migration_audit_context.py",
+              "-q"
+            ],
+            "name": "migration_audit_context"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T18:15:22Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "ConfigurationJobExecutor / BackupArtefactManifestRecord: added a deviationState field (Optional, empty for the configuration path) to the shared C7 manifest record so backup's own DV-1 state fits on the same table without a second schema.",
+          "WorkerClaimLoop / Ui2WorkerMain constructors gained backup-specific parameters (backupJobExecutor, backupCredentialRef) -- the only call site (Ui2WorkerMain) was updated; no other caller exists."
+        ],
+        "completed": [
+          "docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md: ten-field gate entries for 14H section 5's seven literals (entry 5's SFTP fetch is gate_not_applicable per C4 2.3's prior-step rule, six SIGNED_OFF gate_registry rows for the rest).",
+          "Migration V18__cp_gateway_backup.sql: seeds the six gate rows SIGNED_OFF, adds backup_artefact.deviation_state (14I DV-1), and creates backup_artefact_retrieval (14I OR-3 audit) and backup_endpoint_ineligibility, both audit-triggered.",
+          "capability-registry: cp_gateway_backup.yaml, BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL (job-engine), BackupCapabilities.checkPoint (worker) and a mirrored duplicate in service.boot.DeviceCompositionConfiguration (service cannot import worker, DIR-2) -- BackupCapabilitiesGateAlignmentTest proves executionEligible() against the real committed gate_registry_fixture.yaml (also extended with the six new rows) and JobAdmissionService admits ENROLLED / refuses DRAFT.",
+          "worker.backup.BackupReadPlan: the closed 14H section-5 literal set, tested equal (BackupReadPlanTest).",
+          "DeviceTransport gains fetchStreaming (FetchStreamResult) -- a real SFTP implementation in SshExecTransport via JSch ChannelSftp, streaming with a byte cap, never buffering the archive whole.",
+          "worker.backup.BackupCapabilityExecutor: the submit-then-poll-then-fetch-then-verify-then-delete state machine (14H BK-3/BK-5/BK-6/BK-7/BK-8/BK-11) against one held SSH session.",
+          "worker.backup.BackupJobExecutor: C2 discipline (lease-fenced transitions, one pre-contact job_step_attempt row) mirroring ConfigurationJobExecutor, plus OUTCOME_UNKNOWN handling, DV-1 deviation-against-previous-artefact, C7 3.3 version-lock refusal (zero rows), and cleanup_failed -> backup_endpoint_ineligibility marking. Wired into WorkerClaimLoop and Ui2WorkerMain (new env vars UI2_CP_BACKUP_CREDENTIAL_REF, UI2_BACKUP_FREE_SPACE_THRESHOLD_BYTES, UI2_BACKUP_POLL_INTERVAL_SECONDS, UI2_BACKUP_RUN_DEADLINE_SECONDS).",
+          "persistence.artefact: BackupArtefactManifestRepository extended with findLatestPlaintextDigest/findByDevice/findAll/findForRetrieval (Jooq impl); new BackupEndpointEligibilityRepository, BackupArtefactRetrievalRepository, BackupArtefactRetrieval (the one 14I OR-1..OR-5 implementation, re-deriving RbacEvaluator's E4 decision since persistence cannot depend on service), BackupRetrievalComposition; platform-core BackupArtefactRetrievalPort.",
+          "ui2/cli backup-retrieve command (job-engine BackupRetrievalFactory) -- the only path in the repository that ever decrypts an artefact; BackupNoHttpRetrievalRouteTest greps service sources and fails if any HTTP retrieval/download/decrypt route ever appears (AC-4).",
+          "service.device.backup.BackupCollectService: allowlist (UI2_BACKUP_PILOT_DEVICE_IDS, empty by default refuses every device), BK-12 reason>=8 chars, missing-credential refusal, before ever calling JobAdmissionService. BackupController: POST /devices/{id}/backup/collect (202/409), GET /devices/{id}/backups, GET /backups (posture rows only). ActionRegistry/SecurityWebMvcConfig wired (role:backup_admin on the collect route).",
+          "Tests: BackupReadPlanTest, BackupCapabilitiesGateAlignmentTest, BackupJobExecutorEndToEndTest (happy path; digest mismatch -> nothing deleted; never-terminal poll -> OUTCOME_UNKNOWN, nothing deleted; failed delete -> cleanup_failed + endpoint ineligible, manifest still recorded; unresolvable software version -> zero rows), BackupJobExecutorWorkerDiesTest, BackupCollectServiceTest (allowlist in/out, empty-allowlist-refuses-all, reason gate, credential gate), BackupArtefactRetrievalTest (role refusal, reason gate, unknown artefact, successful decrypt + its own audit row), BackupNoHttpRetrievalRouteTest."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none in this session -- the backend routes this movement's screen needs already exist and are tested; the screen itself is unbuilt (see unresolved_risks)."
+        },
+        "integration": {
+          "branch": "feature/check-point-backup",
+          "ci": "not run (no CI configured for this local worktree)",
+          "head_sha": "f888b1cb24d41ba12590754076df151874225aed",
+          "merge_commit": null,
+          "merge_decision": "PO assistant review required first, per this session's own flagged console-submittable risk -- do not merge until that question is explicitly answered.",
+          "merge_state": "OPEN",
+          "pr": 315,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/315"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0175-followup",
+          "movement_type": "UI",
+          "objective": "Resolve the console-submittable class-1 authority question from this session's unresolved_risks, then build the frontend backup panel/action and the BackupController HTTP-layer route tests this movement's WORKER.md scoped but this session did not reach.",
+          "status": "in_progress"
+        },
+        "preserved": [
+          "Every existing configuration/inventory/confirm/discovery capability, executor, route and test is untouched in behavior -- full build and all existing suites stayed green throughout.",
+          "Restore stays disabled; no scheduler, no retention sweeping, no command beyond 14H section 5's seven literals; no Palo Alto or management-server backup code."
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work is mechanical UI/HTTP-test construction against already-frozen, already-tested backend contracts -- no new vendor semantics, no new command gate, no new schema.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [
+          "No project/*.json or CURRENT_STATE.md update was made in this session -- WORKER.md's brief did not name them as files to touch, and the movement's own state-update ownership is the PO assistant's (queue/roadmap) per the constitution; flagging for the PO review to record DEV.3.3's successor state and the build_history entry for NXS-LOCAL-0175."
+        ],
+        "unresolved_risks": [
+          "ARCHITECTURE/AUTHORITY QUESTION FOR PO REVIEW (not silently resolved): AGENTS.md 'Network action taxonomy' states class-1 controlled recovery writes 'are permitted only through their RB.x contracts... are never console-submittable', and ActionRegistry's own RECOVERY_WRITE_EXAMPLE is the sole precedent, deliberately registered non-console-submittable to demonstrate E3's unconditional refusal. WORKER.md explicitly and repeatedly directs a POST /devices/{id}/backup/collect route and a browser 'Back up now' action, and 14H BK-12 explicitly authorizes a manual, role:backup_admin + reason(>=8 chars)-gated backup trigger. I registered ActionRegistry.DEVICE_BACKUP_COLLECT as consoleSubmittable=true, reading 14H BK-12 itself as the movement's own scoped RB.x-style exception (role+reason+single-pilot-device gate, no schedule) rather than raising a blocking RELAY_QUESTION mid-session -- but this is the FIRST action in the repository to test that constitutional prose against a real console-submitted class-1-backing capability, and it should be explicitly confirmed or corrected at PO review before merge.",
+          "No frontend backup panel or 'Back up now' UI action was implemented (WORKER.md 'Service and screen' / Tests 'a frontend test for the panel and the action') -- the backend routes (POST collect, GET device backups, GET fleet backups) exist and are tested at the service layer, but ui2/frontend has no corresponding screen change or test. This is the largest scope gap against WORKER.md.",
+          "No HTTP-layer integration test for BackupController's three routes (status codes, JSON shape) was written -- only BackupCollectService's own admission logic is unit-tested. A GateChain/Spring MVC-level test (mirroring an existing *ControllerTest) is still owed.",
+          "BK-11's 'distinct backup credential' is resolved as one env-backed, per-vendor credential reference (UI2_CP_BACKUP_CREDENTIAL_REF), not a per-device credential_references row -- matches 'per vendor' in BK-11's own text, but there is no operator-facing way yet to set/rotate it beyond direct configuration; a later movement should decide whether this needs its own CLI/HTTP surface.",
+          "BackupReadPlan wires only the Clish primary form of every literal (BK-2); entries 1 and 7's Expert fallback (df -P /var/log, rm -f -- <exact path>) is gated and documented (CONFIRM-ON-HARDWARE) but not wired into the executor, per BK-7's own 'a successor record says so' language.",
+          "The parsing heuristics in BackupCapabilityExecutor (parseFreeSpaceBytes/parseArchiveName/classifyStatus/parseSha256sumOutput) are honest, documented guesses against UNVERIFIED command forms (14H section 5's own status) -- proven only against the scripted fake transport, never real Check Point output, and may need correction after the pilot run per BK-4."
+        ],
+        "validation": {
+          "affected": "./ui2/gradlew -p ui2 build -x :integration-tests:test: BUILD SUCCESSFUL across all eleven modules (worker/persistence/service/job-engine/capability-registry/cli/platform-core/architecture-tests/ldap-adapter/scheduler/integration-tests-compile-only), no regression in any pre-existing test.",
+          "diff_check": "./ui2/gradlew -p ui2 projects: 11 subprojects, unchanged count.",
+          "full_regression": "Same command as affected -- this workspace's full non-integration build IS the regression suite; green.",
+          "privacy": "python3 scripts/repository_privacy_check.py: PASS, 0 findings.",
+          "real_environment": "NOT RUN -- no real Check Point pilot device was contacted in this session (local validation only, per SESSION_START deployment_direction); every command form in the gate doc is UNVERIFIED until the Product Owner's own hardware run, per BK-4/BK-7's own CONFIRM-ON-HARDWARE marks.",
+          "state_consistency": "python3 -m pytest tests/test_ui2_deployment_manifests.py tests/test_migration_audit_context.py tests/test_contract_authority_status.py -q: 60 passed.",
+          "targeted": "worker/persistence/service backup-specific suites: all new tests pass (BackupReadPlanTest, BackupCapabilitiesGateAlignmentTest, BackupJobExecutorEndToEndTest x5 scenarios, BackupJobExecutorWorkerDiesTest, BackupCollectServiceTest x5, BackupArtefactRetrievalTest x4, BackupNoHttpRetrievalRouteTest)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T18:59:21Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0175",
+  "movement": "check-point-backup-capability",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14H_BACKUP_STEP_SCOPE_PILOT_DEVICE_AND_THE_ASYNCHRONOUS_TRUTH.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md",
+    "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+    "docs/design/UI2_0_BACKUP_OUTCOME_DECISION_2026_09_12.md",
+    "docs/design/DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/configuration/ConfigurationJobExecutor.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/configuration/ConfigurationReadPlan.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/artefact/ArtefactStore.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/artefact/BackupArtefactManifestRepository.java",
+    "ui2/cli/src/main/java"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T18:59:21Z"
+}

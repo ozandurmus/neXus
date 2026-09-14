@@ -1,0 +1,233 @@
+{
+  "created_at": "2026-09-14T19:12:06Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 docs/design/DECISION_RECORD_SUCCESSOR_INDEX.md exists, is generated, lists every record whose Status states a relation, and resolves every named target; the test fails if the committed file drifts from a fresh render.",
+          "AC-2 CURRENT_STATE.md describes today and stays inside its budget; AI_HANDOVER.md likewise, and points at the index.",
+          "AC-3 project/build_history.json and project/roadmap.json name the newest build, and no backlog item claims to be open for work that merged; every write went through the queue script.",
+          "AC-4 tests/test_dev_0_5b_auth_consumer_canonical_config.py passes in full, with the scanner still catching a real assignment (a test proves it).",
+          "AC-5 The named test files and the privacy gate are green."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_6_DOCUMENTATION_DIET.md -- FROZEN: the documentation diet, what a cold-start document may contain and the word budgets tests/test_cold_start_budget.py enforces (AI_HANDOVER.md at most 300 words, CURRENT_STATE.md at most 1050). docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md (FROZEN) -- the queue as the single write path for project data and the cold-start reading order. AGENTS.md -- the contract-status law this movement serves: a FROZEN document is never edited in place, so a reader needs a route from the frozen text to the clause that replaced it. PO ASSISTANT DECISION 2026-09-14: the successor index is generated from the records themselves, never hand-maintained, and a test keeps it honest.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run python3 -m pytest tests/test_cold_start_budget.py tests/test_contract_authority_status.py tests/test_dev_0_5b_auth_consumer_canonical_config.py tests/test_project_files_budget.py -q first and record the counts, including the one expected failure.",
+          "what_exists": "CURRENT_STATE.md is 1031 words against a 1050 budget and describes a state several days old; AI_HANDOVER.md is 296 words against 300. project/roadmap.json's current_build and project/build_history.json's newest record both read ui2_d1_restore_c7_c2_amendments, while sixteen movements have merged since. project/backlog.json still carries items delivered today. The project plan screen (merged today, GET /project-plan) renders exactly this data, so its first impression is the stale one. Sixteen Product Owner decision records were added on 2026-09-13 and 2026-09-14 under docs/design/PO_DECISION_RECORD_*.md, plus GOV_ORCH_12, 12-A, 13 and 4-A; several of them open with a Status block naming what they supersede or amend ('Successor clause to X', 'Correcting amendment to Y', 'supersedes Z'), in prose, in varying words, and nothing indexes them. tests/test_contract_authority_status.py already parses those Status blocks for a different rule (a FROZEN document may not cite a DRAFT one as authority) and is the working example of reading them. tests/test_dev_0_5b_auth_consumer_canonical_config.py has exactly one failing case, test_repository_text_has_no_known_dlp_assignment_collision, and it fails on prose inside a committed relay file under relay/ that happens to match a secret-assignment pattern -- a false positive on legitimate text, not a leak. scripts/project_queue.py is the only sanctioned writer for project/*.json (add, status, note, retitle, decide, build add/status/note, decision open/decide) and it redacts and validates; never hand-edit those files."
+        },
+        "context_not_loaded": [
+          "ui2/**",
+          "the Python collectors",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/cold-start-truth"
+        },
+        "invariants": [
+          "No FROZEN document is edited in place.",
+          "project data is written only through the queue script.",
+          "The index is generated, never authored.",
+          "Nothing is claimed in CURRENT_STATE.md that cannot be checked today."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The orchestrator opens the PR for this provider.",
+        "movement_type": "DOCS",
+        "objective": "Make the repository tell a reader who arrives cold what is actually true today. An independent assessment run against the checkout this evening recommended merging a movement that shipped days ago and deciding a question already answered, because the cold-start documents lag and because a frozen contract is corrected by a SUCCESSOR record rather than edited in place, with nothing anywhere listing which record supersedes which. Refresh the cold-start documents to today, publish a machine-checked successor index, refresh the project data the plan screen reads, and fix the one genuinely red test.",
+        "output_contract": [
+          "A repository that tells a cold reader the truth, with a generated route from every frozen text to the clause that replaced it.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "Parsing prose into a generated index, plus disciplined rewriting inside hard word budgets and a scripted data refresh.",
+          "tier": "Codex gpt-5.6-terra, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every claim you write into CURRENT_STATE.md must be checkable in the repository today. If you cannot verify something, leave it out rather than carrying it forward.",
+          "Run only the test files named in test_baseline plus your new one and the privacy gate. Do not run the full pytest suite.",
+          "project/*.json is written only through scripts/project_queue.py.",
+          "Mechanical mismatches between this packet and the repository are settled against the repository and named in the SESSION_CLOSE; a RELAY_QUESTION is for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Commit early and often. SESSION_CLOSE names the index's record count, the word counts of both cold-start documents, the build-history records added, the backlog items closed, and the DLP re-anchoring."
+        ],
+        "risks": [
+          "Inventing a supersession the prose does not state.",
+          "Appending to CURRENT_STATE.md instead of cutting, and blowing the budget.",
+          "Hand-editing project/*.json and losing the redaction and validation the script does.",
+          "Silencing the DLP test rather than re-anchoring it, which would turn a real scanner into decoration."
+        ],
+        "scope": {
+          "in": [
+            "A generated successor index at docs/design/DECISION_RECORD_SUCCESSOR_INDEX.md, written by a new script (scripts/successor_index.py render, plus --check for the test): it parses every docs/design/*.md Status block, extracts the relations those blocks already state -- supersedes, amends, corrects, successor clause to, narrows -- and emits one table of (record, relation, target, date, one-line subject) plus, per target, the chain of everything that has touched it. Do not invent a relation that the prose does not state; a record whose Status names no relation appears in its own section as standalone. The index carries a line at the top saying it is generated and how to regenerate it.",
+            "A test (tests/test_successor_index.py) that the committed index matches a fresh render, so it cannot drift, and that every record naming a relation resolves to a document that exists.",
+            "Refresh CURRENT_STATE.md to the state of the repository as of this movement, inside its word budget: what the Java product does today end to end (discovery from the UI with candidate marking, device add and enrollment confirm, inventory collection with the cluster view, configuration collection with its index view and encrypted artefacts, Check Point gateway backup behind the pilot allowlist, local identity administration, the project plan screen), what is measured against real devices and what is still UNVERIFIED, what is deliberately disabled (restore, the scheduler), and the open Product Owner decisions. Cut what is no longer true rather than appending.",
+            "Refresh AI_HANDOVER.md inside its 300-word budget to point a fresh session at the right reading order for today, including the new successor index.",
+            "Refresh the project data through scripts/project_queue.py ONLY: add build-history records for the movements that merged on 2026-09-13 and 2026-09-14 (their movement ids are the relay filenames under relay/ and relay/archive/, and each merged pull request's title states what it delivered -- read them, do not guess), move roadmap current_build to the newest, and close every backlog item the merged work delivered. Where an item is partly delivered, note what remains instead of closing it.",
+            "Fix the one failing DLP case: the collision is prose in a committed relay file matching a secret-assignment pattern. Fix it at the scanner's fixture or anchor, not by deleting or rewording the relay record (relay files are history). State in the SESSION_CLOSE exactly what was re-anchored and why it is still a real scanner."
+          ],
+          "out": [
+            "Editing any FROZEN document in place; hand-editing project/*.json; changing the word budgets or the diet rules; rewriting history under docs/history/ or relay/; touching ui2 source."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_cold_start_budget.py",
+              "-q"
+            ],
+            "name": "cold_start_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_successor_index.py",
+              "-q"
+            ],
+            "name": "successor_index"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_dev_0_5b_auth_consumer_canonical_config.py",
+              "-q"
+            ],
+            "name": "dlp_canonical_config"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_queue_check"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T19:12:06Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Generated successor index and drift/resolution test.",
+          "Refreshed cold-start state and handover.",
+          "Recorded 16 merged movements through project_queue.py; closed six delivered backlog items.",
+          "Re-anchored six exact historical prose collision lines and made scanner fixtures independent of linked-worktree staging."
+        ],
+        "completed": [
+          "131 design records indexed.",
+          "CURRENT_STATE.md: 285 words; AI_HANDOVER.md: 162 words.",
+          "Focused validation: 26 passed; queue check and privacy gate passed."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No main.py change.",
+          "ui": "No UI source change."
+        },
+        "integration": {
+          "branch": "feature/cold-start-truth",
+          "ci": "NOT RUN: this docs movement used its named Python validation commands.",
+          "head_sha": "78fe10f06ebc37166a555b5b9618249441bfde5d",
+          "merge_commit": null,
+          "merge_decision": "No merge action taken. Git staging failed because the linked-worktree index.lock is not writable.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0179",
+          "movement_type": "VALIDATION",
+          "objective": "From a Git-writable worktree, commit the validated change set and open the PR; orchestrator verification performs merging.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No FROZEN record, relay history, or UI source was edited.",
+          "Restore and scheduler remain disabled.",
+          "No raw sensitive values were reported."
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work is Git handoff only.",
+          "tier": "low"
+        },
+        "state_updates": [
+          "NXS-LOCAL-0176 is the newest queue build.",
+          "Closed: device import/enrollment, device add/discovery/manual, B1-04b onboarding, wordmark, project-plan archive lookup, and stale DLP catalogue work."
+        ],
+        "unresolved_risks": [
+          "Dispatch named a relay collision, but repository evidence identified six historical prose lines in three FROZEN design records; these were anchored without altering history.",
+          "Sandbox Git permissions prevent the requested PR handoff."
+        ],
+        "validation": {
+          "affected": "PASS: named focused suite, 26 passed.",
+          "diff_check": "PASS: git diff --check.",
+          "full_regression": "NOT RUN: dispatch prohibits the full pytest suite.",
+          "privacy": "PASS: repository privacy gate, 0 findings.",
+          "real_environment": "NOT APPLICABLE: DOCS movement with local validation only.",
+          "state_consistency": "PASS: scripts/project_queue.py check.",
+          "targeted": "PASS: cold-start budget, contract authority, successor index, DLP canonical config, and project-file budget tests; 26 passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T19:20:19Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0179",
+  "movement": "cold-start-truth-and-successor-index",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_ORCH_6_DOCUMENTATION_DIET.md",
+    "docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md",
+    "CURRENT_STATE.md",
+    "AI_HANDOVER.md",
+    "project/roadmap.json",
+    "project/build_history.json",
+    "scripts/project_queue.py",
+    "tests/test_cold_start_budget.py",
+    "tests/test_dev_0_5b_auth_consumer_canonical_config.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T19:20:19Z"
+}

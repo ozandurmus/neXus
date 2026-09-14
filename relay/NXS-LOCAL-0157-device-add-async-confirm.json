@@ -1,0 +1,296 @@
+{
+  "created_at": "2026-09-14T09:51:54Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 THE DECISIVE TEST: service admits the confirm job, the worker loop claims it under the C2 lease and, over a fake transport, the device lands ENROLLED with hostname/model/version/HA role -- observed failing before the loop exists.",
+          "AC-2 A worker that dies after claiming leaves the job in the C2-prescribed state and the device DRAFT; a later worker reconciles per C2 section 3.5.",
+          "AC-3 Ui2ArchitectureTest passes unchanged: no service class depends on worker; the worker role is a typed argument of the same image.",
+          "AC-4 deploy/ui2 applies cleanly from scratch with the worker Deployment and both key secrets declared in the manifest set; the manifest tests cover the worker Deployment.",
+          "AC-5 The dialog asks address, vendor, credential, 'single device'; it polls and shows progress and result; the Inventory screen lists devices with the cluster as parent when formed; the AdministrationScreen test race is fixed properly.",
+          "AC-6 Eleven-module build, :service:test, :worker:test, :job-engine:test, :architecture-tests:test and frontend tests green; privacy gate PASS; tests/test_ui2_deployment_manifests.py passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md -- FROZEN 2026-09-14 (section 4, EC-6a, EC-11, EC-12: the confirm is a C3-authorized action whose device steps run as a C4 read capability). docs/design/DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md -- APPROVED 2026-09-14, the only four reads. docs/design/PO_DECISION_RECORD_2026_09_14_... (FROZEN) DA-1..DA-3, PF-1..PF-5. docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (FROZEN): the job record, state machine, claiming by lease with fencing token and heartbeat, per-step timeout, OUTCOME_UNKNOWN reconciliation -- the confirm job obeys all of it. docs/design/UI2_0_C4 (FROZEN) sections 2.3, 3.5, 4.2. docs/design/PO_DECISION_RECORD_2026_09_13D (FROZEN) DS-1/DS-2: a capability may be its own deployable unit; the workload role is selected by an explicit typed argument, never by a shell-interpreted environment variable. docs/design/UI2_0_B1_01C (FROZEN): the image, its entry point taking the role as an argument (CMD [\"service\"]), the manifest set -- deploy/ui2/50-service-deployment.yaml's own comment says worker and scheduler are deferred by EP-2, not omitted; this movement adds the worker Deployment. PO ASSISTANT DECISION (2026-09-14, recorded in this packet because relay NXS-LOCAL-0156 was already closed when the question surfaced): of the two options 0156's SESSION_CLOSE offered, option (1) -- asynchronous C2 job executed by the worker process -- is chosen; option (2), relaxing Ui2ArchitectureTest dir2, is refused.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :service:test, :worker:test, :job-engine:test and npm --prefix ui2/frontend test first; record the counts (and the one known frontend failure) before you change anything.",
+          "what_exists": "Merged from 0156 (PR #270): migration V12 on devices (observed_hostname/model/software_version/ha_role, recorded identity columns, identity_mismatch_state, cluster_member_ref/virtual_system_ref, peer_follow_outcome/reason); worker.confirm package with DeviceFirstContactCommandSet (equals the gate table, tested), ConfirmCapabilityExecutor, CheckPoint/PaloAlto confirm read parsers (UNVERIFIED bindings at one site), peer-follow corroboration and the identity-mismatch evaluator with the posture switch; their tests. job-engine: Job, JobAdmissionService, JobLeaseRepository/PersistenceJobLeaseRepository/ClaimedJob (C2 lease), StepExecutor (drives a Capability's steps against a DeviceTransport -- constructed only by tests today), evidence writer ports. worker: SshExecTransport, PanXmlApiTransport, store-backed credential resolvers (0154), DiscoveryRunnerMain / PanDiscoveryRunnerMain as the only mains. service: Ui2Application (Spring Boot) has no role dispatch yet; DeviceRegistrationService.IMPLEMENTED_TRANSPORTS = Set.of(\"ssh_exec\") (B1_04B successor IM-8 not applied); DeviceRegistrationController POST /devices. deploy/ui2: service Deployment only; the image ENTRYPOINT runs the jar with the role as CMD argument. Frontend: AddDeviceDialog still the static mock; frontend/tests/AdministrationScreen.test.tsx has a 'Loading...' race in its Credentials-tab assertion (fails on main too)."
+        },
+        "context_not_loaded": [
+          "The Python collectors",
+          "docs/history/**",
+          "project/*.json",
+          "The collection measurement briefs"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/device-add-async-confirm"
+        },
+        "invariants": [
+          "The web service never reaches transport code; the device is contacted only by the worker process, only through a claimed C2 job.",
+          "Only the four approved reads, one peer hop at most, never a VIP, never a second credential.",
+          "A unit forms only on corroboration; mismatch warns and continues by default.",
+          "The worker role is a typed argument of the one image; both key secrets are declared in the manifest set.",
+          "No direction test relaxed; no new surface, subproject or dependency."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Finish single-device add on top of NXS-LOCAL-0156's merged groundwork, the way the architecture already says it must work (decision recorded here, closing 0156's DIR-2 question with option 1): POST /devices/add-single creates the DRAFT device row and admits a C2 job whose capability is the confirm capability 0156 built; a worker process -- the image's worker role, run as its own Kubernetes Deployment -- claims the job through the C2 lease, executes the four approved first-contact reads (and the one peer-follow hop) against the device, and writes hostname/model/version/HA role, the recorded identity, the peer outcome and any identity-mismatch warning to the devices row, landing it ENROLLED; the service exposes the row's state and the dialog polls it and shows progress and result. DIR-2 (web never reaches transport code) stays exactly as frozen; no second execution path is built.",
+        "output_contract": [
+          "Single-device add works end to end through a C2 job and a real worker process, with the worker as its own Deployment.",
+          "Job type, worker runtime and manifest, endpoints, a real dialog with polling, an Inventory list, both key secrets in the manifest set.",
+          "SESSION_CLOSE naming job/capability ids, the worker entry point, manifests, endpoints and test counts."
+        ],
+        "recommended_reasoning": {
+          "reason": "The first real job round-trip through service, database, worker and transport, plus a new deployable unit; the quiet failures are a half-enrolled row and a second execution path. Commit early so a budget stop is recoverable.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type and method names the clause it implements (C2 section n, C4 section n, contract EC-n, record DA-n/PF-n, 13D DS-n).",
+          "Write the end-to-end job test and the worker-dies test FIRST; report that each was observed failing before and passing after.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects. No new migration unless a C2 job column is genuinely missing -- if so, V13, additive.",
+          "No address, hostname, serial, host key or credential reaches a log line, an exception message or an audit row beyond the columns the contract names.",
+          "If a contract clause and this packet disagree, raise a RELAY_QUESTION and STOP; never reconcile silently and never relax a direction test.",
+          "The SESSION_CLOSE names the job type and capability ids, the worker entry point and its loop bounds, the manifest files, the endpoints, and the test counts before and after."
+        ],
+        "risks": [
+          "Calling the confirm executor from the service 'just for the synchronous case' -- that is option (2), refused.",
+          "A worker loop without a heartbeat or a fencing token, so two workers run the same confirm.",
+          "Leaving the two key secrets as manual patches, so the next fresh apply fails at start-up.",
+          "Selecting the role from an environment variable read by a shell (DS-2 forbids it).",
+          "Weakening the AdministrationScreen test instead of awaiting the loaded state."
+        ],
+        "scope": {
+          "in": [
+            "Job type: a C2 job whose capability is the device confirm (one per vendor), with target_ref = the new DRAFT device's device_id/endpoint_id and the credential_reference_id; admitted by JobAdmissionService from the service; every C2 rule applies (request-time fixation, lease, fencing token, heartbeat, per-step timeout, OUTCOME_UNKNOWN when the worker dies mid-step). Peer follow (PF-1) runs inside the same job as one further step sequence against the named peer, never as a second admitted job.",
+            "Worker runtime: a typed worker role. Ui2Application (or a small Ui2Worker entry in the same jar) dispatches on the CMD role argument -- 'service' as today, 'worker' starts a claim loop: claim the next admitted job through the C2 lease, heartbeat, execute with StepExecutor over the real transports and the store-backed credential resolvers, write step attempts and the outcome, release. Bounded concurrency of 1 at this maturity (CURRENT_STATE 'Concurrency budget stays at 1 per vendor'). The worker reads the same secret files as the service (DB app credential, credential-store key) and nothing else. DS-2: the role is a typed argument, never an environment variable interpreted by a shell.",
+            "Kubernetes: deploy/ui2/52-worker-deployment.yaml (same image, CMD ['worker'], same security context and secret mounts as the service, plus the credential-store key mount), and the two hand-wired secrets this session added (ui2-role-binding-key, ui2-credential-store-key) written into the manifest set properly (20-secret.yaml shells + mounts on both Deployments) so a fresh apply needs no manual patch. tests/test_ui2_deployment_manifests.py extended for the worker Deployment (role argument, no host toolchain, digest-pinned image, read-only root, non-root numeric user).",
+            "Service: POST /devices/add-single {address, vendor, credential_reference_id} -- role:onboarding_admin -- creates the DRAFT row (transport_kind ssh_exec for Check Point, pan_xml_api for Palo Alto: apply IM-8 by extending IMPLEMENTED_TRANSPORTS), admits the confirm job, returns the device_id and job id; GET /devices/{id} returns the row with its read facts, enrollment state, peer outcome, mismatch warning and the job's C2 state. The confirm job's completion handler moves DRAFT to ENROLLED with the facts (EC-6a also on a mismatch, warn+audit+continue; strict posture switch honoured) or leaves DRAFT with the failure outcome when the device could not be reached.",
+            "Frontend: AddDeviceDialog real -- address, vendor, credential (from GET /credentials), 'Single device' submits and then polls GET /devices/{id} showing connecting / reading identity / checking peer / done, and the result (facts, peer outcome, any mismatch warning with the management plane's view beside it). 'Management server (discovery)' present but disabled ('next step'). Inventory screen lists devices from GET /devices with hostname, vendor, model, version, HA role, enrollment state, cluster as parent when formed; no liveness vocabulary. Fix the 'Loading...' race in tests/AdministrationScreen.test.tsx by awaiting the loaded state, not by weakening the assertion.",
+            "Tests, first two written FIRST and observed failing: (1) an admitted confirm job is claimed by the worker loop under the C2 lease and, over a fake transport, lands the device ENROLLED with the facts -- proving the service→job→worker→row path end to end without a device; (2) a worker that dies after claiming leaves the job in the C2 state the contract prescribes and the row DRAFT (no half-enrolled row). Then: peer follow inside the job; mismatch warn/continue vs strict; refusal before contact on an unresolvable credential; the manifest tests; the frontend dialog and polling; every 0156 and 0154 test still green.",
+            "Commit early and often (job type; worker runtime; manifests; service; frontend; tests). Open the PR at the end; do not merge. No tool footer, emoji or external URL in commits or the PR."
+          ],
+          "out": [
+            "The management-server (discovery) branch of the dialog beyond the disabled button (DA-3, next movement).",
+            "Any read beyond the four gate entries; any collection; any write; any scan; a scheduler process (13E defers it).",
+            "Relaxing Ui2ArchitectureTest dir2 or any direction rule; editing any FROZEN document or existing migration; a new Gradle subproject or dependency.",
+            "Trust-store administration; directory credentials; renaming code-internal identifiers."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":job-engine:test"
+            ],
+            "name": "ui2_job_engine_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_ui2_deployment_manifests.py",
+              "-q"
+            ],
+            "name": "deployment_manifests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T09:51:54Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "DRAFT-device job admission contradicts FROZEN F4/F6/F7/F12 (StepExecutor/JobAdmissionService/DeviceStatePort) enforcement",
+      "text": "CONTRACT CONTRADICTION -- STOPPING BEFORE IMPLEMENTATION (per this packet's own requirement: \"If a contract clause and this packet disagree, raise a RELAY_QUESTION and STOP; never reconcile silently and never relax a direction test\").\n\nThis movement's objective is: POST /devices/add-single creates the DRAFT device row and admits a C2 confirm job against it; a worker claims that job and contacts the device; on success the row lands ENROLLED with the observed facts.\n\nThe already-merged B1-4/B1-4b code enforces the opposite rule at four independent, tested points, all tied to FROZEN adjudications F4/F6/F7/F12:\n\n1. JobAdmissionService.submit() (job-engine/.../admission/JobAdmissionService.java lines 68-80): refuses admission with DEVICE_NOT_ELIGIBLE for any device whose enrollment_state does not permit read collection -- comment: \"does not permit a job to be created against it (DRAFT is refused here)\".\n2. DeviceEnrollmentState.permitsReadCollection() (platform-core, DeviceEnrollmentState.java): \"Contract Section 3: DRAFT never permits collection or a job.\"\n3. StepExecutor.execute() (job-engine/.../executor/StepExecutor.java lines 100-109): re-checks enrollment at claim time and returns JobOutcome.Rejected(\"DEVICE_NOT_ELIGIBLE_AT_CLAIM_TIME\") before EXECUTING, before any device contact -- covered by its own regression test, DraftDeviceRefusedAtClaimTimeTest, which asserts \"a DRAFT device at claim time must never be contacted.\"\n4. JooqDeviceStatePort.recordContactOutcome() / DeviceStatePort javadoc (persistence + platform-core): a DRAFT device is refused with DRAFT_DEVICE_NOT_CONTACTABLE -- \"a DRAFT device is confirmed via the enrollment-confirm action, never a contact outcome... this movement's own registration flow never hands a DRAFT device to an executor in the first place.\"\n\nAll four say, with test coverage, that a DRAFT device is never admitted into a job and never handed to an executor/worker for contact; DRAFT -> ENROLLED must happen through a separate, already-anticipated \"enrollment-confirm action\" that is not a job/worker contact outcome.\n\nThis movement's brief requires exactly the path those four points refuse: admit a C2 job whose target is the new DRAFT device, and have the worker's StepExecutor contact it and land it ENROLLED. Implementing this as specified would require weakening JobAdmissionService's or StepExecutor's DRAFT refusal (an explicitly forbidden direction-rule relaxation per this movement's own \"Files you must not touch\": \"Relaxing ... any direction rule\"), or inventing a second admission/execution path that bypasses the existing gate (a silent reconciliation, also forbidden). Neither is available under this brief's own constraints.\n\nI have not modified JobAdmissionService, StepExecutor, DeviceEnrollmentState, DeviceStatePort, or any migration, and have made no other repository changes this session.\n\nQUESTION FOR THE PRODUCT OWNER: which authority yields? Concretely, is the intended design:\n(a) the confirm job's admission and claim-time check are meant to treat DRAFT as eligible specifically for the confirm capability (an explicit, narrow amendment to F4/F6, naming exactly which capability/action-class is exempt and why disabled/deleted devices still refuse), or\n(b) DRAFT -> ENROLLED is meant to go through the \"separate, authorized confirm action\" that JooqDeviceStatePort's comment already anticipates -- i.e. the confirm job's completion handler writes facts and calls a dedicated confirm-transition write (not JobAdmissionService/StepExecutor's generic device-eligibility gate at all), meaning admission for this one job type needs a different eligibility predicate than \"permitsReadCollection\" -- and if so, exactly what that predicate is (DRAFT permitted, still refusing disabled/deleted), or\n(c) something else this packet has not named.\n\nAwaiting a RELAY_DECISION or RELAY_CORRECTION before any implementation proceeds. No code was changed.",
+      "timestamp": "2026-09-14T09:55:12Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner assistant (PO+O) under the Product Owner's 2026-09-14 approval of the first-contact design; recorded as docs/design/PO_DECISION_RECORD_2026_09_14B_ENROLLMENT_CONFIRM_IS_THE_ONE_JOB_ADMISSIBLE_AGAINST_DRAFT.md (FROZEN, successor to B1_04B section 3 and adjudication F4)",
+      "marker": "RELAY_DECISION",
+      "scope": "DRAFT-device job admission for the enrollment confirm only",
+      "seq": 3,
+      "subject": "Resolved: the confirm is the one job kind admissible against DRAFT; every other kind keeps F4's refusal",
+      "supersedes": "none",
+      "text": "Right call to stop. The contradiction is real and is resolved by a recorded successor clause, not by reading one side away: EC-J1 exactly one job kind -- the enrollment confirm, whose capability is the closed four-read set -- is admissible against a DRAFT device; EC-J2 every other job kind keeps F4's refusal at all four enforcement points (JobAdmissionService, DeviceEnrollmentState.permitsReadCollection stays false for DRAFT, StepExecutor claim-time check, DeviceStatePort), and a test proves both sides; EC-J3 the confirm job's completion moves the row DRAFT -> ENROLLED (EC-6a on mismatch); EC-J4 the confirm job obeys every C2 rule in full; EC-J5 peer follow runs inside the same job. Implement by distinguishing the confirm job kind at those four points -- never by widening permitsReadCollection or by an execution path outside C2/C4. The packet's objective stands otherwise. Proceed from a fresh dispatch: your worktree will be recreated from origin/main once the record is merged.",
+      "timestamp": "2026-09-14T09:57:10Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "job-engine: JobAdmissionService.java, new ConfirmCapabilityIds.java",
+          "persistence: DeviceRepository.java, JooqDeviceRepository.java, new DeviceConfirmFacts.java, new TransactionBoundaryFactory.java",
+          "worker: new ConfirmJobExecutor.java, WorkerClaimLoop.java, ConfirmCapabilities.java, Ui2WorkerMain.java; StoreBackedSshCredentialResolver/StoreBackedPanCredentialResolver widened to public",
+          "capability-registry: two new fixture YAML specs (unloaded by production code, matching cp_gaia_inventory.yaml's own current maturity)",
+          "deploy/ui2: 52-worker-deployment.yaml, two new secret shells, 50-service-deployment.yaml mounts",
+          "tests/test_ui2_deployment_manifests.py extended",
+          "ui2/frontend: AddDeviceDialog.tsx, InventoryScreen.tsx, AdministrationScreen.tsx, adminApi.ts, new DeviceRegistryPanel.tsx, new useFetchOnMount.ts, new deviceCopy.ts, LocalIdentitiesPanel/CredentialsPanel refactored onto the same hook",
+          "3 existing DeviceRepository test fakes updated for the 3 new interface methods"
+        ],
+        "completed": [
+          "RELAY_QUESTION raised and resolved (PO_DECISION_RECORD_2026_09_14B EC-J1..EC-J5) before any code was written: the confirm is the one job kind admissible against a DRAFT device.",
+          "ConfirmCapabilityIds + JobAdmissionService change admitting only the confirm capability against DRAFT (ConfirmCapabilityAdmissibleAgainstDraftTest proves both sides).",
+          "ConfirmJobExecutor (worker.confirm): the confirm job's own C2-compliant executor, writing DeviceRepository.recordConfirmSuccess (new DeviceConfirmFacts) on completion.",
+          "AC-1 and AC-2, the two decisive tests, written first (observed failing on compile), now passing: ConfirmJobExecutorEndToEndTest, ConfirmJobExecutorWorkerDiesTest.",
+          "WorkerClaimLoop + Ui2WorkerMain (worker entry point, claim loop, bounded to one job at a time).",
+          "deploy/ui2/52-worker-deployment.yaml + two new key secrets, mounted on both Deployments; tests/test_ui2_deployment_manifests.py extended, 45/45 passing.",
+          "Frontend: AddDeviceDialog (submit + cancellable poll + terminal result), InventoryScreen (cluster grouping), Administration device tab, all wired to a defined device API contract; useFetchOnMount race fix; 50/50 frontend tests passing."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "not applicable -- Java/Gradle project, no main.py",
+          "ui": "InventoryScreen/AdministrationScreen/AddDeviceDialog wired to a real device API contract; useFetchOnMount fixes a stale-response race; 50/50 frontend tests passing, tsc/vite build clean"
+        },
+        "integration": {
+          "branch": "feature/device-add-async-confirm",
+          "ci": "not run (no CI configured in this repo for this branch push)",
+          "head_sha": "HEAD",
+          "merge_commit": null,
+          "merge_decision": "not merged -- PO review required per merge gate",
+          "merge_state": "OPEN",
+          "pr": 272,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/272"
+        },
+        "next": {
+          "movement": "device-add-async-confirm-service-endpoints",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Implement POST /devices/add-single, GET /devices/{id}, GET /devices wired to DeviceRegistrationService/JobAdmissionService/DeviceRepository.findConfirmFacts; resolve the Ui2WorkerMain single-jar packaging gap; add a composite DeviceTransport for Palo Alto.",
+          "status": "planned"
+        },
+        "preserved": [
+          "Every 0156/0154 test still passes",
+          "DeviceEnrollmentState.permitsReadCollection() unchanged (DRAFT still false)",
+          "Ui2ArchitectureTest passes unchanged (no service class imports worker)"
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work is Spring wiring plus one build-packaging decision, not new contract-level design; a fresh session with a tighter, endpoint-scoped brief can close it without re-deriving this session's contract resolution.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "state_updates": [
+          "None made to project/*.json or CURRENT_STATE.md this session (out of the files this brief named); the PO should record PARTIAL status and the named next-action list when updating project state."
+        ],
+        "unresolved_risks": [
+          "The three HTTP service endpoints (POST /devices/add-single, GET /devices/{id}, GET /devices) the frontend calls are not implemented -- DeviceRegistrationController is still excluded from Spring component scan. This is the one concrete remaining gap.",
+          "Ui2WorkerMain is not yet reachable from the deployed image: the fixed ENTRYPOINT only launches :service's bootJar today; wiring the worker CMD role to run Ui2WorkerMain needs a build-script change (not a service-source dependency on worker), named in Ui2WorkerMain's own javadoc.",
+          "ConfirmCapabilityExecutor's transport in Ui2WorkerMain currently covers Check Point only; Palo Alto needs a composite DeviceTransport before one worker process serves both vendors.",
+          "ConfirmJobExecutor is a sibling of StepExecutor, not a caller of it (StepExecutor cannot express the confirm's two-phase self-then-peer contact) -- an intentional design choice, not a contract violation, but it departs from this packet's own descriptive text and is worth PO review."
+        ],
+        "validation": {
+          "affected": "job-engine, persistence, worker, capability-registry, deploy/ui2, tests/test_ui2_deployment_manifests.py, ui2/frontend",
+          "diff_check": "git diff reviewed module by module before each commit",
+          "full_regression": "ui2/gradlew build -x :integration-tests:test green across all 11 modules; npm frontend tests 50/50",
+          "privacy": "python3 scripts/repository_privacy_check.py PASS, 0 findings",
+          "real_environment": "not performed -- no device/cluster available to this session",
+          "state_consistency": "no project/*.json touched this session",
+          "targeted": "ConfirmJobExecutorEndToEndTest, ConfirmJobExecutorWorkerDiesTest, ConfirmCapabilityAdmissibleAgainstDraftTest all pass"
+        }
+      },
+      "seq": 4,
+      "timestamp": "2026-09-14T10:35:24Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0157",
+  "movement": "device-add-async-confirm-and-worker-runtime",
+  "next_actor": null,
+  "refs": [
+    "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md",
+    "docs/design/DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14_DEVICE_ADD_ENTRY_PEER_FOLLOW_AND_CREDENTIAL_STORE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13D_INDEPENDENTLY_DEPLOYABLE_SERVICES.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md",
+    "relay/NXS-LOCAL-0156-device-add-single-device.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T10:35:24Z"
+}

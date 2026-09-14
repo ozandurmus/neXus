@@ -1,0 +1,234 @@
+{
+  "created_at": "2026-09-14T18:50:38Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 An account whose only session is past either deadline can log in; the stale row ends as EXPIRED with the right end_reason and the login returns a new session.",
+          "AC-2 An account with a genuinely live session still gets the conflict, unchanged.",
+          "AC-3 A request presenting a past-deadline session is rejected as unauthenticated and the row is ended.",
+          "AC-4 findActiveByActor never returns a past-deadline row, independently of whether anything swept.",
+          "AC-5 Eleven-module build, persistence, service, architecture and frontend tests, privacy gate and contract_authority_status green."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md -- FROZEN: the session lifecycle it fixes, including the idle deadline, the absolute lifetime, the end reasons (login_elsewhere, idle_timeout, absolute_lifetime, revoked_by_admin, access_group_lost) and the single-active-session rule the login conflict enforces. Read it before changing behaviour: this movement implements what it already says, and changes no rule. PO ASSISTANT DECISION 2026-09-14, on the Product Owner's own words -- an operator should not have to sign out for a session to end; absence of activity ends it. Where the contract is silent on WHERE the expiry happens, it happens on the paths that read a session, not in a background timer.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :persistence:test, :service:test, :architecture-tests:test and npm --prefix ui2/frontend test first; record counts.",
+          "what_exists": "The defect, observed on the live database today: one row with state ACTIVE, created 08:32, idle_deadline_at 09:02, absolute_expires_at 18:32, still ACTIVE at 18:48, and the login returning 409 with the message the frontend renders as 'Another session is already active for this account.' (ui2/frontend/src/auth/LoginScreen.tsx line 16). JooqSessionRepository.findActiveByActor(actorFingerprint) is the conflict check and its SQL is `select ... from sessions where actor_fingerprint = {0} and state = 'ACTIVE'` -- no deadline predicate (line ~41). JooqSessionRepository.findActivePastDeadline(asOf) exists with the right SQL (`state = 'ACTIVE' and (idle_deadline_at <= {0} or absolute_expires_at <= {0})`, line ~59) and a grep of ui2/service and ui2/worker finds NO caller. The sessions table's state check constraint allows ACTIVE, SUPERSEDED, EXPIRED, REVOKED; end_reason allows login_elsewhere, idle_timeout, absolute_lifetime, revoked_by_admin, access_group_lost. GateChain is where a request's session is validated on every call. The Product Owner assistant has already expired the stuck row by hand on the live database so the account could log in; that is a one-off unblock, not the fix."
+        },
+        "context_not_loaded": [
+          "ui2/worker",
+          "docs/history/**",
+          "project/*.json",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/expire-stale-sessions"
+        },
+        "invariants": [
+          "A dead session never refuses a login.",
+          "The single-active-session rule itself is unchanged.",
+          "No background timer; expiry happens on the paths that read a session.",
+          "One derivation of 'past deadline', reused."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The orchestrator opens the PR for this provider.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Fix a lockout the Product Owner hit today: an account whose only session had passed both its idle deadline and its absolute lifetime could not log in, because the login conflict check asks only whether a row's state is ACTIVE and nothing ever moves a past-deadline row out of ACTIVE. The repository already has the query that finds them and no caller. An idle session must end on its own, exactly as the contract says, and a dead row must never refuse a login.",
+        "output_contract": [
+          "A session that goes idle ends by itself and never locks its account out.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A bounded defect with the query already written, a clear contract and five named tests.",
+          "tier": "Codex gpt-5.6-terra, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every change names the contract clause it implements.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects. No migration.",
+          "A session write that the audit trigger guards must carry its actor and action; follow the existing session-ending code path rather than writing raw SQL beside it.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Commit early and often. SESSION_CLOSE names the paths that now expire, the end_reason choice when both deadlines have passed, and the test counts before and after."
+        ],
+        "risks": [
+          "Fixing only the sweep and leaving the conflict query able to return a dead row.",
+          "Ending a live session by getting the deadline comparison backwards.",
+          "Writing the state change outside the audited session path."
+        ],
+        "scope": {
+          "in": [
+            "Expire on read: every path that reads a session for a decision -- the gate chain's per-request validation and the login conflict check -- first ends any ACTIVE row whose idle deadline or absolute lifetime has passed, writing state EXPIRED with end_reason idle_timeout or absolute_lifetime as appropriate (idle first when both have passed is a choice: pick one, state it in the class and be consistent), the ending actor recorded as the system, in the same transaction as the read so no caller can observe a dead row as live. Use the existing findActivePastDeadline query rather than adding a second derivation.",
+            "The conflict check itself must not depend on the sweep having run: findActiveByActor gains the deadline predicate so that a past-deadline row is not returned as a conflict even if nothing expired it yet. Belt and braces, because the lockout is a user-visible failure and the sweep is a side effect.",
+            "Touching a session on a real request refreshes its idle deadline exactly as the contract specifies; confirm that path still works and is covered, since it is what makes 'no activity' meaningful.",
+            "Tests: a persistence test that a past-idle row and a past-absolute row are both ended with the right end_reason and that an in-date row is untouched; a service test that a login against an account whose only session is past deadline succeeds and returns a new session rather than 409; a service test that a login against a genuinely live session still returns the conflict; a gate test that a request carrying a past-deadline session is rejected as unauthenticated rather than served; and a test that the conflict query itself excludes past-deadline rows.",
+            "A short note in the login screen's conflict copy is NOT in scope -- the message is correct when the conflict is real."
+          ],
+          "out": [
+            "Any change to the single-active-session rule itself, the deadlines' values, the end-reason vocabulary or the contract; a background timer or scheduler; session takeover or a 'sign out my other session' affordance (worth having, but it is a product decision the Product Owner has not made)."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":persistence:test"
+            ],
+            "name": "ui2_persistence_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T18:50:38Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "JooqSessionRepository expires stale ACTIVE sessions in the audited system transaction before decision reads; idle_timeout wins when both deadlines have elapsed.",
+          "findActiveByActor requires both deadlines to be future-dated, LoginFlow passes its decision time, and GateChain passes its E1 time then heartbeats successful E1 requests."
+        ],
+        "completed": [
+          "Implemented expiry-on-read for login conflict and E1 session reads using the existing findActivePastDeadline query.",
+          "Added persistence, login-flow and gate-chain tests for expiry, conflict filtering and heartbeat behavior."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No main.py change.",
+          "ui": "No UI change."
+        },
+        "integration": {
+          "branch": "feature/expire-stale-sessions",
+          "ci": "NOT RUN: Gradle wrapper lock creation was denied by the sandbox.",
+          "head_sha": "6444d3f7823911cafbf7408d12ef725ce31da44f",
+          "merge_commit": null,
+          "merge_decision": "No merge action taken; commit and PR creation were blocked by filesystem permissions.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0176",
+          "movement_type": "VALIDATION",
+          "objective": "Run the required validations and create/push the existing implementation commit in an environment allowed to write the Gradle and shared Git worktree lock paths, then open a PR without merging it locally.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Single-active-session rule, deadline values, end-reason vocabulary and terminal states are unchanged.",
+          "No scheduler, background timer, session-takeover behavior or frontend copy was added."
+        ],
+        "recommended_reasoning": {
+          "reason": "The next step is bounded validation and delivery once filesystem permissions permit it.",
+          "tier": "low"
+        },
+        "state_updates": [
+          "None: implementation is unvalidated, uncommitted and has no PR."
+        ],
+        "unresolved_risks": [
+          "All required validations remain unrun because Gradle cannot create its cache lock in this sandbox.",
+          "Commit and PR creation are blocked because Git cannot create the shared worktree index lock outside the writable roots.",
+          "Dispatch baseline said findActivePastDeadline had no caller; code contains SessionReconciler.reconcileOnce, but no scheduler invokes it. Expiry-on-read reuses the query.",
+          "The frozen contract reserves ended_by_actor_fingerprint for admin revocation; expiry records the system actor through the audited transaction context rather than that column."
+        ],
+        "validation": {
+          "affected": "NOT RUN: persistence, service, architecture, frontend and eleven-module checks require the blocked Gradle runtime or remain pending after it.",
+          "diff_check": "PASS: git diff --check before the commit attempt.",
+          "full_regression": "NOT RUN: dispatch prohibits full Python pytest and the required Gradle build could not start.",
+          "privacy": "NOT RUN: blocked validation closeout; no privacy-gate result is claimed.",
+          "real_environment": "NOT APPLICABLE: local validation only.",
+          "state_consistency": "NOT RUN: no durable project-state update is authorized while the implementation is unvalidated and uncommitted.",
+          "targeted": "BLOCKED before Gradle started: the wrapper could not create its existing lock under /Users/OzanDur/.gradle because the sandbox denied access; test counts are unavailable."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T18:57:09Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0176",
+  "movement": "expired-session-must-not-block-login",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/identity/JooqSessionRepository.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/identity/SessionRepository.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/LoginController.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/GateChain.java",
+    "ui2/frontend/src/auth/LoginScreen.tsx"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T18:57:09Z"
+}

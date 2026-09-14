@@ -1,0 +1,253 @@
+{
+  "created_at": "2026-09-14T17:51:41Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Reading a finished run marks every candidate that matches an enrolled device as already_imported, with the existing device id, computed at read time (test: import a device after the run, re-read, the mark appears).",
+          "AC-2 An already-imported or conflicting candidate cannot be selected, and selecting its cluster parent skips it (test).",
+          "AC-3 The list header reports the found count and the already-added count (frontend test).",
+          "AC-4 The import path's own RD-5 refusal is unchanged (existing tests green).",
+          "AC-5 The registry is consulted once per read, not once per candidate (test); eleven-module build, service/persistence/architecture/frontend tests, privacy gate and contract_authority_status green."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14F_DISCOVERY_FROM_THE_UI_RUN_AND_CANDIDATE_SET.md -- FROZEN 2026-09-14: DR-2 the persisted candidate set carries importable and, after import, the RD-5 outcome; section 2 import matches by the vendor stable identifier; section 3 the candidate table with cluster parent and child rows. docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md (FROZEN 2026-09-14) RD-1 selecting a cluster selects its members, RD-2/RD-3 the match key is the vendor stable identifier, RD-4 name-blindness (never match on a display name), RD-5 the three outcomes new / already_imported / conflicting, DI-3/DI-4 show everything (a candidate is never hidden, only marked). PO ASSISTANT DECISION 2026-09-14: the already-imported state is computed when the candidate list is READ, never frozen at run time, because a device can be added between the run finishing and the operator selecting.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :service:test, :persistence:test, :architecture-tests:test and npm --prefix ui2/frontend test first; record counts.",
+          "what_exists": "ui2/service/.../discovery/DiscoveryRunService.java holds the import path; at its line ~248 it calls deviceDiscoveryMatchRepository.findByDiscoveryMatchKey(matchKey) and maps the result to the RD-5 outcome -- that is the only place the match is consulted today, and the read path (the run + candidates view) does not call it. ui2/persistence/.../device/DeviceDiscoveryMatchRepository.java exposes findByDiscoveryMatchKey returning Optional<DeviceDiscoveryMatch>; DeviceDiscoveryMatch is a record (deviceId, addressRef, Optional<String> clusterMemberRef, Optional<String> virtualSystemRef) whose toString redacts addressRef. discovery_candidate (migration V14) carries importable BOOLEAN NOT NULL and import_outcome TEXT with a CHECK constraint allowing NULL or one of 'new','already_imported','conflicting'. ui2/frontend/src/shell/AddDeviceDialog.tsx renders the candidate table and gates selection on candidate.importable (see its lines ~230-250: a non-importable parent row expands selection to its importable children). adminApi.ts holds the candidate types."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "ui2/worker",
+          "the Python collectors",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/discovery-already-imported-marking"
+        },
+        "invariants": [
+          "No candidate is ever hidden; already-imported ones are marked and disabled.",
+          "The match is by vendor stable identifier only.",
+          "The import path remains the authority on what may be imported."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Show the operator, before they select anything, which discovery candidates are already in the product. Today the already-imported check runs only inside the import path, so a run against an estate whose cluster is already enrolled presents those members as freshly selectable and the operator finds out only after pressing Import. Product Owner directive 2026-09-14: a candidate that is already added appears greyed out and cannot be selected, and the list says how many of the found candidates that is.",
+        "output_contract": [
+          "A discovery result that tells the operator, before selection, what is already in the product.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A read-path join, a selection rule and a screen affordance against existing contracts and an existing repository method.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every new field and method names the clause it serves (14F section 2/3, import contract RD-n, DI-n).",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. Eleven Gradle subprojects. No migration is expected; if one is genuinely needed it is additive at the next free number and sets the audit context before any row it writes.",
+          "RD-4 name-blindness: the match is by stable identifier only, never by display name or address.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Open the PR at the end; do not merge. SESSION_CLOSE names the field, the batch method, the frontend affordance and the test counts before and after."
+        ],
+        "risks": [
+          "Freezing the mark at run time so a device added afterwards still looks new.",
+          "One registry query per candidate on a forty-row list.",
+          "Overwriting import_outcome with a read-time observation.",
+          "Letting a cluster selection silently re-import members that already exist."
+        ],
+        "scope": {
+          "in": [
+            "Read path: when the run and its candidates are read, resolve each candidate's match key against the device registry through the existing DeviceDiscoveryMatchRepository (add a batch lookup method rather than calling it per candidate in a loop) and add to the candidate's JSON a field naming its existing state -- new, already_imported, or conflicting per RD-5 -- plus the existing device id when it is already imported. Do not overwrite the persisted import_outcome column with it: that column records what an import did; this field records what the registry says right now. Name them distinctly and say which is which in the SESSION_CLOSE.",
+            "Selection rule: a candidate whose existing state is already_imported is not selectable; one that is conflicting is not selectable either and carries its reason. RD-1 still holds: selecting a cluster selects its importable members, and now it must skip the already-imported ones rather than including them. A run where every member is already imported leaves the cluster row visible and selectable-but-empty -- render that honestly rather than hiding the row (DI-3).",
+            "Import path: keep its own RD-5 check exactly as it is. The read-path marking is an affordance, not the authority; a candidate that became imported between the read and the import must still be refused per row by the import path, with its outcome.",
+            "Frontend: an already-imported row renders greyed out and non-selectable with a short badge naming the state, and the summary line above the table reports the counts, in the shape 'N candidates found, M already added' (and a separate count for conflicting when any exist). A tooltip or secondary line on the row names the existing device so the operator can find it. No role-conditional rendering.",
+            "Tests: service tests for the read path (a candidate matching an enrolled device is marked already_imported with its device id; one matching nothing is new; a conflicting match is marked and not selectable), a batch-lookup test proving one query rather than N, a frontend test that the row is disabled and the counts render, and an existing-behaviour test that the import path still refuses per row."
+          ],
+          "out": [
+            "Changing the match key or the RD-5 semantics; hiding any candidate; the discovery run itself, the worker, or any device contact; the inventory or configuration screens."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":persistence:test"
+            ],
+            "name": "ui2_persistence_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "run",
+              "build"
+            ],
+            "name": "frontend_build"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T17:51:41Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/persistence/.../device/DeviceDiscoveryMatchRepository.java",
+          "ui2/persistence/.../device/JooqDeviceDiscoveryMatchRepository.java",
+          "ui2/service/.../discovery/DiscoveryRunService.java",
+          "ui2/service/.../api/DiscoveryController.java",
+          "ui2/service/src/test/.../discovery/DiscoveryRunServiceTest.java",
+          "ui2/frontend/src/auth/adminApi.ts",
+          "ui2/frontend/src/shell/AddDeviceDialog.tsx",
+          "ui2/frontend/tests/AddDeviceDialog.test.tsx"
+        ],
+        "completed": [
+          "AC-1: DiscoveryRunService.read() now computes a read-time RD-5 projection (CandidateRegistryState: new/already_imported/conflicting + existing device id) per candidate, via a batch registry lookup, exposed as ReadOutcome.Found.registryStateByCandidateId.",
+          "AC-5: DeviceDiscoveryMatchRepository.findByDiscoveryMatchKeys(Collection<String>) added (one query for the whole candidate set); implemented in JooqDeviceDiscoveryMatchRepository with a single dynamic IN-clause query; DiscoveryRunService calls it exactly once per read().",
+          "DiscoveryController: GET /discovery/runs/{run_id} candidate JSON now carries registry_state and existing_device_id, distinct from the untouched, persisted import_outcome field.",
+          "AC-2: frontend AddDeviceDialog.tsx isSelectable() gates single-row and cluster-parent selection so an already_imported/conflicting candidate cannot be selected and a cluster selection skips such members; an all-already-imported cluster stays visible, selectable-but-empty (DI-3), never hidden.",
+          "AC-3: frontend summary line above the candidate table renders 'N candidates found, M already added' plus a conflicting count when any exist; an already-imported/conflicting row is greyed out with a badge and, when known, the existing device id.",
+          "Import path (DiscoveryRunService.importSelection/importOneCandidate) refactored to share the RD-5 comparison (registryStateFor) with the read path, with its own RD-5 refusal behavior otherwise unchanged.",
+          "Tests: 3 new DiscoveryRunServiceTest cases (AC-1 read-time marking incl. device added after the run, conflicting marking, AC-5 single-batch-query assertion) and 1 new AddDeviceDialog.test.tsx case (disabled row + header counts); all pre-existing import-path and cluster-selection tests left green and unmodified (AC-4)."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- this movement is entirely within ui2 (Java service/persistence) and ui2/frontend; no Python collector/worker code touched.",
+          "ui": "AddDeviceDialogTrigger's discovery candidate table gains a read-time already-imported/conflicting affordance: greyed-out disabled rows with a state badge and existing device id, and a found/already-added/conflicting summary line above the table."
+        },
+        "integration": {
+          "branch": "feature/discovery-already-imported-marking",
+          "ci": "not queried by this session -- see PR #308 checks on GitHub",
+          "head_sha": "701b75fec5d655ef64fb526475d79b714f3b3a29",
+          "merge_commit": null,
+          "merge_decision": "Awaiting Product Owner assistant review plus orchestrator verify.passed per this movement's merge gate; worker does not merge to main.",
+          "merge_state": "OPEN",
+          "pr": 308,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/308"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0173",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "PR #308 open against main for Product Owner assistant review plus orchestrator verify.passed; worker does not merge.",
+          "status": "complete"
+        },
+        "preserved": [
+          "The persisted discovery_candidate.import_outcome column and DiscoveryCandidateRecord.importOutcome() -- never written or read by the new read-path projection.",
+          "The import path's own RD-5 refusal and its per-row transaction shape -- behaviorally unchanged (existing already_imported/conflicting/refused-per-row/cluster-expansion tests still green, unmodified).",
+          "No candidate is ever hidden from the read/frontend -- already-imported/conflicting rows are marked and disabled, never removed from the response or the table.",
+          "RD-4 name-blindness -- matching stays by DiscoveryMatchKey (vendor stable identifier / owning domain), never display name or address."
+        ],
+        "recommended_reasoning": {
+          "reason": "Implementation matched the pre-scoped brief exactly (a read-path batch join, a selection rule, a screen affordance) with no new architecture, security boundary, or vendor-semantic ambiguity encountered.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "No persistence-level (DB-backed) test exists for JooqDeviceDiscoveryMatchRepository.findByDiscoveryMatchKeys's IN-clause SQL -- the one-query behavior is proven at the service layer via a Fake repository call-count assertion; the persistence module has no existing DB-bound test harness for this repository to extend within this movement's scope."
+        ],
+        "validation": {
+          "affected": "ui2_service_tests and ui2_persistence_tests: BUILD SUCCESSFUL, all green.",
+          "diff_check": "git diff limited to the 8 files listed in changed[]; no migration, no touch to ui2/worker, device/deployment/collection code, or the inventory/configuration screens.",
+          "full_regression": "ui2_build_excluding_db_bound_integration_tests: BUILD SUCCESSFUL (includes service/persistence/architecture-tests/cli/job-engine/worker/ldap-adapter/capability-registry/platform-core/scheduler test tasks and the frontend build); frontend_tests: 61/61 passed across 13 files; frontend_build: tsc --noEmit && vite build clean.",
+          "privacy": "python3 scripts/repository_privacy_check.py: PASS, 0 findings, 1734 files scanned.",
+          "real_environment": "Not performed -- local/automated validation only per this movement's deployment_direction; no network-facing behavior changed (read/selection/import stay against the existing devices/endpoints tables and the existing DeviceAddSingleService/JobAdmissionService paths).",
+          "state_consistency": "python3 -m pytest tests/test_contract_authority_status.py -q: 5 passed.",
+          "targeted": "New tests green: DiscoveryRunServiceTest (3 new AC-1/AC-5 cases) and AddDeviceDialog.test.tsx (1 new AC-2/AC-3 case)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T18:01:29Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0173",
+  "movement": "discovery-candidate-already-imported-marking",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14F_DISCOVERY_FROM_THE_UI_RUN_AND_CANDIDATE_SET.md",
+    "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/discovery/DiscoveryRunService.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceDiscoveryMatchRepository.java",
+    "ui2/frontend/src/shell/AddDeviceDialog.tsx",
+    "ui2/frontend/src/auth/adminApi.ts"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T18:01:29Z"
+}

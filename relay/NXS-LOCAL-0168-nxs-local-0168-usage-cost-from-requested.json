@@ -1,0 +1,190 @@
+{
+  "created_at": "2026-09-14T17:20:58Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A Codex-shaped usage cache with model None and model_requested gpt-5.6-terra prices from the table and reports cost_source estimated_from_requested_model.",
+          "AC-2 An unpriced or absent requested model still reports unavailable; a provider-reported cost still wins.",
+          "AC-3 Claude movements' usage output is unchanged.",
+          "AC-4 The usage table shows a figure for Codex movements with its source distinguishable.",
+          "AC-5 tests/test_orchestrator_usage.py and tests/test_orchestrator.py pass; privacy gate PASS."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_4A_COST_FROM_THE_REQUESTED_MODEL_WHEN_THE_STREAM_IS_SILENT.md -- FROZEN 2026-09-14: CU-1 the fallback and its distinct cost_source value estimated_from_requested_model; CU-2 it is not a guess and rides alongside the existing audit_exception provider_default_used; CU-3 with no model_requested the answer stays unavailable; CU-4 the estimate is a comparable, never billed spend. docs/design/GOV_ORCH_4_WORKBENCH_OBSERVABILITY_TOKENS_AND_STUCK_DETECTION.md (FROZEN) sections 3.1 and 3.2 -- the shape and the unchanged reported/estimated/unavailable resolution for providers that do report a model.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run python3 -m pytest tests/test_orchestrator_usage.py tests/test_orchestrator.py -q first and record the counts. Do NOT run the whole suite.",
+          "what_exists": "scripts/orchestrator_usage.py holds the resolution in one function: _cost_for(model, tokens, reported_cost, price_table) -> (cost, source) returning 'reported' when the provider gave a cost, 'estimated' from a price-table entry keyed by the observed model, else (None, 'unavailable'); _public_shape(cache, provider, price_table) builds the JSON the workbench and the usage command print, and it is where 'model' is read. The observed model comes from the event stream and is None for Codex by design (scripts/orchestrator_providers.py records observed_model = (None, None) and marks the dispatch audit_exception 'provider_default_used'). The dispatch's requested model is on the process record written by scripts/orchestrator.py as 'model_requested' (the same field the status listing prints); a record for movement NXS-LOCAL-0166 reads, in part: {\"provider\": \"codex\", \"model_requested\": \"gpt-5.6-terra\", \"effort_requested\": \"medium\"}. A usage row for that movement currently reads: {\"provider\": \"codex\", \"model\": null, \"cost_source\": \"unavailable\", \"cost_usd\": null, \"input_tokens\": 2973857, \"cache_read_input_tokens\": 2824704, \"output_tokens\": 23515, \"total_tokens\": 5822076}. config/model_prices.json already carries gpt-5.6-terra, gpt-5.6-luna, gpt-5.3-codex and the Claude models, each with input_per_mtok, cache_write_per_mtok, cache_read_per_mtok, output_per_mtok. tests/test_orchestrator_usage.py holds the existing unit tests for this module -- follow their style."
+        },
+        "context_not_loaded": [
+          "ui2/**",
+          "docs/history/**",
+          "project/*.json",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/usage-cost-from-requested-model"
+        },
+        "invariants": [
+          "One resolution function; no second derivation.",
+          "reported and estimated keep their meanings exactly.",
+          "No model is ever invented; absent both, unavailable."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The orchestrator opens the PR for this provider.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement GOV.ORCH.4-A: when a provider's event stream reports no model, resolve the token price from the dispatch's recorded model_requested and label the result cost_source estimated_from_requested_model. Today every Codex movement shows its token counts with cost unavailable, although config/model_prices.json holds the entry for the model the dispatch asked for.",
+        "output_contract": [
+          "Codex movements show a cost figure labelled by its source instead of a dash.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "One branch in one pure function plus tests, against a written contract and a quoted sample of both real shapes.",
+          "tier": "Codex gpt-5.6-terra, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every new branch names the clause it implements (GOV.ORCH.4-A CU-n).",
+          "Run only the two test files named in test_baseline plus the privacy gate.",
+          "Smallest diff; the resolution stays in one function, never re-derived at a call site.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+          "Commit early and often. SESSION_CLOSE names the function signature change, the new source value, the table rendering, and test counts before and after."
+        ],
+        "risks": [
+          "Collapsing the new source into the existing 'estimated', which would hide the uncertainty CU-2 keeps visible.",
+          "Reading the requested model inside the pure function by reaching for a file.",
+          "Changing Claude's output while touching the shared path."
+        ],
+        "scope": {
+          "in": [
+            "Thread the requested model into the cost resolution: the usage functions gain an optional requested_model parameter (or read it from the process record where the public shape is built -- choose whichever keeps the pure function pure and say which in the SESSION_CLOSE), and _cost_for gains the CU-1 branch returning the new source string estimated_from_requested_model. CU-3: absent both models, unchanged unavailable. The reported and estimated branches keep their exact current behaviour.",
+            "The usage JSON keeps every field it has and adds nothing beyond what CU-1 needs; if the shape gains a field naming the model actually priced, name it plainly and document it in the module docstring.",
+            "The human-readable usage table (the 'cost' column of orchestrator.py usage) shows the estimate rather than a dash, with the source distinguishable -- a trailing marker is enough; do not widen the table's contract beyond that.",
+            "Tests in tests/test_orchestrator_usage.py: a Codex-shaped cache with model None and a requested model present prices from the table and reports estimated_from_requested_model; the same with an unpriced requested model reports unavailable; with neither model, unavailable; a provider-reported cost still wins over both; a Claude-shaped cache with an observed model still reports estimated and is byte-for-byte what it was before."
+          ],
+          "out": [
+            "config/model_prices.json's values (Product Owner owned); the provider adapters; the dashboard's own rendering beyond the cost column; any attempt to read a model from the Codex stream."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator_usage.py",
+              "-q"
+            ],
+            "name": "usage_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator.py",
+              "-q"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T17:20:58Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "_cost_for(model, tokens, reported_cost, price_table, requested_model=None) now returns estimated_from_requested_model only when no observed model exists.",
+          "Usage entry points accept requested_model explicitly; dashboard and run paths pass the dispatch record value.",
+          "Focused tests cover priced, unpriced, absent, reported-cost, observed-model, and CLI-marker paths."
+        ],
+        "completed": [
+          "Implemented GOV.ORCH.4-A CU-1 requested-model pricing fallback and CU-3 unavailable fallback.",
+          "Added a trailing '*' marker for requested-model estimates in the usage table."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Requested-model token-cost fallback and CLI source marker implemented.",
+          "ui": "No dashboard rendering change."
+        },
+        "integration": {
+          "branch": "feature/usage-cost-from-requested-model",
+          "ci": "Local required checks passed; remote PR checks pending creation.",
+          "head_sha": "f49f91b",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode: engineer must not merge.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "usage-cost-from-requested-model",
+          "movement_type": "VALIDATION",
+          "objective": "Product Owner review and orchestrator verification of the open pull request.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "Reported cost remains highest precedence; observed-model estimates retain cost_source estimated.",
+          "Usage JSON fields and provider adapters are unchanged; no model is read from the Codex stream."
+        ],
+        "recommended_reasoning": {
+          "reason": "Review and merge-gate verification only; implementation validation is complete.",
+          "tier": "Codex gpt-5.6-terra, low effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "tests/test_contract_authority_status.py: 5 passed in 0.50s.",
+          "diff_check": "PASS: git diff --check.",
+          "full_regression": "Not run; dispatch explicitly limits validation to targeted suites.",
+          "privacy": "PASS: repository privacy gate scanned 1371 files with 0 findings.",
+          "real_environment": "Not applicable: local orchestration accounting only.",
+          "state_consistency": "PASS: contract authority status suite.",
+          "targeted": "Baseline: 158 passed in 42.38s (usage plus orchestrator). Final: tests/test_orchestrator_usage.py 14 passed in 0.36s; tests/test_orchestrator.py 148 passed in 43.50s."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T17:27:39Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0168",
+  "movement": "usage-cost-from-requested-model",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_ORCH_4A_COST_FROM_THE_REQUESTED_MODEL_WHEN_THE_STREAM_IS_SILENT.md",
+    "docs/design/GOV_ORCH_4_WORKBENCH_OBSERVABILITY_TOKENS_AND_STUCK_DETECTION.md",
+    "scripts/orchestrator_usage.py",
+    "scripts/orchestrator.py",
+    "config/model_prices.json",
+    "tests/test_orchestrator_usage.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T17:27:39Z"
+}
