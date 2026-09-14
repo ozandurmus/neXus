@@ -73,10 +73,12 @@ public final class JooqDeviceRepository implements DeviceRepository {
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, (DSLContext dsl) -> {
             Timestamp now = Timestamp.from(Instant.now());
             dsl.execute("insert into devices(device_id, vendor_hint, registration_source, created_at, "
-                    + "is_test_target, enrollment_state, disabled, credential_reference_id) "
-                    + "values ({0}, {1}, {2}, {3}, {4}, 'DRAFT', false, {5})",
+                    + "is_test_target, enrollment_state, disabled, credential_reference_id, "
+                    + "cluster_member_ref, virtual_system_ref, discovery_match_key) "
+                    + "values ({0}, {1}, {2}, {3}, {4}, 'DRAFT', false, {5}, {6}, {7}, {8})",
                     draft.deviceId(), draft.vendorHint(), draft.registrationSource(), now, draft.isTestTarget(),
-                    draft.credentialReferenceId());
+                    draft.credentialReferenceId(), draft.clusterMemberRef().orElse(null),
+                    draft.virtualSystemRef().orElse(null), draft.discoveryMatchKey().orElse(null));
             dsl.execute("insert into endpoints(endpoint_id, device_id, transport_kind, address_ref, created_at) "
                     + "values ({0}, {1}, {2}, {3}, {4})",
                     draft.endpointId(), draft.deviceId(), draft.transportKind(), draft.addressRef(), now);
