@@ -1,0 +1,13 @@
+CCP is not run - Active Check not found
+Required interfaces: 2
+Required secured interfaces: 0
+
+Interfaces:
+eth0        UP     non sync(non secured), multicast, unicast
+eth1        UP     non sync(non secured), multicast, unicast
+
+Virtual cluster interfaces:
+eth0        192.0.2.1
+eth1        198.51.100.1
+
+Virtual cluster interfaces(off):

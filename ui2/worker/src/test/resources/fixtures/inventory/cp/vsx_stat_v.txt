@@ -1,0 +1,4 @@
+VSID | Type | Name        | SIC Status
+0    | VS0  | VS0         | Trust
+2    | VS   | vs-finance  | Trust
+5    | VS   | vs-hr       | Trust

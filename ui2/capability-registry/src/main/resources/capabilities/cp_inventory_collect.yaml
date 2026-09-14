@@ -1,0 +1,34 @@
+# cp_inventory_collect -- the Check Point half of inventory collection
+# (PO_DECISION_RECORD_2026_09_14C D-1/D-2). This entry exists only so
+# JobAdmissionService's step 1 (capability exists, is execution-eligible)
+# has something to resolve com.securityexpert.nexus.ui2.jobs.admission.
+# InventoryCapabilityIds.CP_INVENTORY_COLLECT against -- the real device
+# contact never runs this capability's own step list; it runs through
+# worker.inventory.InventoryJobExecutor/InventoryCapabilityExecutor against
+# the closed read set (worker.inventory.InventoryReadPlan), because
+# StepExecutor's single-command-per-step shape cannot express the paced,
+# ordered, VSX-context-discovering session this capability's own read plan
+# needs (see InventoryJobExecutor's javadoc). connect/disconnect are the
+# only steps declared here -- neither needs a gate_reference -- so this
+# capability resolves execution-eligible with no gate rows of its own.
+#
+# Admitted only against ENROLLED, non-disabled devices (14C D-1; unlike
+# the enrollment confirm, this job kind is never admissible against DRAFT).
+capability_id: cp_inventory_collect
+vendor: check_point
+platform_role_scope: cp_gaia_gateway
+maturity_state: CAP_OFFLINE
+transport:
+  kind: ssh_exec
+  trust_rule_ref: utils.cp_ssh_trust
+steps:
+  - kind: connect
+finally_steps:
+  - kind: disconnect
+parser_ref:
+  parser_version: UNKNOWN
+  semantics_doc_ref: "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md section 3"
+source_pointers:
+  - "worker.inventory.InventoryCapabilityExecutor (the closed read set this capability's own execution defers to)"
+validation_status: FIXTURE_ONLY
+revalidation_plan_ref: "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md section 5"

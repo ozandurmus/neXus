@@ -1,0 +1,7 @@
+1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP
+    inet 192.0.2.10/24 brd 192.0.2.255 scope global eth0
+2: eth1: <BROADCAST,MULTICAST> mtu 1500 state DOWN
+3: eth2.100@eth2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP
+    inet 198.51.100.1/25 brd 198.51.100.127 scope global eth2.100
+4: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN
+    inet 127.0.0.1/8 scope host lo
