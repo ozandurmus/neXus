@@ -148,14 +148,23 @@ def load_price_table(path: Path) -> dict:
     return {k: v for k, v in obj.items() if k != "_comment" and isinstance(v, dict)}
 
 
-def _cost_for(model: str | None, tokens: dict, reported_cost: float | None, price_table: dict) -> tuple[float | None, str]:
+def _cost_for(model: str | None, tokens: dict, reported_cost: float | None, price_table: dict,
+              requested_model: str | None = None) -> tuple[float | None, str]:
     """Section 3.2's cost resolution: a provider-reported cost always wins
     (`reported`); otherwise a price-table entry for the observed model
     yields an `estimated` cost via the per-million-token formula; absent
-    either, the honest answer is `unavailable` -- never guessed."""
+    either, the honest answer is `unavailable` -- never guessed. GOV.ORCH.4-A
+    CU-1 additionally permits the dispatch's requested model when the stream
+    reported no model, labelling that estimate distinctly."""
     if reported_cost is not None:
         return reported_cost, "reported"
     entry = (price_table or {}).get(model) if model else None
+    source = "estimated"
+    # GOV.ORCH.4-A CU-1: a requested model is a bounded fallback only when
+    # the provider event stream supplied no observed model.
+    if entry is None and model is None:
+        entry = (price_table or {}).get(requested_model) if requested_model else None
+        source = "estimated_from_requested_model"
     if isinstance(entry, dict):
         cost = (
             tokens["input_tokens"] / 1_000_000 * (entry.get("input_per_mtok") or 0)
@@ -163,11 +172,12 @@ def _cost_for(model: str | None, tokens: dict, reported_cost: float | None, pric
             + tokens["cache_read_input_tokens"] / 1_000_000 * (entry.get("cache_read_per_mtok") or 0)
             + tokens["output_tokens"] / 1_000_000 * (entry.get("output_per_mtok") or 0)
         )
-        return round(cost, 6), "estimated"
+        return round(cost, 6), source
+    # GOV.ORCH.4-A CU-3: no observed or requested priced model is unavailable.
     return None, "unavailable"
 
 
-def _public_shape(cache: dict, provider: str, price_table: dict) -> dict:
+def _public_shape(cache: dict, provider: str, price_table: dict, requested_model: str | None = None) -> dict:
     """Section 3.1's JSON shape. When a `result` event was seen (Claude),
     its own usage totals are preferred over the accumulated per-turn sums
     (AC-1) -- the cumulative session totals it reports are the authoritative
@@ -179,7 +189,9 @@ def _public_shape(cache: dict, provider: str, price_table: dict) -> dict:
     total_tokens = sum(tokens.values())
     denom = tokens["input_tokens"] + tokens["cache_creation_input_tokens"] + tokens["cache_read_input_tokens"]
     cache_hit_ratio = round(tokens["cache_read_input_tokens"] / denom, 4) if denom else 0.0
-    cost_usd, cost_source = _cost_for(cache.get("model"), tokens, cache.get("result_cost_usd"), price_table)
+    cost_usd, cost_source = _cost_for(
+        cache.get("model"), tokens, cache.get("result_cost_usd"), price_table, requested_model,
+    )
     return {
         "provider": provider,
         "turns": cache.get("turns", 0),
@@ -198,7 +210,7 @@ def _public_shape(cache: dict, provider: str, price_table: dict) -> dict:
 
 
 def update_usage(state_dir: Path, movement_id: str, log_path: Path, provider: str,
-                  price_table: dict | None = None) -> dict:
+                  price_table: dict | None = None, requested_model: str | None = None) -> dict:
     """Incrementally parses `log_path` from the last recorded byte offset,
     accumulates into the persisted per-movement cache, and returns the
     current public usage shape (section 3.1). Never raises: a missing log,
@@ -227,22 +239,23 @@ def update_usage(state_dir: Path, movement_id: str, log_path: Path, provider: st
         except OSError:
             pass
     save_usage_cache(state_dir, movement_id, cache)
-    return _public_shape(cache, provider, price_table or {})
+    return _public_shape(cache, provider, price_table or {}, requested_model)
 
 
-def usage_summary_only(state_dir: Path, movement_id: str, provider: str, price_table: dict | None = None) -> dict:
+def usage_summary_only(state_dir: Path, movement_id: str, provider: str,
+                       price_table: dict | None = None, requested_model: str | None = None) -> dict:
     """Read-only: the last computed usage shape for `movement_id`, without
     touching the log (used when there is no worktree/log to read yet)."""
     cache = load_usage_cache(state_dir, movement_id)
-    return _public_shape(cache, provider, price_table or {})
+    return _public_shape(cache, provider, price_table or {}, requested_model)
 
 
 def compute_usage(state_dir: Path, movement_id: str, worktree_path: str | None, provider: str,
-                   price_table: dict | None = None) -> dict:
+                   price_table: dict | None = None, requested_model: str | None = None) -> dict:
     """The one entry point callers (the dashboard, `orchestrator.py run`,
     the `usage` CLI) use: refreshes from `<worktree>/.nexus/engineer.log`
     when a worktree is known, otherwise returns the last cached totals."""
     if worktree_path:
         log_path = Path(worktree_path) / ".nexus" / "engineer.log"
-        return update_usage(state_dir, movement_id, log_path, provider, price_table)
-    return usage_summary_only(state_dir, movement_id, provider, price_table)
+        return update_usage(state_dir, movement_id, log_path, provider, price_table, requested_model)
+    return usage_summary_only(state_dir, movement_id, provider, price_table, requested_model)

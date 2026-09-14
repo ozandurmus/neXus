@@ -1596,7 +1596,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
     # record itself (§3.4's board reads it from the record, never
     # re-deriving it) alongside `verify` (§3.4's Evidence tab / verify.passed).
     price_table = ou.load_price_table(DEFAULT_PRICE_TABLE_PATH)
-    usage = ou.compute_usage(state_dir, movement, str(worktree_path), provider, price_table)
+    usage = ou.compute_usage(state_dir, movement, str(worktree_path), provider, price_table,
+                             record.get("model_requested"))
 
     _save_state(state_dir, movement, {
         **record, "phase": phase, "failure_reason": failure_reason, "exit_code": exit_code,
@@ -1935,7 +1936,7 @@ def _cmd_usage(args: argparse.Namespace) -> int:
     print(f"{'movement':<24}{'provider':<9}{'tokens':>12}{'cache%':>8}{'cost':>10}")
     for m in report["movements"]:
         cache_pct = f"{(m.get('cache_hit_ratio') or 0) * 100:.0f}%"
-        cost = f"${m['cost_usd']:.4f}" if m.get("cost_usd") is not None else (m.get("cost_source") or "-")
+        cost = (f"${m['cost_usd']:.4f}" + ("*" if m.get("cost_source") == "estimated_from_requested_model" else "")) if m.get("cost_usd") is not None else (m.get("cost_source") or "-")
         print(f"{m['movement_id']:<24}{(m.get('provider') or '-'):<9}{m.get('total_tokens', 0):>12}{cache_pct:>8}{cost:>10}")
     totals = report["totals"]
     cost_total = f"${totals['cost_usd']:.4f}" if totals.get("cost_usd") is not None else "-"
