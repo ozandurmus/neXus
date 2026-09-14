@@ -31,7 +31,8 @@ the vendor; the rest is read from the device.*
 - **DA-2.** A single device's facts — hostname, model, software version,
   HA/cluster role — are **read from the device on first contact**, never typed.
   This first contact is the enrollment confirm of
-  `DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md` §4 (DRAFT): connect with the
+  `DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md` §4 (DRAFT — cited as the
+  intended shape, not authority; it authorizes nothing until frozen): connect with the
   selected credential, perform the one identity read per vendor, record the
   presented identity, and land the row `ENROLLED` — under `13F` §2's
   warn-and-continue rule on any later mismatch. The two identity reads are
@@ -111,7 +112,7 @@ The credential store is the prerequisite of both branches of §1: neither a
 single-device add nor a management-server discovery can run from the product
 until a credential can be selected. It is dispatched first, without waiting
 for the import contract's freeze. The single-device add (DA-2, PF-1..5) needs
-`DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md` frozen and its two identity-read
+`DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md` (DRAFT today, not authority) frozen and its two identity-read
 gate rows approved; the management-server path (DA-3) needs the discovery
 runs' `UNVERIFIED` bindings confirmed on the live servers. All three are step
 2→3 work of `13E` §1.
