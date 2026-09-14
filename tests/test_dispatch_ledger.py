@@ -67,3 +67,10 @@ def test_check_detects_a_stale_ledger(tmp_path):
     assert ledger.main(["render", "--check", "--state-dir", str(tmp_path / "state"), "--output", str(output)]) == 1
     assert ledger.main(["render", "--state-dir", str(tmp_path / "state"), "--output", str(output)]) == 0
     assert ledger.main(["render", "--check", "--state-dir", str(tmp_path / "state"), "--output", str(output)]) == 0
+
+def test_measured_zero_usage_renders_0(tmp_path):
+    text = _render(tmp_path, [_record("NXS-LOCAL-8"), _record("NXS-LOCAL-9")], [
+        ("NXS-LOCAL-8", {"turns": 1, "input_tokens": 0, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": 0, "last_event_at": "2026-09-14T10:10:00Z"}),
+    ])
+    assert "| NXS-LOCAL-8 | 1 |" in text and " | 1 | 0 | 0.00% |" in text
+    assert "| NXS-LOCAL-9 | 1 |" in text and " | unknown | unknown | unknown |" in text

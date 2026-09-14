@@ -179,15 +179,15 @@ def test_truncated_last_line_is_skipped_and_picked_up_once_completed(tmp_path):
 def test_missing_log_never_raises(tmp_path):
     state_dir = tmp_path / "state"
     usage = ou.update_usage(state_dir, "NXS-LOCAL-0005", tmp_path / "no-such-log", "claude")
-    assert usage["total_tokens"] == 0
+    assert usage["total_tokens"] is None
     assert usage["cost_source"] == "unavailable"
 
 
 def test_compute_usage_without_a_worktree_returns_cached_totals(tmp_path):
     state_dir = tmp_path / "state"
     usage = ou.compute_usage(state_dir, "NXS-LOCAL-0006", None, "claude")
-    assert usage["total_tokens"] == 0
-    assert usage["turns"] == 0
+    assert usage["total_tokens"] is None
+    assert usage["turns"] is None
 
 
 # ---------------------------------------------------------------------------

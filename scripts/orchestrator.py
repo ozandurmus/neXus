@@ -1940,9 +1940,11 @@ def _cmd_usage(args: argparse.Namespace) -> int:
 
     print(f"{'movement':<24}{'provider':<9}{'tokens':>12}{'cache%':>8}{'cost':>10}")
     for m in report["movements"]:
-        cache_pct = f"{(m.get('cache_hit_ratio') or 0) * 100:.0f}%"
+        cache_pct = f"{m.get('cache_hit_ratio') * 100:.0f}%" if m.get('cache_hit_ratio') is not None else "unknown"
         cost = (f"${m['cost_usd']:.4f}" + ("*" if m.get("cost_source") == "estimated_from_requested_model" else "")) if m.get("cost_usd") is not None else (m.get("cost_source") or "-")
-        print(f"{m['movement_id']:<24}{(m.get('provider') or '-'):<9}{m.get('total_tokens', 0):>12}{cache_pct:>8}{cost:>10}")
+        tokens = m.get('total_tokens')
+        tokens_str = "unknown" if tokens is None else str(tokens)
+        print(f"{m['movement_id']:<24}{(m.get('provider') or '-'):<9}{tokens_str:>12}{cache_pct:>8}{cost:>10}")
     totals = report["totals"]
     cost_total = f"${totals['cost_usd']:.4f}" if totals.get("cost_usd") is not None else "-"
     print(f"TOTAL movements={totals['movements']} tokens={totals['total_tokens']} cost={cost_total}")
