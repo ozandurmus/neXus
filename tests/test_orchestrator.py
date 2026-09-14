@@ -2004,7 +2004,7 @@ def test_usage_cli_json_output_equals_build_usage_report(tmp_path, capsys):
     assert json.loads(out) == expected
 
 
-def test_usage_cli_table_output_does_not_raise(tmp_path, capsys):
+def test_usage_cli_table_output_absent_renders_unknown(tmp_path, capsys):
     state_dir = tmp_path / "state"
     relay_dir = tmp_path / "relay"
     orch._save_state(state_dir, "NXS-LOCAL-0203", {
@@ -2017,6 +2017,31 @@ def test_usage_cli_table_output_does_not_raise(tmp_path, capsys):
     out = capsys.readouterr().out
     assert rc == orch.EXIT_OK
     assert "NXS-LOCAL-0203" in out
+    assert "unknown" in out
+    # "unknown" should be present in the tokens and cache% columns
+    assert "TOTAL" in out
+
+def test_usage_cli_genuine_zero_renders_0(tmp_path, capsys):
+    state_dir = tmp_path / "state"
+    relay_dir = tmp_path / "relay"
+    import json
+    usage_dir = state_dir / "usage"
+    usage_dir.mkdir(parents=True)
+    with open(usage_dir / "NXS-LOCAL-0204.json", "w") as f:
+        json.dump({"input_tokens": 0, "output_tokens": 0, "turns": 1}, f)
+
+    orch._save_state(state_dir, "NXS-LOCAL-0204", {
+        "movement_id": "NXS-LOCAL-0204", "phase": orch.PHASE_RUNNING, "pid": os.getpid(),
+        "provider": "claude", "started_at": "2026-09-11T09:00:00Z", "worktree_path": None,
+    })
+    capsys.readouterr()
+    rc = orch.main(["usage", "--state-dir", str(state_dir), "--relay-dir", str(relay_dir),
+                     "--repo-root", str(ROOT)])
+    out = capsys.readouterr().out
+    assert rc == orch.EXIT_OK
+    assert "NXS-LOCAL-0204" in out
+    assert "unknown" not in out
+    assert "           0      0%" in out
     assert "TOTAL" in out
 
 

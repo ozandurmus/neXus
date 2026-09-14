@@ -35,9 +35,9 @@ USAGE_FIELDS = (
 )
 
 _EMPTY_CACHE: dict[str, Any] = {
-    "byte_offset": 0, "provider": None, "seen_message_ids": [], "turns": 0,
-    "input_tokens": 0, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
-    "output_tokens": 0, "model": None, "result_usage": None, "result_cost_usd": None,
+    "byte_offset": 0, "provider": None, "seen_message_ids": [], "turns": None,
+    "input_tokens": None, "cache_creation_input_tokens": None, "cache_read_input_tokens": None,
+    "output_tokens": None, "model": None, "result_usage": None, "result_cost_usd": None,
     "last_event_at": None,
 }
 
@@ -65,6 +65,13 @@ def load_usage_cache(state_dir: Path, movement_id: str) -> dict:
     cache = _empty_cache()
     cache.update(obj)
     cache["seen_message_ids"] = list(obj.get("seen_message_ids") or [])
+
+    # AC-2: migrate old caches that recorded no events (turns is 0 and result_usage is None)
+    if cache.get("turns") == 0 and cache.get("result_usage") is None:
+        cache["turns"] = None
+        for field in USAGE_FIELDS:
+            cache[field] = None
+
     return cache
 
 
@@ -116,13 +123,13 @@ def _apply_event(cache: dict, provider: str, obj: dict) -> None:
             if message_id in seen:
                 return
             seen.append(message_id)
-        cache["turns"] += 1
+        cache["turns"] = (cache.get("turns") or 0) + 1
         for field in USAGE_FIELDS:
-            cache[field] += int(usage.get(field) or 0)
+            cache[field] = (cache.get(field) or 0) + int(usage.get(field) or 0)
     elif kind == "turn":
-        cache["turns"] += 1
+        cache["turns"] = (cache.get("turns") or 0) + 1
         for field in USAGE_FIELDS:
-            cache[field] += int(usage.get(field) or 0)
+            cache[field] = (cache.get(field) or 0) + int(usage.get(field) or 0)
     elif kind == "result":
         cache["result_usage"] = {field: int(usage.get(field) or 0) for field in USAGE_FIELDS}
         cost = normalized.get("total_cost_usd")
@@ -185,16 +192,29 @@ def _public_shape(cache: dict, provider: str, price_table: dict, requested_model
     if cache.get("result_usage") is not None:
         tokens = {field: cache["result_usage"].get(field, 0) for field in USAGE_FIELDS}
     else:
-        tokens = {field: cache.get(field, 0) for field in USAGE_FIELDS}
-    total_tokens = sum(tokens.values())
-    denom = tokens["input_tokens"] + tokens["cache_creation_input_tokens"] + tokens["cache_read_input_tokens"]
-    cache_hit_ratio = round(tokens["cache_read_input_tokens"] / denom, 4) if denom else 0.0
-    cost_usd, cost_source = _cost_for(
-        cache.get("model"), tokens, cache.get("result_cost_usd"), price_table, requested_model,
-    )
+        tokens = {field: cache.get(field) for field in USAGE_FIELDS}
+
+    has_measurement = tokens["input_tokens"] is not None
+
+    if has_measurement:
+        t = {k: v or 0 for k, v in tokens.items()}
+        total_tokens = sum(t.values())
+        denom = t["input_tokens"] + t["cache_creation_input_tokens"] + t["cache_read_input_tokens"]
+        cache_hit_ratio = round(t["cache_read_input_tokens"] / denom, 4) if denom else 0.0
+        cost_usd, cost_source = _cost_for(
+            cache.get("model"), t, cache.get("result_cost_usd"), price_table, requested_model,
+        )
+    else:
+        total_tokens = None
+        cache_hit_ratio = None
+        if cache.get("result_cost_usd") is not None:
+            cost_usd, cost_source = cache.get("result_cost_usd"), "reported"
+        else:
+            cost_usd, cost_source = None, "unavailable"
+
     return {
         "provider": provider,
-        "turns": cache.get("turns", 0),
+        "turns": cache.get("turns"),
         "input_tokens": tokens["input_tokens"],
         "cache_creation_input_tokens": tokens["cache_creation_input_tokens"],
         "cache_read_input_tokens": tokens["cache_read_input_tokens"],
