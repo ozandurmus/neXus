@@ -31,6 +31,7 @@ import {
   type ApiError,
   type CredentialView,
   type DeviceDetail,
+  type DeviceRole,
   type DiscoveryCandidate,
   type DiscoveryImportResult,
   type DiscoveryRunView,
@@ -78,6 +79,7 @@ type DiscoveryPhase = "form" | "starting" | "polling" | "failed" | "candidates" 
 function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
   const [mode, setMode] = useState<"single" | "discovery">("single");
   const [address, setAddress] = useState("");
+  const [role, setRole] = useState<DeviceRole>("gateway");
   const [vendor, setVendor] = useState<Vendor>("check_point");
   const [credentialId, setCredentialId] = useState("");
   const [createdCredential, setCreatedCredential] = useState<CredentialView | null>(null);
@@ -187,7 +189,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
     if (mode === "single") {
       setPhase("submitting");
       try {
-        const result = await addDeviceSingle(address, vendor, credentialId);
+        const result = await addDeviceSingle(address, role, vendor, credentialId);
         setDeviceId(result.device_id);
         setPhase("polling");
       } catch (err) {
@@ -339,6 +341,22 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
               onChange={(e) => setAddress(e.target.value)}
               autoFocus
             />
+            <TextField
+              label="Role"
+              select
+              size="small"
+              fullWidth
+              value={role}
+              onChange={(e) => setRole(e.target.value as DeviceRole)}
+            >
+              <MenuItem value="gateway">Firewall</MenuItem>
+              <MenuItem value="management_server">Management server</MenuItem>
+            </TextField>
+            {role === "management_server" && (
+              <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                A management server can be added and confirmed, but collection from it is refused until its read sets are gated.
+              </Typography>
+            )}
             <TextField
               label="Vendor"
               select

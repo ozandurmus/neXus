@@ -66,44 +66,42 @@ describe("AddDeviceDialog", () => {
   });
 
   it("submits, polls, and shows the success result once enrollment_state reaches ENROLLED", async () => {
-    vi.stubGlobal(
-      "fetch",
-      routedFetch({
-        "/credentials": CREDENTIALS_ROUTE,
-        "/session/status": { body: { csrf_token: "test-csrf" } },
-        "/devices/add-single": { body: { device_id: "dev-1", job_id: "job-1", enrollment_state: "DRAFT" } },
-        "/devices/dev-1": [
-          {
-            body: {
-              device_id: "dev-1",
-              vendor_hint: "check_point",
-              enrollment_state: "DRAFT",
-              disabled: false,
-              facts: null,
-              peer_follow_outcome: null,
-              peer_follow_reason: null,
-              identity_mismatch_state: "NONE",
-              cluster_member_ref: null,
-              job: { job_id: "job-1", state: "REQUESTED", outcome: null, terminal_reason: null },
-            },
+    const fetchMock = routedFetch({
+      "/credentials": CREDENTIALS_ROUTE,
+      "/session/status": { body: { csrf_token: "test-csrf" } },
+      "/devices/add-single": { body: { device_id: "dev-1", job_id: "job-1", enrollment_state: "DRAFT" } },
+      "/devices/dev-1": [
+        {
+          body: {
+            device_id: "dev-1",
+            vendor_hint: "check_point",
+            enrollment_state: "DRAFT",
+            disabled: false,
+            facts: null,
+            peer_follow_outcome: null,
+            peer_follow_reason: null,
+            identity_mismatch_state: "NONE",
+            cluster_member_ref: null,
+            job: { job_id: "job-1", state: "REQUESTED", outcome: null, terminal_reason: null },
           },
-          {
-            body: {
-              device_id: "dev-1",
-              vendor_hint: "check_point",
-              enrollment_state: "ENROLLED",
-              disabled: false,
-              facts: { hostname: "fw-edge-1", model: "Quantum", software_version: "R81.20", ha_role: "active" },
-              peer_follow_outcome: "CORROBORATED",
-              peer_follow_reason: null,
-              identity_mismatch_state: "NONE",
-              cluster_member_ref: null,
-              job: { job_id: "job-1", state: "COMPLETED", outcome: "SUCCESS", terminal_reason: null },
-            },
+        },
+        {
+          body: {
+            device_id: "dev-1",
+            vendor_hint: "check_point",
+            enrollment_state: "ENROLLED",
+            disabled: false,
+            facts: { hostname: "fw-edge-1", model: "Quantum", software_version: "R81.20", ha_role: "active" },
+            peer_follow_outcome: "CORROBORATED",
+            peer_follow_reason: null,
+            identity_mismatch_state: "NONE",
+            cluster_member_ref: null,
+            job: { job_id: "job-1", state: "COMPLETED", outcome: "SUCCESS", terminal_reason: null },
           },
-        ],
-      }),
-    );
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     render(withTheme(<AddDeviceDialogTrigger />));
     await openDialogAndFillAddress("192.0.2.10");
@@ -114,6 +112,14 @@ describe("AddDeviceDialog", () => {
     expect(screen.getByText(/fw-edge-1/)).toBeInTheDocument();
     expect(screen.getByText(/Quantum/)).toBeInTheDocument();
     expect(screen.getByText("Corroborated with peer")).toBeInTheDocument();
+
+    const addCall = fetchMock.mock.calls.find(([input]) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      return url.split("?")[0] === "/devices/add-single";
+    }) as unknown as [RequestInfo | URL, RequestInit] | undefined;
+    expect(addCall).toBeDefined();
+    const body = JSON.parse(addCall![1].body as string);
+    expect(body.role).toBe("gateway");
   }, 10000);
 
   it("shows the 422 reason_code inline and never opens a polling loop", async () => {

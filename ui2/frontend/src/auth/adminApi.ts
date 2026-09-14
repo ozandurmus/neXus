@@ -246,13 +246,17 @@ export interface DeviceSummary {
   readonly cluster_member_ref: string | null;
 }
 
+export type DeviceRole = "gateway" | "management_server";
+
 export function addDeviceSingle(
   address: string,
+  role: DeviceRole,
   vendor: Vendor,
   credentialReferenceId: string,
 ): Promise<AddDeviceSingleResult> {
   return call("/devices/add-single", "POST", {
     address,
+    role,
     vendor,
     credential_reference_id: credentialReferenceId,
   });
