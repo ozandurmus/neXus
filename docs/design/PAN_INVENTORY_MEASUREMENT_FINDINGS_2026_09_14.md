@@ -81,6 +81,21 @@ reads), `uptime`, `time`, content versions, `plugin_versions/entry@name/@version
 - This confirms the earlier product's field family and answers the
   `conn-ha1-backup/conn-status` nesting it had marked as a guess: present.
 
-## 6. Still owed
+## 6. M-4 — per-vsys scoping (multi-vsys firewall)
 
-M-4 only if `multi-vsys` is on: R-4 and R-5 with `&vsys=<id>`.
+- `&vsys=<id>` is accepted on both reads.
+- **Interfaces narrow:** `ifnet/entry` went from 46 to 26 rows for the
+  second vsys; the `hw/entry` list (14 physical ports) is unchanged. The
+  unscoped read already carries a `vsys` leaf on every logical interface,
+  so one unscoped read plus that leaf gives the per-vsys view without
+  per-vsys calls.
+- **Routes do not narrow:** the scoped and unscoped route reads were
+  byte-identical (120 rows). Routes are scoped by `virtual-router`, not by
+  vsys. Per-vsys route attribution therefore goes virtual-router →
+  interfaces in that virtual router (from `ifnet/entry/fwd`) → those
+  interfaces' `vsys`; a virtual router whose interfaces span vsys is shown
+  under each.
+- Consequence for 14C §3: the `&vsys=<id>` forms are not needed for
+  inventory; one interface read and one route read per firewall.
+
+## 7. Nothing further owed for inventory measurement.
