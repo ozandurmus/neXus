@@ -327,6 +327,138 @@ def test_decide_start_budget_resume_ignores_active_count_and_max_workers():
     assert action == "resume"
 
 
+# --- GOV.ORCH.12 RQ-1..RQ-5: answered relay-question resume ---------------
+
+def _relay_question_failed_record(**overrides) -> dict:
+    record = {
+        "pid": 123, "phase": orch.PHASE_FAILED, "exit_code": 0,
+        "failure_reasons": ["relay_not_closed"], "retry_count": 0,
+    }
+    record.update(overrides)
+    return record
+
+
+def _answered_question_relay(*entries) -> dict:
+    return {"next_actor": "engineer", "entries": [
+        {"seq": seq, **entry} for seq, entry in enumerate(entries, 1)
+    ]}
+
+
+def test_decide_start_resumes_an_answered_relay_question():
+    """GOV.ORCH.12 RQ-1/RQ-2: a PO decision after the engineer question resumes."""
+    relay = _answered_question_relay(
+        {"marker": "RELAY_QUESTION", "actor": "engineer", "subject": "Need direction"},
+        {"marker": "RELAY_DECISION", "actor": "po", "subject": "Use option A"},
+    )
+    action, reason = orch.decide_start(relay_obj=relay, existing_record=_relay_question_failed_record(),
+                                        is_pid_alive=False, active_count=3, max_workers=3)
+    assert action == "resume"
+    assert "GOV.ORCH.12" in reason
+
+
+def test_decide_start_refuses_an_unanswered_relay_question():
+    """GOV.ORCH.12 RQ-2: the engineer's final question is not an answer."""
+    relay = _answered_question_relay(
+        {"marker": "RELAY_QUESTION", "actor": "engineer", "subject": "Need direction"},
+    )
+    action, reason = orch.decide_start(relay_obj=relay, existing_record=_relay_question_failed_record(),
+                                        is_pid_alive=False, active_count=0, max_workers=3)
+    assert action == "refuse"
+    assert "Product Owner answer" in reason
+
+
+def test_decide_start_refuses_when_the_answer_is_older_than_the_question():
+    """GOV.ORCH.12 RQ-2: only an answer after the latest question qualifies."""
+    relay = _answered_question_relay(
+        {"marker": "RELAY_DECISION", "actor": "po", "subject": "Old answer"},
+        {"marker": "RELAY_QUESTION", "actor": "engineer", "subject": "New question"},
+    )
+    action, _ = orch.decide_start(relay_obj=relay, existing_record=_relay_question_failed_record(),
+                                   is_pid_alive=False, active_count=0, max_workers=3)
+    assert action == "refuse"
+
+
+def test_answered_relay_question_requires_actor_and_engineer_turn():
+    """GOV.ORCH.12-A RQ-2a/RQ-2c: missing authorship or a PO turn closes."""
+    entries = [
+        {"seq": 4, "marker": "RELAY_QUESTION", "actor": "engineer"},
+        {"seq": 5, "marker": "RELAY_DECISION", "subject": "No actor"},
+    ]
+    action, _ = orch.decide_start(
+        relay_obj={"next_actor": "engineer", "entries": entries},
+        existing_record=_relay_question_failed_record(), is_pid_alive=False, active_count=0, max_workers=3,
+    )
+    assert action == "refuse"
+    entries[1]["actor"] = "po"
+    action, _ = orch.decide_start(
+        relay_obj={"next_actor": "po", "entries": entries},
+        existing_record=_relay_question_failed_record(), is_pid_alive=False, active_count=0, max_workers=3,
+    )
+    assert action == "refuse"
+
+
+@pytest.mark.parametrize("failure_reasons", [
+    ["relay_not_closed", "engineer_exit_nonzero"],
+    ["relay_not_closed", "future_reason"],
+])
+def test_answered_relay_question_default_closes_on_extra_failure_reasons(failure_reasons):
+    """GOV.ORCH.12 RQ-2: every reason beyond relay_not_closed blocks resume."""
+    relay = _answered_question_relay(
+        {"marker": "RELAY_QUESTION", "actor": "engineer"},
+        {"marker": "RELAY_CORRECTION", "actor": "po", "subject": "Correction"},
+    )
+    action, _ = orch.decide_start(
+        relay_obj=relay, existing_record=_relay_question_failed_record(failure_reasons=failure_reasons),
+        is_pid_alive=False, active_count=0, max_workers=3,
+    )
+    assert action == "dispatch"
+
+
+def test_answered_relay_question_default_closes_on_nonzero_exit():
+    """GOV.ORCH.12 RQ-2: clean engineer exit is mandatory."""
+    relay = _answered_question_relay(
+        {"marker": "RELAY_QUESTION", "actor": "engineer"},
+        {"marker": "RELAY_NOTE", "actor": "po", "subject": "Proceed"},
+    )
+    action, _ = orch.decide_start(
+        relay_obj=relay, existing_record=_relay_question_failed_record(exit_code=1),
+        is_pid_alive=False, active_count=0, max_workers=3,
+    )
+    assert action == "dispatch"
+
+
+def test_answered_relay_question_resumes_once_per_new_answer():
+    """GOV.ORCH.12 RQ-3: the consumed answer index prevents duplicate resumes."""
+    entries = [
+        {"marker": "RELAY_QUESTION", "actor": "engineer"},
+        {"marker": "RELAY_DECISION", "actor": "po", "subject": "First answer"},
+    ]
+    record = _relay_question_failed_record(last_resumed_answer_seq=2)
+    action, reason = orch.decide_start(relay_obj=_answered_question_relay(*entries), existing_record=record,
+                                        is_pid_alive=False, active_count=0, max_workers=3)
+    assert action == "refuse"
+    assert "newer than the last resume" in reason
+    entries.append({"marker": "RELAY_CORRECTION", "actor": "po", "subject": "New answer"})
+    action, _ = orch.decide_start(relay_obj=_answered_question_relay(*entries), existing_record=record,
+                                   is_pid_alive=False, active_count=0, max_workers=3)
+    assert action == "resume"
+
+
+def test_answered_relay_question_recovery_note_names_the_answer_marker():
+    """GOV.ORCH.12 RQ-4: the relay-answer recovery note names its evidence."""
+    relay = _answered_question_relay(
+        {"marker": "RELAY_QUESTION", "actor": "engineer"},
+        {"marker": "RELAY_DECISION", "actor": "po", "subject": "Use option A"},
+    )
+    record = _relay_question_failed_record()
+    assert orch.needs_resume_recovery_note(
+        relay_obj=relay, has_staged_uncommitted_changes=False, is_pid_alive=False, existing_record=record,
+    ) is True
+    answer = orch._answered_relay_question_entry(relay)
+    note = orch.RELAY_QUESTION_RESUME_RECOVERY_NOTE.format(marker=answer[1]["marker"], subject=answer[1]["subject"])
+    assert "RELAY_DECISION" in note
+
+
 # --- AC-4 (orchestrator_background_task_exit_race): resume recovery-note ---
 # --- detection -- the exact live-observed pattern from relay/NXS-LOCAL-0018:
 # --- staged-but-uncommitted changes, relay still at its own SESSION_START,
