@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.persistence.device;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -14,4 +16,12 @@ import java.util.Optional;
 public interface DeviceDiscoveryMatchRepository {
 
     Optional<DeviceDiscoveryMatch> findByDiscoveryMatchKey(String discoveryMatchKey);
+
+    /**
+     * The same RD-5 read, batched over every discovery match key on a run's
+     * candidate set: one query instead of one per candidate (NXS-LOCAL-0173
+     * AC-5). The result carries only the keys that matched an existing
+     * {@code devices} row; a key absent from it is {@code new}.
+     */
+    Map<String, DeviceDiscoveryMatch> findByDiscoveryMatchKeys(Collection<String> discoveryMatchKeys);
 }
