@@ -36,9 +36,16 @@ public final class JooqSessionRepository implements SessionRepository {
 
     @Override
     public Optional<SessionRecord> findActiveByActor(String actorFingerprint) {
-        return transactionBoundary.inTransaction(dsl -> {
+        return findActiveByActor(actorFingerprint, Instant.now());
+    }
+
+    @Override
+    public Optional<SessionRecord> findActiveByActor(String actorFingerprint, Instant asOf) {
+        return afterExpiringPastDeadline(asOf, dsl -> {
             Result<Record> rows = dsl.fetch("select " + COLUMNS
-                    + " from sessions where actor_fingerprint = {0} and state = 'ACTIVE'", actorFingerprint);
+                    + " from sessions where actor_fingerprint = {0} and state = 'ACTIVE'"
+                    + " and idle_deadline_at > {1} and absolute_expires_at > {1}", actorFingerprint,
+                    Timestamp.from(asOf));
             return rows.stream().findFirst().map(JooqSessionRepository::toRecord);
         });
     }
@@ -53,13 +60,22 @@ public final class JooqSessionRepository implements SessionRepository {
     }
 
     @Override
-    public java.util.List<SessionRecord> findActivePastDeadline(Instant asOf) {
-        return transactionBoundary.inTransaction(dsl -> {
+    public Optional<SessionRecord> findBySessionId(String sessionId, Instant asOf) {
+        return afterExpiringPastDeadline(asOf, dsl -> {
             Result<Record> rows = dsl.fetch("select " + COLUMNS
-                    + " from sessions where state = 'ACTIVE' and (idle_deadline_at <= {0} or absolute_expires_at <= {0})",
-                    Timestamp.from(asOf));
-            return rows.stream().map(JooqSessionRepository::toRecord).toList();
+                    + " from sessions where session_id = {0}", sessionId);
+            return rows.stream().findFirst().map(JooqSessionRepository::toRecord);
         });
+    }
+
+    @Override
+    public java.util.List<SessionRecord> findActivePastDeadline(Instant asOf) {
+        return transactionBoundary.inTransaction(dsl -> findActivePastDeadline(dsl, asOf));
+    }
+
+    @Override
+    public void expirePastDeadline(Instant asOf) {
+        afterExpiringPastDeadline(asOf, dsl -> null);
     }
 
     @Override
@@ -129,6 +145,26 @@ public final class JooqSessionRepository implements SessionRepository {
                 "update sessions set state = 'REVOKED', end_reason = 'access_group_lost' "
                         + "where session_id = {0} and state = 'ACTIVE'",
                 sessionId));
+    }
+
+    private <T> T afterExpiringPastDeadline(Instant asOf, java.util.function.Function<DSLContext, T> read) {
+        return auditedTransactionBoundary.inTransaction(SYSTEM_SESSION_RECONCILER, "session_expire_on_read", dsl -> {
+            for (SessionRecord session : findActivePastDeadline(dsl, asOf)) {
+                boolean idleExpired = !asOf.isBefore(session.idleDeadlineAt());
+                dsl.execute("update sessions set state = 'EXPIRED', end_reason = {0} "
+                                + "where session_id = {1} and state = 'ACTIVE'",
+                        (idleExpired ? SessionEndReason.IDLE_TIMEOUT : SessionEndReason.ABSOLUTE_LIFETIME).column(),
+                        session.sessionId());
+            }
+            return read.apply(dsl);
+        });
+    }
+
+    private static java.util.List<SessionRecord> findActivePastDeadline(DSLContext dsl, Instant asOf) {
+        Result<Record> rows = dsl.fetch("select " + COLUMNS
+                + " from sessions where state = 'ACTIVE' and (idle_deadline_at <= {0} or absolute_expires_at <= {0})",
+                Timestamp.from(asOf));
+        return rows.stream().map(JooqSessionRepository::toRecord).toList();
     }
 
     private static SessionRecord toRecord(Record row) {

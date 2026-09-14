@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.service.security;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -72,7 +73,7 @@ public final class GateChain {
             return refuse("E1", 401, "SESSION_INVALID", "no session cookie presented");
         }
         String sessionId = SessionHasher.hash(request.sessionCookieRawValue().get());
-        Optional<SessionRecord> maybeSession = sessionRepository.findBySessionId(sessionId);
+        Optional<SessionRecord> maybeSession = sessionRepository.findBySessionId(sessionId, now);
         if (maybeSession.isEmpty()) {
             return refuse("E1", 401, "SESSION_INVALID", "no matching session row");
         }
@@ -94,6 +95,7 @@ public final class GateChain {
                 return refuse("E1", 401, "SESSION_INVALID", "request origin missing on a state-changing method");
             }
         }
+        sessionRepository.heartbeat(sessionId, now, Duration.between(session.lastSeenAt(), session.idleDeadlineAt()));
         String actorFingerprint = session.actorFingerprint();
 
         // Must-change-password gate (NXS-LOCAL-0152, WORKER.md "Server

@@ -65,7 +65,7 @@ class DeviceRegistrationGateTest {
 
         @Override
         public List<SessionRecord> findActivePastDeadline(Instant asOf) {
-            throw new UnsupportedOperationException("not used by this test");
+            return List.of();
         }
 
         @Override
@@ -82,7 +82,10 @@ class DeviceRegistrationGateTest {
 
         @Override
         public void heartbeat(String sessionId, Instant now, Duration idleTimeout) {
-            throw new UnsupportedOperationException("not used by this test");
+            SessionRecord r = bySessionId.get(sessionId);
+            bySessionId.put(sessionId, new SessionRecord(r.sessionId(), r.actorFingerprint(), r.csrfSecret(), r.state(),
+                    r.createdAt(), now, now.plus(idleTimeout), r.absoluteExpiresAt(), r.supersededBySessionId(),
+                    r.endedByActorFingerprint(), r.endReason()));
         }
 
         @Override

@@ -56,7 +56,7 @@ public final class LoginFlow {
      * never touches LDAP or the password.
      */
     public LoginResult login(String actorFingerprint, Instant now) {
-        Optional<SessionRecord> existing = sessionRepository.findActiveByActor(actorFingerprint);
+        Optional<SessionRecord> existing = sessionRepository.findActiveByActor(actorFingerprint, now);
         if (existing.isEmpty()) {
             String rawCookie = randomCookieValue();
             String sessionId = SessionHasher.hash(rawCookie);

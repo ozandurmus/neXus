@@ -146,6 +146,22 @@ class LoginFlowTest {
     }
 
     @Test
+    void loginExpiresItsPastDeadlineSessionThenCreatesANewOne() {
+        InMemorySessionRepository repo = new InMemorySessionRepository();
+        repo.bySessionId.put("past-idle", new SessionRecord("past-idle", "actor1", "csrf", SessionState.ACTIVE,
+                NOW.minusSeconds(3600), NOW.minusSeconds(3600), NOW.minusSeconds(1), NOW.plusSeconds(30000),
+                Optional.empty(), Optional.empty(), Optional.empty()));
+        LoginFlow flow = newFlow(repo);
+
+        LoginFlow.LoginResult result = flow.login("actor1", NOW);
+
+        assertTrue(result instanceof LoginFlow.LoginResult.NewSession);
+        assertEquals(SessionState.EXPIRED, repo.findBySessionId("past-idle").orElseThrow().state());
+        assertEquals(SessionEndReason.IDLE_TIMEOUT,
+                repo.findBySessionId("past-idle").orElseThrow().endReason().orElseThrow());
+    }
+
+    @Test
     void takeoverTransitionsPriorToSupersededAndCreatesANewActiveSessionInOneCall() {
         InMemorySessionRepository repo = new InMemorySessionRepository();
         LoginFlow flow = newFlow(repo);
