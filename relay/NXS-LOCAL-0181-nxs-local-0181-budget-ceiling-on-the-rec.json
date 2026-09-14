@@ -1,0 +1,201 @@
+{
+  "created_at": "2026-09-14T20:34:39Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 After a dispatch, the movement's state record contains max_budget_usd with the value the run was held to.",
+          "AC-2 A ledger rendered from records that carry the field shows the ceiling in the budget column as a currency figure.",
+          "AC-3 A ledger rendered from a record written before this change still shows the literal word unknown in that column and never a guessed or default number.",
+          "AC-4 A row whose cost exceeds its ceiling is visibly marked, and the ledger says what the marker means.",
+          "AC-5 The named test files pass with the new tests added, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_13_THE_DISPATCH_LEDGER.md -- FROZEN 2026-09-14: DL-3 lists the columns each row carries and names the budget ceiling among them; DL-4 cost honesty, a subscription figure is a comparable and never billed spend; DL-6 derived, never authored, an absent value prints unknown rather than being computed into a number. Supporting: docs/design/GOV_ORCH_4A_COST_FROM_THE_REQUESTED_MODEL_WHEN_THE_STREAM_IS_SILENT.md CU-4.",
+          "context_not_loaded": null,
+          "engineering_baseline": "scripts/dispatch_ledger.py was merged in PR #328 and renders 59 attempts from the orchestrator's state records. Its budget column already reads record.get('max_budget_usd'); the field is simply never written.",
+          "product_baseline": "Not a product change. The Java product, its collectors and its UI are untouched by this movement.",
+          "test_baseline": "tests/test_dispatch_ledger.py (4 tests), tests/test_orchestrator.py and tests/test_orchestrator_usage.py all pass on origin/main today.",
+          "what_exists": "A real state record, /Users/OzanDur/Codo/nexus-nexus-worktrees/.state/NXS-LOCAL-0180.json, has exactly these keys and no others: base_sha, branch, dispatch_seq, effort_requested, exit_code, failure_reason, heartbeat_at, last_action, last_error, merge_mode, model_requested, movement_id, phase, pid, provider, retry_count, revision, session_id, started_at, task_hash, worktree_path. There is no max_budget_usd. scripts/orchestrator.py builds that dict in three places; each already carries the pair 'provider': provider, 'model_requested': args.model, 'effort_requested': args.effort -- around line 1285 (the resume record), around line 1335 (the dispatch record) and around line 1493 (the run payload, where the same pair is written as 'model_requested': model, 'effort_requested': effort). The ceiling is available at all three as args.max_budget_usd; its module default is DEFAULT_MAX_BUDGET_USD. A rendered ledger row looks exactly like this, with the thirteenth cell being the budget column: | NXS-LOCAL-0180 | 1 | 2026-09-14T20:13:44Z | codex | gpt-5.6-terra | medium | 9.3 | 1 | 5752044 | 48.67% | $6.6345 | estimated_from_requested_model | unknown | done | - |  |"
+        },
+        "context_not_loaded": [
+          "ui2/**",
+          "docs/history/**",
+          "vendor documents",
+          "application/**"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/budget-ceiling-on-the-record"
+        },
+        "invariants": [
+          "Derived, never authored: an absent ceiling prints unknown and is never back-filled with a default.",
+          "The human assessment column is preserved on every re-render; this movement must not touch that behaviour.",
+          "Metered and subscription totals stay separate and an unavailable cost is counted in neither.",
+          "The ledger holds movement identifiers and numbers only: no address, hostname, serial, credential or path to a credential."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the pull request and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Persist the requested budget ceiling on the orchestrator's state record so GOV.ORCH.13 DL-3's budget column can be filled, and say plainly in the ledger when the provider that ran the movement cannot prove exhaustion against that ceiling. Today every row reads unknown in that column and the first dispatch of the new loop ran to an estimated 6.63 against a requested ceiling of 4.00 without being stopped, which nobody could see from the ledger.",
+        "output_contract": [
+          "A ledger that shows, per dispatch, what ceiling was asked for and whether the run stayed under it.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "Three one-line additions at named sites plus a render rule and its tests; the contract is frozen and the shapes are pasted.",
+          "tier": "bounded tier, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every changed function names the clause it implements (GOV.ORCH.13 DL-n).",
+          "Run only the test files named plus your own additions and the privacy gate.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE names the three sites you changed, the marker you chose for an over-ceiling row, and any divergence you found between this packet and the code."
+        ],
+        "risks": [
+          "Back-filling the default ceiling onto old records to make the column look complete, which would invent a fact the record never held.",
+          "Marking an over-ceiling row in a way that a re-render then treats as a human assessment cell and preserves wrongly.",
+          "Changing the record's key set in a way an existing reader of that record does not expect; the run payload at the third site is read by scripts/dispatch_ledger.py and by orchestrator status."
+        ],
+        "scope": {
+          "in": [
+            "scripts/orchestrator.py: write the requested ceiling onto the state record at all three sites named in what_exists, under the key max_budget_usd, beside the model_requested/effort_requested pair that is already there. Write the value that was actually requested for that dispatch; when none was given, write the module default rather than null, because the default is what the run was actually held to.",
+            "scripts/dispatch_ledger.py: the budget cell renders the persisted ceiling as a currency figure in the same form as the cost cell, and stays the literal word unknown for a record written before this change. A row whose recorded cost exceeds its ceiling is marked in the cost cell so it is visible without arithmetic; choose one short marker, apply it consistently, and say in the file's own header line what the marker means.",
+            "docs/reference/PROVIDER_OPERATING_NOTES.md: one short paragraph stating which providers can prove exhaustion against the ceiling and which cannot, and that for a provider that cannot, the ceiling is a recorded intention rather than a control. Do not restate any rule from AGENTS.md or roles/PO.md; point at them.",
+            "tests: extend tests/test_dispatch_ledger.py for the filled ceiling, the pre-change record that must still read unknown, and the over-ceiling marker; extend the orchestrator tests for the persisted field at the dispatch site."
+          ],
+          "out": [
+            "Any change to whether a run is actually stopped at its ceiling. This movement records and reports; it does not add enforcement.",
+            "Any change to scripts/orchestrator_providers.py, to any adapter, or to budget_exhausted. The default provider proves no exhaustion and that stays true here.",
+            "Any change to roles/PO.md, AGENTS.md or any document under docs/design/. The Product Owner owns those.",
+            "Re-rendering project/DISPATCH_LEDGER.md with real numbers. Leave the committed ledger alone; the Product Owner renders it from the main checkout, where the default state directory resolves correctly."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_dispatch_ledger.py",
+              "-q"
+            ],
+            "name": "dispatch_ledger_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator.py",
+              "-q"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator_usage.py",
+              "-q"
+            ],
+            "name": "usage_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T20:34:39Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/orchestrator.py",
+          "scripts/dispatch_ledger.py",
+          "docs/reference/PROVIDER_OPERATING_NOTES.md",
+          "tests/test_dispatch_ledger.py",
+          "tests/test_orchestrator.py"
+        ],
+        "completed": [
+          "Persisted max_budget_usd in the resume state record, fresh dispatch state record, and run report payload.",
+          "Rendered persisted ceilings as currency; legacy records remain unknown; trailing ! identifies an over-ceiling cost.",
+          "Opened PR #333 in orchestrator merge mode."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/budget-ceiling-on-the-record",
+          "ci": "NOT_RUN",
+          "head_sha": "0396918849c1cd94b4c7b4a480f2e3b5f00cdca0",
+          "merge_commit": null,
+          "merge_decision": "ORCHESTRATOR_PENDING",
+          "merge_state": "OPEN",
+          "pr": 333,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/333"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0181",
+          "movement_type": "VALIDATION",
+          "objective": "Product Owner review and orchestrator verification before merge.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "No budget enforcement or provider adapter behavior changed.",
+          "Absent legacy ceilings render unknown and ledger assessments remain preserved.",
+          "Metered and subscription totals remain separate."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded review of one committed persistence/rendering change.",
+          "tier": "low"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Codex cannot prove budget exhaustion; its persisted ceiling is an intention rather than enforcement."
+        ],
+        "validation": {
+          "affected": "All named test files passed.",
+          "diff_check": "PASS: git diff --check.",
+          "full_regression": "NOT_RUN: dispatch scope required named suites only.",
+          "privacy": "PASS: repository privacy gate, 0 findings.",
+          "real_environment": "NOT_RUN: local validation only.",
+          "state_consistency": "NOT_RUN: no project-state artifact changed.",
+          "targeted": "dispatch_ledger: 5 passed; orchestrator: 149 passed; orchestrator_usage: 14 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T20:42:13Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0181",
+  "movement": "budget-ceiling-on-the-record",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_ORCH_13_THE_DISPATCH_LEDGER.md",
+    "docs/design/GOV_ORCH_4A_COST_FROM_THE_REQUESTED_MODEL_WHEN_THE_STREAM_IS_SILENT.md",
+    "docs/reference/PROVIDER_OPERATING_NOTES.md",
+    "scripts/orchestrator.py",
+    "scripts/dispatch_ledger.py",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T20:42:13Z"
+}

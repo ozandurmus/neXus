@@ -95,8 +95,9 @@ dispatches so their git operations do not race.
   `gh api repos/<owner>/<repo>/commits/main` before saying it is merged. Pull,
   remove the worktree, prune.
 - **`failed`** -- it often is not. Read `.nexus/engineer_last_message.txt` and
-  `git status` in the worktree first. Codex's sandbox is routinely refused
-  `index.lock`, so the work is finished and uncommitted: build it, run the
+  `git status` in the worktree first. The default provider's sandbox is
+  routinely refused `index.lock` (`docs/reference/PROVIDER_OPERATING_NOTES.md`
+  names which one and why), so the work is finished and uncommitted: build it, run the
   packet's validation, then commit, push and open the PR yourself, saying so in
   the PR body. Never re-dispatch work that already exists.
 - **A relay question** -- if it is a real decision, write it as a numbered
