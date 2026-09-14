@@ -452,6 +452,77 @@ def _service_container() -> dict:
     raise AssertionError("the service container is missing from the Deployment")
 
 
+def _worker_pod_spec() -> dict:
+    for _, owner, spec in _pod_specs():
+        if owner.startswith("Deployment/ui2-worker"):
+            return spec
+    raise AssertionError("the worker Deployment is missing from the set")
+
+
+def _worker_container() -> dict:
+    for container in _worker_pod_spec().get("containers") or []:
+        if container.get("name") == "worker":
+            return container
+    raise AssertionError("the worker container is missing from the Deployment")
+
+
+def test_the_artefact_store_is_backed_by_a_claim_not_an_emptydir():
+    """NXS-LOCAL-0167 / C7 section 4: a worker restart must not lose an
+    artefact that a `device_configuration_run` row still points at by
+    `artefact_ref` -- the emptyDir NXS-LOCAL-0165 shipped was a
+    local-validation shortcut, not a design. Every other writable path
+    (tmp, home) keeps its existing emptyDir assertion untouched.
+    """
+    spec = _worker_pod_spec()
+    volumes = {volume.get("name"): volume for volume in spec.get("volumes") or []}
+    artefact_volume = volumes.get("artefact-store")
+    assert artefact_volume is not None, "the worker Deployment declares no artefact-store volume"
+    assert "persistentVolumeClaim" in artefact_volume, (
+        "the artefact-store volume must be a PersistentVolumeClaim, "
+        f"found: {sorted(artefact_volume)}"
+    )
+    assert "emptyDir" not in artefact_volume, (
+        "the artefact-store volume is still an emptyDir -- artefacts do not survive a worker restart"
+    )
+    claim_name = artefact_volume["persistentVolumeClaim"].get("claimName")
+    assert claim_name, "the artefact-store volume names no claim"
+
+    claim_docs = [
+        doc
+        for _, doc in _documents(include_openshift=False)
+        if doc.get("kind") == "PersistentVolumeClaim"
+        and (doc.get("metadata") or {}).get("name") == claim_name
+    ]
+    assert claim_docs, f"no PersistentVolumeClaim manifest named {claim_name!r}"
+    claim_spec = claim_docs[0].get("spec") or {}
+    assert claim_spec.get("accessModes") == ["ReadWriteOnce"], (
+        f"{claim_name}: expected accessModes [ReadWriteOnce], found {claim_spec.get('accessModes')}"
+    )
+    assert (claim_spec.get("resources") or {}).get("requests", {}).get("storage"), (
+        f"{claim_name}: no storage request"
+    )
+
+    for name in ("tmp", "home"):
+        assert "emptyDir" in volumes[name], (
+            f"{name}: expected to remain an emptyDir, found {sorted(volumes[name])}"
+        )
+
+
+def test_the_service_role_does_not_mount_the_artefact_store():
+    """The service never decrypts a raw artefact (C7 section 4 minimum) --
+    it must not even mount the claim."""
+    service_mounts = {
+        mount.get("name") for mount in (_service_container().get("volumeMounts") or [])
+    }
+    assert "artefact-store" not in service_mounts, (
+        "the service container mounts the artefact-store volume; C7 section 4 restricts it to worker"
+    )
+    worker_mounts = {
+        mount.get("name") for mount in (_worker_container().get("volumeMounts") or [])
+    }
+    assert "artefact-store" in worker_mounts, "the worker container no longer mounts artefact-store"
+
+
 def _containerfile_declared_writable_paths() -> set[str]:
     text = CONTAINERFILE.read_text(encoding="utf-8")
     match = re.search(r"chmod 0770 ([^\n\\]+)", text)

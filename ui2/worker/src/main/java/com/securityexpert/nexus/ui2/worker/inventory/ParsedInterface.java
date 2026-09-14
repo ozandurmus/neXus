@@ -11,11 +11,10 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterf
 /**
  * One parsed interface, before an {@code interface_id}/{@code address_id}
  * is assigned. See {@link ParsedAddress}. {@code vlanId} (14D PR-2: read
- * from a {@code vlan protocol 802.1Q id <n>} detail line when present) has
- * no {@code device_interface} column to persist into -- it stays a
- * worker-only parse result, dropped by {@link #toInventoryInterface()},
- * exactly as {@code CheckPointHaStateParser}'s per-VSID HA role stays
- * unpersisted for the same reason.
+ * from a {@code vlan protocol 802.1Q id <n>} detail line when present, or
+ * Palo Alto's own {@code tag} leaf) persists into {@code
+ * device_interface.vlan_id} (migration V17) via {@link
+ * #toInventoryInterface()}.
  */
 public record ParsedInterface(String name, Optional<String> parent, String kind, String state,
         List<ParsedAddress> addresses, Optional<Integer> vlanId) {
@@ -33,6 +32,6 @@ public record ParsedInterface(String name, Optional<String> parent, String kind,
         List<InventoryAddress> assigned = addresses.stream()
                 .map(a -> a.toInventoryAddress(UUID.randomUUID().toString()))
                 .toList();
-        return new InventoryInterface(UUID.randomUUID().toString(), name, parent, kind, state, assigned);
+        return new InventoryInterface(UUID.randomUUID().toString(), name, parent, kind, state, assigned, vlanId);
     }
 }

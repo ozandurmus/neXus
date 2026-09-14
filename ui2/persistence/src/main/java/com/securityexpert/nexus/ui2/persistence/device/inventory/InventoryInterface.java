@@ -11,16 +11,20 @@ import java.util.Optional;
  * DeviceInventoryRepository#recordRun} and back out through {@link
  * DeviceInventoryRepository#findLatestRun}.
  *
- * @param kind  {@code physical|vlan|subinterface|loopback|bond|tunnel|other}
- *              -- the shared read contract's closed vocabulary; an unknown
- *              vendor token maps to {@code "other"}, never a guess
- * @param state {@code up|down|unknown} -- never inferred from a substring
- *              match on the raw flag list (AGENTS.md UNKNOWN/fail-closed
- *              law; 14C §4's "UP must be read from the flag list... not by
- *              substring" correction)
+ * @param kind   {@code physical|vlan|subinterface|loopback|bond|tunnel|other}
+ *               -- the shared read contract's closed vocabulary; an unknown
+ *               vendor token maps to {@code "other"}, never a guess
+ * @param state  {@code up|down|unknown} -- never inferred from a substring
+ *               match on the raw flag list (AGENTS.md UNKNOWN/fail-closed
+ *               law; 14C §4's "UP must be read from the flag list... not by
+ *               substring" correction)
+ * @param vlanId the {@code device_interface.vlan_id} column (migration
+ *               V17): Check Point's {@code vlan protocol 802.1Q id <n>}
+ *               detail line, or Palo Alto's {@code tag} leaf; empty for the
+ *               vast majority of interfaces that carry no VLAN id at all
  */
 public record InventoryInterface(String interfaceId, String name, Optional<String> parent, String kind, String state,
-        List<InventoryAddress> addresses) {
+        List<InventoryAddress> addresses, Optional<Integer> vlanId) {
 
     public static final String KIND_PHYSICAL = "physical";
     public static final String KIND_VLAN = "vlan";
@@ -41,5 +45,12 @@ public record InventoryInterface(String interfaceId, String name, Optional<Strin
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(state, "state");
         addresses = addresses == null ? List.of() : List.copyOf(addresses);
+        vlanId = vlanId == null ? Optional.empty() : vlanId;
+    }
+
+    /** Pre-V17 shape, kept so every existing caller that never mentions a VLAN id keeps compiling unchanged. */
+    public InventoryInterface(String interfaceId, String name, Optional<String> parent, String kind, String state,
+            List<InventoryAddress> addresses) {
+        this(interfaceId, name, parent, kind, state, addresses, Optional.empty());
     }
 }

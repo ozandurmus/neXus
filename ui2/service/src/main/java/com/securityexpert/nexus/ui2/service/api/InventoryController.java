@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
@@ -70,7 +71,10 @@ public final class InventoryController {
         body.put("device_id", found.deviceId());
         body.put("collected_at", run.map(r -> TIMESTAMP.format(r.collectedAt())).orElse(null));
         body.put("job", job.map(InventoryController::toJobBody).orElse(null));
-        body.put("contexts", run.map(r -> r.contexts().stream().map(InventoryController::toContextBody).toList())
+        Map<String, InventoryHaFact> haByContext = run.map(InventoryController::haFactsByContext).orElse(Map.of());
+        body.put("contexts", run.map(r -> r.contexts().stream()
+                .map(context -> toContextBody(context, haByContext.get(context.context())))
+                .toList())
                 .orElse(List.of()));
         return ResponseEntity.ok(body);
     }
@@ -161,6 +165,7 @@ public final class InventoryController {
         body.put("parent", iface.parent().orElse(null));
         body.put("kind", iface.kind());
         body.put("state", iface.state());
+        body.put("vlan_id", iface.vlanId().orElse(null));
         body.put("addresses", iface.addresses().stream().map(InventoryController::toAddressBody).toList());
         return body;
     }
@@ -175,11 +180,28 @@ public final class InventoryController {
         return body;
     }
 
-    private static Map<String, Object> toContextBody(InventoryContext context) {
+    private static Map<String, InventoryHaFact> haFactsByContext(InventoryRun run) {
+        Map<String, InventoryHaFact> byContext = new LinkedHashMap<>();
+        for (InventoryHaFact fact : run.haFacts()) {
+            byContext.put(fact.context(), fact);
+        }
+        return byContext;
+    }
+
+    /** {@code ha}: null when this run recorded no HA fact for this context (a non-HA standalone read, or an older run). */
+    private static Map<String, Object> toContextBody(InventoryContext context, InventoryHaFact haFact) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("context", context.context());
         body.put("interfaces", context.interfaces().stream().map(InventoryController::toInterfaceBody).toList());
         body.put("routes", context.routes().stream().map(InventoryController::toRouteBody).toList());
+        body.put("ha", haFact == null ? null : toHaBody(haFact));
+        return body;
+    }
+
+    private static Map<String, Object> toHaBody(InventoryHaFact fact) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("role", fact.role());
+        body.put("cluster_mode", fact.clusterMode().orElse(null));
         return body;
     }
 
