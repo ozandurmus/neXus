@@ -8,6 +8,8 @@ import com.securityexpert.nexus.ui2.capability.Capability;
 import com.securityexpert.nexus.ui2.capability.CapabilityRegistry;
 import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentReadPort;
 import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentSnapshot;
+import com.securityexpert.nexus.ui2.jobs.discovery.DiscoveryRunReadPort;
+import com.securityexpert.nexus.ui2.jobs.discovery.DiscoveryRunSnapshot;
 
 /**
  * Job admission (adjudication F4, F6): "a submission against a capability
@@ -42,12 +44,28 @@ public final class JobAdmissionService {
 
     private final CapabilityRegistry capabilityRegistry;
     private final DeviceEnrollmentReadPort deviceEnrollmentReadPort;
+    private final DiscoveryRunReadPort discoveryRunReadPort;
     private final JobAdmissionRepository repository;
 
+    /**
+     * The original three-arg constructor, unchanged so every existing call
+     * site keeps compiling (device-target capabilities keep every existing
+     * check, untouched). An instance built this way has no discovery run
+     * port; calling {@link #submitForRun} on it always refuses {@code
+     * DISCOVERY_RUN_NOT_FOUND} rather than throwing -- the composition root
+     * that wires discovery admission uses the four-arg constructor instead.
+     */
     public JobAdmissionService(CapabilityRegistry capabilityRegistry, DeviceEnrollmentReadPort deviceEnrollmentReadPort,
             JobAdmissionRepository repository) {
+        this(capabilityRegistry, deviceEnrollmentReadPort, runId -> Optional.empty(), repository);
+    }
+
+    /** 14F DR-1: {@link #submitForRun} admits a discovery capability against a {@code discovery_run} row through {@code discoveryRunReadPort}. */
+    public JobAdmissionService(CapabilityRegistry capabilityRegistry, DeviceEnrollmentReadPort deviceEnrollmentReadPort,
+            DiscoveryRunReadPort discoveryRunReadPort, JobAdmissionRepository repository) {
         this.capabilityRegistry = Objects.requireNonNull(capabilityRegistry, "capabilityRegistry");
         this.deviceEnrollmentReadPort = Objects.requireNonNull(deviceEnrollmentReadPort, "deviceEnrollmentReadPort");
+        this.discoveryRunReadPort = Objects.requireNonNull(discoveryRunReadPort, "discoveryRunReadPort");
         this.repository = Objects.requireNonNull(repository, "repository");
     }
 
@@ -104,6 +122,63 @@ public final class JobAdmissionService {
         // Lost the idempotency-key race (or a genuine client retry):
         // resolve to whichever job already holds that key rather than
         // ever creating a second row for the same key.
+        return repository.findByIdempotencyKey(idempotencyKey)
+                .<AdmissionResult>map(AdmissionResult.Deduplicated::new)
+                .orElse(new AdmissionResult.Refused("IDEMPOTENCY_KEY_CONFLICT",
+                        "a job already exists for idempotency_key=" + idempotencyKey
+                                + " but it could not be re-read"));
+    }
+
+    /**
+     * 14F DR-1: admits a discovery capability against a {@code
+     * discovery_run} row -- the run's own target kind, alongside {@link
+     * #submit}'s device target. Every device-target check in {@link
+     * #submit} is untouched; this method never consults {@link
+     * #deviceEnrollmentReadPort}.
+     *
+     * <p><b>Evaluation order</b>, mirroring {@link #submit}:</p>
+     * <ol>
+     *   <li>Capability execution-eligibility, identical check.</li>
+     *   <li>The run exists and is still {@code REQUESTED} ({@link
+     *       DiscoveryRunSnapshot#admissible()}) -- refuses {@code
+     *       DISCOVERY_RUN_NOT_FOUND} or {@code DISCOVERY_RUN_NOT_ELIGIBLE}.</li>
+     *   <li>Idempotency, identical pattern.</li>
+     * </ol>
+     */
+    public AdmissionResult submitForRun(String capabilityId, String targetRunId, String clientIdempotencyKey,
+            String actorFingerprint, String actionId) {
+        Optional<Capability> capability = capabilityRegistry.find(capabilityId);
+        if (capability.isEmpty()) {
+            return new AdmissionResult.Refused("CAPABILITY_UNKNOWN",
+                    "no registered capability with capability_id=" + capabilityId);
+        }
+        if (!capability.get().executionEligible()) {
+            return new AdmissionResult.Refused("CAPABILITY_NOT_EXECUTION_ELIGIBLE",
+                    "capability " + capabilityId + " has at least one step whose gate resolution is UNKNOWN "
+                            + "(C4 §3.5) -- never a member of the set admission is allowed to dispatch");
+        }
+
+        Optional<DiscoveryRunSnapshot> run = discoveryRunReadPort.findRun(targetRunId);
+        if (run.isEmpty()) {
+            return new AdmissionResult.Refused("DISCOVERY_RUN_NOT_FOUND", "no discovery_run row for run_id="
+                    + targetRunId);
+        }
+        if (!run.get().admissible()) {
+            return new AdmissionResult.Refused("DISCOVERY_RUN_NOT_ELIGIBLE",
+                    "discovery_run " + targetRunId + " state=" + run.get().state()
+                            + " is not REQUESTED -- a job is already admitted or the run already finished");
+        }
+
+        String idempotencyKey = clientIdempotencyKey != null && !clientIdempotencyKey.isBlank()
+                ? clientIdempotencyKey
+                : UUID.randomUUID().toString();
+        String jobId = UUID.randomUUID().toString();
+
+        Optional<String> created = repository.createRequestedIfAbsentForRun(jobId, idempotencyKey, capabilityId,
+                targetRunId, capability.get().resolvedActionClassOrDeclaredClass().id(), actorFingerprint, actionId);
+        if (created.isPresent()) {
+            return new AdmissionResult.Admitted(created.get());
+        }
         return repository.findByIdempotencyKey(idempotencyKey)
                 .<AdmissionResult>map(AdmissionResult.Deduplicated::new)
                 .orElse(new AdmissionResult.Refused("IDEMPOTENCY_KEY_CONFLICT",

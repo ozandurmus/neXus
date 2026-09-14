@@ -25,6 +25,13 @@ public final class PersistenceJobAdmissionRepository implements JobAdmissionRepo
     }
 
     @Override
+    public Optional<String> createRequestedIfAbsentForRun(String jobId, String idempotencyKey, String capabilityId,
+            String targetRunId, String actionClassId, String actorFingerprint, String actionId) {
+        return dao.insertRequestedIfAbsentForRun(jobId, idempotencyKey, capabilityId, targetRunId, actionClassId,
+                capabilityId, actorFingerprint, actionId);
+    }
+
+    @Override
     public Optional<String> findByIdempotencyKey(String idempotencyKey) {
         return dao.findJobIdByIdempotencyKey(idempotencyKey);
     }

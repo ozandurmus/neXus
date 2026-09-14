@@ -57,6 +57,13 @@ class InventoryCapabilityAdmissionTest {
         }
 
         @Override
+        public Optional<String> createRequestedIfAbsentForRun(String jobId, String idempotencyKey,
+                String capabilityId, String targetRunId, String actionClassId, String actorFingerprint,
+                String actionId) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
         public Optional<String> findByIdempotencyKey(String idempotencyKey) {
             return Optional.ofNullable(jobsByIdempotencyKey.get(idempotencyKey));
         }
