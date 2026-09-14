@@ -15,10 +15,17 @@ behaviour is `docs/reference/PROVIDER_OPERATING_NOTES.md`, not here.
 | Default dispatch, heavy or novel work | Codex | `gpt-5.6-sol` | `medium`, `high` where argued |
 | Fallback dispatch | Claude | `claude-sonnet-5` | `medium` |
 | Not used | Codex | Luna | — |
+| Trial, hybrid relay only | Antigravity | `pro`, `flash`, `flash_lite` | no effort flag exists |
 
 The Product Owner assistant's own model is Claude. Codex is the standing
 dispatch default because the Product Owner's Codex use is unmetered and their
 Claude credit is not.
+
+Antigravity joined as a third participant on 2026-09-15, in trial. It is not
+dispatched by the orchestrator and is not a `--provider` value; it takes work
+through the hybrid relay path and can hold either the engineer or the Product
+Owner role. It reports no tokens and no cost, by measurement and by the
+Product Owner's decision (`docs/reference/PROVIDER_OPERATING_NOTES.md`).
 
 ## Reasoning tiers
 

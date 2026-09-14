@@ -45,11 +45,33 @@ Claude can prove ceiling exhaustion from its observed terminal reason; Codex can
 
 ## Antigravity
 
-Not a provider yet. Measured, not adapted:
-`docs/design/ANTIGRAVITY_PROVIDER_MEASUREMENT_2026_09_14.md` and its successor
-`..._MEASUREMENT_2_2026_09_14.md`. No CLI; an in-process SDK over a bundled
-harness binary. It would need `FORCED_MERGE_MODE` like Codex, for the same
-reason.
+In trial since 2026-09-15 as a third participant, able to hold either the
+engineer or the Product Owner role. Measured, not adapted:
+`docs/design/ANTIGRAVITY_PROVIDER_MEASUREMENT_3_2026_09_15.md` supersedes the
+two earlier records, whose claim that no command-line interface exists was
+wrong.
+
+- **How it takes work today: the hybrid relay path, not the orchestrator.**
+  It is not a `--provider` value and no adapter exists. The assistant prepares
+  the movement, its worktree and its `.nexus/WORKER.md` exactly as a dispatch
+  would, then hands the participant the worktree instead of spawning a
+  process; the participant closes the relay with its own `SESSION_CLOSE`; the
+  assistant runs `orchestrator.py verify`, reviews and merges as usual.
+- **No credential and no outbound path of its own.** Its command-line tool is
+  a client of the running desktop session, so it needs no API key. It does
+  need that session to be running: from an ordinary shell it exits with
+  `ANTIGRAVITY_LS_ADDRESS is not set`.
+- **It reports no tokens, no cost and no turns.** Measured over a real
+  transcript: zero of 86 events carry a usage field. Its ledger row is
+  `unknown` in every derived column, and the Product Owner has accepted that
+  for the trial -- following the work is the requirement, not accounting for
+  it. Do not estimate a figure to fill the gap; an invented number is worse
+  than an honest `unknown`.
+- **Follow it through the worktree, not the workbench.** Commits on the lane
+  and `git status` in the worktree are the progress signal, since no event
+  stream reaches the orchestrator.
+- It has no pre-push git gate, so were it ever adapted it would join
+  `FORCED_MERGE_MODE` for the same reason Codex did.
 
 ## Cost per turn, by movement class
 

@@ -86,6 +86,32 @@ engineer; the worker finishes and the state record proves it.
 free and work ready, dispatch it; leave roughly half a minute between two
 dispatches so their git operations do not race.
 
+### Handing a movement to a participant the orchestrator cannot spawn
+
+A participant may take work without being dispatched -- it holds the engineer
+role, or the Product Owner role, through the relay alone. The preparation is
+identical to a dispatch up to the moment the process would be spawned:
+write the packet, run its validation locally, create the relay and set its
+internal `id`, then create the worktree from the packet's own
+`report.git.base`/`report.git.lane` and write `.nexus/approved_task.json`,
+`.nexus/movement_id.txt` and `.nexus/WORKER.md` into it with the
+orchestrator's own `render_worker_md`, and install the pre-push hook. Then
+hand over the worktree path instead of starting a process.
+
+The participant reads `.nexus/WORKER.md`, does the work, and closes the relay
+with its own `SESSION_CLOSE`. You then run `orchestrator.py verify`, review
+the diff and merge exactly as for any other movement. Nothing in the
+orchestrator changes and the merge gate is unchanged.
+
+Two things are different and both must be said out loud when reporting:
+there is no process record, so `status` has nothing to show and progress is
+read from the lane's commits and the worktree's `git status`; and a
+participant with no usage stream produces a ledger row that is `unknown` in
+every derived column. Never estimate a figure to fill it.
+Which participants are on which path is
+`docs/reference/MODEL_TIER_MAP.md`, and how each behaves is
+`docs/reference/PROVIDER_OPERATING_NOTES.md`.
+
 ### When a movement ends
 
 - **`done`** -- read the relay's `SESSION_CLOSE` report, run
