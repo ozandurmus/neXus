@@ -1,0 +1,25 @@
+Cluster mode:   Virtual System Load Sharing (Active Up)
+
+ID  Unique Address    Assigned Load    State                 Name
+
+1 (local) 192.0.2.10       50%              ACTIVE               gw-a
+2         192.0.2.11       50%              ACTIVE               gw-b
+
+Message from syslogd@gw-vsx at Sep 14 08:30:00 2026
+kernel: eth0: link becomes ready
+
+Active PNOTEs:  None
+
+Cluster name: vsls-cluster
+
+Virtual Devices Status on each Cluster Member:
+
+ID | Weight | gw-a [local] | gw-b
+2  | 50%    | ACTIVE       | STANDBY
+5  | 50%    | STANDBY      | ACTIVE
+
+Active   : 2
+Weight   : 100%
+Weight (%): 100
+
+Legend: S - sync, HA/LS - bond type, LM - link monitor, P - probing

@@ -1,0 +1,17 @@
+vsid 2:
+-------
+
+CCP mode: Broadcast
+Required interfaces: 1
+Required secured interfaces: 0
+
+Interface Name:  Status:
+eth3-01     (S)  UP
+
+Virtual cluster interfaces: 1
+eth3-01     203.0.113.65
+
+ClusterXL VLAN monitoring per interface:
+Interface | Low VLAN | High VLAN
+eth3-01   | 100       | 200
+Security GW: yes

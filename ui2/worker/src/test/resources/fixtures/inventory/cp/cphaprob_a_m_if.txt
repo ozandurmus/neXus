@@ -1,13 +1,20 @@
-CCP is not run - Active Check not found
+vsid 0:
+-------
+
+CCP mode: Broadcast
 Required interfaces: 2
 Required secured interfaces: 0
 
-Interfaces:
-eth0        UP     non sync(non secured), multicast, unicast
-eth1        UP     non sync(non secured), multicast, unicast
+Interface Name:  Status:
+Mgmt        (S)  UP
+Sync        (S)  UP
 
-Virtual cluster interfaces:
-eth0        192.0.2.1
-eth1        198.51.100.1
+Message from syslogd@gw-vsx at Sep 14 09:15:00 2026
+kernel: Mgmt: link becomes ready
 
-Virtual cluster interfaces(off):
+Virtual cluster interfaces: 2
+Mgmt        192.0.2.1
+Sync        198.51.100.1  VMAC address: 00:1c:7f:aa:bb:cc
+
+No VLANs are monitored on the member
+Security GW: yes

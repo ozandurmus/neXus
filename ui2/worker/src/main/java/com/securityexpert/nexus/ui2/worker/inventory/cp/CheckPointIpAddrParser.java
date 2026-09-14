@@ -13,27 +13,34 @@ import com.securityexpert.nexus.ui2.worker.inventory.ParsedAddress;
 import com.securityexpert.nexus.ui2.worker.inventory.ParsedInterface;
 
 /**
- * {@code ip -details -4 addr show} / {@code ip -6 addr show} (14C §3).
- * {@code UNVERIFIED} against a real gateway (channel differs -- 14C §3:
- * "proven payload, channel differs"). A pure function from the two reads'
- * output text to {@link ParsedInterface} data; every address on this read
- * is {@link InventoryAddress#ROLE_MEMBER} -- a cluster virtual address is
- * only ever read from {@link CheckPointClusterVirtualInterfaceParser}, and
- * the two are never merged in this class (14C §3: "the two never mix").
+ * {@code ip -details -4 addr show} / {@code ip -6 addr show} (14D CF-3,
+ * PR-2). A pure function from the two reads' output text to {@link
+ * ParsedInterface} data; every address on this read is {@link
+ * InventoryAddress#ROLE_MEMBER} -- a cluster virtual address is only ever
+ * read from {@link CheckPointClusterVirtualInterfaceParser}, and the two
+ * are never merged in this class.
  *
- * <p>14C §4's named correction: "UP must be read from the flag list inside
- * {@code <...>}, not by substring" -- {@link #isUp} checks the flag list
- * for the exact token {@code "UP"}, never a substring match against the
- * whole header line (which would also match {@code LOWER_UP}).</p>
+ * <p>PR-2's measured corrections: a header name may carry {@code @parent}
+ * ({@code bond1.3841@bond1}, physical context) or {@code @ifNN} ({@code
+ * eth3-01.3247@if34}, inside a virtual system) -- both split on {@code @}
+ * identically, the part before it is the name; a trailing {@code
+ * link-netnsid <n>} token on an {@code inet}/{@code inet6} line is
+ * tolerated because only the address token right after {@code inet}/
+ * {@code inet6} is ever captured; a {@code vlan protocol 802.1Q id <n>}
+ * detail line gives {@link ParsedInterface#vlanId()} when present; {@code
+ * UP} is read from the flag list's exact token, never a substring match
+ * against the whole header line (which would also match {@code
+ * LOWER_UP}).</p>
  */
 public final class CheckPointIpAddrParser {
 
     // "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP" -- group 1 is the raw name
-    // (possibly "name@parent"), group 2 the flag list inside <...>.
+    // (possibly "name@parent" or "name@ifNN"), group 2 the flag list inside <...>.
     private static final Pattern HEADER = Pattern.compile("^\\d+:\\s*([^:]+):\\s*<([^>]*)>");
     private static final Pattern INET4_LINE = Pattern.compile("^\\s*inet\\s+(\\S+)");
     private static final Pattern INET6_LINE = Pattern.compile("^\\s*inet6\\s+(\\S+)");
     private static final Pattern VLAN_NAME = Pattern.compile("^.+\\.\\d+$");
+    private static final Pattern VLAN_DETAIL_LINE = Pattern.compile("(?i)vlan\\s+protocol\\s+802\\.1Q\\s+id\\s+(\\d+)");
 
     private CheckPointIpAddrParser() {
     }
@@ -70,6 +77,11 @@ public final class CheckPointIpAddrParser {
             if (current == null) {
                 continue;
             }
+            Matcher vlanDetail = VLAN_DETAIL_LINE.matcher(line);
+            if (vlanDetail.find()) {
+                current.vlanId = Optional.of(Integer.parseInt(vlanDetail.group(1)));
+                continue;
+            }
             Matcher address = addressLine.matcher(line);
             if (address.find()) {
                 current.addresses.add(new ParsedAddress(address.group(1), family, InventoryAddress.ROLE_MEMBER));
@@ -84,6 +96,12 @@ public final class CheckPointIpAddrParser {
     private static String kindOf(String name, Optional<String> parent) {
         if ("lo".equals(name)) {
             return InventoryInterface.KIND_LOOPBACK;
+        }
+        // A "<name>.<vlanid>" subinterface is VLAN even when its own name starts with "bond"
+        // (measured: "bond1.3841@bond1") -- checked ahead of the bond-prefix rule below, which
+        // is for the bond master interface itself (no parent, no trailing ".<digits>").
+        if (parent.isPresent() && VLAN_NAME.matcher(name).matches()) {
+            return InventoryInterface.KIND_VLAN;
         }
         if (name.startsWith("bond")) {
             return InventoryInterface.KIND_BOND;
@@ -108,6 +126,7 @@ public final class CheckPointIpAddrParser {
         Optional<String> parent = Optional.empty();
         String kind = InventoryInterface.KIND_OTHER;
         String state = InventoryInterface.STATE_UNKNOWN;
+        Optional<Integer> vlanId = Optional.empty();
         final List<ParsedAddress> addresses = new java.util.ArrayList<>();
 
         Builder(String name) {
@@ -115,7 +134,7 @@ public final class CheckPointIpAddrParser {
         }
 
         ParsedInterface build() {
-            return new ParsedInterface(name, parent, kind, state, List.copyOf(addresses));
+            return new ParsedInterface(name, parent, kind, state, List.copyOf(addresses), vlanId);
         }
     }
 }

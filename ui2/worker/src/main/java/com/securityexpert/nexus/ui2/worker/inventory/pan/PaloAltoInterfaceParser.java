@@ -90,7 +90,7 @@ public final class PaloAltoInterfaceParser {
             String kind = kindOf(name);
 
             byVsys.computeIfAbsent(vsys, key -> new ArrayList<>())
-                    .add(new ParsedInterface(name, parent, kind, state, addresses));
+                    .add(new ParsedInterface(name, parent, kind, state, addresses, Optional.empty()));
         }
         return byVsys;
     }
