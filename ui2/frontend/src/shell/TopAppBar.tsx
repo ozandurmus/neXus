@@ -2,9 +2,31 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import { m3 } from "../theme/m3Theme";
 import { Icon } from "./Icon";
-import { M3Button } from "./M3Widgets";
+import { M3Button, StatusChip } from "./M3Widgets";
 import { useSession } from "../auth/SessionContext";
 import { NexusWordmark } from "../brand/NexusWordmark";
+import { useFetchOnMount } from "./useFetchOnMount";
+import { listNotifications } from "../auth/adminApi";
+
+/**
+ * The minimal notification badge NXS-LOCAL-0165 adds (WORKER.md
+ * "Configuration collection": "no functional notification surface exists;
+ * add ... a shell badge, and say so") -- an unread count next to the bell
+ * glyph, from {@code GET /notifications}. Not a full notification center
+ * (no dropdown, no per-item read/dismiss action); those are a later
+ * movement's own build.
+ */
+function NotificationBadge() {
+  const { data } = useFetchOnMount(
+    () => listNotifications().then((result) => result.notifications ?? []),
+    () => "",
+  );
+  const unread = (data ?? []).filter((n) => n.read_at === null).length;
+  if (unread === 0) {
+    return null;
+  }
+  return <StatusChip tone="warn" label={String(unread)} dense />;
+}
 
 /**
  * The canvas's top app bar: product name, a search affordance and a
@@ -31,7 +53,10 @@ export function TopAppBar() {
         Search devices, settings, evidence
       </Box>
       <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2, color: m3.onSurfaceVar }}>
-        <Icon name="bell" size={20} />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Icon name="bell" size={20} />
+          {session ? <NotificationBadge /> : null}
+        </Box>
         {session ? (
           <>
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.2 }}>
