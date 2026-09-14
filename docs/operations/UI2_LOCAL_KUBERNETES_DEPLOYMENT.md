@@ -165,6 +165,36 @@ the DSN is assembled inside the process (contract SEC-4, and the `C1` §6
 secret-file rule the service implements — a missing, unreadable or empty
 file stops start-up rather than falling back).
 
+## 5a. Supply the configuration-artefact-store key (NXS-LOCAL-0165)
+
+Configuration collection's raw copy (Check Point `show configuration`, Palo
+Alto `effective-running`/`active`/`merged`) is encrypted at rest under its
+own key, `ArtefactStoreCipher` -- a separate purpose from the credential
+store, never the same key (C1 §6.1). `deploy/ui2/23-secret-artefact-store-key.yaml`
+carries the Secret's key name and no value, exactly like
+`21-secret-credential-store-key.yaml`. Created once, the same way:
+
+```sh
+d="$(mktemp -d)"
+( umask 077
+  openssl rand -base64 32 | tr -d '\n' > "$d/key"
+
+  kubectl -n ui2 create secret generic ui2-artefact-store-key \
+    --from-file=key="$d/key" \
+    --dry-run=client -o json > "$d/patch.json"
+
+  kubectl -n ui2 patch secret ui2-artefact-store-key --type=merge --patch-file "$d/patch.json" )
+rm -rf "$d"
+```
+
+The worker role mounts it at `/run/secrets/ui2-artefact-store/key`
+(`UI2_ARTEFACT_STORE_KEY_FILE`); the service role never mounts it -- it
+never decrypts a raw artefact, only the sanitized view already stored in
+Postgres. The encrypted bytes themselves live under `UI2_ARTEFACT_STORE_ROOT`
+(`/app/artefact-store`, an `emptyDir` at this local-validation stage --
+ephemeral by design here; a persistent volume is a later, production-scope
+concern this movement does not take on).
+
 ## 6. Apply the manifest set
 
 ```sh
@@ -175,13 +205,14 @@ kubectl -n ui2 rollout status deployment/ui2-service --timeout=600s
 ```
 
 > **Secrets are created once, never re-applied.** `deploy/ui2/20-secret.yaml`,
-> `21-secret-credential-store-key.yaml` and `22-secret-role-binding-key.yaml`
-> carry no values by contract. Applying them over an existing Secret that was
-> itself created with `kubectl apply` removes that Secret's data (observed
-> 2026-09-14: the role-binding key was wiped and had to be regenerated). Create
-> the three Secrets with `kubectl create secret generic ... --from-file=key=...`
-> and, on later rollouts, apply the manifest set without the `2*-secret-*.yaml`
-> files, for example `kubectl apply -f deploy/ui2/50-service-deployment.yaml -f deploy/ui2/52-worker-deployment.yaml`.
+> `21-secret-credential-store-key.yaml`, `22-secret-role-binding-key.yaml` and
+> `23-secret-artefact-store-key.yaml` carry no values by contract. Applying
+> them over an existing Secret that was itself created with `kubectl apply`
+> removes that Secret's data (observed 2026-09-14: the role-binding key was
+> wiped and had to be regenerated). Create the four Secrets with
+> `kubectl create secret generic ... --from-file=key=...` and, on later
+> rollouts, apply the manifest set without the `2*-secret-*.yaml` files, for
+> example `kubectl apply -f deploy/ui2/50-service-deployment.yaml -f deploy/ui2/52-worker-deployment.yaml`.
 
 `kubectl apply -f` on a directory is not recursive, so `deploy/ui2/openshift/`
 is not picked up here. On the corporate platform, apply
@@ -219,6 +250,25 @@ kubectl -n ui2 port-forward svc/ui2-service 8080:8080
 
 and then `http://127.0.0.1:8080/`. Neither route exposes the deployment
 beyond this machine.
+
+## 7a. Trigger the first configuration collection (NXS-LOCAL-0165)
+
+With an enrolled device present, submit its collection job the same way the
+Configuration screen's own "Collect now" button does:
+
+```sh
+kubectl -n ui2 port-forward svc/ui2-service 8080:8080 &
+curl -sS -X POST http://127.0.0.1:8080/devices/<device_id>/configuration/collect \
+  -H 'Content-Type: application/json' -d '{}' \
+  -b '<the session cookie from a prior login>'
+```
+
+The worker's claim loop (60 s lease, `Ui2WorkerMain`) picks the job up on its
+own poll cycle; `GET /devices/<device_id>/configuration` shows the run once
+it completes. `kubectl -n ui2 logs deploy/ui2-worker` names no configuration
+line, hostname, or secret value at any point (AGENTS.md raw-evidence law) --
+only the job/run identifiers and outcome tokens the C2 discipline already
+logs for every other job kind.
 
 ## 8. Reset the database to empty
 
