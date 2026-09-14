@@ -199,6 +199,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE
 -- ten-item record per entry; these columns are the runtime projection.
 -- ---------------------------------------------------------------------
 
+-- Audit context for the seed rows: gate_registry carries the audit trigger
+-- (audit_context_missing otherwise). Transaction-local (is_local = true), so
+-- Flyway's migration transaction is the only scope. Same guard as V15.
+SELECT set_config('app.actor_fingerprint', 'migration:V16_device_configuration', true);
+SELECT set_config('app.action_id', 'gate_registry_seed_by_migration', true);
+
 INSERT INTO gate_registry (gate_id, vendor, platform_role_scope, shell_context, transport_kind,
     canonical_command_key, action_class, sign_off_state, timeout_s, retry_rule, max_frequency,
     session_reuse_rule, unsupported_behavior_ref, secret_output_risk, safe_telemetry_fields,
