@@ -5,9 +5,9 @@
 --
 -- Invariant: section names and counts only -- no configuration value is stored
 -- here or in any column this migration creates (AGENTS.md raw-evidence law,
--- DV-2 AC-6). The source column from device_configuration_index intentionally
--- does not appear here: grouping is by (context, section), and individual
--- source-level rows are summed into old_count/new_count before persistence.
+-- DV-2 AC-6). The source column from device_configuration_index is included
+-- here so that provenance changes for the same section name (e.g. Palo Alto's
+-- tpl vs local) generate distinct deviation entries (AC-3).
 
 SELECT set_config('app.actor_fingerprint', 'migration:V22_deviation_summary', true);
 SELECT set_config('app.action_id', 'deviation_summary_creation_by_migration', true);
@@ -37,6 +37,7 @@ CREATE TABLE configuration_run_deviation_entry (
     summary_id   TEXT        NOT NULL REFERENCES configuration_run_deviation_summary(summary_id),
     context       TEXT        NOT NULL,
     section        TEXT        NOT NULL,
+    source          TEXT,
     kind            TEXT        NOT NULL
         CHECK (kind IN ('ADDED', 'REMOVED', 'RECOUNTED')),
     old_count        INTEGER     NOT NULL,

@@ -71,9 +71,9 @@ public final class JooqDeviceConfigurationRepository implements DeviceConfigurat
                         summaryId, run.runId(), summary.status().name());
                 for (ConfigurationDeviationEntry entry : summary.entries()) {
                     dsl.execute("insert into configuration_run_deviation_entry(entry_id, summary_id, context, "
-                            + "section, kind, old_count, new_count) values ({0}, {1}, {2}, {3}, {4}, {5}, {6})",
+                            + "section, source, kind, old_count, new_count) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7})",
                             UUID.randomUUID().toString(), summaryId, entry.context(), entry.section(),
-                            entry.kind().name(), entry.oldCount(), entry.newCount());
+                            entry.source().orElse(null), entry.kind().name(), entry.oldCount(), entry.newCount());
                 }
             }
             return null;
@@ -182,12 +182,13 @@ public final class JooqDeviceConfigurationRepository implements DeviceConfigurat
 
         List<ConfigurationDeviationEntry> entries = new ArrayList<>();
         Result<Record> entryRows = dsl.fetch(
-                "select context, section, kind, old_count, new_count "
+                "select context, section, source, kind, old_count, new_count "
                 + "from configuration_run_deviation_entry where summary_id = {0}", summaryId);
         for (Record row : entryRows) {
             entries.add(new ConfigurationDeviationEntry(
                     row.get("context", String.class),
                     row.get("section", String.class),
+                    Optional.ofNullable(row.get("source", String.class)),
                     ConfigurationDeviationEntry.DeviationKind.valueOf(row.get("kind", String.class)),
                     row.get("old_count", Integer.class),
                     row.get("new_count", Integer.class)));

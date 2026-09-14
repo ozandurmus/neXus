@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationEntry;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationEntry.DeviationKind;
@@ -16,9 +17,8 @@ import com.securityexpert.nexus.ui2.persistence.device.configuration.Configurati
  *
  * <p>Identity key: {@code (context, section, source)} -- the full tuple the
  * index already carries. Two Palo Alto entries that differ only by source are
- * therefore different entries (AC-3). The summary groups by
- * {@code (context, section)} and reports the change in the total count of
- * entries sharing that pair across all source values.</p>
+ * therefore different entries (AC-3). The summary reports deviations
+ * per {@code (context, section, source)}.</p>
  *
  * <p>If the old index list is null (predecessor's index was never stored),
  * the result is {@link ConfigurationDeviationSummary#notComputable()} (AC-5).
@@ -33,8 +33,8 @@ public final class IndexDeviationComputer {
 
     /**
      * Compares {@code oldIndex} against {@code newIndex} and returns a summary
-     * of which {@code (context, section)} groups gained, lost, or altered their
-     * total entry count (across all source values).
+     * of which {@code (context, section, source)} groups gained, lost, or altered their
+     * total entry count.
      *
      * @param oldIndex the predecessor run's index; {@code null} means the
      *     predecessor's index was never stored (AC-5 -- result is NOT_COMPUTABLE)
@@ -49,9 +49,7 @@ public final class IndexDeviationComputer {
             return ConfigurationDeviationSummary.notComputable();
         }
 
-        // Aggregate entry counts by (context, section) for both sides.
-        // Two entries that share (context, section) but differ in source are
-        // separate index rows (AC-3) and their counts are summed here.
+        // Aggregate entry counts by (context, section, source) for both sides.
         Map<SectionKey, Integer> oldCounts = aggregate(oldIndex);
         Map<SectionKey, Integer> newCounts = aggregate(newIndex);
 
@@ -61,7 +59,7 @@ public final class IndexDeviationComputer {
         for (Map.Entry<SectionKey, Integer> newEntry : newCounts.entrySet()) {
             if (!oldCounts.containsKey(newEntry.getKey())) {
                 entries.add(new ConfigurationDeviationEntry(
-                        newEntry.getKey().context(), newEntry.getKey().section(),
+                        newEntry.getKey().context(), newEntry.getKey().section(), newEntry.getKey().source(),
                         DeviationKind.ADDED, 0, newEntry.getValue()));
             }
         }
@@ -70,17 +68,17 @@ public final class IndexDeviationComputer {
         for (Map.Entry<SectionKey, Integer> oldEntry : oldCounts.entrySet()) {
             if (!newCounts.containsKey(oldEntry.getKey())) {
                 entries.add(new ConfigurationDeviationEntry(
-                        oldEntry.getKey().context(), oldEntry.getKey().section(),
+                        oldEntry.getKey().context(), oldEntry.getKey().section(), oldEntry.getKey().source(),
                         DeviationKind.REMOVED, oldEntry.getValue(), 0));
             }
         }
 
-        // Sections in both with a different summed count: RECOUNTED.
+        // Sections in both with a different count: RECOUNTED.
         for (Map.Entry<SectionKey, Integer> oldEntry : oldCounts.entrySet()) {
             Integer newCount = newCounts.get(oldEntry.getKey());
             if (newCount != null && !newCount.equals(oldEntry.getValue())) {
                 entries.add(new ConfigurationDeviationEntry(
-                        oldEntry.getKey().context(), oldEntry.getKey().section(),
+                        oldEntry.getKey().context(), oldEntry.getKey().section(), oldEntry.getKey().source(),
                         DeviationKind.RECOUNTED, oldEntry.getValue(), newCount));
             }
         }
@@ -89,22 +87,18 @@ public final class IndexDeviationComputer {
     }
 
     /**
-     * Aggregates entry counts by {@code (context, section)}, summing across
-     * all {@code source} values. Two entries with the same context and section
-     * but different source values are counted separately in the index (AC-3)
-     * but their individual counts are summed for the deviation report, which
-     * reports per section, not per source.
+     * Aggregates entry counts by {@code (context, section, source)}.
      */
     private static Map<SectionKey, Integer> aggregate(List<ConfigurationIndexEntry> index) {
         Map<SectionKey, Integer> counts = new LinkedHashMap<>();
         for (ConfigurationIndexEntry entry : index) {
-            SectionKey key = new SectionKey(entry.context(), entry.section());
+            SectionKey key = new SectionKey(entry.context(), entry.section(), entry.source());
             counts.merge(key, entry.entryCount(), Integer::sum);
         }
         return counts;
     }
 
-    /** Identity key for grouping: context + section (never source, never a value). */
-    private record SectionKey(String context, String section) {
+    /** Identity key for grouping: context + section + source. */
+    private record SectionKey(String context, String section, Optional<String> source) {
     }
 }

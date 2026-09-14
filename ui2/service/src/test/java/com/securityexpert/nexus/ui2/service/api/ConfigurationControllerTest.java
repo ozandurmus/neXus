@@ -254,6 +254,7 @@ class ConfigurationControllerTest {
 
         var devEntry = new com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationEntry(
                 "physical", "arp",
+                java.util.Optional.empty(),
                 com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationEntry.DeviationKind.RECOUNTED,
                 1, 2);
         var summary = new com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationSummary(

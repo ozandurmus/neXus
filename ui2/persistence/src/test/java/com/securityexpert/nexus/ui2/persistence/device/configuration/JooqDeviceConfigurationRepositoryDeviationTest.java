@@ -40,7 +40,7 @@ class JooqDeviceConfigurationRepositoryDeviationTest {
 
     private static ConfigurationRun sampleChangedRunWithSummary() {
         ConfigurationIndexEntry indexEntry = new ConfigurationIndexEntry("ctx-1", "sec-1", Optional.empty(), 5);
-        ConfigurationDeviationEntry devEntry = new ConfigurationDeviationEntry("ctx-1", "sec-1", DeviationKind.RECOUNTED, 3, 5);
+        ConfigurationDeviationEntry devEntry = new ConfigurationDeviationEntry("ctx-1", "sec-1", Optional.empty(), DeviationKind.RECOUNTED, 3, 5);
         ConfigurationDeviationSummary summary = new ConfigurationDeviationSummary(
                 ConfigurationDeviationSummary.Status.COMPUTED, List.of(devEntry));
 
@@ -125,8 +125,8 @@ class JooqDeviceConfigurationRepositoryDeviationTest {
                 new String[] { "sum-1", "COMPUTED" });
 
         Result<Record> entryResult = create.fetchFromStringData(
-                new String[] { "context", "section", "kind", "old_count", "new_count" },
-                new String[] { "ctx-1", "sec-1", "RECOUNTED", "3", "5" });
+                new String[] { "context", "section", "source", "kind", "old_count", "new_count" },
+                new String[] { "ctx-1", "sec-1", null, "RECOUNTED", "3", "5" });
 
         List<Result<Record>> queue = new ArrayList<>(List.of(
                 findRowResult, runResult, indexResult, overrideResult, summaryResult, entryResult));

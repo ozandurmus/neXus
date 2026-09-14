@@ -60,6 +60,7 @@ class IndexDeviationComputerTest {
         assertEquals(DeviationKind.ADDED, entry.kind());
         assertEquals("ctx-a", entry.context());
         assertEquals("sec-y", entry.section());
+        assertEquals(Optional.empty(), entry.source());
         assertEquals(0, entry.oldCount());
         assertEquals(7, entry.newCount());
     }
@@ -80,6 +81,7 @@ class IndexDeviationComputerTest {
         assertEquals(DeviationKind.REMOVED, entry.kind());
         assertEquals("ctx-a", entry.context());
         assertEquals("sec-z", entry.section());
+        assertEquals(Optional.empty(), entry.source());
         assertEquals(2, entry.oldCount());
         assertEquals(0, entry.newCount());
     }
@@ -99,6 +101,7 @@ class IndexDeviationComputerTest {
         assertEquals(DeviationKind.RECOUNTED, entry.kind());
         assertEquals("ctx-b", entry.context());
         assertEquals("sec-p", entry.section());
+        assertEquals(Optional.empty(), entry.source());
         assertEquals(10, entry.oldCount());
         assertEquals(14, entry.newCount());
     }
@@ -137,7 +140,6 @@ class IndexDeviationComputerTest {
     void paloAltoEntriesDifferingOnlyBySourceAreTreatedAsDifferentEntries() {
         // Old: sec-q has one row with source=tpl (count 4) and one with source=dg (count 6).
         // New: same section but source=tpl is gone, source=local arrives.
-        // Total old count = 10, total new count = 9 (local adds 3, tpl's 4 removed).
         List<ConfigurationIndexEntry> oldIndex = List.of(
                 panEntry("vsys-1", "sec-q", "tpl", 4),
                 panEntry("vsys-1", "sec-q", "dg", 6));
@@ -148,14 +150,50 @@ class IndexDeviationComputerTest {
         ConfigurationDeviationSummary summary = IndexDeviationComputer.compute(oldIndex, newIndex);
 
         assertEquals(ConfigurationDeviationSummary.Status.COMPUTED, summary.status());
-        // The section appears in both but with a different total count (10 -> 9): RECOUNTED.
-        assertEquals(1, summary.entries().size());
-        ConfigurationDeviationEntry entry = summary.entries().get(0);
-        assertEquals(DeviationKind.RECOUNTED, entry.kind());
-        assertEquals("vsys-1", entry.context());
-        assertEquals("sec-q", entry.section());
-        assertEquals(10, entry.oldCount(), "old total: tpl(4) + dg(6)");
-        assertEquals(9, entry.newCount(), "new total: dg(6) + local(3)");
+        // 'dg' is unchanged (6). 'tpl' is removed (4->0). 'local' is added (0->3).
+        assertEquals(2, summary.entries().size());
+
+        ConfigurationDeviationEntry removed = summary.entries().stream()
+                .filter(e -> e.kind() == DeviationKind.REMOVED).findFirst().orElseThrow();
+        assertEquals("vsys-1", removed.context());
+        assertEquals("sec-q", removed.section());
+        assertEquals(Optional.of("tpl"), removed.source());
+        assertEquals(4, removed.oldCount());
+        assertEquals(0, removed.newCount());
+
+        ConfigurationDeviationEntry added = summary.entries().stream()
+                .filter(e -> e.kind() == DeviationKind.ADDED).findFirst().orElseThrow();
+        assertEquals("vsys-1", added.context());
+        assertEquals("sec-q", added.section());
+        assertEquals(Optional.of("local"), added.source());
+        assertEquals(0, added.oldCount());
+        assertEquals(3, added.newCount());
+    }
+
+    @Test
+    void paloAltoPureProvenanceMoveWithUnchangedTotalCountProducesDeviationEntries() {
+        // Old: sec-q has source=tpl (count 3).
+        // New: sec-q has source=local (count 3).
+        // The total section count remains 3, but the provenance moved.
+        List<ConfigurationIndexEntry> oldIndex = List.of(
+                panEntry("vsys-1", "sec-q", "tpl", 3));
+        List<ConfigurationIndexEntry> newIndex = List.of(
+                panEntry("vsys-1", "sec-q", "local", 3));
+
+        ConfigurationDeviationSummary summary = IndexDeviationComputer.compute(oldIndex, newIndex);
+
+        assertEquals(ConfigurationDeviationSummary.Status.COMPUTED, summary.status());
+        assertEquals(2, summary.entries().size(), "Move from tpl to local must produce 2 deviation entries");
+
+        ConfigurationDeviationEntry removed = summary.entries().stream()
+                .filter(e -> e.kind() == DeviationKind.REMOVED).findFirst().orElseThrow();
+        assertEquals(Optional.of("tpl"), removed.source());
+        assertEquals(3, removed.oldCount());
+
+        ConfigurationDeviationEntry added = summary.entries().stream()
+                .filter(e -> e.kind() == DeviationKind.ADDED).findFirst().orElseThrow();
+        assertEquals(Optional.of("local"), added.source());
+        assertEquals(3, added.newCount());
     }
 
     @Test
@@ -233,10 +271,11 @@ class IndexDeviationComputerTest {
 
         assertEquals(1, summary.entries().size());
         ConfigurationDeviationEntry entry = summary.entries().get(0);
-        // Only these five fields exist on a ConfigurationDeviationEntry.
+        // Only these six fields exist on a ConfigurationDeviationEntry.
         // The record compiler enforces no other fields exist.
         assertEquals("ctx-e", entry.context());   // opaque context name
         assertEquals("sec-v", entry.section());   // opaque section name
+        assertEquals(Optional.empty(), entry.source()); // opaque source name
         assertEquals(DeviationKind.RECOUNTED, entry.kind()); // enum, not a value
         assertEquals(1, entry.oldCount());         // integer
         assertEquals(2, entry.newCount());         // integer

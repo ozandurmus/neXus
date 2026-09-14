@@ -13,6 +13,7 @@ package com.securityexpert.nexus.ui2.persistence.device.configuration;
 public record ConfigurationDeviationEntry(
         String context,
         String section,
+        java.util.Optional<String> source,
         DeviationKind kind,
         int oldCount,
         int newCount) {
