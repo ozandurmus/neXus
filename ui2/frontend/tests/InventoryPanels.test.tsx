@@ -252,7 +252,7 @@ describe("BackupPanel", () => {
       return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
     });
     vi.stubGlobal("fetch", fetchMock);
-    
+
     render(withTheme(<BackupPanel deviceId="dev-1" />));
     await waitFor(() => expect(screen.getByText("No backups")).toBeInTheDocument());
     expect(screen.getByText("No backup has been retained for this device.")).toBeInTheDocument();
@@ -287,12 +287,12 @@ describe("BackupPanel", () => {
       return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
     });
     vi.stubGlobal("fetch", fetchMock);
-    
+
     render(withTheme(<BackupPanel deviceId="dev-1" />));
-    
+
     await waitFor(() => expect(screen.getByText("abcd123")).toBeInTheDocument());
     expect(screen.getByText("9876xyz")).toBeInTheDocument();
-    
+
     expect(screen.getByText("not evaluated")).toBeInTheDocument();
     expect(screen.queryByText("unchanged")).not.toBeInTheDocument();
     expect(screen.getByText("changed")).toBeInTheDocument();
@@ -306,9 +306,9 @@ describe("BackupPanel", () => {
       return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
     });
     vi.stubGlobal("fetch", fetchMock);
-    
+
     render(withTheme(<BackupPanel deviceId="dev-1" />));
-    
+
     await waitFor(() => expect(screen.getByText("Failed to connect to storage")).toBeInTheDocument());
     expect(screen.getByText("Backup unavailable")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
