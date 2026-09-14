@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Palo Alto inventory measurement (PO_DECISION_RECORD_2026_09_14C section 5, M-3 and M-4).
 
-Usage: python3 pan_inventory_shape.py https://<firewall-mgmt-address> [--vsys vsys2] [--ca bundle.pem | --insecure]
+Usage: python3 pan_inventory_shape.py https://<firewall-mgmt-address> [--vsys vsys2] [--config] [--panorama] [--ca bundle.pem | --insecure]
 Prompts for user and password (never on the command line, never in a URL).
 Prints only element paths, attribute names, counts and value SHAPES; no value
 is printed. Paste the whole output back.
@@ -45,7 +45,7 @@ def describe(name, raw):
     if flags: print(f"### route flag tokens seen={sorted(flags)}")
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument("base"); ap.add_argument("--vsys"); ap.add_argument("--ca"); ap.add_argument("--insecure", action="store_true", help="measurement only: do not verify the firewall certificate (self-signed)")
+    ap=argparse.ArgumentParser(); ap.add_argument("base"); ap.add_argument("--vsys"); ap.add_argument("--ca"); ap.add_argument("--config", action="store_true", help="also measure the configuration reads (sizes, top-level categories, hash; no content)"); ap.add_argument("--panorama", action="store_true", help="the target is a Panorama: measure its own config read for Template/Device Group provenance"); ap.add_argument("--insecure", action="store_true", help="measurement only: do not verify the firewall certificate (self-signed)")
     a=ap.parse_args()
     ctx=ssl.create_default_context(cafile=a.ca) if a.ca else ssl.create_default_context()
     if a.insecure:
@@ -63,6 +63,30 @@ def main():
         body={"type":"op","cmd":cmd,"key":key}
         try: describe(name, post(a.base, body, ctx))
         except Exception as e: print(f"\n### {name}: error {type(e).__name__}")
+    if a.config:
+        import hashlib
+        def cfg(name, body):
+            try: raw=post(a.base, body, ctx)
+            except Exception as e: print(f"\n### {name}: error {type(e).__name__}"); return
+            root=ET.fromstring(raw); print(f"\n### {name}: bytes={len(raw)} status={root.get('status')} sha256_16={hashlib.sha256(raw).hexdigest()[:16]}")
+            cats=Counter()
+            for top in root.iter("config"):
+                for c in top: cats[c.tag]+=1
+                for dev in top.iter("devices"):
+                    for e in dev.findall("entry"):
+                        for c in e: cats["devices/entry/"+c.tag]+=1
+                        for v in e.findall("vsys/entry"):
+                            for c in v: cats["devices/entry/vsys/entry/"+c.tag]+=1
+                break
+            for k,n in sorted(cats.items()): print(f"{n:5d}  {k}")
+            if a.panorama:
+                tpl=len(root.findall(".//template/entry")); ts=len(root.findall(".//template-stack/entry")); dg=len(root.findall(".//device-group/entry"))
+                print(f"### panorama: template_entries={tpl} template_stack_entries={ts} device_group_entries={dg}")
+        cfg("R-6 active config (type=config action=show xpath=/config)", {"type":"config","action":"show","xpath":"/config","key":key})
+        if not a.panorama:
+            cfg("R-7 effective-running", {"type":"op","cmd":"<show><config><effective-running></effective-running></config></show>","key":key})
+            cfg("R-7 effective-running (second read, Q-16 stability)", {"type":"op","cmd":"<show><config><effective-running></effective-running></config></show>","key":key})
+            cfg("R-8 merged", {"type":"op","cmd":"<show><config><merged></merged></config></show>","key":key})
     if a.vsys:
         for name,cmd in list(reads.items())[:2]:
             body={"type":"op","cmd":cmd,"key":key,"vsys":a.vsys}
