@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
@@ -14,6 +14,7 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { useFetchOnMount } from "../shell/useFetchOnMount";
 import {
   createCredential,
   deleteCredential,
@@ -45,24 +46,20 @@ function vendorLabel(view: CredentialView): string {
  * token (AG-J3, {@code NoRoleConditionalRenderingInFrontendTest}).
  */
 export function CredentialsPanel() {
-  const [credentials, setCredentials] = useState<CredentialView[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [replaceSecretFor, setReplaceSecretFor] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<Record<string, string>>({});
 
-  const refresh = useCallback(() => {
-    listCredentials()
-      .then((result) => {
-        setCredentials(result.credentials);
-        setError(null);
-      })
-      .catch((err: ApiError) => setError(describeError(err)));
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  const {
+    data,
+    error: fetchError,
+    refresh,
+  } = useFetchOnMount(
+    () => listCredentials().then((result) => result.credentials ?? []),
+    (err) => describeError(err as ApiError),
+  );
+  const credentials = data;
+  const error = fetchError;
 
   if (error) {
     return (

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { CapabilityMenu, M3Button, M3Tabs, StatusChip, ToggleRow } from "../src/shell/M3Widgets";
@@ -119,13 +119,26 @@ describe("M3Button", () => {
 });
 
 describe("AddDeviceDialogTrigger", () => {
-  it("opens with blank fields and closes on Enrol without claiming success", async () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Full submit -> poll -> terminal-result coverage lives in
+  // tests/AddDeviceDialog.test.tsx; this is the shared-widget smoke test:
+  // the dialog opens blank, and Cancel closes it without ever writing
+  // anything (only the credential list is read).
+  it("opens with a blank address field and closes on Cancel without submitting", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ credentials: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
     render(withTheme(<AddDeviceDialogTrigger />));
     fireEvent.click(screen.getByRole("button", { name: "Add device" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByLabelText("Device name")).toHaveValue("");
-    expect(screen.getByText(/does not submit anywhere/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Enrol" }));
+    expect(screen.getByLabelText("Address")).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    expect(fetchMock).not.toHaveBeenCalledWith("/devices/add-single", expect.anything());
   });
 });
