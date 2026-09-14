@@ -82,6 +82,11 @@ export function listDeviceBackups(deviceId: string): Promise<{ backups: BackupAr
   return call(`/devices/${encodeURIComponent(deviceId)}/backups`, "GET");
 }
 
+/** BK-12 manual backup (14K BW-4): posts to the collect route with a required reason. */
+export function collectDeviceBackup(deviceId: string, reason: string): Promise<{ job_id: string }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/backup/collect`, "POST", { reason });
+}
+
 export function createLocalIdentity(localIdentityName: string, initialPassword: string): Promise<LocalIdentityView> {
   return call("/local-identities", "POST", {
     local_identity_name: localIdentityName,

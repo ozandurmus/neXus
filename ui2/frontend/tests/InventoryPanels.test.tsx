@@ -328,4 +328,173 @@ describe("BackupPanel", () => {
     expect(screen.getByText("Backup unavailable")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
+
+  it("submits the backup request with the typed reason when reason is long enough", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/devices/dev-1/backups") {
+        return Promise.resolve(jsonResponse(200, { backups: [] }));
+      }
+      if (url === "/session/status") {
+        return Promise.resolve(jsonResponse(200, { csrf_token: "tok-1" }));
+      }
+      if (url === "/devices/dev-1/backup/collect" && init?.method === "POST") {
+        return Promise.resolve(jsonResponse(202, { job_id: "bkjob-1" }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(withTheme(<BackupPanel deviceId="dev-1" />));
+    await waitFor(() => expect(screen.queryByText("Loading…")).not.toBeInTheDocument());
+
+    const field = screen.getByRole("textbox", { name: /Backup reason/i });
+    fireEvent.change(field, { target: { value: "scheduled maintenance window" } });
+
+    const button = screen.getByRole("button", { name: "Request backup" });
+    fireEvent.click(button);
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some((call) => String(call[0]) === "/devices/dev-1/backup/collect")).toBe(true),
+    );
+    const collectCall = fetchMock.mock.calls.find((call) => String(call[0]) === "/devices/dev-1/backup/collect");
+    const body = JSON.parse(collectCall?.[1]?.body as string);
+    expect(body.reason).toBe("scheduled maintenance window");
+
+    await waitFor(() =>
+      expect(screen.getByText(/Backup request accepted/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("refuses locally without sending a request when the reason is shorter than 8 characters", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === "/devices/dev-1/backups") {
+        return Promise.resolve(jsonResponse(200, { backups: [] }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(withTheme(<BackupPanel deviceId="dev-1" />));
+    await waitFor(() => expect(screen.queryByText("Loading…")).not.toBeInTheDocument());
+
+    const field = screen.getByRole("textbox", { name: /Backup reason/i });
+    fireEvent.change(field, { target: { value: "short" } });
+
+    // Both the helper text and the inline validation message mention "at least 8 characters".
+    const minMessages = screen.getAllByText(/at least 8 characters/i);
+    expect(minMessages.length).toBeGreaterThanOrEqual(1);
+
+    const button = screen.getByRole("button", { name: "Request backup" });
+    expect(button).toBeDisabled();
+
+    // No collect call should have been made.
+    expect(
+      fetchMock.mock.calls.some((call) => String(call[0]) === "/devices/dev-1/backup/collect"),
+    ).toBe(false);
+  });
+
+  it("shows the server's own code and reason verbatim on a 409 refusal", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/devices/dev-1/backups") {
+        return Promise.resolve(jsonResponse(200, { backups: [] }));
+      }
+      if (url === "/session/status") {
+        return Promise.resolve(jsonResponse(200, { csrf_token: "tok-1" }));
+      }
+      if (url === "/devices/dev-1/backup/collect" && init?.method === "POST") {
+        return Promise.resolve(
+          jsonResponse(409, {
+            error: "ADMISSION_REFUSED",
+            code: "DEVICE_NOT_IN_BACKUP_PILOT_ALLOWLIST",
+            reason: "device dev-1 is not on the backup pilot allowlist (14H BK-1) -- refused, never a silent skip",
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(withTheme(<BackupPanel deviceId="dev-1" />));
+    await waitFor(() => expect(screen.queryByText("Loading…")).not.toBeInTheDocument());
+
+    const field = screen.getByRole("textbox", { name: /Backup reason/i });
+    fireEvent.change(field, { target: { value: "scheduled maintenance" } });
+    fireEvent.click(screen.getByRole("button", { name: "Request backup" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "DEVICE_NOT_IN_BACKUP_PILOT_ALLOWLIST: device dev-1 is not on the backup pilot allowlist (14H BK-1) -- refused, never a silent skip",
+        ),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("refreshes the backup list after a 202 admission", async () => {
+    let listCallCount = 0;
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/devices/dev-1/backups") {
+        listCallCount += 1;
+        const second = listCallCount > 1;
+        return Promise.resolve(
+          jsonResponse(200, {
+            backups: second
+              ? [
+                  {
+                    artefact_id: "art-fresh",
+                    device_id: "dev-1",
+                    collected_at: "2026-09-15T00:00:00Z",
+                    size_bytes: 512,
+                    digest_prefix: "newone1",
+                    validation_level: "trusted",
+                    deviation_state: "first",
+                  },
+                ]
+              : [],
+          }),
+        );
+      }
+      if (url === "/session/status") {
+        return Promise.resolve(jsonResponse(200, { csrf_token: "tok-1" }));
+      }
+      if (url === "/devices/dev-1/backup/collect" && init?.method === "POST") {
+        return Promise.resolve(jsonResponse(202, { job_id: "bkjob-2" }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(withTheme(<BackupPanel deviceId="dev-1" />));
+    await waitFor(() => expect(screen.queryByText("Loading…")).not.toBeInTheDocument());
+
+    const field = screen.getByRole("textbox", { name: /Backup reason/i });
+    fireEvent.change(field, { target: { value: "post-change verification" } });
+    fireEvent.click(screen.getByRole("button", { name: "Request backup" }));
+
+    await waitFor(() => expect(screen.getByText("newone1")).toBeInTheDocument());
+    expect(listCallCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it("has no restore, download, or decrypt control", () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === "/devices/dev-1/backups") {
+        return Promise.resolve(jsonResponse(200, { backups: [] }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(withTheme(<BackupPanel deviceId="dev-1" />));
+
+    // None of these words should ever appear as a button or label.
+    expect(screen.queryByRole("button", { name: /restore/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /download/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /decrypt/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/restore/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/download/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/decrypt/i)).not.toBeInTheDocument();
+  });
 });

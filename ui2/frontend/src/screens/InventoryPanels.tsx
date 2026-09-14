@@ -6,6 +6,7 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
@@ -16,6 +17,7 @@ import {
   getDeviceInventory,
   getClusterInventory,
   requestInventoryCollect,
+  collectDeviceBackup,
   type ApiError,
   type ClusterContext,
   type ClusterDifference,
@@ -479,6 +481,94 @@ export function DeviceInventoryPanels({ device }: { readonly device: DeviceSumma
   );
 }
 
+const BACKUP_REASON_MIN = 8;
+
+/**
+ * BK-12 manual backup trigger (14K BW-4). Collects the operator's reason,
+ * refuses locally if it is shorter than {@link BACKUP_REASON_MIN} characters
+ * after stripping (matching the server's own guard), and posts to the collect
+ * route. A 409 shows the server's own `code` and `reason` verbatim; an
+ * unrecognised response code still renders. A 202 tells the operator the
+ * request was accepted and that the result appears in the list when the job
+ * completes. Nothing here offers a restore, a download, or a decrypt.
+ */
+function RequestBackupControl({ deviceId, onAdmitted }: { readonly deviceId: string; readonly onAdmitted: () => void }) {
+  const [reason, setReason] = useState("");
+  const [phase, setPhase] = useState<"idle" | "submitting" | "admitted" | "refused" | "error">("idle");
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
+
+  const stripped = reason.trim();
+  const tooShort = stripped.length < BACKUP_REASON_MIN;
+
+  const handleSubmit = async () => {
+    if (tooShort) return;
+    setPhase("submitting");
+    setServerMessage(null);
+    try {
+      await collectDeviceBackup(deviceId, stripped);
+      setPhase("admitted");
+      setReason("");
+      onAdmitted();
+    } catch (err) {
+      const apiErr = err as Partial<ApiError>;
+      if (apiErr.status === 409) {
+        const code = typeof apiErr.body?.code === "string" ? (apiErr.body.code as string) : "";
+        const serverReason = typeof apiErr.body?.reason === "string" ? (apiErr.body.reason as string) : "";
+        setServerMessage(code ? `${code}: ${serverReason}` : serverReason || "request refused");
+        setPhase("refused");
+      } else {
+        setServerMessage(describeApiError(err));
+        setPhase("error");
+      }
+    }
+  };
+
+  return (
+    <Stack spacing={1.5}>
+      <Typography variant="body2" color="text.secondary">
+        Request a backup for this device. Provide a reason of at least {BACKUP_REASON_MIN} characters.
+      </Typography>
+      <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ flexWrap: "wrap" }}>
+        <TextField
+          label="Reason"
+          value={reason}
+          onChange={(e) => {
+            setReason(e.target.value);
+            if (phase === "admitted" || phase === "refused" || phase === "error") setPhase("idle");
+            setServerMessage(null);
+          }}
+          size="small"
+          sx={{ minWidth: 320 }}
+          disabled={phase === "submitting"}
+          inputProps={{ "aria-label": "Backup reason" }}
+        />
+        <M3Button
+          emphasis="tonal"
+          onClick={handleSubmit}
+          disabled={tooShort || phase === "submitting"}
+        >
+          Request backup
+        </M3Button>
+      </Stack>
+      {tooShort && reason.length > 0 && (
+        <Typography variant="body2" color="text.secondary">
+          Reason must be at least {BACKUP_REASON_MIN} characters (after trimming).
+        </Typography>
+      )}
+      {phase === "admitted" && (
+        <Typography variant="body2" color="success.main">
+          Backup request accepted. The result appears in the list below when the job completes.
+        </Typography>
+      )}
+      {(phase === "refused" || phase === "error") && serverMessage && (
+        <Typography variant="body2" color="error">
+          {serverMessage}
+        </Typography>
+      )}
+    </Stack>
+  );
+}
+
 export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
   const fetcher = useFetchOnMount<{ backups: BackupArtefact[] }>(
     () => listDeviceBackups(deviceId),
@@ -501,43 +591,44 @@ export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
 
   const backups = fetcher.data.backups;
 
-  if (backups.length === 0) {
-    return (
-      <EmptyPanel
-        title="No backups"
-        body="No backup has been retained for this device."
-      />
-    );
-  }
-
   return (
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>Collected time</TableCell>
-          <TableCell>Size</TableCell>
-          <TableCell>Digest prefix</TableCell>
-          <TableCell>Validation level</TableCell>
-          <TableCell>Deviation state</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {backups.map((b) => (
-          <TableRow key={b.artefact_id}>
-            <TableCell>{b.collected_at}</TableCell>
-            <TableCell>{b.size_bytes}</TableCell>
-            <TableCell>{b.digest_prefix}</TableCell>
-            <TableCell>{b.validation_level}</TableCell>
-            <TableCell>
-              {b.deviation_state === null ? (
-                <StatusChip tone="neutral" label="not evaluated" dense />
-              ) : (
-                <StatusChip tone="neutral" label={b.deviation_state} dense />
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <Stack spacing={2.5}>
+      <RequestBackupControl deviceId={deviceId} onAdmitted={fetcher.refresh} />
+      {backups.length === 0 ? (
+        <EmptyPanel
+          title="No backups"
+          body="No backup has been retained for this device."
+        />
+      ) : (
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Collected time</TableCell>
+              <TableCell>Size</TableCell>
+              <TableCell>Digest prefix</TableCell>
+              <TableCell>Validation level</TableCell>
+              <TableCell>Deviation state</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {backups.map((b) => (
+              <TableRow key={b.artefact_id}>
+                <TableCell>{b.collected_at}</TableCell>
+                <TableCell>{b.size_bytes}</TableCell>
+                <TableCell>{b.digest_prefix}</TableCell>
+                <TableCell>{b.validation_level}</TableCell>
+                <TableCell>
+                  {b.deviation_state === null ? (
+                    <StatusChip tone="neutral" label="not evaluated" dense />
+                  ) : (
+                    <StatusChip tone="neutral" label={b.deviation_state} dense />
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </Stack>
   );
 }
