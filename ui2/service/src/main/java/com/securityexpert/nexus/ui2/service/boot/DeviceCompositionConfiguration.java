@@ -15,19 +15,26 @@ import com.securityexpert.nexus.ui2.capability.MaturityState;
 import com.securityexpert.nexus.ui2.capability.StepKind;
 import com.securityexpert.nexus.ui2.capability.TransportKind;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfirmCapabilityIds;
+import com.securityexpert.nexus.ui2.jobs.admission.DiscoveryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionRepository;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.jobs.admission.PersistenceJobAdmissionRepository;
 import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentReadPort;
 import com.securityexpert.nexus.ui2.jobs.device.PersistenceDeviceEnrollmentReadPort;
+import com.securityexpert.nexus.ui2.jobs.discovery.DiscoveryRunReadPort;
+import com.securityexpert.nexus.ui2.jobs.discovery.PersistenceDiscoveryRunReadPort;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.device.CredentialReferenceRepository;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceDiscoveryMatchRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqCredentialReferenceRepository;
+import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceDiscoveryMatchRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.JooqDeviceInventoryRepository;
+import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRunRepository;
+import com.securityexpert.nexus.ui2.persistence.discovery.JooqDiscoveryRunRepository;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
 import com.securityexpert.nexus.ui2.service.device.DeviceAddSingleService;
@@ -35,6 +42,7 @@ import com.securityexpert.nexus.ui2.service.device.DeviceQueryService;
 import com.securityexpert.nexus.ui2.service.device.DeviceRegistrationService;
 import com.securityexpert.nexus.ui2.service.device.inventory.InventoryCollectService;
 import com.securityexpert.nexus.ui2.service.device.inventory.InventoryQueryService;
+import com.securityexpert.nexus.ui2.service.discovery.DiscoveryRunService;
 
 /**
  * Composition root for single-device add and its two read routes (WORKER.md
@@ -88,6 +96,16 @@ public class DeviceCompositionConfiguration {
                 confirmCapability(InventoryCapabilityIds.CP_INVENTORY_COLLECT, "check_point", "cp_gaia_gateway",
                         TransportKind.SSH_EXEC),
                 confirmCapability(InventoryCapabilityIds.PAN_INVENTORY_COLLECT, "palo_alto", "pan_firewall",
+                        TransportKind.PAN_XML_API),
+                // 14F DR-1: admitted through JobAdmissionService#submitForRun
+                // against a discovery_run row, never a device -- same
+                // gate-free placeholder shape (StepExecutor never runs
+                // either capability's own step list; the worker's
+                // DiscoveryJobExecutor drives the closed command set
+                // instead, mirroring the two above).
+                confirmCapability(DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, "check_point",
+                        "cp_multi_domain_server", TransportKind.SSH_EXEC),
+                confirmCapability(DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE, "palo_alto", "panorama",
                         TransportKind.PAN_XML_API)));
     }
 
@@ -113,9 +131,27 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
+    public DiscoveryRunRepository discoveryRunRepository(TransactionBoundary transactionBoundary) {
+        return new JooqDiscoveryRunRepository(transactionBoundary);
+    }
+
+    @Bean
+    public DiscoveryRunReadPort discoveryRunReadPort(DiscoveryRunRepository discoveryRunRepository) {
+        return new PersistenceDiscoveryRunReadPort(discoveryRunRepository);
+    }
+
+    @Bean
+    public DeviceDiscoveryMatchRepository deviceDiscoveryMatchRepository(TransactionBoundary transactionBoundary) {
+        return new JooqDeviceDiscoveryMatchRepository(transactionBoundary);
+    }
+
+    /** 14F DR-1: the four-arg constructor so {@code submitForRun} can resolve a real {@code discovery_run} row -- one bean serves both {@link JobAdmissionService#submit} and {@link JobAdmissionService#submitForRun} callers. */
+    @Bean
     public JobAdmissionService jobAdmissionService(CapabilityRegistry deviceCapabilityRegistry,
-            DeviceEnrollmentReadPort deviceEnrollmentReadPort, JobAdmissionRepository jobAdmissionRepository) {
-        return new JobAdmissionService(deviceCapabilityRegistry, deviceEnrollmentReadPort, jobAdmissionRepository);
+            DeviceEnrollmentReadPort deviceEnrollmentReadPort, DiscoveryRunReadPort discoveryRunReadPort,
+            JobAdmissionRepository jobAdmissionRepository) {
+        return new JobAdmissionService(deviceCapabilityRegistry, deviceEnrollmentReadPort, discoveryRunReadPort,
+                jobAdmissionRepository);
     }
 
     @Bean
@@ -144,5 +180,14 @@ public class DeviceCompositionConfiguration {
     public InventoryCollectService inventoryCollectService(DeviceRepository deviceRepository,
             JobAdmissionService jobAdmissionService) {
         return new InventoryCollectService(deviceRepository, jobAdmissionService);
+    }
+
+    @Bean
+    public DiscoveryRunService discoveryRunService(TransactionBoundary transactionBoundary,
+            DiscoveryRunRepository discoveryRunRepository, JobAdmissionService jobAdmissionService,
+            CredentialReferenceRepository credentialReferenceRepository, DeviceAddSingleService deviceAddSingleService,
+            DeviceDiscoveryMatchRepository deviceDiscoveryMatchRepository) {
+        return new DiscoveryRunService(transactionBoundary, discoveryRunRepository, jobAdmissionService,
+                credentialReferenceRepository, deviceAddSingleService, deviceDiscoveryMatchRepository);
     }
 }

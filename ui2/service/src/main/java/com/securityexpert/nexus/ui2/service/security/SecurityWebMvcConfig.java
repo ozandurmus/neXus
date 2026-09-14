@@ -48,7 +48,15 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /credentials", ActionRegistry.CREDENTIAL_CREATE),
             Map.entry("GET /credentials", ActionRegistry.CREDENTIAL_LIST),
             Map.entry("POST /credentials/replace-secret", ActionRegistry.CREDENTIAL_REPLACE_SECRET),
-            Map.entry("POST /credentials/delete", ActionRegistry.CREDENTIAL_DELETE));
+            Map.entry("POST /credentials/delete", ActionRegistry.CREDENTIAL_DELETE),
+            // 14F section 3: body-only start (no path variable, matching
+            // /devices/add-single's own shape), a single-segment wildcard
+            // read, and a two-segment-deep wildcard import (the run id is
+            // not the route's last segment, matching /devices/*/inventory/
+            // collect's own wildcard shape above).
+            Map.entry("POST /discovery/runs", ActionRegistry.DISCOVERY_RUN_START),
+            Map.entry("GET /discovery/runs/*", ActionRegistry.DISCOVERY_RUN_READ),
+            Map.entry("POST /discovery/runs/*/import", ActionRegistry.DISCOVERY_RUN_IMPORT));
 
     private final GateChain gateChain;
 

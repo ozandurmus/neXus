@@ -102,3 +102,19 @@ ALTER TABLE discovery_candidate ADD CONSTRAINT chk_discovery_candidate_import_ou
     CHECK (import_outcome IS NULL OR import_outcome IN ('new', 'already_imported', 'conflicting'));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON discovery_candidate TO ui2_app;
+
+-- ---------------------------------------------------------------------
+-- 4. devices -- the RD-3 match key column import needs. DEVICE_IMPORT_
+-- AND_ENROLLMENT_CONTRACT.md IM-10 fixes device_id as opaque and never a
+-- vendor identifier; discovery_match_key is the separate, explicit
+-- carrier for the vendor stable identifier RD-3/RD-5 match by, opaque to
+-- this column too (never parsed, never the join key on its own). One
+-- devices row carries at most one match key, so a unique partial index
+-- (NULL for a manually registered device, which has none) is what RD-5's
+-- "no existing devices row carries this match key" lookup relies on.
+-- ---------------------------------------------------------------------
+
+ALTER TABLE devices ADD COLUMN discovery_match_key TEXT;
+
+CREATE UNIQUE INDEX uq_devices_discovery_match_key ON devices(discovery_match_key)
+    WHERE discovery_match_key IS NOT NULL;

@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.service.device;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfirmCapabilityIds;
@@ -92,7 +93,35 @@ public final class DeviceAddSingleService {
 
         try {
             return transactionBoundary.inTransaction(dsl -> runInTransaction(actorFingerprint, address, vendor,
-                    credentialReferenceId, mapping));
+                    credentialReferenceId, mapping, "manual_registration", Optional.empty(), Optional.empty(),
+                    Optional.empty(), ActionRegistry.DEVICE_REGISTER));
+        } catch (ValidationFailedSignal signal) {
+            return new Outcome.ValidationFailed(signal.reasonCode);
+        } catch (AdmissionRefusedSignal signal) {
+            return new Outcome.AdmissionRefused(signal.code, signal.reason);
+        }
+    }
+
+    /**
+     * 14F import §2: "the same register-DRAFT-then-admit-confirm step
+     * {@code POST /devices/add-single} uses" -- {@link DiscoveryRunService}'s
+     * own per-candidate import call, one call (and one transaction) per
+     * selected candidate, so a refusal on one candidate never rolls back a
+     * sibling candidate already imported in the same request (AC-3:
+     * "refused per row, not per request").
+     */
+    public Outcome addFromDiscoveryImport(String actorFingerprint, String address, String vendor,
+            String credentialReferenceId, Optional<String> clusterMemberRef, Optional<String> virtualSystemRef,
+            Optional<String> discoveryMatchKey, String actionId) {
+        VendorMapping mapping = VENDOR_MAPPINGS.get(vendor);
+        if (mapping == null) {
+            return new Outcome.ValidationFailed(DeviceRegistrationService.REASON_VENDOR_HINT_INVALID);
+        }
+
+        try {
+            return transactionBoundary.inTransaction(dsl -> runInTransaction(actorFingerprint, address, vendor,
+                    credentialReferenceId, mapping, "discovery_import", clusterMemberRef, virtualSystemRef,
+                    discoveryMatchKey, actionId));
         } catch (ValidationFailedSignal signal) {
             return new Outcome.ValidationFailed(signal.reasonCode);
         } catch (AdmissionRefusedSignal signal) {
@@ -101,9 +130,12 @@ public final class DeviceAddSingleService {
     }
 
     private Outcome runInTransaction(String actorFingerprint, String address, String vendor,
-            String credentialReferenceId, VendorMapping mapping) {
+            String credentialReferenceId, VendorMapping mapping, String registrationSource,
+            Optional<String> clusterMemberRef, Optional<String> virtualSystemRef, Optional<String> discoveryMatchKey,
+            String actionId) {
         DeviceRegistrationService.Outcome registration = deviceRegistrationService.register(actorFingerprint, vendor,
-                mapping.transportKind(), address, credentialReferenceId, false);
+                mapping.transportKind(), address, credentialReferenceId, false, registrationSource, clusterMemberRef,
+                virtualSystemRef, discoveryMatchKey, actionId);
         if (registration instanceof DeviceRegistrationService.Outcome.ValidationFailed failed) {
             throw new ValidationFailedSignal(failed.reasonCode());
         }
@@ -111,7 +143,7 @@ public final class DeviceAddSingleService {
                 (DeviceRegistrationService.Outcome.Registered) registration;
 
         AdmissionResult admission = jobAdmissionService.submit(mapping.capabilityId(), registered.deviceId(),
-                registered.deviceId(), actorFingerprint, ActionRegistry.DEVICE_REGISTER);
+                registered.deviceId(), actorFingerprint, actionId);
         String jobId = switch (admission) {
             case AdmissionResult.Admitted admitted -> admitted.jobId();
             case AdmissionResult.Deduplicated deduplicated -> deduplicated.jobId();
