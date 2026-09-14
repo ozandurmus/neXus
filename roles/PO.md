@@ -19,6 +19,17 @@ and in what order.
 
 ## 2. Fixed choices (do not re-decide these)
 
+- **Provider default: Codex.** Since 2026-09-14 the Product Owner's Claude
+  credit is metered and their Codex use is not, so **every engineering
+  dispatch goes to Codex unless the Product Owner says otherwise** — tier
+  per the work (Terra for bounded work, Sol for heavy or novel work; Luna
+  is not used). Claude stays the Product Owner assistant's own model and
+  the fallback when a Codex dispatch fails twice for a reason that is not
+  a defect in the packet. "This packet is risky" is **not** a reason to
+  switch providers on your own judgment: say so and let the Product Owner
+  choose. Drifting back to Claude silently happened once, on movement
+  `NXS-LOCAL-0175`, and cost credit the Product Owner had asked to save.
+
 | Item | Value |
 |---|---|
 | Worker provider | `claude` unless the packet says otherwise in writing |
