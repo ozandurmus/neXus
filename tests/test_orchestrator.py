@@ -717,6 +717,7 @@ def test_start_cli_dispatches_and_writes_a_state_record(tmp_path, monkeypatch):
     assert record["revision"] == 1
     assert record["base_sha"] == "deadbeefcafe"
     assert record["branch"] == "feature/x"
+    assert record["max_budget_usd"] == orch.DEFAULT_MAX_BUDGET_USD
     assert (worktrees_dir / relay_id / ".nexus" / "approved_task.json").is_file()
     assert (worktrees_dir / relay_id / ".nexus" / "movement_id.txt").read_text().strip() == relay_id
 
@@ -878,6 +879,7 @@ def test_start_cli_resumes_a_budget_exhausted_record_reusing_worktree_and_sessio
     assert resumed["session_id"] == dispatched.get("session_id")
     assert resumed["retry_count"] == 1
     assert resumed["phase"] == orch.PHASE_RUNNING
+    assert resumed["max_budget_usd"] == 5.0
 
 
 def test_start_cli_refuses_a_budget_resume_into_the_same_or_lower_ceiling(tmp_path, monkeypatch, capsys):
@@ -1664,6 +1666,7 @@ def _minimal_run_report_kwargs(**overrides) -> dict:
         relay_status="CLOSED", model=None, effort=None, duration_s=1.0,
         verify_result={"passed": True, "steps": []}, worktree_path=Path("/tmp/x"), branch="feature/x",
         model_observed="claude", effort_observed="medium",
+        max_budget_usd=3.0,
     )
     kwargs.update(overrides)
     return kwargs
@@ -1677,6 +1680,11 @@ def test_build_run_report_names_a_budget_resume_and_its_ceiling():
 def test_build_run_report_omits_budget_resume_when_this_run_was_not_one():
     report = orch._build_run_report(**_minimal_run_report_kwargs())
     assert "budget_resume" not in report
+
+
+def test_build_run_report_carries_the_requested_budget_ceiling():
+    report = orch._build_run_report(**_minimal_run_report_kwargs(max_budget_usd=4.0))
+    assert report["max_budget_usd"] == 4.0
 
 
 def test_run_cli_engineer_exit_nonzero_and_unclosed_relay_reports_both_reasons(tmp_path, monkeypatch, capsys):

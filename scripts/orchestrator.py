@@ -1283,6 +1283,7 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
                   "failure_reasons": None, "budget_exhausted": None,
                   "last_resumed_answer_seq": answer[0] if answer else existing.get("last_resumed_answer_seq"),
                   "provider": provider, "model_requested": args.model, "effort_requested": args.effort,
+                  "max_budget_usd": args.max_budget_usd,  # GOV.ORCH.13 DL-3
                   "merge_mode": merge_mode}
         _save_state(state_dir, args.movement, record)
         payload = {"action": "resume", "movement_id": args.movement, "pid": proc.pid,
@@ -1333,6 +1334,7 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
         "dispatch_seq": len(relay_obj["entries"]),
         "failure_reason": None, "exit_code": None,
         "provider": provider, "model_requested": args.model, "effort_requested": args.effort,
+        "max_budget_usd": args.max_budget_usd,  # GOV.ORCH.13 DL-3
         "merge_mode": merge_mode,
     }
     _save_state(state_dir, args.movement, record)
@@ -1464,6 +1466,7 @@ def _build_run_report(
     integrate_result: dict | None = None, usage: dict | None = None,
     failure_reasons: list[str] | None = None, engineer_log_excerpt: str | None = None,
     budget_exhausted: dict | None = None, budget_resume: dict | None = None,
+    max_budget_usd: float = DEFAULT_MAX_BUDGET_USD,
 ) -> dict:
     """GOV.ORCH.1 section 2.4's report object, extended by GOV.ORCH.2
     section 2.4 with provider/model/effort requested-vs-observed fields and
@@ -1491,6 +1494,7 @@ def _build_run_report(
         "failure_reason": failure_reason, "relay_status": relay_status,
         "provider": provider, "model": model, "effort": effort,
         "model_requested": model, "effort_requested": effort,
+        "max_budget_usd": max_budget_usd,  # GOV.ORCH.13 DL-3
         "model_observed": model_observed, "effort_observed": effort_observed,
         "merge_mode": merge_mode,
         "duration_s": round(duration_s, 3), "verify": verify_result,
@@ -1623,6 +1627,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         integrate_result=integrate_result, usage=usage,
         failure_reasons=failure_reasons, engineer_log_excerpt=engineer_log_excerpt,
         budget_exhausted=budget_exhausted, budget_resume=budget_resume,
+        max_budget_usd=args.max_budget_usd,
     )
     print(json.dumps(report_obj))
     return EXIT_OK if phase == PHASE_DONE else EXIT_REFUSED
