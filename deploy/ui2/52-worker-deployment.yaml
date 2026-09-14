@@ -99,6 +99,11 @@ spec:
               value: /run/secrets/ui2-artefact-store/key
             - name: UI2_ARTEFACT_STORE_ROOT
               value: /app/artefact-store
+            # NXS-LOCAL-0170 / BK-16: the backup_artefact manifest's
+            # hostname_fingerprint HMAC key -- its own purpose, its own key
+            # (C1 §6.1), worker-only exactly like the artefact-store key.
+            - name: UI2_HOSTNAME_FINGERPRINT_KEY_FILE
+              value: /run/secrets/ui2-hostname-fingerprint/key
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
@@ -138,11 +143,17 @@ spec:
             - name: artefact-store-key
               mountPath: /run/secrets/ui2-artefact-store
               readOnly: true
-            # NXS-LOCAL-0165/NXS-LOCAL-0167: the raw encrypted artefact
-            # bytes themselves (FileArtefactStore) -- worker-only, backed
-            # by the durable claim below; not one of the two closed
+            - name: hostname-fingerprint-key
+              mountPath: /run/secrets/ui2-hostname-fingerprint
+              readOnly: true
+            # NXS-LOCAL-0165 / NXS-LOCAL-0170 BK-17: the raw encrypted
+            # artefact bytes themselves (FileArtefactStore) -- the recovery
+            # volume, worker-only, on its own PersistentVolumeClaim
+            # (35-artefact-store-pvc.yaml) separate from the database
+            # volume (30-database-pvc.yaml); not one of the two closed
             # writable paths the image itself declares (FS-3), which stay
-            # service-only.
+            # service-only. The service Deployment never mounts this claim
+            # (tests/test_ui2_deployment_manifests.py asserts both halves).
             - name: artefact-store
               mountPath: /app/artefact-store
       volumes:
@@ -165,6 +176,10 @@ spec:
         - name: artefact-store-key
           secret:
             secretName: ui2-artefact-store-key
+            defaultMode: 0440
+        - name: hostname-fingerprint-key
+          secret:
+            secretName: ui2-hostname-fingerprint-key
             defaultMode: 0440
         - name: artefact-store
           persistentVolumeClaim:

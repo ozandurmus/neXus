@@ -28,8 +28,16 @@ public interface ArtefactStore {
 
     ArtefactHandle open(String deviceId, String jobId, String vendor, boolean gzip) throws IOException;
 
-    /** Decrypts (and, if {@code gzip} was true at write time, decompresses) the artefact back into a stream. */
-    InputStream retrieve(ArtefactRef ref, boolean gzip) throws IOException;
+    /**
+     * Decrypts (and, if {@code gzip} was true at write time, decompresses)
+     * the artefact back into a stream. {@code wrappedDataKey} is the value
+     * {@link ArtefactMetadata#wrappedDataKey()} returned at write time --
+     * the store itself holds only the master key, never a per-artefact
+     * data key, so a caller must supply the wrapped form it persisted on
+     * its own manifest row (BK-15: "no artefact is readable with the
+     * master key alone").
+     */
+    InputStream retrieve(ArtefactRef ref, byte[] wrappedDataKey, boolean gzip) throws IOException;
 
     interface ArtefactHandle extends Closeable {
 
@@ -40,6 +48,7 @@ public interface ArtefactStore {
         ArtefactMetadata finish() throws IOException;
     }
 
+    /** @param wrappedDataKey this artefact's fresh, random data key (BK-15), wrapped under the master key -- never the raw data key. */
     record ArtefactMetadata(
             ArtefactRef ref,
             String plaintextSha256,
@@ -47,6 +56,7 @@ public interface ArtefactStore {
             String ciphertextSha256,
             long ciphertextBytes,
             String compression,
-            String keyId) {
+            String keyId,
+            byte[] wrappedDataKey) {
     }
 }

@@ -225,7 +225,7 @@ class ConfigurationControllerTest {
         FakeDeviceConfigurationRepository configRepository = new FakeDeviceConfigurationRepository();
         configRepository.recordRun(showConfigurationRun("device-1", Instant.parse("2026-09-14T12:00:00Z")),
                 new ConfigurationArtefactRecord("artefact-1", "device-1", "job-1", "check_point", "h", 1L, "h", 1L,
-                        "none", "v1"),
+                        "none", "v1", new byte[] {1, 2, 3}),
                 "actor", "action-1");
         ConfigurationQueryService queryService = new ConfigurationQueryService(devices, configRepository);
         ConfigurationController controller = new ConfigurationController(queryService, unusedCollectService());
@@ -265,7 +265,7 @@ class ConfigurationControllerTest {
         FakeDeviceConfigurationRepository configRepository = new FakeDeviceConfigurationRepository();
         configRepository.recordRun(showConfigurationRun("device-1", Instant.parse("2026-09-14T12:00:00Z")),
                 new ConfigurationArtefactRecord("artefact-1", "device-1", "job-1", "check_point", "h", 1L, "h", 1L,
-                        "none", "v1"),
+                        "none", "v1", new byte[] {1, 2, 3}),
                 "actor", "action-1");
         ConfigurationQueryService queryService = new ConfigurationQueryService(devices, configRepository);
         ConfigurationController controller = new ConfigurationController(queryService, unusedCollectService());

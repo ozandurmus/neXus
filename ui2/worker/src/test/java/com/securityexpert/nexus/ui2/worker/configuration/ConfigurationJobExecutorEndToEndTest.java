@@ -99,7 +99,8 @@ class ConfigurationJobExecutorEndToEndTest {
         ConfigurationCapabilityExecutor capabilityExecutor = new ConfigurationCapabilityExecutor(transport,
                 ref -> { throw new IllegalStateException("not used"); }, artefactStore, PanoramaCrossCheckPort.NONE);
         ConfigurationJobExecutor executor = new ConfigurationJobExecutor(leaseRepo, attemptRepo, devicePort,
-                deviceRepository, configurationRepository, notificationRepository, capabilityExecutor);
+                deviceRepository, configurationRepository, notificationRepository, capabilityExecutor,
+                new RecordingManifestRepository(), testFingerprint(), tempDir.toString());
 
         ConfigurationRequest request =
                 ConfigurationRequest.checkPoint(new ConnectionTarget("ep-1", "gw-a-host", 22), "cred-1", "trust-1");
@@ -129,7 +130,7 @@ class ConfigurationJobExecutorEndToEndTest {
         assertEquals(1, configurationRepository.recordedArtefacts.size());
         var artefactRecord = configurationRepository.recordedArtefacts.get(0);
         assertEquals(run.artefactRef(), artefactRecord.artefactRef());
-        try (InputStream retrieved = artefactStore.retrieve(new ArtefactRef(artefactRecord.artefactRef()), false)) {
+        try (InputStream retrieved = artefactStore.retrieve(new ArtefactRef(artefactRecord.artefactRef()), artefactRecord.wrappedDataKey(), false)) {
             assertArrayEquals(rawConfig.getBytes(StandardCharsets.UTF_8), retrieved.readAllBytes(),
                     "artefact #2: the untouched raw bytes, round-tripped through encryption");
         }
@@ -169,7 +170,8 @@ class ConfigurationJobExecutorEndToEndTest {
         ConfigurationCapabilityExecutor capabilityExecutor = new ConfigurationCapabilityExecutor(transport,
                 ref -> new PanCredentialMaterial("user", "pw".toCharArray()), artefactStore, PanoramaCrossCheckPort.NONE);
         ConfigurationJobExecutor executor = new ConfigurationJobExecutor(leaseRepo, attemptRepo, devicePort,
-                deviceRepository, configurationRepository, notificationRepository, capabilityExecutor);
+                deviceRepository, configurationRepository, notificationRepository, capabilityExecutor,
+                new RecordingManifestRepository(), testFingerprint(), tempDir.toString());
 
         ConfigurationRequest request = ConfigurationRequest.paloAlto(new ApiTarget("ep-2", "https://fw.example"), "cred-2");
 
@@ -204,7 +206,8 @@ class ConfigurationJobExecutorEndToEndTest {
         var effectiveRunningArtefact = configurationRepository.recordedArtefacts.get(1);
         assertEquals("gzip", effectiveRunningArtefact.compression());
         byte[] expectedBytes = new GeneratedPanConfigInputStream(localOverrideCount, otherSourceCount).readAllBytes();
-        try (InputStream retrieved = artefactStore.retrieve(new ArtefactRef(effectiveRunningArtefact.artefactRef()), true)) {
+        try (InputStream retrieved = artefactStore.retrieve(new ArtefactRef(effectiveRunningArtefact.artefactRef()),
+                effectiveRunningArtefact.wrappedDataKey(), true)) {
             assertArrayEquals(expectedBytes, retrieved.readAllBytes(),
                     "AC-1: the gzip+encrypted artefact round-trips the untouched streamed bytes");
         }
@@ -213,4 +216,25 @@ class ConfigurationJobExecutorEndToEndTest {
         assertEquals(0, effectiveRunning.withheldLineCount());
         assertEquals(0, merged.withheldLineCount());
     }
+
+    /** NXS-LOCAL-0170 BK-16: the manifest row every artefact now carries; this test only needs it to exist. */
+    private static final class RecordingManifestRepository
+            implements com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRepository {
+        int recorded;
+
+        @Override
+        public void record(com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRecord manifest,
+                String actorFingerprint, String actionId) {
+            recorded++;
+        }
+    }
+
+    /** BK-16: the hostname is fingerprinted, never stored raw; any 32-byte key proves the shape. */
+    private static com.securityexpert.nexus.ui2.platform.HostnameFingerprint testFingerprint() {
+        byte[] key = new byte[32];
+        java.util.Arrays.fill(key, (byte) 7);
+        return com.securityexpert.nexus.ui2.platform.HostnameFingerprint.fromBase64Key(
+                java.util.Base64.getEncoder().encodeToString(key));
+    }
+
 }

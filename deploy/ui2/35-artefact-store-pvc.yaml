@@ -1,0 +1,23 @@
+# NXS-LOCAL-0170 / BK-17: the recovery volume -- a path on a volume
+# separate from the database volume (30-database-pvc.yaml's own
+# ui2-db-data claim), mounted by the worker Deployment only
+# (52-worker-deployment.yaml). The service Deployment never mounts this
+# claim (asserted by tests/test_ui2_deployment_manifests.py).
+#
+# `storageClassName` is omitted so the cluster's default class applies on
+# every stage, matching 30-database-pvc.yaml's own pattern; no
+# `volumeName` pins a pre-created volume and no node-path volume is used.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ui2-artefact-store
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: worker
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

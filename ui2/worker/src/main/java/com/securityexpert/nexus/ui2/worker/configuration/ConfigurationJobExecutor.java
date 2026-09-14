@@ -14,13 +14,20 @@ import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentReadPort;
 import com.securityexpert.nexus.ui2.jobs.executor.JobOutcome;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.stepattempt.JobStepAttemptRepository;
+import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactClass;
+import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactValidation;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRecord;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRepository;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ChangeState;
+import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationArtefactRecord;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationNotificationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationOverride;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationRun;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.DeviceConfigurationRepository;
 import com.securityexpert.nexus.ui2.platform.ActionClass;
+import com.securityexpert.nexus.ui2.platform.HostnameFingerprint;
 import com.securityexpert.nexus.ui2.platform.WorkerActor;
 import com.securityexpert.nexus.ui2.worker.confirm.PresentedIdentity;
 
@@ -44,6 +51,12 @@ public final class ConfigurationJobExecutor {
     private static final String ACTION_CLAIM_TIME_DEVICE_CHECK = "job_configuration_claim_time_device_check";
     private static final String ACTION_COMPLETED = "job_configuration_completed";
     private static final String ACTION_FAILED = "job_configuration_failed";
+    private static final String ACTION_MANIFEST_RECORDED = "job_configuration_manifest_recorded";
+
+    /** section 3.4: the only validation level the configuration path honestly claims -- it writes and digests, nothing more. */
+    private static final String CONFIGURATION_VALIDATION_LEVEL = ArtefactValidation.V1;
+    /** section 3.5's GFS defaults are out of this movement's scope (WORKER.md: "nothing enforces deletion") -- one placeholder tier until a retention policy build assigns real ones. */
+    private static final String CONFIGURATION_RETENTION_TIER = "standard";
 
     private final JobLeaseRepository leaseRepository;
     private final JobStepAttemptRepository attemptRepository;
@@ -52,12 +65,17 @@ public final class ConfigurationJobExecutor {
     private final DeviceConfigurationRepository deviceConfigurationRepository;
     private final ConfigurationNotificationRepository notificationRepository;
     private final ConfigurationCapabilityExecutor configurationExecutor;
+    private final BackupArtefactManifestRepository backupArtefactManifestRepository;
+    private final HostnameFingerprint hostnameFingerprint;
+    private final String recoveryVolumePath;
 
     public ConfigurationJobExecutor(JobLeaseRepository leaseRepository, JobStepAttemptRepository attemptRepository,
             DeviceEnrollmentReadPort deviceEnrollmentReadPort, DeviceRepository deviceRepository,
             DeviceConfigurationRepository deviceConfigurationRepository,
             ConfigurationNotificationRepository notificationRepository,
-            ConfigurationCapabilityExecutor configurationExecutor) {
+            ConfigurationCapabilityExecutor configurationExecutor,
+            BackupArtefactManifestRepository backupArtefactManifestRepository, HostnameFingerprint hostnameFingerprint,
+            String recoveryVolumePath) {
         this.leaseRepository = Objects.requireNonNull(leaseRepository, "leaseRepository");
         this.attemptRepository = Objects.requireNonNull(attemptRepository, "attemptRepository");
         this.deviceEnrollmentReadPort = Objects.requireNonNull(deviceEnrollmentReadPort, "deviceEnrollmentReadPort");
@@ -66,6 +84,10 @@ public final class ConfigurationJobExecutor {
                 Objects.requireNonNull(deviceConfigurationRepository, "deviceConfigurationRepository");
         this.notificationRepository = Objects.requireNonNull(notificationRepository, "notificationRepository");
         this.configurationExecutor = Objects.requireNonNull(configurationExecutor, "configurationExecutor");
+        this.backupArtefactManifestRepository =
+                Objects.requireNonNull(backupArtefactManifestRepository, "backupArtefactManifestRepository");
+        this.hostnameFingerprint = Objects.requireNonNull(hostnameFingerprint, "hostnameFingerprint");
+        this.recoveryVolumePath = Objects.requireNonNull(recoveryVolumePath, "recoveryVolumePath");
     }
 
     public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, ConfigurationRequest request,
@@ -90,7 +112,8 @@ public final class ConfigurationJobExecutor {
             return new JobOutcome.ZombieStopped();
         }
 
-        Optional<PresentedIdentity> recordedIdentity = deviceRepository.findConfirmFacts(targetDeviceId)
+        Optional<DeviceConfirmFacts> confirmFacts = deviceRepository.findConfirmFacts(targetDeviceId);
+        Optional<PresentedIdentity> recordedIdentity = confirmFacts
                 .flatMap(facts -> facts.recordedIdentityPrimary()
                         .map(primary -> new PresentedIdentity(primary, facts.recordedIdentitySecondary())));
 
@@ -136,6 +159,7 @@ public final class ConfigurationJobExecutor {
                         ACTION_FAILED);
                 return new JobOutcome.Failed("configuration_run_write_failed: " + recordFailed.getMessage());
             }
+            recordBackupArtefactManifest(data.artefact(), targetDeviceId, vendor, confirmFacts);
             for (ConfigurationOverride override : data.overrides()) {
                 overridePaths.add(override.category() + "/" + override.elementPath());
             }
@@ -150,6 +174,37 @@ public final class ConfigurationJobExecutor {
         leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR,
                 ACTION_COMPLETED);
         return new JobOutcome.Completed();
+    }
+
+    /**
+     * BK-16: writes a {@code backup_artefact} manifest row (artefact class
+     * {@code configuration}) for the artefact {@code
+     * deviceConfigurationRepository.recordRun} above already committed as
+     * this path's own authority. Section 3.3's version-locking refusal
+     * fires inside {@link BackupArtefactManifestRecord}'s constructor for
+     * a check_point artefact whose software version this device's confirm
+     * facts never resolved -- caught here rather than propagated, since a
+     * missing manifest row is a known gap this movement documents (named
+     * in the SESSION_CLOSE), not a reason to fail a configuration run that
+     * already wrote its own {@code configuration_artefact}/{@code
+     * device_configuration_run} rows successfully.
+     */
+    private void recordBackupArtefactManifest(ConfigurationArtefactRecord artefact, String deviceId, String vendor,
+            Optional<DeviceConfirmFacts> confirmFacts) {
+        Optional<String> virtualSystemRef = confirmFacts.flatMap(DeviceConfirmFacts::virtualSystemRef);
+        Optional<String> softwareVersion = confirmFacts.flatMap(DeviceConfirmFacts::observedSoftwareVersion);
+        String hostnameSource = confirmFacts.flatMap(DeviceConfirmFacts::observedHostname).orElse(deviceId);
+        try {
+            BackupArtefactManifestRecord manifest = new BackupArtefactManifestRecord(artefact.artefactRef(), deviceId,
+                    virtualSystemRef, ArtefactClass.CONFIGURATION, vendor, softwareVersion,
+                    hostnameFingerprint.of(hostnameSource), artefact.plaintextSha256(), artefact.plaintextBytes(),
+                    artefact.ciphertextSha256(), artefact.ciphertextBytes(), artefact.keyId(),
+                    artefact.wrappedDataKey(), ArtefactValidation.reachedWithoutRestore(CONFIGURATION_VALIDATION_LEVEL),
+                    CONFIGURATION_RETENTION_TIER, Optional.empty(), recoveryVolumePath);
+            backupArtefactManifestRepository.record(manifest, ACTOR, ACTION_MANIFEST_RECORDED);
+        } catch (IllegalStateException versionUnresolvable) {
+            // C7 section 3.3's refusal -- see method Javadoc.
+        }
     }
 
     private static String describeFailure(ConfigurationResult result) {

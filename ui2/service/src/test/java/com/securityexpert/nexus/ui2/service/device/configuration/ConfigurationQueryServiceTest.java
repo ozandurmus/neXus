@@ -130,7 +130,7 @@ class ConfigurationQueryServiceTest {
         Instant collectedAt = Instant.parse("2026-09-14T12:00:00Z");
         configRepository.recordRun(showConfigurationRun("device-1", collectedAt, "set hostname gw-a\n"),
                 new ConfigurationArtefactRecord("artefact-1", "device-1", "job-1", "check_point", "h", 1L, "h", 1L,
-                        "none", "v1"),
+                        "none", "v1", new byte[] {1, 2, 3}),
                 "actor", "action-1");
         ConfigurationQueryService service = new ConfigurationQueryService(devices, configRepository);
 
@@ -166,7 +166,7 @@ class ConfigurationQueryServiceTest {
         configRepository.recordRun(
                 showConfigurationRun("device-1", Instant.parse("2026-09-14T12:00:00Z"), "set hostname gw-a\n"),
                 new ConfigurationArtefactRecord("artefact-1", "device-1", "job-1", "check_point", "h", 1L, "h", 1L,
-                        "none", "v1"),
+                        "none", "v1", new byte[] {1, 2, 3}),
                 "actor", "action-1");
         ConfigurationQueryService service = new ConfigurationQueryService(devices, configRepository);
 
@@ -185,7 +185,7 @@ class ConfigurationQueryServiceTest {
         configRepository.recordRun(
                 showConfigurationRun("device-1", Instant.parse("2026-09-14T12:00:00Z"), "set hostname gw-a\n"),
                 new ConfigurationArtefactRecord("artefact-1", "device-1", "job-1", "check_point", "h", 1L, "h", 1L,
-                        "none", "v1"),
+                        "none", "v1", new byte[] {1, 2, 3}),
                 "actor", "action-1");
         ConfigurationQueryService service = new ConfigurationQueryService(devices, configRepository);
 

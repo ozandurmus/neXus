@@ -16,7 +16,8 @@ MIGRATIONS = Path(__file__).resolve().parents[1] / "ui2/service/src/main/resourc
 
 #: Tables whose writes the audit trigger guards. A table is added here when
 #: its migration attaches `fn_audit_capture` (or an equivalent trigger).
-AUDITED_TABLES = ("gate_registry", "role_bindings", "local_credentials", "credential_references")
+AUDITED_TABLES = ("gate_registry", "role_bindings", "local_credentials", "credential_references",
+                   "backup_artefact", "artefact_retention_ledger")
 
 #: Migrations exempted with their reason. V10 backfills two columns with
 #: `WHERE created_by_actor_fingerprint IS NULL`; at V10's point in the

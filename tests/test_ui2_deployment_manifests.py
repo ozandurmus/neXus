@@ -292,10 +292,15 @@ def test_manifest_set_contains_every_kind_the_contract_names():
     ):
         assert required in kinds, f"§5.2: the set has no {required}"
     assert kinds.count("Service") == 2, "§5.2: one Service for the service, one for the database"
-    assert kinds.count("Secret") == 4, (
+    assert kinds.count("Secret") == 5, (
         "§5.2: the db-credentials secret plus the worker's credential-store, "
-        "role-binding and configuration-artefact-store key secrets "
-        "(NXS-LOCAL-0165: 23-secret-artefact-store-key.yaml)"
+        "role-binding, configuration-artefact-store and hostname-fingerprint key secrets "
+        "(NXS-LOCAL-0165: 23-secret-artefact-store-key.yaml; "
+        "NXS-LOCAL-0170: 24-secret-hostname-fingerprint-key.yaml)"
+    )
+    assert kinds.count("PersistentVolumeClaim") == 2, (
+        "§5.2 plus BK-17: the database data claim and the worker-only recovery volume claim "
+        "(NXS-LOCAL-0170: 35-artefact-store-pvc.yaml), and never a third"
     )
 
 
@@ -436,6 +441,44 @@ def test_the_service_declares_exactly_the_writable_set_the_image_declares():
         "FS-4: each declared writable path is supplied as an emptyDir mount, "
         f"but the mounted set is {sorted(mounted)}"
     )
+
+
+def test_the_recovery_volume_is_separate_from_the_database_volume_and_worker_only():
+    """BK-17: the recovery volume is a claim separate from the database's
+    own data claim, mounted by the worker Deployment only -- the service
+    Deployment must never mount it."""
+    pvc_names = {
+        (doc.get("metadata") or {}).get("name")
+        for _, doc in _documents(include_openshift=False)
+        if doc.get("kind") == "PersistentVolumeClaim"
+    }
+    assert "ui2-db-data" in pvc_names, "the database's own data claim must still exist"
+    assert "ui2-artefact-store" in pvc_names, "BK-17: the recovery volume claim is missing"
+    assert pvc_names == {"ui2-db-data", "ui2-artefact-store"}, (
+        f"unexpected PersistentVolumeClaim set: {sorted(pvc_names)}"
+    )
+
+    for _, owner, spec in _pod_specs():
+        volumes = {volume.get("name"): volume for volume in spec.get("volumes") or []}
+        recovery_volume_names = {
+            name for name, volume in volumes.items()
+            if (volume.get("persistentVolumeClaim") or {}).get("claimName") == "ui2-artefact-store"
+        }
+        mounted_recovery_names = {
+            mount["name"]
+            for container in spec.get("containers") or []
+            for mount in container.get("volumeMounts") or []
+            if mount["name"] in recovery_volume_names
+        }
+        if owner.startswith("Deployment/ui2-worker"):
+            assert mounted_recovery_names, "BK-17: the worker Deployment must mount the recovery volume"
+        else:
+            assert not mounted_recovery_names, (
+                f"BK-17: {owner} must never mount the recovery volume, but mounts {mounted_recovery_names}"
+            )
+        assert not recovery_volume_names or owner.startswith("Deployment/ui2-worker"), (
+            f"BK-17: only the worker Deployment may declare the recovery volume claim, but {owner} does too"
+        )
 
 
 def _service_pod_spec() -> dict:

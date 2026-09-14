@@ -76,7 +76,7 @@ class ConfigurationJobExecutorWorkerDiesTest {
         }
 
         @Override
-        public java.io.InputStream retrieve(ArtefactRef ref, boolean gzip) {
+        public java.io.InputStream retrieve(ArtefactRef ref, byte[] wrappedDataKey, boolean gzip) {
             throw new UnsupportedOperationException("not used by this test");
         }
     }
@@ -100,7 +100,8 @@ class ConfigurationJobExecutorWorkerDiesTest {
                 new CrashingDeviceTransport(), ref -> { throw new IllegalStateException("not used by this test"); },
                 new UnusedArtefactStore(), PanoramaCrossCheckPort.NONE);
         ConfigurationJobExecutor executor = new ConfigurationJobExecutor(leaseRepo, attemptRepo, devicePort,
-                deviceRepository, configurationRepository, notificationRepository, capabilityExecutor);
+                deviceRepository, configurationRepository, notificationRepository, capabilityExecutor,
+                new RecordingManifestRepository(), testFingerprint(), System.getProperty("java.io.tmpdir"));
         ConfigurationRequest request =
                 ConfigurationRequest.checkPoint(new ConnectionTarget("ep-3", "gw-c-host", 22), "cred-1", "trust-1");
 
@@ -124,4 +125,25 @@ class ConfigurationJobExecutorWorkerDiesTest {
         assertTrue(leaseRepo.transitions.contains("EXECUTING->REQUESTED"));
         assertFalse(configurationRepository.recordRunCalled, "still no run recorded after reconciliation");
     }
+
+    /** NXS-LOCAL-0170 BK-16: the manifest row every artefact now carries; this test only needs it to exist. */
+    private static final class RecordingManifestRepository
+            implements com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRepository {
+        int recorded;
+
+        @Override
+        public void record(com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRecord manifest,
+                String actorFingerprint, String actionId) {
+            recorded++;
+        }
+    }
+
+    /** BK-16: the hostname is fingerprinted, never stored raw; any 32-byte key proves the shape. */
+    private static com.securityexpert.nexus.ui2.platform.HostnameFingerprint testFingerprint() {
+        byte[] key = new byte[32];
+        java.util.Arrays.fill(key, (byte) 7);
+        return com.securityexpert.nexus.ui2.platform.HostnameFingerprint.fromBase64Key(
+                java.util.Base64.getEncoder().encodeToString(key));
+    }
+
 }
