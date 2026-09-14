@@ -1,5 +1,9 @@
 package com.securityexpert.nexus.ui2.worker.transport.ssh;
 
+import java.util.Optional;
+
+import com.jcraft.jsch.HostKey;
+import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 
@@ -21,6 +25,23 @@ final class SshTransportSession implements TransportSession {
     @Override
     public String sessionId() {
         return sessionId;
+    }
+
+    /**
+     * The SSH host-key fingerprint presented at connection
+     * ({@code DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md} EC-5's Check Point
+     * recorded identity). {@link HostKeyVerifier} already accepted this
+     * connection under {@code StrictHostKeyChecking=yes} before this
+     * session exists; this method only reads back what was presented, it
+     * makes no trust decision of its own.
+     */
+    @Override
+    public Optional<String> presentedIdentity() {
+        HostKey hostKey = jschSession.getHostKey();
+        if (hostKey == null) {
+            return Optional.empty();
+        }
+        return Optional.of(hostKey.getFingerPrint(new JSch()));
     }
 
     Session jschSession() {
