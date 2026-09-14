@@ -174,6 +174,15 @@ kubectl -n ui2 rollout status statefulset/ui2-db --timeout=600s
 kubectl -n ui2 rollout status deployment/ui2-service --timeout=600s
 ```
 
+> **Secrets are created once, never re-applied.** `deploy/ui2/20-secret.yaml`,
+> `21-secret-credential-store-key.yaml` and `22-secret-role-binding-key.yaml`
+> carry no values by contract. Applying them over an existing Secret that was
+> itself created with `kubectl apply` removes that Secret's data (observed
+> 2026-09-14: the role-binding key was wiped and had to be regenerated). Create
+> the three Secrets with `kubectl create secret generic ... --from-file=key=...`
+> and, on later rollouts, apply the manifest set without the `2*-secret-*.yaml`
+> files, for example `kubectl apply -f deploy/ui2/50-service-deployment.yaml -f deploy/ui2/52-worker-deployment.yaml`.
+
 `kubectl apply -f` on a directory is not recursive, so `deploy/ui2/openshift/`
 is not picked up here. On the corporate platform, apply
 `deploy/ui2/openshift/60-route.yaml` **instead of**

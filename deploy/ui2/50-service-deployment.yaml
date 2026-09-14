@@ -91,15 +91,9 @@ spec:
             # this set needs no manual patch. Both reach the process by
             # reference only (SEC-4): no literal value carries a credential.
             - name: UI2_CREDENTIAL_STORE_KEY_FILE
-              valueFrom:
-                secretKeyRef:
-                  name: ui2-credential-store-key
-                  key: key
-            - name: UI2_ROLE_BINDING_KEY_FILE
-              valueFrom:
-                secretKeyRef:
-                  name: ui2-role-binding-key
-                  key: key
+              value: /run/secrets/ui2-credential-store/key
+            - name: UI2_ROLE_BINDING_GROUP_REFERENCE_KEY_FILE
+              value: /run/secrets/ui2-role-binding/key
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
