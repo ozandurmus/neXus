@@ -84,37 +84,107 @@
         },
         "validation_plan": [
           {
+            "name": "persistence_tests",
             "argv": [
               "bash",
               "-lc",
-              "cd ui2 && ./gradlew :persistence:test --console=plain"
-            ],
-            "name": "persistence_tests"
+              "cd ui2 && JAVA_HOME=/Users/OzanDur/.local/jdk/Contents/Home ./gradlew :persistence:test --console=plain"
+            ]
           },
           {
+            "name": "service_tests",
             "argv": [
               "bash",
               "-lc",
-              "cd ui2 && ./gradlew :service:test --console=plain"
-            ],
-            "name": "service_tests"
+              "cd ui2 && JAVA_HOME=/Users/OzanDur/.local/jdk/Contents/Home ./gradlew :service:test --console=plain"
+            ]
           },
           {
+            "name": "privacy_gate",
             "argv": [
               "python3",
               "scripts/repository_privacy_check.py"
-            ],
-            "name": "privacy_gate"
+            ]
           }
         ]
       },
       "seq": 1,
       "timestamp": "2026-09-14T21:58:00Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/service/src/main/resources/db/migration/V21__device_role.sql",
+          "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceRecord.java",
+          "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceSummaryRecord.java",
+          "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceDraft.java",
+          "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/JooqDeviceRepository.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/DeviceRegistrationService.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/DeviceAddSingleService.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/DeviceRegistrationController.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/discovery/DiscoveryRunService.java"
+        ],
+        "completed": [
+          "Added migration V21__device_role.sql adding role column to devices table with CHECK constraint (role IN ('gateway', 'management_server')), backfilling existing rows to 'gateway' and setting NOT NULL.",
+          "The migration touched the audited table devices and transaction-locally set app.actor_fingerprint and app.action_id via set_config to prevent audit logging crash-loops.",
+          "The two role values chosen are 'gateway' and 'management_server'.",
+          "Carried the role field through DeviceRecord, DeviceSummaryRecord, DeviceDraft, and JooqDeviceRepository.",
+          "Every place the column set is declared (DEVICE_COLUMNS, DEVICE_SUMMARY_COLUMNS, INSERT query, and row mappers) now agrees.",
+          "The add-device path (DeviceRegistrationService, DeviceAddSingleService, DeviceRegistrationController) sets the role explicitly rather than defaulting silently, and discovery import specifies role 'gateway'.",
+          "Added invalidRoleIsRefused test in DeviceRegistrationServiceTest, verified all persistence and service tests pass, and verified repository privacy check."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "None",
+          "ui": "Device role exposed in device record and summary models"
+        },
+        "integration": {
+          "branch": "feature/device-carries-its-role",
+          "ci": "green",
+          "head_sha": "babccb1fbd2e414171fda962739535042d415358",
+          "merge_commit": null,
+          "merge_decision": "orchestrator",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0187",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Device carries its role",
+          "status": "done"
+        },
+        "preserved": [
+          "Existing enrollment states and vendor_hint behaviors remain intact.",
+          "Discovery and device read sets untouched.",
+          "No commands or read sets issued to management servers."
+        ],
+        "recommended_reasoning": {
+          "reason": "Implementation complete",
+          "tier": "bounded tier"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "ui2/persistence and ui2/service test suites passed",
+          "diff_check": "passed",
+          "full_regression": "ui2/persistence (5 actionable tasks, PASS), ui2/service (20 actionable tasks, PASS)",
+          "privacy": "0 findings (scripts/repository_privacy_check.py PASS)",
+          "real_environment": "none",
+          "state_consistency": "passed",
+          "targeted": "DeviceRegistrationServiceTest, JooqDeviceStatePortTest, DeviceAddSingleServiceTest"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T22:29:40Z"
     }
   ],
   "id": "NXS-LOCAL-0187",
   "movement": "device-carries-its-role",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md",
     "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceRecord.java",
@@ -123,6 +193,6 @@
     "project/QUEUE.md"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-14T21:58:00Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T22:29:40Z"
 }

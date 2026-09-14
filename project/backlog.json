@@ -405,6 +405,15 @@
       "priority": "P3",
       "target": "GOV.ORCH.4 workbench successor",
       "note": ""
+    },
+    {
+      "id": "device_role_vocabulary_declared_twice",
+      "category": "governance",
+      "title": "The device-role vocabulary is a string literal in Java and again in the CHECK constraint",
+      "status": "planned",
+      "priority": "P3",
+      "target": "14I MS-1 successor",
+      "note": ""
     }
   ]
 }

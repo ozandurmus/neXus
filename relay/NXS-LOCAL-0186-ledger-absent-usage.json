@@ -121,11 +121,74 @@
       },
       "seq": 1,
       "timestamp": "2026-09-14T21:56:23Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/orchestrator_usage.py",
+          "scripts/orchestrator.py",
+          "tests/test_dispatch_ledger.py",
+          "tests/test_orchestrator.py",
+          "tests/test_orchestrator_usage.py"
+        ],
+        "completed": [
+          "Changed orchestrator_usage.py to initialize and persist missing measurement metrics as None instead of 0.",
+          "Updated tests and orchestrator usage renderer to handle None values gracefully.",
+          "Fixed orchestrator.py _cmd_usage to honestly print unknown for missing total_tokens and missing cache_hit_ratio.",
+          "Added test_usage_cli_genuine_zero_renders_0 to verify zero and absent representation in _cmd_usage output."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "The usage and ledger will now correctly display unknown for movements with no tokens measured.",
+          "ui": "No UI changes."
+        },
+        "integration": {
+          "branch": "feature/ledger-absent-usage-is-unknown",
+          "ci": "green",
+          "head_sha": "HEAD",
+          "merge_commit": null,
+          "merge_decision": "blocked",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0186",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Ledger absent usage renders as unknown",
+          "status": "done"
+        },
+        "preserved": [
+          "Totals and counts stay identical",
+          "Assessment column stays untouched",
+          "Existing code using the missing metric is unaffected because totals map to 0.0"
+        ],
+        "recommended_reasoning": {
+          "reason": "Implementation complete",
+          "tier": "bounded tier"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "orchestrator.py test_usage_cli output fixed and passes",
+          "diff_check": "passed",
+          "full_regression": "150 passed",
+          "privacy": "0 findings",
+          "real_environment": "none",
+          "state_consistency": "passed",
+          "targeted": "test_orchestrator_usage.py, test_dispatch_ledger.py, and test_orchestrator.py pass with new zero-measurement proofs"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T22:20:07Z"
     }
   ],
   "id": "NXS-LOCAL-0186",
   "movement": "ledger-absent-usage-is-unknown",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/GOV_ORCH_13_THE_DISPATCH_LEDGER.md",
     "docs/design/GOV_ORCH_4A_COST_FROM_THE_REQUESTED_MODEL_WHEN_THE_STREAM_IS_SILENT.md",
@@ -135,6 +198,6 @@
     "project/DISPATCH_LEDGER.md"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-14T21:56:23Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T22:20:07Z"
 }
