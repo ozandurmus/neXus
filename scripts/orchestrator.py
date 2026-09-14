@@ -170,6 +170,11 @@ RESUME_RECOVERY_NOTE = (
     "test run, confirm it actually finished and you saw the real result."
 )
 
+RELAY_QUESTION_RESUME_RECOVERY_NOTE = (
+    "Before doing anything else this turn: your relay question was answered by "
+    "{marker} ({subject!r}). Read the relay file before taking any other action."
+)
+
 
 class OrchestratorError(Exception):
     """A CLI-level request could not be satisfied."""
@@ -531,6 +536,37 @@ def _is_resumable_budget_failure(record: dict) -> bool:
     return (reasons - {"budget_exhausted"}) <= _BUDGET_ENTAILED_REASONS
 
 
+def _answered_relay_question_entry(relay_obj: dict) -> tuple[int, dict] | None:
+    """GOV.ORCH.12-A RQ-2a-c: return the last valid PO answer after the
+    stopping engineer question, or None. This only identifies relay evidence;
+    `_is_resumable_answered_relay_question` owns the closed resume decision."""
+    entries = relay_obj.get("entries") or []
+    question_seqs = [
+        entry.get("seq") for entry in entries
+        if entry.get("marker") == "RELAY_QUESTION" and entry.get("actor") == "engineer"
+        and isinstance(entry.get("seq"), int)
+    ]
+    if not question_seqs or relay_obj.get("next_actor") != "engineer":
+        return None
+    question_seq = max(question_seqs)
+    answers = [
+        (entry["seq"], entry) for entry in entries
+        if entry.get("actor") == "po" and isinstance(entry.get("seq"), int)
+        and entry["seq"] > question_seq
+        and entry.get("marker") in {"RELAY_DECISION", "RELAY_CORRECTION", "RELAY_NOTE"}
+    ]
+    return max(answers, key=lambda answer: answer[0], default=None)
+
+
+def _is_resumable_answered_relay_question(record: dict, relay_obj: dict) -> bool:
+    """GOV.ORCH.12 RQ-2/RQ-3: closed resume signature, once per PO answer."""
+    if (record.get("phase") != PHASE_FAILED or record.get("exit_code") != 0
+            or set(record.get("failure_reasons") or []) != {"relay_not_closed"}):
+        return False
+    answer = _answered_relay_question_entry(relay_obj)
+    return answer is not None and answer[0] > record.get("last_resumed_answer_seq", -1)
+
+
 def decide_start(
     *, relay_obj: dict, existing_record: dict | None, is_pid_alive: bool,
     active_count: int, max_workers: int,
@@ -573,6 +609,18 @@ def decide_start(
             )
         return "resume", "budget resume: prior run's failure reasons are budget_exhausted plus only entailed reasons (GOV.ORCH.10-A R-2a)"
 
+    if existing_record is not None and (
+        existing_record.get("phase") == PHASE_FAILED
+        and existing_record.get("exit_code") == 0
+        and set(existing_record.get("failure_reasons") or []) == {"relay_not_closed"}
+    ):
+        if _is_resumable_answered_relay_question(existing_record, relay_obj):
+            return "resume", "relay-question resume: Product Owner answered the engineer question (GOV.ORCH.12 RQ-1/RQ-2)"
+        answer = _answered_relay_question_entry(relay_obj)
+        if answer is not None:
+            return "refuse", "relay has no Product Owner answer newer than the last resume (GOV.ORCH.12 RQ-3)"
+        return "refuse", "relay question has no Product Owner answer (GOV.ORCH.12 RQ-2)"
+
     # No record, the prior run ended terminally for a non-resumable reason,
     # or a budget failure already at retry_limit (R-4): a fresh dispatch,
     # which needs a free worker slot. (A resume above is not a NEW slot --
@@ -606,6 +654,7 @@ def has_staged_uncommitted_changes(porcelain_status: str) -> bool:
 
 def needs_resume_recovery_note(
     *, relay_obj: dict, has_staged_uncommitted_changes: bool, is_pid_alive: bool,
+    existing_record: dict | None = None,
 ) -> bool:
     """AC-4's detection: the exact background-task-exit-race pattern observed
     live in relay/NXS-LOCAL-0018 -- staged-but-uncommitted git changes, the
@@ -613,9 +662,9 @@ def needs_resume_recovery_note(
     ever consulted from the resume branch of `decide_start` (where the pid
     being dead is already established), but takes `is_pid_alive` explicitly
     so this stays correct and testable independent of that caller."""
-    if is_pid_alive or not has_staged_uncommitted_changes:
-        return False
-    return relay_never_advanced_past_session_start(relay_obj)
+    if existing_record is not None and _is_resumable_answered_relay_question(existing_record, relay_obj):
+        return True
+    return not is_pid_alive and has_staged_uncommitted_changes and relay_never_advanced_past_session_start(relay_obj)
 
 
 def decide_merge_lock_acquire(
@@ -1195,8 +1244,10 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
         # matches, inject RESUME_RECOVERY_NOTE onto this one dispatch's
         # prompt. Does not change the resume decision itself (AC-5).
         staged = has_staged_uncommitted_changes(_git_status_porcelain(worktree_path))
+        is_relay_question_resume = _is_resumable_answered_relay_question(existing, relay_obj)
         recovery_note_needed = needs_resume_recovery_note(
             relay_obj=relay_obj, has_staged_uncommitted_changes=staged, is_pid_alive=False,
+            existing_record=existing,
         )
         # GOV.ORCH.10 R-1: a resume reached because the prior run's only
         # failure reason was budget_exhausted, read the same way
@@ -1207,7 +1258,15 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
         # this write and the spawn still leaves the increment recorded.
         retry_count = existing.get("retry_count", 0) + 1
         _save_state(state_dir, args.movement, {**existing, "retry_count": retry_count})
-        notes = [n for n in (RESUME_RECOVERY_NOTE if recovery_note_needed else None, no_merge_note) if n]
+        answer = _answered_relay_question_entry(relay_obj) if is_relay_question_resume else None
+        relay_question_note = (
+            RELAY_QUESTION_RESUME_RECOVERY_NOTE.format(
+                marker=answer[1].get("marker"), subject=answer[1].get("subject", ""),
+            ) if answer else None
+        )
+        notes = [n for n in (
+            relay_question_note or (RESUME_RECOVERY_NOTE if recovery_note_needed else None), no_merge_note,
+        ) if n]
         proc = _spawn_engineer(
             worktree_path=worktree_path, profile_path=Path(args.profile),
             canonical_relay_dir=relay_dir, relay_file=relay_file,
@@ -1222,6 +1281,7 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
                   "dispatch_seq": len(relay_obj["entries"]), "retry_count": retry_count,
                   "failure_reason": None, "exit_code": None,
                   "failure_reasons": None, "budget_exhausted": None,
+                  "last_resumed_answer_seq": answer[0] if answer else existing.get("last_resumed_answer_seq"),
                   "provider": provider, "model_requested": args.model, "effort_requested": args.effort,
                   "merge_mode": merge_mode}
         _save_state(state_dir, args.movement, record)

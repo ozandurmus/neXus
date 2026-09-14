@@ -1077,6 +1077,15 @@
       "priority": "P1 -- valuable evidence, requires a new command-gate row + readiness-contract mapping before implementation",
       "target": "RESERVE -- Python preflight surface; the command-gate row it needs stays active as cp_cphaprob_command_gate / cp_failover_command_gate_batch",
       "note": "see docs/history/backlog/cp_preflight_ccp_tablestat_evidence.md"
+    },
+    {
+      "id": "gov_orch_resume_after_relay_question",
+      "category": "governance",
+      "title": "Orchestrator: a worker that parks a RELAY_QUESTION and exits is recorded failed (relay_not_closed) and cannot be resumed after the RELAY_DECISION; run refuses because the worktree exists",
+      "status": "done",
+      "priority": "P1",
+      "target": "scripts/orchestrator.py decide_start -- add a resume path when the relay's last marker is RELAY_DECISION and next_actor is engineer (GOV.ORCH successor); observed on NXS-LOCAL-0147, 2026-09-13",
+      "note": ""
     }
   ]
 }
