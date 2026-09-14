@@ -228,7 +228,9 @@
 
   function renderCard(row) {
     var card = document.createElement("div");
-    card.className = "board-card";
+    var provider = String(row.provider || "").toLowerCase();
+    var providerClass = provider === "claude" || provider === "codex" ? provider : "neutral";
+    card.className = "board-card provider-" + providerClass;
     card.onclick = function () { openDetail(row.movement_id); };
 
     var top = document.createElement("div");
@@ -246,7 +248,7 @@
     var meta = document.createElement("div");
     meta.className = "card-fields";
     meta.innerHTML =
-      '<span>' + fmtModelEffort(row) + '</span>' +
+      '<span class="provider-line provider-' + providerClass + '">' + fmtModelEffort(row) + '</span>' +
       '<span>' + esc(row.process_status || "-") + ' · ' + esc(row.stage || "-") + '</span>' +
       '<span>duration ' + fmtAge(row.duration_s) + ' · ' + esc(fmtIdle(row.idle_seconds)) + '</span>' +
       '<span>' + esc(fmtTokens(row.usage)) + '</span>' +
