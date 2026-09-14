@@ -227,6 +227,27 @@ class ConfigurationJobExecutorEndToEndTest {
                 String actorFingerprint, String actionId) {
             recorded++;
         }
+
+        @Override
+        public java.util.Optional<PlaintextDigestSummary> findLatestPlaintextDigest(String deviceId,
+                String artefactClass) {
+            return java.util.Optional.empty();
+        }
+
+        @Override
+        public java.util.List<BackupArtefactSummary> findByDevice(String deviceId, String artefactClass) {
+            return java.util.List.of();
+        }
+
+        @Override
+        public java.util.List<BackupArtefactSummary> findAll(String artefactClass) {
+            return java.util.List.of();
+        }
+
+        @Override
+        public java.util.Optional<RetrievalManifest> findForRetrieval(String artefactId) {
+            return java.util.Optional.empty();
+        }
     }
 
     /** BK-16: the hostname is fingerprinted, never stored raw; any 32-byte key proves the shape. */

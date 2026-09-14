@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfigurationCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfirmCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.DiscoveryCapabilityIds;
@@ -18,6 +19,8 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
+import com.securityexpert.nexus.ui2.worker.backup.BackupJobExecutor;
+import com.securityexpert.nexus.ui2.worker.backup.BackupRequest;
 import com.securityexpert.nexus.ui2.worker.configuration.ConfigurationJobExecutor;
 import com.securityexpert.nexus.ui2.worker.configuration.ConfigurationRequest;
 import com.securityexpert.nexus.ui2.worker.discovery.DiscoveryJobExecutor;
@@ -38,7 +41,8 @@ public final class WorkerClaimLoop {
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
             InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT,
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
-            DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE);
+            DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
+            BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL);
     private static final int DEFAULT_SSH_PORT = 22;
 
     private final JobLeaseRepository leaseRepository;
@@ -48,17 +52,21 @@ public final class WorkerClaimLoop {
     private final InventoryJobExecutor inventoryJobExecutor;
     private final ConfigurationJobExecutor configurationJobExecutor;
     private final DiscoveryJobExecutor discoveryJobExecutor;
+    private final BackupJobExecutor backupJobExecutor;
     private final String workerId;
     private final Duration leaseDuration;
     private final String checkPointTrustRuleRef;
     private final String paloAltoTrustRuleRef;
+    /** BK-11: the distinct backup credential reference, never {@code device.credentialReferenceId()} -- empty means unconfigured (fails closed inside {@code BackupCapabilityExecutor}). */
+    private final Optional<String> backupCredentialRef;
 
     /** WORKER.md "one worker process serves both vendors" (0159): the same claim loop now also serves every job kind. */
     public WorkerClaimLoop(JobLeaseRepository leaseRepository, JobRecordDao jobRecordDao,
             DeviceRepository deviceRepository, ConfirmJobExecutor confirmJobExecutor,
             InventoryJobExecutor inventoryJobExecutor, ConfigurationJobExecutor configurationJobExecutor,
-            DiscoveryJobExecutor discoveryJobExecutor, String workerId, Duration leaseDuration,
-            String checkPointTrustRuleRef, String paloAltoTrustRuleRef) {
+            DiscoveryJobExecutor discoveryJobExecutor, BackupJobExecutor backupJobExecutor, String workerId,
+            Duration leaseDuration, String checkPointTrustRuleRef, String paloAltoTrustRuleRef,
+            Optional<String> backupCredentialRef) {
         this.leaseRepository = Objects.requireNonNull(leaseRepository, "leaseRepository");
         this.jobRecordDao = Objects.requireNonNull(jobRecordDao, "jobRecordDao");
         this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
@@ -66,10 +74,12 @@ public final class WorkerClaimLoop {
         this.inventoryJobExecutor = Objects.requireNonNull(inventoryJobExecutor, "inventoryJobExecutor");
         this.configurationJobExecutor = Objects.requireNonNull(configurationJobExecutor, "configurationJobExecutor");
         this.discoveryJobExecutor = Objects.requireNonNull(discoveryJobExecutor, "discoveryJobExecutor");
+        this.backupJobExecutor = Objects.requireNonNull(backupJobExecutor, "backupJobExecutor");
         this.workerId = Objects.requireNonNull(workerId, "workerId");
         this.leaseDuration = Objects.requireNonNull(leaseDuration, "leaseDuration");
         this.checkPointTrustRuleRef = Objects.requireNonNull(checkPointTrustRuleRef, "checkPointTrustRuleRef");
         this.paloAltoTrustRuleRef = Objects.requireNonNull(paloAltoTrustRuleRef, "paloAltoTrustRuleRef");
+        this.backupCredentialRef = Objects.requireNonNull(backupCredentialRef, "backupCredentialRef");
     }
 
     /** Runs until the thread is interrupted, sleeping {@code pollInterval} whenever the queue was empty. */
@@ -122,6 +132,15 @@ public final class WorkerClaimLoop {
                     endpoint.endpointId(), endpoint.addressRef(), device.credentialReferenceId());
             configurationJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(),
                     configurationRequest, false);
+            return true;
+        }
+
+        if (BackupCapabilityIds.isBackupCapability(job.capabilityId())) {
+            // BK-11: the distinct backup credential, never device.credentialReferenceId() (the collection credential).
+            BackupRequest backupRequest = new BackupRequest(
+                    new ConnectionTarget(endpoint.endpointId(), hostOf(endpoint.addressRef()), portOf(endpoint.addressRef())),
+                    backupCredentialRef, checkPointTrustRuleRef);
+            backupJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), backupRequest);
             return true;
         }
 

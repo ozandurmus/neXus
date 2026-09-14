@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.jobs.transport;
 
+import java.io.OutputStream;
 import java.time.Duration;
 
 /**
@@ -22,6 +23,23 @@ public interface DeviceTransport {
 
     /** {@code sftp_get}/{@code scp_get} -- declared, not implemented at this movement. */
     FetchResult fetch(TransportSession session, FetchSpec spec, Duration timeout);
+
+    /**
+     * The streaming form of {@link #fetch} (14H BK-3): writes the remote
+     * file's bytes directly into {@code sink} without buffering the whole
+     * file in memory -- the shape backup's own fetch into the artefact
+     * store needs, since it already holds an {@code OutputStream} sink
+     * rather than wanting a {@code stagingArtifactId} back. A default
+     * method, not an abstract one, so every existing implementor and test
+     * double keeps compiling unchanged -- only {@code SshExecTransport}
+     * overrides it with a real implementation; every other transport falls
+     * through to this same "not implemented" shape {@link #fetch} already
+     * uses for a capability a transport does not support.
+     */
+    default FetchStreamResult fetchStreaming(TransportSession session, FetchSpec spec, Duration timeout,
+            OutputStream sink) {
+        throw new TransportNotImplementedException("sftp_get_streaming");
+    }
 
     /** PAN XML API -- declared, not implemented at this movement. */
     XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout);

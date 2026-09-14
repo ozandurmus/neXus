@@ -66,7 +66,14 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // collect's own wildcard shape above).
             Map.entry("POST /discovery/runs", ActionRegistry.DISCOVERY_RUN_START),
             Map.entry("GET /discovery/runs/*", ActionRegistry.DISCOVERY_RUN_READ),
-            Map.entry("POST /discovery/runs/*/import", ActionRegistry.DISCOVERY_RUN_IMPORT));
+            Map.entry("POST /discovery/runs/*/import", ActionRegistry.DISCOVERY_RUN_IMPORT),
+            // NXS-LOCAL-0175 "Service and screen": same wildcard shapes as
+            // the inventory/configuration routes above. BK-14: no route
+            // here ever returns an artefact byte, path or decrypt
+            // affordance -- these three surface posture rows only.
+            Map.entry("POST /devices/*/backup/collect", ActionRegistry.DEVICE_BACKUP_COLLECT),
+            Map.entry("GET /devices/*/backups", ActionRegistry.DEVICE_BACKUP_READ),
+            Map.entry("GET /backups", ActionRegistry.DEVICE_BACKUP_READ));
 
     private final GateChain gateChain;
 
