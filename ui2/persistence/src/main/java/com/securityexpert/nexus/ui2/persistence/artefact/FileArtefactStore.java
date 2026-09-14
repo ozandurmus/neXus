@@ -15,6 +15,8 @@ import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import javax.crypto.spec.SecretKeySpec;
+
 import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
 
 /**
@@ -54,9 +56,10 @@ public final class FileArtefactStore implements ArtefactStore {
     }
 
     @Override
-    public InputStream retrieve(ArtefactRef ref, boolean gzip) throws IOException {
+    public InputStream retrieve(ArtefactRef ref, byte[] wrappedDataKey, boolean gzip) throws IOException {
         Path path = pathFor(ref);
-        InputStream decrypted = cipher.decryptingStream(Files.newInputStream(path));
+        SecretKeySpec dataKey = cipher.unwrapKey(wrappedDataKey);
+        InputStream decrypted = cipher.decryptingStream(Files.newInputStream(path), dataKey);
         return gzip ? new GZIPInputStream(decrypted) : decrypted;
     }
 
@@ -74,6 +77,7 @@ public final class FileArtefactStore implements ArtefactStore {
         private final Path tempFile;
         private final Path vendorDeviceDir;
         private final boolean gzip;
+        private final SecretKeySpec dataKey;
         private final CountingDigestOutputStream plaintextCounter;
         private final CountingDigestOutputStream ciphertextCounter;
         private final OutputStream sink;
@@ -83,9 +87,12 @@ public final class FileArtefactStore implements ArtefactStore {
             this.tempFile = tempFile;
             this.vendorDeviceDir = vendorDeviceDir;
             this.gzip = gzip;
+            // BK-15: a fresh, random data key per artefact -- the master key
+            // never encrypts artefact bytes directly.
+            this.dataKey = cipher.generateDataKey();
             OutputStream fileOut = Files.newOutputStream(tempFile);
             this.ciphertextCounter = new CountingDigestOutputStream(fileOut);
-            OutputStream cipherOut = cipher.encryptingStream(ciphertextCounter);
+            OutputStream cipherOut = cipher.encryptingStream(ciphertextCounter, dataKey);
             OutputStream compressOut = gzip ? new GZIPOutputStream(cipherOut) : cipherOut;
             this.plaintextCounter = new CountingDigestOutputStream(compressOut);
             this.sink = plaintextCounter;
@@ -108,7 +115,7 @@ public final class FileArtefactStore implements ArtefactStore {
             Files.move(tempFile, finalPath, StandardCopyOption.REPLACE_EXISTING);
             ArtefactRef ref = new ArtefactRef(root.relativize(finalPath).toString());
             return new ArtefactMetadata(ref, plaintextCounter.digestHex(), plaintextCounter.count(), ciphertextSha256,
-                    ciphertextCounter.count(), gzip ? "gzip" : "none", ArtefactStoreCipher.KEY_ID);
+                    ciphertextCounter.count(), gzip ? "gzip" : "none", cipher.keyId(), cipher.wrapKey(dataKey));
         }
 
         @Override
