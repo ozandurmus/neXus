@@ -32,16 +32,15 @@ import java.util.regex.Pattern;
  * bare per that decision; per-VSID reads run last, one VSID at a time,
  * VS0 never re-entered.</p>
  *
- * <p><b>Palo Alto.</b> Unchanged by 14D (M-3/M-4 still owed). The four
+ * <p><b>Palo Alto (14E PF-1..PF-3, PM-1..PM-4).</b> The four
  * {@link #PALO_ALTO_BASE_STEPS} XML API calls run unscoped -- {@code show
  * interface all}/{@code show routing route} already return every vsys's
- * own entries in one response (the shape {@code tests/fixtures/panorama/
- * *.xml} shows), so {@code worker.inventory.pan}'s parsers assign context
- * per entry rather than this movement issuing a second, narrower call per
- * vsys. The per-vsys {@code &vsys=<id>} form is still a legal, closed-set
- * literal request shape, available via {@link #paloAltoVsysFormParam} for
- * a later measurement-driven increment; this movement's own executor
- * never sends it.</p>
+ * own entries in one response, so {@code worker.inventory.pan}'s parsers
+ * assign context per entry rather than this movement issuing a second,
+ * narrower call per vsys. PF-2 measured that {@code &vsys=<id>} narrows
+ * only the interface list and leaves the route list byte-identical, so
+ * that form is dropped from the closed set entirely -- there is no
+ * per-vsys request literal left to declare, measured or otherwise.</p>
  */
 public final class InventoryReadPlan {
 
@@ -111,14 +110,7 @@ public final class InventoryReadPlan {
     public static final String PAN_SHOW_INTERFACE_ALL = "<show><interface>all</interface></show>";
     public static final String PAN_SHOW_ROUTING_ROUTE = "<show><routing><route/></routing></show>";
 
-    /** Section 3's exact order: identity refresh, HA state, interfaces, routes. */
+    /** 14E PF-1's exact order: identity refresh, HA state, interfaces, routes. Each once, unscoped (PF-2). */
     public static final List<String> PALO_ALTO_BASE_STEPS =
             List.of(PAN_SHOW_SYSTEM_INFO, PAN_SHOW_HA_STATE, PAN_SHOW_INTERFACE_ALL, PAN_SHOW_ROUTING_ROUTE);
-
-    public static final String PALO_ALTO_VSYS_FORM_PARAM_KEY = "vsys";
-
-    /** The {@code &vsys=<id>} form param this movement declares but never sends (see class javadoc). */
-    public static java.util.Map<String, String> paloAltoVsysFormParam(String vsysId) {
-        return java.util.Map.of(PALO_ALTO_VSYS_FORM_PARAM_KEY, vsysId);
-    }
 }

@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -73,13 +72,14 @@ class InventoryReadPlanTest {
     }
 
     @Test
-    void paloAltoVsysFormParamCarriesTheDeclaredKey() {
-        assertEquals(Map.of("vsys", "vsys2"), InventoryReadPlan.paloAltoVsysFormParam("vsys2"));
-    }
-
-    @Test
     void checkPointClosedSetHasExactlySixPhysicalReadsAndThreeVsidComposites() {
         assertEquals(6, InventoryReadPlan.CHECK_POINT_PHYSICAL_READS.size());
         assertEquals(3, InventoryReadPlan.checkPointVsidSteps("2").size());
+    }
+
+    /** 14E PF-2: the {@code &vsys=<id>} form is dropped -- exactly PF-1's four unscoped requests remain. */
+    @Test
+    void paloAltoClosedSetHasExactlyFourUnscopedRequestsNoVsysForm() {
+        assertEquals(4, InventoryReadPlan.PALO_ALTO_BASE_STEPS.size());
     }
 }
