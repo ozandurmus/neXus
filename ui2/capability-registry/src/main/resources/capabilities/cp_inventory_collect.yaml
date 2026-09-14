@@ -1,34 +1,75 @@
 # cp_inventory_collect -- the Check Point half of inventory collection
-# (PO_DECISION_RECORD_2026_09_14C D-1/D-2). This entry exists only so
-# JobAdmissionService's step 1 (capability exists, is execution-eligible)
-# has something to resolve com.securityexpert.nexus.ui2.jobs.admission.
-# InventoryCapabilityIds.CP_INVENTORY_COLLECT against -- the real device
-# contact never runs this capability's own step list; it runs through
-# worker.inventory.InventoryJobExecutor/InventoryCapabilityExecutor against
-# the closed read set (worker.inventory.InventoryReadPlan), because
-# StepExecutor's single-command-per-step shape cannot express the paced,
-# ordered, VSX-context-discovering session this capability's own read plan
-# needs (see InventoryJobExecutor's javadoc). connect/disconnect are the
-# only steps declared here -- neither needs a gate_reference -- so this
-# capability resolves execution-eligible with no gate rows of its own.
+# (PO_DECISION_RECORD_2026_09_14D CF-1..CF-4, gate consequence). The six
+# steps below are the capability's own CF-3 physical read set in CF-2's
+# bare (non-VSX) literal form -- exactly worker.inventory.InventoryReadPlan.
+# CHECK_POINT_PHYSICAL_READS, in that order, gated per docs/design/
+# CP_INVENTORY_COMMAND_GATE_ENTRIES.md entries 1-6 -- so C4 execution
+# eligibility is computed from real gate resolution rather than a
+# connect-only placeholder.
+#
+# The real device contact still never runs this capability's own step list
+# through StepExecutor: it runs through worker.inventory.InventoryJobExecutor/
+# InventoryCapabilityExecutor against the closed read set (InventoryReadPlan),
+# because StepExecutor's single-command-per-step shape cannot express the
+# paced, ordered, VSX-context-discovering session the real read plan needs
+# (per-host bare-vs-vsenv-wrapped form choice, per-VSID composites whose
+# count is discovered at run time from `vsx stat -v`'s own output). Those
+# VSX-wrapped and per-VSID literal forms are gated too -- docs/design/
+# CP_INVENTORY_COMMAND_GATE_ENTRIES.md entries 7-14 and
+# gate_registry_fixture.yaml's own cp_inventory_*_vsenv0/vsid_* rows --
+# they simply have no step of their own here to reference them, the same
+# way this file's earlier revision's connect/disconnect-only shape could
+# not express any of CF-3 at all.
 #
 # Admitted only against ENROLLED, non-disabled devices (14C D-1; unlike
 # the enrollment confirm, this job kind is never admissible against DRAFT).
 capability_id: cp_inventory_collect
 vendor: check_point
 platform_role_scope: cp_gaia_gateway
-maturity_state: CAP_OFFLINE
+# CAP_VALIDATED, not CAP_OFFLINE: every step above now resolves gate KNOWN
+# (docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md, SIGNED_OFF) -- C4 §3.4's
+# own rule ("its CAP-VALIDATED transition is blocked until that step
+# resolves KNOWN") is satisfied. This is runnable-but-unverified. not
+# real-environment-validated: validation_status stays FIXTURE_ONLY below
+# because the parser binding against a live device is unverified until the
+# first live run reports its counts (this document's own status line).
+maturity_state: CAP_VALIDATED
 transport:
   kind: ssh_exec
   trust_rule_ref: utils.cp_ssh_trust
 steps:
   - kind: connect
+  - kind: exec
+    shell_context: expert
+    send: "ip -details -4 addr show"
+    gate_reference: cp_inventory_ip_addr_show_v4
+  - kind: exec
+    shell_context: expert
+    send: "ip -6 addr show"
+    gate_reference: cp_inventory_ip_addr_show_v6
+  - kind: exec
+    shell_context: expert
+    send: "ip -4 route show table all"
+    gate_reference: cp_inventory_ip_route_show_table_all
+  - kind: exec
+    shell_context: expert
+    send: "cphaprob stat"
+    gate_reference: cp_inventory_cphaprob_stat
+  - kind: exec
+    shell_context: expert
+    send: "cphaprob -a -m if"
+    gate_reference: cp_inventory_cphaprob_a_m_if
+  - kind: exec
+    shell_context: expert
+    send: "vsx stat -v"
+    gate_reference: cp_inventory_vsx_stat_v
 finally_steps:
   - kind: disconnect
 parser_ref:
-  parser_version: UNKNOWN
-  semantics_doc_ref: "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md section 3"
+  parser_version: "14D"
+  semantics_doc_ref: "docs/design/PO_DECISION_RECORD_2026_09_14D_CP_INVENTORY_MEASURED_FORMS.md"
 source_pointers:
   - "worker.inventory.InventoryCapabilityExecutor (the closed read set this capability's own execution defers to)"
+  - "worker.inventory.InventoryReadPlan (CF-2/CF-3 literals)"
 validation_status: FIXTURE_ONLY
-revalidation_plan_ref: "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md section 5"
+revalidation_plan_ref: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md -- parser bindings unverified until the first live run from the product"

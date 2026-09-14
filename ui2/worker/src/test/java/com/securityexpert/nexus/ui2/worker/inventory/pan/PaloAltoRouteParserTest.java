@@ -12,37 +12,34 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
 import com.securityexpert.nexus.ui2.worker.inventory.Fixtures;
 import com.securityexpert.nexus.ui2.worker.inventory.ParsedRoute;
 
-/** AC-2: {@code show routing route} -- protocol from flags, virtual-router as table, container-anchored. */
+/** 14E PP-2: whitespace-tokenised flags, grouped by {@code virtual-router}; the {@code result/flags} legend is not a route. */
 class PaloAltoRouteParserTest {
 
     @Test
-    void keepsFlagLettersAsProtocolAndGroupsByVsys() {
-        Map<String, String> interfaceToVsys = Map.of("ethernet1/1", "vsys1", "ethernet1/2.100", "vsys2");
+    void tokenisesFlagsOnWhitespaceAndGroupsByVirtualRouter() {
+        Map<String, List<ParsedRoute>> byVirtualRouter =
+                PaloAltoRouteParser.parse(Fixtures.read("pan/show_routing_route.xml"));
 
-        Map<String, List<ParsedRoute>> byVsys =
-                PaloAltoRouteParser.parse(Fixtures.read("pan/show_routing_route.xml"), interfaceToVsys, "vsys1");
+        assertEquals(3, byVirtualRouter.size(), "default, VR-DMZ, VR-ORPHAN -- the legend line is not a fourth route");
 
-        assertEquals(2, byVsys.size());
-        List<ParsedRoute> vsys1Routes = byVsys.get("vsys1");
-        assertEquals(2, vsys1Routes.size());
-
-        ParsedRoute connected = vsys1Routes.stream().filter(r -> r.destination().equals("192.0.2.0/24")).findFirst()
-                .orElseThrow();
+        ParsedRoute connected = byVirtualRouter.get("default").get(0);
+        assertEquals("192.0.2.0/24", connected.destination());
         assertTrue(connected.nextHop().isEmpty(), "nexthop 0.0.0.0 means none");
         assertEquals(InventoryRoute.PROTOCOL_CONNECTED, connected.protocol());
         assertEquals("default", connected.routeTable().orElseThrow());
 
-        ParsedRoute defaultRoute = vsys1Routes.stream().filter(r -> r.destination().equals("0.0.0.0/0")).findFirst()
-                .orElseThrow();
-        assertEquals(InventoryRoute.PROTOCOL_STATIC, defaultRoute.protocol());
-        assertEquals("192.0.2.254", defaultRoute.nextHop().orElseThrow());
-        assertEquals("ethernet1/1", defaultRoute.interfaceName().orElseThrow(),
-                "the @vsys1 suffix is stripped from the stored interface name");
+        ParsedRoute staticRoute = byVirtualRouter.get("VR-DMZ").get(0);
+        assertEquals(InventoryRoute.PROTOCOL_STATIC, staticRoute.protocol());
+        assertEquals("ethernet1/3", staticRoute.interfaceName().orElseThrow());
 
-        List<ParsedRoute> vsys2Routes = byVsys.get("vsys2");
-        assertEquals(2, vsys2Routes.size());
-        ParsedRoute hostRoute = vsys2Routes.stream().filter(r -> r.destination().equals("203.0.113.1/32")).findFirst()
-                .orElseThrow();
+        ParsedRoute hostRoute = byVirtualRouter.get("VR-ORPHAN").get(0);
         assertEquals(InventoryRoute.PROTOCOL_HOST, hostRoute.protocol());
+        assertEquals("192.0.2.254", hostRoute.nextHop().orElseThrow());
+        assertTrue(hostRoute.interfaceName().isEmpty(), "an empty <interface> element is kept empty, per PP-2");
+    }
+
+    @Test
+    void emptyResponseYieldsNoRoutes() {
+        assertEquals(Map.of(), PaloAltoRouteParser.parse(""));
     }
 }

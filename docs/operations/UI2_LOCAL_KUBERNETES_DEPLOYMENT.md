@@ -274,7 +274,30 @@ kubectl delete namespace ui2-build --ignore-not-found
 
 Deleting the `ui2` namespace destroys the claim and the database with it.
 
-## 11. What this procedure does not decide
+## 11. Triggering the first live inventory run
+
+Once a device is `ENROLLED` (step 4's confirm, or an equivalent add-single
+flow, has run), inventory collection is triggered the same way "Collect
+now" already triggers it in the UI: a `POST /devices/{id}/inventory/collect`
+request. `JobAdmissionService` admits the job only if `cp_inventory_collect`/
+`pan_inventory_collect` resolves execution-eligible against the running
+`gate_registry` table — `V15__inventory_command_gate_entries.sql` seeds the
+Product-Owner-approved 14D CF-3/14E PF-1 literals as `SIGNED_OFF` rows, so a
+fresh database that has run migrations through V15 admits both capabilities
+without any further seeding step. The worker's claim loop (already polling
+every 2 s, step 6) picks the admitted job up, runs it against the real
+device through `CompositeDeviceTransport`, and writes one `device_inventory`
+run.
+
+The run's counts surface through the existing inventory read routes the
+frontend's `InventoryScreen`/`InventoryPanels` already call — the per-device
+inventory endpoint returns the latest run's context/interface/route counts
+once `InventoryJobExecutor` has recorded it; there is no separate "first
+live run" endpoint or flag. A `FAILED`/`REJECTED` job (credential
+unresolvable, connect failed, identity mismatch under the strict posture)
+is visible the same way any other job's terminal state already is.
+
+## 12. What this procedure does not decide
 
 The contract's §10 records eight `UNKNOWN`s. This procedure observes; it does
 not close any of them. In particular the readiness endpoint used above

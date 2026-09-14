@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.securityexpert.nexus.ui2.capability.CapabilityRegistry;
+import com.securityexpert.nexus.ui2.jobs.capability.PersistenceGateRegistryPort;
 import com.securityexpert.nexus.ui2.jobs.device.PersistenceDeviceEnrollmentReadPort;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.lease.PersistenceJobLeaseRepository;
@@ -19,6 +20,7 @@ import com.securityexpert.nexus.ui2.persistence.discovery.JooqDiscoveryRunReposi
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.JooqDeviceInventoryRepository;
+import com.securityexpert.nexus.ui2.persistence.gates.JooqGateRegistryDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
@@ -114,9 +116,10 @@ public final class Ui2WorkerMain {
         // routes ssh_exec to sshTransport and pan_xml_api to panTransport; the
         // startup check (AC-11) fails fast if either capability's transport
         // kind were ever left unregistered.
+        PersistenceGateRegistryPort gateRegistry = new PersistenceGateRegistryPort(new JooqGateRegistryDao(transactionBoundary));
         var capabilities = new java.util.ArrayList<com.securityexpert.nexus.ui2.capability.Capability>();
         capabilities.addAll(ConfirmCapabilities.all());
-        capabilities.addAll(InventoryCapabilities.all());
+        capabilities.addAll(InventoryCapabilities.all(gateRegistry));
         capabilities.addAll(com.securityexpert.nexus.ui2.worker.discovery.DiscoveryCapabilities.all());
         CapabilityRegistry capabilityRegistry = CapabilityRegistry.of(capabilities);
         TransportRegistry transportRegistry = WorkerBootstrap.buildTransportRegistry(sshTransport, panTransport);

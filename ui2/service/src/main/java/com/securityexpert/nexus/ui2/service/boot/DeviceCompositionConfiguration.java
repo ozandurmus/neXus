@@ -11,6 +11,7 @@ import com.securityexpert.nexus.ui2.capability.CapabilityRegistry;
 import com.securityexpert.nexus.ui2.capability.CapabilityRegistryLoader;
 import com.securityexpert.nexus.ui2.capability.CapabilitySpec;
 import com.securityexpert.nexus.ui2.capability.CapabilityStep;
+import com.securityexpert.nexus.ui2.capability.GateRegistryPort;
 import com.securityexpert.nexus.ui2.capability.MaturityState;
 import com.securityexpert.nexus.ui2.capability.StepKind;
 import com.securityexpert.nexus.ui2.capability.TransportKind;
@@ -20,6 +21,7 @@ import com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionRepository;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.jobs.admission.PersistenceJobAdmissionRepository;
+import com.securityexpert.nexus.ui2.jobs.capability.PersistenceGateRegistryPort;
 import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentReadPort;
 import com.securityexpert.nexus.ui2.jobs.device.PersistenceDeviceEnrollmentReadPort;
 import com.securityexpert.nexus.ui2.jobs.discovery.DiscoveryRunReadPort;
@@ -35,6 +37,7 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventory
 import com.securityexpert.nexus.ui2.persistence.device.inventory.JooqDeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRunRepository;
 import com.securityexpert.nexus.ui2.persistence.discovery.JooqDiscoveryRunRepository;
+import com.securityexpert.nexus.ui2.persistence.gates.JooqGateRegistryDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
 import com.securityexpert.nexus.ui2.service.device.DeviceAddSingleService;
@@ -52,18 +55,33 @@ import com.securityexpert.nexus.ui2.service.discovery.DiscoveryRunService;
  * {@code jobs} read/list beans the new controller needs.
  *
  * <p>{@link #deviceCapabilityRegistry} duplicates {@code worker}'s own
- * {@code ConfirmCapabilities} placeholder builder rather than depending on
- * it: {@code service} may never import a {@code worker} class (DIR-2), so
- * the same gate-free placeholder (a step list with no gate reference --
- * neither side's confirm/inventory executor runs through {@code
- * StepExecutor} or these steps at all) is built here from {@code
- * capability-registry} types alone, for the enrollment confirm and the
- * inventory collect capabilities alike -- one registry, one {@link
- * JobAdmissionService} bean serves both (WORKER.md: "collapse it"). Keep
- * both in sync if any capability's id/vendor/transport ever changes.</p>
+ * {@code ConfirmCapabilities}/{@code InventoryCapabilities} builders rather
+ * than depending on them: {@code service} may never import a {@code
+ * worker} class (DIR-2). The enrollment confirm capabilities stay the
+ * gate-free connect/disconnect placeholder they always were (unchanged by
+ * NXS-LOCAL-0164, out of this movement's scope); the two inventory
+ * capabilities now carry the real 14D CF-3/14E PF-1 literals with real
+ * gate references, resolved against the real {@code gate_registry} table
+ * (V15-seeded) through {@link PersistenceGateRegistryPort} -- the same
+ * literal set {@code worker.inventory.InventoryReadPlan}/{@code
+ * InventoryCapabilities} carry, duplicated here because {@code service}
+ * cannot import {@code worker}. Keep all three in sync if any capability's
+ * id/vendor/transport/literal set ever changes.</p>
  */
 @Configuration
 public class DeviceCompositionConfiguration {
+
+    // Mirrors worker.inventory.InventoryReadPlan.CHECK_POINT_PHYSICAL_READS
+    // exactly (14D CF-3, CF-2's bare/physical form) -- kept here only
+    // because DIR-2 forbids importing that worker class from service.
+    private static final List<String> CHECK_POINT_PHYSICAL_READS = List.of(
+            "ip -details -4 addr show", "ip -6 addr show", "ip -4 route show table all", "cphaprob stat",
+            "cphaprob -a -m if", "vsx stat -v");
+
+    // Mirrors worker.inventory.InventoryReadPlan.PALO_ALTO_BASE_STEPS exactly (14E PF-1).
+    private static final List<String> PALO_ALTO_BASE_STEPS = List.of(
+            "<show><system><info/></system></show>", "<show><high-availability><state/></high-availability></show>",
+            "<show><interface>all</interface></show>", "<show><routing><route/></routing></show>");
 
     @Bean
     public DeviceRepository deviceRepository(TransactionBoundary transactionBoundary) {
@@ -87,16 +105,19 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
-    public CapabilityRegistry deviceCapabilityRegistry() {
+    public GateRegistryPort gateRegistryPort(TransactionBoundary transactionBoundary) {
+        return new PersistenceGateRegistryPort(new JooqGateRegistryDao(transactionBoundary));
+    }
+
+    @Bean
+    public CapabilityRegistry deviceCapabilityRegistry(GateRegistryPort gateRegistryPort) {
         return CapabilityRegistry.of(List.of(
                 confirmCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, "check_point", "cp_gaia_gateway",
                         TransportKind.SSH_EXEC),
                 confirmCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO, "palo_alto", "pan_firewall",
                         TransportKind.PAN_XML_API),
-                confirmCapability(InventoryCapabilityIds.CP_INVENTORY_COLLECT, "check_point", "cp_gaia_gateway",
-                        TransportKind.SSH_EXEC),
-                confirmCapability(InventoryCapabilityIds.PAN_INVENTORY_COLLECT, "palo_alto", "pan_firewall",
-                        TransportKind.PAN_XML_API),
+                checkPointInventoryCapability(gateRegistryPort),
+                paloAltoInventoryCapability(gateRegistryPort),
                 // 14F DR-1: admitted through JobAdmissionService#submitForRun
                 // against a discovery_run row, never a device -- same
                 // gate-free placeholder shape (StepExecutor never runs
@@ -118,6 +139,42 @@ public class DeviceCompositionConfiguration {
         CapabilitySpec spec = new CapabilitySpec(capabilityId, vendor, platformRoleScope, transportKind,
                 MaturityState.CAP_OFFLINE, List.of(connect), List.of(disconnect), "UNKNOWN", List.of(), false);
         return new CapabilityRegistryLoader(key -> List.of()).load(spec);
+    }
+
+    /** NXS-LOCAL-0164: 14D CF-3's physical reads, in CF-2's bare form, each gated (docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md). */
+    private static Capability checkPointInventoryCapability(GateRegistryPort gateRegistryPort) {
+        CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        List<CapabilityStep> steps = new java.util.ArrayList<>();
+        steps.add(connect);
+        for (String read : CHECK_POINT_PHYSICAL_READS) {
+            steps.add(new CapabilityStep(StepKind.EXEC, "expert", read, false, Optional.empty(), Optional.empty(),
+                    Optional.empty()));
+        }
+        CapabilitySpec spec = new CapabilitySpec(InventoryCapabilityIds.CP_INVENTORY_COLLECT, "check_point",
+                "cp_gaia_gateway", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, steps, List.of(disconnect),
+                "14D", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
+    }
+
+    /** NXS-LOCAL-0164: 14E PF-1's four unscoped requests, each gated (docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md). */
+    private static Capability paloAltoInventoryCapability(GateRegistryPort gateRegistryPort) {
+        CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        List<CapabilityStep> steps = new java.util.ArrayList<>();
+        steps.add(connect);
+        for (String request : PALO_ALTO_BASE_STEPS) {
+            steps.add(new CapabilityStep(StepKind.XML_API_CALL, "not_applicable", request, false, Optional.empty(),
+                    Optional.empty(), Optional.empty()));
+        }
+        CapabilitySpec spec = new CapabilitySpec(InventoryCapabilityIds.PAN_INVENTORY_COLLECT, "palo_alto",
+                "pan_firewall", TransportKind.PAN_XML_API, MaturityState.CAP_VALIDATED, steps, List.of(disconnect),
+                "14E", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
     }
 
     @Bean
