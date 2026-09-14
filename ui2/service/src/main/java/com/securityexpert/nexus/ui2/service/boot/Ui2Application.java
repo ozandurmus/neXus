@@ -54,18 +54,19 @@ import org.springframework.context.annotation.FilterType;
 // administration (PO_DECISION_RECORD_2026_09_13G) needs
 // POST /role-bindings / POST /role-bindings/revoke reachable for real, so
 // this movement finished wiring GateChain/RBAC (RbacConfiguration) rather
-// than leave it deferred. SessionAdminController and
-// DeviceRegistrationController stay excluded: their own remaining
-// collaborators (a session-admin service, device registration) are
-// untouched by this movement and remain out of scope. They are excluded,
-// not deleted: a route that 404s because its controller was never
-// registered is honest, while one that 500s on every call is not.
+// than leave it deferred. NXS-LOCAL-0158 wires DeviceRegistrationController's
+// own remaining collaborators (DeviceAddSingleService, DeviceQueryService,
+// DeviceCompositionConfiguration) and removes it from this exclusion.
+// SessionAdminController stays excluded: its own collaborator (a
+// session-admin service) is untouched by this movement and remains out of
+// scope. It is excluded, not deleted: a route that 404s because its
+// controller was never registered is honest, while one that 500s on every
+// call is not.
 @ComponentScan(
         basePackages = "com.securityexpert.nexus.ui2.service",
         excludeFilters = @ComponentScan.Filter(
                 type = FilterType.REGEX,
-                pattern = "com\\.securityexpert\\.nexus\\.ui2\\.service\\.api\\."
-                        + "(SessionAdminController|DeviceRegistrationController)"))
+                pattern = "com\\.securityexpert\\.nexus\\.ui2\\.service\\.api\\.SessionAdminController"))
 public class Ui2Application {
 
     public static void main(String[] args) {
