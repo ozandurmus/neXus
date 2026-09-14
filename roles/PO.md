@@ -159,6 +159,9 @@ A "no" to any of these is a stop, not a workaround.
   is a comparable — never billed spend
   (`docs/reference/PROVIDER_OPERATING_NOTES.md`).
 
+- After each dispatch closes, run `python3 scripts/dispatch_ledger.py render`
+  and fill that movement's assessment cell in `project/DISPATCH_LEDGER.md`.
+
 - **A worker can finish green and uncommitted.** The default provider's
   sandbox is frequently refused `index.lock` in a linked worktree, so the
   movement finishes and the orchestrator still records it `failed`. Before
