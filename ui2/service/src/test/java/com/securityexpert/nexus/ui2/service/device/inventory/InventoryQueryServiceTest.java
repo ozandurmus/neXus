@@ -148,7 +148,7 @@ class InventoryQueryServiceTest {
         inventoryRepository.recordRun(run, "actor", "action-1");
         FakeJobRecordDao jobs = new FakeJobRecordDao();
         jobs.byId.put("job-1", new JobRow("job-1", "cp_inventory_collect", "device-1", "CLASS_0_READ", "COMPLETED",
-                null, 0L, "SUCCESS", null));
+                null, 0L, "SUCCESS", null, "device", null));
         InventoryQueryService service = new InventoryQueryService(devices, jobs, inventoryRepository);
 
         InventoryQueryService.DeviceInventoryOutcome outcome = service.deviceInventory("device-1");

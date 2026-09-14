@@ -16,6 +16,16 @@ public interface JobRecordDao {
     Optional<String> insertRequestedIfAbsent(String jobId, String idempotencyKey, String capabilityId,
             String targetDeviceId, String actionClass, String jobType, String actorFingerprint, String actionId);
 
+    /**
+     * DR-1: the discovery-run sibling of {@link #insertRequestedIfAbsent} --
+     * {@code target_kind = 'discovery_run'}, {@code target_ref = targetRunId},
+     * {@code target_device_id} left {@code NULL} (V14 {@code chk_jobs_target_shape}).
+     *
+     * @return the inserted row's own {@code job_id} if this key was new, {@code empty} on a duplicate key.
+     */
+    Optional<String> insertRequestedIfAbsentForRun(String jobId, String idempotencyKey, String capabilityId,
+            String targetRunId, String actionClass, String jobType, String actorFingerprint, String actionId);
+
     Optional<String> findJobIdByIdempotencyKey(String idempotencyKey);
 
     Optional<JobRow> find(String jobId);
