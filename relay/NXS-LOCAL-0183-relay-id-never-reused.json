@@ -95,11 +95,76 @@
       },
       "seq": 1,
       "timestamp": "2026-09-14T21:02:53Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Defined ID_FILE_RE in scripts/local_relay.py to match NXS-LOCAL-####-.*(?:.json|.json.lock|.lock).",
+          "Updated _next_id in scripts/local_relay.py to scan directory entries for both relay JSON files and advisory lock files.",
+          "Added unit tests in tests/test_local_relay_protocol.py covering AC-1, AC-2, AC-3, and AC-4."
+        ],
+        "completed": [
+          "Implemented lock-file-aware movement ID allocation in scripts/local_relay.py.",
+          "Added comprehensive unit test coverage in tests/test_local_relay_protocol.py (91 passed).",
+          "Verified repository privacy gate passed with zero findings.",
+          "Committed changes on feature/relay-id-never-reused and opened pull request 336."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "No change."
+        },
+        "integration": {
+          "branch": "feature/relay-id-never-reused",
+          "ci": "NOT_RUN: local validation only per brief.",
+          "head_sha": "f1a0345da0796d552bda1ab51ab6c4f395aeb86a",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode: pull request opened; awaiting Product Owner review and orchestrator verify.passed.",
+          "merge_state": "OPEN",
+          "pr": 336,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/336"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0183",
+          "movement_type": "VALIDATION",
+          "objective": "Product Owner assistant review and orchestrator verify.passed merge.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "Function signature and return contract of _next_id unchanged (takes Path, returns int).",
+          "Target file existence check in _cmd_create preserved as defense-in-depth.",
+          "Relay file schema, marker formats, and lock files left unmodified."
+        ],
+        "recommended_reasoning": {
+          "reason": "All implementation and local validation criteria are satisfied; next step is PO review and merge verification.",
+          "tier": "bounded/low"
+        },
+        "state_updates": [
+          "None: PO owns project state and roadmap updates per WORKER.md."
+        ],
+        "unresolved_risks": [
+          "The allocator now reads all relay JSON files (.json) and advisory lock files (.json.lock and .lock) in relay_dir, preventing ID collisions from uncommitted sessions that left lock files. However, it still cannot see git branches (feature/*), external worktree directories, or orchestrator state records (.state/*) if both the JSON and the lock file are absent from relay_dir."
+        ],
+        "validation": {
+          "affected": "PASS: python3 -m pytest tests/test_local_relay_protocol.py -q (91 passed)",
+          "diff_check": "PASS",
+          "full_regression": "NOT_RUN: scoped validation per brief.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py (1454 scanned, 0 findings)",
+          "real_environment": "NOT_APPLICABLE: deployment direction is local validation only.",
+          "state_consistency": "NOT_APPLICABLE: no project state files touched.",
+          "targeted": "PASS: tests/test_local_relay_protocol.py passed (91 tests)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T21:20:53Z"
     }
   ],
   "id": "NXS-LOCAL-0183",
   "movement": "relay-id-never-reused",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md",
     "scripts/local_relay.py",
@@ -108,6 +173,6 @@
     "tests/test_local_relay_protocol.py"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-14T21:02:53Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T21:20:53Z"
 }

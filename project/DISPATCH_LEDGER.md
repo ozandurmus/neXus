@@ -1,5 +1,7 @@
 # Dispatch ledger
 
+A trailing `!` in cost means the recorded cost exceeds the recorded budget ceiling.
+
 | movement | attempt | started | provider | model | effort | minutes | turns | tokens | cache % | cost | source | budget | outcome | PR | assessment |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | NXS-LOCAL-0111 | 1 | 2026-09-12T14:37:26Z | claude | claude-opus-5 | high | 9.7 | 16 | 1469119 | 91.49% | $3.0230 | reported | unknown | cancelled | - |  |
@@ -61,7 +63,10 @@
 | NXS-LOCAL-0174 | 1 | 2026-09-14T18:13:34Z | claude | claude-sonnet-5 | high | 23.4 | 87 | 22205750 | 98.55% | $7.0842 | reported | unknown | done | - |  |
 | NXS-LOCAL-0175 | 1 | 2026-09-14T18:15:24Z | claude | claude-sonnet-5 | high | 44.1 | 223 | 67260185 | 99.28% | $18.9177 | reported | unknown | done | 315 |  |
 | NXS-LOCAL-0180 | 1 | 2026-09-14T20:13:44Z | codex | gpt-5.6-terra | medium | 9.3 | 1 | 5752044 | 48.67% | $6.6345 | estimated_from_requested_model | unknown | done | - | Ran past the $4.00 ceiling to an estimated $6.63 because the ceiling is unenforceable for this provider; the budget column reads unknown because the record never persisted it; one recorded turn for 5.7M tokens means the turn counter is not reading this provider's stream. |
+| NXS-LOCAL-0181 | 1 | 2026-09-14T20:34:54Z | codex | gpt-5.6-terra | medium | 7.4 | 1 | 3737190 | 48.87% | $4.3058 | estimated_from_requested_model | unknown | done | 333 |  |
+| NXS-LOCAL-0182 | 1 | 2026-09-14T20:37:42Z | codex | gpt-5.6-terra | medium | 4.5 | 1 | 1674621 | 48.60% | $1.9879 | estimated_from_requested_model | unknown | failed | 332 |  |
+| NXS-LOCAL-0183 | 1 | 2026-09-14T21:19:35Z | antigravity | pro | unknown | unknown | 0 | 0 | 0.00% | unknown | unavailable | unknown | done | 336 | First movement taken by the third participant, through the hybrid relay path; verify passed on the first attempt and the review found nothing to send back. Cost and tokens are unknown by measurement and that is accepted, but this row shows turns, tokens and cache as 0 rather than unknown, which is a fabricated number and contrary to DL-6. |
 
 Metered total (claude): $280.3284
-Subscription total (codex): $11.2347
-Unavailable costs: 3
+Subscription total (codex): $17.5284
+Unavailable costs: 4
