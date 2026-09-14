@@ -98,6 +98,17 @@ A "no" to any of these is a stop, not a workaround.
 
 ## 6. Mechanics that have bitten this loop
 
+- **Quote mechanical details, never describe them from memory.** A packet
+  that says "the entries' `role` field" when the writer emits `actor` costs
+  a dispatch: the worker cannot tell a Product Owner slip from a contract
+  it must honour. Paste one redacted sample of the real shape (a relay
+  entry, a response element path, a row) into `what_exists`. Two of the
+  three stops of 2026-09-14 were this.
+- **Say what the worker may settle alone.** `roles/WORKER.md`'s standing
+  rules now fix it: a mechanical mismatch is settled against the code and
+  reported; only a decision (authority, scope, semantics, a frozen clause)
+  is a `RELAY_QUESTION`. Do not restate it per packet; do not contradict it.
+
 - A bare `SESSION_START` needs `protocol_version: 2`, `message_type`,
   `refs`, `movement`, `report`. `gov_session_transfer.py validate` wants the
   sentinel file from `render --out`; `local_relay.py create --start` takes

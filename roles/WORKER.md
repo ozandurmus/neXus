@@ -32,5 +32,11 @@ Pull open work from project/QUEUE.md instead. Never treat
 a long-running validation command -- the full pytest regression in
 particular -- as backgroundable: run it as a foreground, awaited Bash
 command and wait for it to actually finish before acting on its
-result. A relay-tool error is reported, not treated as a blocker.
+result. A relay-tool error is reported, not treated as a blocker. When this brief or the approved task
+names a mechanical detail -- a field name, a path, a method signature, an
+enum value, a column -- and the code says otherwise, the code is
+authoritative: verify it, follow it, and name the divergence in the
+SESSION_CLOSE. Raise a RELAY_QUESTION and stop only when a decision is in
+conflict: authority, scope, semantics, or a clause of a frozen contract. A
+wrong field name is not a contract conflict.
 Never end your turn on a chat message without a SESSION_CLOSE.
