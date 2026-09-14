@@ -303,6 +303,36 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
     discoveryPhase === "polling" ||
     discoveryPhase === "importing";
 
+  const credentialSelectorFragment = (
+    <>
+      <TextField
+        label="Credential"
+        select
+        size="small"
+        fullWidth
+        value={credentialId}
+        onChange={(e) => setCredentialId(e.target.value)}
+        disabled={eligibleCredentials.length === 0}
+        helperText={
+          credentialsError
+            ? credentialsError
+            : eligibleCredentials.length === 0
+              ? `No stored credential allows ${VENDOR_LABEL[vendor]}.`
+              : undefined
+        }
+      >
+        {eligibleCredentials.map((c: CredentialView) => (
+          <MenuItem key={c.credential_id} value={c.credential_reference_id}>
+            {c.display_name}
+          </MenuItem>
+        ))}
+      </TextField>
+      {eligibleCredentials.length === 0 && (
+        <Button onClick={() => setCreateCredentialOpen(true)}>Create credential</Button>
+      )}
+    </>
+  );
+
   return (
     <Dialog open onClose={dialogBusy ? undefined : onClose} PaperProps={{ sx: { borderRadius: "28px", width: mode === "discovery" && discoveryPhase !== "form" ? 640 : 460 } }}>
       <DialogContent sx={{ p: 3, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -368,31 +398,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
               <MenuItem value="check_point">Check Point</MenuItem>
               <MenuItem value="palo_alto">Palo Alto</MenuItem>
             </TextField>
-            <TextField
-              label="Credential"
-              select
-              size="small"
-              fullWidth
-              value={credentialId}
-              onChange={(e) => setCredentialId(e.target.value)}
-              disabled={eligibleCredentials.length === 0}
-              helperText={
-                credentialsError
-                  ? credentialsError
-                  : eligibleCredentials.length === 0
-                    ? `No stored credential allows ${VENDOR_LABEL[vendor]}. Add one from the Credentials tab first.`
-                    : undefined
-              }
-            >
-              {eligibleCredentials.map((c: CredentialView) => (
-                <MenuItem key={c.credential_id} value={c.credential_reference_id}>
-                  {c.display_name}
-                </MenuItem>
-              ))}
-            </TextField>
-            {eligibleCredentials.length === 0 && !credentialsError && (
-              <Button onClick={() => setCreateCredentialOpen(true)}>Create credential</Button>
-            )}
+            {credentialSelectorFragment}
             {validationReason && (
               <Typography variant="body2" color="error">
                 Validation failed: {validationReason}
@@ -465,28 +471,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
               <MenuItem value="check_point">Check Point (multi-domain server)</MenuItem>
               <MenuItem value="palo_alto">Palo Alto (Panorama)</MenuItem>
             </TextField>
-            <TextField
-              label="Credential"
-              select
-              size="small"
-              fullWidth
-              value={credentialId}
-              onChange={(e) => setCredentialId(e.target.value)}
-              disabled={eligibleCredentials.length === 0}
-              helperText={
-                credentialsError
-                  ? credentialsError
-                  : eligibleCredentials.length === 0
-                    ? `No stored credential allows ${VENDOR_LABEL[vendor]}. Add one from the Credentials tab first.`
-                    : undefined
-              }
-            >
-              {eligibleCredentials.map((c: CredentialView) => (
-                <MenuItem key={c.credential_id} value={c.credential_reference_id}>
-                  {c.display_name}
-                </MenuItem>
-              ))}
-            </TextField>
+            {credentialSelectorFragment}
             {validationReason && (
               <Typography variant="body2" color="error">
                 Validation failed: {validationReason}
