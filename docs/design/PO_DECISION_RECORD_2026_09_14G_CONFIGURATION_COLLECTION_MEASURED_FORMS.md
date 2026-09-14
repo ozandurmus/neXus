@@ -55,6 +55,36 @@ authority) and asked for the configuration service and screen to follow.
   parents. The document is not stored. Panorama is never an inventory
   target.
 
+## 2a. Palo Alto local overrides (Product Owner directive, 2026-09-14)
+
+- **CG-7a. Never assume everything is pushed from Panorama.** The
+  configuration of record is read from the device (`effective-running`,
+  CG-4). Every element there carries provenance: the `src` attribute
+  (`tpl` / `template`, `dg` / `device-group`, `shared`, `local`, as the
+  earlier product's provenance walk counted them). An element whose source
+  is `local` where a Panorama template or device group defines the same
+  path is a **local override**.
+- **CG-7b. Detection is per device, from the device's own read:** the
+  streaming index (CG-6) counts elements per source per category and lists
+  the override paths (category and element name, never the value).
+- **CG-7c. Cross-check against Panorama.** For every Panorama-managed
+  Palo Alto device, the device's effective configuration is compared with
+  what Panorama's common templates / template stack and device groups
+  define for it (the CG-7 assignment index plus the template and device
+  group subtrees for that device, reduced on the stream). Elements present
+  locally with `src=local` that Panorama also defines are reported as
+  overrides with the Panorama-side definition named (template / device
+  group and path).
+- **CG-7d. Notification.** Overrides are surfaced through the product's
+  notifier (the Notifications surface of the shell; a log line and the
+  audit row at minimum until a channel is configured), one notification
+  per device per run listing the override paths, and shown on the device's
+  configuration view with an "override" marker per element category.
+- **CG-7e.** Absence of any `src=local` element is recorded as
+  `no_local_override` for the run; the earlier product's semantic-policy
+  rule stands: a display-name versus `vsysN` string mismatch is never taken
+  as override proof (vsys identity is normalised first).
+
 ## 3. Storage and job
 
 - **CG-8.** Job kind `configuration_collect`, capabilities
@@ -68,7 +98,9 @@ authority) and asked for the configuration service and screen to follow.
   stored as a separate artefact (small) referenced from the run; the raw
   copy goes through `C7`'s artefact store (encrypted, hash recorded). A
   `panorama_assignment(run_id, device_serial, template_stack, templates,
-  device_groups)` table holds CG-7's index.
+  device_groups)` table holds CG-7's index; `device_configuration_override(run_id,
+  context, category, element_path, local_source, panorama_source)` holds
+  CG-7b/CG-7c's findings.
 - **CG-10. Change detection.** Latest run per device is what the screen
   shows; a new run whose canonical hash equals the previous is recorded as
   `unchanged`; a difference marks `changed` and keeps both runs. Diff
