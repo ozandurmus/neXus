@@ -169,3 +169,146 @@ describe("AddDeviceDialog", () => {
     await waitFor(() => expect(screen.getByText("Identity mismatch open")).toBeInTheDocument());
   });
 });
+
+const CLUSTER_CANDIDATE = {
+  candidate_id: "c-cluster",
+  kind: "VIRTUALIZATION_CLUSTER",
+  importable: false,
+  display_name: "Cluster Alpha",
+  own_address: null,
+  management_address: "10.1.1.100",
+  cluster_reference: null,
+  parent_candidate_id: null,
+  model: null,
+  software_version: null,
+  connection_state: null,
+  import_outcome: null,
+};
+
+const MEMBER_ONE_CANDIDATE = {
+  candidate_id: "c-m1",
+  kind: "PHYSICAL_VIRTUALIZATION_CHASSIS_MEMBER",
+  importable: true,
+  display_name: "Member One",
+  own_address: "10.1.1.1",
+  management_address: "10.1.1.1",
+  cluster_reference: "cluster-ref-1",
+  parent_candidate_id: "c-cluster",
+  model: null,
+  software_version: null,
+  connection_state: null,
+  import_outcome: null,
+};
+
+const MEMBER_TWO_CANDIDATE = {
+  candidate_id: "c-m2",
+  kind: "PHYSICAL_VIRTUALIZATION_CHASSIS_MEMBER",
+  importable: true,
+  display_name: "Member Two",
+  own_address: "10.1.1.2",
+  management_address: "10.1.1.2",
+  cluster_reference: "cluster-ref-1",
+  parent_candidate_id: "c-cluster",
+  model: null,
+  software_version: null,
+  connection_state: null,
+  import_outcome: null,
+};
+
+async function openDialogAndSwitchToDiscovery(address: string) {
+  fireEvent.click(screen.getByRole("button", { name: "Add device" }));
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Management server (discovery)" }));
+  await waitFor(() => expect(screen.getByLabelText("Management server address")).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText("Management server address"), { target: { value: address } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start discovery" })).not.toBeDisabled());
+}
+
+describe("AddDeviceDialog discovery mode", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("starts a run, polls to FINISHED, and shows the grouped candidate table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "/credentials": CREDENTIALS_ROUTE,
+        "/session/status": { body: { csrf_token: "test-csrf" } },
+        "/discovery/runs": { status: 202, body: { run_id: "run-1", job_id: "job-1" } },
+        "/discovery/runs/run-1": [
+          { body: { run_id: "run-1", vendor: "check_point", state: "RUNNING", job_id: "job-1", outcome_summary: {}, candidates: [] } },
+          {
+            body: {
+              run_id: "run-1",
+              vendor: "check_point",
+              state: "FINISHED",
+              job_id: "job-1",
+              outcome_summary: { PHYSICAL_VIRTUALIZATION_CHASSIS_MEMBER: 2, VIRTUALIZATION_CLUSTER: 1 },
+              candidates: [CLUSTER_CANDIDATE, MEMBER_ONE_CANDIDATE, MEMBER_TWO_CANDIDATE],
+            },
+          },
+        ],
+      }),
+    );
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndSwitchToDiscovery("mds.example");
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+
+    await waitFor(() => expect(screen.getByText("Cluster Alpha")).toBeInTheDocument(), { timeout: 8000 });
+    expect(screen.getByText("Member One")).toBeInTheDocument();
+    expect(screen.getByText("Member Two")).toBeInTheDocument();
+  }, 10000);
+
+  it("selecting the cluster selects its members, and import shows per-candidate outcomes", async () => {
+    const fetchMock = routedFetch({
+      "/credentials": CREDENTIALS_ROUTE,
+      "/session/status": { body: { csrf_token: "test-csrf" } },
+      "/discovery/runs": { status: 202, body: { run_id: "run-1", job_id: "job-1" } },
+      "/discovery/runs/run-1": {
+        body: {
+          run_id: "run-1",
+          vendor: "check_point",
+          state: "FINISHED",
+          job_id: "job-1",
+          outcome_summary: {},
+          candidates: [CLUSTER_CANDIDATE, MEMBER_ONE_CANDIDATE, MEMBER_TWO_CANDIDATE],
+        },
+      },
+      "/discovery/runs/run-1/import": {
+        body: {
+          results: [
+            { candidate_id: "c-m1", outcome: "new", device_id: "dev-1", job_id: "job-2", reason: null },
+            { candidate_id: "c-m2", outcome: "already_imported", device_id: "dev-existing", job_id: null, reason: null },
+          ],
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndSwitchToDiscovery("mds.example");
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+    await waitFor(() => expect(screen.getByText("Cluster Alpha")).toBeInTheDocument(), { timeout: 8000 });
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    expect(checkboxes).toHaveLength(3);
+    fireEvent.click(checkboxes[0]);
+    await waitFor(() => expect(checkboxes[1]).toBeChecked());
+    expect(checkboxes[2]).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+
+    await waitFor(() => expect(screen.getByText("new")).toBeInTheDocument());
+    expect(screen.getByText("already_imported")).toBeInTheDocument();
+
+    const importCall = fetchMock.mock.calls.find(([input]) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      return url.split("?")[0] === "/discovery/runs/run-1/import";
+    }) as unknown as [RequestInfo | URL, RequestInit] | undefined;
+    expect(importCall).toBeDefined();
+    const body = JSON.parse(importCall![1].body as string);
+    expect(new Set(body.candidate_ids)).toEqual(new Set(["c-m1", "c-m2"]));
+  }, 10000);
+});
