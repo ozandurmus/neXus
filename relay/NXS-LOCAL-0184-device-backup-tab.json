@@ -1,0 +1,190 @@
+{
+  "created_at": "2026-09-14T21:31:25Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Selecting a device shows a Backup tab beside Interfaces, Routing and Cluster members.",
+          "AC-2 With artefacts present, the tab lists them newest first with collected time, size, digest prefix, validation level and deviation state.",
+          "AC-3 A null deviation state renders as not evaluated; a test asserts it never renders as unchanged.",
+          "AC-4 An empty list renders an EmptyPanel whose wording claims nothing about whether backup is configured for the device.",
+          "AC-5 A failed request shows the error rather than an empty table; a test asserts it.",
+          "AC-6 npx vitest run passes with the new tests, npx tsc --noEmit is clean, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md -- FROZEN, Product Owner approved 2026-09-05. PO-NAV-2 freezes Recovery as a reserved seventh root that is NOT rendered today, and states that the only recovery surface today is one device tab plus an Overview card, promoted to a root only when a fleet-level restore-readiness or recovery-store surface ships under its own contract. A new root screen for backups would therefore violate a frozen decision; a device tab is what that decision names. Supporting: PO_DECISION_RECORD_2026_09_14I DV-4, which requires the deviation state to be shown on the device's backup view.",
+          "context_not_loaded": null,
+          "engineering_baseline": "ui2/frontend is React and TypeScript, tested with vitest, using MUI and the repository's own M3 widgets. The device detail tab strip already exists and is where this tab belongs.",
+          "product_baseline": "Check Point gateway backup is implemented and gated to a pilot allowlist that is currently empty, so no artefact exists yet on this installation. The screen must therefore be correct and honest when the list is empty, and must not imply that an empty list means a device has no backups configured.",
+          "test_baseline": "npx vitest run passes on origin/main today: 14 files, 78 tests, run locally on 2026-09-15 before this packet was written. npx tsc --noEmit is clean.",
+          "what_exists": "The device detail tab strip is in ui2/frontend/src/screens/InventoryPanels.tsx, around line 434, and reads exactly:\n\n      <M3Tabs\n        ariaLabel=\"Device detail\"\n        tabs={[\n          {\n            label: \"Interfaces\",\n            panel: isCluster\n              ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} />\n              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} />,\n          },\n          {\n            label: \"Routing\",\n            ...\n          },\n          {\n            label: \"Cluster members\",\n            ...\n          },\n\nThe API client lives in ui2/frontend/src/auth/adminApi.ts and its helpers are one-liners over a shared call(), for example:\n\nexport function listDevices(): Promise<{ devices: DeviceSummary[] }> {\n  return call(\"/devices\", \"GET\");\n}\n\nThe route this movement reads is GET /devices/{deviceId}/backups. Its response body is built by BackupController.toSummaryBody and carries exactly these keys, in this order: artefact_id, device_id, collected_at, size_bytes, digest_prefix, validation_level, deviation_state. The list is returned under the key \"backups\". deviation_state is null or one of exactly three values -- unchanged, changed, first -- enforced by a CHECK constraint in migration V18__cp_gateway_backup.sql. digest_prefix is already truncated by the server; it is a prefix, not a full digest.\n\nScreens import shared pieces from ../shell/ScreenLayout (ScreenHeader, ListDetail, EmptyPanel, ScreenRoot), ../shell/M3Widgets (M3Button, M3Tabs, StatusChip) and ../shell/useFetchOnMount, and describe a failed request through a local describeApiError helper. InventoryScreen.tsx is the nearest example of all of these together."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "application/**",
+          "ui2/service/**",
+          "ui2/worker/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/device-backup-tab"
+        },
+        "invariants": [
+          "No artefact byte, path, download link or decrypt affordance anywhere in the UI.",
+          "The deviation vocabulary is exactly what the API returns; the UI invents no fourth value and no default.",
+          "Absence of evidence is not evidence of absence: an empty list means nothing was retained, not that nothing is protected.",
+          "No new root screen; the frozen information architecture keeps Recovery reserved."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "UI",
+        "objective": "Give the operator somewhere to see a device's retained backups. The backup capability ships end to end -- artefacts are collected, encrypted, recorded in the manifest with a deviation state -- and none of it is visible anywhere in the product. Three API routes exist and no screen calls any of them. This movement adds the read-only device tab that shows what is retained; triggering a backup is a separate movement and is out of scope here.",
+        "output_contract": [
+          "An operator can open a device and see what has actually been retained for it, and whether the last backup differed from the one before.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "One tab in an existing strip and one API helper, against a route whose response shape is pasted in full.",
+          "tier": "bounded tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "The two frontend commands run from ui2/frontend; the privacy gate runs from the repository root.",
+          "Run only the commands named above. Do not run the Java build or the Python suite.",
+          "Match the surrounding file's style rather than introducing a new one: the same shared widgets, the same error helper shape, the same spacing idiom.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE names the tab's position, the exact deviation vocabulary rendered, and the empty-state wording you chose."
+        ],
+        "risks": [
+          "Rendering a null deviation state as unchanged, which would claim the artefact matched its predecessor when it was never compared.",
+          "Writing empty-state copy that reads as a verdict about the device rather than about the list.",
+          "Reaching for the full digest or the recovery volume path, neither of which the route returns and neither of which may ever be shown."
+        ],
+        "scope": {
+          "in": [
+            "ui2/frontend/src/auth/adminApi.ts: one helper for GET /devices/{deviceId}/backups, following the existing one-line style over call(), with a exported type for the row shape whose fields match what_exists exactly.",
+            "ui2/frontend/src/screens/InventoryPanels.tsx: a fourth tab labelled Backup in the existing Device detail strip, rendering the device's retained artefacts newest first: collected time, size, digest prefix, validation level, and the deviation state.",
+            "The deviation state is rendered as a StatusChip using the same vocabulary the API returns and no other: unchanged, changed, first. A null deviation state renders as not evaluated, never as unchanged.",
+            "An empty list renders through EmptyPanel and says plainly that no backup has been retained for this device, without implying anything about whether backup is configured or permitted for it.",
+            "A failed request renders the error the same way the surrounding screen already does, through a local describeApiError, and never silently shows an empty table.",
+            "ui2/frontend/tests: tests for the populated list, the empty list, the failed request, and that a null deviation state does not render as unchanged."
+          ],
+          "out": [
+            "Triggering a backup. No call to POST /devices/{deviceId}/backup/collect, no button, no reason field. That is its own movement.",
+            "Any new root screen, any change to ScreenId, to App.tsx, or to the navigation rail. PO-NAV-2 reserves Recovery as a root and it is not rendered today.",
+            "Any change to the Java service, to any route, or to the response shape.",
+            "Any artefact byte, any path, any download link or decrypt affordance. Record 14I OR-1 forbids all three from ever reaching an HTTP response, and nothing in this screen may imply one exists.",
+            "Showing a full digest. The server sends a prefix; render what it sends."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "npx",
+              "vitest",
+              "run"
+            ],
+            "name": "frontend_suite"
+          },
+          {
+            "argv": [
+              "npx",
+              "tsc",
+              "--noEmit"
+            ],
+            "name": "typecheck"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T21:31:25Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added BackupArtefact interface and listDeviceBackups API helper in ui2/frontend/src/auth/adminApi.ts.",
+          "Created BackupPanel component in ui2/frontend/src/screens/InventoryPanels.tsx and added it as the fourth tab labelled 'Backup'."
+        ],
+        "completed": [
+          "AC-1: Selecting a device shows a Backup tab.",
+          "AC-2: Lists backups newest first with collected time, size, digest prefix, validation level and deviation state.",
+          "AC-3: Null deviation state renders as 'not evaluated'.",
+          "AC-4: Empty list renders an EmptyPanel.",
+          "AC-5: Failed request shows the error via describeApiError.",
+          "AC-6: Tests, typecheck, and privacy gate pass."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "N/A",
+          "ui": "Fourth tab (after 'Cluster members') is visible in Device detail strip. Deviation vocabulary rendered: unchanged, changed, first (rendered via StatusChip) and 'not evaluated' for null. Empty state wording: Title: 'No backups', Body: 'No backup has been retained for this device.'"
+        },
+        "integration": {
+          "branch": "feature/device-backup-tab",
+          "ci": "skipped",
+          "head_sha": "13d8da4214bf716349a3ffc33532c46e22f86a30",
+          "merge_commit": null,
+          "merge_decision": "approved",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "Triggering a backup",
+          "movement_type": "UI",
+          "objective": "Add capability to trigger a backup",
+          "status": "planned"
+        },
+        "preserved": [
+          "Triggering a backup is preserved as a separate movement.",
+          "Recovery root screen is preserved and not rendered."
+        ],
+        "recommended_reasoning": {
+          "reason": "Next step is a separate movement.",
+          "tier": "bounded tier"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "Inventory panels load without regression",
+          "diff_check": "git diff --check origin/main clean",
+          "full_regression": "npx vitest run passed and typecheck clean",
+          "privacy": "python3 scripts/repository_privacy_check.py passed",
+          "real_environment": "Local validation only",
+          "state_consistency": "N/A - UI only",
+          "targeted": "npx vitest run passed for InventoryPanels.test.tsx"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T21:42:09Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0184",
+  "movement": "device-backup-tab",
+  "next_actor": null,
+  "refs": [
+    "docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md",
+    "ui2/frontend/src/screens/InventoryPanels.tsx",
+    "ui2/frontend/src/auth/adminApi.ts",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/BackupController.java",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T21:42:09Z"
+}
