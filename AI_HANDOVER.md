@@ -1,6 +1,6 @@
 # AI_HANDOVER
 
-> **NON-AUTHORITATIVE DERIVED SUMMARY**
+> **NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY**
 > If this conflicts with `CURRENT_STATE.md` or `project/QUEUE.md`, those win.
 
 Read in this order: `AI_START_HERE.md`, `CURRENT_STATE.md`,
