@@ -195,7 +195,7 @@ def derive_work_stage(
     own architecture section (C) and the AMENDMENT's stage list both call
     for. A worktree that no longer exists (porcelain_lines always empty for
     it) still resolves honestly via the other signals; nothing here raises."""
-    if relay_status == "CLOSED" or phase == orch.PHASE_DONE:
+    if relay_status == "CLOSED" or phase in (orch.PHASE_DONE, orch.PHASE_CANCELLED):
         return STAGE_MERGED
     if next_actor == "po":
         return STAGE_AWAITING_PO
@@ -259,7 +259,10 @@ def derive_health(
     only then does a genuinely dead-but-not-terminal process count as
     `exited_without_close`; a still-alive process is `silent` or `healthy`
     depending on how long `engineer.log` has gone quiet."""
-    if relay_status == "CLOSED" or phase == orch.PHASE_DONE:
+    # `cancelled` is a terminal phase (`orch.TERMINAL_PHASES`): a record the PO
+    # stopped on purpose has no live process by definition, so it must never
+    # fall through to `exited_without_close` and show as running.
+    if relay_status == "CLOSED" or phase in (orch.PHASE_DONE, orch.PHASE_CANCELLED):
         return HEALTH_DONE
     if phase == orch.PHASE_FAILED:
         return HEALTH_FAILED

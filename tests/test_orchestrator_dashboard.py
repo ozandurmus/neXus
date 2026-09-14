@@ -379,6 +379,12 @@ def test_health_done_when_relay_closed():
     assert _health(relay_status="CLOSED") == dash.HEALTH_DONE
 
 
+def test_health_done_when_phase_cancelled_with_dead_pid():
+    """A stopped (cancelled) movement is terminal: it never counts as
+    exited_without_close, so the board never lists it as running."""
+    assert _health(phase=orch.PHASE_CANCELLED, pid_alive=False, next_actor="engineer") == dash.HEALTH_DONE
+
+
 def test_health_done_when_phase_done_even_if_relay_status_missing():
     assert _health(relay_status=None, phase=orch.PHASE_DONE) == dash.HEALTH_DONE
 
