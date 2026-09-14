@@ -1,0 +1,140 @@
+{
+  "created_at": "2026-09-14T21:56:23Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A movement with no usage cache file renders unknown in the turns, tokens and cache columns.",
+          "AC-2 A movement whose usage cache exists and recorded no events renders unknown in those three columns, not zero.",
+          "AC-3 A movement that genuinely measured a zero still renders 0, and a test distinguishes this case from AC-2.",
+          "AC-4 The metered and subscription totals, and the unavailable-cost count, are unchanged for every existing row.",
+          "AC-5 A human assessment cell still survives a re-render untouched.",
+          "AC-6 tests/test_dispatch_ledger.py and tests/test_orchestrator_usage.py pass with the new tests, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_13_THE_DISPATCH_LEDGER.md -- FROZEN, Product Owner directive 2026-09-14: DL-3 fixes the column set; DL-4 cost honesty, a subscription figure is a comparable and never billed spend, and an unavailable cost is counted in neither total; DL-5 the assessment column is human and the renderer never overwrites it; DL-6 derived, never authored -- duration comes from the record's own timestamps and an absent or negative value is printed as unknown rather than computed into a number. Supporting: GOV_ORCH_4A CU-4.",
+          "context_not_loaded": null,
+          "engineering_baseline": "scripts/dispatch_ledger.py renders project/DISPATCH_LEDGER.md from the orchestrator's records; scripts/orchestrator_usage.py owns the per-movement usage cache and the summary the renderer reads. Sixty attempts are recorded today across three providers.",
+          "product_baseline": "Not a product change. The Java product, its collectors and its UI are untouched.",
+          "test_baseline": "tests/test_dispatch_ledger.py and tests/test_orchestrator_usage.py pass on origin/main today, run locally on 2026-09-15 before this packet was written.",
+          "what_exists": "The real committed row for the movement that exposed this reads exactly:\n\n| NXS-LOCAL-0183 | 1 | 2026-09-14T21:19:35Z | antigravity | pro | unknown | unknown | 0 | 0 | 0.00% | unknown | unavailable | unknown | done | 336 | ... |\n\nThe columns, in order, are: movement, attempt, started, provider, model, effort, minutes, turns, tokens, cache %, cost, source, budget, outcome, PR, assessment. So turns, tokens and cache are the three cells printing a measured-looking zero for a movement whose usage was never measured at all.\n\nscripts/orchestrator_usage.py::usage_summary_only returns a dict built like this, and the renderer reads those keys:\n\n    return {\n        \"provider\": provider,\n        \"turns\": cache.get(\"turns\", 0),\n        \"input_tokens\": tokens[\"input_tokens\"],\n        \"cache_creation_input_tokens\": tokens[\"cache_creation_input_tokens\"],\n        \"cache_read_input_tokens\": tokens[\"cache_read_input_tokens\"],\n        \"output_tokens\": tokens[\"output_tokens\"],\n        \"total_tokens\": total_tokens,\n        \"uncached_input_tokens\": tokens[\"input_tokens\"],\n        \"cache_hit_ratio\": cache_hit_ratio,\n        \"cost_usd\": cost_usd,\n        \"cost_source\": cost_source,\n        \"model\": cache.get(\"model\"),\n        \"last_event_at\": cache.get(\"last_event_at\"),\n    }\n\nand the cache-hit line just above it is:\n\n    cache_hit_ratio = round(tokens[\"cache_read_input_tokens\"] / denom, 4) if denom else 0.0\n\nThe usage cache file for a movement lives at <state_dir>/usage/<movement_id>.json; scripts/orchestrator_usage.py::_usage_path returns that path, and scripts/dispatch_ledger.py already calls _usage_path(...).is_file() to decide whether a row has usage at all."
+        },
+        "context_not_loaded": [
+          "ui2/**",
+          "docs/history/**",
+          "application/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ledger-absent-usage-is-unknown"
+        },
+        "invariants": [
+          "Derived, never authored: no absent value is ever computed into a number.",
+          "The assessment column is human and is preserved on every re-render.",
+          "Metered and subscription figures never sum together.",
+          "The ledger holds movement identifiers and numbers only: no address, hostname, serial, credential or path to a credential."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Stop the dispatch ledger printing a zero where it has no measurement. A participant that emits no usage stream renders turns 0, tokens 0 and cache 0.00 percent. A zero claims nothing was spent; the truth is that nothing was measured, and GOV.ORCH.13 DL-6 says an absent value prints unknown and is never computed into a number.",
+        "output_contract": [
+          "A ledger whose every number is something that was actually measured.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "Two scripts and their tests; the defect, the real row and the exact summary shape are all pasted.",
+          "tier": "bounded tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every command runs from the repository root.",
+          "Every changed function names the clause it implements (GOV.ORCH.13 DL-n).",
+          "Run only the commands named above.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE names how absent is represented, where it is decided, and what proves a genuine zero still renders as zero."
+        ],
+        "risks": [
+          "Collapsing absent and zero into one representation somewhere in the middle of the chain, which puts the defect back one layer down where no test looks.",
+          "Breaking an existing caller of the usage summary that reasonably expects a number.",
+          "Changing the totals by treating a newly-unknown cell as an unavailable cost, which would move the counts DL-4 fixes."
+        ],
+        "scope": {
+          "in": [
+            "Distinguish an absent usage record from a recorded zero. A movement whose usage cache file does not exist, and a movement whose cache exists but recorded no events at all, both have no measurement; a movement that genuinely processed zero of something has one. Choose one representation for the absent case -- None is the obvious one -- and carry it through rather than substituting a number anywhere on the way.",
+            "scripts/dispatch_ledger.py: turns, tokens and cache render the literal word unknown when there is no measurement, exactly as minutes and cost already do. The cache percentage in particular must not print 0.00% for a movement that never reported a cache field.",
+            "scripts/orchestrator_usage.py: whatever change is needed so the absent case is expressible. Keep every existing caller working; a caller that expects a number today must keep getting one where a measurement exists.",
+            "tests: a movement with no usage cache renders unknown in turns, tokens and cache; a movement with a cache recording genuine zeros still renders 0; the totals and the unavailable-cost count are unchanged by either."
+          ],
+          "out": [
+            "Estimating, inferring or back-filling any figure for a participant that reports nothing. An invented number is worse than an honest unknown and DL-6 forbids it.",
+            "Any change to the column set, their order, or their headings.",
+            "Any change to the assessment column's preservation. DL-5 is not touched by this movement and a re-render must still keep every human cell exactly.",
+            "Any change to how cost or cost_source is computed, or to the separation of metered and subscription totals.",
+            "Re-rendering project/DISPATCH_LEDGER.md with real numbers. Leave the committed ledger alone; the Product Owner renders it from the main checkout."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_dispatch_ledger.py",
+              "-q"
+            ],
+            "name": "dispatch_ledger_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator_usage.py",
+              "-q"
+            ],
+            "name": "usage_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator.py",
+              "-q"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T21:56:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0186",
+  "movement": "ledger-absent-usage-is-unknown",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_ORCH_13_THE_DISPATCH_LEDGER.md",
+    "docs/design/GOV_ORCH_4A_COST_FROM_THE_REQUESTED_MODEL_WHEN_THE_STREAM_IS_SILENT.md",
+    "scripts/dispatch_ledger.py",
+    "scripts/orchestrator_usage.py",
+    "tests/test_dispatch_ledger.py",
+    "project/DISPATCH_LEDGER.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-14T21:56:23Z"
+}
