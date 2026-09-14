@@ -131,6 +131,15 @@ val frontendBuild = tasks.register<Exec>("frontendBuild") {
     outputs.dir(frontendDir.dir("dist"))
 }
 
+// Container builds (ui2/Containerfile) compile the frontend in a dedicated
+// Node stage and copy `frontend/dist` into the Java stage, which has no npm.
+// `-PfrontendPrebuilt=true` tells Gradle the dist directory is already the
+// build output: the two npm tasks are skipped, and `:service:processResources`
+// still packages the directory `frontendBuild` declares as its output.
+val frontendPrebuilt = (findProperty("frontendPrebuilt") as String?) == "true"
+frontendCi.configure { enabled = !frontendPrebuilt }
+frontendBuild.configure { enabled = !frontendPrebuilt }
+
 val frontendCheck = tasks.register("frontendCheck") {
     group = "verification"
     description = "Full frontend gate: npm ci, npm test, npm run build."

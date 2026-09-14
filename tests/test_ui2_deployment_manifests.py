@@ -508,7 +508,14 @@ def test_the_containerfile_is_two_stages_pinned_by_digest():
     """§11 check 1 (§3.1, §3.2)."""
     lines = CONTAINERFILE.read_text(encoding="utf-8").splitlines()
     froms = [line for line in lines if line.startswith("FROM ")]
-    assert len(froms) == 2, f"§3.2: the image is two stages, found {len(froms)}"
+    # §3.2 successor (2026-09-14): the frontend is compiled in its own Node
+    # stage (PR #238's no-committed-bundle rule; grafting node into the JDK
+    # stage fails on OPENSSL_3.4.0), so the image is N build stages and ONE
+    # runtime stage. What §3.2 protects -- a runtime stage that carries no
+    # build tooling and bases pinned by digest -- is asserted directly.
+    assert len(froms) >= 2, f"§3.2: at least a build and a runtime stage, found {len(froms)}"
+    assert "openjdk-21-runtime@sha256:" in froms[-1], f"§3.2: the final stage must be the runtime base: {froms[-1]}"
+    assert "nodejs" not in froms[-1] and " AS " not in froms[-1], "§3.2: the runtime stage is last and unnamed"
     for line in froms:
         assert "@sha256:" in line, f"§3.1: base image is not pinned by digest: {line}"
 
