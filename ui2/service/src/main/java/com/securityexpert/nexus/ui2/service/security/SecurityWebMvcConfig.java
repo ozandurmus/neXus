@@ -29,7 +29,13 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /local-identities", ActionRegistry.LOCAL_IDENTITY_LIST),
             Map.entry("POST /local-identities/set-password", ActionRegistry.LOCAL_IDENTITY_SET_PASSWORD),
             Map.entry("POST /local-identities/disable", ActionRegistry.LOCAL_IDENTITY_DISABLE),
-            Map.entry("POST /local-identities/enable", ActionRegistry.LOCAL_IDENTITY_ENABLE));
+            Map.entry("POST /local-identities/enable", ActionRegistry.LOCAL_IDENTITY_ENABLE),
+            // 2026-09-14 CS-1..CS-5: one resource, body-only (no path
+            // variable), matching /local-identities' own shape.
+            Map.entry("POST /credentials", ActionRegistry.CREDENTIAL_CREATE),
+            Map.entry("GET /credentials", ActionRegistry.CREDENTIAL_LIST),
+            Map.entry("POST /credentials/replace-secret", ActionRegistry.CREDENTIAL_REPLACE_SECRET),
+            Map.entry("POST /credentials/delete", ActionRegistry.CREDENTIAL_DELETE));
 
     private final GateChain gateChain;
 

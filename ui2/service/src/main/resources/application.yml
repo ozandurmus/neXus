@@ -33,6 +33,12 @@ ui2:
     # -encoded 256-bit key, read once at startup, never a property default.
     group-reference-key-file: ${UI2_ROLE_BINDING_GROUP_REFERENCE_KEY_FILE:/run/secrets/ui2_role_binding_group_reference_key}
     group-reference-key-id: ${UI2_ROLE_BINDING_GROUP_REFERENCE_KEY_ID:role_binding_group_ref_key_v1}
+  credential-store:
+    # 2026-09-14 CS-2: a second, separately named key from the role-binding
+    # key above (C1 §6.1 scopes secrets per purpose) -- base64-encoded
+    # 256-bit, read once at startup, never a property default.
+    key-file: ${UI2_CREDENTIAL_STORE_KEY_FILE:/run/secrets/ui2_credential_store_key}
+    key-id: ${UI2_CREDENTIAL_STORE_KEY_ID:credential_store_key_v1}
 
 logging:
   level:

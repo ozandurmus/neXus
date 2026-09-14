@@ -27,6 +27,11 @@ public final class ActionRegistry {
     public static final String LOCAL_IDENTITY_SET_PASSWORD = "local_identity_set_password";
     public static final String LOCAL_IDENTITY_DISABLE = "local_identity_disable";
     public static final String LOCAL_IDENTITY_ENABLE = "local_identity_enable";
+    /** 2026-09-14 PO decision record CS-1..CS-5: credential store administration, {@code role:security_admin} only. */
+    public static final String CREDENTIAL_CREATE = "credential_create";
+    public static final String CREDENTIAL_LIST = "credential_list";
+    public static final String CREDENTIAL_REPLACE_SECRET = "credential_replace_secret";
+    public static final String CREDENTIAL_DELETE = "credential_delete";
 
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
@@ -52,6 +57,13 @@ public final class ActionRegistry {
         register(new ActionDescriptor(LOCAL_IDENTITY_SET_PASSWORD, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(LOCAL_IDENTITY_DISABLE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(LOCAL_IDENTITY_ENABLE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        // 2026-09-14 CS-1..CS-5: every credential store operation requires
+        // role:security_admin, through this same E4 evaluation -- no second
+        // authorization check exists.
+        register(new ActionDescriptor(CREDENTIAL_CREATE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(CREDENTIAL_LIST, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(CREDENTIAL_REPLACE_SECRET, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(CREDENTIAL_DELETE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without
