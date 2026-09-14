@@ -2,14 +2,24 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE.** This document authorizes nothing. It
-creates no device row, contacts no device, and lifts no gate. It is written
-so that a later, separate movement can implement against it once the
-Product Owner has reviewed it clause by clause and applied `FROZEN`, exactly
-as `CP_AND_VSX_DISCOVERY_CONTRACT.md` and `PAN_DISCOVERY_CONTRACT.md` were
-reviewed and frozen on 2026-09-13. No such review has happened for this
-document at the time of writing; this status line says so plainly rather
-than implying one.
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-14.** This document is
+implementation authority for device import and the enrollment confirm,
+within the scope §1 states and no further. It lifts no collection gate: the
+first contact's two identity reads are approved separately, per vendor, in
+`DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md`.
+
+**Review of record.** The Product Owner assistant read §2, §3 and §4 clause
+by clause on 2026-09-13 and answered the two open items on the relay
+(`relay/NXS-LOCAL-0147`: EC-6a, EC-12); the Product Owner approved the freeze
+in the 2026-09-14 session after directing, in
+`PO_DECISION_RECORD_2026_09_14_DEVICE_ADD_ENTRY_PEER_FOLLOW_AND_CREDENTIAL_STORE.md`
+(FROZEN), how the dialog that drives this contract behaves: exactly address,
+vendor and credential are entered (no display-name field, DA-1); the device's
+facts are read on first contact (DA-2); and a single member's peer is
+followed and corroborated before a unit forms (PF-1 to PF-5). Those clauses
+are that record's, cited here as the successor clauses this document reads
+alongside; nothing in §2–§6 is edited to absorb them. Previous status:
+DRAFT — FOR PRODUCT OWNER FREEZE (2026-09-13).
 
 It fixes what happens between discovery and collection: how a candidate row
 from either FROZEN discovery contract becomes a device the product owns, how
@@ -503,10 +513,11 @@ Three bands, in the shape `CP-DISCOVERY` §9 and `PAN-DISCOVERY` §11 use.
 
 ### Band 1 — repository checks, runnable now
 
-1. The status line declares `DRAFT — FOR PRODUCT OWNER FREEZE` and states
-   plainly that the document authorizes nothing:
+1. The status line declares the applied status and its reviewer:
    `grep -n -A 2 '^## Status$' docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md`
-   shows a leading `DRAFT` token.
+   shows a leading `FROZEN — PRODUCT OWNER APPROVED` token with a date.
+   (Before 2026-09-14 this check asserted a `DRAFT` token; the freeze
+   replaced it rather than leaving it to contradict the status block.)
 2. The repository privacy gate reports zero findings:
    `python3 scripts/repository_privacy_check.py`.
 3. The document contains no address literal:
