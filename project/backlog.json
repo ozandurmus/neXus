@@ -396,6 +396,15 @@
       "priority": "P2",
       "target": "GOV.ORCH.4 section 3.1; scripts/orchestrator_usage.py",
       "note": ""
+    },
+    {
+      "id": "workbench_borrow_from_agent_orchestration_tools",
+      "category": "governance",
+      "title": "Workbench: borrow the features that make a fleet of agents followable",
+      "status": "planned",
+      "priority": "P3",
+      "target": "GOV.ORCH.4 workbench successor",
+      "note": ""
     }
   ]
 }
