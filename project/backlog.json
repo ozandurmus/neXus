@@ -405,6 +405,15 @@
       "priority": "P2",
       "target": "PasswordChangeService and LocalIdentityAdministration set-password paths; application.yml ui2.local-auth.*; frontend shows the active rules on the change screen",
       "note": ""
+    },
+    {
+      "id": "device_admin_accounts_and_privileges",
+      "category": "collection",
+      "title": "Device administrator accounts and their privileges, collected and shown per device",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }

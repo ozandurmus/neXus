@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-14T17:39:19Z
+Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-14T17:46:20Z
 
 ## Now
 - ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments (automated_validated)
@@ -43,6 +43,7 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-14T
 - P2/in_progress ui2_m3_design_transfer_pass
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
+- P2/planned device_admin_accounts_and_privileges
 - P2/planned dlp_prose_collision_catalogue_stale
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
