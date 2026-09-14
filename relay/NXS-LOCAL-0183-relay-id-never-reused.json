@@ -1,0 +1,113 @@
+{
+  "created_at": "2026-09-14T21:02:53Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Given a relay directory holding only a lock file for an id and no JSON file for it, the next allocated id is greater than that id.",
+          "AC-2 Given both a JSON file and a lock file, the allocator still returns one more than the highest id seen in either.",
+          "AC-3 An empty directory, and a directory that does not exist, still return 1 as they do today.",
+          "AC-4 A file whose name does not match the id pattern is ignored and never raises.",
+          "AC-5 tests/test_local_relay_protocol.py passes with the new tests added, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md -- FROZEN, Product Owner approved 2026-09-08. It fixes that a movement id resolves to exactly one relay file, and that the worktree path and the orchestrator's state record are both derived from that id. A reissued id breaks all three at once: two movements resolve to one file, share one worktree path, and merge their accounting into one record. This movement restores that invariant at its source and changes nothing else about the protocol.",
+          "context_not_loaded": null,
+          "engineering_baseline": "scripts/local_relay.py is the only allocator of movement ids. The repository currently holds 59 lock files beside the relay JSON files, so the lock files are a real and available record of ids already handed out.",
+          "product_baseline": "Not a product change. The Java product, its collectors and its UI are untouched.",
+          "test_baseline": "tests/test_local_relay_protocol.py passes on origin/main today; it was run locally on 2026-09-15 before this packet was written.",
+          "what_exists": "scripts/local_relay.py defines the allocator exactly like this, at line 325:\n\ndef _next_id(relay_dir: Path) -> int:\n    if not relay_dir.is_dir():\n        return 1\n    best = 0\n    for candidate in relay_dir.glob(f\"{ID_PREFIX}*.json\"):\n        match = re.match(r\"^NXS-LOCAL-(\\d{4})-\", candidate.name)\n        if match:\n            best = max(best, int(match.group(1)))\n    return best + 1\n\nIts only caller is in the create command, around line 457:\n\n    next_id = _next_id(relay_dir)\n    full_id = f\"{ID_PREFIX}{next_id:04d}\"\n    slug = _slugify(args.slug or start_obj[\"movement\"])\n    target = relay_dir / f\"{full_id}-{slug}.json\"\n    if target.exists():\n        print(f\"error: {target} already exists\", file=sys.stderr)\n        return EXIT_INVALID\n\nThe lock files sit in the same directory and are named after the relay file they lock, for example relay/NXS-LOCAL-0155-brand-nexus-wordmark.json.lock and relay/NXS-LOCAL-0178-nxs-local-0178-root-identity-and-local-a.json.lock. Note that a lock name therefore ends in .json.lock, not .lock alone, and that the id is still the first four digits after the NXS-LOCAL- prefix."
+        },
+        "context_not_loaded": [
+          "ui2/**",
+          "docs/history/**",
+          "application/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/relay-id-never-reused"
+        },
+        "invariants": [
+          "An id, once handed out, is never handed out again.",
+          "The function returns an integer and never raises on an unexpected file name.",
+          "No existing file in the relay directory is created, renamed, moved or deleted by this change."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the pull request and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Stop the relay from ever reissuing a movement id that has already been used. Today the id allocator looks only at committed relay JSON files, so a movement whose JSON was never committed frees its id while its lock file, its worktree directory and its orchestrator state record all still exist under that id. On 2026-09-13 ids 0136 and 0137 were handed to two new movements; the collision was caught by hand before dispatch, and the history of the two earlier movements is gone.",
+        "output_contract": [
+          "A relay that cannot hand the same movement id to two movements.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "One small pure function and its tests; the defect, the evidence and the file-name trap are all named exactly.",
+          "tier": "bounded tier, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Run only the two commands named above, from the repository root.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE states what evidence the allocator now reads and what it still cannot see."
+        ],
+        "risks": [
+          "Matching the lock name with a pattern that assumes it ends in .lock rather than .json.lock, and so silently counting nothing.",
+          "Deleting or tidying lock files as part of the fix, which would destroy the very evidence the fix depends on.",
+          "Changing the create command's behaviour for an id that legitimately does not exist yet."
+        ],
+        "scope": {
+          "in": [
+            "scripts/local_relay.py: make _next_id consider every id the directory has evidence of, not only committed JSON files. The lock files named in what_exists are that evidence and are already written by this same module. Keep the function's signature and its return contract unchanged: it still returns one integer, the next free id.",
+            "Keep the existing guard in the create command that refuses when the target file already exists. It stays as the second line of defence; this movement fixes the first."
+          ],
+          "out": [
+            "Any change to the relay file format, to the entry schema, or to any marker.",
+            "Any change to how ids are formatted or to the four-digit width.",
+            "Deleting, renaming or tidying any existing lock file. They are the evidence this fix relies on; leave every one of them alone.",
+            "Any change to scripts/orchestrator.py, to the worktree layout, or to the state directory.",
+            "Any change to a document under docs/design/. The Product Owner owns those."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_local_relay_protocol.py",
+              "-q"
+            ],
+            "name": "local_relay_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T21:02:53Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0183",
+  "movement": "relay-id-never-reused",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md",
+    "scripts/local_relay.py",
+    "docs/history/backlog/relay_id_reuse_when_record_uncommitted.md",
+    "project/QUEUE.md",
+    "tests/test_local_relay_protocol.py"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-14T21:02:53Z"
+}
