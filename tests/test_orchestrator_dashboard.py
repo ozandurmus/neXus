@@ -435,15 +435,32 @@ def test_health_healthy_when_idle_seconds_unknown():
     assert _health(idle_seconds=None) == dash.HEALTH_HEALTHY
 
 
+def test_health_handed_over_when_flag_present_and_not_terminal():
+    assert _health(external_participant=True, pid_alive=False) == dash.HEALTH_HANDED_OVER
+
+
+def test_health_exited_without_close_when_no_flag_and_pid_dead():
+    assert _health(external_participant=False, pid_alive=False) == dash.HEALTH_EXITED_WITHOUT_CLOSE
+
+
+def test_health_terminal_phase_wins_over_handed_over_flag():
+    assert _health(external_participant=True, phase=orch.PHASE_DONE) == dash.HEALTH_DONE
+
+
+def test_health_closed_relay_wins_over_handed_over_flag():
+    assert _health(external_participant=True, relay_status="CLOSED") == dash.HEALTH_DONE
+
+
 @pytest.mark.parametrize("kwargs,expected", [
     ({"relay_status": "CLOSED"}, dash.HEALTH_DONE),
     ({"phase": orch.PHASE_FAILED}, dash.HEALTH_FAILED),
     ({"next_actor": "po"}, dash.HEALTH_AWAITING_PO),
+    ({"external_participant": True, "pid_alive": False}, dash.HEALTH_HANDED_OVER),
     ({"pid_alive": False}, dash.HEALTH_EXITED_WITHOUT_CLOSE),
     ({"idle_seconds": 5000}, dash.HEALTH_SILENT),
     ({}, dash.HEALTH_HEALTHY),
 ])
-def test_health_never_returns_anything_outside_the_six_values(kwargs, expected):
+def test_health_never_returns_anything_outside_the_seven_values(kwargs, expected):
     result = _health(**kwargs)
     assert result == expected
     assert result in dash.ALL_HEALTH_VALUES

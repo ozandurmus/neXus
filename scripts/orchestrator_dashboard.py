@@ -113,9 +113,10 @@ HEALTH_EXITED_WITHOUT_CLOSE = "exited_without_close"
 HEALTH_AWAITING_PO = "awaiting_po"
 HEALTH_FAILED = "failed"
 HEALTH_DONE = "done"
+HEALTH_HANDED_OVER = "handed_over"
 ALL_HEALTH_VALUES = frozenset({
     HEALTH_HEALTHY, HEALTH_SILENT, HEALTH_EXITED_WITHOUT_CLOSE,
-    HEALTH_AWAITING_PO, HEALTH_FAILED, HEALTH_DONE,
+    HEALTH_AWAITING_PO, HEALTH_FAILED, HEALTH_DONE, HEALTH_HANDED_OVER,
 })
 
 #: A sentinel distinct from `None` -- `None` is itself a legitimate
@@ -248,6 +249,7 @@ def _log_idle_seconds(worktree_path: str | None) -> float | None:
 def derive_health(
     *, pid_alive: bool, relay_status: str | None, next_actor: str | None, phase: str | None,
     idle_seconds: float | None, stuck_after_seconds: int = DEFAULT_STUCK_AFTER_SECONDS,
+    external_participant: bool = False,
 ) -> str:
     """Section 3.3's six-value health field, computed only from a live pid
     check, relay status/next_actor, the record's own `phase`, and
@@ -258,7 +260,8 @@ def derive_health(
     `next_actor == "po"` is the ordinary, expected pause, not a problem;
     only then does a genuinely dead-but-not-terminal process count as
     `exited_without_close`; a still-alive process is `silent` or `healthy`
-    depending on how long `engineer.log` has gone quiet."""
+    depending on how long `engineer.log` has gone quiet.
+    GOV.ORCH.4-B HB-1, HB-2, HB-3: handed_over added after terminal and awaiting_po rules."""
     # `cancelled` is a terminal phase (`orch.TERMINAL_PHASES`): a record the PO
     # stopped on purpose has no live process by definition, so it must never
     # fall through to `exited_without_close` and show as running.
@@ -268,6 +271,8 @@ def derive_health(
         return HEALTH_FAILED
     if next_actor == "po":
         return HEALTH_AWAITING_PO
+    if external_participant:
+        return HEALTH_HANDED_OVER
     if not pid_alive:
         return HEALTH_EXITED_WITHOUT_CLOSE
     if idle_seconds is not None and idle_seconds >= stuck_after_seconds:
@@ -755,6 +760,7 @@ def build_movement_summary(
     health = derive_health(
         pid_alive=bool(row.get("pid_alive")), relay_status=relay_status, next_actor=next_actor,
         phase=row.get("phase"), idle_seconds=idle_seconds, stuck_after_seconds=stuck_after_seconds,
+        external_participant=record.get("external_participant", False),
     )
     usage = ou.compute_usage(state_dir, row["movement_id"], worktree_path, row.get("provider", "claude"), price_table or {}, row.get("model_requested"))
     return {
