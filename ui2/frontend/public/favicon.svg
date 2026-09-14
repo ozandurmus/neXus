@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>neXus</title>
+  <rect width="64" height="64" rx="16" fill="#1b1f3b" />
+  <path d="M12 10 L24 10 L52 54 L40 54 Z" fill="#1f8f7c" />
+  <path d="M52 10 L40 10 L12 54 L24 54 Z" fill="#3b63d1" />
+</svg>
