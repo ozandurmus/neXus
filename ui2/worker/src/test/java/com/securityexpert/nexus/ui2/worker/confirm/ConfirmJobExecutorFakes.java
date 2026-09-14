@@ -147,7 +147,7 @@ final class ConfirmJobExecutorFakes {
         boolean recordConfirmSuccessCalled = false;
 
         void put(String deviceId, DeviceEnrollmentState state) {
-            byId.put(deviceId, new DeviceRecord(deviceId, "check_point", "manual_registration",
+            byId.put(deviceId, new DeviceRecord(deviceId, "gateway", "check_point", "manual_registration",
                     java.time.Instant.now(), false, state, false, "cred-ref-1"));
         }
 
@@ -197,7 +197,7 @@ final class ConfirmJobExecutorFakes {
                 return false;
             }
             lastRecordedFacts = facts;
-            byId.put(deviceId, new DeviceRecord(existing.deviceId(), existing.vendorHint(),
+            byId.put(deviceId, new DeviceRecord(existing.deviceId(), existing.role(), existing.vendorHint(),
                     existing.registrationSource(), existing.createdAt(), existing.isTestTarget(),
                     DeviceEnrollmentState.ENROLLED, existing.disabled(), existing.credentialReferenceId()));
             return true;

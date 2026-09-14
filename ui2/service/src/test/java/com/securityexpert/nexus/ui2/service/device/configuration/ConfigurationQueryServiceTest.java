@@ -95,7 +95,7 @@ class ConfigurationQueryServiceTest {
     private static ConfigurationRun showConfigurationRun(String deviceId, Instant collectedAt, String sanitizedText) {
         return new ConfigurationRun("run-1", deviceId, "job-1", collectedAt, "check_point",
                 ConfigurationReadKind.SHOW_CONFIGURATION, true, "hash-1", "hash-1", 100L, "artefact-1", 0,
-                Optional.of(sanitizedText), ChangeState.FIRST_RUN, List.of(), List.of());
+                Optional.of(sanitizedText), ChangeState.FIRST_RUN, List.of(), List.of(), Optional.empty());
     }
 
     @Test

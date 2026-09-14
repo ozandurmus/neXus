@@ -120,6 +120,7 @@ class ConfigurationJobExecutorEndToEndTest {
         assertEquals(ConfigurationReadKind.SHOW_CONFIGURATION, run.readKind());
         assertTrue(run.primary());
         assertEquals(ChangeState.FIRST_RUN, run.changeState(), "no previous run for this device existed");
+        assertTrue(run.deviationSummary().isEmpty(), "AC-4: first run carries no deviation summary");
 
         assertEquals(expected.canonicalHash(), run.canonicalHash(), "AC-1: the canonical hash over set lines only");
         assertEquals(expected.withheldLineCount(), run.withheldLineCount());
@@ -215,6 +216,94 @@ class ConfigurationJobExecutorEndToEndTest {
         assertEquals(0, active.withheldLineCount());
         assertEquals(0, effectiveRunning.withheldLineCount());
         assertEquals(0, merged.withheldLineCount());
+    }
+
+    @Test
+    void changedRunCarriesDeviationSummaryNamingChangedSectionsAndCounts(@TempDir Path tempDir) throws Exception {
+        String rawConfigOld = checkPointRawConfiguration();
+        // New configuration has one static ARP entry removed and one added with different IP
+        StringBuilder textNew = new StringBuilder();
+        textNew.append("#\n# Configuration of gw-a\n# Language version: 20.0\n#\n");
+        for (int i = 0; i < 290; i++) { // 290 instead of 295 -> arp count changes
+            textNew.append("set arp static-arp ip-address 10.0.").append(i / 256).append('.').append(i % 256)
+                    .append(" hw-address 00:11:22:33:44:").append(String.format("%02x", i % 256)).append('\n');
+        }
+        for (int i = 0; i < 5; i++) {
+            textNew.append("set user admin").append(i).append(" password-hash abcdef").append(i).append('\n');
+        }
+        String rawConfigNew = textNew.toString();
+
+        Map<String, String> outputByCommandOld = Map.of(
+                ConfigurationReadPlan.CP_SHOW_HOSTNAME, "gw-a\n",
+                ConfigurationReadPlan.CP_SHOW_VERSION_ALL, "Version R81.20\n",
+                ConfigurationReadPlan.CP_CPSTAT_OS_HW_INFO, "Model Quantum\n",
+                ConfigurationReadPlan.CP_SHOW_CONFIGURATION, rawConfigOld);
+
+        Map<String, String> outputByCommandNew = Map.of(
+                ConfigurationReadPlan.CP_SHOW_HOSTNAME, "gw-a\n",
+                ConfigurationReadPlan.CP_SHOW_VERSION_ALL, "Version R81.20\n",
+                ConfigurationReadPlan.CP_CPSTAT_OS_HW_INFO, "Model Quantum\n",
+                ConfigurationReadPlan.CP_SHOW_CONFIGURATION, rawConfigNew);
+
+        ConfigurationJobExecutorFakes.FakeLeaseRepository leaseRepo =
+                new ConfigurationJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
+        ConfigurationJobExecutorFakes.FakeStepAttemptRepository attemptRepo =
+                new ConfigurationJobExecutorFakes.FakeStepAttemptRepository();
+        ConfigurationJobExecutorFakes.FakeDeviceEnrollmentReadPort devicePort =
+                new ConfigurationJobExecutorFakes.FakeDeviceEnrollmentReadPort();
+        ConfigurationJobExecutorFakes.FakeDeviceRepository deviceRepository =
+                new ConfigurationJobExecutorFakes.FakeDeviceRepository();
+        ConfigurationJobExecutorFakes.FakeDeviceConfigurationRepository configurationRepository =
+                new ConfigurationJobExecutorFakes.FakeDeviceConfigurationRepository();
+        ConfigurationJobExecutorFakes.FakeConfigurationNotificationRepository notificationRepository =
+                new ConfigurationJobExecutorFakes.FakeConfigurationNotificationRepository();
+        ArtefactStore artefactStore = newArtefactStore(tempDir);
+
+        ScriptedCheckPointConfigTransport transportOld = new ScriptedCheckPointConfigTransport(outputByCommandOld);
+        ConfigurationCapabilityExecutor capabilityExecutorOld = new ConfigurationCapabilityExecutor(transportOld,
+                ref -> { throw new IllegalStateException("not used"); }, artefactStore, PanoramaCrossCheckPort.NONE);
+        ConfigurationJobExecutor executorOld = new ConfigurationJobExecutor(leaseRepo, attemptRepo, devicePort,
+                deviceRepository, configurationRepository, notificationRepository, capabilityExecutorOld,
+                new RecordingManifestRepository(), testFingerprint(), tempDir.toString());
+
+        ConfigurationRequest request =
+                ConfigurationRequest.checkPoint(new ConnectionTarget("ep-1", "gw-a-host", 22), "cred-1", "trust-1");
+
+        executorOld.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request, false);
+        assertEquals(1, configurationRepository.recordedRuns.size());
+        assertEquals(ChangeState.FIRST_RUN, configurationRepository.recordedRuns.get(0).changeState());
+
+        // Second run: changed configuration
+        String job2 = "job-configuration-2";
+        long leaseEpoch2 = 8L;
+        ConfigurationJobExecutorFakes.FakeLeaseRepository leaseRepo2 =
+                new ConfigurationJobExecutorFakes.FakeLeaseRepository(job2, leaseEpoch2, JobState.CLAIMED);
+        ScriptedCheckPointConfigTransport transportNew = new ScriptedCheckPointConfigTransport(outputByCommandNew);
+        ConfigurationCapabilityExecutor capabilityExecutorNew = new ConfigurationCapabilityExecutor(transportNew,
+                ref -> { throw new IllegalStateException("not used"); }, artefactStore, PanoramaCrossCheckPort.NONE);
+        ConfigurationJobExecutor executorNew = new ConfigurationJobExecutor(leaseRepo2, attemptRepo, devicePort,
+                deviceRepository, configurationRepository, notificationRepository, capabilityExecutorNew,
+                new RecordingManifestRepository(), testFingerprint(), tempDir.toString());
+
+        JobOutcome outcome = executorNew.execute(job2, leaseEpoch2, DEVICE_ID, request, false);
+        assertTrue(outcome instanceof JobOutcome.Completed);
+
+        assertEquals(2, configurationRepository.recordedRuns.size());
+        ConfigurationRun secondRun = configurationRepository.recordedRuns.get(1);
+        assertEquals(ChangeState.CHANGED, secondRun.changeState());
+        assertTrue(secondRun.deviationSummary().isPresent(), "changed run carries deviation summary");
+
+        var summary = secondRun.deviationSummary().get();
+        assertEquals(com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationSummary.Status.COMPUTED,
+                summary.status());
+        assertEquals(1, summary.entries().size());
+        var entry = summary.entries().get(0);
+        assertEquals("physical", entry.context());
+        assertEquals("arp", entry.section());
+        assertEquals(com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationDeviationEntry.DeviationKind.RECOUNTED,
+                entry.kind());
+        assertEquals(295, entry.oldCount());
+        assertEquals(290, entry.newCount());
     }
 
     /** NXS-LOCAL-0170 BK-16: the manifest row every artefact now carries; this test only needs it to exist. */
