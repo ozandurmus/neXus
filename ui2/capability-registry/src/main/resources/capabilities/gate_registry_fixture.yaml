@@ -427,3 +427,141 @@ gates:
     secret_output_risk: none
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md entry 4"
+
+  # NXS-LOCAL-0165: 14G CG-1 Check Point configuration reads. docs/design/CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md.
+  - gate_id: cp_configuration_show_hostname
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "clish -c 'show hostname'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "an empty hostname is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md entry 1"
+
+  - gate_id: cp_configuration_show_version_all
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "clish -c 'show version all'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "a field this parser does not recognize is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md entry 2"
+
+  - gate_id: cp_configuration_cpstat_os_hw_info
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "clish -c 'cpstat os -f hw_info'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "a field this parser does not recognize is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md entry 3"
+
+  - gate_id: cp_configuration_show_configuration
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "clish -c 'show configuration'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 60
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run, no per-virtual-system repetition"
+    unsupported_behavior_ref: "the read carries secret-bearing lines -- withheld in the sanitized view, encrypted at rest in the artefact store"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md entry 4"
+
+  # NXS-LOCAL-0165: 14G CG-4 Palo Alto configuration reads. docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md.
+  - gate_id: pan_configuration_show_system_info
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "<show><system><info/></system></show>"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "non-XML or error envelope is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md entry 1"
+
+  - gate_id: pan_configuration_active
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "type=config&action=show&xpath=/config"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "the read carries secret-bearing leaves -- withheld in the view, encrypted at rest"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md entry 2"
+
+  - gate_id: pan_configuration_effective_running
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "<show><config><effective-running/></config></show>"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 120
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "the read carries secret-bearing leaves -- withheld in the view, encrypted at rest; response measured at 11.8 MB, streamed, never held whole"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md entry 3"
+
+  - gate_id: pan_configuration_merged
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "<show><config><merged/></config></show>"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 60
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "the read carries secret-bearing leaves -- withheld in the view, encrypted at rest"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md entry 4"

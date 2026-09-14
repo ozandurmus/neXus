@@ -36,6 +36,16 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /devices/*/inventory", ActionRegistry.DEVICE_READ),
             Map.entry("POST /devices/*/inventory/collect", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
+            // NXS-LOCAL-0165 "Routes": same wildcard shapes as the inventory
+            // routes above; /devices/*/configuration/text is a four-segment
+            // route (GateChainInterceptor tries a single-segment wildcard at
+            // every position, so the id at position 2 resolves the same way
+            // /discovery/runs/*/import's own position-3 wildcard already does).
+            Map.entry("GET /configuration", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /devices/*/configuration", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /devices/*/configuration/text", ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ),
+            Map.entry("POST /devices/*/configuration/collect", ActionRegistry.DEVICE_CONFIGURATION_COLLECT),
+            Map.entry("GET /notifications", ActionRegistry.NOTIFICATIONS_READ),
             // 13G: one resource, body-only (no path variable), matching
             // /role-bindings/revoke's own shape.
             Map.entry("POST /local-identities", ActionRegistry.LOCAL_IDENTITY_CREATE),

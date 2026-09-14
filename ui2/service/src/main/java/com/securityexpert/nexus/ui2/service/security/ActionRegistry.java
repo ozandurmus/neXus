@@ -31,6 +31,12 @@ public final class ActionRegistry {
      * open one.
      */
     public static final String DEVICE_INVENTORY_COLLECT = "device_inventory_collect";
+    /** NXS-LOCAL-0165 "Routes": {@code POST /devices/{id}/configuration/collect} -- same gate as {@link #DEVICE_INVENTORY_COLLECT}. */
+    public static final String DEVICE_CONFIGURATION_COLLECT = "device_configuration_collect";
+    /** NXS-LOCAL-0165 "Routes": {@code GET /devices/{id}/configuration/text} -- the sanitized Check Point view; a gated read, {@code role:onboarding_admin} only (it names section/entry structure of a device's own configuration). */
+    public static final String DEVICE_CONFIGURATION_TEXT_READ = "device_configuration_text_read";
+    /** NXS-LOCAL-0165: {@code GET /notifications} -- any authenticated session, like {@link #DEVICE_READ}. */
+    public static final String NOTIFICATIONS_READ = "notifications_read";
     /** 13G LIA-5: local identity administration, {@code role:security_admin} only. */
     public static final String LOCAL_IDENTITY_CREATE = "local_identity_create";
     public static final String LOCAL_IDENTITY_LIST = "local_identity_list";
@@ -70,6 +76,9 @@ public final class ActionRegistry {
         // NO_APPLICABLE_AUTHORITY at E4 (open to any authenticated session).
         register(new ActionDescriptor(DEVICE_READ, true, Optional.empty()));
         register(new ActionDescriptor(DEVICE_INVENTORY_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        register(new ActionDescriptor(DEVICE_CONFIGURATION_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        register(new ActionDescriptor(DEVICE_CONFIGURATION_TEXT_READ, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        register(new ActionDescriptor(NOTIFICATIONS_READ, true, Optional.empty()));
         // 13G LIA-5: every local identity administration operation requires
         // role:security_admin, through this same E4 evaluation -- no second
         // authorization check exists.
