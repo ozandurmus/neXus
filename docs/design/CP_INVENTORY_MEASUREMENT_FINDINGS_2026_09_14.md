@@ -115,7 +115,38 @@ on a new channel) is still owed.
   battery settled on). The shape script's VS section now tries the first
   two and prints `type vsenv`.
 
-## 8. Still owed (M-2, remainder)
+## 8. M-2, second pass (VSX host, one virtual system)
+
+- **`bash -lc 'vsenv <VSID> && <reads>'` works on a non-interactive
+  channel** (exit 0, first line `Context is set to Virtual Device <name>
+  (ID <n>).`, then the reads answer for that virtual system). Sourcing the
+  Check Point profile inside `bash -c` does **not** define `vsenv` (exit
+  127). `type vsenv` under `bash -i` reports a shell function. The Java
+  transport therefore issues every per-VS composite as
+  `bash -lc 'vsenv <VSID> && …'`.
+- Inside the VS context, `ip -4 addr show` lists the virtual system's own
+  interfaces (physical port, VLAN subinterfaces `name.ID@ifNN` with
+  `link-netnsid`), and `ip -4 route show` its own routes (`proto 7` default
+  and statics, `proto kernel` connected, `proto 7 scope link`). These are
+  the **member's** addresses on that virtual system.
+- `cphaprob -a -m if` inside the context is headed `vsid <N>:` and lists
+  the virtual system's monitored interfaces and its own `Virtual cluster
+  interfaces: <n>` block — the cluster addresses for that virtual system
+  (five on the measured one). Its VLAN table has the VSX shape
+  `Interface | VS ID | Monitored VLANs` followed by a `VSX load sharing:`
+  sentence.
+- `cphaprob stat` inside the context reports that virtual system's own
+  member roles (the local member was ACTIVE there while STANDBY for the
+  physical view), consistent with the VSLS table in §4.
+- **A fresh SSH session may land directly in a non-zero context** (prompt
+  `:3` observed on a new login after the measurement). The collector must
+  never assume the physical context on connect: physical reads run in the
+  session as opened only after verifying `:0`, or, simpler, are themselves
+  issued as `bash -lc 'vsenv 0 && …'`.
+- Virtual-system ids differ per host (one host had 2 and 3, another 1 and
+  3); the id set always comes from `vsx stat -v`.
+
+## 9. Still owed
 
 On the VSX host: `sh cp_inventory_shape.sh <VSID>` for one of the two
 virtual systems (composite `vsenv <VSID>; ip -4 addr show; ip -4 route
