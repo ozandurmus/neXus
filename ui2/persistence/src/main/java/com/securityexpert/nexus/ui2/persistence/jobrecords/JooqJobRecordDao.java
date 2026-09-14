@@ -50,6 +50,14 @@ public final class JooqJobRecordDao implements JobRecordDao {
                 .stream().findFirst().map(JooqJobRecordDao::toRow));
     }
 
+    @Override
+    public Optional<JobRow> findMostRecentByTargetDeviceId(String targetDeviceId) {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(
+                "select * from jobs where target_device_id = {0} order by submitted_at desc limit 1",
+                targetDeviceId)
+                .stream().findFirst().map(JooqJobRecordDao::toRow));
+    }
+
     private static JobRow toRow(Record row) {
         return new JobRow(
                 row.get("job_id", String.class),

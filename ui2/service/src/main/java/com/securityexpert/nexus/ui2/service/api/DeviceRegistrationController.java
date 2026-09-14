@@ -1,60 +1,161 @@
 package com.securityexpert.nexus.ui2.service.api;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.securityexpert.nexus.ui2.service.device.DeviceRegistrationService;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
+import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
+import com.securityexpert.nexus.ui2.service.device.DeviceAddSingleService;
+import com.securityexpert.nexus.ui2.service.device.DeviceQueryService;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
 /**
- * Manual device registration (B1-4b contract §4). Gated by {@link
- * GateChainInterceptor} -- reached only after {@code E1}-{@code E4}
- * required {@code role:onboarding_admin} (module placement: registration
- * controller lives in {@code service}, adjudication F12).
+ * Single-device add and its two read routes (WORKER.md "Routes" --
+ * NXS-LOCAL-0158 closes the three gaps NXS-LOCAL-0157's SESSION_CLOSE
+ * named). Gated by {@link GateChainInterceptor} through {@code
+ * SecurityWebMvcConfig}'s route map -- this class performs no authorization
+ * check of its own. Every JSON key below is exactly what {@code
+ * adminApi.ts} (the fixed side of this contract) declares.
  */
 @RestController
 public final class DeviceRegistrationController {
 
-    public record RegisterRequest(String vendorHint, String transportKind, String addressRef,
-            String credentialReferenceId, boolean isTestTarget) {
+    public record AddSingleRequest(
+            @JsonProperty("address") String address,
+            @JsonProperty("vendor") String vendor,
+            @JsonProperty("credential_reference_id") String credentialReferenceId) {
     }
 
-    private final DeviceRegistrationService deviceRegistrationService;
+    private final DeviceAddSingleService deviceAddSingleService;
+    private final DeviceQueryService deviceQueryService;
 
-    public DeviceRegistrationController(DeviceRegistrationService deviceRegistrationService) {
-        this.deviceRegistrationService = deviceRegistrationService;
+    public DeviceRegistrationController(DeviceAddSingleService deviceAddSingleService,
+            DeviceQueryService deviceQueryService) {
+        this.deviceAddSingleService = deviceAddSingleService;
+        this.deviceQueryService = deviceQueryService;
     }
 
-    @PostMapping("/devices")
-    public ResponseEntity<Map<String, Object>> register(@RequestBody RegisterRequest request,
+    @PostMapping("/devices/add-single")
+    public ResponseEntity<Map<String, Object>> addSingle(@RequestBody AddSingleRequest request,
             HttpServletRequest servletRequest) {
-        String actorFingerprint = (String) servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
-        DeviceRegistrationService.Outcome outcome = deviceRegistrationService.register(actorFingerprint,
-                request.vendorHint(), request.transportKind(), request.addressRef(), request.credentialReferenceId(),
-                request.isTestTarget());
-        return respond(outcome);
+        String actorFingerprint = actingUser(servletRequest);
+        DeviceAddSingleService.Outcome outcome = deviceAddSingleService.addSingle(actorFingerprint, request.address(),
+                request.vendor(), request.credentialReferenceId());
+        return switch (outcome) {
+            case DeviceAddSingleService.Outcome.Admitted admitted -> {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("device_id", admitted.deviceId());
+                body.put("job_id", admitted.jobId());
+                body.put("enrollment_state", "DRAFT");
+                yield ResponseEntity.ok(body);
+            }
+            case DeviceAddSingleService.Outcome.ValidationFailed failed -> {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("error", "VALIDATION_FAILED");
+                body.put("reason_code", failed.reasonCode());
+                yield ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
+            }
+            case DeviceAddSingleService.Outcome.AdmissionRefused refused -> {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("error", "ADMISSION_REFUSED");
+                body.put("code", refused.code());
+                body.put("reason", refused.reason());
+                yield ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+            }
+        };
     }
 
-    private static ResponseEntity<Map<String, Object>> respond(DeviceRegistrationService.Outcome outcome) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        if (outcome instanceof DeviceRegistrationService.Outcome.ValidationFailed failed) {
-            body.put("error", "VALIDATION_FAILED");
-            body.put("reason_code", failed.reasonCode());
-            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
+    @GetMapping("/devices/{deviceId}")
+    public ResponseEntity<Map<String, Object>> getDevice(@PathVariable String deviceId) {
+        DeviceQueryService.DetailOutcome outcome = deviceQueryService.deviceDetail(deviceId);
+        if (outcome instanceof DeviceQueryService.DetailOutcome.NotFound) {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("error", "NOT_FOUND");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
         }
-        DeviceRegistrationService.Outcome.Registered registered =
-                (DeviceRegistrationService.Outcome.Registered) outcome;
-        body.put("device_id", registered.deviceId());
-        body.put("endpoint_id", registered.endpointId());
-        body.put("enrollment_state", "DRAFT");
+        DeviceQueryService.DetailOutcome.Found found = (DeviceQueryService.DetailOutcome.Found) outcome;
+        return ResponseEntity.ok(toDetailBody(found.device(), found.facts(), found.job()));
+    }
+
+    @GetMapping("/devices")
+    public ResponseEntity<Map<String, Object>> listDevices() {
+        List<Map<String, Object>> devices = deviceQueryService.listDevices().stream()
+                .map(DeviceRegistrationController::toSummaryBody)
+                .toList();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("devices", devices);
         return ResponseEntity.ok(body);
+    }
+
+    private static String actingUser(HttpServletRequest servletRequest) {
+        return (String) servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
+    }
+
+    private static Map<String, Object> toDetailBody(DeviceRecord device, DeviceConfirmFacts facts,
+            Optional<JobRow> job) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("device_id", device.deviceId());
+        body.put("vendor_hint", device.vendorHint());
+        body.put("enrollment_state", device.enrollmentState().name());
+        body.put("disabled", device.disabled());
+        body.put("facts", toFactsBody(facts));
+        body.put("peer_follow_outcome", facts.peerFollowOutcome());
+        body.put("peer_follow_reason", facts.peerFollowReason().orElse(null));
+        body.put("identity_mismatch_state", facts.identityMismatchState());
+        body.put("cluster_member_ref", facts.clusterMemberRef().orElse(null));
+        body.put("job", job.map(DeviceRegistrationController::toJobBody).orElse(null));
+        return body;
+    }
+
+    /** {@code null} until the confirm has observed at least one fact -- never an object of all-null fields. */
+    private static Map<String, Object> toFactsBody(DeviceConfirmFacts facts) {
+        if (facts.observedHostname().isEmpty() && facts.observedModel().isEmpty()
+                && facts.observedSoftwareVersion().isEmpty() && facts.observedHaRole().isEmpty()) {
+            return null;
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("hostname", facts.observedHostname().orElse(null));
+        body.put("model", facts.observedModel().orElse(null));
+        body.put("software_version", facts.observedSoftwareVersion().orElse(null));
+        body.put("ha_role", facts.observedHaRole().orElse(null));
+        return body;
+    }
+
+    private static Map<String, Object> toJobBody(JobRow jobRow) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("job_id", jobRow.jobId());
+        body.put("state", jobRow.state());
+        body.put("outcome", jobRow.outcome());
+        body.put("terminal_reason", jobRow.terminalReason());
+        return body;
+    }
+
+    private static Map<String, Object> toSummaryBody(DeviceSummaryRecord summary) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("device_id", summary.deviceId());
+        body.put("vendor_hint", summary.vendorHint());
+        body.put("enrollment_state", summary.enrollmentState().name());
+        body.put("hostname", summary.observedHostname().orElse(null));
+        body.put("model", summary.observedModel().orElse(null));
+        body.put("software_version", summary.observedSoftwareVersion().orElse(null));
+        body.put("ha_role", summary.observedHaRole().orElse(null));
+        body.put("cluster_member_ref", summary.clusterMemberRef().orElse(null));
+        return body;
     }
 }

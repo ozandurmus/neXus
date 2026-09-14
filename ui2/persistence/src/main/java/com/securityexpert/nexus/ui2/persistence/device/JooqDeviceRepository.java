@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.persistence.device;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -28,6 +29,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "observed_ha_role, recorded_identity_primary, recorded_identity_secondary, identity_mismatch_state, "
             + "identity_mismatch_presented_primary, identity_mismatch_presented_secondary, cluster_member_ref, "
             + "virtual_system_ref, peer_follow_outcome, peer_follow_reason";
+    private static final String DEVICE_SUMMARY_COLUMNS = "device_id, vendor_hint, enrollment_state, "
+            + "observed_hostname, observed_model, observed_software_version, observed_ha_role, cluster_member_ref";
 
     private final TransactionBoundary transactionBoundary;
     private final AuditedTransactionBoundary auditedTransactionBoundary;
@@ -140,6 +143,15 @@ public final class JooqDeviceRepository implements DeviceRepository {
         });
     }
 
+    @Override
+    public List<DeviceSummaryRecord> listAll() {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(
+                        "select " + DEVICE_SUMMARY_COLUMNS + " from devices order by created_at desc, device_id")
+                .stream()
+                .map(JooqDeviceRepository::toSummaryRecord)
+                .toList());
+    }
+
     private static DeviceRecord toDeviceRecord(Record row) {
         return new DeviceRecord(
                 row.get("device_id", String.class),
@@ -167,6 +179,18 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 Optional.ofNullable(row.get("virtual_system_ref", String.class)),
                 row.get("peer_follow_outcome", String.class),
                 Optional.ofNullable(row.get("peer_follow_reason", String.class)));
+    }
+
+    private static DeviceSummaryRecord toSummaryRecord(Record row) {
+        return new DeviceSummaryRecord(
+                row.get("device_id", String.class),
+                row.get("vendor_hint", String.class),
+                DeviceEnrollmentState.fromColumnValue(row.get("enrollment_state", String.class)),
+                Optional.ofNullable(row.get("observed_hostname", String.class)),
+                Optional.ofNullable(row.get("observed_model", String.class)),
+                Optional.ofNullable(row.get("observed_software_version", String.class)),
+                Optional.ofNullable(row.get("observed_ha_role", String.class)),
+                Optional.ofNullable(row.get("cluster_member_ref", String.class)));
     }
 
     private static EndpointRecord toEndpointRecord(Record row) {

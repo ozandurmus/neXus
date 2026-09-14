@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -82,6 +83,11 @@ class JooqDeviceStatePortTest {
 
         @Override
         public Optional<DeviceConfirmFacts> findConfirmFacts(String deviceId) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
+        public List<DeviceSummaryRecord> listAll() {
             throw new UnsupportedOperationException("not used by this test");
         }
     }

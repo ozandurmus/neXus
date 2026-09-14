@@ -19,4 +19,7 @@ public interface JobRecordDao {
     Optional<String> findJobIdByIdempotencyKey(String idempotencyKey);
 
     Optional<JobRow> find(String jobId);
+
+    /** GET /devices/{id}'s {@code job} field: the most recently submitted job targeting this device, if any. */
+    Optional<JobRow> findMostRecentByTargetDeviceId(String targetDeviceId);
 }

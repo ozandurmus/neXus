@@ -26,6 +26,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * {@code C4} route→action mapping (deferred, contract §2). A route absent
  * from the map is outside this chain's scope entirely (e.g.
  * {@code /healthz}, {@code /login}) — never gated, never refused here.</p>
+ *
+ * <p>A path-variable route (WORKER.md "Routes": {@code GET /devices/{id}},
+ * this map's first one) is looked up by its exact route first and, only on
+ * a miss, by replacing its last path segment with a single {@code *}
+ * wildcard (e.g. {@code "GET /devices/*"}) -- one segment only, never a
+ * multi-segment or prefix match, so every other, non-wildcarded route entry
+ * keeps matching exactly as it always has.</p>
  */
 public final class GateChainInterceptor implements HandlerInterceptor {
 
@@ -44,8 +51,7 @@ public final class GateChainInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
-        String routeKey = request.getMethod() + " " + request.getServletPath();
-        String actionId = actionIdByRoute.get(routeKey);
+        String actionId = actionIdFor(request.getMethod(), request.getServletPath());
         if (actionId == null) {
             return true;
         }
@@ -69,6 +75,18 @@ public final class GateChainInterceptor implements HandlerInterceptor {
         response.setContentType("application/json");
         objectMapper.writeValue(response.getWriter(), refused.body());
         return false;
+    }
+
+    private String actionIdFor(String method, String servletPath) {
+        String exact = actionIdByRoute.get(method + " " + servletPath);
+        if (exact != null) {
+            return exact;
+        }
+        int lastSlash = servletPath.lastIndexOf('/');
+        if (lastSlash <= 0) {
+            return null;
+        }
+        return actionIdByRoute.get(method + " " + servletPath.substring(0, lastSlash) + "/*");
     }
 
     private static Optional<String> findSessionCookie(HttpServletRequest request) {

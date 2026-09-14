@@ -93,6 +93,11 @@ class DeviceRegistrationServiceTest {
                 String deviceId) {
             throw new UnsupportedOperationException("not used by this test");
         }
+
+        @Override
+        public List<com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord> listAll() {
+            throw new UnsupportedOperationException("not used by this test");
+        }
     }
 
     private static final class FakeCredentialReferenceRepository implements CredentialReferenceRepository {
