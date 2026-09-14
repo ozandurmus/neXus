@@ -29,6 +29,8 @@ import {
   type InventoryInterface,
   type InventoryRoute,
   type Presence,
+  type BackupArtefact,
+  listDeviceBackups,
 } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 
@@ -459,6 +461,10 @@ export function DeviceInventoryPanels({ device }: { readonly device: DeviceSumma
               ),
           },
           {
+            label: "Backup",
+            panel: <BackupPanel deviceId={device.device_id} />,
+          },
+          {
             label: "Identity & provenance",
             panel: (
               <EmptyPanel
@@ -470,5 +476,72 @@ export function DeviceInventoryPanels({ device }: { readonly device: DeviceSumma
         ]}
       />
     </Stack>
+  );
+}
+
+export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
+  const fetcher = useFetchOnMount<{ backups: BackupArtefact[] }>(
+    () => listDeviceBackups(deviceId),
+    describeApiError,
+  );
+
+  if (fetcher.error) {
+    return (
+      <EmptyPanel title="Backup unavailable" body={fetcher.error}>
+        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+          <M3Button emphasis="outlined" onClick={fetcher.refresh}>Retry</M3Button>
+        </Box>
+      </EmptyPanel>
+    );
+  }
+
+  if (!fetcher.data) {
+    return null; // Or a loading spinner, but useFetchOnMount doesn't require one for the standard approach here
+  }
+
+  const backups = fetcher.data.backups;
+
+  if (backups.length === 0) {
+    return (
+      <EmptyPanel
+        title="No backups"
+        body="No backup has been retained for this device."
+      />
+    );
+  }
+
+  return (
+    <Table size="small">
+      <TableHead>
+        <TableRow>
+          <TableCell>Collected time</TableCell>
+          <TableCell>Size</TableCell>
+          <TableCell>Digest prefix</TableCell>
+          <TableCell>Validation level</TableCell>
+          <TableCell>Deviation state</TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {backups.map((b) => (
+          <TableRow key={b.artefact_id}>
+            <TableCell>{b.collected_at}</TableCell>
+            <TableCell>{b.size_bytes}</TableCell>
+            <TableCell>{b.digest_prefix}</TableCell>
+            <TableCell>{b.validation_level}</TableCell>
+            <TableCell>
+              {b.deviation_state === null ? (
+                <StatusChip tone="neutral" label="not evaluated" dense />
+              ) : (
+                <StatusChip
+                  tone={b.deviation_state === "changed" ? "bad" : "ok"}
+                  label={b.deviation_state}
+                  dense
+                />
+              )}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { InventoryScreen } from "../src/screens/InventoryScreen";
+import { BackupPanel } from "../src/screens/InventoryPanels";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -235,5 +236,81 @@ describe("InventoryScreen device selection and panels", () => {
       expect(fetchMock.mock.calls.some((call) => String(call[0]) === "/devices/dev-1/inventory/collect")).toBe(true),
     );
     await waitFor(() => expect(devicePollCount).toBeGreaterThanOrEqual(2), { timeout: 5000 });
+  });
+});
+
+describe("BackupPanel", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders an empty panel when no backups are retained", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === "/devices/dev-1/backups") {
+        return Promise.resolve(jsonResponse(200, { backups: [] }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    
+    render(withTheme(<BackupPanel deviceId="dev-1" />));
+    await waitFor(() => expect(screen.getByText("No backups")).toBeInTheDocument());
+    expect(screen.getByText("No backup has been retained for this device.")).toBeInTheDocument();
+  });
+
+  it("renders a list of backups with their properties, translating a null deviation state to 'not evaluated'", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === "/devices/dev-1/backups") {
+        return Promise.resolve(jsonResponse(200, {
+          backups: [
+            {
+              artefact_id: "art-1",
+              device_id: "dev-1",
+              collected_at: "2026-09-14T12:00:00Z",
+              size_bytes: 1024,
+              digest_prefix: "abcd123",
+              validation_level: "trusted",
+              deviation_state: null
+            },
+            {
+              artefact_id: "art-2",
+              device_id: "dev-1",
+              collected_at: "2026-09-13T12:00:00Z",
+              size_bytes: 1024,
+              digest_prefix: "9876xyz",
+              validation_level: "trusted",
+              deviation_state: "changed"
+            }
+          ]
+        }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    
+    render(withTheme(<BackupPanel deviceId="dev-1" />));
+    
+    await waitFor(() => expect(screen.getByText("abcd123")).toBeInTheDocument());
+    expect(screen.getByText("9876xyz")).toBeInTheDocument();
+    
+    expect(screen.getByText("not evaluated")).toBeInTheDocument();
+    expect(screen.queryByText("unchanged")).not.toBeInTheDocument();
+    expect(screen.getByText("changed")).toBeInTheDocument();
+  });
+
+  it("shows the error rather than an empty table on failure", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === "/devices/dev-1/backups") {
+        return Promise.resolve(jsonResponse(500, { error: "Failed to connect to storage" }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    
+    render(withTheme(<BackupPanel deviceId="dev-1" />));
+    
+    await waitFor(() => expect(screen.getByText("Failed to connect to storage")).toBeInTheDocument());
+    expect(screen.getByText("Backup unavailable")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 });
