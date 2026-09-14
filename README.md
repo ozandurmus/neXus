@@ -1,4 +1,4 @@
-# SecurityExpert / neXus (working name)
+# neXus
 
 A multi-vendor network-security **evidence** platform. It collects and
 reconciles runtime inventory and current configuration from Check Point

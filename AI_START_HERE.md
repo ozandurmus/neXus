@@ -12,7 +12,7 @@ is the single owner of the rule and is not restated here.
 
 ## What this is
 
-**neXus / SecurityExpert** — a multi-vendor network-security *evidence* platform.
+**neXus** (formerly SecurityExpert) — a multi-vendor network-security *evidence* platform.
 It collects and reconciles runtime inventory and current configuration from
 Check Point (MDS/CMA), Check Point VSX, and Palo Alto Panorama / PAN-OS, then
 publishes a single static HTML report plus a sanitized shareable support bundle.

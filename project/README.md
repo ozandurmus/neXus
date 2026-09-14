@@ -1,4 +1,4 @@
-# SecurityExpert Living Project Plan Contract
+# neXus Living Project Plan Contract
 
 The files in this directory are product-planning metadata, not device evidence.
 They are embedded into the local HTML Project Plan module on every render.

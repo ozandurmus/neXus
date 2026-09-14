@@ -1,4 +1,4 @@
-# AGENTS.md — SecurityExpert Agent Constitution
+# AGENTS.md — neXus Agent Constitution
 
 > Product Owner assistant sessions start from `PO.md` (a short brief that
 > points back here); this file remains the authority it names.
@@ -12,7 +12,7 @@ files (`CLAUDE.md`, `.github/copilot-instructions.md`,
 product's own tool names or model tiers, but must not restate the rule itself
 — point back here.
 
-SecurityExpert product principle: `SEE → VERIFY → TRACE → RECOVER → OPERATE`.
+neXus product principle: `SEE → VERIFY → TRACE → RECOVER → OPERATE`.
 
 ## Authority hierarchy
 
