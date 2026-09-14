@@ -40,11 +40,11 @@ describe("the UI 2.0 shell navigation", () => {
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
 
-    expect(within(rail).queryByText("SecurityExpert")).toBeNull();
+    expect(within(rail).queryAllByTitle("neXus")).toHaveLength(1);
     fireEvent.click(within(rail).getByRole("button", { name: "Expand navigation" }));
 
     const drawer = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(drawer).getByText("SecurityExpert")).toBeInTheDocument();
+    expect(within(drawer).getByTitle("neXus")).toBeInTheDocument();
     expect(within(drawer).getByText("Overview")).toBeInTheDocument();
     for (const g of DRAWER_GROUPS) {
       expect(within(drawer).getByText(g.header)).toBeInTheDocument();
@@ -55,7 +55,7 @@ describe("the UI 2.0 shell navigation", () => {
 
     fireEvent.click(within(drawer).getByRole("button", { name: "Collapse navigation" }));
     const collapsedRail = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(collapsedRail).queryByText("SecurityExpert")).toBeNull();
+    expect(within(collapsedRail).queryAllByTitle("neXus")).toHaveLength(1);
   });
 
   it("marks a leaf the shell cannot yet serve as disabled rather than hiding it", () => {
