@@ -33,6 +33,8 @@ Owner choose. Silent drift back to Claude happened once, on movement
 - It has no `PreToolUse` hook, so it is forced to `--merge-mode orchestrator`
   and never reaches `gh pr merge` itself.
 
+Claude can prove ceiling exhaustion from its observed terminal reason; Codex cannot, because it supplies no equivalent evidence. For a provider that cannot prove exhaustion, the recorded ceiling is an intention rather than a control; the governing requirements remain in `AGENTS.md` and `roles/PO.md`.
+
 ## Claude
 
 - Its `stream-json` `system`/`init` event carries the model actually served,

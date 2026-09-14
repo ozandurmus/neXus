@@ -41,6 +41,19 @@ def test_missing_usage_and_negative_duration_are_unknown(tmp_path):
     assert "| NXS-LOCAL-3 | 1 |" in text and text.count("unknown") >= 8
 
 
+def test_budget_ceiling_is_rendered_or_unknown_and_overage_is_marked(tmp_path):
+    text = _render(tmp_path, [
+        _record("NXS-LOCAL-6", max_budget_usd=3.0),
+        _record("NXS-LOCAL-7"),
+    ], [
+        ("NXS-LOCAL-6", {"result_cost_usd": 4.0}),
+        ("NXS-LOCAL-7", {"result_cost_usd": 2.0}),
+    ])
+    assert "A trailing `!` in cost means" in text
+    assert "| NXS-LOCAL-6 | 1 |" in text and "$4.0000 !" in text and "$3.0000" in text
+    assert "| NXS-LOCAL-7 | 1 |" in text and "| unknown | done |" in text
+
+
 def test_assessment_survives_rerender_and_totals_stay_separate(tmp_path):
     text = _render(tmp_path, [_record("NXS-LOCAL-5")])
     edited = text.replace("| NXS-LOCAL-5 | 1 |", "| NXS-LOCAL-5 | 1 |", 1).replace(" | - |  |", " | - | useful run |", 1)

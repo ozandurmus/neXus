@@ -67,13 +67,17 @@ def _row(record: dict, attempt: int, latest: bool, state_dir: Path, relay_dir: P
     )
     ended = observed.get("last_event_at") or record.get("last_timestamp")
     cost = observed.get("cost_usd")
+    budget = record.get("max_budget_usd")
+    cost_cell = f"${cost:.4f}" if isinstance(cost, (int, float)) else "unknown"
+    if isinstance(cost, (int, float)) and isinstance(budget, (int, float)) and cost > budget:
+        cost_cell += " !"
     return [
         movement, str(attempt), _cell(record.get("started_at")), _cell(provider),
         _cell(observed.get("model") or record.get("model_requested")), _cell(record.get("effort_requested")),
         _minutes(record.get("started_at"), ended), _cell(observed.get("turns")), _cell(observed.get("total_tokens")),
         f"{observed['cache_hit_ratio'] * 100:.2f}%" if observed.get("cache_hit_ratio") is not None else "unknown",
-        f"${cost:.4f}" if isinstance(cost, (int, float)) else "unknown", _cell(observed.get("cost_source")),
-        _cell(record.get("max_budget_usd")), _cell(record.get("phase") or record.get("failure_reason")), _pr(relay_dir, movement), "",
+        cost_cell, _cell(observed.get("cost_source")),
+        f"${budget:.4f}" if isinstance(budget, (int, float)) else "unknown", _cell(record.get("phase") or record.get("failure_reason")), _pr(relay_dir, movement), "",
     ]
 
 
@@ -92,14 +96,14 @@ def render(state_dir: Path, relay_dir: Path, existing: str = "") -> str:
     unavailable = 0
     for row in rows:
         try:
-            value = float(row[10].removeprefix("$"))
+            value = float(row[10].removesuffix(" !").removeprefix("$"))
         except ValueError:
             unavailable += 1
             continue
         kind = "subscription" if row[3] in SUBSCRIPTION_PROVIDERS else "metered"
         totals[kind] += value
         providers[kind].add(row[3])
-    table = ["# Dispatch ledger", "", "| " + " | ".join(COLUMNS) + " |", "|" + "|".join(["---"] * len(COLUMNS)) + "|"]
+    table = ["# Dispatch ledger", "", "A trailing `!` in cost means the recorded cost exceeds the recorded budget ceiling.", "", "| " + " | ".join(COLUMNS) + " |", "|" + "|".join(["---"] * len(COLUMNS)) + "|"]
     table += ["| " + " | ".join(row) + " |" for row in rows]
     table += ["", f"Metered total ({', '.join(sorted(providers['metered'])) or 'no providers'}): ${totals['metered']:.4f}",
               f"Subscription total ({', '.join(sorted(providers['subscription'])) or 'no providers'}): ${totals['subscription']:.4f}",
