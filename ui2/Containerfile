@@ -22,6 +22,14 @@ FROM registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:00f862eda4fcba6f07
 USER 0
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
+# Optional corporate CA anchors for this stage's own downloads. ui2/.ca/ is
+# part of the build context, git-ignored and normally empty; behind a
+# TLS-intercepting network the operator drops PEM files there before
+# building. Nothing from it reaches the runtime image.
+COPY .ca/ /tmp/corp-ca/
+RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
+      cp /tmp/corp-ca/*.pem /etc/pki/ca-trust/source/anchors/ && update-ca-trust; \
+    fi
 RUN npm ci
 COPY frontend/ ./
 RUN npm run build
@@ -33,6 +41,14 @@ ENV GRADLE_USER_HOME=/build/.gradle-home
 
 WORKDIR /build
 COPY . /build
+# Optional corporate CA anchors for this stage's own downloads. ui2/.ca/ is
+# part of the build context, git-ignored and normally empty; behind a
+# TLS-intercepting network the operator drops PEM files there before
+# building. Nothing from it reaches the runtime image.
+COPY .ca/ /tmp/corp-ca/
+RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
+      cp /tmp/corp-ca/*.pem /etc/pki/ca-trust/source/anchors/ && update-ca-trust; \
+    fi
 
 # The committed wrapper is the only Gradle entry point, validated by its
 # committed distributionSha256Sum (B1-1a §4). No verification-metadata
