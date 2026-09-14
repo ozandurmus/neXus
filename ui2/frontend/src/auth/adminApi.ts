@@ -95,3 +95,60 @@ export function createRoleBinding(
 export function revokeRoleBinding(bindingId: string): Promise<{ binding_id: string }> {
   return call("/role-bindings/revoke", "POST", { bindingId });
 }
+
+/**
+ * 2026-09-14 PO decision record CS-1..CS-5: credential store administration.
+ * `secret`/`passphrase` are write-only on every call below -- no function
+ * here, and no server response it reads, ever returns one back.
+ */
+export interface CredentialView {
+  readonly credential_id: string;
+  readonly credential_reference_id: string;
+  readonly display_name: string;
+  readonly kind: "ssh_password" | "ssh_private_key" | "api_password";
+  readonly username: string;
+  readonly allows_check_point: boolean;
+  readonly allows_palo_alto: boolean;
+  readonly created_at: string;
+  readonly secret_set_at: string;
+}
+
+export function listCredentials(): Promise<{ credentials: CredentialView[] }> {
+  return call("/credentials", "GET");
+}
+
+export function createCredential(
+  displayName: string,
+  kind: string,
+  username: string,
+  allowsCheckPoint: boolean,
+  allowsPaloAlto: boolean,
+  secret: string,
+  passphrase: string,
+): Promise<CredentialView> {
+  return call("/credentials", "POST", {
+    display_name: displayName,
+    kind,
+    username,
+    allows_check_point: allowsCheckPoint,
+    allows_palo_alto: allowsPaloAlto,
+    secret,
+    passphrase: passphrase || undefined,
+  });
+}
+
+export function replaceCredentialSecret(
+  credentialId: string,
+  secret: string,
+  passphrase: string,
+): Promise<CredentialView> {
+  return call("/credentials/replace-secret", "POST", {
+    credential_id: credentialId,
+    secret,
+    passphrase: passphrase || undefined,
+  });
+}
+
+export function deleteCredential(credentialId: string): Promise<{ credential_id: string; deleted: boolean }> {
+  return call("/credentials/delete", "POST", { credential_id: credentialId });
+}

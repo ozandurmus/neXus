@@ -5,6 +5,7 @@ import Typography from "@mui/material/Typography";
 import { ScreenHeader, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { AddDeviceDialogTrigger } from "../shell/AddDeviceDialog";
 import { CapabilityMenu, M3Button, M3Tabs, StatusChip, ToggleRow } from "../shell/M3Widgets";
+import { CredentialsPanel } from "./CredentialsPanel";
 import { LocalIdentitiesPanel } from "./LocalIdentitiesPanel";
 
 /** M3Administration with an empty registry. Enrollment is the one place a device enters the product. */
@@ -87,13 +88,7 @@ export function AdministrationScreen() {
           },
           {
             label: "Credentials",
-            panel: (
-              <EmptyPanel
-                title="No credential profile configured"
-                body="No device is enrolled, so no credential profile has been chosen yet. Credentials are
-                      stored outside the repository and are never written into a report or a support bundle."
-              />
-            ),
+            panel: <CredentialsPanel />,
           },
           {
             label: "Project plan",
