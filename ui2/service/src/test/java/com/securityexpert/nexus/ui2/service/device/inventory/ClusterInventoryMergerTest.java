@@ -11,28 +11,35 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
+
 /** WORKER.md "Service read model": "Unit tests for the merger: identical members, one member missing a route, differing interface state, VIP appears once, two contexts." */
 class ClusterInventoryMergerTest {
 
     private static InventoryAddress memberAddress(String address) {
-        return new InventoryAddress(address, InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER);
+        return new InventoryAddress("addr-" + address, address, InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER);
     }
 
     private static InventoryAddress vip(String address) {
-        return new InventoryAddress(address, InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_CLUSTER_VIRTUAL);
+        return new InventoryAddress("addr-" + address, address, InventoryAddress.FAMILY_IPV4,
+                InventoryAddress.ROLE_CLUSTER_VIRTUAL);
     }
 
     private static InventoryRun run(String deviceId, InventoryContext... contexts) {
         return new InventoryRun("run-" + deviceId, deviceId, "job-" + deviceId, Instant.parse("2026-09-14T00:00:00Z"),
-                List.of(contexts));
+                contexts.length, List.of(contexts));
     }
 
     @Test
     void identicalMembersMergeToOneRowWithAllPresenceAndNoDifferences() {
-        InventoryInterface eth0A = new InventoryInterface("eth0", Optional.empty(), InventoryInterface.KIND_PHYSICAL,
-                InventoryInterface.STATE_UP, List.of(memberAddress("192.0.2.1/24")));
-        InventoryInterface eth0B = new InventoryInterface("eth0", Optional.empty(), InventoryInterface.KIND_PHYSICAL,
-                InventoryInterface.STATE_UP, List.of(memberAddress("192.0.2.2/24")));
+        InventoryInterface eth0A = new InventoryInterface("if-a-eth0", "eth0", Optional.empty(),
+                InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_UP, List.of(memberAddress("192.0.2.1/24")));
+        InventoryInterface eth0B = new InventoryInterface("if-b-eth0", "eth0", Optional.empty(),
+                InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_UP, List.of(memberAddress("192.0.2.2/24")));
         InventoryContext contextA = new InventoryContext(InventoryContext.PHYSICAL, List.of(eth0A), List.of());
         InventoryContext contextB = new InventoryContext(InventoryContext.PHYSICAL, List.of(eth0B), List.of());
 
@@ -54,10 +61,10 @@ class ClusterInventoryMergerTest {
 
     @Test
     void aRouteMissingOnOneMemberListsOnlyTheMembersThatHaveIt() {
-        InventoryRoute onBoth = new InventoryRoute("198.51.100.0/24", Optional.of("198.51.100.1"),
+        InventoryRoute onBoth = new InventoryRoute("route-both", "198.51.100.0/24", Optional.of("198.51.100.1"),
                 Optional.of("eth0"), InventoryRoute.PROTOCOL_STATIC, Optional.empty());
-        InventoryRoute onlyOnA = new InventoryRoute("203.0.113.0/24", Optional.empty(), Optional.of("eth1"),
-                InventoryRoute.PROTOCOL_CONNECTED, Optional.empty());
+        InventoryRoute onlyOnA = new InventoryRoute("route-only-a", "203.0.113.0/24", Optional.empty(),
+                Optional.of("eth1"), InventoryRoute.PROTOCOL_CONNECTED, Optional.empty());
 
         InventoryContext contextA = new InventoryContext(InventoryContext.PHYSICAL, List.of(), List.of(onBoth, onlyOnA));
         InventoryContext contextB = new InventoryContext(InventoryContext.PHYSICAL, List.of(), List.of(onBoth));
@@ -80,10 +87,10 @@ class ClusterInventoryMergerTest {
 
     @Test
     void aDifferingInterfaceStateIsReportedAsADifferenceAgainstTheFirstMembersBaseline() {
-        InventoryInterface up = new InventoryInterface("eth0", Optional.empty(), InventoryInterface.KIND_PHYSICAL,
-                InventoryInterface.STATE_UP, List.of());
-        InventoryInterface down = new InventoryInterface("eth0", Optional.empty(), InventoryInterface.KIND_PHYSICAL,
-                InventoryInterface.STATE_DOWN, List.of());
+        InventoryInterface up = new InventoryInterface("if-a-eth0", "eth0", Optional.empty(),
+                InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_UP, List.of());
+        InventoryInterface down = new InventoryInterface("if-b-eth0", "eth0", Optional.empty(),
+                InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_DOWN, List.of());
         InventoryContext contextA = new InventoryContext(InventoryContext.PHYSICAL, List.of(up), List.of());
         InventoryContext contextB = new InventoryContext(InventoryContext.PHYSICAL, List.of(down), List.of());
 
@@ -103,10 +110,12 @@ class ClusterInventoryMergerTest {
 
     @Test
     void anIdenticalVipReportedByEveryMemberAppearsExactlyOnceOnTheClusterRow() {
-        InventoryInterface eth0A = new InventoryInterface("eth0", Optional.empty(), InventoryInterface.KIND_PHYSICAL,
-                InventoryInterface.STATE_UP, List.of(memberAddress("192.0.2.1/24"), vip("192.0.2.100/24")));
-        InventoryInterface eth0B = new InventoryInterface("eth0", Optional.empty(), InventoryInterface.KIND_PHYSICAL,
-                InventoryInterface.STATE_UP, List.of(memberAddress("192.0.2.2/24"), vip("192.0.2.100/24")));
+        InventoryInterface eth0A = new InventoryInterface("if-a-eth0", "eth0", Optional.empty(),
+                InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_UP,
+                List.of(memberAddress("192.0.2.1/24"), vip("192.0.2.100/24")));
+        InventoryInterface eth0B = new InventoryInterface("if-b-eth0", "eth0", Optional.empty(),
+                InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_UP,
+                List.of(memberAddress("192.0.2.2/24"), vip("192.0.2.100/24")));
         InventoryContext contextA = new InventoryContext(InventoryContext.PHYSICAL, List.of(eth0A), List.of());
         InventoryContext contextB = new InventoryContext(InventoryContext.PHYSICAL, List.of(eth0B), List.of());
 
@@ -124,10 +133,10 @@ class ClusterInventoryMergerTest {
 
     @Test
     void twoContextsMergeIndependentlyAndAreOrderedDeterministically() {
-        InventoryInterface vsys1Iface = new InventoryInterface("eth0", Optional.empty(), InventoryInterface.KIND_PHYSICAL,
-                InventoryInterface.STATE_UP, List.of());
-        InventoryInterface vsys2Iface = new InventoryInterface("eth1", Optional.empty(), InventoryInterface.KIND_PHYSICAL,
-                InventoryInterface.STATE_UP, List.of());
+        InventoryInterface vsys1Iface = new InventoryInterface("if-vsys1-eth0", "eth0", Optional.empty(),
+                InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_UP, List.of());
+        InventoryInterface vsys2Iface = new InventoryInterface("if-vsys2-eth1", "eth1", Optional.empty(),
+                InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_UP, List.of());
         InventoryContext vsys1A = new InventoryContext("vsys1", List.of(vsys1Iface), List.of());
         InventoryContext vsys2A = new InventoryContext("vsys2", List.of(vsys2Iface), List.of());
 

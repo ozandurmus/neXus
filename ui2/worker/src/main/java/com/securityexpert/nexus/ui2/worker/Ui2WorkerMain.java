@@ -15,6 +15,8 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundaryFactory;
 import com.securityexpert.nexus.ui2.persistence.credential.CredentialStoreComposition;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.JooqDeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
@@ -27,6 +29,9 @@ import com.securityexpert.nexus.ui2.worker.confirm.PeerFollowResolver;
 import com.securityexpert.nexus.ui2.worker.confirm.WorkerClaimLoop;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.StoreBackedSshCredentialResolver;
 import com.securityexpert.nexus.ui2.worker.discovery.pan.StoreBackedPanCredentialResolver;
+import com.securityexpert.nexus.ui2.worker.inventory.InventoryCapabilities;
+import com.securityexpert.nexus.ui2.worker.inventory.InventoryCapabilityExecutor;
+import com.securityexpert.nexus.ui2.worker.inventory.InventoryJobExecutor;
 import com.securityexpert.nexus.ui2.worker.transport.CompositeDeviceTransport;
 import com.securityexpert.nexus.ui2.worker.transport.TransportRegistry;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.SshExecTransport;
@@ -104,7 +109,10 @@ public final class Ui2WorkerMain {
         // routes ssh_exec to sshTransport and pan_xml_api to panTransport; the
         // startup check (AC-11) fails fast if either capability's transport
         // kind were ever left unregistered.
-        CapabilityRegistry capabilityRegistry = CapabilityRegistry.of(ConfirmCapabilities.all());
+        var capabilities = new java.util.ArrayList<com.securityexpert.nexus.ui2.capability.Capability>();
+        capabilities.addAll(ConfirmCapabilities.all());
+        capabilities.addAll(InventoryCapabilities.all());
+        CapabilityRegistry capabilityRegistry = CapabilityRegistry.of(capabilities);
         TransportRegistry transportRegistry = WorkerBootstrap.buildTransportRegistry(sshTransport, panTransport);
         WorkerBootstrap.boot(capabilityRegistry, transportRegistry);
         CompositeDeviceTransport compositeTransport = new CompositeDeviceTransport(transportRegistry);
@@ -119,10 +127,16 @@ public final class Ui2WorkerMain {
                 deviceEnrollmentReadPort, deviceRepository, checkPointConfirmExecutor,
                 new PeerFollowResolver(checkPointConfirmExecutor));
 
+        DeviceInventoryRepository deviceInventoryRepository = new JooqDeviceInventoryRepository(transactionBoundary);
+        InventoryCapabilityExecutor inventoryCapabilityExecutor =
+                new InventoryCapabilityExecutor(compositeTransport, panCredentialResolver);
+        InventoryJobExecutor inventoryJobExecutor = new InventoryJobExecutor(leaseRepository, attemptRepository,
+                deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, inventoryCapabilityExecutor);
+
         JobRecordDao jobRecordDao = new JooqJobRecordDao(transactionBoundary);
         WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
-                confirmJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofSeconds(60), checkPointTrustRuleRef,
-                paloAltoTrustRuleRef);
+                confirmJobExecutor, inventoryJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofSeconds(60),
+                checkPointTrustRuleRef, paloAltoTrustRuleRef);
 
         claimLoop.runUntilInterrupted(Duration.ofSeconds(2));
     }

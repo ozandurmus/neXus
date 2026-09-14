@@ -2,10 +2,12 @@ package com.securityexpert.nexus.ui2.service.device.inventory;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
+import com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
@@ -33,19 +35,22 @@ public final class InventoryCollectService {
         }
     }
 
+    private static final Map<String, String> CAPABILITY_BY_VENDOR = Map.of(
+            "check_point", InventoryCapabilityIds.CP_INVENTORY_COLLECT,
+            "palo_alto", InventoryCapabilityIds.PAN_INVENTORY_COLLECT);
+
     private final DeviceRepository deviceRepository;
-    private final JobAdmissionService inventoryJobAdmissionService;
+    private final JobAdmissionService jobAdmissionService;
     private final Clock clock;
 
-    public InventoryCollectService(DeviceRepository deviceRepository, JobAdmissionService inventoryJobAdmissionService) {
-        this(deviceRepository, inventoryJobAdmissionService, Clock.systemUTC());
+    public InventoryCollectService(DeviceRepository deviceRepository, JobAdmissionService jobAdmissionService) {
+        this(deviceRepository, jobAdmissionService, Clock.systemUTC());
     }
 
-    InventoryCollectService(DeviceRepository deviceRepository, JobAdmissionService inventoryJobAdmissionService,
+    InventoryCollectService(DeviceRepository deviceRepository, JobAdmissionService jobAdmissionService,
             Clock clock) {
         this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
-        this.inventoryJobAdmissionService =
-                Objects.requireNonNull(inventoryJobAdmissionService, "inventoryJobAdmissionService");
+        this.jobAdmissionService = Objects.requireNonNull(jobAdmissionService, "jobAdmissionService");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -59,7 +64,7 @@ public final class InventoryCollectService {
         if (device.isEmpty()) {
             return new Outcome.DeviceNotFound();
         }
-        String capabilityId = InventoryCapabilityIds.forVendor(device.get().vendorHint());
+        String capabilityId = CAPABILITY_BY_VENDOR.get(device.get().vendorHint());
         if (capabilityId == null) {
             return new Outcome.AdmissionRefused("VENDOR_UNSUPPORTED",
                     "device " + deviceId + " vendor_hint=" + device.get().vendorHint()
@@ -69,7 +74,7 @@ public final class InventoryCollectService {
         String nonce = clientNonce.filter(value -> !value.isBlank()).orElseGet(this::minuteBucket);
         String idempotencyKey = deviceId + ":inventory:" + nonce;
 
-        AdmissionResult admission = inventoryJobAdmissionService.submit(capabilityId, deviceId, idempotencyKey,
+        AdmissionResult admission = jobAdmissionService.submit(capabilityId, deviceId, idempotencyKey,
                 actorFingerprint, ActionRegistry.DEVICE_INVENTORY_COLLECT);
         return switch (admission) {
             case AdmissionResult.Admitted admitted -> new Outcome.Admitted(admitted.jobId());

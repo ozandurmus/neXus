@@ -19,15 +19,15 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
 import com.securityexpert.nexus.ui2.service.device.inventory.ClusterInventoryMerger;
-import com.securityexpert.nexus.ui2.service.device.inventory.InventoryAddress;
 import com.securityexpert.nexus.ui2.service.device.inventory.InventoryCollectService;
-import com.securityexpert.nexus.ui2.service.device.inventory.InventoryContext;
-import com.securityexpert.nexus.ui2.service.device.inventory.InventoryInterface;
 import com.securityexpert.nexus.ui2.service.device.inventory.InventoryQueryService;
-import com.securityexpert.nexus.ui2.service.device.inventory.InventoryRoute;
-import com.securityexpert.nexus.ui2.service.device.inventory.InventoryRun;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
 /**
@@ -171,7 +171,7 @@ public final class InventoryController {
         body.put("next_hop", route.nextHop().orElse(null));
         body.put("interface", route.interfaceName().orElse(null));
         body.put("protocol", route.protocol());
-        body.put("table", route.table().orElse(null));
+        body.put("table", route.routeTable().orElse(null));
         return body;
     }
 

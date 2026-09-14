@@ -22,6 +22,7 @@ import com.securityexpert.nexus.ui2.capability.MaturityState;
 import com.securityexpert.nexus.ui2.capability.SignOffState;
 import com.securityexpert.nexus.ui2.capability.StepKind;
 import com.securityexpert.nexus.ui2.capability.TransportKind;
+import com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionRepository;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentReadPort;

@@ -17,6 +17,8 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
 import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
@@ -115,7 +117,7 @@ class InventoryQueryServiceTest {
     @Test
     void deviceInventoryIsNotFoundForAnUnknownDevice() {
         InventoryQueryService service = new InventoryQueryService(new FakeDeviceRepository(), new FakeJobRecordDao(),
-                new InMemoryDeviceInventoryRepository());
+                new FakeDeviceInventoryRepository());
 
         InventoryQueryService.DeviceInventoryOutcome outcome = service.deviceInventory("no-such-device");
 
@@ -127,7 +129,7 @@ class InventoryQueryServiceTest {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.byId.put("device-1", device("device-1"));
         InventoryQueryService service = new InventoryQueryService(devices, new FakeJobRecordDao(),
-                new InMemoryDeviceInventoryRepository());
+                new FakeDeviceInventoryRepository());
 
         InventoryQueryService.DeviceInventoryOutcome outcome = service.deviceInventory("device-1");
 
@@ -140,10 +142,10 @@ class InventoryQueryServiceTest {
     void deviceInventoryReturnsTheLatestRunAndItsJob() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.byId.put("device-1", device("device-1"));
-        InMemoryDeviceInventoryRepository inventoryRepository = new InMemoryDeviceInventoryRepository();
-        InventoryRun run = new InventoryRun("run-1", "device-1", "job-1", Instant.parse("2026-09-14T00:00:00Z"),
+        FakeDeviceInventoryRepository inventoryRepository = new FakeDeviceInventoryRepository();
+        InventoryRun run = new InventoryRun("run-1", "device-1", "job-1", Instant.parse("2026-09-14T00:00:00Z"), 0,
                 List.of());
-        inventoryRepository.recordRun(run);
+        inventoryRepository.recordRun(run, "actor", "action-1");
         FakeJobRecordDao jobs = new FakeJobRecordDao();
         jobs.byId.put("job-1", new JobRow("job-1", "cp_inventory_collect", "device-1", "CLASS_0_READ", "COMPLETED",
                 null, 0L, "SUCCESS", null));
@@ -159,7 +161,7 @@ class InventoryQueryServiceTest {
     @Test
     void clusterInventoryIsNotFoundWhenNoDeviceCarriesTheRef() {
         InventoryQueryService service = new InventoryQueryService(new FakeDeviceRepository(), new FakeJobRecordDao(),
-                new InMemoryDeviceInventoryRepository());
+                new FakeDeviceInventoryRepository());
 
         InventoryQueryService.ClusterInventoryOutcome outcome = service.clusterInventory("cluster-1");
 
@@ -176,10 +178,12 @@ class InventoryQueryServiceTest {
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.of("cluster-1")),
                 new DeviceSummaryRecord("dev-c", "check_point", DeviceEnrollmentState.ENROLLED, Optional.of("other"),
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
-        InMemoryDeviceInventoryRepository inventoryRepository = new InMemoryDeviceInventoryRepository();
+        FakeDeviceInventoryRepository inventoryRepository = new FakeDeviceInventoryRepository();
         InventoryContext context = new InventoryContext(InventoryContext.PHYSICAL, List.of(), List.of());
-        inventoryRepository.recordRun(new InventoryRun("run-a", "dev-a", "job-a", Instant.now(), List.of(context)));
-        inventoryRepository.recordRun(new InventoryRun("run-b", "dev-b", "job-b", Instant.now(), List.of(context)));
+        inventoryRepository.recordRun(new InventoryRun("run-a", "dev-a", "job-a", Instant.now(), 1, List.of(context)),
+                "actor", "action-1");
+        inventoryRepository.recordRun(new InventoryRun("run-b", "dev-b", "job-b", Instant.now(), 1, List.of(context)),
+                "actor", "action-2");
         InventoryQueryService service = new InventoryQueryService(devices, new FakeJobRecordDao(), inventoryRepository);
 
         InventoryQueryService.ClusterInventoryOutcome outcome = service.clusterInventory("cluster-1");

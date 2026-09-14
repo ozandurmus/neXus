@@ -19,17 +19,17 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
 import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
-import com.securityexpert.nexus.ui2.service.device.inventory.InMemoryDeviceInventoryRepository;
-import com.securityexpert.nexus.ui2.service.device.inventory.InventoryAddress;
+import com.securityexpert.nexus.ui2.service.device.inventory.FakeDeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.service.device.inventory.InventoryCollectService;
-import com.securityexpert.nexus.ui2.service.device.inventory.InventoryContext;
-import com.securityexpert.nexus.ui2.service.device.inventory.InventoryInterface;
 import com.securityexpert.nexus.ui2.service.device.inventory.InventoryQueryService;
-import com.securityexpert.nexus.ui2.service.device.inventory.InventoryRoute;
-import com.securityexpert.nexus.ui2.service.device.inventory.InventoryRun;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
 /** WORKER.md AC-1: "Both GET routes return exactly the shared contract shapes (tests with fakes)... POST collect... returns 202 {job_id}." */
@@ -127,7 +127,7 @@ class InventoryControllerTest {
     void getDeviceInventoryReturns404ForAnUnknownDevice() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         InventoryQueryService queryService =
-                new InventoryQueryService(devices, new FakeJobRecordDao(), new InMemoryDeviceInventoryRepository());
+                new InventoryQueryService(devices, new FakeJobRecordDao(), new FakeDeviceInventoryRepository());
         InventoryController controller = new InventoryController(queryService, unusedCollectService());
 
         ResponseEntity<Map<String, Object>> response = controller.getDeviceInventory("no-such-device");
@@ -141,7 +141,7 @@ class InventoryControllerTest {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.byId.put("device-1", device("device-1"));
         InventoryQueryService queryService =
-                new InventoryQueryService(devices, new FakeJobRecordDao(), new InMemoryDeviceInventoryRepository());
+                new InventoryQueryService(devices, new FakeJobRecordDao(), new FakeDeviceInventoryRepository());
         InventoryController controller = new InventoryController(queryService, unusedCollectService());
 
         ResponseEntity<Map<String, Object>> response = controller.getDeviceInventory("device-1");
@@ -158,15 +158,17 @@ class InventoryControllerTest {
     void getDeviceInventoryReturnsTheLatestRunShapedExactlyAsTheContract() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.byId.put("device-1", device("device-1"));
-        InMemoryDeviceInventoryRepository inventoryRepository = new InMemoryDeviceInventoryRepository();
-        InventoryInterface iface = new InventoryInterface("eth0", Optional.empty(), InventoryInterface.KIND_PHYSICAL,
-                InventoryInterface.STATE_UP,
-                List.of(new InventoryAddress("198.51.100.5/24", InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER)));
-        InventoryRoute route = new InventoryRoute("0.0.0.0/0", Optional.of("198.51.100.1"), Optional.of("eth0"),
-                InventoryRoute.PROTOCOL_DEFAULT, Optional.empty());
+        FakeDeviceInventoryRepository inventoryRepository = new FakeDeviceInventoryRepository();
+        InventoryInterface iface = new InventoryInterface("if-1", "eth0", Optional.empty(),
+                InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_UP,
+                List.of(new InventoryAddress("addr-1", "198.51.100.5/24", InventoryAddress.FAMILY_IPV4,
+                        InventoryAddress.ROLE_MEMBER)));
+        InventoryRoute route = new InventoryRoute("route-1", "0.0.0.0/0", Optional.of("198.51.100.1"),
+                Optional.of("eth0"), InventoryRoute.PROTOCOL_DEFAULT, Optional.empty());
         InventoryContext context = new InventoryContext(InventoryContext.PHYSICAL, List.of(iface), List.of(route));
         Instant collectedAt = Instant.parse("2026-09-14T12:00:00Z");
-        inventoryRepository.recordRun(new InventoryRun("run-1", "device-1", "job-1", collectedAt, List.of(context)));
+        inventoryRepository.recordRun(new InventoryRun("run-1", "device-1", "job-1", collectedAt, 1, List.of(context)),
+                "actor", "action-1");
         FakeJobRecordDao jobs = new FakeJobRecordDao();
         jobs.byId.put("job-1", new JobRow("job-1", "cp_inventory_collect", "device-1", "CLASS_0_READ", "COMPLETED",
                 null, 0L, "SUCCESS", null));
@@ -190,7 +192,7 @@ class InventoryControllerTest {
     @Test
     void getClusterInventoryReturns404WhenNoDeviceCarriesTheRef() {
         InventoryQueryService queryService = new InventoryQueryService(new FakeDeviceRepository(),
-                new FakeJobRecordDao(), new InMemoryDeviceInventoryRepository());
+                new FakeJobRecordDao(), new FakeDeviceInventoryRepository());
         InventoryController controller = new InventoryController(queryService, unusedCollectService());
 
         ResponseEntity<Map<String, Object>> response = controller.getClusterInventory("no-such-cluster");
@@ -240,7 +242,7 @@ class InventoryControllerTest {
         com.securityexpert.nexus.ui2.capability.CapabilityRegistry registry =
                 com.securityexpert.nexus.ui2.capability.CapabilityRegistry.of(List.of(
                         inventoryCapability(
-                                com.securityexpert.nexus.ui2.service.device.inventory.InventoryCapabilityIds.CP_INVENTORY_COLLECT,
+                                com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds.CP_INVENTORY_COLLECT,
                                 "check_point")));
         com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentReadPort enrollmentReadPort = deviceId ->
                 devices.find(deviceId).map(d -> new com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentSnapshot(
@@ -250,7 +252,7 @@ class InventoryControllerTest {
                         new InMemoryAdmissionRepository());
         InventoryCollectService collectService = new InventoryCollectService(devices, admissionService);
         InventoryQueryService queryService =
-                new InventoryQueryService(devices, new FakeJobRecordDao(), new InMemoryDeviceInventoryRepository());
+                new InventoryQueryService(devices, new FakeJobRecordDao(), new FakeDeviceInventoryRepository());
         return new InventoryController(queryService, collectService);
     }
 

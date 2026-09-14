@@ -15,6 +15,7 @@ import com.securityexpert.nexus.ui2.capability.MaturityState;
 import com.securityexpert.nexus.ui2.capability.StepKind;
 import com.securityexpert.nexus.ui2.capability.TransportKind;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfirmCapabilityIds;
+import com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionRepository;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.jobs.admission.PersistenceJobAdmissionRepository;
@@ -25,14 +26,13 @@ import com.securityexpert.nexus.ui2.persistence.device.CredentialReferenceReposi
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqCredentialReferenceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.JooqDeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
 import com.securityexpert.nexus.ui2.service.device.DeviceAddSingleService;
 import com.securityexpert.nexus.ui2.service.device.DeviceQueryService;
 import com.securityexpert.nexus.ui2.service.device.DeviceRegistrationService;
-import com.securityexpert.nexus.ui2.service.device.inventory.DeviceInventoryRepository;
-import com.securityexpert.nexus.ui2.service.device.inventory.InMemoryDeviceInventoryRepository;
-import com.securityexpert.nexus.ui2.service.device.inventory.InventoryCapabilityIds;
 import com.securityexpert.nexus.ui2.service.device.inventory.InventoryCollectService;
 import com.securityexpert.nexus.ui2.service.device.inventory.InventoryQueryService;
 
@@ -43,14 +43,16 @@ import com.securityexpert.nexus.ui2.service.device.inventory.InventoryQueryServi
  * wired in the service composition today") alongside the {@code devices}/
  * {@code jobs} read/list beans the new controller needs.
  *
- * <p>{@link #confirmCapabilityRegistry} duplicates {@code worker}'s own
+ * <p>{@link #deviceCapabilityRegistry} duplicates {@code worker}'s own
  * {@code ConfirmCapabilities} placeholder builder rather than depending on
  * it: {@code service} may never import a {@code worker} class (DIR-2), so
- * the same two-capability, gate-free placeholder (a step list with no gate
- * reference -- neither side's confirm executor runs through {@code
+ * the same gate-free placeholder (a step list with no gate reference --
+ * neither side's confirm/inventory executor runs through {@code
  * StepExecutor} or these steps at all) is built here from {@code
- * capability-registry} types alone. Keep both in sync if either
- * capability's id/vendor/transport ever changes.</p>
+ * capability-registry} types alone, for the enrollment confirm and the
+ * inventory collect capabilities alike -- one registry, one {@link
+ * JobAdmissionService} bean serves both (WORKER.md: "collapse it"). Keep
+ * both in sync if any capability's id/vendor/transport ever changes.</p>
  */
 @Configuration
 public class DeviceCompositionConfiguration {
@@ -77,11 +79,15 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
-    public CapabilityRegistry confirmCapabilityRegistry() {
+    public CapabilityRegistry deviceCapabilityRegistry() {
         return CapabilityRegistry.of(List.of(
                 confirmCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, "check_point", "cp_gaia_gateway",
                         TransportKind.SSH_EXEC),
                 confirmCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO, "palo_alto", "pan_firewall",
+                        TransportKind.PAN_XML_API),
+                confirmCapability(InventoryCapabilityIds.CP_INVENTORY_COLLECT, "check_point", "cp_gaia_gateway",
+                        TransportKind.SSH_EXEC),
+                confirmCapability(InventoryCapabilityIds.PAN_INVENTORY_COLLECT, "palo_alto", "pan_firewall",
                         TransportKind.PAN_XML_API)));
     }
 
@@ -107,9 +113,9 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
-    public JobAdmissionService jobAdmissionService(CapabilityRegistry confirmCapabilityRegistry,
+    public JobAdmissionService jobAdmissionService(CapabilityRegistry deviceCapabilityRegistry,
             DeviceEnrollmentReadPort deviceEnrollmentReadPort, JobAdmissionRepository jobAdmissionRepository) {
-        return new JobAdmissionService(confirmCapabilityRegistry, deviceEnrollmentReadPort, jobAdmissionRepository);
+        return new JobAdmissionService(deviceCapabilityRegistry, deviceEnrollmentReadPort, jobAdmissionRepository);
     }
 
     @Bean
@@ -123,17 +129,9 @@ public class DeviceCompositionConfiguration {
         return new DeviceQueryService(deviceRepository, jobRecordDao);
     }
 
-    /**
-     * NXS-LOCAL-0160 SESSION_START baseline: "work against your own
-     * in-memory fake of DeviceInventoryRepository... then rebase or
-     * cherry-pick 0159's persistence commit and drop the fake from main
-     * code." Until then this is the one instance the whole application
-     * shares, so a run recorded by a future collection job stays visible
-     * to every subsequent read in the same process.
-     */
     @Bean
-    public DeviceInventoryRepository deviceInventoryRepository() {
-        return new InMemoryDeviceInventoryRepository();
+    public DeviceInventoryRepository deviceInventoryRepository(TransactionBoundary transactionBoundary) {
+        return new JooqDeviceInventoryRepository(transactionBoundary);
     }
 
     @Bean
@@ -142,30 +140,9 @@ public class DeviceCompositionConfiguration {
         return new InventoryQueryService(deviceRepository, jobRecordDao, deviceInventoryRepository);
     }
 
-    /**
-     * Mirrors {@link #confirmCapabilityRegistry()}'s own gate-free
-     * placeholder shape (see that method's own javadoc) -- {@code service}
-     * builds its own two-capability registry rather than depending on a
-     * {@code worker} class (DIR-2).
-     */
-    @Bean
-    public CapabilityRegistry inventoryCapabilityRegistry() {
-        return CapabilityRegistry.of(List.of(
-                confirmCapability(InventoryCapabilityIds.CP_INVENTORY_COLLECT, "check_point", "cp_gaia_gateway",
-                        TransportKind.SSH_EXEC),
-                confirmCapability(InventoryCapabilityIds.PAN_INVENTORY_COLLECT, "palo_alto", "pan_firewall",
-                        TransportKind.PAN_XML_API)));
-    }
-
-    @Bean
-    public JobAdmissionService inventoryJobAdmissionService(CapabilityRegistry inventoryCapabilityRegistry,
-            DeviceEnrollmentReadPort deviceEnrollmentReadPort, JobAdmissionRepository jobAdmissionRepository) {
-        return new JobAdmissionService(inventoryCapabilityRegistry, deviceEnrollmentReadPort, jobAdmissionRepository);
-    }
-
     @Bean
     public InventoryCollectService inventoryCollectService(DeviceRepository deviceRepository,
-            JobAdmissionService inventoryJobAdmissionService) {
-        return new InventoryCollectService(deviceRepository, inventoryJobAdmissionService);
+            JobAdmissionService jobAdmissionService) {
+        return new InventoryCollectService(deviceRepository, jobAdmissionService);
     }
 }

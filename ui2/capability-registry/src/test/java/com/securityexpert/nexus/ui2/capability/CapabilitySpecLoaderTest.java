@@ -91,20 +91,23 @@ class CapabilitySpecLoaderTest {
 
     @Test
     void theCommittedFixtureFilesParseAndTheCapabilityIsExecutionEligibleAgainstThem() {
+        // device_confirm_check_point.yaml (the enrollment confirm's own committed registry entry,
+        // NXS-LOCAL-0158) is the current committed spec fixture whose steps need no gate rows at
+        // all -- cp_gaia_inventory.yaml (the earlier B1-5 narrow-subset capability this test used to
+        // load) was superseded and removed by NXS-LOCAL-0159's cp_inventory_collect.yaml.
         CapabilitySpec spec = CapabilitySpecLoader.loadFromStream(
-                getClass().getClassLoader().getResourceAsStream("capabilities/cp_gaia_inventory.yaml"));
+                getClass().getClassLoader().getResourceAsStream("capabilities/device_confirm_check_point.yaml"));
         List<GateRow> gates = GateRegistryFixtureLoader.loadFromStream(
                 getClass().getClassLoader().getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
 
-        assertEquals("cp_gaia_inventory_show_version_ha_state", spec.capabilityId());
-        assertTrue(gates.size() >= 2, "expected at least the two cp_gaia_* rows this capability resolves against");
+        assertEquals("device_confirm_check_point", spec.capabilityId());
 
         GateRegistryPort inMemory = key -> gates.stream()
                 .filter(row -> row.key().equals(key))
                 .toList();
         Capability capability = new CapabilityRegistryLoader(inMemory).load(spec);
 
-        assertTrue(capability.executionEligible(), "the committed fixture backs every gate reference this "
-                + "capability's spec declares, and both cp_gaia_* gate rows are SIGNED_OFF");
+        assertTrue(capability.executionEligible(), "connect/disconnect are the only declared steps and neither "
+                + "needs a gate reference, so this capability resolves execution-eligible with no gate rows at all");
     }
 }

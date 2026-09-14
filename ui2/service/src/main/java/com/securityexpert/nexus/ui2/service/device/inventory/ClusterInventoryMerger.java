@@ -10,6 +10,12 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
+
 /**
  * 14C D-5 / 13F CL-2: the pure function that unifies a cluster's member
  * runs into one {@code GET /clusters/{cluster_member_ref}/inventory} view.

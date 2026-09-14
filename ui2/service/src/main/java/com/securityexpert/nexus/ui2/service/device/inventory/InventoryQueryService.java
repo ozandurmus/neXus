@@ -8,6 +8,8 @@ import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
 

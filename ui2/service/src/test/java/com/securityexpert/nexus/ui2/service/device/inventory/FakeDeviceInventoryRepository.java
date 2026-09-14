@@ -7,20 +7,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Temporary stand-in for NXS-LOCAL-0159's persistence-backed {@link
- * DeviceInventoryRepository} (WORKER.md risk: "Blocking on 0159 instead of
- * working against the fake first"). Keeps every run ever recorded per
- * device, in insertion order, so {@link #findLatestRun} can return the most
- * recently recorded one without depending on any collector actually having
- * run yet in this movement's own tests.
- */
-public final class InMemoryDeviceInventoryRepository implements DeviceInventoryRepository {
+import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
+
+/** Test-only in-memory {@link DeviceInventoryRepository} fake; the real bean is {@code JooqDeviceInventoryRepository}. */
+public final class FakeDeviceInventoryRepository implements DeviceInventoryRepository {
 
     private final Map<String, List<InventoryRun>> runsByDeviceId = new ConcurrentHashMap<>();
 
     @Override
-    public void recordRun(InventoryRun run) {
+    public void recordRun(InventoryRun run, String actorFingerprint, String actionId) {
         runsByDeviceId.computeIfAbsent(run.deviceId(), key -> new ArrayList<>()).add(run);
     }
 
