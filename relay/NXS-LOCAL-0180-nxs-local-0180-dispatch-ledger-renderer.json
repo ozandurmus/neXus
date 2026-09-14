@@ -1,0 +1,144 @@
+{
+ "created_at": "2026-09-14T19:51:59Z",
+ "entries": [
+  {
+   "actor": "po",
+   "marker": "SESSION_START",
+   "report": {
+    "acceptance_criteria": [
+     "AC-1 `python3 scripts/dispatch_ledger.py render` writes project/DISPATCH_LEDGER.md with DL-3's columns for every movement the state directory holds.",
+     "AC-2 Re-rendering after a human edits an assessment cell preserves that cell exactly (test).",
+     "AC-3 Metered and subscription totals are separate, unavailable costs are counted in neither, and each total says which providers it covers.",
+     "AC-4 A movement with no usage row, and one whose duration computes negative, both render 'unknown' rather than a number.",
+     "AC-5 The new tests and the two named test files pass; privacy gate PASS; the rendered ledger is committed."
+    ],
+    "baseline": {
+     "authority": "docs/design/GOV_ORCH_13_THE_DISPATCH_LEDGER.md -- FROZEN 2026-09-14: DL-1 one rendered ledger at project/DISPATCH_LEDGER.md, never hand written; DL-2 one row per attempt, a missing earlier attempt says so rather than vanishing; DL-3 the column set; DL-4 metered and subscription costs totalled separately, an unavailable cost counted nowhere; DL-5 the assessment column is human and is never overwritten, only filled when empty; DL-6 derived values only, and an impossible duration prints unknown. docs/design/GOV_ORCH_4A_...md (FROZEN) CU-1..CU-4 -- the cost source values the ledger prints, including estimated_from_requested_model and the rule that a subscription figure is a comparable, not spend.",
+     "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+     "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+     "test_baseline": "Run python3 -m pytest tests/test_orchestrator_usage.py tests/test_orchestrator.py -q first and record the counts. Do not run the whole suite.",
+     "what_exists": "scripts/orchestrator.py exposes subcommands including `status` (prints a JSON array of process records) and `usage` (prints a table; `usage --json` prints {\"movements\": [...], \"totals\": {...}}). A status record carries, in part: {\"movement_id\": \"NXS-LOCAL-0166\", \"provider\": \"codex\", \"model_requested\": \"gpt-5.6-terra\", \"effort_requested\": \"medium\", \"phase\": \"failed\", \"failure_reason\": \"relay_not_closed\", \"exit_code\": 0, \"started_at\": \"2026-09-14T16:38:00Z\", \"last_timestamp\": \"2026-09-14T16:48:46Z\", \"retry_count\": 0, \"branch\": \"feature/...\", \"worktree_path\": \"...\", \"revision\": 1}. A usage movement row carries, in part: {\"movement_id\": \"NXS-LOCAL-0166\", \"provider\": \"codex\", \"model\": null, \"turns\": 2, \"total_tokens\": 5822076, \"input_tokens\": 2973857, \"cache_read_input_tokens\": 2824704, \"cache_creation_input_tokens\": 0, \"output_tokens\": 23515, \"cache_hit_ratio\": 0.4871, \"cost_usd\": null, \"cost_source\": \"unavailable\", \"last_event_at\": \"2026-09-14T16:48:46Z\"}. Movement NXS-LOCAL-0168 is implementing GOV.ORCH.4-A so cost_source may also read estimated_from_requested_model by the time you run -- handle every value the module can return and do not hard-code the list from this text alone: read scripts/orchestrator_usage.py. The pull request number for a movement is not in either record; the relay file's SESSION_CLOSE report carries an integration object with a `pr` field (relay/*.json, entries[-1].report.integration.pr) -- read it there, and print a dash when absent. Subscription-billed providers are not marked anywhere today; the Product Owner owns that fact -- take it from a small, documented mapping in the script (codex is subscription-billed on this machine; claude is metered) and say so in the SESSION_CLOSE."
+    },
+    "context_not_loaded": [
+     "ui2/**",
+     "docs/history/**",
+     "vendor documents"
+    ],
+    "deployment_direction": "local validation only",
+    "git": {
+     "base": "origin/main",
+     "lane": "feature/dispatch-ledger"
+    },
+    "invariants": [
+     "Rendered, never authored; the assessment column is the one human part and is preserved.",
+     "No invented attempt, duration or cost.",
+     "Metered and subscription figures never sum together."
+    ],
+    "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+    "movement_type": "IMPLEMENTATION",
+    "objective": "Implement GOV.ORCH.13: a script that renders project/DISPATCH_LEDGER.md from the orchestrator's own records -- one row per dispatch attempt with duration, provider, model, effort, turns, tokens, cache ratio, cost and its source, budget, outcome and pull request, plus a human assessment column the renderer preserves. Today those numbers live in a per-movement cache that dies with the state directory, duration is nowhere, and the first cross-provider comparison had to be reconstructed by hand.",
+    "output_contract": [
+     "A committed ledger showing every dispatch: minutes, model, tokens, cost and what to improve.",
+     "SESSION_CLOSE per requirements."
+    ],
+    "recommended_reasoning": {
+     "reason": "A renderer with a preservation rule and a join across two record shapes; medium covers it.",
+     "tier": "Sonnet 5, medium effort"
+    },
+    "requirements": [
+     "English, per AGENTS.md engineering-output language law.",
+     "Every function names the clause it implements (GOV.ORCH.13 DL-n).",
+     "Run only the test files named plus your own new one and the privacy gate.",
+     "The ledger must contain no address, hostname, serial or credential -- it holds movement identifiers and numbers only.",
+     "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is for a decision in conflict.",
+     "No emoji, no tool-identifying footer, no external URL in commits, the PR or code comments.",
+     "Commit early and often. SESSION_CLOSE names the script's subcommands, the columns, how attempts were evidenced, and test counts before and after."
+    ],
+    "risks": [
+     "Shelling out to the orchestrator instead of importing it, which would break when the CLI changes.",
+     "Editing scripts/orchestrator_usage.py while another movement has it open.",
+     "Losing assessment cells on re-render -- the one thing a human typed.",
+     "Counting a subscription estimate as spend."
+    ],
+    "scope": {
+     "in": [
+      "scripts/dispatch_ledger.py with a `render` subcommand (and `--check` that renders to memory and exits non-zero if the file on disk differs, for a test to use): reads the orchestrator's status records and usage rows through the existing modules (import them; do not shell out and do not re-implement their parsing), joins them per movement, and writes project/DISPATCH_LEDGER.md.",
+      "DL-2 attempts: a record's retry_count and revision tell you a movement ran more than once. Render one row per attempt you can evidence; for an attempt whose numbers the state directory no longer holds, render the row with its identifiers and the word unknown in the derived columns, never silently omitted. If the records genuinely cannot distinguish attempts, render one row and say in the row that earlier attempts are not retained -- do not invent them.",
+      "DL-3 columns exactly: movement, attempt, started (date and time), provider, model, effort, minutes, turns, tokens, cache %, cost, source, budget, outcome, PR, assessment. DL-6: minutes from started_at to the usage row's last_event_at (falling back to the record's last_timestamp); a negative or missing result prints 'unknown'.",
+      "DL-4 totals: two totals lines, metered and subscription, each summing only rows whose cost is a number, plus a count of rows whose cost is unavailable. Never one combined figure.",
+      "DL-5 preservation: parse the existing file before writing, key the assessment cells by (movement, attempt), and carry every non-empty one through unchanged; new rows get an empty placeholder. A test proves an edited assessment survives a re-render.",
+      "Tests in the existing style (a new tests/test_dispatch_ledger.py): the join produces the expected row for a Claude record and for a Codex one; an attempt with no usage row renders unknown rather than zero; assessments survive a re-render; the two totals never merge; a negative duration prints unknown.",
+      "A one-paragraph note in roles/PO.md section 6 telling the Product Owner assistant to render the ledger after each dispatch closes and to fill the assessment cell then."
+     ],
+     "out": [
+      "Any change to scripts/orchestrator.py or scripts/orchestrator_usage.py beyond importing them (movement NXS-LOCAL-0168 is editing the usage module in parallel -- do not touch it); the dashboard; config/model_prices.json; scheduling or automating the render."
+     ]
+    },
+    "validation_plan": [
+     {
+      "argv": [
+       "python3",
+       "-m",
+       "pytest",
+       "tests/test_dispatch_ledger.py",
+       "-q"
+      ],
+      "name": "dispatch_ledger_tests"
+     },
+     {
+      "argv": [
+       "python3",
+       "-m",
+       "pytest",
+       "tests/test_orchestrator_usage.py",
+       "-q"
+      ],
+      "name": "usage_tests"
+     },
+     {
+      "argv": [
+       "python3",
+       "-m",
+       "pytest",
+       "tests/test_orchestrator.py",
+       "-q"
+      ],
+      "name": "orchestrator_tests"
+     },
+     {
+      "argv": [
+       "python3",
+       "scripts/repository_privacy_check.py"
+      ],
+      "name": "privacy_gate"
+     },
+     {
+      "argv": [
+       "python3",
+       "-m",
+       "pytest",
+       "tests/test_contract_authority_status.py",
+       "-q"
+      ],
+      "name": "contract_authority_status"
+     }
+    ]
+   },
+   "seq": 1,
+   "timestamp": "2026-09-14T19:51:59Z"
+  }
+ ],
+ "id": "NXS-LOCAL-0180",
+ "movement": "dispatch-ledger-renderer",
+ "next_actor": "engineer",
+ "refs": [
+  "docs/design/GOV_ORCH_13_THE_DISPATCH_LEDGER.md",
+  "docs/design/GOV_ORCH_4A_COST_FROM_THE_REQUESTED_MODEL_WHEN_THE_STREAM_IS_SILENT.md",
+  "scripts/orchestrator.py",
+  "scripts/orchestrator_usage.py",
+  "project/QUEUE.md"
+ ],
+ "schema_version": 1,
+ "status": "OPEN",
+ "updated_at": "2026-09-14T19:51:59Z"
+}

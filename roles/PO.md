@@ -182,9 +182,12 @@ A "no" to any of these is a stop, not a workaround.
   workers both reaching for the next free `V` is a guaranteed conflict, as
   is two workers both adding a backlog row.
 - A worker that parks a `RELAY_QUESTION` and exits is recorded `failed`
-  (`relay_not_closed`) and `run` refuses to resume it (`decide_start` has no
-  resume path for it, backlog `gov_orch_resume_after_relay_question`).
-  Answer on the relay, then apply the decision yourself.
+  (`relay_not_closed`) and **is resumable once you answer** — `GOV.ORCH.12`
+  and its amendment `12-A`, implemented 2026-09-14. Post a `po`-authored
+  answer with a `seq` above the question and leave the relay's top-level
+  `next_actor` as `engineer`; `run` then resumes the same worktree, branch
+  and session with a recovery note. Do not re-dispatch and do not apply the
+  decision yourself.
 - A worker stopped at its budget ceiling has usually committed everything:
   run `orchestrator.py verify --movement <id>`, review, and open the PR from
   the PO side rather than re-running it.
