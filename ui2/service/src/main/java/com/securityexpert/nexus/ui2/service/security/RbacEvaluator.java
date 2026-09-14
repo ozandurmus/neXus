@@ -11,6 +11,7 @@ import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.RootIdentityRepository;
 
 /**
  * {@code E4}'s four-outcome evaluation (C3 §5.1, §6.1). An exact-match
@@ -25,16 +26,36 @@ public final class RbacEvaluator {
     public static final String REASON_ROLE_TOKEN_UNBOUND = "role_token_unbound";
     public static final String REASON_ACTOR_GROUP_SET_STALE = "actor_group_set_stale";
     public static final String AUTHORITY = "ui2_ldap";
+    public static final String LOCAL_AUTHORITY = "ui2_local";
+    public static final String ROOT_AUTHORITY = "ui2_root";
 
     private final RoleBindingRepository roleBindingRepository;
     private final ActorAuthzStateRepository actorAuthzStateRepository;
     private final GroupReferenceCipher groupReferenceCipher;
+    private final LocalIdentityResolver localIdentityResolver;
+    private final LocalRoleTokenResolver localRoleTokenResolver;
+    private final RootIdentityRepository rootIdentityRepository;
 
     public RbacEvaluator(RoleBindingRepository roleBindingRepository,
             ActorAuthzStateRepository actorAuthzStateRepository, GroupReferenceCipher groupReferenceCipher) {
         this.roleBindingRepository = roleBindingRepository;
         this.actorAuthzStateRepository = actorAuthzStateRepository;
         this.groupReferenceCipher = groupReferenceCipher;
+        this.localIdentityResolver = null;
+        this.localRoleTokenResolver = null;
+        this.rootIdentityRepository = null;
+    }
+
+    public RbacEvaluator(RoleBindingRepository roleBindingRepository,
+            ActorAuthzStateRepository actorAuthzStateRepository, GroupReferenceCipher groupReferenceCipher,
+            LocalIdentityResolver localIdentityResolver, LocalRoleTokenResolver localRoleTokenResolver,
+            RootIdentityRepository rootIdentityRepository) {
+        this.roleBindingRepository = roleBindingRepository;
+        this.actorAuthzStateRepository = actorAuthzStateRepository;
+        this.groupReferenceCipher = groupReferenceCipher;
+        this.localIdentityResolver = localIdentityResolver;
+        this.localRoleTokenResolver = localRoleTokenResolver;
+        this.rootIdentityRepository = rootIdentityRepository;
     }
 
     public record Decision(AuthzOutcome outcome, Optional<String> authority, Optional<String> reasonCode,
@@ -43,6 +64,14 @@ public final class RbacEvaluator {
         static Decision permitted(String bindingId) {
             return new Decision(AuthzOutcome.PERMITTED, Optional.of(AUTHORITY), Optional.empty(),
                     Optional.of(bindingId));
+        }
+
+        static Decision permittedLocal(String bindingId) {
+            return new Decision(AuthzOutcome.PERMITTED, Optional.of(LOCAL_AUTHORITY), Optional.empty(), Optional.of(bindingId));
+        }
+
+        static Decision permittedRoot() {
+            return new Decision(AuthzOutcome.PERMITTED, Optional.of(ROOT_AUTHORITY), Optional.empty(), Optional.empty());
         }
 
         static Decision noApplicableAuthority() {
@@ -64,12 +93,28 @@ public final class RbacEvaluator {
             return new Decision(AuthzOutcome.AUTHZ_NOT_EVALUATED, Optional.of(AUTHORITY),
                     Optional.of(REASON_ACTOR_GROUP_SET_STALE), Optional.empty());
         }
+
+        static Decision deniedLocalUnbound() {
+            return new Decision(AuthzOutcome.DENIED, Optional.of(LOCAL_AUTHORITY),
+                    Optional.of(REASON_ACTOR_NOT_IN_REQUIRED_GROUP), Optional.empty());
+        }
     }
 
     public Decision evaluate(String actorFingerprint, Optional<RoleToken> requiredToken, Instant now) {
+        Optional<String> localIdentityId = localIdentityResolver == null ? Optional.empty()
+                : localIdentityResolver.resolve(actorFingerprint).map(record -> record.localIdentityId());
+        if (localIdentityId.isPresent() && rootIdentityRepository != null
+                && rootIdentityRepository.rootLocalIdentityId().filter(localIdentityId.get()::equals).isPresent()) {
+            return Decision.permittedRoot();
+        }
         if (requiredToken.isEmpty()) {
             // NO_APPLICABLE_AUTHORITY: open to any authenticated session.
             return Decision.noApplicableAuthority();
+        }
+        if (localIdentityId.isPresent() && localRoleTokenResolver != null) {
+            return localRoleTokenResolver.resolveBinding(localIdentityId.get(), requiredToken.get())
+                    .map(binding -> Decision.permittedLocal(binding.bindingId()))
+                    .orElseGet(Decision::deniedLocalUnbound);
         }
         String token = requiredToken.get().token();
 

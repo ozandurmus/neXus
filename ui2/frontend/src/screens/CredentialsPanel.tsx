@@ -95,7 +95,7 @@ export function CredentialsPanel() {
             Add credential
           </M3Button>
         </Box>
-        {createOpen && <CreateCredentialDialog onClose={() => setCreateOpen(false)} onCreated={refresh} />}
+        {createOpen && <CreateCredentialDialog onClose={() => setCreateOpen(false)} onCreated={() => refresh()} />}
       </EmptyPanel>
     );
   }
@@ -145,7 +145,7 @@ export function CredentialsPanel() {
           </Box>
         ))}
       </Stack>
-      {createOpen && <CreateCredentialDialog onClose={() => setCreateOpen(false)} onCreated={refresh} />}
+      {createOpen && <CreateCredentialDialog onClose={() => setCreateOpen(false)} onCreated={() => refresh()} />}
       {replaceSecretFor && (
         <ReplaceSecretDialog
           credentialId={replaceSecretFor}
@@ -163,15 +163,22 @@ function describeError(err: ApiError): string {
   if (serverError === "CREDENTIAL_IN_USE") {
     return "This credential is in use by a device and cannot be deleted.";
   }
+  if (serverError === "ACTION_REFUSED") {
+    return "You do not have permission to create credentials.";
+  }
   return serverError ?? `request failed (status ${err.status})`;
 }
 
-function CreateCredentialDialog({ onClose, onCreated }: { readonly onClose: () => void; readonly onCreated: () => void }) {
+export function CreateCredentialDialog({ onClose, onCreated, initialVendor }: {
+  readonly onClose: () => void;
+  readonly onCreated: (credential: CredentialView) => void;
+  readonly initialVendor?: "check_point" | "palo_alto";
+}) {
   const [displayName, setDisplayName] = useState("");
   const [kind, setKind] = useState<CredentialView["kind"]>("ssh_password");
   const [username, setUsername] = useState("");
-  const [allowsCheckPoint, setAllowsCheckPoint] = useState(false);
-  const [allowsPaloAlto, setAllowsPaloAlto] = useState(false);
+  const [allowsCheckPoint, setAllowsCheckPoint] = useState(initialVendor === "check_point");
+  const [allowsPaloAlto, setAllowsPaloAlto] = useState(initialVendor === "palo_alto");
   const [secret, setSecret] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -224,8 +231,8 @@ function CreateCredentialDialog({ onClose, onCreated }: { readonly onClose: () =
           disabled={!allowsCheckPoint && !allowsPaloAlto}
           onClick={() =>
             createCredential(displayName, kind, username, allowsCheckPoint, allowsPaloAlto, secret, passphrase)
-              .then(() => {
-                onCreated();
+              .then((credential) => {
+                onCreated(credential);
                 onClose();
               })
               .catch((err: ApiError) => setError(describeError(err)))

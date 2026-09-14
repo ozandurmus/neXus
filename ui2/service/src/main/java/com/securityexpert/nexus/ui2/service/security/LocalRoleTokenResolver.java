@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.service.security;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
@@ -41,5 +42,12 @@ public final class LocalRoleTokenResolver {
             }
         }
         return resolved;
+    }
+
+    /** The matching direct binding, retained for E4's audit row. */
+    public Optional<RoleBindingRecord> resolveBinding(String localIdentityId, RoleToken token) {
+        return roleBindingRepository.findActiveByToken(token.token()).stream()
+                .filter(binding -> localIdentityId.equals(groupReferenceCipher.decrypt(binding.groupReferenceEncrypted())))
+                .findFirst();
     }
 }

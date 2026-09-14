@@ -12,6 +12,7 @@ import com.securityexpert.nexus.ui2.persistence.identity.JooqAuthzDecisionReposi
 import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.LocalIdentityAdministration;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.RootIdentityRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.SecurityAdminLockoutGuard;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionRepository;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
@@ -19,6 +20,8 @@ import com.securityexpert.nexus.ui2.platform.LocalIdentityAdministrationPort;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 import com.securityexpert.nexus.ui2.service.security.GateChain;
 import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
+import com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver;
+import com.securityexpert.nexus.ui2.service.security.LocalRoleTokenResolver;
 import com.securityexpert.nexus.ui2.service.security.RoleBindingAdminService;
 import com.securityexpert.nexus.ui2.service.security.SecurityWebMvcConfig;
 
@@ -58,8 +61,11 @@ public class RbacConfiguration {
 
     @Bean
     public RbacEvaluator rbacEvaluator(RoleBindingRepository roleBindingRepository,
-            ActorAuthzStateRepository actorAuthzStateRepository, GroupReferenceCipher groupReferenceCipher) {
-        return new RbacEvaluator(roleBindingRepository, actorAuthzStateRepository, groupReferenceCipher);
+            ActorAuthzStateRepository actorAuthzStateRepository, GroupReferenceCipher groupReferenceCipher,
+            LocalIdentityResolver localIdentityResolver, LocalRoleTokenResolver localRoleTokenResolver,
+            RootIdentityRepository rootIdentityRepository) {
+        return new RbacEvaluator(roleBindingRepository, actorAuthzStateRepository, groupReferenceCipher,
+                localIdentityResolver, localRoleTokenResolver, rootIdentityRepository);
     }
 
     @Bean
@@ -89,17 +95,17 @@ public class RbacConfiguration {
     @Bean
     public RoleBindingAdminService roleBindingAdminService(RoleBindingRepository roleBindingRepository,
             ActorAuthzStateRepository actorAuthzStateRepository, GroupReferenceCipher groupReferenceCipher,
-            SecurityAdminLockoutGuard securityAdminLockoutGuard) {
+            SecurityAdminLockoutGuard securityAdminLockoutGuard, RootIdentityRepository rootIdentityRepository) {
         return new RoleBindingAdminService(roleBindingRepository, actorAuthzStateRepository, groupReferenceCipher,
-                securityAdminLockoutGuard);
+                securityAdminLockoutGuard, rootIdentityRepository);
     }
 
     /** 13G LIA-2: the exact same class the CLI's own composition (job-engine) constructs. */
     @Bean
     public LocalIdentityAdministrationPort localIdentityAdministrationPort(
             LocalCredentialsRepository localCredentialsRepository, SessionRepository sessionRepository,
-            SecurityAdminLockoutGuard securityAdminLockoutGuard) {
+            SecurityAdminLockoutGuard securityAdminLockoutGuard, RootIdentityRepository rootIdentityRepository) {
         return new LocalIdentityAdministration(localCredentialsRepository, sessionRepository,
-                securityAdminLockoutGuard);
+                securityAdminLockoutGuard, rootIdentityRepository);
     }
 }

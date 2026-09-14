@@ -18,6 +18,7 @@ import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 
 import { m3 } from "../theme/m3Theme";
+import { CreateCredentialDialog } from "../screens/CredentialsPanel";
 import { M3Button, StatusChip } from "./M3Widgets";
 import { useFetchOnMount } from "./useFetchOnMount";
 import {
@@ -47,6 +48,7 @@ const VENDOR_LABEL: Record<Vendor, string> = {
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
   const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
+  if (serverError === "ACTION_REFUSED") return "You do not have permission to create credentials.";
   if (serverError) return serverError;
   return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
 }
@@ -78,6 +80,8 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
   const [address, setAddress] = useState("");
   const [vendor, setVendor] = useState<Vendor>("check_point");
   const [credentialId, setCredentialId] = useState("");
+  const [createdCredential, setCreatedCredential] = useState<CredentialView | null>(null);
+  const [createCredentialOpen, setCreateCredentialOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("form");
   const [validationReason, setValidationReason] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -98,7 +102,9 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
     () => listCredentials().then((result) => result.credentials ?? []),
     describeApiError,
   );
-  const credentials = credentialsData ?? [];
+  const credentials = createdCredential && !(credentialsData ?? []).some((credential) => credential.credential_id === createdCredential.credential_id)
+    ? [...(credentialsData ?? []), createdCredential]
+    : credentialsData ?? [];
   const eligibleCredentials = credentials.filter((c) =>
     vendor === "check_point" ? c.allows_check_point : c.allows_palo_alto,
   );
@@ -366,6 +372,9 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
                 </MenuItem>
               ))}
             </TextField>
+            {eligibleCredentials.length === 0 && !credentialsError && (
+              <Button onClick={() => setCreateCredentialOpen(true)}>Create credential</Button>
+            )}
             {validationReason && (
               <Typography variant="body2" color="error">
                 Validation failed: {validationReason}
@@ -551,6 +560,17 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
           </Stack>
         )}
       </DialogContent>
+      {createCredentialOpen && (
+        <CreateCredentialDialog
+          initialVendor={vendor}
+          onClose={() => setCreateCredentialOpen(false)}
+          onCreated={(credential) => {
+            setCreatedCredential(credential);
+            setCredentialId(credential.credential_reference_id);
+            setCreateCredentialOpen(false);
+          }}
+        />
+      )}
       <DialogActions sx={{ px: 3, pb: 3 }}>
         <Button
           onClick={onClose}

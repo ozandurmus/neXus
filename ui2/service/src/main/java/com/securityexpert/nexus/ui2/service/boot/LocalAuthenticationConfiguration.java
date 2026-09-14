@@ -17,10 +17,12 @@ import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.identity.FirstBootIdentityRoleBindingSeeder;
 import com.securityexpert.nexus.ui2.persistence.identity.JooqLocalCredentialsRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.JooqRootIdentityRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.JooqRoleBindingRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.JooqSessionRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.RootIdentityRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionRepository;
 import com.securityexpert.nexus.ui2.platform.Clock;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
@@ -95,6 +97,11 @@ public class LocalAuthenticationConfiguration {
         return new JooqRoleBindingRepository(transactionBoundary);
     }
 
+    @Bean
+    public RootIdentityRepository rootIdentityRepository(TransactionBoundary transactionBoundary) {
+        return new JooqRootIdentityRepository(transactionBoundary);
+    }
+
     /**
      * The encryption envelope C3 §4.2 requires for {@code role_bindings.group_reference_encrypted}
      * (C1 §6.2's {@code <VAR>_FILE} secret convention: a base64-encoded
@@ -110,9 +117,9 @@ public class LocalAuthenticationConfiguration {
     @Bean
     public FirstBootIdentityRoleBindingSeeder firstBootIdentityRoleBindingSeeder(TransactionBoundary transactionBoundary,
             LocalCredentialsRepository localCredentialsRepository, RoleBindingRepository roleBindingRepository,
-            GroupReferenceCipher groupReferenceCipher) {
+            GroupReferenceCipher groupReferenceCipher, RootIdentityRepository rootIdentityRepository) {
         return new FirstBootIdentityRoleBindingSeeder(transactionBoundary, localCredentialsRepository,
-                roleBindingRepository, groupReferenceCipher, groupReferenceKeyId);
+                roleBindingRepository, groupReferenceCipher, groupReferenceKeyId, rootIdentityRepository);
     }
 
     @Bean
