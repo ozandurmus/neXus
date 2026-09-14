@@ -12,14 +12,13 @@ under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   `nexusadmin` (full administrative capability) and `claudeadmin`
   (`role:viewer`), which a restart can never reset.
 - **Both discovery contracts are FROZEN and both transports are in Java**
-  (PRs #240, #241, #246, #247). CP reads the measured method — domain list,
-  `mdsenv && cpmiquerybin object` per domain per type, `netstat` twice —
-  per `CP_DISCOVERY_MEASURED_METHOD_AND_COMMAND_HANDOVER_2026_09_13.md`; PAN
-  uses keygen + one enumeration over the XML API, TLS always verified. Every
-  binding is `UNVERIFIED` at one site per vendor; both command/route gate
-  documents are DRAFT pending PO approval — **nothing has run live yet**.
-  `DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md` is DRAFT for PO freeze. Build
-  order and collection decisions: `PO_DECISION_RECORD_2026_09_13E`/`13F`.
+  (PRs #240, #241, #246, #247); every binding `UNVERIFIED`, gate documents
+  DRAFT — **nothing has run live**. `DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md`
+  **FROZEN 2026-09-14**; first-contact reads approved
+  (`DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md`). Login step delivered:
+  session UX (#253), local identity administration (#256), credential store
+  (#267); posture switch for forced password change, default off (#259).
+  Records: `13E`/`13F`/`13G`/`2026-09-14`. Product name **neXus** (#264, #265).
 - **Services are independently deployable** (`PO_DECISION_RECORD_2026_09_13D`,
   superseding `UI2_0_B1_01C` EP-1). Its `AUTH-PLACEMENT` question is open and
   blocks a *second* authenticated surface, not the transport work.
