@@ -17,7 +17,12 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundaryFactory;
 import com.securityexpert.nexus.ui2.persistence.credential.CredentialStoreComposition;
 import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRunRepository;
 import com.securityexpert.nexus.ui2.persistence.discovery.JooqDiscoveryRunRepository;
+import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
+import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.device.configuration.DeviceConfigurationRepository;
+import com.securityexpert.nexus.ui2.persistence.device.configuration.JooqConfigurationNotificationRepository;
+import com.securityexpert.nexus.ui2.persistence.device.configuration.JooqDeviceConfigurationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.JooqDeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.gates.JooqGateRegistryDao;
@@ -25,12 +30,17 @@ import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobStepAttemptDao;
+import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
 import com.securityexpert.nexus.ui2.platform.SecretFile;
 import com.securityexpert.nexus.ui2.worker.confirm.ConfirmCapabilities;
 import com.securityexpert.nexus.ui2.worker.confirm.ConfirmCapabilityExecutor;
 import com.securityexpert.nexus.ui2.worker.confirm.ConfirmJobExecutor;
 import com.securityexpert.nexus.ui2.worker.confirm.PeerFollowResolver;
 import com.securityexpert.nexus.ui2.worker.confirm.WorkerClaimLoop;
+import com.securityexpert.nexus.ui2.worker.configuration.ConfigurationCapabilities;
+import com.securityexpert.nexus.ui2.worker.configuration.ConfigurationCapabilityExecutor;
+import com.securityexpert.nexus.ui2.worker.configuration.ConfigurationJobExecutor;
+import com.securityexpert.nexus.ui2.worker.configuration.pan.PanoramaCrossCheckPort;
 import com.securityexpert.nexus.ui2.worker.discovery.DiscoveryJobExecutor;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.ManagementPlaneEnumerationAdapter;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.StoreBackedSshCredentialResolver;
@@ -77,6 +87,9 @@ public final class Ui2WorkerMain {
         String dbPassword = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_PASSWORD_FILE")), "worker.db_password");
         String credentialStoreKeyBase64 =
                 SecretFile.readRequired(Path.of(requireEnv("UI2_CREDENTIAL_STORE_KEY_FILE")), "credential_store_key");
+        String artefactStoreKeyBase64 =
+                SecretFile.readRequired(Path.of(requireEnv("UI2_ARTEFACT_STORE_KEY_FILE")), "artefact_store_key");
+        Path artefactStoreRoot = Path.of(System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "/var/lib/ui2/artefacts"));
         String checkPointTrustRuleRef = System.getenv().getOrDefault("UI2_CP_TRUST_RULE_REF", "utils.cp_ssh_trust");
         String paloAltoTrustRuleRef =
                 System.getenv().getOrDefault("UI2_PAN_TRUST_RULE_REF", "utils.pan_xml_api_trust");
@@ -120,6 +133,7 @@ public final class Ui2WorkerMain {
         var capabilities = new java.util.ArrayList<com.securityexpert.nexus.ui2.capability.Capability>();
         capabilities.addAll(ConfirmCapabilities.all());
         capabilities.addAll(InventoryCapabilities.all(gateRegistry));
+        capabilities.addAll(ConfigurationCapabilities.all(gateRegistry));
         capabilities.addAll(com.securityexpert.nexus.ui2.worker.discovery.DiscoveryCapabilities.all());
         CapabilityRegistry capabilityRegistry = CapabilityRegistry.of(capabilities);
         TransportRegistry transportRegistry = WorkerBootstrap.buildTransportRegistry(sshTransport, panTransport);
@@ -142,6 +156,18 @@ public final class Ui2WorkerMain {
         InventoryJobExecutor inventoryJobExecutor = new InventoryJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, inventoryCapabilityExecutor);
 
+        ArtefactStore artefactStore =
+                new FileArtefactStore(artefactStoreRoot, ArtefactStoreCipher.fromBase64Key(artefactStoreKeyBase64));
+        DeviceConfigurationRepository deviceConfigurationRepository =
+                new JooqDeviceConfigurationRepository(transactionBoundary);
+        JooqConfigurationNotificationRepository configurationNotificationRepository =
+                new JooqConfigurationNotificationRepository(transactionBoundary);
+        ConfigurationCapabilityExecutor configurationCapabilityExecutor = new ConfigurationCapabilityExecutor(
+                compositeTransport, panCredentialResolver, artefactStore, PanoramaCrossCheckPort.NONE);
+        ConfigurationJobExecutor configurationJobExecutor = new ConfigurationJobExecutor(leaseRepository,
+                attemptRepository, deviceEnrollmentReadPort, deviceRepository, deviceConfigurationRepository,
+                configurationNotificationRepository, configurationCapabilityExecutor);
+
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
         ManagementPlaneEnumerationAdapter checkPointDiscoveryAdapter =
                 new ManagementPlaneEnumerationAdapter(compositeTransport, sshCredentialResolver);
@@ -152,8 +178,8 @@ public final class Ui2WorkerMain {
 
         JobRecordDao jobRecordDao = new JooqJobRecordDao(transactionBoundary);
         WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
-                confirmJobExecutor, inventoryJobExecutor, discoveryJobExecutor, "worker-" + UUID.randomUUID(),
-                Duration.ofSeconds(60), checkPointTrustRuleRef, paloAltoTrustRuleRef);
+                confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
+                "worker-" + UUID.randomUUID(), Duration.ofSeconds(60), checkPointTrustRuleRef, paloAltoTrustRuleRef);
 
         claimLoop.runUntilInterrupted(Duration.ofSeconds(2));
     }

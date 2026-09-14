@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.securityexpert.nexus.ui2.jobs.admission.ConfigurationCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfirmCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.DiscoveryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds;
@@ -17,6 +18,8 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
+import com.securityexpert.nexus.ui2.worker.configuration.ConfigurationJobExecutor;
+import com.securityexpert.nexus.ui2.worker.configuration.ConfigurationRequest;
 import com.securityexpert.nexus.ui2.worker.discovery.DiscoveryJobExecutor;
 import com.securityexpert.nexus.ui2.worker.inventory.InventoryJobExecutor;
 import com.securityexpert.nexus.ui2.worker.inventory.InventoryRequest;
@@ -34,6 +37,7 @@ public final class WorkerClaimLoop {
     private static final List<String> ELIGIBLE_CAPABILITY_IDS = List.of(
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
             InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT,
+            ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE);
     private static final int DEFAULT_SSH_PORT = 22;
 
@@ -42,22 +46,25 @@ public final class WorkerClaimLoop {
     private final DeviceRepository deviceRepository;
     private final ConfirmJobExecutor confirmJobExecutor;
     private final InventoryJobExecutor inventoryJobExecutor;
+    private final ConfigurationJobExecutor configurationJobExecutor;
     private final DiscoveryJobExecutor discoveryJobExecutor;
     private final String workerId;
     private final Duration leaseDuration;
     private final String checkPointTrustRuleRef;
     private final String paloAltoTrustRuleRef;
 
-    /** WORKER.md "one worker process serves both vendors" (0159): the same claim loop now also serves both job kinds. */
+    /** WORKER.md "one worker process serves both vendors" (0159): the same claim loop now also serves every job kind. */
     public WorkerClaimLoop(JobLeaseRepository leaseRepository, JobRecordDao jobRecordDao,
             DeviceRepository deviceRepository, ConfirmJobExecutor confirmJobExecutor,
-            InventoryJobExecutor inventoryJobExecutor, DiscoveryJobExecutor discoveryJobExecutor, String workerId,
-            Duration leaseDuration, String checkPointTrustRuleRef, String paloAltoTrustRuleRef) {
+            InventoryJobExecutor inventoryJobExecutor, ConfigurationJobExecutor configurationJobExecutor,
+            DiscoveryJobExecutor discoveryJobExecutor, String workerId, Duration leaseDuration,
+            String checkPointTrustRuleRef, String paloAltoTrustRuleRef) {
         this.leaseRepository = Objects.requireNonNull(leaseRepository, "leaseRepository");
         this.jobRecordDao = Objects.requireNonNull(jobRecordDao, "jobRecordDao");
         this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
         this.confirmJobExecutor = Objects.requireNonNull(confirmJobExecutor, "confirmJobExecutor");
         this.inventoryJobExecutor = Objects.requireNonNull(inventoryJobExecutor, "inventoryJobExecutor");
+        this.configurationJobExecutor = Objects.requireNonNull(configurationJobExecutor, "configurationJobExecutor");
         this.discoveryJobExecutor = Objects.requireNonNull(discoveryJobExecutor, "discoveryJobExecutor");
         this.workerId = Objects.requireNonNull(workerId, "workerId");
         this.leaseDuration = Objects.requireNonNull(leaseDuration, "leaseDuration");
@@ -110,6 +117,14 @@ public final class WorkerClaimLoop {
             return true;
         }
 
+        if (ConfigurationCapabilityIds.isConfigurationCapability(job.capabilityId())) {
+            ConfigurationRequest configurationRequest = buildConfigurationRequest(job.capabilityId(),
+                    endpoint.endpointId(), endpoint.addressRef(), device.credentialReferenceId());
+            configurationJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(),
+                    configurationRequest, false);
+            return true;
+        }
+
         ConfirmRequest primaryRequest = buildRequest(job.capabilityId(), endpoint.endpointId(), endpoint.addressRef(),
                 device.credentialReferenceId());
         var peerRequestFactory = peerRequestFactoryFor(job.capabilityId(), device.credentialReferenceId());
@@ -129,6 +144,19 @@ public final class WorkerClaimLoop {
             return InventoryRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
         }
         throw new IllegalStateException("claimed job for an inventory capability the worker does not recognize: "
+                + capabilityId);
+    }
+
+    private ConfigurationRequest buildConfigurationRequest(String capabilityId, String endpointId, String addressRef,
+            String credentialRef) {
+        if (ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT.equals(capabilityId)) {
+            return ConfigurationRequest.checkPoint(new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef)),
+                    credentialRef, checkPointTrustRuleRef);
+        }
+        if (ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT.equals(capabilityId)) {
+            return ConfigurationRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
+        }
+        throw new IllegalStateException("claimed job for a configuration capability the worker does not recognize: "
                 + capabilityId);
     }
 

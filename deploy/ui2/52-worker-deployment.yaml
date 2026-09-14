@@ -90,6 +90,16 @@ spec:
               value: /run/secrets/ui2-credential-store/key
             - name: UI2_ROLE_BINDING_GROUP_REFERENCE_KEY_FILE
               value: /run/secrets/ui2-role-binding/key
+            # NXS-LOCAL-0165: the configuration-collection artefact store's
+            # own key (worker role only -- service never decrypts a raw
+            # artefact; C7 section 4 minimum). UI2_ARTEFACT_STORE_ROOT is
+            # not a secret -- it is the emptyDir path below, local
+            # validation only (a persistent volume is a later, production
+            # concern this movement does not take on).
+            - name: UI2_ARTEFACT_STORE_KEY_FILE
+              value: /run/secrets/ui2-artefact-store/key
+            - name: UI2_ARTEFACT_STORE_ROOT
+              value: /app/artefact-store
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
@@ -126,6 +136,16 @@ spec:
             - name: role-binding-key
               mountPath: /run/secrets/ui2-role-binding
               readOnly: true
+            - name: artefact-store-key
+              mountPath: /run/secrets/ui2-artefact-store
+              readOnly: true
+            # NXS-LOCAL-0165: the raw encrypted artefact bytes themselves
+            # (FileArtefactStore) -- worker-only, ephemeral (emptyDir) at
+            # this local-validation stage; not one of the two closed
+            # writable paths the image itself declares (FS-3), which stay
+            # service-only.
+            - name: artefact-store
+              mountPath: /app/artefact-store
       volumes:
         - name: tmp
           emptyDir: {}
@@ -143,3 +163,9 @@ spec:
           secret:
             secretName: ui2-role-binding-key
             defaultMode: 0440
+        - name: artefact-store-key
+          secret:
+            secretName: ui2-artefact-store-key
+            defaultMode: 0440
+        - name: artefact-store
+          emptyDir: {}

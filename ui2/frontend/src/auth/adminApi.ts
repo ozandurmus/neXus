@@ -53,6 +53,17 @@ async function call<T>(path: string, method: "GET" | "POST", body?: unknown): Pr
   return parsed as T;
 }
 
+/** Like {@link call}, but for a {@code text/plain} response (the Check Point sanitized configuration view) -- never JSON-parsed. */
+async function callText(path: string): Promise<string> {
+  const response = await fetch(path, { method: "GET", credentials: "include" });
+  const text = await response.text();
+  if (!response.ok) {
+    const error: ApiError = { status: response.status, body: { error: text || "NOT_FOUND" } };
+    throw error;
+  }
+  return text;
+}
+
 export function listLocalIdentities(): Promise<{ identities: LocalIdentityView[] }> {
   return call("/local-identities", "GET");
 }
@@ -401,4 +412,84 @@ export function importDiscoveryCandidates(
     candidate_ids: candidateIds,
     credential_reference_id: credentialReferenceId,
   });
+}
+
+/**
+ * Configuration collection read model (14G, movement NXS-LOCAL-0165):
+ * mirrors the inventory read model's own shape above. `change_state` is
+ * `null` until a device's first configuration run lands.
+ */
+export interface ConfigurationIndexEntry {
+  readonly context: string;
+  readonly section: string;
+  readonly source: "tpl" | "dg" | "shared" | "local" | null;
+  readonly entry_count: number;
+  readonly has_override: boolean;
+}
+
+export interface ConfigurationOverride {
+  readonly context: string;
+  readonly category: string;
+  readonly element_path: string;
+  readonly panorama_source: string | null;
+}
+
+export interface ConfigurationSupplementaryRun {
+  readonly read_kind: string;
+  readonly collected_at: string;
+  readonly canonical_hash: string;
+  readonly change_state: "changed" | "unchanged" | "first_run";
+}
+
+export interface DeviceConfiguration {
+  readonly device_id: string;
+  readonly collected_at: string | null;
+  readonly vendor: string | null;
+  readonly read_kind: string | null;
+  readonly canonical_hash: string | null;
+  readonly change_state: "changed" | "unchanged" | "first_run" | null;
+  readonly withheld_line_count: number;
+  readonly sanitized_text_available: boolean;
+  readonly index: ConfigurationIndexEntry[];
+  readonly overrides: ConfigurationOverride[];
+  readonly supplementary_runs: ConfigurationSupplementaryRun[];
+}
+
+export interface ConfigurationDeviceListEntry {
+  readonly device_id: string;
+  readonly hostname: string | null;
+  readonly vendor: string;
+  readonly last_collected_at: string | null;
+  readonly change_state: "changed" | "unchanged" | "first_run" | null;
+}
+
+export function getDeviceConfiguration(deviceId: string): Promise<DeviceConfiguration> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/configuration`, "GET");
+}
+
+export function getDeviceConfigurationText(deviceId: string): Promise<string> {
+  return callText(`/devices/${encodeURIComponent(deviceId)}/configuration/text`);
+}
+
+export function requestConfigurationCollect(deviceId: string, nonce?: string): Promise<{ job_id: string }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/configuration/collect`, "POST", nonce ? { nonce } : {});
+}
+
+export function listConfigurations(): Promise<{ devices: ConfigurationDeviceListEntry[] }> {
+  return call("/configuration", "GET");
+}
+
+export interface ConfigurationNotificationView {
+  readonly notification_id: string;
+  readonly device_id: string;
+  readonly run_id: string;
+  readonly kind: string;
+  readonly summary: string;
+  readonly override_paths: string[];
+  readonly created_at: string;
+  readonly read_at: string | null;
+}
+
+export function listNotifications(): Promise<{ notifications: ConfigurationNotificationView[] }> {
+  return call("/notifications", "GET");
 }

@@ -1,0 +1,54 @@
+# cp_configuration_collect -- the Check Point half of configuration
+# collection (PO_DECISION_RECORD_2026_09_14G CG-1, gate consequence). The
+# four steps below are CG-1's exact literal set, in order (identity
+# refresh x3, then the configuration read), gated per docs/design/
+# CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md entries 1-4, mirroring
+# cp_inventory_collect.yaml's own shape exactly.
+#
+# The real device contact never runs this capability's own step list
+# through StepExecutor: it runs through worker.configuration.
+# ConfigurationJobExecutor/ConfigurationCapabilityExecutor against the
+# closed read set (worker.configuration.ConfigurationReadPlan), because
+# StepExecutor's single-command-per-step shape cannot express the
+# canonical-hash/secret-withholding/section-index processing (CG-2/CG-3)
+# the real read plan needs. These steps exist so C4 execution eligibility
+# is computed from real gate resolution.
+#
+# Admitted only against ENROLLED, non-disabled devices (14G CG-8; like
+# inventory collection, never admissible against DRAFT).
+capability_id: cp_configuration_collect
+vendor: check_point
+platform_role_scope: cp_gaia_gateway
+maturity_state: CAP_VALIDATED
+transport:
+  kind: ssh_exec
+  trust_rule_ref: utils.cp_ssh_trust
+steps:
+  - kind: connect
+  - kind: exec
+    shell_context: expert
+    send: "clish -c 'show hostname'"
+    gate_reference: cp_configuration_show_hostname
+  - kind: exec
+    shell_context: expert
+    send: "clish -c 'show version all'"
+    gate_reference: cp_configuration_show_version_all
+  - kind: exec
+    shell_context: expert
+    send: "clish -c 'cpstat os -f hw_info'"
+    gate_reference: cp_configuration_cpstat_os_hw_info
+  - kind: exec
+    shell_context: expert
+    send: "clish -c 'show configuration'"
+    gate_reference: cp_configuration_show_configuration
+finally_steps:
+  - kind: disconnect
+parser_ref:
+  parser_version: "14G"
+  semantics_doc_ref: "docs/design/PO_DECISION_RECORD_2026_09_14G_CONFIGURATION_COLLECTION_MEASURED_FORMS.md"
+source_pointers:
+  - "worker.configuration.ConfigurationCapabilityExecutor (the closed read set this capability's own execution defers to)"
+  - "worker.configuration.ConfigurationReadPlan (CG-1 literals)"
+  - "worker.configuration.cp.CheckPointGaiaConfigProcessor (CG-2/CG-3 canonical hash, secret withholding, section index)"
+validation_status: FIXTURE_ONLY
+revalidation_plan_ref: "docs/design/CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md -- parser bindings unverified until the first live run from the product"

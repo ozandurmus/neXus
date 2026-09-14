@@ -15,6 +15,7 @@ import com.securityexpert.nexus.ui2.capability.GateRegistryPort;
 import com.securityexpert.nexus.ui2.capability.MaturityState;
 import com.securityexpert.nexus.ui2.capability.StepKind;
 import com.securityexpert.nexus.ui2.capability.TransportKind;
+import com.securityexpert.nexus.ui2.jobs.admission.ConfigurationCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfirmCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.DiscoveryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds;
@@ -33,6 +34,10 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqCredentialReferenceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceDiscoveryMatchRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationNotificationRepository;
+import com.securityexpert.nexus.ui2.persistence.device.configuration.DeviceConfigurationRepository;
+import com.securityexpert.nexus.ui2.persistence.device.configuration.JooqConfigurationNotificationRepository;
+import com.securityexpert.nexus.ui2.persistence.device.configuration.JooqDeviceConfigurationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.JooqDeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRunRepository;
@@ -43,6 +48,8 @@ import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
 import com.securityexpert.nexus.ui2.service.device.DeviceAddSingleService;
 import com.securityexpert.nexus.ui2.service.device.DeviceQueryService;
 import com.securityexpert.nexus.ui2.service.device.DeviceRegistrationService;
+import com.securityexpert.nexus.ui2.service.device.configuration.ConfigurationCollectService;
+import com.securityexpert.nexus.ui2.service.device.configuration.ConfigurationQueryService;
 import com.securityexpert.nexus.ui2.service.device.inventory.InventoryCollectService;
 import com.securityexpert.nexus.ui2.service.device.inventory.InventoryQueryService;
 import com.securityexpert.nexus.ui2.service.discovery.DiscoveryRunService;
@@ -83,6 +90,16 @@ public class DeviceCompositionConfiguration {
             "<show><system><info/></system></show>", "<show><high-availability><state/></high-availability></show>",
             "<show><interface>all</interface></show>", "<show><routing><route/></routing></show>");
 
+    // Mirrors worker.configuration.ConfigurationReadPlan.CHECK_POINT_IDENTITY_READS + CP_SHOW_CONFIGURATION (14G CG-1).
+    private static final List<String> CHECK_POINT_CONFIGURATION_READS = List.of(
+            "clish -c 'show hostname'", "clish -c 'show version all'", "clish -c 'cpstat os -f hw_info'",
+            "clish -c 'show configuration'");
+
+    // Mirrors worker.configuration.ConfigurationReadPlan's Palo Alto literals (14G CG-4).
+    private static final List<String> PALO_ALTO_CONFIGURATION_READS = List.of(
+            "<show><system><info/></system></show>", "type=config&action=show&xpath=/config",
+            "<show><config><effective-running/></config></show>", "<show><config><merged/></config></show>");
+
     @Bean
     public DeviceRepository deviceRepository(TransactionBoundary transactionBoundary) {
         return new JooqDeviceRepository(transactionBoundary);
@@ -118,6 +135,8 @@ public class DeviceCompositionConfiguration {
                         TransportKind.PAN_XML_API),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
+                checkPointConfigurationCapability(gateRegistryPort),
+                paloAltoConfigurationCapability(gateRegistryPort),
                 // 14F DR-1: admitted through JobAdmissionService#submitForRun
                 // against a discovery_run row, never a device -- same
                 // gate-free placeholder shape (StepExecutor never runs
@@ -174,6 +193,42 @@ public class DeviceCompositionConfiguration {
         CapabilitySpec spec = new CapabilitySpec(InventoryCapabilityIds.PAN_INVENTORY_COLLECT, "palo_alto",
                 "pan_firewall", TransportKind.PAN_XML_API, MaturityState.CAP_VALIDATED, steps, List.of(disconnect),
                 "14E", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
+    }
+
+    /** NXS-LOCAL-0165: 14G CG-1's identity-refresh + configuration reads, each gated (docs/design/CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md). */
+    private static Capability checkPointConfigurationCapability(GateRegistryPort gateRegistryPort) {
+        CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        List<CapabilityStep> steps = new java.util.ArrayList<>();
+        steps.add(connect);
+        for (String read : CHECK_POINT_CONFIGURATION_READS) {
+            steps.add(new CapabilityStep(StepKind.EXEC, "expert", read, false, Optional.empty(), Optional.empty(),
+                    Optional.empty()));
+        }
+        CapabilitySpec spec = new CapabilitySpec(ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, "check_point",
+                "cp_gaia_gateway", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, steps, List.of(disconnect),
+                "14G", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
+    }
+
+    /** NXS-LOCAL-0165: 14G CG-4's four requests, each gated (docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md). */
+    private static Capability paloAltoConfigurationCapability(GateRegistryPort gateRegistryPort) {
+        CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        List<CapabilityStep> steps = new java.util.ArrayList<>();
+        steps.add(connect);
+        for (String request : PALO_ALTO_CONFIGURATION_READS) {
+            steps.add(new CapabilityStep(StepKind.XML_API_CALL, "not_applicable", request, false, Optional.empty(),
+                    Optional.empty(), Optional.empty()));
+        }
+        CapabilitySpec spec = new CapabilitySpec(ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT, "palo_alto",
+                "pan_firewall", TransportKind.PAN_XML_API, MaturityState.CAP_VALIDATED, steps, List.of(disconnect),
+                "14G", List.of(), false);
         return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
     }
 
@@ -237,6 +292,29 @@ public class DeviceCompositionConfiguration {
     public InventoryCollectService inventoryCollectService(DeviceRepository deviceRepository,
             JobAdmissionService jobAdmissionService) {
         return new InventoryCollectService(deviceRepository, jobAdmissionService);
+    }
+
+    @Bean
+    public DeviceConfigurationRepository deviceConfigurationRepository(TransactionBoundary transactionBoundary) {
+        return new JooqDeviceConfigurationRepository(transactionBoundary);
+    }
+
+    @Bean
+    public ConfigurationNotificationRepository configurationNotificationRepository(
+            TransactionBoundary transactionBoundary) {
+        return new JooqConfigurationNotificationRepository(transactionBoundary);
+    }
+
+    @Bean
+    public ConfigurationQueryService configurationQueryService(DeviceRepository deviceRepository,
+            DeviceConfigurationRepository deviceConfigurationRepository) {
+        return new ConfigurationQueryService(deviceRepository, deviceConfigurationRepository);
+    }
+
+    @Bean
+    public ConfigurationCollectService configurationCollectService(DeviceRepository deviceRepository,
+            JobAdmissionService jobAdmissionService) {
+        return new ConfigurationCollectService(deviceRepository, jobAdmissionService);
     }
 
     @Bean

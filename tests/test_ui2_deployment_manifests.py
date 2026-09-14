@@ -292,9 +292,10 @@ def test_manifest_set_contains_every_kind_the_contract_names():
     ):
         assert required in kinds, f"§5.2: the set has no {required}"
     assert kinds.count("Service") == 2, "§5.2: one Service for the service, one for the database"
-    assert kinds.count("Secret") == 3, (
-        "§5.2: the db-credentials secret plus the worker's credential-store "
-        "and role-binding key secrets"
+    assert kinds.count("Secret") == 4, (
+        "§5.2: the db-credentials secret plus the worker's credential-store, "
+        "role-binding and configuration-artefact-store key secrets "
+        "(NXS-LOCAL-0165: 23-secret-artefact-store-key.yaml)"
     )
 
 
