@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 import orchestrator as orch  # noqa: E402
 import local_relay as lr  # noqa: E402
+import orchestrator_usage as ou  # noqa: E402
 
 
 def _start_report(**overrides) -> dict:
@@ -2009,3 +2010,23 @@ def test_usage_cli_table_output_does_not_raise(tmp_path, capsys):
     assert rc == orch.EXIT_OK
     assert "NXS-LOCAL-0203" in out
     assert "TOTAL" in out
+
+
+def test_usage_cli_marks_requested_model_estimates(tmp_path, capsys):
+    state_dir = tmp_path / "state"
+    relay_dir = tmp_path / "relay"
+    orch._save_state(state_dir, "NXS-LOCAL-0204", {
+        "movement_id": "NXS-LOCAL-0204", "phase": orch.PHASE_DONE, "pid": None,
+        "provider": "codex", "model_requested": "gpt-5.6-terra",
+        "started_at": "2026-09-11T09:00:00Z", "worktree_path": None,
+    })
+    ou.save_usage_cache(state_dir, "NXS-LOCAL-0204", {
+        **ou._empty_cache(), "input_tokens": 1_000_000,
+    })
+
+    rc = orch.main(["usage", "--state-dir", str(state_dir), "--relay-dir", str(relay_dir),
+                    "--repo-root", str(ROOT)])
+    out = capsys.readouterr().out
+
+    assert rc == orch.EXIT_OK
+    assert "$" in out and "*" in out

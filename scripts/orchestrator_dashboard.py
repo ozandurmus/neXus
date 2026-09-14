@@ -756,7 +756,7 @@ def build_movement_summary(
         pid_alive=bool(row.get("pid_alive")), relay_status=relay_status, next_actor=next_actor,
         phase=row.get("phase"), idle_seconds=idle_seconds, stuck_after_seconds=stuck_after_seconds,
     )
-    usage = ou.compute_usage(state_dir, row["movement_id"], worktree_path, row.get("provider", "claude"), price_table or {})
+    usage = ou.compute_usage(state_dir, row["movement_id"], worktree_path, row.get("provider", "claude"), price_table or {}, row.get("model_requested"))
     return {
         **row,
         "process_status": derive_process_status(row),
@@ -1020,7 +1020,8 @@ def build_usage_report(state_dir: Path, relay_dir: Path, repo_root: Path, since:
         if since and (not started_at or started_at < since):
             continue
         provider = record.get("provider", "claude")
-        usage = ou.compute_usage(state_dir, record["movement_id"], record.get("worktree_path"), provider, price_table)
+        usage = ou.compute_usage(state_dir, record["movement_id"], record.get("worktree_path"), provider, price_table,
+                                 record.get("model_requested"))
         rows.append({"movement_id": record["movement_id"], **usage})
     rows.sort(key=lambda r: r["movement_id"])
     return {"movements": rows, "totals": _sum_usage_rows(rows)}

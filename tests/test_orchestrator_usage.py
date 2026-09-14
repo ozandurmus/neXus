@@ -94,6 +94,45 @@ def test_codex_fixture_summed_totals_and_unavailable_cost(tmp_path):
     assert usage["cost_usd"] is None
 
 
+def test_requested_model_prices_a_codex_stream_without_an_observed_model(tmp_path):
+    state_dir = tmp_path / "state"
+    log_path = tmp_path / "wt" / ".nexus" / "engineer.log"
+    _write_lines(log_path, CODEX_FIXTURE)
+    price_table = {"gpt-5.6-terra": {
+        "input_per_mtok": 1.0, "cache_write_per_mtok": 2.0,
+        "cache_read_per_mtok": 0.5, "output_per_mtok": 4.0,
+    }}
+
+    usage = ou.update_usage(state_dir, "NXS-LOCAL-0002", log_path, "codex", price_table, "gpt-5.6-terra")
+
+    assert usage["cost_usd"] == round(300 / 1_000_000 + 60 / 1_000_000 * 0.5 + 45 / 1_000_000 * 4, 6)
+    assert usage["cost_source"] == "estimated_from_requested_model"
+
+
+def test_requested_model_fallback_requires_a_priced_requested_model(tmp_path):
+    state_dir = tmp_path / "state"
+    log_path = tmp_path / "wt" / ".nexus" / "engineer.log"
+    _write_lines(log_path, CODEX_FIXTURE)
+
+    unpriced = ou.update_usage(state_dir, "NXS-LOCAL-0010", log_path, "codex", {}, "not-priced")
+    absent = ou.update_usage(state_dir, "NXS-LOCAL-0011", log_path, "codex", {})
+
+    assert (unpriced["cost_usd"], unpriced["cost_source"]) == (None, "unavailable")
+    assert (absent["cost_usd"], absent["cost_source"]) == (None, "unavailable")
+
+
+def test_reported_cost_wins_over_requested_model_fallback(tmp_path):
+    state_dir = tmp_path / "state"
+    log_path = tmp_path / "wt" / ".nexus" / "engineer.log"
+    _write_lines(log_path, CLAUDE_FIXTURE)
+
+    usage = ou.update_usage(
+        state_dir, "NXS-LOCAL-0012", log_path, "claude", {"gpt-5.6-terra": {}}, "gpt-5.6-terra",
+    )
+
+    assert (usage["cost_usd"], usage["cost_source"]) == (1.23, "reported")
+
+
 # ---------------------------------------------------------------------------
 # AC-3: incremental parse -- only new events counted; a truncated last line
 # is skipped and picked up once completed.
