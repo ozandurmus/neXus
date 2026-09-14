@@ -206,6 +206,26 @@ describe("AddDeviceDialog", () => {
 
     await waitFor(() => expect(screen.getByText("Identity mismatch open")).toBeInTheDocument());
   });
+
+  it("shows the creation control on both paths when the credential list fails to load", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "/credentials": { status: 500, body: { error: "INTERNAL_ERROR" } },
+        "/session/status": { body: { csrf_token: "test-csrf" } },
+      }),
+    );
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    fireEvent.click(screen.getByRole("button", { name: "Add device" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create credential" })).toBeInTheDocument());
+    expect(screen.getByText(/INTERNAL_ERROR/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Management server (discovery)" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create credential" })).toBeInTheDocument());
+    expect(screen.getByText(/INTERNAL_ERROR/)).toBeInTheDocument();
+  });
 });
 
 const CLUSTER_CANDIDATE = {
@@ -427,4 +447,44 @@ describe("AddDeviceDialog discovery mode", () => {
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
   }, 10000);
+
+  it("offers inline credential creation on discovery path and selects the created credential", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "/credentials": [
+          { body: { credentials: [] } },
+          {
+            body: {
+              credential_id: "c-new-discovery",
+              credential_reference_id: "cred-ref-new",
+              display_name: "New Discovery SSH",
+              kind: "ssh_password",
+              username: "admin",
+              allows_check_point: true,
+              allows_palo_alto: false,
+              created_at: "2026-09-01T00:00:00Z",
+              secret_set_at: "2026-09-01T00:00:00Z",
+            },
+          },
+        ],
+        "/session/status": { body: { csrf_token: "test-csrf" } },
+      }),
+    );
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    fireEvent.click(screen.getByRole("button", { name: "Add device" }));
+    fireEvent.click(screen.getByRole("button", { name: "Management server (discovery)" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create credential" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
+    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "New Discovery SSH" } });
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "admin" } });
+    fireEvent.change(screen.getByLabelText("Secret"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start discovery" })).toBeDisabled());
+    fireEvent.change(screen.getByLabelText("Management server address"), { target: { value: "mds.example" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start discovery" })).not.toBeDisabled());
+  });
 });
