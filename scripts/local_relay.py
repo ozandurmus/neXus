@@ -139,6 +139,7 @@ SCHEMA_VERSION = 1
 ID_PREFIX = "NXS-LOCAL-"
 ID_RE = re.compile(r"^NXS-LOCAL-(\d{4})$")
 FILENAME_RE = re.compile(r"^(NXS-LOCAL-\d{4})-[a-z0-9-]+\.json$")
+ID_FILE_RE = re.compile(r"^NXS-LOCAL-(\d{4})-.*(?:\.json|\.json\.lock|\.lock)$")
 
 ROLES = ("po", "engineer")
 STATUSES = ("OPEN", "IN_PROGRESS", "AWAITING_PO", "AWAITING_ENGINEER", "CLOSED")
@@ -326,8 +327,17 @@ def _next_id(relay_dir: Path) -> int:
     if not relay_dir.is_dir():
         return 1
     best = 0
-    for candidate in relay_dir.glob(f"{ID_PREFIX}*.json"):
-        match = re.match(r"^NXS-LOCAL-(\d{4})-", candidate.name)
+    try:
+        entries = relay_dir.iterdir()
+    except OSError:
+        return 1
+    for candidate in entries:
+        try:
+            if candidate.is_dir():
+                continue
+        except OSError:
+            continue
+        match = ID_FILE_RE.match(candidate.name)
         if match:
             best = max(best, int(match.group(1)))
     return best + 1

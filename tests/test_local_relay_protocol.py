@@ -137,6 +137,61 @@ def test_create_assigns_sequential_ids_across_calls(tmp_path):
     assert ids == ["NXS-LOCAL-0001", "NXS-LOCAL-0002", "NXS-LOCAL-0003"]
 
 
+def test_next_id_respects_lock_file_without_json(tmp_path):
+    relay_dir = tmp_path / "relay"
+    relay_dir.mkdir()
+    (relay_dir / "NXS-LOCAL-0042-abandoned-movement.json.lock").touch()
+    assert lr._next_id(relay_dir) == 43
+
+    start = tmp_path / "start.json"
+    start.write_text(json.dumps(_start_bare(movement="NEXT_MOVEMENT")), encoding="utf-8")
+    rc = lr.main(["create", "--role", "po", "--start", str(start), "--dir", str(relay_dir)])
+    assert rc == lr.EXIT_OK
+    created = relay_dir / "NXS-LOCAL-0043-next-movement.json"
+    assert created.exists()
+    assert _read(created)["id"] == "NXS-LOCAL-0043"
+
+
+def test_next_id_picks_highest_between_json_and_lock(tmp_path):
+    relay_dir = tmp_path / "relay"
+    relay_dir.mkdir()
+
+    (relay_dir / "NXS-LOCAL-0010-earlier.json.lock").touch()
+    (relay_dir / "NXS-LOCAL-0020-later.json").touch()
+    assert lr._next_id(relay_dir) == 21
+
+    (relay_dir / "NXS-LOCAL-0030-latest.json.lock").touch()
+    assert lr._next_id(relay_dir) == 31
+
+    (relay_dir / "NXS-LOCAL-0035-same.json").touch()
+    (relay_dir / "NXS-LOCAL-0035-same.json.lock").touch()
+    assert lr._next_id(relay_dir) == 36
+
+
+def test_next_id_empty_and_nonexistent_directory(tmp_path):
+    nonexistent = tmp_path / "does_not_exist"
+    assert lr._next_id(nonexistent) == 1
+
+    empty = tmp_path / "empty_dir"
+    empty.mkdir()
+    assert lr._next_id(empty) == 1
+
+
+def test_next_id_ignores_unmatching_files_and_never_raises(tmp_path):
+    relay_dir = tmp_path / "relay"
+    relay_dir.mkdir()
+    (relay_dir / "README.md").write_text("notes", encoding="utf-8")
+    (relay_dir / ".gitkeep").touch()
+    (relay_dir / "not-a-relay-file.json").touch()
+    (relay_dir / "NXS-LOCAL-invalid-slug.json").touch()
+    (relay_dir / "NXS-LOCAL-123-short.json").touch()
+    (relay_dir / "NXS-LOCAL-12345-long.json").touch()
+    (relay_dir / "NXS-LOCAL-0010-other.txt").touch()
+    (relay_dir / "NXS-LOCAL-0010-other.json.bak").touch()
+    (relay_dir / "archive").mkdir()
+    assert lr._next_id(relay_dir) == 1
+
+
 def test_create_by_engineer_sets_next_actor_to_po(tmp_path):
     path = _create(tmp_path, role="engineer")
     obj = _read(path)
