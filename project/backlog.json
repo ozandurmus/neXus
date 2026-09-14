@@ -369,6 +369,15 @@
       "priority": "P2",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "antigravity_provider_adapter",
+      "category": "governance",
+      "title": "Antigravity as a third engineer provider: probe, contract, adapter",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }

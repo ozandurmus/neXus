@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-14T19:17:27Z
+Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-14T19:46:35Z
 
 ## Now
 - NXS-LOCAL-0176 — Expire a past-deadline session on read so it never blocks a login (automated_validated)
@@ -38,6 +38,7 @@ Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-14T19:17:27Z
 - P1/planned ui2_pan_transport_no_credentials_in_url — UI2 Palo Alto transport: no credential ever appears in a U (target: PAN_DISCOVERY_CONTRACT.md T-1/T-5; the P)
 - P1/planned ui2_reproducible_in_cluster_image_build — UI2 reproducible in-cluster image build and release assura (target: UI2_0_B1_01C in-cluster OCI build; 13D B)
 - P2/in_progress ui2_m3_design_transfer_pass
+- P2/planned antigravity_provider_adapter
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
 - P2/planned device_admin_accounts_and_privileges
