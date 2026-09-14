@@ -64,6 +64,10 @@ public final class InventoryCollectService {
         if (device.isEmpty()) {
             return new Outcome.DeviceNotFound();
         }
+        if ("management_server".equals(device.get().role())) {
+            return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",
+                    "device " + deviceId + " is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)");
+        }
         String capabilityId = CAPABILITY_BY_VENDOR.get(device.get().vendorHint());
         if (capabilityId == null) {
             return new Outcome.AdmissionRefused("VENDOR_UNSUPPORTED",

@@ -70,6 +70,10 @@ public final class BackupCollectService {
         if (device.isEmpty()) {
             return new Outcome.DeviceNotFound();
         }
+        if ("management_server".equals(device.get().role())) {
+            return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",
+                    "device " + deviceId + " is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)");
+        }
         if (!"check_point".equals(device.get().vendorHint())) {
             return new Outcome.AdmissionRefused("VENDOR_UNSUPPORTED", "device " + deviceId + " vendor_hint="
                     + device.get().vendorHint() + " has no registered backup capability (14H BK-9: Check Point "

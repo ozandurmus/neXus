@@ -137,6 +137,11 @@ class ConfigurationCollectServiceTest {
                 DeviceEnrollmentState.ENROLLED, false, "cred-ref-1");
     }
 
+    private static DeviceRecord enrolledManagementServer(String deviceId, String vendorHint) {
+        return new DeviceRecord(deviceId, "management_server", vendorHint, "manual_registration", Instant.now(), false,
+                DeviceEnrollmentState.ENROLLED, false, "cred-ref-1");
+    }
+
     private static ConfigurationCollectService serviceFor(FakeDeviceRepository devices) {
         CapabilityRegistry registry = CapabilityRegistry.of(List.of(
                 configurationCapability(ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, "check_point"),
@@ -168,6 +173,20 @@ class ConfigurationCollectServiceTest {
         ConfigurationCollectService.Outcome outcome = service.requestCollect("device-1", "actor", Optional.of("nonce-1"));
 
         assertTrue(outcome instanceof ConfigurationCollectService.Outcome.Admitted, "expected Admitted, got " + outcome);
+    }
+
+    @Test
+    void aManagementServerIsRefusedNamingTheMissingGate() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("device-1", enrolledManagementServer("device-1", "check_point"));
+        ConfigurationCollectService service = serviceFor(devices);
+
+        ConfigurationCollectService.Outcome outcome = service.requestCollect("device-1", "actor", Optional.empty());
+
+        assertTrue(outcome instanceof ConfigurationCollectService.Outcome.AdmissionRefused, "expected AdmissionRefused, got " + outcome);
+        ConfigurationCollectService.Outcome.AdmissionRefused refused = (ConfigurationCollectService.Outcome.AdmissionRefused) outcome;
+        assertEquals("MANAGEMENT_SERVER_UNGATED", refused.code());
+        assertTrue(refused.reason().contains("14I MS-2"), "the reason must name the missing gate");
     }
 
     @Test
