@@ -495,11 +495,7 @@ export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
     );
   }
 
-  if (!fetcher.data) {
-    return null; // Or a loading spinner, but useFetchOnMount doesn't require one for the standard approach here
-  }
-
-  const backups = fetcher.data.backups;
+  const backups = fetcher.data?.backups ?? [];
 
   if (backups.length === 0) {
     return (
@@ -532,11 +528,7 @@ export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
               {b.deviation_state === null ? (
                 <StatusChip tone="neutral" label="not evaluated" dense />
               ) : (
-                <StatusChip
-                  tone={b.deviation_state === "changed" ? "bad" : "ok"}
-                  label={b.deviation_state}
-                  dense
-                />
+                <StatusChip tone="neutral" label={b.deviation_state} dense />
               )}
             </TableCell>
           </TableRow>
