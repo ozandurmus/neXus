@@ -378,6 +378,24 @@
       "priority": "P2",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "gov_orch_budget_ceiling_not_persisted_or_enforced",
+      "category": "governance",
+      "title": "The dispatch budget ceiling is neither recorded nor enforceable for the default provider",
+      "status": "planned",
+      "priority": "P1",
+      "target": "GOV.ORCH.13 DL-3 budget column; scripts/orchestrator.py state record",
+      "note": ""
+    },
+    {
+      "id": "gov_orch_turn_counter_blind_to_codex_stream",
+      "category": "governance",
+      "title": "The turn counter reads one turn for a whole multi-million-token default-provider dispatch",
+      "status": "planned",
+      "priority": "P2",
+      "target": "GOV.ORCH.4 section 3.1; scripts/orchestrator_usage.py",
+      "note": ""
     }
   ]
 }

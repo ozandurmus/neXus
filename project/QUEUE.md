@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-14T19:46:35Z
+Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-14T20:28:31Z
 
 ## Now
 - NXS-LOCAL-0176 — Expire a past-deadline session on read so it never blocks a login (automated_validated)
@@ -23,6 +23,7 @@ Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-14T19:46:35Z
 - P1/planned failover_readiness_check_contract — Failover readiness contract carrying the PO's four semanti (target: PO_DECISION_RECORD 3)
 - P1/planned failover_recheck_on_request — A failover request must re-run every readiness check at th (target: PO rule 2026-09-12; OP.2 contract)
 - P1/planned failover_vsx_vsls_mentality_contract — VSX/VSLS semantics: CP per-VS state independent of chassis (target: PO statement 2026-09-12; needs vendor-se)
+- P1/planned gov_orch_budget_ceiling_not_persisted_or_enforced — The dispatch budget ceiling is neither recorded nor enforc (target: GOV.ORCH.13 DL-3 budget column; scripts/)
 - P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a pr (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
 - P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP l (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
 - P1/planned pan_collection_contract_from_measurement — Write the Palo Alto collection contract from the PAN_COLLE (target: docs/design/PAN_COLLECTION_MEASUREMENT_B)
@@ -42,6 +43,7 @@ Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-14T19:46:35Z
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
 - P2/planned device_admin_accounts_and_privileges
+- P2/planned gov_orch_turn_counter_blind_to_codex_stream
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
 - P2/planned project_plan_crypto_placeholder_sentinel_lost
