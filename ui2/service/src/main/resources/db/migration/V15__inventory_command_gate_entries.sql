@@ -18,6 +18,12 @@
 -- this movement's own path to a populated runtime table. Additive only;
 -- no existing row is touched.
 
+-- Audit context for the seed rows: gate_registry carries the audit trigger
+-- (audit_context_missing otherwise). Transaction-local (is_local = true), so
+-- Flyway's migration transaction is the only scope; nothing leaks to the pool.
+SELECT set_config('app.actor_fingerprint', 'migration:V15_inventory_command_gate_entries', true);
+SELECT set_config('app.action_id', 'gate_registry_seed_by_migration', true);
+
 INSERT INTO gate_registry (gate_id, vendor, platform_role_scope, shell_context, transport_kind,
     canonical_command_key, action_class, sign_off_state, timeout_s, retry_rule, max_frequency,
     session_reuse_rule, unsupported_behavior_ref, secret_output_risk, safe_telemetry_fields,
