@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Palo Alto inventory measurement (PO_DECISION_RECORD_2026_09_14C section 5, M-3 and M-4).
 
-Usage: python3 pan_inventory_shape.py https://<firewall-mgmt-address> [--vsys vsys2] [--ca bundle.pem]
+Usage: python3 pan_inventory_shape.py https://<firewall-mgmt-address> [--vsys vsys2] [--ca bundle.pem | --insecure]
 Prompts for user and password (never on the command line, never in a URL).
 Prints only element paths, attribute names, counts and value SHAPES; no value
 is printed. Paste the whole output back.
@@ -45,9 +45,11 @@ def describe(name, raw):
     if flags: print(f"### route flag tokens seen={sorted(flags)}")
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument("base"); ap.add_argument("--vsys"); ap.add_argument("--ca")
+    ap=argparse.ArgumentParser(); ap.add_argument("base"); ap.add_argument("--vsys"); ap.add_argument("--ca"); ap.add_argument("--insecure", action="store_true", help="measurement only: do not verify the firewall certificate (self-signed)")
     a=ap.parse_args()
     ctx=ssl.create_default_context(cafile=a.ca) if a.ca else ssl.create_default_context()
+    if a.insecure:
+        ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE; print("### TLS verification disabled for this measurement run")
     user=input("user: "); pw=getpass.getpass("password: ")
     key_xml=post(a.base, {"type":"keygen","user":user,"password":pw}, ctx); del pw
     key=ET.fromstring(key_xml).findtext(".//key")
