@@ -1,4 +1,4 @@
-# SecurityExpert — Current State
+# neXus — Current State
 
 Hot-path checkpoint only. **No durable law/rule/lifecycle detail here** —
 see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
