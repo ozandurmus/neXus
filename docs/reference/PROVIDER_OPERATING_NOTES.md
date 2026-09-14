@@ -67,6 +67,17 @@ wrong.
   for the trial -- following the work is the requirement, not accounting for
   it. Do not estimate a figure to fill the gap; an invented number is worse
   than an honest `unknown`.
+- **It ignores the working directory it was started from.** It is anchored to
+  its editor's workspace, so a process launched inside a worktree still reads
+  and writes in the main checkout. Every prompt must name the worktree's
+  absolute path and forbid the main checkout in words (`roles/PO.md` §3).
+- **Its command line selects only its own model tiers.** Other vendors' models
+  are selectable in its interface but not through the command line, so a
+  mixed-vendor run means pairing it with an orchestrator dispatch, not
+  choosing a different model inside it.
+- **A conversation cannot be created without a project id**, which its own
+  help text does not mention; read it from an existing conversation's
+  metadata.
 - **Follow it through the worktree, not the workbench.** Commits on the lane
   and `git status` in the worktree are the progress signal, since no event
   stream reaches the orchestrator.

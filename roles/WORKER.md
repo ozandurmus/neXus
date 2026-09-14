@@ -39,4 +39,10 @@ authoritative: verify it, follow it, and name the divergence in the
 SESSION_CLOSE. Raise a RELAY_QUESTION and stop only when a decision is in
 conflict: authority, scope, semantics, or a clause of a frozen contract. A
 wrong field name is not a contract conflict.
+Before every commit run `git diff --check origin/main` yourself and fix
+what it names; trailing whitespace on an added line fails verification after
+the work is already correct, and it has cost two movements a cycle each.
+Leave the worktree clean: write reports and scratch files outside the
+repository, or remove them before you close, because verification's first
+step is that nothing is untracked.
 Never end your turn on a chat message without a SESSION_CLOSE.

@@ -58,7 +58,15 @@ not a design for how it might be run. Follow it step for step.
    instead of quoting.
 2. `--max-budget-usd` from this movement's own scope. A packet that bundles
    six layers costs what six packets cost and is harder to review.
-3. Run every `validation_plan` step once, locally, before it goes in.
+3. Run every `validation_plan` step once, locally, before it goes in, and
+   **from the directory `verify` will use**, which is always the worktree
+   root. There is no per-step working directory: verification runs every
+   step with the worktree as its `cwd`. A command belonging to a
+   subdirectory must carry its own `cd` -- `["bash", "-lc", "cd <dir> &&
+   <command>"]` -- or it fails in verification having passed in your own
+   shell. Say in the packet which directory each command runs from, so the
+   worker runs what verification will run. This cost two cycles on
+   `NXS-LOCAL-0184`.
 4. Confirm the lane is unused and, when two movements run together, give them
    non-colliding migration numbers.
 5. `python3 scripts/local_relay.py create --start <packet> --role po --slug <movement>-<slug>`,
@@ -97,6 +105,27 @@ internal `id`, then create the worktree from the packet's own
 `.nexus/movement_id.txt` and `.nexus/WORKER.md` into it with the
 orchestrator's own `render_worker_md`, and install the pre-push hook. Then
 hand over the worktree path instead of starting a process.
+
+**Say the absolute path, every time.** A participant that runs inside its
+own editor is anchored to the repository's workspace, not to the working
+directory you started it from: it will read and write in the main checkout
+however the process was launched. The first sentence of the prompt therefore
+names the worktree's absolute path, tells it to read
+`<worktree>/.nexus/WORKER.md` and `<worktree>/.nexus/approved_task.json` by
+absolute path, and says in words that the main checkout is not to be
+modified. This is not a courtesy: without it the work lands on the wrong
+branch and the next `git status` in the main checkout is the first anyone
+hears of it. Observed on `NXS-LOCAL-0184`.
+
+The worktree also needs whatever a build in it cannot produce for itself --
+a linked `ui2/frontend/node_modules`, for one -- prepared before the
+handover, not left for the participant to install.
+
+Tell it where its own scratch goes, too. A session-close report, a scratch
+JSON, a relay lock written from inside the lane -- each is untracked, and
+verification's first step is that the worktree is clean, so each fails a
+movement whose work is already correct. Say in the prompt that reports are
+written outside the repository and removed once the relay is closed.
 
 The participant reads `.nexus/WORKER.md`, does the work, and closes the relay
 with its own `SESSION_CLOSE`. You then run `orchestrator.py verify`, review
@@ -177,6 +206,15 @@ A "no" to any of these is a stop, not a workaround.
   happened on 2026-09-14.
 - **`gh`, never `git`, for anything the remote owns** — merge state, branch
   state, the head of main, checks. `git` is for the local worktree only.
+
+- **A correction to a packet goes in two places, and verification reads
+  only one.** The approved task exists as the relay's first entry and as
+  `.nexus/approved_task.json` in the worktree. Verification reads the
+  relay. Correcting only the worktree copy leaves verification running the
+  original plan, and the failure then looks like the worker's. Write both,
+  then re-read the relay to confirm the correction survived -- a worker's
+  own append, or a rebase, can take it back out. This cost two cycles on
+  `NXS-LOCAL-0184`.
 
 - **Quote mechanical details, never describe them from memory.** A packet
   that says "the entries' `role` field" when the writer emits `actor` costs

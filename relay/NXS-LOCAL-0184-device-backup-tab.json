@@ -84,27 +84,27 @@
         },
         "validation_plan": [
           {
+            "name": "frontend_suite",
             "argv": [
-              "npx",
-              "vitest",
-              "run"
-            ],
-            "name": "frontend_suite"
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npx vitest run"
+            ]
           },
           {
+            "name": "typecheck",
             "argv": [
-              "npx",
-              "tsc",
-              "--noEmit"
-            ],
-            "name": "typecheck"
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npx tsc --noEmit"
+            ]
           },
           {
+            "name": "privacy_gate",
             "argv": [
               "python3",
               "scripts/repository_privacy_check.py"
-            ],
-            "name": "privacy_gate"
+            ]
           }
         ]
       },
