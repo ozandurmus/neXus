@@ -54,6 +54,13 @@ public final class ActionRegistry {
     public static final String DISCOVERY_RUN_READ = "discovery_run_read";
     /** 14F section 2: {@code POST /discovery/runs/{run_id}/import} -- a write action, {@code role:onboarding_admin} only. */
     public static final String DISCOVERY_RUN_IMPORT = "discovery_run_import";
+    /**
+     * WORKER.md (movement NXS-LOCAL-0174): {@code GET /project-plan} -- any
+     * authenticated session, like {@link #DEVICE_READ} (PO-NAV-5:
+     * administration-only once real directory-backed authorization exists;
+     * not simulated now).
+     */
+    public static final String PROJECT_PLAN_READ = "project_plan_read";
 
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
@@ -101,6 +108,8 @@ public final class ActionRegistry {
         register(new ActionDescriptor(DISCOVERY_RUN_START, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DISCOVERY_RUN_READ, true, Optional.empty()));
         register(new ActionDescriptor(DISCOVERY_RUN_IMPORT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        // WORKER.md: same open-to-any-authenticated-session gate as DEVICE_READ.
+        register(new ActionDescriptor(PROJECT_PLAN_READ, true, Optional.empty()));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

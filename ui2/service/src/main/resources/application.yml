@@ -39,6 +39,12 @@ ui2:
     # 256-bit, read once at startup, never a property default.
     key-file: ${UI2_CREDENTIAL_STORE_KEY_FILE:/run/secrets/ui2_credential_store_key}
     key-id: ${UI2_CREDENTIAL_STORE_KEY_ID:credential_store_key_v1}
+  project-plan:
+    # Empty by default: ProjectPlanConfiguration then locates the repository
+    # checkout's own project/ directory itself (deployment_direction: local
+    # validation only for this movement). An operator may point this at a
+    # different checkout path explicitly.
+    directory: ${UI2_PROJECT_PLAN_DIRECTORY:}
 
 logging:
   level:
