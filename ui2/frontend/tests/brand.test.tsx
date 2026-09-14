@@ -5,10 +5,33 @@ import { NexusWordmark } from "../src/brand/NexusWordmark";
 
 describe("NexusWordmark", () => {
   it("renders an svg with an accessible neXus title", () => {
-    const { container } = render(<NexusWordmark />);
+    const { container, getByRole } = render(<NexusWordmark />);
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
     expect(svg?.querySelector("title")?.textContent).toBe("neXus");
+    expect(getByRole("img", { name: "neXus" })).toBe(svg);
+  });
+
+  it("uses fixed path geometry without text or font attributes", () => {
+    const { container } = render(<NexusWordmark />);
+    expect(container.querySelector("text")).toBeNull();
+    expect(container.querySelector("[font-family]")).toBeNull();
+  });
+
+  it("keeps its inner geometry identical at every height", () => {
+    const geometry = (height: number) => {
+      const { container, unmount } = render(<NexusWordmark height={height} />);
+      const svg = container.querySelector("svg")?.cloneNode(true) as SVGSVGElement;
+      svg.removeAttribute("width");
+      svg.removeAttribute("height");
+      svg.removeAttribute("aria-labelledby");
+      svg.querySelector("title")?.remove();
+      unmount();
+      return svg.outerHTML;
+    };
+
+    expect(geometry(20)).toBe(geometry(40));
+    expect(geometry(40)).toBe(geometry(200));
   });
 
   it("scales from 20px to 200px tall with no raster asset", () => {
