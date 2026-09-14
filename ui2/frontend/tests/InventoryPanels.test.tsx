@@ -93,6 +93,52 @@ describe("InventoryScreen device selection and panels", () => {
     await waitFor(() => expect(screen.getByText("0.0.0.0/0")).toBeInTheDocument());
   });
 
+  it("renders the VLAN id column and the context's HA role when the run recorded them", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/devices") {
+        return Promise.resolve(jsonResponse(200, { devices: [STANDALONE_DEVICE] }));
+      }
+      if (url === "/devices/dev-1/inventory") {
+        return Promise.resolve(
+          jsonResponse(200, {
+            device_id: "dev-1",
+            collected_at: "2026-09-14T12:00:00Z",
+            job: { job_id: "job-1", state: "COMPLETED", outcome: "SUCCESS", terminal_reason: null },
+            contexts: [
+              {
+                context: "physical",
+                ha: { role: "ACTIVE", cluster_mode: "High Availability" },
+                interfaces: [
+                  {
+                    name: "eth0.100",
+                    parent: "eth0",
+                    kind: "vlan",
+                    state: "up",
+                    vlan_id: 100,
+                    addresses: [],
+                  },
+                ],
+                routes: [],
+              },
+            ],
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("fw-edge-1"));
+
+    await waitFor(() => expect(screen.getByText("eth0.100")).toBeInTheDocument());
+    expect(screen.getByText("100")).toBeInTheDocument();
+    expect(screen.getByText("ACTIVE")).toBeInTheDocument();
+    expect(screen.getByText("High Availability")).toBeInTheDocument();
+  });
+
   it("renders the cluster unified view with a member marker and VIP once for a cluster device", async () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);

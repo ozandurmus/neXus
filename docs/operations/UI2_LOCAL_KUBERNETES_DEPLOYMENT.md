@@ -191,9 +191,10 @@ The worker role mounts it at `/run/secrets/ui2-artefact-store/key`
 (`UI2_ARTEFACT_STORE_KEY_FILE`); the service role never mounts it -- it
 never decrypts a raw artefact, only the sanitized view already stored in
 Postgres. The encrypted bytes themselves live under `UI2_ARTEFACT_STORE_ROOT`
-(`/app/artefact-store`, an `emptyDir` at this local-validation stage --
-ephemeral by design here; a persistent volume is a later, production-scope
-concern this movement does not take on).
+(`/app/artefact-store`, a `PersistentVolumeClaim` --
+`deploy/ui2/51-artefact-store-pvc.yaml`, NXS-LOCAL-0167 -- so a worker
+restart does not orphan the artefacts `device_configuration_run` rows still
+point at by `artefact_ref`).
 
 ## 6. Apply the manifest set
 

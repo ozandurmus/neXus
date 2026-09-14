@@ -61,6 +61,7 @@ function InterfacesTable({ interfaces }: { readonly interfaces: readonly Invento
           <TableCell>Name</TableCell>
           <TableCell>Kind</TableCell>
           <TableCell>State</TableCell>
+          <TableCell>VLAN</TableCell>
           <TableCell>Addresses</TableCell>
         </TableRow>
       </TableHead>
@@ -72,6 +73,7 @@ function InterfacesTable({ interfaces }: { readonly interfaces: readonly Invento
             <TableCell>
               <StatusChip tone={iface.state === "up" ? "ok" : iface.state === "down" ? "bad" : "neutral"} label={iface.state} dense />
             </TableCell>
+            <TableCell>{iface.vlan_id ?? "—"}</TableCell>
             <TableCell>
               <Stack spacing={0.5}>
                 {iface.addresses.length === 0 ? "—" : iface.addresses.map((a) => <AddressChip key={a.address} address={a} />)}
@@ -81,6 +83,23 @@ function InterfacesTable({ interfaces }: { readonly interfaces: readonly Invento
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+/** device_inventory_ha (migration V17): the selected context's own HA role, shown above its interfaces. */
+function ContextHaBadge({ context }: { readonly context: InventoryContext | undefined }) {
+  const ha = context?.ha;
+  if (!ha) return null;
+  return (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Typography variant="body2" color="text.secondary">HA role:</Typography>
+      <StatusChip tone={ha.role === "ACTIVE" ? "ok" : "neutral"} label={ha.role} dense />
+      {ha.cluster_mode && (
+        <Typography variant="body2" color="text.secondary">
+          {ha.cluster_mode}
+        </Typography>
+      )}
+    </Stack>
   );
 }
 
@@ -238,7 +257,15 @@ export function InterfacesPanel({ contexts }: { readonly contexts: readonly Inve
   return (
     <ContextTabs
       contexts={contexts}
-      render={(name) => <InterfacesTable interfaces={contexts.find((c) => c.context === name)?.interfaces ?? []} />}
+      render={(name) => {
+        const context = contexts.find((c) => c.context === name);
+        return (
+          <Stack spacing={1}>
+            <ContextHaBadge context={context} />
+            <InterfacesTable interfaces={context?.interfaces ?? []} />
+          </Stack>
+        );
+      }}
     />
   );
 }

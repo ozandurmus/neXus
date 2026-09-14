@@ -263,7 +263,14 @@ export interface InventoryInterface {
   readonly parent: string | null;
   readonly kind: string;
   readonly state: string;
+  readonly vlan_id: number | null;
   readonly addresses: InventoryAddress[];
+}
+
+/** device_inventory_ha (migration V17): a context's HA role and cluster mode, when the run recorded one. */
+export interface InventoryHa {
+  readonly role: string;
+  readonly cluster_mode: string | null;
 }
 
 export interface InventoryRoute {
@@ -278,6 +285,7 @@ export interface InventoryContext {
   readonly context: string;
   readonly interfaces: InventoryInterface[];
   readonly routes: InventoryRoute[];
+  readonly ha: InventoryHa | null;
 }
 
 export interface DeviceInventory {

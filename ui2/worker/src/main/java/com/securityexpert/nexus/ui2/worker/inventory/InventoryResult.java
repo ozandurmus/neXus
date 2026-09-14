@@ -3,11 +3,18 @@ package com.securityexpert.nexus.ui2.worker.inventory;
 import java.util.List;
 
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
 
 /** One inventory-collect device-contact outcome, mirrors {@code worker.confirm.ConfirmResult}'s shape. */
 public sealed interface InventoryResult {
 
-    record Completed(List<InventoryContext> contexts) implements InventoryResult {
+    /** {@code haFacts} (migration V17): every {@link InventoryHaFact} the contact produced, across every context. */
+    record Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts) implements InventoryResult {
+
+        /** Pre-V17 shape, kept so a caller that never mentions HA facts keeps compiling unchanged. */
+        public Completed(List<InventoryContext> contexts) {
+            this(contexts, List.of());
+        }
     }
 
     /** Refuses before any contact -- {@code connect}/the API key dance is never attempted. */

@@ -13,14 +13,19 @@ import java.util.NoSuchElementException;
  * requirement). {@code localEntryCount} of the {@code address} category's
  * entries carry {@code src="local"}; the rest are split across {@code tpl}/
  * {@code dg}/{@code shared} so the category index exercises every source.
+ *
+ * <p>Public (NXS-LOCAL-0167): {@code
+ * worker.configuration.ConfigurationJobExecutorEndToEndTest} reuses this
+ * same generator for its own synthetic multi-megabyte {@code
+ * effective-running} rather than duplicating it.</p>
  */
-final class GeneratedPanConfigInputStream extends InputStream {
+public final class GeneratedPanConfigInputStream extends InputStream {
 
     private final Iterator<String> chunks;
     private byte[] buffer = new byte[0];
     private int bufferPos;
 
-    GeneratedPanConfigInputStream(int localEntryCount, int otherSourceEntryCount) {
+    public GeneratedPanConfigInputStream(int localEntryCount, int otherSourceEntryCount) {
         this.chunks = new ChunkIterator(localEntryCount, otherSourceEntryCount);
     }
 

@@ -1,0 +1,24 @@
+# NXS-LOCAL-0167 / C7 section 4: the configuration-collection artefact
+# store's durable backing. NXS-LOCAL-0165 shipped this as an `emptyDir`,
+# a local-validation shortcut, not a design -- a worker restart lost every
+# artefact `device_configuration_run` rows still pointed at by
+# `artefact_ref`. This claim replaces it; the worker role alone mounts it
+# (52-worker-deployment.yaml), the service role never does.
+#
+# `storageClassName` is omitted so the cluster's default class applies on
+# every stage, matching `30-database-pvc.yaml`; no `volumeName` pins a
+# pre-created volume and no node-path volume of any kind is used.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ui2-artefact-store
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: worker
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
