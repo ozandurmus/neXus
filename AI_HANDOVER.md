@@ -11,41 +11,41 @@ environment facts in `docs/reference/COPILOT_OPERATING_MODEL.md`.
 
 ## 1. Snapshot
 
-- **Login works and is required**, even on localhost. Both bootstrap
-  identities seed at first boot; a restart never resets them.
-- **Both discovery contracts are FROZEN**, each measured against a live
-  management server, neither derived from the Python.
-- **CP's domain core is merged; no transport is written.** That is next.
-- Services are **independently deployable**; `AUTH-PLACEMENT` is open.
+- **The product runs and a human has signed in** (local Kubernetes,
+  `docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md`). Login, sign-out,
+  local identity administration and the credential store are merged; forced
+  password change is a posture switch, default off.
+- **Discovery is in Java for both vendors**; bindings `UNVERIFIED`, gate
+  documents DRAFT, **nothing has run live**.
+- `DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md` **FROZEN**; the four
+  first-contact reads approved. The product is **neXus**.
 
 ## 2. What this session did
 
-- Froze both discovery contracts with a review of record; built CP's domain
-  core in Java.
-- Measured Palo Alto against a live Panorama: the peer arrives as a
-  **serial**, so reciprocity is checkable inside one response.
-- Built local authentication end to end.
-- Loop repairs: `GOV.ORCH.9`, `10`, `10-A`, `11`, cold-start diet.
+- CP transport aligned to the measured method; PAN transport built.
+- Login step delivered; records `13G` and `2026-09-14` written.
+- Brand: option-D wordmark, favicon, title; governing docs renamed.
+- Deployed to minikube past VPN and TLS-interception; Containerfile builds
+  the frontend in a Node stage and accepts CA anchors (`ui2/.ca/`).
 
 ## 3. Exact next action
 
-**Approve the two DRAFT gate documents, then run both discovery runners
-live** (`DiscoveryRunnerMain` against the MDS, `PanDiscoveryRunnerMain`
-against Panorama; counts and shapes only) and correct the `UNVERIFIED`
-bindings from what they report. Then the Product Owner's freeze review of
-`DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md`, and the per-vendor collection
-measurement briefs under `13F` §6.
+**`NXS-LOCAL-0156` (single-device add: address, vendor, credential → first
+contact → `ENROLLED`, peer follow under corroboration) — review and merge.**
+Then the management-server branch (`DA-3`) once live discovery runs confirm
+the bindings; then the collection measurement briefs (`13E` step 3). Keep the
+VM; rebuild only the image.
 
 ## 4. Test delta
 
-`ui2` build green (excluding DB-bound integration tests), service and
-architecture suites green, eleven modules. Python suite last measured 3,541
-passed / 2 pre-existing failures. CI `validate` green.
+`ui2` build and all suites green; migrations through `V11` (`V12` reserved
+for `0156`); CI `validate` green; contract-authority gate green on `main`.
 
 ## 5. New risks
 
-- Four clauses this session referenced something that did not exist, each
-  caught by a test, a question or a gate — never by the author. **Verify
-  every referent as you write it.**
-- `AUTH-PLACEMENT` blocks a second authenticated surface.
-- `UI2_0_B1_01A`/`02A` stay agent-frozen, not Product Owner reviewed.
+- VPN claims all private space: VM reachable only with VPN off or a host
+  route; the `vmnet` subnet change applies after a reboot.
+- Role-binding and credential-store keys are wired by hand, not by
+  `deploy/ui2/` manifests.
+- Budget ceilings hit three times with work committed: verify from the PO
+  side and open the PR instead of re-running.
