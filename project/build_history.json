@@ -3,6 +3,150 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0176",
+      "status": "automated_validated",
+      "title": "Expire a past-deadline session on read so it never blocks a login",
+      "summary": "Merged expiry-on-read for stale sessions.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0176",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0175",
+      "status": "automated_validated",
+      "title": "Check Point gateway backup: gate, capability, executor, retrieval, service routes",
+      "summary": "Merged pilot-gated Check Point gateway backup.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0175",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0178",
+      "status": "automated_validated",
+      "title": "nexusadmin is the product root identity",
+      "summary": "Merged root local-identity authorization.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0178",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0174",
+      "status": "automated_validated",
+      "title": "Populate the Project plan tab with a real GET project-plan endpoint",
+      "summary": "Merged the project-plan endpoint and tab.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0174",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0170",
+      "status": "automated_validated",
+      "title": "Bring the artefact store up to the C7 manifest shape",
+      "summary": "Merged the C7-shaped per-artefact envelope.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0170",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0173",
+      "status": "automated_validated",
+      "title": "Mark already-imported discovery candidates at read time",
+      "summary": "Merged read-time discovery candidate marking.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0173",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0172",
+      "status": "automated_validated",
+      "title": "Restyle workbench with Material 3 tokens",
+      "summary": "Merged the Material 3 workbench restyle.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0172",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0168",
+      "status": "automated_validated",
+      "title": "Price Codex usage from requested model",
+      "summary": "Merged requested-model pricing fallback.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0168",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0167",
+      "status": "automated_validated",
+      "title": "Close configuration debts: tests, artefact PVC, inventory HA and VLAN",
+      "summary": "Merged configuration coverage and inventory consolidation.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0167",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0166",
+      "status": "automated_validated",
+      "title": "Resume a movement whose relay question was answered",
+      "summary": "Merged answered relay-question resume handling.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0166",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0165",
+      "status": "automated_validated",
+      "title": "Configuration collection service: CP and PAN reads, artefact store, Configuration screen",
+      "summary": "Merged configuration collection and encrypted artefact surface.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0165",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0164",
+      "status": "automated_validated",
+      "title": "Inventory live-enable: gates, capability steps, Palo Alto measured forms",
+      "summary": "Merged inventory live-enable gates and capability steps.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0164",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0163",
+      "status": "automated_validated",
+      "title": "Discovery from the UI: run row, candidate set, import",
+      "summary": "Merged UI discovery run, candidate set, and import.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0163",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0160",
+      "status": "automated_validated",
+      "title": "Serve inventory read, cluster merge, collect routes and wire the Inventory screen",
+      "summary": "Merged inventory read and cluster view.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0160",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0159",
+      "status": "automated_validated",
+      "title": "Inventory collection domain core: job kind, parsers, executor",
+      "summary": "Merged inventory collection domain core.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0159",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0158",
+      "status": "automated_validated",
+      "title": "Finish single-device add: routes, worker packaging, both vendors in one worker",
+      "summary": "Merged device-add endpoints and worker packaging.",
+      "completed": "2026-09-14",
+      "movement": "NXS-LOCAL-0158",
+      "docs": {}
+    },
+    {
       "build": "ui2_d1_restore_c7_c2_amendments",
       "status": "automated_validated",
       "title": "UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments",

@@ -6,6 +6,22 @@ regenerate. Open a row's linked document only when you need that build's detail.
 
 | Build | Status | Dates | Title | Summary | Docs |
 | --- | --- | --- | --- | --- | --- |
+| `NXS-LOCAL-0176` | automated_validated | 2026-09-14 | Expire a past-deadline session on read so it never blocks a login | Merged expiry-on-read for stale sessions. | — |
+| `NXS-LOCAL-0175` | automated_validated | 2026-09-14 | Check Point gateway backup: gate, capability, executor, retrieval, service routes | Merged pilot-gated Check Point gateway backup. | — |
+| `NXS-LOCAL-0178` | automated_validated | 2026-09-14 | nexusadmin is the product root identity | Merged root local-identity authorization. | — |
+| `NXS-LOCAL-0174` | automated_validated | 2026-09-14 | Populate the Project plan tab with a real GET project-plan endpoint | Merged the project-plan endpoint and tab. | — |
+| `NXS-LOCAL-0170` | automated_validated | 2026-09-14 | Bring the artefact store up to the C7 manifest shape | Merged the C7-shaped per-artefact envelope. | — |
+| `NXS-LOCAL-0173` | automated_validated | 2026-09-14 | Mark already-imported discovery candidates at read time | Merged read-time discovery candidate marking. | — |
+| `NXS-LOCAL-0172` | automated_validated | 2026-09-14 | Restyle workbench with Material 3 tokens | Merged the Material 3 workbench restyle. | — |
+| `NXS-LOCAL-0168` | automated_validated | 2026-09-14 | Price Codex usage from requested model | Merged requested-model pricing fallback. | — |
+| `NXS-LOCAL-0167` | automated_validated | 2026-09-14 | Close configuration debts: tests, artefact PVC, inventory HA and VLAN | Merged configuration coverage and inventory consolidation. | — |
+| `NXS-LOCAL-0166` | automated_validated | 2026-09-14 | Resume a movement whose relay question was answered | Merged answered relay-question resume handling. | — |
+| `NXS-LOCAL-0165` | automated_validated | 2026-09-14 | Configuration collection service: CP and PAN reads, artefact store, Configuration screen | Merged configuration collection and encrypted artefact surface. | — |
+| `NXS-LOCAL-0164` | automated_validated | 2026-09-14 | Inventory live-enable: gates, capability steps, Palo Alto measured forms | Merged inventory live-enable gates and capability steps. | — |
+| `NXS-LOCAL-0163` | automated_validated | 2026-09-14 | Discovery from the UI: run row, candidate set, import | Merged UI discovery run, candidate set, and import. | — |
+| `NXS-LOCAL-0160` | automated_validated | 2026-09-14 | Serve inventory read, cluster merge, collect routes and wire the Inventory screen | Merged inventory read and cluster view. | — |
+| `NXS-LOCAL-0159` | automated_validated | 2026-09-14 | Inventory collection domain core: job kind, parsers, executor | Merged inventory collection domain core. | — |
+| `NXS-LOCAL-0158` | automated_validated | 2026-09-14 | Finish single-device add: routes, worker packaging, both vendors in one worker | Merged device-add endpoints and worker packaging. | — |
 | `ui2_d1_restore_c7_c2_amendments` | automated_validated | — | UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments | Applied the D1 Option A amendment bundle's pending steps to C7 and C2, and supplied the missing amendment records for C4 and the baseline. Three steps were already applied by earlier movements without any record, so the contracts did not sa | [agreement](docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md) |
 | `ui2_b1_01a_platform_skeleton_freeze` | automated_validated | 2026-09-12 | UI2 B1-1a — platform skeleton contract frozen, integration suite proven on real PostgreSQL 16, audit redaction policy | Froze the B1-1a platform skeleton contract, superseding the B1-1 draft as authority, and proved the ui2 integration suite against a real PostgreSQL 16 server (42 executed, 0 failed). Added migration V5__audit_redaction_policy.sql so audit_l | [agreement](docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md) [handover](AI_HANDOVER.md) |
 | `ui2_b1_01_skeleton_ci_docker` | in_progress | 2026-09-10 | UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze) | The worker added the DRAFT B1-1 contract for ui2 module boundaries, dependency direction, reproducible builds, isolated CI, Docker, Testcontainers/Flyway, and 15 runnable checks. | [agreement](docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md) [handover](AI_HANDOVER.md) |
