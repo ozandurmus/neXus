@@ -23,6 +23,14 @@ public final class ActionRegistry {
     public static final String DEVICE_REGISTER = "device_register";
     /** WORKER.md "Routes": {@code GET /devices} and {@code GET /devices/{id}} -- any authenticated session. */
     public static final String DEVICE_READ = "device_read";
+    /**
+     * NXS-LOCAL-0160 "Routes": {@code POST /devices/{id}/inventory/collect}
+     * -- a class-0-read collection job, but the submission itself is a
+     * write (a job row), so it keeps {@code device_register}'s own
+     * {@code role:onboarding_admin} gate rather than {@link #DEVICE_READ}'s
+     * open one.
+     */
+    public static final String DEVICE_INVENTORY_COLLECT = "device_inventory_collect";
     /** 13G LIA-5: local identity administration, {@code role:security_admin} only. */
     public static final String LOCAL_IDENTITY_CREATE = "local_identity_create";
     public static final String LOCAL_IDENTITY_LIST = "local_identity_list";
@@ -55,6 +63,7 @@ public final class ActionRegistry {
         // session, like the other read controllers -- empty means
         // NO_APPLICABLE_AUTHORITY at E4 (open to any authenticated session).
         register(new ActionDescriptor(DEVICE_READ, true, Optional.empty()));
+        register(new ActionDescriptor(DEVICE_INVENTORY_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         // 13G LIA-5: every local identity administration operation requires
         // role:security_admin, through this same E4 evaluation -- no second
         // authorization check exists.

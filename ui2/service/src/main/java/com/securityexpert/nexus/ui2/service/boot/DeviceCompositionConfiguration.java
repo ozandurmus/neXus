@@ -30,6 +30,11 @@ import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
 import com.securityexpert.nexus.ui2.service.device.DeviceAddSingleService;
 import com.securityexpert.nexus.ui2.service.device.DeviceQueryService;
 import com.securityexpert.nexus.ui2.service.device.DeviceRegistrationService;
+import com.securityexpert.nexus.ui2.service.device.inventory.DeviceInventoryRepository;
+import com.securityexpert.nexus.ui2.service.device.inventory.InMemoryDeviceInventoryRepository;
+import com.securityexpert.nexus.ui2.service.device.inventory.InventoryCapabilityIds;
+import com.securityexpert.nexus.ui2.service.device.inventory.InventoryCollectService;
+import com.securityexpert.nexus.ui2.service.device.inventory.InventoryQueryService;
 
 /**
  * Composition root for single-device add and its two read routes (WORKER.md
@@ -116,5 +121,51 @@ public class DeviceCompositionConfiguration {
     @Bean
     public DeviceQueryService deviceQueryService(DeviceRepository deviceRepository, JobRecordDao jobRecordDao) {
         return new DeviceQueryService(deviceRepository, jobRecordDao);
+    }
+
+    /**
+     * NXS-LOCAL-0160 SESSION_START baseline: "work against your own
+     * in-memory fake of DeviceInventoryRepository... then rebase or
+     * cherry-pick 0159's persistence commit and drop the fake from main
+     * code." Until then this is the one instance the whole application
+     * shares, so a run recorded by a future collection job stays visible
+     * to every subsequent read in the same process.
+     */
+    @Bean
+    public DeviceInventoryRepository deviceInventoryRepository() {
+        return new InMemoryDeviceInventoryRepository();
+    }
+
+    @Bean
+    public InventoryQueryService inventoryQueryService(DeviceRepository deviceRepository, JobRecordDao jobRecordDao,
+            DeviceInventoryRepository deviceInventoryRepository) {
+        return new InventoryQueryService(deviceRepository, jobRecordDao, deviceInventoryRepository);
+    }
+
+    /**
+     * Mirrors {@link #confirmCapabilityRegistry()}'s own gate-free
+     * placeholder shape (see that method's own javadoc) -- {@code service}
+     * builds its own two-capability registry rather than depending on a
+     * {@code worker} class (DIR-2).
+     */
+    @Bean
+    public CapabilityRegistry inventoryCapabilityRegistry() {
+        return CapabilityRegistry.of(List.of(
+                confirmCapability(InventoryCapabilityIds.CP_INVENTORY_COLLECT, "check_point", "cp_gaia_gateway",
+                        TransportKind.SSH_EXEC),
+                confirmCapability(InventoryCapabilityIds.PAN_INVENTORY_COLLECT, "palo_alto", "pan_firewall",
+                        TransportKind.PAN_XML_API)));
+    }
+
+    @Bean
+    public JobAdmissionService inventoryJobAdmissionService(CapabilityRegistry inventoryCapabilityRegistry,
+            DeviceEnrollmentReadPort deviceEnrollmentReadPort, JobAdmissionRepository jobAdmissionRepository) {
+        return new JobAdmissionService(inventoryCapabilityRegistry, deviceEnrollmentReadPort, jobAdmissionRepository);
+    }
+
+    @Bean
+    public InventoryCollectService inventoryCollectService(DeviceRepository deviceRepository,
+            JobAdmissionService inventoryJobAdmissionService) {
+        return new InventoryCollectService(deviceRepository, inventoryJobAdmissionService);
     }
 }

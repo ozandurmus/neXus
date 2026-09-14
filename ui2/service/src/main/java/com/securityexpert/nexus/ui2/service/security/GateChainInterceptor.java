@@ -29,10 +29,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * <p>A path-variable route (WORKER.md "Routes": {@code GET /devices/{id}},
  * this map's first one) is looked up by its exact route first and, only on
- * a miss, by replacing its last path segment with a single {@code *}
- * wildcard (e.g. {@code "GET /devices/*"}) -- one segment only, never a
- * multi-segment or prefix match, so every other, non-wildcarded route entry
- * keeps matching exactly as it always has.</p>
+ * a miss, by replacing exactly one path segment with a single {@code *}
+ * wildcard and re-checking the map -- tried from the last segment inward
+ * (e.g. {@code "GET /devices/*"} for {@code GET /devices/{id}}, then
+ * {@code "GET /devices/*​/inventory"} for
+ * {@code GET /devices/{id}/inventory}, NXS-LOCAL-0160 "Routes": the id is
+ * not always the last segment). Always one segment wildcarded at a time,
+ * never two at once and
+ * never a prefix match, so every other, non-wildcarded route entry keeps
+ * matching exactly as it always has, and the original last-segment-only
+ * routes ({@code GET /devices/*}) still resolve on their very first
+ * wildcard attempt.</p>
  */
 public final class GateChainInterceptor implements HandlerInterceptor {
 
@@ -82,11 +89,19 @@ public final class GateChainInterceptor implements HandlerInterceptor {
         if (exact != null) {
             return exact;
         }
-        int lastSlash = servletPath.lastIndexOf('/');
-        if (lastSlash <= 0) {
-            return null;
+        String[] segments = servletPath.split("/", -1);
+        for (int i = segments.length - 1; i >= 1; i--) {
+            if (segments[i].isEmpty()) {
+                continue;
+            }
+            String[] wildcarded = segments.clone();
+            wildcarded[i] = "*";
+            String candidate = actionIdByRoute.get(method + " " + String.join("/", wildcarded));
+            if (candidate != null) {
+                return candidate;
+            }
         }
-        return actionIdByRoute.get(method + " " + servletPath.substring(0, lastSlash) + "/*");
+        return null;
     }
 
     private static Optional<String> findSessionCookie(HttpServletRequest request) {
