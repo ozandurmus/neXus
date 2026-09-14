@@ -1,0 +1,35 @@
+# pan_discovery_enumerate -- the Palo Alto half of discovery-from-the-UI
+# (PO_DECISION_RECORD_2026_09_14F DR-1). Mirrors cp_discovery_enumerate.yaml's
+# own reasoning in full: this entry exists only so
+# JobAdmissionService.submitForRun's step 1 has something to resolve
+# com.securityexpert.nexus.ui2.jobs.admission.DiscoveryCapabilityIds.
+# PAN_DISCOVERY_ENUMERATE against; the real Panorama contact runs through
+# worker.discovery.DiscoveryJobExecutor against the closed route set
+# (PAN_DISCOVERY_API_ROUTE_GATE_ENTRIES.md).
+#
+# Admitted against a discovery_run row (DR-1), never a device.
+#
+# maturity_state: as cp_discovery_enumerate.yaml -- the two routes were
+# APPROVED 2026-09-14 (PAN_DISCOVERY_API_ROUTE_GATE_ENTRIES.md), field
+# bindings stay UNVERIFIED until the first live run. CAP_OFFLINE kept per
+# the same instruction; the registry's MaturityState enum has no state
+# meaning "approved, UNVERIFIED bindings."
+capability_id: pan_discovery_enumerate
+vendor: palo_alto
+platform_role_scope: pan_panorama
+maturity_state: CAP_OFFLINE
+transport:
+  kind: pan_xml_api
+  trust_rule_ref: utils.pan_xml_api_trust
+steps:
+  - kind: connect
+finally_steps:
+  - kind: disconnect
+parser_ref:
+  parser_version: UNKNOWN
+  semantics_doc_ref: "docs/design/PAN_DISCOVERY_CONTRACT.md section 4"
+source_pointers:
+  - "worker.discovery.DiscoveryJobExecutor (the closed route set this capability's own execution defers to)"
+  - "worker.discovery.pan.PanoramaEnumerationAdapter"
+validation_status: APPROVED_GATE_UNVERIFIED_BINDINGS
+revalidation_plan_ref: "docs/design/PAN_DISCOVERY_API_ROUTE_GATE_ENTRIES.md"

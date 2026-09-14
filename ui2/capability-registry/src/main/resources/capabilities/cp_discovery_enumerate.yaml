@@ -1,0 +1,47 @@
+# cp_discovery_enumerate -- the Check Point half of discovery-from-the-UI
+# (PO_DECISION_RECORD_2026_09_14F DR-1). This entry exists only so
+# JobAdmissionService.submitForRun's step 1 (capability exists, is
+# execution-eligible) has something to resolve
+# com.securityexpert.nexus.ui2.jobs.admission.DiscoveryCapabilityIds.
+# CP_DISCOVERY_ENUMERATE against -- the real management-plane contact never
+# runs this capability's own step list; it runs through
+# worker.discovery.DiscoveryJobExecutor against the closed command set
+# (CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md), because StepExecutor's
+# single-command-per-step shape cannot express the paced, ordered,
+# domain-enumerating session this capability's own read plan needs (mirrors
+# cp_inventory_collect.yaml's own reasoning). connect/disconnect are the
+# only steps declared here -- neither needs a gate_reference -- so this
+# capability resolves execution-eligible with no gate rows of its own.
+#
+# Admitted against a discovery_run row (DR-1), never a device -- F4's
+# DRAFT-device refusal does not apply here at all, by construction:
+# JobAdmissionService.submitForRun never consults DeviceEnrollmentReadPort.
+#
+# maturity_state: the command gates for this capability were APPROVED
+# 2026-09-14 (CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md), but the
+# field bindings stay UNVERIFIED until the Product Owner's first live run
+# reports its counts. CAP_VALIDATED would overstate that as a completed
+# validation; CAP_OFFLINE is kept per WORKER.md's own instruction ("if no
+# state expresses it, keep CAP_OFFLINE and say so in SESSION_CLOSE with the
+# exact enum values available") -- the registry's MaturityState enum has
+# exactly four values (CAP_SPEC, CAP_OFFLINE, CAP_VALIDATED, CAP_RELEASED)
+# and none of them means "approved, UNVERIFIED bindings."
+capability_id: cp_discovery_enumerate
+vendor: check_point
+platform_role_scope: cp_multi_domain_server
+maturity_state: CAP_OFFLINE
+transport:
+  kind: ssh_exec
+  trust_rule_ref: utils.cp_ssh_trust
+steps:
+  - kind: connect
+finally_steps:
+  - kind: disconnect
+parser_ref:
+  parser_version: UNKNOWN
+  semantics_doc_ref: "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md section 6"
+source_pointers:
+  - "worker.discovery.DiscoveryJobExecutor (the closed command set this capability's own execution defers to)"
+  - "worker.discovery.cp.ManagementPlaneEnumerationAdapter"
+validation_status: APPROVED_GATE_UNVERIFIED_BINDINGS
+revalidation_plan_ref: "docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md"

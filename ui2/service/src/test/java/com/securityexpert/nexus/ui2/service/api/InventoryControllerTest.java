@@ -103,6 +103,13 @@ class InventoryControllerTest {
         }
 
         @Override
+        public Optional<String> insertRequestedIfAbsentForRun(String jobId, String idempotencyKey,
+                String capabilityId, String targetRunId, String actionClass, String jobType,
+                String actorFingerprint, String actionId) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
         public Optional<String> findJobIdByIdempotencyKey(String idempotencyKey) {
             throw new UnsupportedOperationException("not used by this test");
         }
@@ -171,7 +178,7 @@ class InventoryControllerTest {
                 "actor", "action-1");
         FakeJobRecordDao jobs = new FakeJobRecordDao();
         jobs.byId.put("job-1", new JobRow("job-1", "cp_inventory_collect", "device-1", "CLASS_0_READ", "COMPLETED",
-                null, 0L, "SUCCESS", null));
+                null, 0L, "SUCCESS", null, "device", null));
         InventoryQueryService queryService = new InventoryQueryService(devices, jobs, inventoryRepository);
         InventoryController controller = new InventoryController(queryService, unusedCollectService());
 
@@ -289,6 +296,13 @@ class InventoryControllerTest {
             }
             jobsByIdempotencyKey.put(idempotencyKey, jobId);
             return Optional.of("job-" + jobId);
+        }
+
+        @Override
+        public Optional<String> createRequestedIfAbsentForRun(String jobId, String idempotencyKey,
+                String capabilityId, String targetRunId, String actionClassId, String actorFingerprint,
+                String actionId) {
+            throw new UnsupportedOperationException("not exercised by this test");
         }
 
         @Override

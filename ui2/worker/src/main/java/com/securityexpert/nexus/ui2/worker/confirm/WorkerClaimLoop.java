@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.jobs.admission.ConfirmCapabilityIds;
+import com.securityexpert.nexus.ui2.jobs.admission.DiscoveryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.lease.ClaimedJob;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
@@ -16,6 +17,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
+import com.securityexpert.nexus.ui2.worker.discovery.DiscoveryJobExecutor;
 import com.securityexpert.nexus.ui2.worker.inventory.InventoryJobExecutor;
 import com.securityexpert.nexus.ui2.worker.inventory.InventoryRequest;
 
@@ -31,7 +33,8 @@ public final class WorkerClaimLoop {
 
     private static final List<String> ELIGIBLE_CAPABILITY_IDS = List.of(
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
-            InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT);
+            InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT,
+            DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE);
     private static final int DEFAULT_SSH_PORT = 22;
 
     private final JobLeaseRepository leaseRepository;
@@ -39,6 +42,7 @@ public final class WorkerClaimLoop {
     private final DeviceRepository deviceRepository;
     private final ConfirmJobExecutor confirmJobExecutor;
     private final InventoryJobExecutor inventoryJobExecutor;
+    private final DiscoveryJobExecutor discoveryJobExecutor;
     private final String workerId;
     private final Duration leaseDuration;
     private final String checkPointTrustRuleRef;
@@ -47,13 +51,14 @@ public final class WorkerClaimLoop {
     /** WORKER.md "one worker process serves both vendors" (0159): the same claim loop now also serves both job kinds. */
     public WorkerClaimLoop(JobLeaseRepository leaseRepository, JobRecordDao jobRecordDao,
             DeviceRepository deviceRepository, ConfirmJobExecutor confirmJobExecutor,
-            InventoryJobExecutor inventoryJobExecutor, String workerId, Duration leaseDuration,
-            String checkPointTrustRuleRef, String paloAltoTrustRuleRef) {
+            InventoryJobExecutor inventoryJobExecutor, DiscoveryJobExecutor discoveryJobExecutor, String workerId,
+            Duration leaseDuration, String checkPointTrustRuleRef, String paloAltoTrustRuleRef) {
         this.leaseRepository = Objects.requireNonNull(leaseRepository, "leaseRepository");
         this.jobRecordDao = Objects.requireNonNull(jobRecordDao, "jobRecordDao");
         this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
         this.confirmJobExecutor = Objects.requireNonNull(confirmJobExecutor, "confirmJobExecutor");
         this.inventoryJobExecutor = Objects.requireNonNull(inventoryJobExecutor, "inventoryJobExecutor");
+        this.discoveryJobExecutor = Objects.requireNonNull(discoveryJobExecutor, "discoveryJobExecutor");
         this.workerId = Objects.requireNonNull(workerId, "workerId");
         this.leaseDuration = Objects.requireNonNull(leaseDuration, "leaseDuration");
         this.checkPointTrustRuleRef = Objects.requireNonNull(checkPointTrustRuleRef, "checkPointTrustRuleRef");
@@ -84,6 +89,14 @@ public final class WorkerClaimLoop {
         ClaimedJob claimed = claim.get();
         JobRow job = jobRecordDao.find(claimed.jobId())
                 .orElseThrow(() -> new IllegalStateException("claimed job has no row: " + claimed.jobId()));
+
+        // 14F DR-1: a discovery job's target is a discovery_run row, not a device -- dispatched before any
+        // device/endpoint resolution below, which would otherwise crash on a job with no target_device_id.
+        if (DiscoveryCapabilityIds.isDiscoveryCapability(job.capabilityId())) {
+            discoveryJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetRef());
+            return true;
+        }
+
         DeviceRecord device = deviceRepository.find(job.targetDeviceId())
                 .orElseThrow(() -> new IllegalStateException("claimed job targets an unknown device: " + job.targetDeviceId()));
         EndpointRecord endpoint = deviceRepository.findEndpointByDeviceId(job.targetDeviceId())

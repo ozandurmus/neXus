@@ -93,6 +93,13 @@ class DeviceQueryServiceTest {
         }
 
         @Override
+        public Optional<String> insertRequestedIfAbsentForRun(String jobId, String idempotencyKey,
+                String capabilityId, String targetRunId, String actionClass, String jobType,
+                String actorFingerprint, String actionId) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
         public Optional<String> findJobIdByIdempotencyKey(String idempotencyKey) {
             throw new UnsupportedOperationException("not used by this test");
         }
@@ -145,7 +152,7 @@ class DeviceQueryServiceTest {
         FakeJobRecordDao jobs = new FakeJobRecordDao();
         jobs.mostRecentByDeviceId.put("device-1",
                 new JobRow("job-1", "device_confirm_check_point", "device-1", "CLASS_0_READ", "REQUESTED", null, 0L,
-                        null, null));
+                        null, null, "device", null));
         DeviceQueryService service = new DeviceQueryService(devices, jobs);
 
         DeviceQueryService.DetailOutcome outcome = service.deviceDetail("device-1");

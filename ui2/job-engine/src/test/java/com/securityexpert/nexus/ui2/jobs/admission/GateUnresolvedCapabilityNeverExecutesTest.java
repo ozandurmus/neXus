@@ -73,6 +73,13 @@ class GateUnresolvedCapabilityNeverExecutesTest {
             public Optional<String> findByIdempotencyKey(String idempotencyKey) {
                 throw new AssertionError("admission must refuse before ever querying for a REQUESTED row");
             }
+
+            @Override
+            public Optional<String> createRequestedIfAbsentForRun(String jobId, String idempotencyKey,
+                    String capabilityId, String targetRunId, String actionClassId, String actorFingerprint,
+                    String actionId) {
+                throw new AssertionError("not exercised by this test");
+            }
         };
 
         JobAdmissionService admission = new JobAdmissionService(registry, enrolledDevice, neverCalledIfRefusedFirst);
