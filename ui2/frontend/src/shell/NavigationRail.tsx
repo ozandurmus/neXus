@@ -5,6 +5,8 @@ import Typography from "@mui/material/Typography";
 import { m3 } from "../theme/m3Theme";
 import { Icon, type IconName } from "./Icon";
 import type { ScreenId } from "./types";
+import { NexusMark } from "../brand/NexusMark";
+import { NexusWordmark } from "../brand/NexusWordmark";
 
 /**
  * The M3 navigation from the design canvas's `M3Components` artboard: a
@@ -92,10 +94,8 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
           gap: 1.5,
         }}
       >
-        <Box sx={{ width: 48, height: 48, borderRadius: "16px", bgcolor: m3.primaryContainer,
-                   color: m3.onPrimaryContainer, display: "grid", placeItems: "center",
-                   fontWeight: 500, fontSize: 14, mb: 1 }}>
-          SX
+        <Box sx={{ mb: 1 }}>
+          <NexusMark size={48} />
         </Box>
         <IconButton
           aria-label="Expand navigation"
@@ -137,14 +137,9 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
             display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" }}
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 1, pt: 1, pb: 1.5 }}>
-        <Box sx={{ width: 40, height: 40, borderRadius: "14px", bgcolor: m3.primaryContainer,
-                   color: m3.onPrimaryContainer, display: "grid", placeItems: "center",
-                   fontWeight: 500, fontSize: 13 }}>
-          SX
-        </Box>
-        <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-          <Typography variant="h4">SecurityExpert</Typography>
-          <Typography variant="body2">neXus · verified state</Typography>
+        <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, gap: "2px" }}>
+          <NexusWordmark height={24} color={m3.onSurface} />
+          <Typography variant="body2">Verified state</Typography>
         </Box>
         <IconButton aria-label="Collapse navigation" onClick={() => setExpanded(false)} sx={{ ml: "auto" }}>
           <Icon name="menu" size={20} />
