@@ -32,8 +32,16 @@ run 'cphaprob stat'
 run 'cphaprob -a -m if'
 run 'vsx stat -v'
 if [ -n "$VSID" ]; then
-  run "vsenv $VSID; ip -4 addr show; ip -4 route show"
-  run "vsenv $VSID; cphaprob stat"
+  # vsenv is a shell function of the interactive Expert shell, not a binary
+  # (measured 2026-09-14: "sh: vsenv: command not found" under sh -c). Each
+  # form below is a candidate for a non-interactive exec channel; report which
+  # ones succeed.
+  run 'bash -ic "type vsenv" 2>&1 | head -5'
+  run 'printf "CPDIR=%s\n" "$CPDIR"; ls "$CPDIR/tmp/.CPprofile.sh" /opt/CPshared/5.0/tmp/.CPprofile.sh /etc/profile.d/CP.sh 2>&1'
+  run "bash -lc 'vsenv $VSID && ip -4 addr show && ip -4 route show'"
+  run "bash -c '. \$CPDIR/tmp/.CPprofile.sh 2>/dev/null || . /opt/CPshared/5.0/tmp/.CPprofile.sh; vsenv $VSID && ip -4 addr show && ip -4 route show'"
+  run "bash -lc 'vsenv $VSID && cphaprob stat'"
+  run "bash -lc 'vsenv $VSID && cphaprob -a -m if'"
   printf '\n### M-2 decisive step: now open a NEW ssh session to this host and run only: ip -4 addr show\n'
   printf '### Compare its interface names with the physical block above; report SAME or DIFFERENT.\n'
 fi
