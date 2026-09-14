@@ -31,13 +31,13 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.SshCredentialResolver;
  * (out of this movement's "files you must not touch" scope for the
  * transport layer).</p>
  */
-final class StoreBackedSshCredentialResolver implements SshCredentialResolver {
+public final class StoreBackedSshCredentialResolver implements SshCredentialResolver {
 
     private final CredentialReferenceRepository credentialReferenceRepository;
     private final CredentialRepository credentialRepository;
     private final CredentialStoreCipher cipher;
 
-    StoreBackedSshCredentialResolver(CredentialReferenceRepository credentialReferenceRepository,
+    public StoreBackedSshCredentialResolver(CredentialReferenceRepository credentialReferenceRepository,
             CredentialRepository credentialRepository, CredentialStoreCipher cipher) {
         this.credentialReferenceRepository = Objects.requireNonNull(credentialReferenceRepository,
                 "credentialReferenceRepository");

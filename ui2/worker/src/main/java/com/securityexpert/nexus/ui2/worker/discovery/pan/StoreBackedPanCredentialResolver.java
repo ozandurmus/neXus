@@ -22,13 +22,13 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
  * password to hand Panorama's XML API and is refused, not silently
  * misresolved.
  */
-final class StoreBackedPanCredentialResolver implements PanCredentialResolver {
+public final class StoreBackedPanCredentialResolver implements PanCredentialResolver {
 
     private final CredentialReferenceRepository credentialReferenceRepository;
     private final CredentialRepository credentialRepository;
     private final CredentialStoreCipher cipher;
 
-    StoreBackedPanCredentialResolver(CredentialReferenceRepository credentialReferenceRepository,
+    public StoreBackedPanCredentialResolver(CredentialReferenceRepository credentialReferenceRepository,
             CredentialRepository credentialRepository, CredentialStoreCipher cipher) {
         this.credentialReferenceRepository = Objects.requireNonNull(credentialReferenceRepository,
                 "credentialReferenceRepository");

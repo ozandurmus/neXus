@@ -1,0 +1,34 @@
+# device_confirm_check_point -- the enrollment confirm's registry entry
+# (PO_DECISION_RECORD_2026_09_14B EC-J1: "its capability is the confirm
+# capability and nothing else"). This entry exists only so
+# JobAdmissionService's step 1 (capability exists, is execution-eligible)
+# has something to resolve com.securityexpert.nexus.ui2.jobs.admission.
+# ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT against -- the confirm's
+# real device contact never runs this capability's own step list; it runs
+# through worker.confirm.ConfirmJobExecutor/ConfirmCapabilityExecutor
+# against the closed four-read set (DeviceFirstContactCommandSet), because
+# StepExecutor's single-connectionTarget execute() cannot express the
+# confirm's own two-phase (self, then conditionally peer) shape (see
+# ConfirmJobExecutor's javadoc). connect/disconnect are the only steps
+# declared here -- neither needs a gate_reference (C4 §2.3: an
+# authentication handshake's expectation is evaluated by the transport
+# itself), so this capability resolves execution-eligible with no gate
+# rows of its own.
+capability_id: device_confirm_check_point
+vendor: check_point
+platform_role_scope: cp_gaia_gateway
+maturity_state: CAP_OFFLINE
+transport:
+  kind: ssh_exec
+  trust_rule_ref: utils.cp_ssh_trust
+steps:
+  - kind: connect
+finally_steps:
+  - kind: disconnect
+parser_ref:
+  parser_version: UNKNOWN
+  semantics_doc_ref: "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md EC-11/EC-12"
+source_pointers:
+  - "worker.confirm.ConfirmCapabilityExecutor (the closed four-read set this capability's own execution defers to)"
+validation_status: FIXTURE_ONLY
+revalidation_plan_ref: "docs/design/DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md"

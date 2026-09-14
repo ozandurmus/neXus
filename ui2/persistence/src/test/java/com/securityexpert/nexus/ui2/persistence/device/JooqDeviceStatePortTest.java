@@ -42,6 +42,11 @@ class JooqDeviceStatePortTest {
         }
 
         @Override
+        public Optional<EndpointRecord> findEndpointByDeviceId(String deviceId) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
         public String registerDraft(DeviceDraft draft, String actorFingerprint, String actionId) {
             throw new UnsupportedOperationException("not used by this test");
         }
@@ -66,6 +71,17 @@ class JooqDeviceStatePortTest {
 
         @Override
         public boolean setDisabled(String deviceId, boolean disabled, String actorFingerprint, String actionId) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
+        public boolean recordConfirmSuccess(String deviceId, DeviceConfirmFacts facts, String actorFingerprint,
+                String actionId) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
+        public Optional<DeviceConfirmFacts> findConfirmFacts(String deviceId) {
             throw new UnsupportedOperationException("not used by this test");
         }
     }

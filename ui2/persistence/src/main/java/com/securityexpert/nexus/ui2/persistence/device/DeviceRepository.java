@@ -17,6 +17,9 @@ public interface DeviceRepository {
 
     Optional<EndpointRecord> findEndpoint(String endpointId);
 
+    /** The one endpoint a manually-registered device carries (B1-4b contract §4: one device, one endpoint at this maturity). */
+    Optional<EndpointRecord> findEndpointByDeviceId(String deviceId);
+
     /**
      * Registers a device as {@code DRAFT} together with its one endpoint,
      * in a single audited transaction (contract §4: "the devices INSERT
@@ -48,4 +51,25 @@ public interface DeviceRepository {
 
     /** Contract §3 {@code any -> disabled}: a separate boolean column, not a state. */
     boolean setDisabled(String deviceId, boolean disabled, String actorFingerprint, String actionId);
+
+    /**
+     * EC-J3: the confirm job's completion handler moves the row {@code
+     * DRAFT -> ENROLLED} with the observed facts, atomically, in one
+     * fenced update guarded by {@code WHERE enrollment_state = 'DRAFT'} --
+     * the same fenced-update pattern {@link #transitionEnrollmentState}
+     * uses. No other write path ever sets any V12 column or moves a row to
+     * {@code ENROLLED} on first contact (EC-J3: "no other code path
+     * changes enrollment state on first contact"). Never called for any
+     * job kind other than the enrollment confirm (EC-J1).
+     *
+     * @return {@code true} only if a row matching {@code deviceId} AND
+     *         currently {@code DRAFT} was updated; {@code false} means the
+     *         device was not found or already left {@code DRAFT} (a
+     *         zombie writer's own signal to stop, mirroring {@link
+     *         #transitionEnrollmentState}'s contract).
+     */
+    boolean recordConfirmSuccess(String deviceId, DeviceConfirmFacts facts, String actorFingerprint, String actionId);
+
+    /** The V12 facts a confirmed device carries, for a read model (GET /devices, GET /devices/{id}). */
+    Optional<DeviceConfirmFacts> findConfirmFacts(String deviceId);
 }

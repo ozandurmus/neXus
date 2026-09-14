@@ -1,8 +1,12 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { InventoryScreen } from "../src/screens/InventoryScreen";
+
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status });
+}
 
 function withTheme(node: React.ReactElement) {
   return <ThemeProvider theme={m3Theme}>{node}</ThemeProvider>;
@@ -16,8 +20,17 @@ const TABS = [
 ];
 
 describe("InventoryScreen detail tabs", () => {
-  it("renders each tab's own panel, and no other tab's panel, tab by tab", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders each tab's own panel, and no other tab's panel, tab by tab", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, { devices: [] }))));
     render(withTheme(<InventoryScreen />));
+    // Let the list panel's own GET /devices settle before driving the
+    // unrelated detail tabs, so its state update isn't left dangling
+    // outside of React's act() once the test's synchronous body returns.
+    await waitFor(() => expect(screen.getByText("No devices")).toBeInTheDocument());
     const tablist = screen.getByRole("tablist", { name: "Device detail" });
 
     for (const tab of TABS) {
@@ -30,9 +43,106 @@ describe("InventoryScreen detail tabs", () => {
     }
   });
 
-  it("defaults to the Interfaces tab, empty", () => {
+  it("defaults to the Interfaces tab, empty", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, { devices: [] }))));
     render(withTheme(<InventoryScreen />));
+    await waitFor(() => expect(screen.getByText("No devices")).toBeInTheDocument());
     expect(screen.getByText("No interface evidence")).toBeInTheDocument();
     expect(screen.queryByText("No routing evidence")).toBeNull();
+  });
+});
+
+describe("InventoryScreen device list", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches GET /devices and renders standalone devices", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          jsonResponse(200, {
+            devices: [
+              {
+                device_id: "dev-1",
+                vendor_hint: "check_point",
+                enrollment_state: "DRAFT",
+                hostname: "fw-edge-1",
+                model: null,
+                software_version: null,
+                ha_role: null,
+                cluster_member_ref: null,
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
+    expect(screen.getByText("Registered, not confirmed")).toBeInTheDocument();
+    expect(screen.getByText("1 device enrolled")).toBeInTheDocument();
+  });
+
+  it("groups devices sharing a cluster_member_ref under one parent grouping", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          jsonResponse(200, {
+            devices: [
+              {
+                device_id: "dev-a",
+                vendor_hint: "check_point",
+                enrollment_state: "ENROLLED",
+                hostname: "member-a",
+                model: "Quantum",
+                software_version: "R81.20",
+                ha_role: "active",
+                cluster_member_ref: "cluster-1",
+              },
+              {
+                device_id: "dev-b",
+                vendor_hint: "check_point",
+                enrollment_state: "ENROLLED",
+                hostname: "member-b",
+                model: "Quantum",
+                software_version: "R81.20",
+                ha_role: "standby",
+                cluster_member_ref: "cluster-1",
+              },
+              {
+                device_id: "dev-c",
+                vendor_hint: "palo_alto",
+                enrollment_state: "ENROLLED",
+                hostname: "standalone-c",
+                model: "PA-440",
+                software_version: "11.0",
+                ha_role: null,
+                cluster_member_ref: null,
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("Cluster cluster-1")).toBeInTheDocument());
+    expect(screen.getByText("2 members")).toBeInTheDocument();
+    expect(screen.getByText("member-a")).toBeInTheDocument();
+    expect(screen.getByText("member-b")).toBeInTheDocument();
+    // The standalone device (null cluster_member_ref) renders as a normal row, not nested.
+    expect(screen.getByText("standalone-c")).toBeInTheDocument();
+  });
+
+  it("shows an error state with a retry action when the fetch fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network down")));
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("Inventory unavailable")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 });

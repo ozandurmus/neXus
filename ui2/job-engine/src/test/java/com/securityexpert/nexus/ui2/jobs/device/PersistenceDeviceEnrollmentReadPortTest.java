@@ -47,6 +47,11 @@ class PersistenceDeviceEnrollmentReadPortTest {
         }
 
         @Override
+        public Optional<EndpointRecord> findEndpointByDeviceId(String deviceId) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
         public String registerDraft(DeviceDraft draft, String actorFingerprint, String actionId) {
             throw new UnsupportedOperationException("not used by this test");
         }
@@ -64,6 +69,19 @@ class PersistenceDeviceEnrollmentReadPortTest {
 
         @Override
         public boolean setDisabled(String deviceId, boolean disabled, String actorFingerprint, String actionId) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
+        public boolean recordConfirmSuccess(String deviceId,
+                com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts facts, String actorFingerprint,
+                String actionId) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
+        public Optional<com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts> findConfirmFacts(
+                String deviceId) {
             throw new UnsupportedOperationException("not used by this test");
         }
     }

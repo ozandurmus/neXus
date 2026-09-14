@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
@@ -11,6 +11,7 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { useFetchOnMount } from "../shell/useFetchOnMount";
 import {
   createLocalIdentity,
   createRoleBinding,
@@ -33,24 +34,21 @@ import {
  * supplies (AG-J3, {@code NoRoleConditionalRenderingInFrontendTest}).
  */
 export function LocalIdentitiesPanel() {
-  const [identities, setIdentities] = useState<LocalIdentityView[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [passwordDialogFor, setPasswordDialogFor] = useState<string | null>(null);
   const [roleDialogFor, setRoleDialogFor] = useState<string | null>(null);
 
-  const refresh = useCallback(() => {
-    listLocalIdentities()
-      .then((result) => {
-        setIdentities(result.identities);
-        setError(null);
-      })
-      .catch((err: ApiError) => setError(describeError(err)));
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  const {
+    data,
+    error: fetchError,
+    refresh,
+  } = useFetchOnMount(
+    () => listLocalIdentities().then((result) => result.identities ?? []),
+    (err) => describeError(err as ApiError),
+  );
+  const identities = data;
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const error = fetchError ?? mutationError;
 
   if (error) {
     return (
@@ -127,7 +125,7 @@ export function LocalIdentitiesPanel() {
                   onClick={() =>
                     disableLocalIdentity(identity.local_identity_id)
                       .then(refresh)
-                      .catch((err: ApiError) => setError(describeError(err)))
+                      .catch((err: ApiError) => setMutationError(describeError(err)))
                   }
                 >
                   Disable
@@ -138,7 +136,7 @@ export function LocalIdentitiesPanel() {
                   onClick={() =>
                     enableLocalIdentity(identity.local_identity_id)
                       .then(refresh)
-                      .catch((err: ApiError) => setError(describeError(err)))
+                      .catch((err: ApiError) => setMutationError(describeError(err)))
                   }
                 >
                   Enable

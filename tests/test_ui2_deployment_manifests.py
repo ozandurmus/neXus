@@ -267,13 +267,14 @@ def test_the_rule_checks_below_have_something_to_check():
     turning the whole module green.
     """
     pod_specs = _pod_specs()
-    assert len(pod_specs) == 2, (
-        f"expected the service and the database workloads, found {[o for _, o, _ in pod_specs]}"
+    assert len(pod_specs) == 3, (
+        f"expected the service, worker and database workloads, found {[o for _, o, _ in pod_specs]}"
     )
     containers = _containers()
     assert [owner for _, owner, _ in containers] == [
         "StatefulSet/ui2-db:database",
         "Deployment/ui2-service:service",
+        "Deployment/ui2-worker:worker",
     ], f"unexpected container set: {[owner for _, owner, _ in containers]}"
 
 
@@ -291,6 +292,10 @@ def test_manifest_set_contains_every_kind_the_contract_names():
     ):
         assert required in kinds, f"§5.2: the set has no {required}"
     assert kinds.count("Service") == 2, "§5.2: one Service for the service, one for the database"
+    assert kinds.count("Secret") == 3, (
+        "§5.2: the db-credentials secret plus the worker's credential-store "
+        "and role-binding key secrets"
+    )
 
 
 def test_route_is_a_separate_file_and_the_only_platform_difference():

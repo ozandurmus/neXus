@@ -65,7 +65,12 @@ public final class JobAdmissionService {
                             + "(C4 §3.5) -- never a member of the set admission is allowed to dispatch");
         }
 
-        // 2. Device enrollment (F6, first enforcement point).
+        // 2. Device enrollment (F6, first enforcement point). PO_DECISION_RECORD_2026_09_14B
+        // EC-J1/EC-J2: the enrollment confirm is the one capability kind admissible against a
+        // DRAFT device (it is the transition out of DRAFT); every other capability keeps F4's
+        // unconditional DRAFT refusal, unchanged. DeviceEnrollmentState.permitsReadCollection()
+        // itself is never widened for DRAFT (EC-J2: "never by widening permitsReadCollection") --
+        // the exception is applied only here, narrowly, by capability id.
         Optional<DeviceEnrollmentSnapshot> device = deviceEnrollmentReadPort.findEnrollment(targetDeviceId);
         if (device.isEmpty()) {
             return new AdmissionResult.Refused("DEVICE_NOT_FOUND", "no device row for device_id=" + targetDeviceId);
@@ -73,10 +78,13 @@ public final class JobAdmissionService {
         if (device.get().disabled()) {
             return new AdmissionResult.Refused("DEVICE_DISABLED", "device " + targetDeviceId + " is disabled");
         }
-        if (!device.get().permitsReadCollection()) {
+        boolean confirmAgainstDraft = ConfirmCapabilityIds.isConfirmCapability(capabilityId)
+                && device.get().enrollmentState() == com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.DRAFT;
+        if (!device.get().permitsReadCollection() && !confirmAgainstDraft) {
             return new AdmissionResult.Refused("DEVICE_NOT_ELIGIBLE",
                     "device " + targetDeviceId + " enrollment_state=" + device.get().enrollmentState()
-                            + " does not permit a job to be created against it (DRAFT is refused here)");
+                            + " does not permit a job to be created against it (DRAFT is refused here, except the "
+                            + "enrollment confirm itself, EC-J1)");
         }
 
         // 3. Idempotency (C2 §2.3): server-generates a key when the caller

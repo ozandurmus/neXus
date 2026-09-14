@@ -152,3 +152,86 @@ export function replaceCredentialSecret(
 export function deleteCredential(credentialId: string): Promise<{ credential_id: string; deleted: boolean }> {
   return call("/credentials/delete", "POST", { credential_id: credentialId });
 }
+
+/**
+ * Device enrollment (NXS-LOCAL-0157). `add-single` is the one write path;
+ * every other function here is a read against a device the backend already
+ * knows about. `job.state` is a C2 job state machine -- callers must treat
+ * an unrecognized value as `OUTCOME_UNKNOWN`-shaped rather than throwing.
+ */
+export type Vendor = "check_point" | "palo_alto";
+
+export type JobState =
+  | "REQUESTED"
+  | "CLAIMED"
+  | "EXECUTING"
+  | "COMPLETED"
+  | "FAILED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "OUTCOME_UNKNOWN"
+  | "RECONCILED";
+
+export interface JobView {
+  readonly job_id: string;
+  readonly state: string;
+  readonly outcome: string | null;
+  readonly terminal_reason: string | null;
+}
+
+export interface DeviceFacts {
+  readonly hostname: string | null;
+  readonly model: string | null;
+  readonly software_version: string | null;
+  readonly ha_role: string | null;
+}
+
+export interface AddDeviceSingleResult {
+  readonly device_id: string;
+  readonly job_id: string;
+  readonly enrollment_state: "DRAFT";
+}
+
+export interface DeviceDetail {
+  readonly device_id: string;
+  readonly vendor_hint: string;
+  readonly enrollment_state: string;
+  readonly disabled: boolean;
+  readonly facts: DeviceFacts | null;
+  readonly peer_follow_outcome: "NONE" | "CORROBORATED" | "NOT_CONFIRMED" | null;
+  readonly peer_follow_reason: string | null;
+  readonly identity_mismatch_state: "NONE" | "OPEN";
+  readonly cluster_member_ref: string | null;
+  readonly job: JobView | null;
+}
+
+export interface DeviceSummary {
+  readonly device_id: string;
+  readonly vendor_hint: string;
+  readonly enrollment_state: string;
+  readonly hostname: string | null;
+  readonly model: string | null;
+  readonly software_version: string | null;
+  readonly ha_role: string | null;
+  readonly cluster_member_ref: string | null;
+}
+
+export function addDeviceSingle(
+  address: string,
+  vendor: Vendor,
+  credentialReferenceId: string,
+): Promise<AddDeviceSingleResult> {
+  return call("/devices/add-single", "POST", {
+    address,
+    vendor,
+    credential_reference_id: credentialReferenceId,
+  });
+}
+
+export function getDevice(deviceId: string): Promise<DeviceDetail> {
+  return call(`/devices/${encodeURIComponent(deviceId)}`, "GET");
+}
+
+export function listDevices(): Promise<{ devices: DeviceSummary[] }> {
+  return call("/devices", "GET");
+}

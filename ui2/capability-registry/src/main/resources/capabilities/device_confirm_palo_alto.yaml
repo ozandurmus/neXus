@@ -1,0 +1,23 @@
+# device_confirm_palo_alto -- the Palo Alto half of the enrollment confirm's
+# registry entry; see device_confirm_check_point.yaml's own header comment
+# for why this capability's step list is a placeholder never executed by
+# StepExecutor (execution runs through worker.confirm.ConfirmJobExecutor /
+# ConfirmCapabilityExecutor instead, over the closed four-read set).
+capability_id: device_confirm_palo_alto
+vendor: palo_alto
+platform_role_scope: pan_firewall
+maturity_state: CAP_OFFLINE
+transport:
+  kind: pan_xml_api
+  trust_rule_ref: utils.pan_xml_api_trust
+steps:
+  - kind: connect
+finally_steps:
+  - kind: disconnect
+parser_ref:
+  parser_version: UNKNOWN
+  semantics_doc_ref: "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md EC-11/EC-12"
+source_pointers:
+  - "worker.confirm.ConfirmCapabilityExecutor (the closed four-read set this capability's own execution defers to)"
+validation_status: FIXTURE_ONLY
+revalidation_plan_ref: "docs/design/DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md"
