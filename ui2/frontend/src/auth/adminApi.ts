@@ -1,12 +1,6 @@
 /**
  * 13G local identity administration: thin fetch client for
- * `/local-identities*` and the existing `/role-bindings*` endpoints. Every
- * mutating call needs the session's own CSRF token; until the parallel
- * movement (relay NXS-LOCAL-0152) extends `GET /session/status` to expose
- * one, `csrfToken()` resolves to `undefined` and the header is simply
- * omitted -- a disclosed, temporary limitation (see SESSION_CLOSE), not a
- * silent failure: the server's own GateChain still refuses the request and
- * this client surfaces that refusal exactly as the server states it.
+ * `/local-identities*` and the existing `/role-bindings*` endpoints.
  */
 
 export interface LocalIdentityView {

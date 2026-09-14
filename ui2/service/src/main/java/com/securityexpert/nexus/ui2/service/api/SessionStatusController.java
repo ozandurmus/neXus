@@ -65,10 +65,13 @@ public final class SessionStatusController {
         Map<String, Object> body = new LinkedHashMap<>();
         if (session.isEmpty()) {
             body.put("authenticated", false);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .cacheControl(org.springframework.http.CacheControl.noStore())
+                    .body(body);
         }
 
         body.put("authenticated", true);
+        body.put("csrf_token", session.get().csrfSecret());
         // NXS-LOCAL-0152 AC-3: display name, resolved role tokens, and the
         // must-change-password flag -- no credential material, no verifier,
         // no group reference, no internal identifier beyond what a local
@@ -82,7 +85,9 @@ public final class SessionStatusController {
                     .map(RoleToken::token).toList();
             body.put("role_tokens", roleTokens);
         });
-        return ResponseEntity.ok(body);
+        return ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(body);
     }
 
     private Optional<SessionRecord> activeSession(String rawCookieValue) {
