@@ -1,0 +1,128 @@
+{
+  "created_at": "2026-09-14T21:58:00Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A single new migration, V21, adds the role column with a CHECK constraint over exactly the two named values.",
+          "AC-2 Every pre-existing device row is backfilled to the gateway value and the column is not nullable afterwards.",
+          "AC-3 A device added through the existing path carries an explicit role, and a round trip through the repository returns it unchanged.",
+          "AC-4 A value outside the vocabulary is refused by the database, and a test proves it.",
+          "AC-5 The service starts against the migrated schema; if the migration writes to an audited table it sets the actor fingerprint and action id transaction-locally.",
+          "AC-6 The ui2 persistence and service test suites pass, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md -- FROZEN, Product Owner directives 2026-09-14. MS-1: a management server or MDS, and a Panorama, are devices in their own right, added through the same one add menu, holding the same device row, carrying the same enrollment and confirm path. MS-2: inventory, configuration and backup are collected from them with their own per-vendor read sets, and nothing is issued against one until its own gate entries exist. MS-3: this does not reopen collection through the management server. MS-5: until MS-2's gates exist, a management server is a device that can be discovered from and confirmed, and whose collection actions are refused with a reason naming the missing gate.",
+          "context_not_loaded": null,
+          "engineering_baseline": "ui2/persistence owns the device row and its repository; migrations live in ui2/service/src/main/resources/db/migration and the highest version present is V20.",
+          "product_baseline": "Devices are added, enrolled and confirmed today; discovery reads from a management plane but the manager itself is not a device row. Collection is gated per capability. Nothing in this movement issues a command to any device.",
+          "test_baseline": "The ui2 persistence and service test suites pass on origin/main today.",
+          "what_exists": "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceRecord.java declares the row exactly like this:\n\npublic record DeviceRecord(\n        String deviceId,\n        String vendorHint,\n        String registrationSource,\n        Instant createdAt,\n        boolean isTestTarget,\n        DeviceEnrollmentState enrollmentState,\n        boolean disabled,\n        String credentialReferenceId) {\n\nand JooqDeviceRepository names its columns in two constants and an insert:\n\n    private static final String DEVICE_COLUMNS = \"device_id, vendor_hint, registration_source, created_at, \"\n    private static final String DEVICE_SUMMARY_COLUMNS = \"device_id, vendor_hint, enrollment_state, \"\n            dsl.execute(\"insert into devices(device_id, vendor_hint, registration_source, created_at, \"\n\nso the column set is declared in more than one place and every one of them has to agree. vendor_hint already carries the vendor (check_point, palo_alto); this movement adds what the device IS, which is a different axis from who made it."
+        },
+        "context_not_loaded": [
+          "ui2/frontend/**",
+          "docs/history/**",
+          "application/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/device-carries-its-role"
+        },
+        "invariants": [
+          "Identifiers and vocabularies are opaque and closed: the role is one of exactly the two named values, enforced by the database and not only by Java.",
+          "No command, route or read set reaches a management server in this movement.",
+          "One migration, one version, no edit to an existing migration file.",
+          "A migration writing to an audited table sets its actor fingerprint and action id transaction-locally."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Let a device say what kind of device it is. Record 14I MS-1 makes a Check Point management server or MDS, and a Panorama, devices in their own right rather than merely discovery sources -- but nothing in the model distinguishes one from a gateway, so MS-5's refusal cannot even be expressed. This movement adds that distinction to the device model and nothing else; the refusal, the read sets and their command gates are separate movements that depend on it.",
+        "output_contract": [
+          "A device row that can say whether it is a gateway or the management server that governs one.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "One migration and one field carried through a named set of places; no vendor semantics and no device interaction.",
+          "tier": "bounded tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "The gradle commands run from ui2; the privacy gate runs from the repository root.",
+          "Every changed file names the clause it implements (14I MS-n).",
+          "Run only the commands named above.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE names the two role values you chose, every place the column set is declared, and whether the migration touched an audited table."
+        ],
+        "risks": [
+          "Taking a migration version another movement is already using. V21 is assigned to this movement and to nothing else; do not pick the next free number yourself.",
+          "Missing one of the places the column set is named -- there is more than one constant plus an insert plus a mapper, and a miss shows only at runtime.",
+          "Making the column nullable to avoid the backfill, which leaves the model unable to answer the question it exists to answer.",
+          "Writing to an audited table without the transaction-local settings, which crash-loops the service at rollout rather than failing in a test."
+        ],
+        "scope": {
+          "in": [
+            "One migration, numbered V21 and no other number, adding a device-role column to the devices table with a CHECK constraint over a closed vocabulary. The vocabulary is exactly two values in this movement: a gateway or enforcement device, and a management server. Name them plainly and write the names into the constraint.",
+            "Every existing row is backfilled to the gateway value, because every device enrolled so far is one. The column is not nullable after the backfill.",
+            "If the migration writes to a table whose changes are audited, it must set app.actor_fingerprint and app.action_id transaction-locally, or the service crash-loops on start. A test in this repository enforces it; read an existing migration that writes to an audited table and follow it exactly.",
+            "DeviceRecord and JooqDeviceRepository carry the new field through: the record component, both column constants, the insert, and the row mapper. Every place that names the column set must agree.",
+            "The add-device path sets the role explicitly rather than defaulting silently, so a device added from now on states what it is.",
+            "Tests: the migration applies and backfills; a round trip through the repository preserves the role; an unknown value is refused by the constraint."
+          ],
+          "out": [
+            "Any refusal behaviour. MS-5's refusal, its reason text and the gate it names are a separate movement that depends on this one.",
+            "Any read set, any command, any API route to a management server. MS-2 forbids issuing anything until its own gate entries exist, and none exist.",
+            "Any change to vendor_hint or to the enrollment states. The role is a different axis from the vendor and from the enrollment lifecycle.",
+            "Any UI change. The device workspace is not touched by this movement.",
+            "Any migration version other than V21, and any edit to an existing migration file."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew :persistence:test --console=plain"
+            ],
+            "name": "persistence_tests"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew :service:test --console=plain"
+            ],
+            "name": "service_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T21:58:00Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0187",
+  "movement": "device-carries-its-role",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceRecord.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/JooqDeviceRepository.java",
+    "ui2/service/src/main/resources/db/migration",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-14T21:58:00Z"
+}

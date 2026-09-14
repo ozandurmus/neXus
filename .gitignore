@@ -102,3 +102,10 @@ render_only_*.log
 # Claude Code per-developer local settings (GOV.PO.1: role-scoped tracked settings live in .claude/nexus-po.settings.json)
 .claude/settings.local.json
 .nexus/
+
+# A vitest run inside a linked worktree resolves the symlinked frontend
+# modules to their real path and writes its cache to node_modules/.vite at
+# the repository root. There is no root package.json and never a legitimate
+# root node_modules, so ignoring it costs nothing and stops every frontend
+# movement failing verify on an untracked cache directory.
+/node_modules/

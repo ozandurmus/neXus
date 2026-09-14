@@ -1,0 +1,176 @@
+{
+  "created_at": "2026-09-14T21:55:18Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A record whose external_participant is true, whose relay is open and whose phase is not terminal classifies as handed_over.",
+          "AC-2 The same record without the flag classifies exactly as it does today, exited_without_close, and a test asserts it.",
+          "AC-3 A terminal phase, and a closed relay, each still win over the flag.",
+          "AC-4 derive_health returns a member of ALL_HEALTH_VALUES for every input in the existing generated matrix, which now has seven members.",
+          "AC-5 A handed_over movement is never classified silent on idle time alone.",
+          "AC-6 tests/test_orchestrator_dashboard.py passes with the new tests, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_4B_A_PARTICIPANT_THE_ORCHESTRATOR_DID_NOT_SPAWN.md -- FROZEN, Product Owner approved 2026-09-15: HB-1 adds the seventh value handed_over to the closed set; HB-2 selects it only from the state record's own external_participant field and never infers it from a missing pid, so a spawned movement whose process died still reports exited_without_close, default-closed; HB-3 leaves precedence otherwise unchanged, a terminal outcome still wins and awaiting_po still comes next; HB-4 stops treating idle time as a stuck signal for such a movement.",
+          "context_not_loaded": null,
+          "engineering_baseline": "scripts/orchestrator_dashboard.py owns derive_health and the closed value set. Two movements have already run on the hybrid path, NXS-LOCAL-0183 and NXS-LOCAL-0184, and both were shown as exited while succeeding.",
+          "product_baseline": "Not a product change. The Java product, its collectors and its UI are untouched.",
+          "test_baseline": "tests/test_orchestrator_dashboard.py passes on origin/main today, run locally on 2026-09-15 before this packet was written.",
+          "what_exists": "scripts/orchestrator_dashboard.py, around line 105, declares the closed set exactly like this:\n\nHEALTH_HEALTHY = \"healthy\"\nHEALTH_SILENT = \"silent\"\nHEALTH_EXITED_WITHOUT_CLOSE = \"exited_without_close\"\nHEALTH_AWAITING_PO = \"awaiting_po\"\nHEALTH_FAILED = \"failed\"\nHEALTH_DONE = \"done\"\nALL_HEALTH_VALUES = frozenset({\n    HEALTH_HEALTHY, HEALTH_SILENT, HEALTH_EXITED_WITHOUT_CLOSE,\n    HEALTH_AWAITING_PO, HEALTH_FAILED, HEALTH_DONE,\n})\n\nand the classifier itself, around line 265, ends exactly like this:\n\n    if relay_status == \"CLOSED\" or phase in (orch.PHASE_DONE, orch.PHASE_CANCELLED):\n        return HEALTH_DONE\n    if phase == orch.PHASE_FAILED:\n        return HEALTH_FAILED\n    if next_actor == \"po\":\n        return HEALTH_AWAITING_PO\n    if not pid_alive:\n        return HEALTH_EXITED_WITHOUT_CLOSE\n    if idle_seconds is not None and idle_seconds >= stuck_after_seconds:\n        return HEALTH_SILENT\n    return HEALTH_HEALTHY\n\nA real state record written by the hybrid path carries these keys and values, among others: \"provider\": \"antigravity\", \"pid\": null, \"phase\": \"running\", \"merge_mode\": \"orchestrator\", \"last_action\": \"handed_over\", \"external_participant\": true. A record written by a dispatch carries no external_participant key at all."
+        },
+        "context_not_loaded": [
+          "ui2/**",
+          "docs/history/**",
+          "application/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/handed-over-health"
+        },
+        "invariants": [
+          "The value set stays closed and derive_health still returns exactly one member of it.",
+          "Default-closed: the new value is reachable only through the explicit field.",
+          "A spawned movement's classification is byte-for-byte what it is today."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Stop the workbench reporting a failure for a movement that was never a process. A movement handed to a participant the orchestrator cannot spawn has no pid by design, so derive_health falls through to exited_without_close and shows a successful movement as exited. GOV.ORCH.4-B adds a seventh value, handed_over, selected only from the record's own explicit flag.",
+        "output_contract": [
+          "A workbench that shows work in progress as work in progress, and a failure only when there is one.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "One pure function, one constant, and its tests, against a frozen clause that states the rule and its precedence exactly.",
+          "tier": "bounded tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Both commands run from the repository root.",
+          "Every changed function names the clause it implements (GOV.ORCH.4-B HB-n).",
+          "Run only the commands named above.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE names where in the precedence chain you placed the rule and what proves a record without the flag is unchanged."
+        ],
+        "risks": [
+          "Inferring the new state from a null pid, which would relabel a genuinely crashed dispatch as healthy work in progress -- the exact failure HB-2 forbids.",
+          "Placing the new rule before the terminal or awaiting_po rules, which would hide a finished or blocked movement.",
+          "Changing a caller's default so that a record without the flag behaves differently from today."
+        ],
+        "scope": {
+          "in": [
+            "scripts/orchestrator_dashboard.py: add HEALTH_HANDED_OVER = \"handed_over\" to the constants and to ALL_HEALTH_VALUES.",
+            "derive_health: accept the record's external_participant as an explicit argument and return handed_over for it, positioned exactly where HB-3 puts it -- after the terminal and awaiting_po rules, in place of the dead-process rule and only for a record carrying the flag. A record without the flag must reach the existing rules unchanged.",
+            "Update every caller in this file so the flag reaches derive_health from the record; a caller that has no record field passes the default, which must behave exactly as today.",
+            "tests/test_orchestrator_dashboard.py: the four cases GOV.ORCH.4-B section 4 names -- the flag returns handed_over; no flag still returns exited_without_close; a terminal phase or a closed relay still wins over the flag; and whatever the input, the return value is still one member of the closed set, now of seven."
+          ],
+          "out": [
+            "Any change to the six existing values, their spellings, or their meanings.",
+            "Any change to the stuck detector for a spawned movement, or to the usage and cost fields of GOV.ORCH.4 sections 3.1 and 3.2.",
+            "Inferring the new value from a missing pid, an absent log, a provider name, or anything other than the explicit field. HB-2 is default-closed and this is the clause the movement exists to honour.",
+            "Any change to scripts/orchestrator.py, to the state record writer, or to any document under docs/design/.",
+            "HB-4's lane-commit display. Not showing an idle time is enough here; rendering the lane's last commit is a separate movement."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator_dashboard.py",
+              "-q"
+            ],
+            "name": "dashboard_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T21:55:18Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/orchestrator_dashboard.py",
+          "tests/test_orchestrator_dashboard.py"
+        ],
+        "completed": [
+          "scripts/orchestrator_dashboard.py",
+          "tests/test_orchestrator_dashboard.py"
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/handed-over-health",
+          "ci": "n/a",
+          "head_sha": "n/a",
+          "merge_commit": null,
+          "merge_decision": "NOT_APPLICABLE",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "n/a",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "n/a",
+          "status": "done"
+        },
+        "preserved": [
+          "Default behaviour for records without the flag remains exited_without_close"
+        ],
+        "recommended_reasoning": {
+          "reason": "deterministic implementation",
+          "tier": "bounded tier"
+        },
+        "state_updates": [
+          "Placed the handed_over rule after terminal and awaiting_po rules, exactly where HB-3 dictates.",
+          "A record without the flag returns exited_without_close for a dead pid because external_participant defaults to False in derive_health, allowing it to fall through to the not pid_alive check, which a test asserts."
+        ],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "pytest tests/test_orchestrator_dashboard.py passed",
+          "diff_check": "n/a",
+          "full_regression": "NOT_RUN",
+          "privacy": "scripts/repository_privacy_check.py passed",
+          "real_environment": "NOT_RUN",
+          "state_consistency": "n/a",
+          "targeted": "pytest tests/test_orchestrator_dashboard.py passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T21:57:48Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0185",
+  "movement": "handed-over-health",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_ORCH_4B_A_PARTICIPANT_THE_ORCHESTRATOR_DID_NOT_SPAWN.md",
+    "docs/design/GOV_ORCH_4_WORKBENCH_OBSERVABILITY_TOKENS_AND_STUCK_DETECTION.md",
+    "scripts/orchestrator_dashboard.py",
+    "tests/test_orchestrator_dashboard.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T21:57:48Z"
+}
