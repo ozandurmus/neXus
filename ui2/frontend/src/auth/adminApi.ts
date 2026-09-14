@@ -68,6 +68,20 @@ export function listLocalIdentities(): Promise<{ identities: LocalIdentityView[]
   return call("/local-identities", "GET");
 }
 
+export interface BackupArtefact {
+  readonly artefact_id: string;
+  readonly device_id: string;
+  readonly collected_at: string;
+  readonly size_bytes: number;
+  readonly digest_prefix: string;
+  readonly validation_level: string;
+  readonly deviation_state: "unchanged" | "changed" | "first" | null;
+}
+
+export function listDeviceBackups(deviceId: string): Promise<{ backups: BackupArtefact[] }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/backups`, "GET");
+}
+
 export function createLocalIdentity(localIdentityName: string, initialPassword: string): Promise<LocalIdentityView> {
   return call("/local-identities", "POST", {
     local_identity_name: localIdentityName,
