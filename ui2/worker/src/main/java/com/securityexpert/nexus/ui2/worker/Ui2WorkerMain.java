@@ -18,7 +18,9 @@ import com.securityexpert.nexus.ui2.persistence.credential.CredentialStoreCompos
 import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRunRepository;
 import com.securityexpert.nexus.ui2.persistence.discovery.JooqDiscoveryRunRepository;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRepository;
 import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
+import com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupArtefactManifestRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.DeviceConfigurationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.JooqConfigurationNotificationRepository;
@@ -31,6 +33,7 @@ import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobStepAttemptDao;
 import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
+import com.securityexpert.nexus.ui2.platform.HostnameFingerprint;
 import com.securityexpert.nexus.ui2.platform.SecretFile;
 import com.securityexpert.nexus.ui2.worker.confirm.ConfirmCapabilities;
 import com.securityexpert.nexus.ui2.worker.confirm.ConfirmCapabilityExecutor;
@@ -90,6 +93,8 @@ public final class Ui2WorkerMain {
         String artefactStoreKeyBase64 =
                 SecretFile.readRequired(Path.of(requireEnv("UI2_ARTEFACT_STORE_KEY_FILE")), "artefact_store_key");
         Path artefactStoreRoot = Path.of(System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "/var/lib/ui2/artefacts"));
+        String hostnameFingerprintKeyBase64 = SecretFile.readRequired(
+                Path.of(requireEnv("UI2_HOSTNAME_FINGERPRINT_KEY_FILE")), "hostname_fingerprint_key");
         String checkPointTrustRuleRef = System.getenv().getOrDefault("UI2_CP_TRUST_RULE_REF", "utils.cp_ssh_trust");
         String paloAltoTrustRuleRef =
                 System.getenv().getOrDefault("UI2_PAN_TRUST_RULE_REF", "utils.pan_xml_api_trust");
@@ -160,13 +165,17 @@ public final class Ui2WorkerMain {
                 new FileArtefactStore(artefactStoreRoot, ArtefactStoreCipher.fromBase64Key(artefactStoreKeyBase64));
         DeviceConfigurationRepository deviceConfigurationRepository =
                 new JooqDeviceConfigurationRepository(transactionBoundary);
+        BackupArtefactManifestRepository backupArtefactManifestRepository =
+                new JooqBackupArtefactManifestRepository(transactionBoundary);
+        HostnameFingerprint hostnameFingerprint = HostnameFingerprint.fromBase64Key(hostnameFingerprintKeyBase64);
         JooqConfigurationNotificationRepository configurationNotificationRepository =
                 new JooqConfigurationNotificationRepository(transactionBoundary);
         ConfigurationCapabilityExecutor configurationCapabilityExecutor = new ConfigurationCapabilityExecutor(
                 compositeTransport, panCredentialResolver, artefactStore, PanoramaCrossCheckPort.NONE);
         ConfigurationJobExecutor configurationJobExecutor = new ConfigurationJobExecutor(leaseRepository,
                 attemptRepository, deviceEnrollmentReadPort, deviceRepository, deviceConfigurationRepository,
-                configurationNotificationRepository, configurationCapabilityExecutor);
+                configurationNotificationRepository, configurationCapabilityExecutor, backupArtefactManifestRepository,
+                hostnameFingerprint, artefactStoreRoot.toString());
 
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
         ManagementPlaneEnumerationAdapter checkPointDiscoveryAdapter =

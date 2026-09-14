@@ -236,7 +236,7 @@ public final class ConfigurationCapabilityExecutor {
             String jobId, String vendor) {
         return new ConfigurationArtefactRecord(metadata.ref().value(), deviceId, jobId, vendor,
                 metadata.plaintextSha256(), metadata.plaintextBytes(), metadata.ciphertextSha256(),
-                metadata.ciphertextBytes(), metadata.compression(), metadata.keyId());
+                metadata.ciphertextBytes(), metadata.compression(), metadata.keyId(), metadata.wrappedDataKey());
     }
 
     private static void closeQuietly(ArtefactStore.ArtefactHandle handle) {

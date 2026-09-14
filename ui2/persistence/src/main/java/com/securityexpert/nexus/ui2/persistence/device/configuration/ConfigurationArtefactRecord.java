@@ -9,6 +9,12 @@ package com.securityexpert.nexus.ui2.persistence.device.configuration;
  * carries. Passed to {@link DeviceConfigurationRepository#recordRun}
  * alongside the run so both rows write in one transaction (the run row's
  * foreign key requires the artefact row to exist first).
+ *
+ * <p>{@code wrappedDataKey} (NXS-LOCAL-0170, BK-15) is carried here even
+ * though {@code configuration_artefact} itself does not persist it -- the
+ * configuration job executor uses it to also record a {@code
+ * backup_artefact} manifest row (BK-16) for the same artefact, without a
+ * second read of {@code ArtefactStore.ArtefactMetadata}.</p>
  */
 public record ConfigurationArtefactRecord(
         String artefactRef,
@@ -20,5 +26,6 @@ public record ConfigurationArtefactRecord(
         String ciphertextSha256,
         long ciphertextBytes,
         String compression,
-        String keyId) {
+        String keyId,
+        byte[] wrappedDataKey) {
 }
