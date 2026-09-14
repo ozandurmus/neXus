@@ -19,21 +19,23 @@ and in what order.
 
 ## 2. Fixed choices (do not re-decide these)
 
-- **Provider default: Codex.** Since 2026-09-14 the Product Owner's Claude
-  credit is metered and their Codex use is not, so **every engineering
-  dispatch goes to Codex unless the Product Owner says otherwise** — tier
-  per the work (Terra for bounded work, Sol for heavy or novel work; Luna
-  is not used). Claude stays the Product Owner assistant's own model and
-  the fallback when a Codex dispatch fails twice for a reason that is not
-  a defect in the packet. "This packet is risky" is **not** a reason to
-  switch providers on your own judgment: say so and let the Product Owner
-  choose. Drifting back to Claude silently happened once, on movement
-  `NXS-LOCAL-0175`, and cost credit the Product Owner had asked to save.
+- **The provider default is fixed and is not yours to re-decide.**
+  `docs/reference/MODEL_TIER_MAP.md` names the default provider, the
+  fallback, and the model for each tier; `docs/reference/
+  PROVIDER_OPERATING_NOTES.md` says why the default is what it is and how
+  each provider behaves when dispatched. **Every engineering dispatch goes
+  to the default provider unless the Product Owner says otherwise**, in
+  writing, in the packet — tier per the work. The fallback provider is used
+  only after the default has failed twice for a reason that is not a defect
+  in the packet. "This packet is risky" is **not** a reason to switch on
+  your own judgment: say so and let the Product Owner choose. Silent drift
+  to the metered provider happened once, on movement `NXS-LOCAL-0175`, and
+  cost credit the Product Owner had asked to save.
 
 | Item | Value |
 |---|---|
-| Worker provider | `codex` by default (see the bullet above); `claude` only on the stated exception, in writing, in the packet |
-| Worker model / effort | The lightest tier that fits the work, stated in the packet AND on the `run` command line, never the CLI default. Codex: `gpt-5.6-terra` for bounded work, `gpt-5.6-sol` for heavy or novel work, never Luna. Claude: `claude-sonnet-5`. Effort `medium` unless the packet argues for `high` |
+| Worker provider | The default named in `docs/reference/MODEL_TIER_MAP.md` (see the bullet above); the fallback only on the stated exception, in writing, in the packet |
+| Worker model / effort | The lightest tier that fits the work, stated in the packet AND on the `run` command line, never the CLI default. The tier-to-model mapping is `docs/reference/MODEL_TIER_MAP.md`: bounded work takes the bounded tier, heavy or novel work the heavy tier. Effort `medium` unless the packet argues for `high` |
 | Base ref | `origin/main` at its current HEAD, fetched first |
 | Branch lane | `feature/<movement-slug>` |
 | Contract status a worker may implement | FROZEN only. A DRAFT contract is a design input, never a dispatch authority |
@@ -65,7 +67,7 @@ git fetch origin main
 py scripts/gov_session_transfer.py validate <packet>          # must print valid: true
 py scripts/local_relay.py create --role po --start <packet>
 py scripts/orchestrator.py run --movement NXS-LOCAL-NNNN \
-    --provider codex --model gpt-5.6-terra --effort medium \
+    --provider <default> --model <tier model> --effort medium \
     --timeout 5400 --heartbeat-timeout 900                    # foreground; wait for it
 ```
 
@@ -133,17 +135,20 @@ A "no" to any of these is a stop, not a workaround.
   what six packets cost and is harder to review (movement `NXS-LOCAL-0165`,
   $21, is the example). After every dispatch closes, read `usage`, render
   the ledger (`GOV.ORCH.13`, `project/DISPATCH_LEDGER.md`) and fill that
-  row's assessment cell. A Codex figure is an estimate from the requested
-  model, marked with a trailing asterisk, and is a comparable — never
-  billed spend.
+  row's assessment cell. A subscription-billed provider's figure is an
+  estimate from the requested model, marked with a trailing asterisk, and
+  is a comparable — never billed spend
+  (`docs/reference/PROVIDER_OPERATING_NOTES.md`).
 
-- **Codex cannot always commit.** Its sandbox is frequently refused
-  `index.lock` in a linked worktree, so a movement finishes green and
-  uncommitted and the orchestrator records it `failed`. Before concluding
-  anything, read `.nexus/engineer_last_message.txt` and `git status` in the
-  worktree: if the work is there, build it, run the packet's own validation,
-  then commit, push and open the PR from the Product Owner side, saying so
-  in the PR body. Do not re-dispatch work that already exists.
+- **A worker can finish green and uncommitted.** The default provider's
+  sandbox is frequently refused `index.lock` in a linked worktree, so the
+  movement finishes and the orchestrator still records it `failed`. Before
+  concluding anything, read `.nexus/engineer_last_message.txt` and
+  `git status` in the worktree: if the work is there, build it, run the
+  packet's own validation, then commit, push and open the PR from the
+  Product Owner side, saying so in the PR body. Do not re-dispatch work
+  that already exists. Per-provider detail:
+  `docs/reference/PROVIDER_OPERATING_NOTES.md`.
 
 - **The relay file's internal `id` must equal its movement.** The create
   tool assigns its own id; renaming the file does not change it, and the
