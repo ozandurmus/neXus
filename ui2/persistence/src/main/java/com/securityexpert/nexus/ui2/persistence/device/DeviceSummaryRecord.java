@@ -1,4 +1,5 @@
 package com.securityexpert.nexus.ui2.persistence.device;
+// 14I MS-1
 
 import java.util.Optional;
 
@@ -11,6 +12,7 @@ import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
  */
 public record DeviceSummaryRecord(
         String deviceId,
+        String role,
         String vendorHint,
         DeviceEnrollmentState enrollmentState,
         Optional<String> observedHostname,

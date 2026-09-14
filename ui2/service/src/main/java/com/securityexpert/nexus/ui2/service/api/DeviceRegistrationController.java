@@ -1,4 +1,5 @@
 package com.securityexpert.nexus.ui2.service.api;
+// 14I MS-1
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +39,7 @@ public final class DeviceRegistrationController {
 
     public record AddSingleRequest(
             @JsonProperty("address") String address,
+            @JsonProperty("role") String role,
             @JsonProperty("vendor") String vendor,
             @JsonProperty("credential_reference_id") String credentialReferenceId) {
     }
@@ -55,7 +57,7 @@ public final class DeviceRegistrationController {
     public ResponseEntity<Map<String, Object>> addSingle(@RequestBody AddSingleRequest request,
             HttpServletRequest servletRequest) {
         String actorFingerprint = actingUser(servletRequest);
-        DeviceAddSingleService.Outcome outcome = deviceAddSingleService.addSingle(actorFingerprint, request.address(),
+        DeviceAddSingleService.Outcome outcome = deviceAddSingleService.addSingle(actorFingerprint, request.role(), request.address(),
                 request.vendor(), request.credentialReferenceId());
         return switch (outcome) {
             case DeviceAddSingleService.Outcome.Admitted admitted -> {
@@ -111,6 +113,7 @@ public final class DeviceRegistrationController {
             Optional<JobRow> job) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("device_id", device.deviceId());
+        body.put("role", device.role());
         body.put("vendor_hint", device.vendorHint());
         body.put("enrollment_state", device.enrollmentState().name());
         body.put("disabled", device.disabled());
@@ -149,6 +152,7 @@ public final class DeviceRegistrationController {
     private static Map<String, Object> toSummaryBody(DeviceSummaryRecord summary) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("device_id", summary.deviceId());
+        body.put("role", summary.role());
         body.put("vendor_hint", summary.vendorHint());
         body.put("enrollment_state", summary.enrollmentState().name());
         body.put("hostname", summary.observedHostname().orElse(null));

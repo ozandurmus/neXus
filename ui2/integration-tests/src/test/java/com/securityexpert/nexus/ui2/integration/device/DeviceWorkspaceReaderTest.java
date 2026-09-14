@@ -70,7 +70,7 @@ class DeviceWorkspaceReaderTest {
         String deviceId = DeviceWorkspaceTestRows.opaqueId("dev");
         String endpointId = DeviceWorkspaceTestRows.opaqueId("ep");
         deviceRepository.registerDraft(
-                new DeviceDraft(deviceId, "harness-vendor", "manual_registration", true, credentialReferenceId,
+                new DeviceDraft(deviceId, "gateway", "harness-vendor", "manual_registration", true, credentialReferenceId,
                         endpointId, "ssh_exec", "opaque-address-ref"),
                 Ui2Rows.ACTOR, Ui2Rows.ACTION);
 
@@ -94,7 +94,7 @@ class DeviceWorkspaceReaderTest {
         String deviceId = DeviceWorkspaceTestRows.opaqueId("dev");
         String endpointId = DeviceWorkspaceTestRows.opaqueId("ep");
         deviceRepository.registerDraft(
-                new DeviceDraft(deviceId, "harness-vendor", "manual_registration", true, credentialReferenceId,
+                new DeviceDraft(deviceId, "gateway", "harness-vendor", "manual_registration", true, credentialReferenceId,
                         endpointId, "ssh_exec", "opaque-address-ref"),
                 Ui2Rows.ACTOR, Ui2Rows.ACTION);
         try (Connection app = fixture.appConnection()) {
@@ -115,13 +115,13 @@ class DeviceWorkspaceReaderTest {
     @Test
     void listDevicesOrdersNewestFirst() throws InterruptedException {
         String first = DeviceWorkspaceTestRows.opaqueId("dev-a");
-        deviceRepository.registerDraft(new DeviceDraft(first, "v", "manual_registration", true,
-                credentialReferenceId, DeviceWorkspaceTestRows.opaqueId("ep"), "ssh_exec", "addr-a"),
+        deviceRepository.registerDraft(new DeviceDraft(first, "gateway", "v", "manual_registration", true,
+                credentialReferenceId, DeviceWorkspaceTestRows.opaqueId("ep1"), "ssh_exec", "addr"),
                 Ui2Rows.ACTOR, Ui2Rows.ACTION);
         Thread.sleep(5);
         String second = DeviceWorkspaceTestRows.opaqueId("dev-b");
-        deviceRepository.registerDraft(new DeviceDraft(second, "v", "manual_registration", true,
-                credentialReferenceId, DeviceWorkspaceTestRows.opaqueId("ep"), "ssh_exec", "addr-b"),
+        deviceRepository.registerDraft(new DeviceDraft(second, "gateway", "v", "manual_registration", true,
+                credentialReferenceId, DeviceWorkspaceTestRows.opaqueId("ep2"), "ssh_exec", "addr"),
                 Ui2Rows.ACTOR, Ui2Rows.ACTION);
 
         List<DeviceListEntry> entries = reader.listDevices();
@@ -134,7 +134,7 @@ class DeviceWorkspaceReaderTest {
     void disabledEnrolledDeviceRendersBothFactsIndependently() {
         String deviceId = DeviceWorkspaceTestRows.opaqueId("dev");
         String endpointId = DeviceWorkspaceTestRows.opaqueId("ep");
-        deviceRepository.registerDraft(new DeviceDraft(deviceId, "v", "manual_registration", true,
+        deviceRepository.registerDraft(new DeviceDraft(deviceId, "gateway", "v", "manual_registration", true,
                 credentialReferenceId, endpointId, "ssh_exec", "addr"), Ui2Rows.ACTOR, Ui2Rows.ACTION);
         assertTrue(deviceRepository.transitionEnrollmentState(deviceId, DeviceEnrollmentState.DRAFT,
                 DeviceEnrollmentState.ENROLLED, Ui2Rows.ACTOR, Ui2Rows.ACTION));
@@ -149,7 +149,7 @@ class DeviceWorkspaceReaderTest {
     @Test
     void anOutOfVocabularyEnrollmentStateFailsClosedToNotEvaluable() throws SQLException {
         String deviceId = DeviceWorkspaceTestRows.opaqueId("dev");
-        deviceRepository.registerDraft(new DeviceDraft(deviceId, "v", "manual_registration", true,
+        deviceRepository.registerDraft(new DeviceDraft(deviceId, "gateway", "v", "manual_registration", true,
                 credentialReferenceId, DeviceWorkspaceTestRows.opaqueId("ep"), "ssh_exec", "addr"),
                 Ui2Rows.ACTOR, Ui2Rows.ACTION);
         // Dropping the CHECK constraint is DDL: only ui2_migrate (the

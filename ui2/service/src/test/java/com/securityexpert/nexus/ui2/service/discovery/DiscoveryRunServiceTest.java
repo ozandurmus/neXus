@@ -209,7 +209,7 @@ class DiscoveryRunServiceTest {
         @Override
         public String registerDraft(DeviceDraft draft, String actorFingerprint, String actionId) {
             registered.add(draft);
-            byId.put(draft.deviceId(), new DeviceRecord(draft.deviceId(), draft.vendorHint(),
+            byId.put(draft.deviceId(), new DeviceRecord(draft.deviceId(), "gateway", draft.vendorHint(),
                     draft.registrationSource(), Instant.now(), draft.isTestTarget(), DeviceEnrollmentState.DRAFT,
                     false, draft.credentialReferenceId()));
             return draft.deviceId();

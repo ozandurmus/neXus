@@ -1,4 +1,5 @@
 package com.securityexpert.nexus.ui2.persistence.device;
+// 14I MS-1
 
 import java.util.Objects;
 import java.util.Optional;
@@ -28,6 +29,7 @@ import java.util.Optional;
  */
 public record DeviceDraft(
         String deviceId,
+        String role,
         String vendorHint,
         String registrationSource,
         boolean isTestTarget,
@@ -41,6 +43,7 @@ public record DeviceDraft(
 
     public DeviceDraft {
         Objects.requireNonNull(deviceId, "deviceId");
+        Objects.requireNonNull(role, "role");
         Objects.requireNonNull(vendorHint, "vendorHint");
         Objects.requireNonNull(registrationSource, "registrationSource");
         Objects.requireNonNull(credentialReferenceId, "credentialReferenceId");
@@ -53,15 +56,15 @@ public record DeviceDraft(
     }
 
     /** The manual-registration shape (B1-4b §4): no target modifier, no discovery match key -- every existing call site's own arity. */
-    public DeviceDraft(String deviceId, String vendorHint, String registrationSource, boolean isTestTarget,
+    public DeviceDraft(String deviceId, String role, String vendorHint, String registrationSource, boolean isTestTarget,
             String credentialReferenceId, String endpointId, String transportKind, String addressRef) {
-        this(deviceId, vendorHint, registrationSource, isTestTarget, credentialReferenceId, endpointId,
+        this(deviceId, role, vendorHint, registrationSource, isTestTarget, credentialReferenceId, endpointId,
                 transportKind, addressRef, Optional.empty(), Optional.empty(), Optional.empty());
     }
 
     @Override
     public String toString() {
-        return "DeviceDraft[deviceId=" + deviceId + ", vendorHint=" + vendorHint
+        return "DeviceDraft[deviceId=" + deviceId + ", role=" + role + ", vendorHint=" + vendorHint
                 + ", registrationSource=" + registrationSource + ", isTestTarget=" + isTestTarget
                 + ", credentialReferenceId=" + credentialReferenceId + ", endpointId=" + endpointId
                 + ", transportKind=" + transportKind + ", addressRef=<redacted>, clusterMemberRef=" + clusterMemberRef

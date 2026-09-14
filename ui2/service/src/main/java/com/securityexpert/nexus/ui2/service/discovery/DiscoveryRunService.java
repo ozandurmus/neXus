@@ -1,4 +1,5 @@
 package com.securityexpert.nexus.ui2.service.discovery;
+// 14I MS-1
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -304,7 +305,7 @@ public final class DiscoveryRunService {
         Optional<String> clusterMemberRef = isVirtualSystem ? Optional.empty() : candidate.clusterReference();
 
         DeviceAddSingleService.Outcome outcome = deviceAddSingleService.addFromDiscoveryImport(actorFingerprint,
-                addressRef.get(), candidate.vendor(), credentialReferenceId, clusterMemberRef, virtualSystemRef,
+                "gateway", addressRef.get(), candidate.vendor(), credentialReferenceId, clusterMemberRef, virtualSystemRef,
                 Optional.of(matchKey), ActionRegistry.DISCOVERY_RUN_IMPORT);
         return switch (outcome) {
             case DeviceAddSingleService.Outcome.Admitted admitted -> {

@@ -106,7 +106,7 @@ class DeviceAddSingleServiceTest {
         @Override
         public String registerDraft(DeviceDraft draft, String actorFingerprint, String actionId) {
             registered.add(draft);
-            byId.put(draft.deviceId(), new DeviceRecord(draft.deviceId(), draft.vendorHint(),
+            byId.put(draft.deviceId(), new DeviceRecord(draft.deviceId(), "gateway", draft.vendorHint(),
                     draft.registrationSource(), Instant.now(), draft.isTestTarget(), DeviceEnrollmentState.DRAFT,
                     false, draft.credentialReferenceId()));
             return draft.deviceId();
@@ -216,7 +216,7 @@ class DeviceAddSingleServiceTest {
         DeviceAddSingleService service =
                 new DeviceAddSingleService(new DirectTransactionBoundary(), registrationService, jobAdmissionService);
 
-        DeviceAddSingleService.Outcome outcome = service.addSingle(ACTOR, ADDRESS, "check_point", CREDENTIAL_REF);
+        DeviceAddSingleService.Outcome outcome = service.addSingle(ACTOR, "gateway", ADDRESS, "check_point", CREDENTIAL_REF);
 
         assertTrue(outcome instanceof DeviceAddSingleService.Outcome.Admitted, "expected Admitted, got " + outcome);
         DeviceAddSingleService.Outcome.Admitted admitted = (DeviceAddSingleService.Outcome.Admitted) outcome;
@@ -235,7 +235,7 @@ class DeviceAddSingleServiceTest {
         DeviceAddSingleService service =
                 new DeviceAddSingleService(new DirectTransactionBoundary(), registrationService, jobAdmissionService);
 
-        DeviceAddSingleService.Outcome outcome = service.addSingle(ACTOR, ADDRESS, "palo_alto", CREDENTIAL_REF);
+        DeviceAddSingleService.Outcome outcome = service.addSingle(ACTOR, "gateway", ADDRESS, "palo_alto", CREDENTIAL_REF);
 
         assertTrue(outcome instanceof DeviceAddSingleService.Outcome.Admitted, "expected Admitted, got " + outcome);
         assertEquals(1, devices.registered.size());
@@ -255,7 +255,7 @@ class DeviceAddSingleServiceTest {
         DeviceAddSingleService service =
                 new DeviceAddSingleService(new DirectTransactionBoundary(), registrationService, jobAdmissionService);
 
-        DeviceAddSingleService.Outcome outcome = service.addSingle(ACTOR, ADDRESS, "cisco", CREDENTIAL_REF);
+        DeviceAddSingleService.Outcome outcome = service.addSingle(ACTOR, "gateway", ADDRESS, "cisco", CREDENTIAL_REF);
 
         assertTrue(outcome instanceof DeviceAddSingleService.Outcome.ValidationFailed,
                 "expected ValidationFailed, got " + outcome);
@@ -280,7 +280,7 @@ class DeviceAddSingleServiceTest {
         DeviceAddSingleService service = new DeviceAddSingleService(new RollbackAwareTransactionBoundary(devices),
                 registrationService, jobAdmissionService);
 
-        DeviceAddSingleService.Outcome outcome = service.addSingle(ACTOR, ADDRESS, "check_point", CREDENTIAL_REF);
+        DeviceAddSingleService.Outcome outcome = service.addSingle(ACTOR, "gateway", ADDRESS, "check_point", CREDENTIAL_REF);
 
         assertTrue(outcome instanceof DeviceAddSingleService.Outcome.AdmissionRefused,
                 "expected AdmissionRefused, got " + outcome);

@@ -133,7 +133,7 @@ class InventoryCollectServiceTest {
     }
 
     private static DeviceRecord enrolledDevice(String deviceId, String vendorHint) {
-        return new DeviceRecord(deviceId, vendorHint, "manual_registration", Instant.now(), false,
+        return new DeviceRecord(deviceId, "gateway", vendorHint, "manual_registration", Instant.now(), false,
                 DeviceEnrollmentState.ENROLLED, false, "cred-ref-1");
     }
 
@@ -185,7 +185,7 @@ class InventoryCollectServiceTest {
     @Test
     void aDraftDeviceIsRefused() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
-        devices.byId.put("device-1", new DeviceRecord("device-1", "check_point", "manual_registration", Instant.now(),
+        devices.byId.put("device-1", new DeviceRecord("device-1", "gateway", "check_point", "manual_registration", Instant.now(),
                 false, DeviceEnrollmentState.DRAFT, false, "cred-ref-1"));
         InventoryCollectService service = serviceFor(devices);
 

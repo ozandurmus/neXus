@@ -1,4 +1,5 @@
 package com.securityexpert.nexus.ui2.service.device;
+// 14I MS-1
 
 import java.util.Optional;
 import java.util.Set;
@@ -60,9 +61,9 @@ public final class DeviceRegistrationService {
      *                                     actor fingerprint (contract §4
      *                                     "Audited")
      */
-    public Outcome register(String registeringActorFingerprint, String vendorHint, String transportKind,
+    public Outcome register(String registeringActorFingerprint, String role, String vendorHint, String transportKind,
             String addressRef, String credentialReferenceId, boolean isTestTarget) {
-        return register(registeringActorFingerprint, vendorHint, transportKind, addressRef, credentialReferenceId,
+        return register(registeringActorFingerprint, role, vendorHint, transportKind, addressRef, credentialReferenceId,
                 isTestTarget, "manual_registration", Optional.empty(), Optional.empty(), Optional.empty(),
                 ActionRegistry.DEVICE_REGISTER);
     }
@@ -80,10 +81,15 @@ public final class DeviceRegistrationService {
      * {@link com.securityexpert.nexus.ui2.persistence.device.DeviceDraft}'s
      * own field javadoc).
      */
-    public Outcome register(String registeringActorFingerprint, String vendorHint, String transportKind,
+    public static final String REASON_ROLE_INVALID = "role_invalid";
+
+    public Outcome register(String registeringActorFingerprint, String role, String vendorHint, String transportKind,
             String addressRef, String credentialReferenceId, boolean isTestTarget, String registrationSource,
             Optional<String> clusterMemberRef, Optional<String> virtualSystemRef, Optional<String> discoveryMatchKey,
             String actionId) {
+        if (role == null || (!role.equals("gateway") && !role.equals("management_server"))) {
+            return new Outcome.ValidationFailed(REASON_ROLE_INVALID);
+        }
         if (vendorHint == null || vendorHint.isBlank()) {
             return new Outcome.ValidationFailed(REASON_VENDOR_HINT_INVALID);
         }
@@ -102,7 +108,7 @@ public final class DeviceRegistrationService {
         String deviceId = OpaqueId.random().value();
         String endpointId = OpaqueId.random().value();
 
-        DeviceDraft draft = new DeviceDraft(deviceId, vendorHint, registrationSource, isTestTarget,
+        DeviceDraft draft = new DeviceDraft(deviceId, role, vendorHint, registrationSource, isTestTarget,
                 credentialReferenceId, endpointId, transportKind, addressRef, clusterMemberRef, virtualSystemRef,
                 discoveryMatchKey);
         deviceRepository.registerDraft(draft, registeringActorFingerprint, actionId);

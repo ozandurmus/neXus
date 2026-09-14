@@ -133,8 +133,8 @@ class DeviceRegistrationAuditRowTest {
     }
 
     private static DeviceDraft draft(String deviceId, String endpointId) {
-        return new DeviceDraft(deviceId, "harness-vendor", "manual", true, credentialReferenceId,
-                endpointId, "ssh_exec", "opaque-address-ref");
+        return new DeviceDraft(deviceId, "gateway", "harness-vendor", "manual", true, credentialReferenceId,
+                endpointId, "test_transport", "address-1");
     }
 
     /** {@code table_name/row_pk} of every audit row carrying this actor/action pair, in write order. */

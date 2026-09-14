@@ -127,7 +127,7 @@ class InventoryControllerTest {
     }
 
     private static DeviceRecord device(String deviceId) {
-        return new DeviceRecord(deviceId, "check_point", "manual_registration", Instant.now(), false,
+        return new DeviceRecord(deviceId, "gateway", "check_point", "manual_registration", Instant.now(), false,
                 DeviceEnrollmentState.ENROLLED, false, "cred-ref-1");
     }
 

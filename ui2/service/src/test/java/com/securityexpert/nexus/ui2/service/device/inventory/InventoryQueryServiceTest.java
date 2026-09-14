@@ -117,7 +117,7 @@ class InventoryQueryServiceTest {
     }
 
     private static DeviceRecord device(String deviceId) {
-        return new DeviceRecord(deviceId, "check_point", "manual_registration", Instant.now(), false,
+        return new DeviceRecord(deviceId, "gateway", "check_point", "manual_registration", Instant.now(), false,
                 DeviceEnrollmentState.ENROLLED, false, "cred-ref-1");
     }
 
@@ -179,11 +179,11 @@ class InventoryQueryServiceTest {
     void clusterInventoryMergesEveryMembersLatestRun() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.summaries = List.of(
-                new DeviceSummaryRecord("dev-a", "check_point", DeviceEnrollmentState.ENROLLED, Optional.of("member-a"),
+                new DeviceSummaryRecord("dev-a", "gateway", "check_point", DeviceEnrollmentState.ENROLLED, Optional.of("member-a"),
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.of("cluster-1")),
-                new DeviceSummaryRecord("dev-b", "check_point", DeviceEnrollmentState.ENROLLED, Optional.of("member-b"),
+                new DeviceSummaryRecord("dev-b", "gateway", "check_point", DeviceEnrollmentState.ENROLLED, Optional.of("member-b"),
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.of("cluster-1")),
-                new DeviceSummaryRecord("dev-c", "check_point", DeviceEnrollmentState.ENROLLED, Optional.of("other"),
+                new DeviceSummaryRecord("dev-c", "gateway", "check_point", DeviceEnrollmentState.ENROLLED, Optional.of("other"),
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
         FakeDeviceInventoryRepository inventoryRepository = new FakeDeviceInventoryRepository();
         InventoryContext context = new InventoryContext(InventoryContext.PHYSICAL, List.of(), List.of());

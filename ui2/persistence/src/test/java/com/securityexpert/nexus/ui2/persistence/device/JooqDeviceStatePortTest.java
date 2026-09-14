@@ -58,7 +58,7 @@ class JooqDeviceStatePortTest {
             transitionCalls++;
             if (nextTransitionSucceeds) {
                 DeviceRecord existing = byId.get(deviceId);
-                byId.put(deviceId, new DeviceRecord(existing.deviceId(), existing.vendorHint(),
+                byId.put(deviceId, new DeviceRecord(existing.deviceId(), existing.role(), existing.vendorHint(),
                         existing.registrationSource(), existing.createdAt(), existing.isTestTarget(), toState,
                         existing.disabled(), existing.credentialReferenceId()));
             }
@@ -93,7 +93,7 @@ class JooqDeviceStatePortTest {
     }
 
     private static DeviceRecord deviceWith(String deviceId, DeviceEnrollmentState state) {
-        return new DeviceRecord(deviceId, "vendor-hint-synthetic", "manual_registration", Instant.now(), false,
+        return new DeviceRecord(deviceId, "gateway", "vendor-hint-synthetic", "manual_registration", Instant.now(), false,
                 state, false, "cred-ref-synthetic");
     }
 

@@ -77,9 +77,8 @@ class DeviceWorkspaceProjectionTableGateTest {
     @Test
     void readWorkspaceIssuesNoSqlNamingAProjectionOrCollectionTable() {
         String deviceId = DeviceWorkspaceTestRows.opaqueId("dev-gate");
-        deviceRepository.registerDraft(new DeviceDraft(deviceId, "v", "manual_registration", true,
-                        credentialReferenceId, DeviceWorkspaceTestRows.opaqueId("ep"), "ssh_exec", "addr"),
-                Ui2Rows.ACTOR, Ui2Rows.ACTION);
+        deviceRepository.registerDraft(new DeviceDraft(deviceId, "gateway", "v", "manual_registration", true,
+                "cred-ref", "endpoint-id", "test_transport", "192.168.1.1"), "test_actor", "test_action");
 
         CAPTURED_SQL.clear();
         DeviceWorkspaceReader reader = new DeviceWorkspaceReader(sqlCapturingDataSource(fixture.appDataSource()));
