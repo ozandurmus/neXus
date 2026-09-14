@@ -22,6 +22,11 @@ ui2:
     migrate-user-file: ${UI2_DB_MIGRATE_USER_FILE:/run/secrets/ui2_db_migrate_user}
     migrate-password-file: ${UI2_DB_MIGRATE_PASSWORD_FILE:/run/secrets/ui2_db_migrate_password}
     migration-location: classpath:db/migration
+  local-auth:
+    # Development default: nothing forces a password change. Turn on for a
+    # production posture; PO directive 2026-09-14 (hardening is optional and
+    # configurable, never a development-time obligation).
+    enforce-password-change-on-first-login: ${UI2_LOCAL_AUTH_ENFORCE_PASSWORD_CHANGE_ON_FIRST_LOGIN:false}
   role-binding:
     # C3 section 4.2's role_bindings.group_reference_encrypted envelope key
     # (secrets_metadata purpose 'role_binding_group_ref_key'): a base64
