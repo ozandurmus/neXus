@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.jobs.admission.ConfirmCapabilityIds;
+import com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.lease.ClaimedJob;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
@@ -15,6 +16,8 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
+import com.securityexpert.nexus.ui2.worker.inventory.InventoryJobExecutor;
+import com.securityexpert.nexus.ui2.worker.inventory.InventoryRequest;
 
 /**
  * The worker's claim loop (contract scope "worker runtime": "claim the next
@@ -26,26 +29,31 @@ import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
  */
 public final class WorkerClaimLoop {
 
-    private static final List<String> ELIGIBLE_CAPABILITY_IDS =
-            List.of(ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO);
+    private static final List<String> ELIGIBLE_CAPABILITY_IDS = List.of(
+            ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
+            InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT);
     private static final int DEFAULT_SSH_PORT = 22;
 
     private final JobLeaseRepository leaseRepository;
     private final JobRecordDao jobRecordDao;
     private final DeviceRepository deviceRepository;
     private final ConfirmJobExecutor confirmJobExecutor;
+    private final InventoryJobExecutor inventoryJobExecutor;
     private final String workerId;
     private final Duration leaseDuration;
     private final String checkPointTrustRuleRef;
     private final String paloAltoTrustRuleRef;
 
+    /** WORKER.md "one worker process serves both vendors" (0159): the same claim loop now also serves both job kinds. */
     public WorkerClaimLoop(JobLeaseRepository leaseRepository, JobRecordDao jobRecordDao,
-            DeviceRepository deviceRepository, ConfirmJobExecutor confirmJobExecutor, String workerId,
-            Duration leaseDuration, String checkPointTrustRuleRef, String paloAltoTrustRuleRef) {
+            DeviceRepository deviceRepository, ConfirmJobExecutor confirmJobExecutor,
+            InventoryJobExecutor inventoryJobExecutor, String workerId, Duration leaseDuration,
+            String checkPointTrustRuleRef, String paloAltoTrustRuleRef) {
         this.leaseRepository = Objects.requireNonNull(leaseRepository, "leaseRepository");
         this.jobRecordDao = Objects.requireNonNull(jobRecordDao, "jobRecordDao");
         this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
         this.confirmJobExecutor = Objects.requireNonNull(confirmJobExecutor, "confirmJobExecutor");
+        this.inventoryJobExecutor = Objects.requireNonNull(inventoryJobExecutor, "inventoryJobExecutor");
         this.workerId = Objects.requireNonNull(workerId, "workerId");
         this.leaseDuration = Objects.requireNonNull(leaseDuration, "leaseDuration");
         this.checkPointTrustRuleRef = Objects.requireNonNull(checkPointTrustRuleRef, "checkPointTrustRuleRef");
@@ -81,6 +89,14 @@ public final class WorkerClaimLoop {
         EndpointRecord endpoint = deviceRepository.findEndpointByDeviceId(job.targetDeviceId())
                 .orElseThrow(() -> new IllegalStateException("claimed job's device has no endpoint: " + job.targetDeviceId()));
 
+        if (InventoryCapabilityIds.isInventoryCapability(job.capabilityId())) {
+            InventoryRequest inventoryRequest = buildInventoryRequest(job.capabilityId(), endpoint.endpointId(),
+                    endpoint.addressRef(), device.credentialReferenceId());
+            inventoryJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), inventoryRequest,
+                    false);
+            return true;
+        }
+
         ConfirmRequest primaryRequest = buildRequest(job.capabilityId(), endpoint.endpointId(), endpoint.addressRef(),
                 device.credentialReferenceId());
         var peerRequestFactory = peerRequestFactoryFor(job.capabilityId(), device.credentialReferenceId());
@@ -88,6 +104,19 @@ public final class WorkerClaimLoop {
         confirmJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), primaryRequest,
                 peerRequestFactory, false);
         return true;
+    }
+
+    private InventoryRequest buildInventoryRequest(String capabilityId, String endpointId, String addressRef,
+            String credentialRef) {
+        if (InventoryCapabilityIds.CP_INVENTORY_COLLECT.equals(capabilityId)) {
+            return InventoryRequest.checkPoint(new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef)),
+                    credentialRef, checkPointTrustRuleRef);
+        }
+        if (InventoryCapabilityIds.PAN_INVENTORY_COLLECT.equals(capabilityId)) {
+            return InventoryRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
+        }
+        throw new IllegalStateException("claimed job for an inventory capability the worker does not recognize: "
+                + capabilityId);
     }
 
     private PeerFollowResolver.ConfirmRequestFactory peerRequestFactoryFor(String capabilityId, String credentialRef) {

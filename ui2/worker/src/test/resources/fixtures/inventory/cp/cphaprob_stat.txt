@@ -1,0 +1,6 @@
+Cluster mode:   High Availability (Active Up) with IGMP Membership
+
+ID  Unique Address    Assigned Load    State                 Name
+
+1 (local) 192.0.2.10       100%             ACTIVE               gw-a
+2         192.0.2.11       0%               STANDBY              gw-b

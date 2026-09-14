@@ -1,20 +1,23 @@
 # gate_registry seed fixture (adjudication F2: "created in V4 and seeded
 # from a version-controlled fixture committed alongside the capability
-# specs"). Committed alongside cp_gaia_inventory.yaml in this same
-# directory. Loaded by GateRegistryFixtureLoader and upserted into the
+# specs"). Loaded by GateRegistryFixtureLoader and upserted into the
 # gate_registry table at worker startup (never authored freehand by a
 # capability spec -- C4 §3.2: "gate_id values are source-committed... never
 # an author-typed free-text string a spec can invent at will").
 #
 # Each row mirrors one docs/AI_DEVELOPMENT_PROTOCOL.md "Network-device
-# command gate" entry (C4 §3.2). The two cp_gaia_* rows below back this
-# movement's own CP inventory capability (cp_gaia_inventory.yaml); the
-# three rb3b_* rows are C4 §2.4/§3.4's real, gate-signed-off worked example
+# command gate" entry (C4 §3.2). The two cp_gaia_* rows below backed the
+# earlier B1-5 narrow-subset cp_gaia_inventory.yaml capability, superseded
+# in scope by NXS-LOCAL-0159's cp_inventory_collect/pan_inventory_collect
+# (14C D-1/D-2, CAP_OFFLINE, no gate row authored per 14C §5) -- they now
+# back no shipped capability, kept (like the three rb3b_* rows below) only
+# so CapabilitySpecLoaderTest and GateResolverTest can exercise a SIGNED_OFF
+# resolution against real fixture data. The three rb3b_* rows are C4
+# §2.4/§3.4's real, gate-signed-off worked example
 # (BACKUP_RECOVERY_CONTRACTS.md §7.3/§7.4/§7.7/§7.8), included here so a
 # test can exercise both a SIGNED_OFF resolution and a
 # SIGNED_OFF_PENDING_HARDWARE_CONFIRMATION one against real data, per C4
-# §7 test 5 -- these three rows back no capability this movement ships and
-# are never referenced by cp_gaia_inventory.yaml.
+# §7 test 5.
 gates:
   - gate_id: cp_gaia_show_version_all
     vendor: check_point
