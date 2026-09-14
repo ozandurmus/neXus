@@ -25,12 +25,28 @@ public final class JooqJobRecordDao implements JobRecordDao {
             String targetDeviceId, String actionClass, String jobType, String actorFingerprint, String actionId) {
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
             org.jooq.Result<Record> rows = dsl.fetch(
-                    "insert into jobs(job_id, job_type, capability_id, target_device_id, "
+                    "insert into jobs(job_id, job_type, capability_id, target_device_id, target_kind, "
                             + "submitted_by_actor_fingerprint, submitted_at, idempotency_key, action_class, state) "
-                            + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, 'REQUESTED') "
+                            + "values ({0}, {1}, {2}, {3}, 'device', {4}, {5}, {6}, {7}, 'REQUESTED') "
                             + "on conflict (idempotency_key) do nothing "
                             + "returning job_id",
                     jobId, jobType, capabilityId, targetDeviceId, actorFingerprint, Timestamp.from(Instant.now()),
+                    idempotencyKey, actionClass);
+            return rows.stream().findFirst().map(r -> r.get("job_id", String.class));
+        });
+    }
+
+    @Override
+    public Optional<String> insertRequestedIfAbsentForRun(String jobId, String idempotencyKey, String capabilityId,
+            String targetRunId, String actionClass, String jobType, String actorFingerprint, String actionId) {
+        return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
+            org.jooq.Result<Record> rows = dsl.fetch(
+                    "insert into jobs(job_id, job_type, capability_id, target_ref, target_kind, "
+                            + "submitted_by_actor_fingerprint, submitted_at, idempotency_key, action_class, state) "
+                            + "values ({0}, {1}, {2}, {3}, 'discovery_run', {4}, {5}, {6}, {7}, 'REQUESTED') "
+                            + "on conflict (idempotency_key) do nothing "
+                            + "returning job_id",
+                    jobId, jobType, capabilityId, targetRunId, actorFingerprint, Timestamp.from(Instant.now()),
                     idempotencyKey, actionClass);
             return rows.stream().findFirst().map(r -> r.get("job_id", String.class));
         });
@@ -68,6 +84,8 @@ public final class JooqJobRecordDao implements JobRecordDao {
                 row.get("lease_worker_id", String.class),
                 row.get("lease_epoch", Long.class) == null ? 0L : row.get("lease_epoch", Long.class),
                 row.get("outcome", String.class),
-                row.get("terminal_reason", String.class));
+                row.get("terminal_reason", String.class),
+                row.get("target_kind", String.class),
+                row.get("target_ref", String.class));
     }
 }

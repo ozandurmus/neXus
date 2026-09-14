@@ -15,6 +15,8 @@ import com.securityexpert.nexus.ui2.jobs.stepattempt.PersistenceJobStepAttemptRe
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundaryFactory;
 import com.securityexpert.nexus.ui2.persistence.credential.CredentialStoreComposition;
+import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRunRepository;
+import com.securityexpert.nexus.ui2.persistence.discovery.JooqDiscoveryRunRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.JooqDeviceInventoryRepository;
@@ -29,7 +31,10 @@ import com.securityexpert.nexus.ui2.worker.confirm.ConfirmCapabilityExecutor;
 import com.securityexpert.nexus.ui2.worker.confirm.ConfirmJobExecutor;
 import com.securityexpert.nexus.ui2.worker.confirm.PeerFollowResolver;
 import com.securityexpert.nexus.ui2.worker.confirm.WorkerClaimLoop;
+import com.securityexpert.nexus.ui2.worker.discovery.DiscoveryJobExecutor;
+import com.securityexpert.nexus.ui2.worker.discovery.cp.ManagementPlaneEnumerationAdapter;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.StoreBackedSshCredentialResolver;
+import com.securityexpert.nexus.ui2.worker.discovery.pan.PanoramaEnumerationAdapter;
 import com.securityexpert.nexus.ui2.worker.discovery.pan.StoreBackedPanCredentialResolver;
 import com.securityexpert.nexus.ui2.worker.inventory.InventoryCapabilities;
 import com.securityexpert.nexus.ui2.worker.inventory.InventoryCapabilityExecutor;
@@ -90,10 +95,10 @@ public final class Ui2WorkerMain {
         TrustRuleResolver trustRuleResolver = trustRuleRef -> Optional.ofNullable(
                 System.getenv("UI2_" + trustRuleRef.toUpperCase(java.util.Locale.ROOT).replace('.', '_')
                         + "_FINGERPRINT"));
-        SshExecTransport sshTransport = new SshExecTransport(
+        StoreBackedSshCredentialResolver sshCredentialResolver =
                 new StoreBackedSshCredentialResolver(resolverComponents.credentialReferenceRepository(),
-                        resolverComponents.credentialRepository(), resolverComponents.cipher()),
-                trustRuleResolver);
+                        resolverComponents.credentialRepository(), resolverComponents.cipher());
+        SshExecTransport sshTransport = new SshExecTransport(sshCredentialResolver, trustRuleResolver);
         // Same UI2_<TRUSTRULEREF>_FINGERPRINT env convention ssh_exec's
         // trustRuleResolver above already reads (WORKER.md: "reads no new
         // secret; trust-rule env names stay as they are") reinterpreted as a
@@ -115,6 +120,7 @@ public final class Ui2WorkerMain {
         var capabilities = new java.util.ArrayList<com.securityexpert.nexus.ui2.capability.Capability>();
         capabilities.addAll(ConfirmCapabilities.all());
         capabilities.addAll(InventoryCapabilities.all(gateRegistry));
+        capabilities.addAll(com.securityexpert.nexus.ui2.worker.discovery.DiscoveryCapabilities.all());
         CapabilityRegistry capabilityRegistry = CapabilityRegistry.of(capabilities);
         TransportRegistry transportRegistry = WorkerBootstrap.buildTransportRegistry(sshTransport, panTransport);
         WorkerBootstrap.boot(capabilityRegistry, transportRegistry);
@@ -136,10 +142,18 @@ public final class Ui2WorkerMain {
         InventoryJobExecutor inventoryJobExecutor = new InventoryJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, inventoryCapabilityExecutor);
 
+        DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
+        ManagementPlaneEnumerationAdapter checkPointDiscoveryAdapter =
+                new ManagementPlaneEnumerationAdapter(compositeTransport, sshCredentialResolver);
+        PanoramaEnumerationAdapter paloAltoDiscoveryAdapter =
+                new PanoramaEnumerationAdapter(compositeTransport, panCredentialResolver, panTrustRuleResolver);
+        DiscoveryJobExecutor discoveryJobExecutor = new DiscoveryJobExecutor(leaseRepository, attemptRepository,
+                discoveryRunRepository, checkPointDiscoveryAdapter, paloAltoDiscoveryAdapter);
+
         JobRecordDao jobRecordDao = new JooqJobRecordDao(transactionBoundary);
         WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
-                confirmJobExecutor, inventoryJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofSeconds(60),
-                checkPointTrustRuleRef, paloAltoTrustRuleRef);
+                confirmJobExecutor, inventoryJobExecutor, discoveryJobExecutor, "worker-" + UUID.randomUUID(),
+                Duration.ofSeconds(60), checkPointTrustRuleRef, paloAltoTrustRuleRef);
 
         claimLoop.runUntilInterrupted(Duration.ofSeconds(2));
     }

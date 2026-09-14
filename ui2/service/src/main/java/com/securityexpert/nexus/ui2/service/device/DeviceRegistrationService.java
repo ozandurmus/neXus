@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.service.device;
 
+import java.util.Optional;
 import java.util.Set;
 
 import com.securityexpert.nexus.ui2.platform.OpaqueId;
@@ -61,6 +62,28 @@ public final class DeviceRegistrationService {
      */
     public Outcome register(String registeringActorFingerprint, String vendorHint, String transportKind,
             String addressRef, String credentialReferenceId, boolean isTestTarget) {
+        return register(registeringActorFingerprint, vendorHint, transportKind, addressRef, credentialReferenceId,
+                isTestTarget, "manual_registration", Optional.empty(), Optional.empty(), Optional.empty(),
+                ActionRegistry.DEVICE_REGISTER);
+    }
+
+    /**
+     * 14F import §2 / IM-9: the discovery-import registration flow -- the
+     * same "Validated" checks and the same single audited write {@link
+     * #register(String, String, String, String, String, boolean)} performs,
+     * with a non-{@code manual_registration} {@code registrationSource}
+     * and the target modifiers (IM-1..IM-10) discovery already resolved,
+     * carried onto the new draft's own row rather than a second write
+     * against an existing one (DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md
+     * §10: "without specifying which shape" -- this movement's shape is
+     * one row per imported candidate, carrying its own modifiers, per
+     * {@link com.securityexpert.nexus.ui2.persistence.device.DeviceDraft}'s
+     * own field javadoc).
+     */
+    public Outcome register(String registeringActorFingerprint, String vendorHint, String transportKind,
+            String addressRef, String credentialReferenceId, boolean isTestTarget, String registrationSource,
+            Optional<String> clusterMemberRef, Optional<String> virtualSystemRef, Optional<String> discoveryMatchKey,
+            String actionId) {
         if (vendorHint == null || vendorHint.isBlank()) {
             return new Outcome.ValidationFailed(REASON_VENDOR_HINT_INVALID);
         }
@@ -79,9 +102,10 @@ public final class DeviceRegistrationService {
         String deviceId = OpaqueId.random().value();
         String endpointId = OpaqueId.random().value();
 
-        DeviceDraft draft = new DeviceDraft(deviceId, vendorHint, "manual_registration", isTestTarget,
-                credentialReferenceId, endpointId, transportKind, addressRef);
-        deviceRepository.registerDraft(draft, registeringActorFingerprint, ActionRegistry.DEVICE_REGISTER);
+        DeviceDraft draft = new DeviceDraft(deviceId, vendorHint, registrationSource, isTestTarget,
+                credentialReferenceId, endpointId, transportKind, addressRef, clusterMemberRef, virtualSystemRef,
+                discoveryMatchKey);
+        deviceRepository.registerDraft(draft, registeringActorFingerprint, actionId);
         return new Outcome.Registered(deviceId, endpointId);
     }
 

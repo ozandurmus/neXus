@@ -330,3 +330,75 @@ export function getClusterInventory(clusterMemberRef: string): Promise<ClusterIn
 export function requestInventoryCollect(deviceId: string, nonce?: string): Promise<{ job_id: string }> {
   return call(`/devices/${encodeURIComponent(deviceId)}/inventory/collect`, "POST", nonce ? { nonce } : {});
 }
+
+/**
+ * Discovery from the UI (14F section 3): the management-server toggle's own
+ * three routes. `outcome_summary` is counts-only (PR-3); a candidate row's
+ * `own_address`/`management_address`/`display_name` are CLASS 2 and shown
+ * only here, never logged. `import_outcome` is `null` until import runs.
+ */
+export type DiscoveryRunState = "REQUESTED" | "RUNNING" | "FINISHED" | "FAILED";
+
+export interface DiscoveryCandidate {
+  readonly candidate_id: string;
+  readonly kind: string;
+  readonly importable: boolean;
+  readonly display_name: string | null;
+  readonly own_address: string | null;
+  readonly management_address: string | null;
+  readonly cluster_reference: string | null;
+  readonly parent_candidate_id: string | null;
+  readonly model: string | null;
+  readonly software_version: string | null;
+  readonly connection_state: string | null;
+  readonly import_outcome: "new" | "already_imported" | "conflicting" | null;
+}
+
+export interface DiscoveryRunView {
+  readonly run_id: string;
+  readonly vendor: Vendor;
+  readonly state: DiscoveryRunState;
+  readonly job_id: string | null;
+  readonly outcome_summary: Record<string, number>;
+  readonly candidates: DiscoveryCandidate[];
+}
+
+export interface StartDiscoveryRunResult {
+  readonly run_id: string;
+  readonly job_id: string;
+}
+
+export function startDiscoveryRun(
+  managementAddress: string,
+  vendor: Vendor,
+  credentialReferenceId: string,
+): Promise<StartDiscoveryRunResult> {
+  return call("/discovery/runs", "POST", {
+    management_address: managementAddress,
+    vendor,
+    credential_reference_id: credentialReferenceId,
+  });
+}
+
+export function getDiscoveryRun(runId: string): Promise<DiscoveryRunView> {
+  return call(`/discovery/runs/${encodeURIComponent(runId)}`, "GET");
+}
+
+export interface DiscoveryImportResult {
+  readonly candidate_id: string;
+  readonly outcome: "new" | "already_imported" | "conflicting" | "refused";
+  readonly device_id: string | null;
+  readonly job_id: string | null;
+  readonly reason: string | null;
+}
+
+export function importDiscoveryCandidates(
+  runId: string,
+  candidateIds: string[],
+  credentialReferenceId?: string,
+): Promise<{ results: DiscoveryImportResult[] }> {
+  return call(`/discovery/runs/${encodeURIComponent(runId)}/import`, "POST", {
+    candidate_ids: candidateIds,
+    credential_reference_id: credentialReferenceId,
+  });
+}

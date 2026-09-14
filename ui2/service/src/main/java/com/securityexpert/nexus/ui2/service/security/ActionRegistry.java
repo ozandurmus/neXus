@@ -42,6 +42,12 @@ public final class ActionRegistry {
     public static final String CREDENTIAL_LIST = "credential_list";
     public static final String CREDENTIAL_REPLACE_SECRET = "credential_replace_secret";
     public static final String CREDENTIAL_DELETE = "credential_delete";
+    /** 14F section 3: {@code POST /discovery/runs} -- a write action, {@code role:onboarding_admin} only (same gate as {@link #DEVICE_REGISTER}). */
+    public static final String DISCOVERY_RUN_START = "discovery_run_start";
+    /** 14F section 3: {@code GET /discovery/runs/{run_id}} -- any authenticated session, like {@link #DEVICE_READ}. */
+    public static final String DISCOVERY_RUN_READ = "discovery_run_read";
+    /** 14F section 2: {@code POST /discovery/runs/{run_id}/import} -- a write action, {@code role:onboarding_admin} only. */
+    public static final String DISCOVERY_RUN_IMPORT = "discovery_run_import";
 
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
@@ -79,6 +85,13 @@ public final class ActionRegistry {
         register(new ActionDescriptor(CREDENTIAL_LIST, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(CREDENTIAL_REPLACE_SECRET, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(CREDENTIAL_DELETE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        // 14F section 3: the discovery routes gate exactly like the manual
+        // single-device add routes -- write actions require
+        // role:onboarding_admin, the read is open to any authenticated
+        // session, through this same E4 evaluation.
+        register(new ActionDescriptor(DISCOVERY_RUN_START, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        register(new ActionDescriptor(DISCOVERY_RUN_READ, true, Optional.empty()));
+        register(new ActionDescriptor(DISCOVERY_RUN_IMPORT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

@@ -9,5 +9,7 @@ public record JobRow(
         String leaseWorkerId,
         long leaseEpoch,
         String outcome,
-        String terminalReason) {
+        String terminalReason,
+        String targetKind,
+        String targetRef) {
 }
