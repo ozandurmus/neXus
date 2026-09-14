@@ -7,11 +7,15 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.jobs.JobState;
+import com.securityexpert.nexus.ui2.jobs.bootstrap.CredentialAdministrationFactory;
 import com.securityexpert.nexus.ui2.jobs.bootstrap.LocalIdentityAdministrationFactory;
 import com.securityexpert.nexus.ui2.jobs.bootstrap.LocalIdentityBootstrapFactory;
 import com.securityexpert.nexus.ui2.jobs.bootstrap.SecurityAdminBootstrapFactory;
+import com.securityexpert.nexus.ui2.platform.CredentialStorePort;
+import com.securityexpert.nexus.ui2.platform.CredentialStorePort.CredentialKind;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
 import com.securityexpert.nexus.ui2.platform.LocalIdentityAdministrationPort;
 import com.securityexpert.nexus.ui2.platform.LocalIdentityBootstrapPort;
@@ -51,6 +55,10 @@ public final class CliEntryPoint {
             case "local-identity-set-password" -> localIdentitySetPassword(args);
             case "local-identity-disable" -> localIdentityDisable(args);
             case "local-identity-enable" -> localIdentityEnable(args);
+            case "credential-create" -> credentialCreate(args);
+            case "credential-list" -> credentialList(args);
+            case "credential-replace-secret" -> credentialReplaceSecret(args);
+            case "credential-delete" -> credentialDelete(args);
             case "role-bind-create" -> roleBindCreate(args);
             case "role-bind-revoke" -> roleBindRevoke(args);
             default -> System.out.println("known job states: " + java.util.Arrays.toString(JobState.values()));
@@ -73,6 +81,17 @@ public final class CliEntryPoint {
                 + "<groupReferenceKeyBase64> <localIdentityId> <actingAdminActorFingerprint>");
         System.out.println("  local-identity-enable <jdbcUrl> <migrateUser> <migratePasswordFile> "
                 + "<groupReferenceKeyBase64> <localIdentityId> <actingAdminActorFingerprint>");
+        System.out.println("  credential-create <jdbcUrl> <migrateUser> <migratePasswordFile> "
+                + "<credentialStoreKeyBase64> <credentialStoreKeyId> <displayName> "
+                + "<ssh_password|ssh_private_key|api_password> <username> <allowsCheckPoint:true|false> "
+                + "<allowsPaloAlto:true|false> <secretFile> <passphraseFile|-> <actingAdminActorFingerprint>");
+        System.out.println("  credential-list <jdbcUrl> <migrateUser> <migratePasswordFile> "
+                + "<credentialStoreKeyBase64> <credentialStoreKeyId>");
+        System.out.println("  credential-replace-secret <jdbcUrl> <migrateUser> <migratePasswordFile> "
+                + "<credentialStoreKeyBase64> <credentialStoreKeyId> <credentialId> <secretFile> "
+                + "<passphraseFile|-> <actingAdminActorFingerprint>");
+        System.out.println("  credential-delete <jdbcUrl> <migrateUser> <migratePasswordFile> "
+                + "<credentialStoreKeyBase64> <credentialStoreKeyId> <credentialId> <actingAdminActorFingerprint>");
         System.out.println("  role-bind-create <baseUrl> <sessionCookieValue> <csrfToken> <roleToken> "
                 + "<groupReference> <groupReferenceKeyId>");
         System.out.println("  role-bind-revoke <baseUrl> <sessionCookieValue> <csrfToken> <bindingId>");
@@ -224,6 +243,124 @@ public final class CliEntryPoint {
         String migratePassword = com.securityexpert.nexus.ui2.platform.SecretFile.readRequired(
                 java.nio.file.Path.of(migratePasswordFile), "ui2_migrate.password");
         return LocalIdentityAdministrationFactory.create(jdbcUrl, migrateUser, migratePassword, groupReferenceKeyBase64);
+    }
+
+    // ---------------------------------------------------------------
+    // 2026-09-14 CS-1..CS-5: credential store CLI parity. Every operation
+    // shares CredentialStorePort with the HTTP API (composed here through
+    // job-engine's CredentialAdministrationFactory, exactly as
+    // local-identity-* already shares its own port), so the two paths
+    // cannot drift. A secret (and an optional passphrase) is always read
+    // from a file, never a command-line argument (it would land in shell
+    // history/process listings), and the in-memory array is zeroed
+    // immediately after use. No response ever prints a secret, an
+    // encrypted column, or the envelope key id.
+    // ---------------------------------------------------------------
+
+    private static void credentialCreate(String[] args) {
+        if (args.length != 14) {
+            System.err.println("credential-create requires exactly 13 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        CredentialStorePort port = credentialStorePort(args[1], args[2], args[3], args[4], args[5]);
+        String displayName = args[6];
+        CredentialKind kind = CredentialKind.fromWireValue(args[7]);
+        String username = args[8];
+        boolean allowsCheckPoint = Boolean.parseBoolean(args[9]);
+        boolean allowsPaloAlto = Boolean.parseBoolean(args[10]);
+        char[] secret = readPasswordFile(args[11], "credential.secret");
+        Optional<char[]> passphrase = readOptionalPassphraseFile(args[12]);
+        String actingAdminActorFingerprint = args[13];
+        try {
+            CredentialStorePort.CredentialView view = port.create(actingAdminActorFingerprint, displayName, kind,
+                    username, allowsCheckPoint, allowsPaloAlto, secret, passphrase);
+            printCredentialView(view);
+        } finally {
+            Arrays.fill(secret, '\0');
+            passphrase.ifPresent(p -> Arrays.fill(p, '\0'));
+        }
+    }
+
+    private static void credentialList(String[] args) {
+        if (args.length != 6) {
+            System.err.println("credential-list requires exactly 5 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        CredentialStorePort port = credentialStorePort(args[1], args[2], args[3], args[4], args[5]);
+        for (CredentialStorePort.CredentialView view : port.list()) {
+            printCredentialView(view);
+        }
+    }
+
+    private static void credentialReplaceSecret(String[] args) {
+        if (args.length != 10) {
+            System.err.println("credential-replace-secret requires exactly 9 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        CredentialStorePort port = credentialStorePort(args[1], args[2], args[3], args[4], args[5]);
+        String credentialId = args[6];
+        char[] secret = readPasswordFile(args[7], "credential.secret");
+        Optional<char[]> passphrase = readOptionalPassphraseFile(args[8]);
+        String actingAdminActorFingerprint = args[9];
+        try {
+            CredentialStorePort.ReplaceSecretResult result =
+                    port.replaceSecret(actingAdminActorFingerprint, credentialId, secret, passphrase);
+            if (result instanceof CredentialStorePort.ReplaceSecretResult.Ok ok) {
+                printCredentialView(ok.view());
+            } else {
+                System.err.println("CREDENTIAL_NOT_FOUND");
+            }
+        } finally {
+            Arrays.fill(secret, '\0');
+            passphrase.ifPresent(p -> Arrays.fill(p, '\0'));
+        }
+    }
+
+    private static void credentialDelete(String[] args) {
+        if (args.length != 8) {
+            System.err.println("credential-delete requires exactly 7 arguments; see usage.");
+            printUsage();
+            return;
+        }
+        CredentialStorePort port = credentialStorePort(args[1], args[2], args[3], args[4], args[5]);
+        String credentialId = args[6];
+        String actingAdminActorFingerprint = args[7];
+        CredentialStorePort.DeleteResult result = port.delete(actingAdminActorFingerprint, credentialId);
+        if (result instanceof CredentialStorePort.DeleteResult.Ok) {
+            System.out.println("deleted credential " + credentialId);
+        } else if (result instanceof CredentialStorePort.DeleteResult.NotFound) {
+            System.err.println("CREDENTIAL_NOT_FOUND");
+        } else if (result instanceof CredentialStorePort.DeleteResult.CredentialInUse) {
+            System.err.println("CREDENTIAL_IN_USE");
+        }
+    }
+
+    private static CredentialStorePort credentialStorePort(String jdbcUrl, String migrateUser,
+            String migratePasswordFile, String credentialStoreKeyBase64, String credentialStoreKeyId) {
+        String migratePassword = com.securityexpert.nexus.ui2.platform.SecretFile.readRequired(
+                java.nio.file.Path.of(migratePasswordFile), "ui2_migrate.password");
+        return CredentialAdministrationFactory.create(jdbcUrl, migrateUser, migratePassword, credentialStoreKeyBase64,
+                credentialStoreKeyId);
+    }
+
+    /** {@code "-"} means no passphrase -- never a command-line literal for the passphrase itself. */
+    private static Optional<char[]> readOptionalPassphraseFile(String path) {
+        if ("-".equals(path)) {
+            return Optional.empty();
+        }
+        return Optional.of(readPasswordFile(path, "credential.passphrase"));
+    }
+
+    /** Never a secret, an encrypted column, or the envelope key id -- exactly CS-1/CS-3's allowlisted fields. */
+    private static void printCredentialView(CredentialStorePort.CredentialView view) {
+        System.out.println("credential_id=" + view.credentialId() + " credential_reference_id="
+                + view.credentialReferenceId() + " display_name=" + view.displayName() + " kind="
+                + view.kind().wireValue() + " username=" + view.username() + " allows_check_point="
+                + view.allowsCheckPoint() + " allows_palo_alto=" + view.allowsPaloAlto() + " created_at="
+                + view.createdAt() + " secret_set_at=" + view.secretSetAt());
     }
 
     private static char[] readPasswordFile(String path, String purpose) {
