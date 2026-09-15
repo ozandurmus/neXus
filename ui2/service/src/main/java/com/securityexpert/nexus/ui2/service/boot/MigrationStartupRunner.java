@@ -5,11 +5,11 @@ import java.nio.file.Path;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.PriorityOrdered;
 
 import com.securityexpert.nexus.ui2.persistence.FlywayMigrationRunner;
 
@@ -27,13 +27,13 @@ import com.securityexpert.nexus.ui2.persistence.FlywayMigrationRunner;
  * that did not fully apply is the situation the fail-closed rule exists to
  * prevent, and a half-migrated database is worse than an unavailable one.</p>
  *
- * <p>{@code @Order(0)}, ahead of {@link FirstBootIdentitySeedingRunner}'s
- * {@code @Order(1)} (C3B contract §2): {@code local_credentials} must exist
- * before that runner can query it.</p>
+ * <p>A highest-priority {@link BeanFactoryPostProcessor} runs migrations
+ * before Spring creates ordinary application beans. This is earlier than
+ * every {@code ApplicationRunner}, including
+ * {@link FirstBootIdentitySeedingRunner}, so {@code local_credentials}
+ * exists before first-boot seeding queries it.</p>
  */
-@Component
-@Order(0)
-public class MigrationStartupRunner implements ApplicationRunner {
+public class MigrationStartupRunner implements BeanFactoryPostProcessor, PriorityOrdered {
 
     private static final Logger LOG = LoggerFactory.getLogger(MigrationStartupRunner.class);
 
@@ -43,10 +43,10 @@ public class MigrationStartupRunner implements ApplicationRunner {
     private final String migrationLocation;
 
     public MigrationStartupRunner(
-            @Value("${ui2.db.url}") String jdbcUrl,
-            @Value("${ui2.db.migrate-user-file}") String userFile,
-            @Value("${ui2.db.migrate-password-file}") String passwordFile,
-            @Value("${ui2.db.migration-location:classpath:db/migration}") String migrationLocation) {
+            String jdbcUrl,
+            String userFile,
+            String passwordFile,
+            String migrationLocation) {
         this.jdbcUrl = jdbcUrl;
         this.userFile = Path.of(userFile);
         this.passwordFile = Path.of(passwordFile);
@@ -54,7 +54,16 @@ public class MigrationStartupRunner implements ApplicationRunner {
     }
 
     @Override
-    public void run(ApplicationArguments args) {
+    public int getOrder() {
+        return Ordered.HIGHEST_PRECEDENCE;
+    }
+
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+        migrate();
+    }
+
+    void migrate() {
         MigrateResult result = new FlywayMigrationRunner(
                 jdbcUrl, userFile, passwordFile, migrationLocation).migrate();
         // Counts and versions only: never a DSN, never a credential.
