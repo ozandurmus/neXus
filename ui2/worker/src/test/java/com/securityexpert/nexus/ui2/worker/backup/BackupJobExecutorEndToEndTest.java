@@ -115,6 +115,19 @@ class BackupJobExecutorEndToEndTest {
         assertEquals(1, harness.manifestRepo.recorded.size());
         assertEquals("backup", harness.manifestRepo.recorded.get(0).artefactClass());
         assertEquals("first", harness.manifestRepo.recorded.get(0).deviationState().orElseThrow());
+
+        // BK-14/OR-1: artefact_id is the real FileArtefactStore's own
+        // ciphertext-sha256 identity, never the relative storage path it
+        // also produces -- proven against the real store's output, not a
+        // synthetic opaque-only fixture.
+        var recorded = harness.manifestRepo.recorded.get(0);
+        assertEquals(recorded.ciphertextSha256(), recorded.artefactId(),
+                "artefact_id must be C7 section 3.2's sha256-of-ciphertext identity");
+        assertFalse(recorded.artefactId().contains("/"), "artefact_id must never carry a storage path segment");
+        assertTrue(recorded.recoveryVolumePath().endsWith(recorded.artefactId() + ".enc"),
+                "the real producer path stays server-side, in recovery_volume_path, not in artefact_id");
+        assertFalse(recorded.recoveryVolumePath().equals(recorded.artefactId()),
+                "presentation identity (artefact_id) must not equal storage identity (recovery_volume_path)");
         assertTrue(harness.transport.commandsIssued.contains(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME)));
         assertFalse(harness.eligibilityRepo.isIneligible(DEVICE_ID));
         assertTrue(harness.transport.disconnectCalled);

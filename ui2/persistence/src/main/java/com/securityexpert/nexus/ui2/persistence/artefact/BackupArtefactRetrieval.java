@@ -87,8 +87,12 @@ public final class BackupArtefactRetrieval implements BackupArtefactRetrievalPor
         }
 
         Path destination = Path.of(destinationPath);
-        try (InputStream decrypted = artefactStore.retrieve(new ArtefactRef(artefactId), manifest.get().wrappedDataKey(),
-                false);
+        // C7 section 3.2: artefactId is the opaque, HTTP/UI-safe identity --
+        // never a locator. The real storage locator is the server-only
+        // recoveryVolumePath this manifest carries, which never reaches an
+        // HTTP/UI response.
+        try (InputStream decrypted = artefactStore.retrieve(new ArtefactRef(manifest.get().recoveryVolumePath()),
+                manifest.get().wrappedDataKey(), false);
                 OutputStream out = Files.newOutputStream(destination)) {
             decrypted.transferTo(out);
         } catch (IOException e) {

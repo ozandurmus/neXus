@@ -33,13 +33,19 @@ public interface BackupArtefactManifestRepository {
     /** WORKER.md "GET /backups for the fleet view". */
     List<BackupArtefactSummary> findAll(String artefactClass);
 
-    /** 14I OR-2: the wrapped data key an operator retrieval needs to decrypt through the artefact store. */
+    /**
+     * 14I OR-2: the wrapped data key and server-only storage locator an
+     * operator retrieval needs to decrypt through the artefact store.
+     * {@code artefactId} is the opaque identity (never a locator, C7
+     * section 3.2); {@link RetrievalManifest#recoveryVolumePath()} is the
+     * store-relative locator and must never reach an HTTP/UI response.
+     */
     Optional<RetrievalManifest> findForRetrieval(String artefactId);
 
     record PlaintextDigestSummary(String artefactId, String plaintextSha256) {
     }
 
-    record RetrievalManifest(String artefactId, byte[] wrappedDataKey) {
+    record RetrievalManifest(String artefactId, byte[] wrappedDataKey, String recoveryVolumePath) {
     }
 
     record BackupArtefactSummary(String artefactId, String deviceId, Instant createdAt, long plaintextBytes,

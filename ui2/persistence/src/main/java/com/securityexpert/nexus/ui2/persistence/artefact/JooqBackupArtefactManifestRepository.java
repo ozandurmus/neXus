@@ -89,9 +89,11 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
     @Override
     public Optional<RetrievalManifest> findForRetrieval(String artefactId) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetchOptional(
-                "select artefact_id, wrapped_data_key from backup_artefact where artefact_id = {0}", artefactId)
+                "select artefact_id, wrapped_data_key, recovery_volume_path from backup_artefact "
+                        + "where artefact_id = {0}", artefactId)
                 .map(row -> new RetrievalManifest(row.get("artefact_id", String.class),
-                        row.get("wrapped_data_key", byte[].class))));
+                        row.get("wrapped_data_key", byte[].class),
+                        row.get("recovery_volume_path", String.class))));
     }
 
     private static BackupArtefactSummary toSummary(Record row) {
