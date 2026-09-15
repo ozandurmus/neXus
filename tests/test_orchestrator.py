@@ -985,13 +985,16 @@ def test_spawn_engineer_grants_add_dir_for_the_canonical_relay_directory_on_resu
 
 
 @pytest.mark.parametrize("resume_session_id", [None, "11111111-1111-1111-1111-111111111111"])
-def test_codex_spawn_grants_the_derived_linked_worktree_git_dir(tmp_path, monkeypatch, resume_session_id):
+def test_codex_spawn_grants_only_the_derived_git_directories_needed_to_commit(tmp_path, monkeypatch, resume_session_id):
     calls = []
     git_dir = tmp_path / "main" / ".git" / "worktrees" / "wt"
+    object_dir = tmp_path / "main" / ".git" / "objects"
 
     monkeypatch.setattr(orch.subprocess, "Popen", lambda argv, **k: (calls.append(argv), _FakeProc(1))[1])
     monkeypatch.setattr(
-        orch, "_git_rev_parse", lambda ref, cwd: str(git_dir) if ref == "--git-dir" else "",
+        orch, "_git_rev_parse", lambda ref, cwd: str({
+            "--git-dir": git_dir, "--git-path=objects": object_dir,
+        }[ref]),
     )
     relay_dir = tmp_path / "relay"
     orch._spawn_engineer(
@@ -1002,10 +1005,10 @@ def test_codex_spawn_grants_the_derived_linked_worktree_git_dir(tmp_path, monkey
     argv = calls[0]
     if resume_session_id:
         roots = next(value for value in argv if value.startswith("sandbox_workspace_write.writable_roots="))
-        assert json.loads(roots.partition("=")[2]) == [str(relay_dir), str(git_dir)]
+        assert json.loads(roots.partition("=")[2]) == [str(relay_dir), str(git_dir), str(object_dir)]
     else:
         assert [argv[index + 1] for index, value in enumerate(argv) if value == "--add-dir"] == [
-            str(relay_dir), str(git_dir),
+            str(relay_dir), str(git_dir), str(object_dir),
         ]
 
 
