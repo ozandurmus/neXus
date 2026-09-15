@@ -1,5 +1,6 @@
 import { ScreenHeader, MetricGrid, MetricCard, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
-import { M3Button, M3Tabs } from "../shell/M3Widgets";
+import { M3Tabs } from "../shell/M3Widgets";
+import { JobsPanel } from "./JobsPanel";
 
 /** M3Operations with nothing run yet. */
 export function OperationsScreen() {
@@ -8,12 +9,6 @@ export function OperationsScreen() {
       <ScreenHeader
         title="Operations"
         subtitle="What is running against the fleet, and what the fleet is ready for. Readiness is observed; no failover action exists in this build."
-        actions={
-          <>
-            <M3Button emphasis="outlined">Job history</M3Button>
-            <M3Button emphasis="filled">Schedule collection</M3Button>
-          </>
-        }
       />
       <MetricGrid>
         <MetricCard title="Jobs run" note="nothing run yet" />
@@ -36,13 +31,7 @@ export function OperationsScreen() {
           },
           {
             label: "Jobs",
-            panel: (
-              <EmptyPanel
-                title="No jobs yet"
-                body="Nothing has run against the fleet, because the fleet is empty. Read jobs are class 0; backup
-                      creation is the only class 1 write and runs under its own contract."
-              />
-            ),
+            panel: <JobsPanel />,
           },
           {
             label: "Queue",
