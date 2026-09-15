@@ -92,10 +92,15 @@ control is root-equivalent on the host.
 
 ## Exact next action
 
-Measure, read-only, whether `k3s`'s CNI would collide with the rules Docker
-already manages on `HOST-A`, and record it as a ledger entry. Then prepare the
-installation commands for the human to run under `HOST_W2`. The agent performs
-no host write.
+Step 3 of `docs/operations/HOST_A_MIGRATION.md`: measure, read-only, whether
+`k3s`'s CNI would collide with the rules Docker already manages on `HOST-A`,
+and record phase A as one ledger entry. Read that file first -- it fixes every
+step's tier and performer, and the stop conditions, before the migration starts.
+Steps 0-2 are done. If step 3 cannot be answered from reads alone it is not
+escalated by trying it: the sequence halts with `CAUSE: UNKNOWN` and becomes a
+question for the incumbent's administrators. The agent performs no host write;
+installation is `HOST_W2` and the human runs it from commands prepared at
+step 6.
 
 Before the cluster is rebuilt, export the four hand-created secrets. A verified
 dump exists — 40 tables, read back with `pg_restore --list` — but the dump alone
