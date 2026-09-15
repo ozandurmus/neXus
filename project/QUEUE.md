@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-14T22:32:55Z
+Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-15T08:22:10Z
 
 ## Now
 - NXS-LOCAL-0176 — Expire a past-deadline session on read so it never blocks a login (automated_validated)
@@ -51,6 +51,7 @@ Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-14T22:32:55Z
 - P3/planned cp_cphaprob_peer_observation_corroboration
 - P3/planned device_role_vocabulary_declared_twice
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race
+- P3/planned waf_fortiweb_capability_scope_and_measurement
 - P3/planned workbench_borrow_from_agent_orchestration_tools
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
 - P0 deploy1_oidc_viewer
