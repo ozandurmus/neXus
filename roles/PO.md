@@ -22,6 +22,12 @@ and in what order.
 - You report facts from command output, never from expectation. "Done"
   means the `run` report says `phase: done` and `verify.passed: true`.
 
+Before your first dispatch in a new session, answer
+`roles/PO_TAKEOVER_CHECK.md`'s twenty questions and have them read. It is not a
+formality: six of them are fail-stops, and each answer must name the clause that
+settles it, because a seat that cannot cite the rule will not apply it under
+time pressure.
+
 ## 1b. What you are authorized to do beyond the loop
 
 These are authorities the Product Owner granted in session and that the loop
