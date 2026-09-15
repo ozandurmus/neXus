@@ -474,6 +474,8 @@ public final class CliEntryPoint {
             System.err.println("ROLE_REFUSED: role:backup_admin is required");
         } else if (result instanceof com.securityexpert.nexus.ui2.platform.BackupArtefactRetrievalPort.RetrieveResult.ReasonTooShort) {
             System.err.println("REASON_TOO_SHORT: a reason of at least eight characters is required");
+        } else if (result instanceof com.securityexpert.nexus.ui2.platform.BackupArtefactRetrievalPort.RetrieveResult.AuditRefused) {
+            System.err.println("AUDIT_REFUSED: retrieval audit could not be recorded");
         } else if (result instanceof com.securityexpert.nexus.ui2.platform.BackupArtefactRetrievalPort.RetrieveResult.IoFailure failure) {
             System.err.println("IO_FAILURE: " + failure.reason());
         }
