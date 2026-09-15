@@ -203,6 +203,54 @@ class ProjectPlanReaderTest {
         assertEquals(Integer.valueOf(1), counts.get("done"));
     }
 
+    @Test
+    void productProjectionExcludesLegacyAndOperationsAndRefreshesItsRevision(@TempDir Path directory) throws Exception {
+        Files.writeString(directory.resolve("roadmap.json"), """
+                {"current_build":"java-build","now_next":{"now":{"build":"java-build"}}}
+                """);
+        Files.writeString(directory.resolve("feature_registry.json"), """
+                {"features":[{"id":"java","status":"automated_validated"},{"id":"python","status":"done"}]}
+                """);
+        Files.writeString(directory.resolve("backlog.json"), """
+                {"items":[{"id":"debt","status":"automated_validated"},{"id":"agent","status":"planned"},
+                {"id":"new-unclassified","status":"planned"}]}
+                """);
+        Files.writeString(directory.resolve("build_history.json"), """
+                {"builds":[{"build":"java-build","status":"automated_validated"},
+                {"build":"agent-build","status":"done"}]}
+                """);
+        Path projection = directory.resolve("java_product_plan.json");
+        Files.writeString(projection, """
+                {"schema_version":"1.0","reviewed_current_build":"java-build","reviewed_at":"2026-09-15",
+                "current_track":"UI2.x","tracks":[{"id":"UI2.x","feature_ids":["java"]}],
+                "product_build_ids":["java-build"],
+                "backlog_classifications":{"debt":"java_debt","agent":"agent_operations"},
+                "converted_lessons":[{"id":"lesson","source_id":"agent","status":"historical_derived"}]}
+                """);
+        ProjectPlanReader reader = new ProjectPlanReader(directory);
+        Map<String, Object> first = reader.read();
+        assertEquals("java-build", first.get("current_product_build"));
+        assertEquals(1, ((List<?>) first.get("backlog")).size());
+        assertEquals(1, ((List<?>) first.get("build_history")).size());
+        assertEquals(2L, first.get("excluded_backlog_count"));
+        assertEquals(List.of(), first.get("completed_features"));
+        assertEquals(0.0, first.get("overall_progress_percent"));
+        assertEquals("UNKNOWN", ((Map<?, ?>) first.get("source_metadata")).get("freshness"));
+        assertTrue(warningsOf(first).contains("Backlog classification missing or invalid: new-unclassified"));
+        Files.writeString(projection, Files.readString(projection).replace("2026-09-15", "2026-09-16"));
+        assertFalse(((Map<?, ?>) first.get("source_metadata")).get("revision")
+                .equals(((Map<?, ?>) reader.read().get("source_metadata")).get("revision")));
+        Files.writeString(projection, Files.readString(projection).replace("\"reviewed_current_build\":\"java-build\"",
+                "\"reviewed_current_build\":\"old-build\""));
+        assertEquals("STALE", ((Map<?, ?>) reader.read().get("source_metadata")).get("freshness"));
+        Files.writeString(projection, "{ malformed");
+        Map<String, Object> unavailable = reader.read();
+        assertEquals(List.of(), unavailable.get("tracks"));
+        assertEquals(List.of(), unavailable.get("backlog"));
+        assertEquals(List.of(), unavailable.get("build_history"));
+        assertEquals("UNAVAILABLE", ((Map<?, ?>) unavailable.get("source_metadata")).get("freshness"));
+    }
+
     // --- Real repository files (AC-1) ---------------------------------------
 
     @Test
@@ -216,5 +264,8 @@ class ProjectPlanReaderTest {
         assertEquals("1.0", payload.get("schema_version"));
         assertFalse(tracksOf(payload).isEmpty());
         assertTrue(payload.get("current_build") != null);
+        assertEquals(List.of(), warningsOf(payload), "Project authorities and explicit Java selections must reconcile");
+        assertEquals("java_ui2", payload.get("product_scope"));
+        assertEquals("UNKNOWN", ((Map<?, ?>) payload.get("source_metadata")).get("freshness"));
     }
 }

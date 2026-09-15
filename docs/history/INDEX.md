@@ -6,6 +6,7 @@ regenerate. Open a row's linked document only when you need that build's detail.
 
 | Build | Status | Dates | Title | Summary | Docs |
 | --- | --- | --- | --- | --- | --- |
+| `NXS-LOCAL-0242` | in_progress | 2026-09-15 | Java Project Plan reconciliation with explicit source provenance | Java roadmap, delivery debt and converted lessons now have separate projections. Java and frontend validation remain pending. | [agreement](docs/design/UI2_PROJECT_PLAN_RECONCILIATION.md) |
 | `NXS-LOCAL-0176` | automated_validated | 2026-09-14 | Expire a past-deadline session on read so it never blocks a login | Merged expiry-on-read for stale sessions. | — |
 | `NXS-LOCAL-0175` | automated_validated | 2026-09-14 | Check Point gateway backup: gate, capability, executor, retrieval, service routes | Merged pilot-gated Check Point gateway backup. | — |
 | `NXS-LOCAL-0178` | automated_validated | 2026-09-14 | nexusadmin is the product root identity | Merged root local-identity authorization. | — |

@@ -574,6 +574,7 @@ export interface ProjectPlanNowNext {
 }
 
 export interface ProjectPlanBacklogItem {
+  readonly classification?: string;
   readonly id: string;
   /** An opaque grouping key, never an enum. */
   readonly category: string;
@@ -592,7 +593,27 @@ export interface ProjectPlanBuild {
   readonly detail: string | null;
 }
 
+export interface ProjectPlanLesson {
+  readonly id: string;
+  readonly title: string;
+  readonly source_id: string;
+  readonly source_status: string;
+  readonly java_application: string;
+  readonly target: string;
+}
+
 export interface ProjectPlanView {
+  readonly product_scope?: string;
+  readonly current_product_build?: string | null;
+  readonly excluded_backlog_count?: number;
+  readonly source_metadata?: {
+    readonly revision: string;
+    readonly reviewed_at: string | null;
+    readonly reviewed_current_build: string | null;
+    readonly freshness: string;
+    readonly update_policy: string;
+  };
+  readonly converted_lessons?: ProjectPlanLesson[];
   readonly schema_version: string;
   readonly generated_at: string;
   readonly current_build: string | null;

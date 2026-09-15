@@ -77,10 +77,7 @@ describe("ProjectPlanPanel hero numbers", () => {
     expect(screen.getByLabelText("Declared roadmap completion percent")).toHaveTextContent("42.5%");
     expect(screen.getByLabelText("Current track completion percent")).toHaveTextContent("66.7%");
 
-    // Earlier product defect #1 fix: open backlog excludes the terminal set
-    // (done, automated_validated, real_env_validated, deferred), not just
-    // "not done" -- b1 (planned), b2 (in_progress) and b3 (planned) are open;
-    // b4 (done) is not.
+    // Only b4 is closed; the three planned/in-progress rows remain open.
     expect(screen.getByLabelText("Open backlog count")).toHaveTextContent("3");
   });
 
@@ -191,7 +188,7 @@ describe("ProjectPlanPanel other sections", () => {
   it("shows build history with the archived count", async () => {
     renderWithPlan(BASE_PLAN);
     await waitFor(() => expect(screen.getByText("Summary one")).toBeInTheDocument());
-    expect(screen.getByText("5 builds archived")).toBeInTheDocument();
+    expect(screen.getByText("5 builds archived (all historical lines)")).toBeInTheDocument();
   });
 
   it("shows an error state with a retry action when the fetch fails", async () => {
@@ -199,5 +196,27 @@ describe("ProjectPlanPanel other sections", () => {
     render(withTheme(<ProjectPlanPanel />));
     await waitFor(() => expect(screen.getByText("SOMETHING_WRONG")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+});
+
+
+describe("Java product provenance", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("separates converted lessons, preserves outstanding validation and refreshes the source", async () => {
+    renderWithPlan({ ...BASE_PLAN,
+      current_product_build: "java-build",
+      source_metadata: { revision: "snapshot-1", reviewed_at: "2026-09-15", reviewed_current_build: "java-build", freshness: "STALE", update_policy: "Reviewed read-only snapshot" },
+      backlog: [{ ...BASE_PLAN.backlog[0], status: "automated_validated", classification: "java_debt" }],
+      converted_lessons: [{ id: "lesson", title: "Historical identity lesson", source_id: "python-source", source_status: "done", java_application: "Verify opaque identity in Java", target: "java-debt" }],
+    });
+    await waitFor(() => expect(screen.getByText(/Source revision: snapshot-1/)).toBeInTheDocument());
+    expect(screen.getByText(/Freshness: STALE/)).toBeInTheDocument();
+    expect(screen.getByText(/Deployed software version: UNKNOWN/)).toBeInTheDocument();
+    expect(screen.getByText("Converted Python lessons — historical / derived")).toBeInTheDocument();
+    expect(screen.getByText("Verify opaque identity in Java")).toBeInTheDocument();
+    expect(screen.getByLabelText("Open backlog count")).toHaveTextContent("1");
+    fireEvent.click(screen.getByRole("button", { name: "Refresh project plan" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   });
 });
