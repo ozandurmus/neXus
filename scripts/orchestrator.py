@@ -1014,6 +1014,12 @@ def _worktree_git_dir(worktree_path: Path) -> Path:
     return git_dir if git_dir.is_absolute() else (worktree_path / git_dir).resolve()
 
 
+def _git_object_dir(worktree_path: Path) -> Path:
+    """Git's resolved shared object store, not a path composed from `.git`."""
+    object_dir = Path(_git_rev_parse("--git-path=objects", worktree_path))
+    return object_dir if object_dir.is_absolute() else (worktree_path / object_dir).resolve()
+
+
 def _add_engineer_toolchains(env: dict[str, str]) -> None:
     """Keep the dispatcher's installed Java and Node launchers reachable."""
     path = env.get("PATH", "")
@@ -1142,7 +1148,7 @@ def _spawn_engineer(
 
     extra_dirs = [canonical_relay_dir]
     if provider == "codex":
-        extra_dirs.append(_worktree_git_dir(worktree_path))
+        extra_dirs.extend((_worktree_git_dir(worktree_path), _git_object_dir(worktree_path)))
     argv = adapter.build_argv(
         prompt_path=prompt_path, worktree=worktree_path, model=model, effort=effort,
         budget_usd=max_budget_usd, extra_dirs=extra_dirs,
