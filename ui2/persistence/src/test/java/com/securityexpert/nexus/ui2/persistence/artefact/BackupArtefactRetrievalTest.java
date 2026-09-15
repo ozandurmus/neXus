@@ -1,18 +1,23 @@
 package com.securityexpert.nexus.ui2.persistence.artefact;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -21,6 +26,7 @@ import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
+import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
 import com.securityexpert.nexus.ui2.platform.BackupArtefactRetrievalPort.RetrieveResult;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
@@ -29,9 +35,11 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
  * 14I OR-1..OR-5, AC-4: the CLI retrieval's own business logic -- {@code
  * role:backup_admin} refusal, the reason-length gate, a successful
  * decrypt-to-path with its own audit row, and an unknown artefact id.
- * Exercised directly against {@link BackupArtefactRetrieval} (no real DB,
- * no real artefact store) since {@code ui2/cli}'s own {@code
- * backup-retrieve} command is a thin wrapper over exactly this port.
+ * Exercised directly against {@link BackupArtefactRetrieval} (no real DB)
+ * since {@code ui2/cli}'s own {@code backup-retrieve} command is a thin
+ * wrapper over exactly this port. Most cases use a fake {@link ArtefactStore};
+ * one case uses a real {@link FileArtefactStore} to prove the opaque
+ * artefact id (BK-14/OR-1) is never used as the store locator.
  */
 class BackupArtefactRetrievalTest {
 
@@ -59,7 +67,8 @@ class BackupArtefactRetrievalTest {
     }
 
     private static final class FakeManifestRepository implements BackupArtefactManifestRepository {
-        Optional<RetrievalManifest> manifest = Optional.of(new RetrievalManifest(ARTEFACT_ID, WRAPPED_KEY));
+        Optional<RetrievalManifest> manifest =
+                Optional.of(new RetrievalManifest(ARTEFACT_ID, WRAPPED_KEY, "recovery/volume/locator"));
 
         @Override
         public void record(BackupArtefactManifestRecord manifest, String actorFingerprint, String actionId) {
@@ -83,7 +92,7 @@ class BackupArtefactRetrievalTest {
 
         @Override
         public Optional<RetrievalManifest> findForRetrieval(String artefactId) {
-            return artefactId.equals(ARTEFACT_ID) ? manifest : Optional.empty();
+            return manifest.filter(m -> m.artefactId().equals(artefactId));
         }
     }
 
@@ -163,14 +172,23 @@ class BackupArtefactRetrievalTest {
     }
 
     private static final class Harness {
-        final FakeArtefactStore artefactStore = new FakeArtefactStore();
         final FakeManifestRepository manifestRepository = new FakeManifestRepository();
         final FakeRetrievalRepository retrievalRepository = new FakeRetrievalRepository();
         final FakeRoleBindingRepository roleBindingRepository = new FakeRoleBindingRepository();
         final FakeActorAuthzStateRepository actorAuthzStateRepository = new FakeActorAuthzStateRepository();
         final GroupReferenceCipher cipher = testCipher();
-        final BackupArtefactRetrieval retrieval = new BackupArtefactRetrieval(artefactStore, manifestRepository,
-                retrievalRepository, roleBindingRepository, actorAuthzStateRepository, cipher);
+        final FakeArtefactStore artefactStore;
+        final BackupArtefactRetrieval retrieval;
+
+        Harness() {
+            this(new FakeArtefactStore());
+        }
+
+        Harness(ArtefactStore artefactStore) {
+            this.artefactStore = artefactStore instanceof FakeArtefactStore fake ? fake : null;
+            this.retrieval = new BackupArtefactRetrieval(artefactStore, manifestRepository, retrievalRepository,
+                    roleBindingRepository, actorAuthzStateRepository, cipher);
+        }
 
         /** Grants role:backup_admin to {@link #ACTOR} by making its resolved group set contain the one bound (decrypted) group reference. */
         void grantBackupAdmin() {
@@ -244,5 +262,44 @@ class BackupArtefactRetrievalTest {
 
         assertTrue(result instanceof RetrieveResult.AuditRefused, "expected AuditRefused, got " + result);
         assertTrue(Files.notExists(destination), "an audit refusal must not release plaintext");
+    }
+
+    /**
+     * BK-14/OR-1 regression: against a real {@link FileArtefactStore}, the
+     * opaque {@code artefactId} and the store's real relative locator are
+     * deliberately different strings. If retrieval ever used {@code
+     * artefactId} as the {@link ArtefactRef} again instead of the
+     * manifest's {@code recoveryVolumePath}, {@code FileArtefactStore}
+     * would fail to find the file and this test would fail.
+     */
+    @Test
+    void resolvesThroughTheServerOnlyLocatorNotTheOpaqueArtefactId(@TempDir Path storeRoot,
+            @TempDir Path destinationDir) throws IOException {
+        byte[] rawKey = new byte[32];
+        new SecureRandom().nextBytes(rawKey);
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(Base64.getEncoder().encodeToString(rawKey));
+        FileArtefactStore realStore = new FileArtefactStore(storeRoot, cipher);
+        byte[] plaintext = "show configuration\nset hostname gw-01\n".getBytes(StandardCharsets.UTF_8);
+
+        ArtefactStore.ArtefactHandle handle = realStore.open("device-1", "job-1", "check_point", false);
+        handle.sink().write(plaintext);
+        ArtefactStore.ArtefactMetadata written = handle.finish();
+        String realLocator = storeRoot.resolve(written.ref().value()).toString();
+
+        String opaqueArtefactId = UUID.randomUUID().toString();
+        assertNotEquals(opaqueArtefactId, realLocator, "the opaque id and the real locator must differ for this "
+                + "test to prove anything");
+
+        Harness harness = new Harness(realStore);
+        harness.grantBackupAdmin();
+        harness.manifestRepository.manifest = Optional.of(new BackupArtefactManifestRepository.RetrievalManifest(
+                opaqueArtefactId, written.wrappedDataKey(), realLocator));
+        Path destination = destinationDir.resolve("retrieved-configuration.txt");
+
+        RetrieveResult result = harness.retrieval.retrieve(ACTOR, opaqueArtefactId, destination.toString(),
+                VALID_REASON);
+
+        assertTrue(result instanceof RetrieveResult.Ok, "expected Ok, got " + result);
+        assertEquals(new String(plaintext, StandardCharsets.UTF_8), Files.readString(destination));
     }
 }
