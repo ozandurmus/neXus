@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.worker.backup;
 
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
@@ -186,13 +187,19 @@ public final class BackupJobExecutor {
         Optional<String> virtualSystemRef = confirmFacts.flatMap(DeviceConfirmFacts::virtualSystemRef);
         Optional<String> softwareVersion = confirmFacts.flatMap(DeviceConfirmFacts::observedSoftwareVersion);
         String hostnameSource = confirmFacts.flatMap(DeviceConfirmFacts::observedHostname).orElse(deviceId);
+        // C7 section 3.2: artefact_id is BRC's sha256-of-ciphertext identity,
+        // application-generated and opaque -- never the store's own relative
+        // path. The real producer path (artefact.ref()) stays server-side
+        // only, resolved against the recovery volume root, never returned
+        // over HTTP (section 3.2's recovery_volume_path rule).
+        String recoveryLocation = Path.of(recoveryVolumePath).resolve(artefact.ref().value()).toString();
         try {
-            BackupArtefactManifestRecord manifest = new BackupArtefactManifestRecord(artefact.ref().value(), deviceId,
-                    virtualSystemRef, ArtefactClass.BACKUP, VENDOR, softwareVersion, hostnameFingerprint.of(hostnameSource),
-                    artefact.plaintextSha256(), artefact.plaintextBytes(), artefact.ciphertextSha256(),
-                    artefact.ciphertextBytes(), artefact.keyId(), artefact.wrappedDataKey(),
-                    ArtefactValidation.reachedWithoutRestore(BACKUP_VALIDATION_LEVEL), BACKUP_RETENTION_TIER,
-                    Optional.empty(), recoveryVolumePath, Optional.of(deviationState));
+            BackupArtefactManifestRecord manifest = new BackupArtefactManifestRecord(artefact.ciphertextSha256(),
+                    deviceId, virtualSystemRef, ArtefactClass.BACKUP, VENDOR, softwareVersion,
+                    hostnameFingerprint.of(hostnameSource), artefact.plaintextSha256(), artefact.plaintextBytes(),
+                    artefact.ciphertextSha256(), artefact.ciphertextBytes(), artefact.keyId(),
+                    artefact.wrappedDataKey(), ArtefactValidation.reachedWithoutRestore(BACKUP_VALIDATION_LEVEL),
+                    BACKUP_RETENTION_TIER, Optional.empty(), recoveryLocation, Optional.of(deviationState));
             manifestRepository.record(manifest, ACTOR, ACTION_MANIFEST_RECORDED);
             return true;
         } catch (IllegalStateException versionUnresolvable) {
