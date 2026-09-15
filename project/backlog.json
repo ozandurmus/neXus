@@ -468,6 +468,15 @@
       "priority": "P0",
       "target": "MigrationStartupRunner (ApplicationRunner, @Order(0)) vs DeviceCompositionConfiguration.deviceCapabilityRegistry; observed on HOST-A 2026-09-15",
       "note": ""
+    },
+    {
+      "id": "job_failure_reason_is_never_recorded",
+      "category": "evidence",
+      "title": "A FAILED job records no reason: outcome, terminal_reason and finished_at stay empty and the run summary is circular, so the planned Jobs and Audit screens would render nothing",
+      "status": "planned",
+      "priority": "P0",
+      "target": "jobs.outcome/terminal_reason/finished_at; discovery_run.outcome_summary; blocks ui2_b1_07 and ui2_b1_08 being useful; observed HOST-A 2026-09-15",
+      "note": ""
     }
   ]
 }
