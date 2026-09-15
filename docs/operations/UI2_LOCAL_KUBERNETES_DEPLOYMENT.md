@@ -230,6 +230,28 @@ kubectl -n ui2 exec ui2-db-0 -- psql -d ui2 -c \
   'SELECT installed_rank, version, description, success FROM flyway_schema_history ORDER BY installed_rank;'
 ```
 
+### 6a. PostgreSQL NetworkPolicy gate
+
+`deploy/ui2/46-database-networkpolicy.yaml` is part of the manifest set. It
+selects only the database pods, permits TCP 5432 only from the existing service
+and worker labels, and denies database egress. It is not a cluster firewall.
+
+Do not apply this policy to a target cluster until the cluster owner has
+authorized the rollout and attested the trust controls required by the frozen
+PostgreSQL NetworkPolicy contract §4. Before starting the database or either
+actor workload, run that contract's §6 disposable-resource matrix with an
+approved immutable probe image: prove the two allowed actors, all listed
+same-namespace and cross-namespace denials, and denied database egress using
+fresh connections with a five-second maximum timeout. Record verdicts and
+counters only; do not log addresses, credentials, DSNs, or raw responses.
+
+This repository movement performed static conformance checks only. CNI
+enforcement, cluster admission controls, migration/readiness under the policy,
+restart and rollback remain **UNVERIFIED** until separately authorized
+real-cluster validation. On a missing or failed check, keep the database and
+actors stopped and retain the restrictive policy; do not add a broad allow or
+delete a live database policy.
+
 ## 7. Reach the UI
 
 Through the Ingress object, which is what the corporate platform's Route
