@@ -1909,6 +1909,42 @@ def test_verify_cli_passes_on_a_clean_worktree_with_an_object_validation_plan(tm
     assert rc == orch.EXIT_OK
 
 
+def test_verify_cli_uses_the_engineer_toolchain_environment(tmp_path, monkeypatch):
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())['id']
+    worktree = tmp_path / "worktrees" / relay_id
+    subprocess.run(["git", "worktree", "add", str(worktree), "origin/main", "-b", "feature/x"],
+                   cwd=work, check=True)
+    state_dir = tmp_path / "state"
+    orch._save_state(state_dir, relay_id, {"movement_id": relay_id, "worktree_path": str(worktree),
+                                            "phase": orch.PHASE_RUNNING, "pid": os.getpid(), "retry_count": 0})
+    launcher = tmp_path / "jdk" / "bin" / "java"
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("#!/bin/sh\n", encoding="utf-8")
+    launcher.chmod(0o755)
+    monkeypatch.setenv("PATH", str(launcher.parent))
+    monkeypatch.delenv("JAVA_HOME", raising=False)
+    engineer_env = {}
+    monkeypatch.setattr(
+        orch.subprocess, "Popen",
+        lambda _argv, env=None, **_kwargs: engineer_env.update(env or {}) or _FakeProc(1),
+    )
+    orch._spawn_engineer(
+        worktree_path=worktree, profile_path=tmp_path / "profile.json",
+        canonical_relay_dir=relay_dir, relay_file=next(relay_dir.glob("*.json")),
+    )
+    captured = {}
+    monkeypatch.setattr(orch.ov, "verify_movement", lambda **kwargs: captured.update(kwargs["env"]) or {"passed": True})
+
+    assert orch.main(["verify", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir)]) == orch.EXIT_OK
+    assert captured["PATH"].split(os.pathsep)[0] == str(launcher.parent)
+    assert captured["JAVA_HOME"] == str(launcher.parent.parent)
+    assert {key: captured[key] for key in ("PATH", "JAVA_HOME")} == {
+        key: engineer_env[key] for key in ("PATH", "JAVA_HOME")
+    }
+
+
 def test_verify_cli_fails_on_uncommitted_changes(tmp_path):
     """AC-5."""
     work = _init_bare_and_clone(tmp_path)

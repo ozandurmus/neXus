@@ -1599,7 +1599,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
         failure_reason = failure_reasons[0] if failure_reasons else None
         verify_result = (
             {"passed": True, "steps": [], "skipped_reason": "no_verify"} if args.no_verify
-            else ov.verify_movement(worktree_path=worktree_path, validation_plan=validation_plan, base_ref=base_ref)
+            else ov.verify_movement(
+                worktree_path=worktree_path, validation_plan=validation_plan, base_ref=base_ref,
+                env=_toolchain_environment(),
+            )
         )
         phase = PHASE_DONE if (exit_code == 0 and relay_status == "CLOSED" and verify_result["passed"]) else PHASE_FAILED
 
@@ -1662,6 +1665,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
 # verify (GOV.ORCH.1 section 2.2, also standalone)
 # ---------------------------------------------------------------------------
 
+def _toolchain_environment() -> dict[str, str]:
+    env = dict(os.environ)
+    _add_engineer_toolchains(env)
+    return env
+
+
 def _cmd_verify(args: argparse.Namespace) -> int:
     state_dir = Path(args.state_dir)
     relay_dir = Path(args.relay_dir).resolve()
@@ -1671,7 +1680,10 @@ def _cmd_verify(args: argparse.Namespace) -> int:
         return EXIT_USAGE
     worktree_path = Path(record["worktree_path"])
     validation_plan, base_ref, _relay_status = _movement_validation_plan_and_base(relay_dir, args.movement)
-    result = ov.verify_movement(worktree_path=worktree_path, validation_plan=validation_plan, base_ref=base_ref)
+    result = ov.verify_movement(
+        worktree_path=worktree_path, validation_plan=validation_plan, base_ref=base_ref,
+        env=_toolchain_environment(),
+    )
     print(json.dumps(result))
     return EXIT_OK if result["passed"] else EXIT_REFUSED
 
