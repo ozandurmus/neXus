@@ -25,6 +25,11 @@ public interface JobLeaseDao {
     boolean transitionState(String jobId, long leaseEpoch, String expectedFromState, String toState,
             String actorFingerprint, String actionId);
 
+    default boolean transitionState(String jobId, long leaseEpoch, String expectedFromState, String toState,
+            String actorFingerprint, String actionId, String terminalReason) {
+        return transitionState(jobId, leaseEpoch, expectedFromState, toState, actorFingerprint, actionId);
+    }
+
     List<ClaimedJobRow> findExpiredWithNoAttempt();
 
     List<ClaimedJobRow> findExpiredAllBoundaryNo();

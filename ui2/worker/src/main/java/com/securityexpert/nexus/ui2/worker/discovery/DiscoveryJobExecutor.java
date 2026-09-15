@@ -114,14 +114,15 @@ public final class DiscoveryJobExecutor {
         EnumerationOutcome outcome = enumerate(run.get());
 
         boolean outcomeWritten = attemptRepository.writeOutcome(attemptId, leaseEpoch,
-                outcome.succeeded ? "MATCHED" : "EXPECTATION_UNMET", null, 0L, 0L, fingerprintOf(outcome));
+                outcome.succeeded ? "MATCHED" : "EXPECTATION_UNMET", null, outcome.succeeded,
+                null, null, fingerprintOf(outcome)); // No response byte/line measurement reaches this executor.
         if (!outcomeWritten) {
             return new JobOutcome.ZombieStopped();
         }
 
         if (!outcome.succeeded) {
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED);
+                    ACTION_FAILED, outcome.failureReasonClass);
             discoveryRunRepository.markFailed(runId, outcome.failureReasonClass, ACTOR, ACTION_FAILED);
             return new JobOutcome.Failed(outcome.failureReasonClass);
         }
@@ -156,7 +157,7 @@ public final class DiscoveryJobExecutor {
         ManagementPlaneEnumerationResult result = checkPointEnumeration.run(request);
         return switch (result) {
             case ManagementPlaneEnumerationResult.Refused refused -> EnumerationOutcome.failed("REFUSED");
-            case ManagementPlaneEnumerationResult.Failed failed -> EnumerationOutcome.failed("FAILED");
+            case ManagementPlaneEnumerationResult.Failed failed -> EnumerationOutcome.failed(failureClass(failed.reason()));
             case ManagementPlaneEnumerationResult.Completed completed -> {
                 var rows = CandidateRowAssembler.assemble(completed.candidates());
                 var records = CheckPointDiscoveryCandidateMapper.map(run.runId(), rows);
@@ -171,7 +172,7 @@ public final class DiscoveryJobExecutor {
         PanoramaEnumerationResult result = paloAltoEnumeration.run(request);
         return switch (result) {
             case PanoramaEnumerationResult.Refused refused -> EnumerationOutcome.failed("REFUSED");
-            case PanoramaEnumerationResult.Failed failed -> EnumerationOutcome.failed("FAILED");
+            case PanoramaEnumerationResult.Failed failed -> EnumerationOutcome.failed(failureClass(failed.reason()));
             case PanoramaEnumerationResult.Completed completed -> {
                 var rows = com.securityexpert.nexus.ui2.discovery.pan.CandidateRowAssembler.assemble(completed.candidates());
                 var records = PaloAltoDiscoveryCandidateMapper.map(run.runId(), rows);
@@ -192,6 +193,14 @@ public final class DiscoveryJobExecutor {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    private static String failureClass(String reason) {
+        return switch (reason) {
+            case "unreachable" -> "UNREACHABLE";
+            case "refused" -> "REFUSED";
+            default -> "UNKNOWN_FAILURE";
+        };
     }
 
     private static final class EnumerationOutcome {

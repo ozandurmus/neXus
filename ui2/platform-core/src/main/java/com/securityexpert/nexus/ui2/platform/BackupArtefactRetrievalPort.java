@@ -27,6 +27,10 @@ public interface BackupArtefactRetrievalPort {
         record ReasonTooShort() implements RetrieveResult {
         }
 
+        /** The retrieval audit could not be recorded, so plaintext was not released. */
+        record AuditRefused() implements RetrieveResult {
+        }
+
         record IoFailure(String reason) implements RetrieveResult {
         }
     }

@@ -84,7 +84,7 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
         bgcolor: m3.surface,
       }}
     >
-      <NexusWordmark height={56} color={m3.onSurface} />
+      <NexusWordmark height={56} color={m3.onSurface} tagline />
       <Box
         component="form"
         onSubmit={handleSubmit}

@@ -25,7 +25,7 @@ public final class JooqEvidenceDao implements EvidenceDao {
     public void writeStepEvidence(String provenanceId, String runId, String stepId, String parserVersion,
             String capabilityVersion, String captureArtifactId, String sourceLocation, String sanitizedFragment,
             String fingerprintSha256, String attemptId, long leaseEpoch, String outcome, String errorClass,
-            long outputBytes, long outputLines) {
+            Long outputBytes, Long outputLines) {
         auditedTransactionBoundary.inTransaction("system:worker", "job_step_evidence_write", dsl -> {
             dsl.execute("insert into provenance_records(provenance_id, run_id, step_id, parser_version, "
                     + "capability_version, capture_artifact_id, source_location, sanitized_fragment, "

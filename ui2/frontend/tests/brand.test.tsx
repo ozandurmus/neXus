@@ -4,39 +4,45 @@ import { NexusMark } from "../src/brand/NexusMark";
 import { NexusWordmark } from "../src/brand/NexusWordmark";
 
 describe("NexusWordmark", () => {
-  it("renders an svg with an accessible neXus title", () => {
+  it("renders the approved wordmark asset", () => {
     const { container } = render(<NexusWordmark />);
-    const svg = container.querySelector("svg");
-    expect(svg).not.toBeNull();
-    expect(svg?.querySelector("title")?.textContent).toBe("neXus");
+    const image = container.querySelector("img");
+    expect(image).not.toBeNull();
+    expect(image?.getAttribute("src")).toContain("wordmark.svg");
+    expect(image?.getAttribute("alt")).toBe("neXus");
   });
 
-  it("scales from 20px to 200px tall with no raster asset", () => {
+  it("renders the approved tagline lockup when requested", () => {
+    const { container } = render(<NexusWordmark tagline />);
+    const image = container.querySelector("img");
+    expect(image?.getAttribute("src")).toContain("wordmark-tagline.svg");
+    expect(image?.getAttribute("alt")).toBe("neXus — A CLEARER TOMORROW");
+  });
+
+  it("keeps the height interface", () => {
     for (const height of [20, 200]) {
       const { container, unmount } = render(<NexusWordmark height={height} />);
-      const svg = container.querySelector("svg");
-      expect(svg?.getAttribute("height")).toBe(String(height));
-      expect(container.querySelector("img")).toBeNull();
+      expect(container.querySelector("img")?.getAttribute("height")).toBe(String(height));
       unmount();
     }
   });
 });
 
 describe("NexusMark", () => {
-  it("renders an svg with an accessible neXus title", () => {
+  it("renders the approved app mark asset", () => {
     const { container } = render(<NexusMark />);
-    const svg = container.querySelector("svg");
-    expect(svg).not.toBeNull();
-    expect(svg?.querySelector("title")?.textContent).toBe("neXus");
+    const image = container.querySelector("img");
+    expect(image).not.toBeNull();
+    expect(image?.getAttribute("src")).toContain("app-mark.svg");
+    expect(image?.getAttribute("alt")).toBe("neXus");
   });
 
-  it("scales from 20px to 200px tall with no raster asset", () => {
+  it("keeps the size interface", () => {
     for (const size of [20, 200]) {
       const { container, unmount } = render(<NexusMark size={size} />);
-      const svg = container.querySelector("svg");
-      expect(svg?.getAttribute("width")).toBe(String(size));
-      expect(svg?.getAttribute("height")).toBe(String(size));
-      expect(container.querySelector("img")).toBeNull();
+      const image = container.querySelector("img");
+      expect(image?.getAttribute("width")).toBe(String(size));
+      expect(image?.getAttribute("height")).toBe(String(size));
       unmount();
     }
   });

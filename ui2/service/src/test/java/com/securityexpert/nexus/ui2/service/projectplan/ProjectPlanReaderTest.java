@@ -162,7 +162,7 @@ class ProjectPlanReaderTest {
     // --- AC-1: missing/unreadable sources never fail the request -----------
 
     @Test
-    void everySourceMissingDegradesToEmptyDefaultsAndFiveWarningsNeverAFailure(@TempDir Path emptyDirectory) {
+    void everySourceMissingStatesSourceIsUnconfiguredAndDegradesWithoutFailure(@TempDir Path emptyDirectory) {
         Map<String, Object> payload = new ProjectPlanReader(emptyDirectory).read();
 
         assertEquals("1.0", payload.get("schema_version"));
@@ -173,6 +173,7 @@ class ProjectPlanReaderTest {
         assertEquals(0.0, (double) payload.get("overall_progress_percent"));
 
         List<String> warnings = warningsOf(payload);
+        assertTrue(warnings.contains("No project-plan source is configured."));
         assertTrue(warnings.contains("roadmap.json is missing or unreadable; using an empty default."));
         assertTrue(warnings.contains("feature_registry.json is missing or unreadable; using an empty default."));
         assertTrue(warnings.contains("backlog.json is missing or unreadable; using an empty default."));
