@@ -112,7 +112,7 @@ class PersistenceDeviceEnrollmentReadPortTest {
     }
 
     private static DeviceRecord deviceWith(String deviceId, DeviceEnrollmentState state, boolean disabled) {
-        return new DeviceRecord(deviceId, "vendor-hint-synthetic", "manual_registration", Instant.now(), false,
+        return new DeviceRecord(deviceId, "gateway", "vendor-hint-synthetic", "manual_registration", Instant.now(), false,
                 state, disabled, "cred-ref-synthetic");
     }
 
