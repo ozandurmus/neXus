@@ -50,9 +50,9 @@ candidates.
 
 Do not run expensive real-device collection for UI-only or documentation work.
 
-## CI validation policy (canonical — DEV.TEST.1 final topology, 2026-09-06)
+## CI validation policy (canonical — PO decision 2026-09-15C)
 
-`.github/workflows/validation.yml` implements the tiers above as two jobs.
+`.github/workflows/validation.yml` implements the tiers above as three jobs.
 This is the one canonical statement of the policy; other files (`AGENTS.md`/
 `CLAUDE.md`, `AI_START_HERE.md`, `AI_HANDOVER.md`) reference it rather than
 restating it.
@@ -66,40 +66,31 @@ restating it.
   conflict-marker check. Deliberately **not** a path→test classifier —
   bounded feature PRs are expected to pay for this job, not the full suite.
   This is the only job that runs automatically.
-- **`full-regression`** (`workflow_dispatch` **only**): the same gates plus
-  the full pytest suite, **parallel**
+- **`regression-scope`** (`pull_request`): compares the PR's changed paths.
+  It returns false only when every path is `docs/**` or `*.md`; unmatched
+  paths run by default. That keeps documentation and records cheap without
+  treating a mixed documentation directory as documentation-only.
+- **`full-regression`** (`workflow_dispatch`, or a pull request whose scope
+  says to run): the same gates plus the full pytest suite, **parallel**
   (`python -m pytest -q -n auto --dist worksteal`, `DEV.TEST.1`, 2026-09-06 —
   Test execution economy above explains why parallel is safe). One
   pytest-xdist master process still yields one aggregate exit code across
   every worker, so no worker's failure is masked by another's pass. It does
-  **not** run automatically on `pull_request` or on push to `main` — there
-  is no `push:` trigger in the workflow at all. Dispatching it against
-  GitHub-hosted infrastructure is an **exceptional, materially justified
-  action** (e.g. proving the parallel design itself works in the cloud, or
-  a specific reason local/agent-cloud evidence cannot be trusted for a
-  given change) — the already-proven local/agent-cloud parallel run
-  (`python -m pytest -q -n auto --dist worksteal`) is normally sufficient
-  evidence and does not need a GitHub-hosted confirmation.
+  runs automatically for source, tests, project state, workflows and
+  deployment manifests because their paths are not excluded. It does not
+  run for documentation-only PRs. There is no `push:` trigger. Manual
+  dispatch remains available; a GitHub-hosted manual run is exceptional
+  when local/agent-cloud evidence is sufficient.
 
-**Why there is no automatic full-suite CI trigger at all (Product Owner
-directed, 2026-09-06, final):** parallelizing the full suite made a
-GitHub-hosted run fast enough to consider running automatically, and this
-movement evaluated two intermediate designs before landing here — running
-`full-regression` on every `pull_request` (evaluated, reverted), and
-running it on every push to `main` (the design actually merged first, then
-also reverted). Both were superseded by this final, explicit Product Owner
-instruction: **no automatic GitHub-hosted full-regression trigger of any
-kind.** `pull_request` schedules `validate` only; `full-regression`
-schedules only via an explicit `workflow_dispatch`. The workflow's `push:`
-trigger was removed entirely — with `full-regression` withheld from
-automatic triggers and `validate` restricted to `pull_request`, a
-push-to-`main` event would otherwise match no job's `if:` condition and
-produce an empty, zero-job workflow run, which is worse than no trigger at
-all. Workflow run `34020356372` (a push-to-main run from the
-intermediate, now-superseded design) remains on record as one-time proof
-that the parallel command itself runs correctly on GitHub-hosted
-infrastructure — it is **not** read as authorization for automatic
-full-regression on every push, which this final topology removes.
+**Why the automatic trigger is conditional (Product Owner decision,
+2026-09-15C):** running the suite on every pull request was considered and
+rejected because it pays the full GitHub-hosted cost for documentation-only
+changes. Leaving it manual was also rejected: PR #359 merged with failing
+tests because a skipped gate reports green. Therefore `full-regression` runs
+for every path except `docs/**` and `*.md`, with unmatched paths failing safe
+by running. The workflow has no `push:` trigger. Workflow run `34020356372`
+remains one-time proof that the parallel command works on GitHub-hosted
+infrastructure, not authorization for an unconditional PR gate.
 
 **Post-merge YAML-syntax incident (2026-09-06, corrects an in-session
 misdiagnosis, kept for context):** while iterating on the intermediate
@@ -121,30 +112,18 @@ test_workflow_yaml_parses` (`pyyaml` dev dependency) now parses this file
 on every test run specifically so a future syntax defect fails locally
 before push, not silently in the cloud after merge.
 
-A PR that trips one of the **full-regression triggers** below still needs a
-full regression before merge — run it locally
-(`py -m pytest -q -n auto --dist worksteal > pytest_result.log 2>&1`, or the
-equivalent one-shot `scripts/pytest_one_shot.ps1`), and say so in the PR.
-Dispatch the GitHub-hosted `full-regression` job explicitly
-(`workflow_dispatch`) only for a materially justified reason beyond that
-local evidence — it is not a routine pre-merge step. Triggers for needing a
-full regression at all (local or, exceptionally, GitHub-hosted): dependency/
-requirements changes; shared test infrastructure; schema/storage/
-migrations; concurrency/global shared state; a security or authentication
-boundary; broad common domain behavior; CI/test infrastructure itself; a
-release/integration milestone; an explicit PO/contract requirement. This
-list is deliberately not an automatic classifier — the agent applies it by
-judgment per change, the same way the rest of the validation ladder is
-applied.
+A PR that is not documentation-only runs the GitHub-hosted full regression
+before merge. The excluded expressions are deliberately narrow: `docs/**`
+means documentation, and `*.md` covers standalone records; `project/**` is
+not excluded because project state can break the suite. A path not covered by
+either expression runs the suite. Manual dispatch remains available.
 
-Because `full-regression` no longer runs automatically on push to `main`,
-there is no post-merge integration safety net beyond `validate`'s fast
-gates unless a session explicitly dispatches it. If a dispatched
-`full-regression` run does fail, treat `main`'s integration baseline as
-unhealthy per `AGENTS.md` "Mandatory build lifecycle": report it
-immediately, and do not merge further feature PRs until the regression is
-understood or a PO explicitly waives it for a proven infrastructure-only
-cause.
+Because there is no automatic push-to-main trigger, a PR that is
+documentation-only has no full-suite CI safety net. If a `full-regression`
+run fails, treat `main`'s integration baseline as unhealthy per `AGENTS.md`
+"Mandatory build lifecycle": report it immediately, and do not merge
+further feature PRs until the regression is understood or a PO explicitly
+waives it for a proven infrastructure-only cause.
 
 ## Build size
 
