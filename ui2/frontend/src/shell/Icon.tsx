@@ -17,7 +17,8 @@ export type IconName =
   | "menu"
   | "more"
   | "plus"
-  | "download";
+  | "download"
+  | "audit";
 
 const common: SVGProps<SVGSVGElement> = {
   viewBox: "0 0 24 24",
@@ -115,6 +116,15 @@ export function Icon({ name, size = 20 }: { readonly name: IconName; readonly si
       return (
         <svg {...props}>
           <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />
+        </svg>
+      );
+    case "audit":
+      return (
+        <svg {...props}>
+          <path d="M6 3h9l3 3v15H6z" />
+          <path d="M9 8h6M9 12h5M9 16h3" />
+          <circle cx="17.5" cy="17.5" r="2.75" />
+          <path d="M19.6 19.6L22 22" />
         </svg>
       );
   }

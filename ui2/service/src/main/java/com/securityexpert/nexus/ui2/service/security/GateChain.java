@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
 import com.securityexpert.nexus.ui2.persistence.identity.AuthzDecisionRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialRecord;
@@ -68,6 +69,25 @@ public final class GateChain {
     }
 
     public GateOutcome evaluate(GateRequest request, Instant now) {
+        return evaluate(request, now, actorFingerprint -> request.actionId());
+    }
+
+    /**
+     * Same {@code E1}-{@code E6} chain, except {@code E2}'s action id is
+     * resolved from the authenticated {@code actorFingerprint} (never from
+     * anything the browser sent) instead of being fixed on {@code request}.
+     * Audit's {@code ui2.audit.read_own}/{@code ui2.audit.read_all} split
+     * (`UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md` §2, §5.1: "the front end
+     * computes no scope of its own... decided by the server on every
+     * request") is the reason this overload exists: a route whose gated
+     * action depends on which role the actor holds cannot be expressed by
+     * {@code SecurityWebMvcConfig}'s static one-route-to-one-action map.
+     * {@code E1} still runs exactly once (one heartbeat, one session read);
+     * {@code actionIdResolver} runs after {@code E1} succeeds and before
+     * {@code E2}, and {@code E4} still writes exactly one
+     * {@code authz_decisions} row, for whichever action the resolver named.
+     */
+    public GateOutcome evaluate(GateRequest request, Instant now, Function<String, String> actionIdResolver) {
         // E1: session authenticity.
         if (request.sessionCookieRawValue().isEmpty()) {
             return refuse("E1", 401, "SESSION_INVALID", "no session cookie presented");
@@ -117,7 +137,8 @@ public final class GateChain {
         }
 
         // E2: action identity.
-        Optional<ActionDescriptor> maybeAction = actionRegistry.find(request.actionId());
+        String actionId = actionIdResolver.apply(actorFingerprint);
+        Optional<ActionDescriptor> maybeAction = actionRegistry.find(actionId);
         if (maybeAction.isEmpty()) {
             return refuse("E2", 404, "ACTION_UNKNOWN", "action_id not present in the registry");
         }

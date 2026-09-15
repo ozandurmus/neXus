@@ -476,4 +476,52 @@ class GateChainTest {
         assertTrue(outcome instanceof GateOutcome.Proceed, "with the posture off, a seeded password blocks nothing");
     }
 
+    /**
+     * The dynamic-action overload {@code AuditController} needs: E2-E4 must
+     * evaluate whichever action id the resolver names for the now-known
+     * actor, not {@code request.actionId()}, and E4 must still write exactly
+     * one {@code authz_decisions} row for that resolved action.
+     */
+    @Test
+    void dynamicResolverOverloadEvaluatesTheResolvedActionNotTheRequestsOwn() {
+        FakeSessionRepository sessions = new FakeSessionRepository();
+        String sessionId = SessionHasher.hash("raw-cookie-dynamic");
+        sessions.put(activeSession(sessionId));
+        ActionRegistry registry = new ActionRegistry();
+        registry.register(new ActionDescriptor("resolved_action", true, Optional.empty()));
+        RbacEvaluator evaluator = new RbacEvaluator(new FakeRoleBindingRepository(),
+                new FakeActorAuthzStateRepository(), cipher());
+        FakeAuthzDecisionRepository decisions = new FakeAuthzDecisionRepository();
+        GateChain chain = new GateChain(sessions, registry, evaluator, decisions);
+
+        // The GateRequest's own actionId ("no_such_action") is unregistered
+        // and would refuse at E2 -- proving the resolver's return value, not
+        // this field, is what E2 actually looks up.
+        GateRequest request = new GateRequest("GET", Optional.of("raw-cookie-dynamic"), Optional.empty(),
+                Optional.empty(), "no_such_action", Optional.empty());
+
+        GateOutcome outcome = chain.evaluate(request, NOW, actorFingerprint -> {
+            assertEquals(ACTOR, actorFingerprint, "the resolver must see the E1-authenticated actor");
+            return "resolved_action";
+        });
+
+        assertTrue(outcome instanceof GateOutcome.Proceed);
+        assertEquals(1, decisions.callCount, "exactly one authz_decisions row for the resolved action");
+    }
+
+    @Test
+    void singleArgEvaluateOverloadIsUnaffectedByTheResolverAddition() {
+        FakeSessionRepository sessions = new FakeSessionRepository();
+        String sessionId = SessionHasher.hash("raw-cookie-unaffected");
+        sessions.put(activeSession(sessionId));
+        GateChain chain = newChain(sessions, new FakeRoleBindingRepository(), new FakeAuthzDecisionRepository());
+
+        GateRequest request = new GateRequest("GET", Optional.of("raw-cookie-unaffected"), Optional.empty(),
+                Optional.empty(), "no_such_action", Optional.empty());
+
+        GateOutcome outcome = chain.evaluate(request, NOW);
+
+        assertTrue(outcome instanceof GateOutcome.Refused);
+        assertEquals("E2", ((GateOutcome.Refused) outcome).gate());
+    }
 }

@@ -63,13 +63,7 @@ public final class GateChainInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        GateRequest gateRequest = new GateRequest(
-                request.getMethod(),
-                findSessionCookie(request),
-                Optional.ofNullable(request.getHeader("X-CSRF-Token")),
-                Optional.ofNullable(request.getHeader("Origin")),
-                actionId,
-                Optional.ofNullable(request.getParameter("target_ref")));
+        GateRequest gateRequest = toGateRequest(request, actionId);
 
         GateOutcome outcome = gateChain.evaluate(gateRequest, Instant.now());
         if (outcome instanceof GateOutcome.Proceed proceed) {
@@ -82,6 +76,26 @@ public final class GateChainInterceptor implements HandlerInterceptor {
         response.setContentType("application/json");
         objectMapper.writeValue(response.getWriter(), refused.body());
         return false;
+    }
+
+    /**
+     * Builds the servlet-independent {@link GateRequest} this interceptor
+     * evaluates, exposed so a controller a route map cannot express (a
+     * per-actor dynamic action, e.g. the Audit screen's {@code read_own}/
+     * {@code read_all} split) can drive {@link GateChain} itself with the
+     * exact same extraction this interceptor uses everywhere else.
+     * {@code actionId} is irrelevant to the caller when it goes on to use
+     * {@link GateChain}'s resolver-taking {@code evaluate} overload -- it is
+     * still required here because {@link GateRequest} always carries one.
+     */
+    public static GateRequest toGateRequest(HttpServletRequest request, String actionId) {
+        return new GateRequest(
+                request.getMethod(),
+                findSessionCookie(request),
+                Optional.ofNullable(request.getHeader("X-CSRF-Token")),
+                Optional.ofNullable(request.getHeader("Origin")),
+                actionId,
+                Optional.ofNullable(request.getParameter("target_ref")));
     }
 
     private String actionIdFor(String method, String servletPath) {

@@ -85,6 +85,18 @@ public final class ActionRegistry {
      */
     public static final String PROJECT_PLAN_READ = "project_plan_read";
 
+    /**
+     * {@code UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md} §2: two actions, not
+     * one, because the screen's own scope (own rows vs. every row) is a
+     * function of which token the actor holds, resolved server-side per
+     * request ({@link GateChain}'s dynamic-action {@code evaluate} overload)
+     * rather than by a single open gate. Namespaced {@code ui2.audit.*}
+     * because the contract itself names these two ids exactly.
+     */
+    public static final String AUDIT_READ_OWN = "ui2.audit.read_own";
+    /** §2: {@code role:security_admin} only -- CLASS_0_READ, never a device action, so C3 §4.1's separation of duties is not crossed by granting it. */
+    public static final String AUDIT_READ_ALL = "ui2.audit.read_all";
+
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
     public ActionRegistry() {
@@ -137,6 +149,11 @@ public final class ActionRegistry {
         register(new ActionDescriptor(DEVICE_BACKUP_READ, true, Optional.empty()));
         // WORKER.md: same open-to-any-authenticated-session gate as DEVICE_READ.
         register(new ActionDescriptor(PROJECT_PLAN_READ, true, Optional.empty()));
+        // Contract §2: read_own requires role:viewer, read_all requires
+        // role:security_admin -- an actor holding neither is refused by E4
+        // regardless of which of the two GateChain's resolver names for them.
+        register(new ActionDescriptor(AUDIT_READ_OWN, true, Optional.of(RoleToken.VIEWER)));
+        register(new ActionDescriptor(AUDIT_READ_ALL, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

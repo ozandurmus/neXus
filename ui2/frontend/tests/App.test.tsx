@@ -30,7 +30,7 @@ describe("the UI 2.0 shell navigation", () => {
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
     const labels = DESTINATIONS.map((d) => d.label);
-    expect(labels).toEqual(["Overview", "Devices", "Config", "Compliance", "Operations", "Admin"]);
+    expect(labels).toEqual(["Overview", "Devices", "Config", "Compliance", "Operations", "Admin", "Audit"]);
     for (const d of DESTINATIONS) {
       expect(within(rail).getByText(d.label)).toBeInTheDocument();
     }

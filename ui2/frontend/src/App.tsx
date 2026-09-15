@@ -11,12 +11,14 @@ import { ConfigurationScreen } from "./screens/ConfigurationScreen";
 import { ComplianceScreen } from "./screens/ComplianceScreen";
 import { OperationsScreen } from "./screens/OperationsScreen";
 import { AdministrationScreen } from "./screens/AdministrationScreen";
+import { AuditScreen } from "./screens/AuditScreen";
 import { OverviewPreview } from "./preview/OverviewPreview";
 import { InventoryPreview } from "./preview/InventoryPreview";
 import { ConfigurationPreview } from "./preview/ConfigurationPreview";
 import { CompliancePreview } from "./preview/CompliancePreview";
 import { OperationsPreview } from "./preview/OperationsPreview";
 import { AdministrationPreview } from "./preview/AdministrationPreview";
+import { AuditPreview } from "./preview/AuditPreview";
 import { m3Theme } from "./theme/m3Theme";
 import { isScreenId, type ScreenId } from "./shell/types";
 
@@ -24,7 +26,7 @@ import { isScreenId, type ScreenId } from "./shell/types";
  * UI 2.0 shell. React + MUI on the Material 3 scheme from the Product Owner's
  * design canvas.
  *
- * All six product screens route through `?screen=<id>`, and each renders its
+ * All seven product screens route through `?screen=<id>`, and each renders its
  * own empty state because the database is empty. `?preview=<id>` renders the
  * same screen's target, populated look with synthetic data so the design can
  * be reviewed while it is being built; every preview carries a banner saying
@@ -41,6 +43,7 @@ const PRODUCT_SCREENS: Record<ScreenId, () => JSX.Element> = {
   compliance: ComplianceScreen,
   operations: OperationsScreen,
   administration: AdministrationScreen,
+  audit: AuditScreen,
 };
 
 const PREVIEW_SCREENS: Record<ScreenId, () => JSX.Element> = {
@@ -50,6 +53,7 @@ const PREVIEW_SCREENS: Record<ScreenId, () => JSX.Element> = {
   compliance: CompliancePreview,
   operations: OperationsPreview,
   administration: AdministrationPreview,
+  audit: AuditPreview,
 };
 
 export function screenFromSearch(search: string): { readonly screen: ScreenId; readonly preview: boolean } {

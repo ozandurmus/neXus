@@ -614,3 +614,93 @@ export interface ProjectPlanView {
 export function getProjectPlan(): Promise<ProjectPlanView> {
   return call("/project-plan", "GET");
 }
+
+/**
+ * Audit screen (`UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md`): a read-only
+ * view over `audit_log`. Unlike every route above, this one is served at
+ * `/api/audit` -- the controller's own route, not the shell's usual
+ * unprefixed convention. The front end computes no scope of its own:
+ * `read_own` versus `read_all` is decided by the server on every request
+ * (§5.1), so no function here accepts or sends a scope parameter. `row_pk`
+ * and `actor_fingerprint` are opaque strings end to end -- never parsed,
+ * pattern-matched, or resolved to an identity by any caller of these
+ * functions (`AGENTS.md` identity law).
+ */
+export type AuditOperation = "INSERT" | "UPDATE" | "DELETE";
+
+export interface AuditEntrySummaryView {
+  readonly audit_id: number;
+  readonly occurred_at: string;
+  readonly table_name: string;
+  readonly row_pk: string;
+  readonly operation: string;
+  readonly actor_fingerprint: string;
+  readonly action_id: string;
+  readonly correlation_run_id: string | null;
+}
+
+export interface AuditListResult {
+  readonly entries: AuditEntrySummaryView[];
+  readonly next_cursor: string | null;
+}
+
+/** Every field is an operator-typed filter value; nothing here is inferred by the front end. */
+export interface AuditListQuery {
+  readonly table_name?: string;
+  readonly row_pk?: string;
+  readonly operation?: AuditOperation;
+  readonly actor_fingerprint?: string;
+  readonly action_id?: string;
+  readonly correlation_run_id?: string;
+  readonly occurred_from?: string;
+  readonly occurred_to?: string;
+  readonly limit?: number;
+  /** Opaque, minted by a previous response's `next_cursor` -- passed back verbatim, never constructed. */
+  readonly cursor?: string;
+}
+
+/**
+ * `UI2_0_B1_08...` §3.2's five payload shapes, discriminated on `state`.
+ * `REDACTED`, `NULL` and `ABSENT` are three distinct states a renderer must
+ * never collapse into one another; `UNCLASSIFIED` carries no value of any
+ * kind, ever.
+ */
+export type AuditFieldProjectionView =
+  | { readonly state: "PRESENT"; readonly value: unknown }
+  | { readonly state: "NULL" }
+  | { readonly state: "REDACTED"; readonly tier: number; readonly reason: string }
+  | { readonly state: "ABSENT" }
+  | { readonly state: "UNCLASSIFIED"; readonly table_name: string; readonly column_name: string };
+
+export type AuditChangeStateView = "CHANGED" | "UNCHANGED" | "NOT_EVALUABLE";
+
+export interface AuditEntryDetailView extends AuditEntrySummaryView {
+  readonly before_fields: Record<string, AuditFieldProjectionView>;
+  readonly after_fields: Record<string, AuditFieldProjectionView>;
+  /** Present only for an `UPDATE` row (§3.2). */
+  readonly change_states?: Record<string, AuditChangeStateView>;
+}
+
+function auditQueryString(query: AuditListQuery): string {
+  const params = new URLSearchParams();
+  if (query.table_name) params.set("table_name", query.table_name);
+  if (query.row_pk) params.set("row_pk", query.row_pk);
+  if (query.operation) params.set("operation", query.operation);
+  if (query.actor_fingerprint) params.set("actor_fingerprint", query.actor_fingerprint);
+  if (query.action_id) params.set("action_id", query.action_id);
+  if (query.correlation_run_id) params.set("correlation_run_id", query.correlation_run_id);
+  if (query.occurred_from) params.set("occurred_from", query.occurred_from);
+  if (query.occurred_to) params.set("occurred_to", query.occurred_to);
+  if (query.limit) params.set("limit", String(query.limit));
+  if (query.cursor) params.set("cursor", query.cursor);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export function listAuditEntries(query: AuditListQuery = {}): Promise<AuditListResult> {
+  return call(`/api/audit${auditQueryString(query)}`, "GET");
+}
+
+export function getAuditEntry(auditId: number): Promise<AuditEntryDetailView> {
+  return call(`/api/audit/${encodeURIComponent(String(auditId))}`, "GET");
+}

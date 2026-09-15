@@ -38,6 +38,7 @@ export const DESTINATIONS: readonly RailDestination[] = [
   { id: "compliance", label: "Compliance", icon: "compliance", screen: "compliance" },
   { id: "operations", label: "Operations", icon: "operations", screen: "operations" },
   { id: "admin", label: "Admin", icon: "admin", screen: "administration" },
+  { id: "audit", label: "Audit", icon: "audit", screen: "audit" },
 ];
 
 export interface DrawerLeaf {
@@ -147,6 +148,14 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
       </Box>
 
       <DrawerItem label="Overview" on={active === "overview"} navHref="?screen=overview" />
+      {/*
+       * `UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md` §5.1: this entry always
+       * renders for every authenticated actor, including one holding
+       * neither of the two roles the screen requires -- the screen itself
+       * renders the server's explained refusal. No role check belongs here
+       * or anywhere else in this file (`C3` §5.4 `AG-J3`).
+       */}
+      <DrawerItem label="Audit" on={active === "audit"} navHref="?screen=audit" />
 
       {DRAWER_GROUPS.map((g) => (
         <Box key={g.header}>

@@ -1,11 +1,12 @@
-/** The six product screens this build routes, named for their M3 frame. */
+/** The seven product screens this build routes, named for their M3 frame. */
 export type ScreenId =
   | "overview"
   | "inventory"
   | "configuration"
   | "compliance"
   | "operations"
-  | "administration";
+  | "administration"
+  | "audit";
 
 export const SCREEN_IDS: readonly ScreenId[] = [
   "overview",
@@ -14,6 +15,7 @@ export const SCREEN_IDS: readonly ScreenId[] = [
   "compliance",
   "operations",
   "administration",
+  "audit",
 ];
 
 export function isScreenId(value: string | null): value is ScreenId {
