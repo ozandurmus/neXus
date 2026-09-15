@@ -46,14 +46,14 @@ import com.securityexpert.nexus.ui2.service.security.SessionSelfLogoutService;
  * first-boot seeder requires -- {@code GateChain}/RBAC's HTTP enforcement
  * (C3) stays unwired by this movement.
  *
- * <p>Session durations (30 minutes idle, 10 hours absolute) are {@code C3}
- * §3.2's own fixed values, not a new configuration surface this movement
- * introduces.</p>
+ * <p>Session durations (5 minutes idle, 10 hours absolute) are fixed by
+ * {@code PO_DECISION_RECORD_2026_09_15B_SESSION_POLICY_AND_ADMIN_VISIBILITY}
+ * SP-1, not a new configuration surface this movement introduces.</p>
  */
 @Configuration
 public class LocalAuthenticationConfiguration {
 
-    private static final Duration IDLE_TIMEOUT = Duration.ofMinutes(30);
+    static final Duration IDLE_TIMEOUT = Duration.ofMinutes(5);
     private static final Duration ABSOLUTE_LIFETIME = Duration.ofHours(10);
 
     private final Path groupReferenceKeyFile;

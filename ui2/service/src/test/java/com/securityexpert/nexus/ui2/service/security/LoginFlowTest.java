@@ -115,7 +115,7 @@ class LoginFlowTest {
     }
 
     private static LoginFlow newFlow(InMemorySessionRepository repo) {
-        return new LoginFlow(repo, Duration.ofMinutes(30), Duration.ofHours(10));
+        return new LoginFlow(repo, Duration.ofMinutes(5), Duration.ofHours(10));
     }
 
     @Test
