@@ -2,10 +2,10 @@
 
 ## Status
 
-**DRAFT — concrete contract awaiting Product Owner review; not implementation authority.**
-Prepared under NXS-LOCAL-0246, 2026-09-15. Canonical relay correction seq 3
-requires review of this concrete draft before FROZEN. Approval must identify
-this document and reviewed Git revision; freezing records that decision here.
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-15.** Revision
+`01863714f087d97b782bfd66033f2d5445114a85` was reviewed and approved through
+canonical relay decision sequence 5. This contract is implementation authority
+only for the successor named in §7.
 
 ## 1. Amendment and scope
 
