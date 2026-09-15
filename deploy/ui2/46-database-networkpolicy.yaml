@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ui2-db-isolation
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: database
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexus-ui2
+      app.kubernetes.io/component: database
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: nexus-ui2
+              app.kubernetes.io/component: service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: nexus-ui2
+              app.kubernetes.io/component: worker
+      ports:
+        - protocol: TCP
+          port: 5432
+  egress: []

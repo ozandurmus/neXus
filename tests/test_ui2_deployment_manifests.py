@@ -323,6 +323,56 @@ def test_route_is_a_separate_file_and_the_only_platform_difference():
     assert "Ingress" in local_kinds
 
 
+def test_database_network_policy_matches_the_database_and_only_existing_actors():
+    """UI2 C-series NetworkPolicy contract §3 and §6."""
+    policies = [
+        (path, doc)
+        for path, doc in _documents(include_openshift=False)
+        if doc.get("kind") == "NetworkPolicy"
+    ]
+    assert len(policies) == 1, "no delivered policy may widen the database boundary"
+    path, policy = policies[0]
+    assert path.name == "46-database-networkpolicy.yaml"
+    assert policy.get("apiVersion") == "networking.k8s.io/v1"
+    metadata = policy.get("metadata") or {}
+    assert metadata.get("name") == "ui2-db-isolation"
+    assert metadata.get("namespace") == "ui2"
+    assert metadata.get("labels") == {
+        "app.kubernetes.io/part-of": "nexus-ui2",
+        "app.kubernetes.io/component": "database",
+    }
+
+    def template_labels(kind: str, name: str) -> dict:
+        workload = next(
+            doc for _, doc in _documents(include_openshift=False)
+            if doc.get("kind") == kind and (doc.get("metadata") or {}).get("name") == name
+        )
+        return (((workload.get("spec") or {}).get("template") or {}).get("metadata") or {}).get("labels") or {}
+
+    database_labels = template_labels("StatefulSet", "ui2-db")
+    service_labels = template_labels("Deployment", "ui2-service")
+    worker_labels = template_labels("Deployment", "ui2-worker")
+
+    spec = policy.get("spec") or {}
+    assert spec.get("podSelector") == {"matchLabels": database_labels}
+    assert spec.get("policyTypes") == ["Ingress", "Egress"]
+    assert spec.get("egress") == []
+    assert len(spec.get("ingress") or []) == 1
+    ingress = spec["ingress"][0]
+    assert ingress.get("from") == [
+        {"podSelector": {"matchLabels": service_labels}},
+        {"podSelector": {"matchLabels": worker_labels}},
+    ]
+
+    database_service = next(
+        doc for _, doc in _documents(include_openshift=False)
+        if doc.get("kind") == "Service" and (doc.get("metadata") or {}).get("name") == "ui2-db"
+    )
+    port = (database_service.get("spec") or {}).get("ports", [])[0]
+    assert port == {"name": "postgresql", "port": 5432, "targetPort": "postgresql"}
+    assert ingress.get("ports") == [{"protocol": "TCP", "port": port["port"]}]
+
+
 @pytest.mark.parametrize("path", _manifest_files())
 def test_no_host_container_tool_appears(path: Path):
     """BP-2 / §11 check 3."""
