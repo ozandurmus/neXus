@@ -12,6 +12,7 @@ import com.securityexpert.nexus.ui2.persistence.identity.JooqAuthzDecisionReposi
 import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.LocalIdentityAdministration;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.ReplaySessionRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.RootIdentityRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.SecurityAdminLockoutGuard;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionRepository;
@@ -20,6 +21,7 @@ import com.securityexpert.nexus.ui2.platform.LocalIdentityAdministrationPort;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 import com.securityexpert.nexus.ui2.service.security.GateChain;
 import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
+import com.securityexpert.nexus.ui2.service.security.ReplayViewerBoundary;
 import com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver;
 import com.securityexpert.nexus.ui2.service.security.LocalRoleTokenResolver;
 import com.securityexpert.nexus.ui2.service.security.RoleBindingAdminService;
@@ -81,8 +83,16 @@ public class RbacConfiguration {
     }
 
     @Bean
-    public SecurityWebMvcConfig securityWebMvcConfig(GateChain gateChain) {
-        return new SecurityWebMvcConfig(gateChain);
+    public SecurityWebMvcConfig securityWebMvcConfig(GateChain gateChain,
+            ReplayViewerBoundary replayBoundary) {
+        return new SecurityWebMvcConfig(gateChain, replayBoundary);
+    }
+
+    @Bean
+    public ReplaySessionRepository replaySessionRepository(
+            TransactionBoundary transactions, GroupReferenceCipher cipher,
+            @Value("${ui2.role-binding.group-reference-key-id}") String wrappingKeyId) {
+        return new ReplaySessionRepository(transactions, cipher, wrappingKeyId);
     }
 
     /** 13G LIA-3.5: shared by {@link RoleBindingAdminService#revoke} and {@link LocalIdentityAdministration#disable}. */

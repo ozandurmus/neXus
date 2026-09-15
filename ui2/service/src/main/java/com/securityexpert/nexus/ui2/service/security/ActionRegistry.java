@@ -85,6 +85,9 @@ public final class ActionRegistry {
      */
     public static final String PROJECT_PLAN_READ = "project_plan_read";
 
+    public static final String REPLAY_ACTIVATE = "replay_session_activate";
+    public static final String REPLAY_DEACTIVATE = "replay_session_deactivate";
+
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
     public ActionRegistry() {
@@ -92,6 +95,8 @@ public final class ActionRegistry {
     }
 
     private void seedActions() {
+        register(new ActionDescriptor(REPLAY_ACTIVATE, true, Optional.of(RoleToken.REPLAY_VIEWER)));
+        register(new ActionDescriptor(REPLAY_DEACTIVATE, true, Optional.empty()));
         register(new ActionDescriptor(ROLE_BINDING_CREATE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(ROLE_BINDING_REVOKE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SESSION_REVOKE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
