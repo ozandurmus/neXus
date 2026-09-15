@@ -600,34 +600,39 @@ export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
           body="No backup has been retained for this device."
         />
       ) : (
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Collected time</TableCell>
-              <TableCell>Size</TableCell>
-              <TableCell>Digest prefix</TableCell>
-              <TableCell>Validation level</TableCell>
-              <TableCell>Deviation state</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {backups.map((b) => (
-              <TableRow key={b.artefact_id}>
-                <TableCell>{b.collected_at}</TableCell>
-                <TableCell>{b.size_bytes}</TableCell>
-                <TableCell>{b.digest_prefix}</TableCell>
-                <TableCell>{b.validation_level}</TableCell>
-                <TableCell>
-                  {b.deviation_state === null ? (
-                    <StatusChip tone="neutral" label="not evaluated" dense />
-                  ) : (
-                    <StatusChip tone="neutral" label={b.deviation_state} dense />
-                  )}
-                </TableCell>
+        <>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Collected time</TableCell>
+                <TableCell>Size</TableCell>
+                <TableCell>Digest prefix</TableCell>
+                <TableCell>Validation level</TableCell>
+                <TableCell>Deviation state</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {backups.map((b) => (
+                <TableRow key={b.artefact_id}>
+                  <TableCell>{b.collected_at}</TableCell>
+                  <TableCell>{b.size_bytes}</TableCell>
+                  <TableCell>{b.digest_prefix}</TableCell>
+                  <TableCell>{b.validation_level}</TableCell>
+                  <TableCell>
+                    {b.deviation_state === null ? (
+                      <StatusChip tone="neutral" label="not evaluated" dense />
+                    ) : (
+                      <StatusChip tone="neutral" label={b.deviation_state} dense />
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <Typography variant="body2" color="text.secondary">
+            Backup archives are compared by digest only: unchanged means identical bytes and changed means different bytes, not archive contents.
+          </Typography>
+        </>
       )}
     </Stack>
   );

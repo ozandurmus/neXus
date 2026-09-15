@@ -295,6 +295,24 @@ describe("BackupPanel", () => {
               digest_prefix: "9876xyz",
               validation_level: "trusted",
               deviation_state: "changed"
+            },
+            {
+              artefact_id: "art-3",
+              device_id: "dev-1",
+              collected_at: "2026-09-12T12:00:00Z",
+              size_bytes: 1024,
+              digest_prefix: "3456abc",
+              validation_level: "trusted",
+              deviation_state: "unchanged"
+            },
+            {
+              artefact_id: "art-4",
+              device_id: "dev-1",
+              collected_at: "2026-09-11T12:00:00Z",
+              size_bytes: 1024,
+              digest_prefix: "7890def",
+              validation_level: "trusted",
+              deviation_state: "first"
             }
           ]
         }));
@@ -309,8 +327,11 @@ describe("BackupPanel", () => {
     expect(screen.getByText("9876xyz")).toBeInTheDocument();
 
     expect(screen.getByText("not evaluated")).toBeInTheDocument();
-    expect(screen.queryByText("unchanged")).not.toBeInTheDocument();
     expect(screen.getByText("changed")).toBeInTheDocument();
+    expect(screen.getByText("unchanged")).toBeInTheDocument();
+    expect(screen.getByText("first")).toBeInTheDocument();
+    expect(screen.getByText(/Backup archives are compared by digest only/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("shows the error rather than an empty table on failure", async () => {
