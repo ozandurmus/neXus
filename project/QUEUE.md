@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-15T11:09:39Z
+Build: NXS-LOCAL-0242 · Track: PCP.x · Generated: 2026-09-15T18:16:47Z
 
 ## Now
-- NXS-LOCAL-0176 — Expire a past-deadline session on read so it never blocks a login (automated_validated)
+- NXS-LOCAL-0242 — Java Project Plan reconciliation with explicit source provenance (in_progress)
 ## Next
 - M12 — M12 -- per-device / per-capability schedules (D5 producer) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -105,8 +105,8 @@ Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-15T11:09:39Z
 - po_cp_backup_async_semantics — CP R81.20 backup is asynchronous, contradicting the blocking-backup assu
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
+- NXS-LOCAL-0242 (in_progress)
 - NXS-LOCAL-0176 (automated_validated)
 - NXS-LOCAL-0175 (automated_validated)
 - NXS-LOCAL-0178 (automated_validated)
 - NXS-LOCAL-0174 (automated_validated)
-- NXS-LOCAL-0170 (automated_validated)

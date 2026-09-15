@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "reviewed_at": "2026-09-15",
+  "reviewed_current_build": "build_1",
+  "tracks": [
+    {
+      "id": "track_a",
+      "title": "Track A",
+      "weight": 2,
+      "status": "in_progress",
+      "feature_ids": [
+        "f1",
+        "f2",
+        "f3"
+      ]
+    },
+    {
+      "id": "track_b",
+      "title": "Track B",
+      "weight": "bogus",
+      "status": "planned",
+      "feature_ids": [
+        "f4",
+        "f5"
+      ]
+    }
+  ],
+  "current_track": "track_a",
+  "next": {
+    "build": "build_2",
+    "title": "Build Two",
+    "status": "planned"
+  },
+  "product_build_ids": [
+    "build_1"
+  ],
+  "backlog_classifications": {
+    "bl_1": "java_debt",
+    "bl_2": "java_debt"
+  },
+  "feature_ids": [
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8"
+  ]
+}

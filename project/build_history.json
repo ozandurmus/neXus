@@ -3,6 +3,18 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0242",
+      "status": "in_progress",
+      "title": "Java Project Plan reconciliation with explicit source provenance",
+      "summary": "Java roadmap, delivery debt and converted lessons now have separate projections. Java and frontend validation remain pending.",
+      "started": "2026-09-15",
+      "movement": "ARCHITECTURE",
+      "docs": {
+        "agreement": "docs/design/UI2_PROJECT_PLAN_RECONCILIATION.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0242.md"
+    },
+    {
       "build": "NXS-LOCAL-0176",
       "status": "automated_validated",
       "title": "Expire a past-deadline session on read so it never blocks a login",

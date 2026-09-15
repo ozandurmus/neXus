@@ -1806,13 +1806,233 @@
     },
     {
       "id": "ui2_java_product_line",
-      "title": "UI 2.0 -- Java product line (baseline adopted, B0 contracts open)",
-      "status": "planned",
+      "title": "UI 2.0 -- Java product line (implementation active; release gates open)",
+      "status": "in_progress",
       "introduced": "UI2.B0 (contracts)",
       "weight": 30,
-      "summary": "BASELINE ADOPTED 2026-09-09: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md (rev 2) and docs/de",
+      "summary": "Java is the sole development line. Local Java deliveries are recorded in build history; real-device and production acceptance remain unverified. Product scope is projected by project/java_product_plan.json.",
       "why": "The Line-1 feature scripts were written to feed static, task-specific pages.",
       "detail": "docs/history/features/ui2_java_product_line.md"
+    },
+    {
+      "id": "java_identity",
+      "title": "Local identity and session administration",
+      "status": "automated_validated",
+      "introduced": "NXS-LOCAL-0176",
+      "weight": 1,
+      "summary": "Local login, root identity and expiry-on-read are recorded; directory-backed production acceptance remains open.",
+      "why": "Track Java delivery independently of historical Line-1 outcomes.",
+      "evidence": "project/build_history.json#NXS-LOCAL-0176",
+      "criteria": [
+        {
+          "id": "automated",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "acceptance",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "java_discovery",
+      "title": "Discovery and device enrollment",
+      "status": "automated_validated",
+      "introduced": "NXS-LOCAL-0173",
+      "weight": 1,
+      "summary": "Discovery, import marking and enrollment have recorded Java deliveries; real-device acceptance remains UNVERIFIED.",
+      "why": "Track Java delivery independently of historical Line-1 outcomes.",
+      "evidence": "project/build_history.json#NXS-LOCAL-0173",
+      "criteria": [
+        {
+          "id": "automated",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "acceptance",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "java_inventory",
+      "title": "Inventory and cluster views",
+      "status": "automated_validated",
+      "introduced": "NXS-LOCAL-0164",
+      "weight": 1,
+      "summary": "Inventory reads and collection have recorded Java deliveries; live field bindings remain UNVERIFIED.",
+      "why": "Track Java delivery independently of historical Line-1 outcomes.",
+      "evidence": "project/build_history.json#NXS-LOCAL-0164",
+      "criteria": [
+        {
+          "id": "automated",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "acceptance",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "java_configuration",
+      "title": "Configuration evidence and encrypted artefacts",
+      "status": "automated_validated",
+      "introduced": "NXS-LOCAL-0167",
+      "weight": 1,
+      "summary": "Configuration collection and view have recorded Java deliveries; live outcomes remain UNVERIFIED.",
+      "why": "Track Java delivery independently of historical Line-1 outcomes.",
+      "evidence": "project/build_history.json#NXS-LOCAL-0167",
+      "criteria": [
+        {
+          "id": "automated",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "acceptance",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "java_backup",
+      "title": "Check Point gateway backup pilot",
+      "status": "automated_validated",
+      "introduced": "NXS-LOCAL-0175",
+      "weight": 1,
+      "summary": "Pilot allowlist remains a gate. Automated delivery does not prove a successful device backup.",
+      "why": "Track Java delivery independently of historical Line-1 outcomes.",
+      "evidence": "project/build_history.json#NXS-LOCAL-0175",
+      "criteria": [
+        {
+          "id": "automated",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "acceptance",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "java_project_plan",
+      "title": "Java product roadmap projection",
+      "status": "in_progress",
+      "introduced": "NXS-LOCAL-0242",
+      "weight": 1,
+      "summary": "Java features, release debt and converted lessons are separate; source freshness is explicit.",
+      "why": "Track Java delivery independently of historical Line-1 outcomes.",
+      "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+      "criteria": [
+        {
+          "id": "automated",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "acceptance",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "java_restore",
+      "title": "Restore acceptance for Release 1",
+      "status": "blocked",
+      "introduced": null,
+      "weight": 1,
+      "summary": "Restore is disabled. The frozen baseline requires restore for Release 1; the first pilot is not Release 1.",
+      "why": "Track Java delivery independently of historical Line-1 outcomes.",
+      "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+      "criteria": [
+        {
+          "id": "automated",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "acceptance",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "java_checks",
+      "title": "REL-CHECKS capability release",
+      "status": "planned",
+      "introduced": null,
+      "weight": 1,
+      "summary": "Frozen baseline names the release slice; Java delivery and real-environment acceptance are not established by Python outcomes.",
+      "why": "Track Java delivery independently of historical Line-1 outcomes.",
+      "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+      "criteria": [
+        {
+          "id": "automated",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "acceptance",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "java_failover_readiness",
+      "title": "REL-FAILOVER-READINESS capability release",
+      "status": "planned",
+      "introduced": null,
+      "weight": 1,
+      "summary": "Readiness is distinct from authorization and controlled execution; Java delivery is not inferred from Python history.",
+      "why": "Track Java delivery independently of historical Line-1 outcomes.",
+      "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+      "criteria": [
+        {
+          "id": "automated",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "acceptance",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "java_scheduler",
+      "title": "Per-capability scheduling",
+      "status": "deferred",
+      "introduced": null,
+      "weight": 1,
+      "summary": "Scheduler has no enabled product path; M12 is a historical Line-1 horizon, not the Java next build.",
+      "why": "Track Java delivery independently of historical Line-1 outcomes.",
+      "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+      "criteria": [
+        {
+          "id": "automated",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "acceptance",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
     }
   ]
 }

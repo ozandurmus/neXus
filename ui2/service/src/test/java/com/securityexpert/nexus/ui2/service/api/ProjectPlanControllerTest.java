@@ -32,6 +32,7 @@ class ProjectPlanControllerTest {
         ResponseEntity<Map<String, Object>> response = controller.getProjectPlan();
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("no-store", response.getHeaders().getCacheControl());
         Map<String, Object> body = response.getBody();
         assertEquals("1.0", body.get("schema_version"));
         assertEquals(80.0, (double) body.get("current_track_progress_percent"));
