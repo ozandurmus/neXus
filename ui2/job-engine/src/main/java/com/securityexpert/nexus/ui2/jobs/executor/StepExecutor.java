@@ -226,12 +226,12 @@ public final class StepExecutor {
             }
 
             ParsedStepResult parsed = evaluateStep(step, contact, parserFactory);
-            return finalizeAttempt(jobId, leaseEpoch, attemptId, parsed, isWriteStep, session);
+            return finalizeAttempt(jobId, leaseEpoch, attemptId, parsed, contact.rawOutput, isWriteStep, session);
         }
     }
 
     private StepRunOutcome finalizeAttempt(String jobId, long leaseEpoch, String attemptId, ParsedStepResult parsed,
-            boolean isWriteStep, TransportSession session) {
+            String rawOutput, boolean isWriteStep, TransportSession session) {
         String outcome;
         String errorClass;
         StepOutcomeKind kind;
@@ -260,8 +260,11 @@ public final class StepExecutor {
             throw new IllegalStateException("unreachable: unknown ParsedStepResult variant " + parsed);
         }
 
-        boolean written = attemptRepository.writeOutcome(attemptId, leaseEpoch, outcome, errorClass, 0L, 0L,
-                fingerprintOf(String.valueOf(parsed)));
+        boolean matchedExpectation = parsed instanceof ParsedStepResult.Matched;
+        long outputBytes = rawOutput == null ? 0L : rawOutput.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        long outputLines = rawOutput == null ? 0L : rawOutput.lines().count();
+        boolean written = attemptRepository.writeOutcome(attemptId, leaseEpoch, outcome, errorClass, matchedExpectation,
+                outputBytes, outputLines, fingerprintOf(String.valueOf(parsed)));
         if (!written) {
             return new StepRunOutcome(StepOutcomeKind.ZOMBIE, "fenced outcome write affected zero rows", session);
         }
@@ -269,7 +272,7 @@ public final class StepExecutor {
         evidenceWriter.writeStepEvidence(attemptId, leaseEpoch,
                 new ProvenanceRecordData(attemptId, jobId, attemptId, "UNKNOWN", capabilityVersionPlaceholder(),
                         Optional.empty(), "device-response", Optional.empty(), fingerprintOf(String.valueOf(parsed))),
-                new StepAttemptOutcome(String.valueOf(outcome), Optional.ofNullable(errorClass), 0L, 0L,
+                new StepAttemptOutcome(String.valueOf(outcome), Optional.ofNullable(errorClass), outputBytes, outputLines,
                         fingerprintOf(String.valueOf(parsed)), Instant.now()));
 
         return new StepRunOutcome(kind, detail, session);

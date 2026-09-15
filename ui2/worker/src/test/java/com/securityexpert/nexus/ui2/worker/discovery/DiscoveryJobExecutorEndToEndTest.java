@@ -125,4 +125,23 @@ class DiscoveryJobExecutorEndToEndTest {
         assertEquals(Optional.of(a.candidateId()), vs.parentCandidateId());
         assertTrue(vs.importable(), "a virtual system nested under a present host is importable");
     }
+
+    @Test
+    void failedDiscoveryUsesNamedReasonAndMeasuredAttempt() {
+        FakeLeaseRepository lease = new FakeLeaseRepository("job-failed", 1, JobState.CLAIMED);
+        FakeStepAttemptRepository attempts = new FakeStepAttemptRepository();
+        FakeDiscoveryRunRepository runs = new FakeDiscoveryRunRepository();
+        runs.run = DiscoveryJobExecutorFakes.requestedRun("run-failed", "check_point");
+        FakeManagementPlaneEnumeration cp = new FakeManagementPlaneEnumeration();
+        cp.result = new ManagementPlaneEnumerationResult.Failed("unreachable", 1, SessionDisconnectOutcome.CLOSED);
+
+        JobOutcome outcome = new DiscoveryJobExecutor(lease, attempts, runs, cp,
+                new FakePanoramaEnumeration()).execute("job-failed", 1, "run-failed");
+
+        assertTrue(outcome instanceof JobOutcome.Failed);
+        assertEquals("UNREACHABLE", runs.lastFailureReasonClass);
+        assertEquals("UNREACHABLE", lease.terminalReason);
+        assertEquals(Boolean.FALSE, attempts.lastMatchedExpectation);
+        assertTrue(attempts.lastOutputBytes > 0, "measurement must not be the old hardcoded zero");
+    }
 }

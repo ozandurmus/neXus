@@ -33,6 +33,7 @@ final class DiscoveryJobExecutorFakes {
 
     static final class FakeLeaseRepository implements JobLeaseRepository {
         final List<String> transitions = new ArrayList<>();
+        String terminalReason;
         final String jobId;
         final long leaseEpoch;
         JobState currentState;
@@ -65,6 +66,13 @@ final class DiscoveryJobExecutorFakes {
         }
 
         @Override
+        public boolean transitionState(String jobId, long leaseEpoch, JobState expectedFrom, JobState to,
+                String actorFingerprint, String actionId, String terminalReason) {
+            this.terminalReason = terminalReason;
+            return transitionState(jobId, leaseEpoch, expectedFrom, to, actorFingerprint, actionId);
+        }
+
+        @Override
         public List<ClaimedJob> findExpiredWithNoAttempt() {
             return List.of();
         }
@@ -85,6 +93,8 @@ final class DiscoveryJobExecutorFakes {
         final AtomicInteger idSeq = new AtomicInteger();
         boolean refuseInsert = false;
         boolean refuseWriteOutcome = false;
+        long lastOutputBytes;
+        Boolean lastMatchedExpectation;
 
         @Override
         public String insertPreContact(String jobId, long leaseEpoch, int stepIndex, String stepKind,
@@ -117,6 +127,14 @@ final class DiscoveryJobExecutorFakes {
                     existing.stepIndex(), existing.attemptNumber(), existing.stepKind(), existing.actionClass(),
                     existing.mutationBoundaryCrossed(), Optional.of(outcome), Optional.ofNullable(errorClass)));
             return true;
+        }
+
+        @Override
+        public boolean writeOutcome(String attemptId, long leaseEpoch, String outcome, String errorClass,
+                boolean matchedExpectation, long outputBytes, long outputLines, String fingerprintSha256) {
+            lastMatchedExpectation = matchedExpectation;
+            lastOutputBytes = outputBytes;
+            return writeOutcome(attemptId, leaseEpoch, outcome, errorClass, outputBytes, outputLines, fingerprintSha256);
         }
 
         @Override

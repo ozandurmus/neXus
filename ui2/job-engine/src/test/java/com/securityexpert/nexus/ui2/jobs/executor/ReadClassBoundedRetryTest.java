@@ -51,6 +51,8 @@ class ReadClassBoundedRetryTest {
         for (int i = 0; i < attempts.size(); i++) {
             assertEquals(i + 1, attempts.get(i).attemptNumber());
         }
+        assertEquals(Boolean.TRUE, attemptRepo.lastMatchedExpectation);
+        assertTrue(attemptRepo.lastOutputBytes > 0, "completed output must be measured, not a hardcoded zero");
     }
 
     @Test

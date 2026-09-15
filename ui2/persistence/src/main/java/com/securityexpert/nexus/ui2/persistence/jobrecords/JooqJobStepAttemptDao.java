@@ -45,12 +45,20 @@ public final class JooqJobStepAttemptDao implements JobStepAttemptDao {
     @Override
     public boolean writeOutcome(String attemptId, long leaseEpoch, String outcome, String errorClass,
             long outputBytes, long outputLines, String fingerprintSha256) {
+        return writeOutcome(attemptId, leaseEpoch, outcome, errorClass, false, outputBytes, outputLines,
+                fingerprintSha256);
+    }
+
+    @Override
+    public boolean writeOutcome(String attemptId, long leaseEpoch, String outcome, String errorClass,
+            boolean matchedExpectation, long outputBytes, long outputLines, String fingerprintSha256) {
         int updated = auditedTransactionBoundary.inTransaction("system:worker", "job_step_attempt_outcome",
                 dsl -> dsl.execute(
-                        "update job_step_attempt set outcome = {0}, error_class = {1}, output_bytes = {2}, "
-                                + "output_lines = {3}, fingerprint_sha256 = {4} "
-                                + "where attempt_id = {5} and lease_epoch = {6}",
-                        outcome, errorClass, outputBytes, outputLines, fingerprintSha256, attemptId, leaseEpoch));
+                        "update job_step_attempt set outcome = {0}, error_class = {1}, matched_expectation = {2}, "
+                                + "output_bytes = {3}, output_lines = {4}, fingerprint_sha256 = {5} "
+                                + "where attempt_id = {6} and lease_epoch = {7}",
+                        outcome, errorClass, matchedExpectation, outputBytes, outputLines, fingerprintSha256,
+                        attemptId, leaseEpoch));
         return updated == 1;
     }
 
