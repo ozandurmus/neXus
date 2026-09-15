@@ -2,13 +2,12 @@
 
 ## Status
 
-**DRAFT — design ready for Product Owner review; not implementation authority.**
-Movement: NXS-LOCAL-0244. Date: 2026-09-15.
-
-The dispatch explicitly requires PO review before FROZEN status. No review of
-this contract is recorded yet. Freeze requires a PO decision identifying the
-reviewed revision; passing tests, opening a PR and orchestrator merge mode do
-not replace that decision. This movement creates documentation only.
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-15.**
+Movement: NXS-LOCAL-0244. Revision `c438b805fa96bf155ac1d2781758356634befc6e`
+was reviewed and approved through canonical relay decision sequence 6. This
+contract is implementation authority only for the bounded C1–C5 slices in §9;
+it grants no host installation, remote transport, raw-log retention, execution
+authority, automatic action, or Claude compatibility claim.
 
 ## 1. Decision and scope
 
