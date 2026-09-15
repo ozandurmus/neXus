@@ -1,23 +1,14 @@
 # Deterministic validation gate.
 #
-# DEV.TEST.1 final topology (2026-09-06, Product Owner directed): every
-# pull_request runs the fast `validate` gate only. `full-regression` (the
-# full suite, parallelized -- see its own step comment) never starts
-# automatically -- not on pull_request, not on push to main -- it runs only
-# through an explicit `workflow_dispatch`. There is deliberately no `push:`
-# trigger at all: with `full-regression` withheld from automatic triggers
-# and `validate` restricted to pull_request, a push-to-main event would
-# match no job's `if:` condition and produce an empty, zero-job workflow
-# run -- removed rather than shipped that way. A GitHub-hosted
-# full-regression run is now an exceptional, materially justified action
-# (see docs/AI_DEVELOPMENT_PROTOCOL.md "CI validation policy"); the
-# already-proven local/agent-cloud parallel run
-# (`python -m pytest -q -n auto --dist worksteal`) is normally sufficient
-# evidence. Workflow run 34020356372 (push-to-main, pre-dating this
-# correction) remains on record as one-time proof that parallel execution
-# itself works on GitHub-hosted infrastructure -- it is not authorization
-# for automatic full-regression on every push, which this correction
-# removes.
+# DEV.TEST.1 cost reasoning (2026-09-06) remains: GitHub-hosted full
+# regression is expensive, while the parallel local/agent-cloud command
+# (`python -m pytest -q -n auto --dist worksteal`) is proven. PO decision
+# 2026-09-15C narrows its dispatch-only topology: `full-regression` runs on
+# pull requests that change anything except documentation/records (`docs/**`
+# or `*.md`), and stays manual for documentation-only changes. Unknown paths
+# run by default. There is still no `push:` trigger. Workflow run 34020356372
+# remains one-time proof that parallel execution works on GitHub-hosted
+# infrastructure, not authorization to run it on every pull request.
 #
 # CORRECTION (2026-09-06, post-merge, kept for context): this file briefly
 # shipped a genuine YAML syntax defect -- the "Report worker topology"
@@ -71,6 +62,29 @@ jobs:
         run: >-
           python3 scripts/nexus_po_scope_check.py
           --branch "${{ github.head_ref }}" --base origin/main
+
+  regression-scope:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.scope.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch PR base for changed-path scope
+        run: git fetch origin +${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}
+      - name: Run unless every changed path is documentation or a record
+        id: scope
+        run: |
+          if ! changed=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD); then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif printf '%s\n' "$changed" | grep -qvE '(^docs/|\.md$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # FAST PR VALIDATION — runs on every pull_request. Cheap, high-value gates
   # only: import sanity, the repository/privacy gate, project-state
@@ -194,15 +208,12 @@ jobs:
         run: git diff --check 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD
         continue-on-error: true
 
-  # FULL INTEGRATION REGRESSION — on-demand only (DEV.TEST.1 final
-  # topology, 2026-09-06): runs ONLY via an explicit `workflow_dispatch`,
-  # never automatically on pull_request or push. DEV.TEST.1 parallelized
-  # the "Full test suite" step itself (see its own step comment); a
-  # GitHub-hosted run of this job is an exceptional, materially justified
-  # action, not the default validation path -- see this file's header
-  # comment and docs/AI_DEVELOPMENT_PROTOCOL.md "CI validation policy".
+  # FULL INTEGRATION REGRESSION — PO decision 2026-09-15C: runs on manual
+  # dispatch and PRs whose changed paths are not all `docs/**` or `*.md`.
+  # `always()` preserves workflow_dispatch when the PR-only scope job skips.
   full-regression:
-    if: github.event_name == 'workflow_dispatch'
+    needs: regression-scope
+    if: always() && (github.event_name == 'workflow_dispatch' || needs.regression-scope.outputs.run == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
