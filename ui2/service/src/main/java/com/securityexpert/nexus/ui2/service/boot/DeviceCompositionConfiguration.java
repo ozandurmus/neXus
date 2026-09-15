@@ -30,7 +30,9 @@ import com.securityexpert.nexus.ui2.jobs.discovery.DiscoveryRunReadPort;
 import com.securityexpert.nexus.ui2.jobs.discovery.PersistenceDiscoveryRunReadPort;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRepository;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupJobAuthorizationRepository;
 import com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupArtefactManifestRepository;
+import com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupJobAuthorizationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.CredentialReferenceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceDiscoveryMatchRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
@@ -368,6 +370,12 @@ public class DeviceCompositionConfiguration {
         return new JooqBackupArtefactManifestRepository(transactionBoundary);
     }
 
+    /** NXS-LOCAL-0224 (BK-12/BW-4): the immutable admission-time evidence {@link BackupCollectService} writes and {@code BackupJobExecutor} (worker) re-checks at claim time (migration V23). */
+    @Bean
+    public BackupJobAuthorizationRepository backupJobAuthorizationRepository(TransactionBoundary transactionBoundary) {
+        return new JooqBackupJobAuthorizationRepository(transactionBoundary);
+    }
+
     /**
      * 14H BK-1: the pilot-device allowlist, an env-backed configuration
      * list -- {@code UI2_BACKUP_PILOT_DEVICE_IDS}, comma-separated,
@@ -377,10 +385,11 @@ public class DeviceCompositionConfiguration {
      */
     @Bean
     public BackupCollectService backupCollectService(DeviceRepository deviceRepository,
-            JobAdmissionService jobAdmissionService) {
+            JobAdmissionService jobAdmissionService, BackupJobAuthorizationRepository backupJobAuthorizationRepository) {
         java.util.Set<String> allowlist = parseCsvEnv("UI2_BACKUP_PILOT_DEVICE_IDS");
         boolean backupCredentialConfigured = !System.getenv().getOrDefault("UI2_CP_BACKUP_CREDENTIAL_REF", "").isBlank();
-        return new BackupCollectService(deviceRepository, jobAdmissionService, allowlist, backupCredentialConfigured);
+        return new BackupCollectService(deviceRepository, jobAdmissionService, allowlist, backupCredentialConfigured,
+                backupJobAuthorizationRepository);
     }
 
     private static java.util.Set<String> parseCsvEnv(String name) {
