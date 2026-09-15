@@ -4,6 +4,7 @@ No source discovery, raw-source adapter, process probe, notifier or client serve
 lives here. Stop the foreground loop to roll back; private state is retained.
 """
 
+import argparse
 import copy
 import fcntl
 import hashlib
@@ -12,6 +13,8 @@ import math
 import os
 from pathlib import Path
 import stat
+import signal
+import sys
 import threading
 import time
 import uuid
@@ -476,3 +479,120 @@ class Observer:
 
     def __exit__(self, *args):
         self.close()
+
+
+def _path(value):
+    if type(value) is not str:
+        raise ValueError("INVALID_CONFIGURATION")
+    path = Path(value)
+    if (not path.is_absolute() or path == Path("/") or ".." in path.parts
+            or str(path) != value or any(ord(c) < 32 or ord(c) == 127 for c in value)):
+        raise ValueError("INVALID_CONFIGURATION")
+    return path
+
+
+def _read_projection(path):
+    """Read one explicit private JSON projection, never a raw source/log adapter."""
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in path.parts[1:-1]:
+            next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+        file_fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+        with os.fdopen(file_fd, "rb") as stream:
+            before = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid()
+                    or stat.S_IMODE(before.st_mode) != 0o600 or before.st_nlink != 1):
+                raise ValueError("UNREADABLE")
+            if before.st_size > MAX_BYTES:
+                raise ValueError("LIMIT_EXCEEDED")
+            raw = stream.read(MAX_BYTES + 1)
+            after = os.fstat(stream.fileno())
+            if len(raw) > MAX_BYTES:
+                raise ValueError("LIMIT_EXCEEDED")
+            if (before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
+                    after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+                raise ValueError("INCONSISTENT")
+        return json.loads(raw, object_pairs_hook=_unique)
+    finally:
+        os.close(fd)
+
+
+def _configuration(path):
+    """No defaults/discovery: all paths, identities and safe vocabularies are explicit."""
+    config = _read_projection(_path(path))
+    fields = {"snapshot_directory", "source_set_token", "movement_ids", "source_roots",
+              "allowlists", "projection_file"}
+    if type(config) is not dict or set(config) != fields:
+        raise ValueError("INVALID_CONFIGURATION")
+    for field in ("movement_ids", "source_roots"):
+        if type(config[field]) is not list or not config[field]:
+            raise ValueError("INVALID_CONFIGURATION")
+    ids = config["movement_ids"]
+    if (len(ids) > MAX_MOVEMENTS or any(not _token(i) for i in ids)
+            or len(set(ids)) != len(ids) or not _token(config["source_set_token"])):
+        raise ValueError("INVALID_CONFIGURATION")
+    allowlists = config["allowlists"]
+    metadata = {"provider", "effort", "requested_model", "observed_model", "provenance", "audit_exception"}
+    if (type(allowlists) is not dict or not set(allowlists) <= metadata
+            or any(type(values) is not list or len(values) > MAX_MOVEMENTS
+                   or any(not _token(v) for v in values) for values in allowlists.values())):
+        raise ValueError("INVALID_CONFIGURATION")
+    directory = _path(config["snapshot_directory"])
+    projection = _path(config["projection_file"])
+    roots = [_path(root) for root in config["source_roots"]]
+    if (not any(projection.is_relative_to(root) and projection != root for root in roots)
+            or _path(path).is_relative_to(directory)):
+        raise ValueError("INVALID_CONFIGURATION")
+    return config, directory, projection, roots
+
+
+def _scan_projection(path, ids):
+    try:
+        return _read_projection(path)
+    except FileNotFoundError:
+        status = "MISSING"
+    except OSError:
+        status = "UNREADABLE"
+    except (ValueError, RecursionError) as error:
+        status = str(error) if str(error) in QUALITY else "MALFORMED"
+    return {identity: {source: {"status": status} for source in SOURCES} for identity in ids}
+
+
+def main(argv=None):
+    """Foreground C2 entrypoint; SIGINT/SIGTERM release the writer lock."""
+    class Parser(argparse.ArgumentParser):
+        def error(self, message):
+            self.exit(2, "INVALID_CONFIGURATION\n")
+
+    parser = Parser(description=__doc__, allow_abbrev=False)
+    parser.add_argument("--configuration", required=True)
+    args = parser.parse_args(argv)
+    try:
+        config, directory, projection, roots = _configuration(args.configuration)
+    except (OSError, ValueError, TypeError, RecursionError):
+        print("INVALID_CONFIGURATION", file=sys.stderr)
+        return 2
+    stop = threading.Event()
+    handlers = {}
+    try:
+        for number in (signal.SIGINT, signal.SIGTERM):
+            handlers[number] = signal.signal(number, lambda *_: stop.set())
+        with Observer(directory, config["source_set_token"], config["movement_ids"],
+                      source_roots=roots, allowlists=config["allowlists"]) as worker:
+            if worker.error:
+                print(worker.error, file=sys.stderr)
+                return 1
+            worker.run(lambda: _scan_projection(projection, worker.ids), stop)
+    except (OSError, ValueError, TypeError, RecursionError):
+        print("OBSERVER_UNAVAILABLE", file=sys.stderr)
+        return 1
+    finally:
+        for number, handler in handlers.items():
+            signal.signal(number, handler)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
