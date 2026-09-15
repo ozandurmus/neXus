@@ -1008,6 +1008,27 @@ def _git_rev_parse(ref: str, cwd: Path) -> str:
     return result.stdout.strip()
 
 
+def _worktree_git_dir(worktree_path: Path) -> Path:
+    """The linked worktree's Git directory, not its `.git` pointer file."""
+    git_dir = Path(_git_rev_parse("--git-dir", worktree_path))
+    return git_dir if git_dir.is_absolute() else (worktree_path / git_dir).resolve()
+
+
+def _add_engineer_toolchains(env: dict[str, str]) -> None:
+    """Keep the dispatcher's installed Java and Node launchers reachable."""
+    path = env.get("PATH", "")
+    for executable in ("java", "node"):
+        launcher = shutil.which(executable, path=path)
+        if not launcher:
+            continue
+        bin_dir = str(Path(launcher).resolve().parent)
+        if bin_dir not in path.split(os.pathsep):
+            path = f"{bin_dir}{os.pathsep}{path}" if path else bin_dir
+        if executable == "java":
+            env.setdefault("JAVA_HOME", str(Path(launcher).resolve().parent.parent))
+    env["PATH"] = path
+
+
 def _git_worktree_add(worktree_path: Path, base: str, branch: str, cwd: Path) -> None:
     result = subprocess.run(
         # <path> <commit-ish> -b <branch> -- matches the exact order
@@ -1087,6 +1108,7 @@ def _spawn_engineer(
     # threshold (see DEFAULT_ENGINEER_BASH_TIMEOUT_MS) -- setdefault so an
     # operator's own pre-set env var is never overridden by this spawn.
     env.setdefault("BASH_DEFAULT_TIMEOUT_MS", str(DEFAULT_ENGINEER_BASH_TIMEOUT_MS))
+    _add_engineer_toolchains(env)
     # AC-1/AC-2/AC-3 (relay/NXS-LOCAL-0015): with --permission-prompts none
     # there is no human to answer a Read/Edit/Write-tool permission prompt
     # for a path outside the worktree, so any such prompt is denied
@@ -1118,9 +1140,12 @@ def _spawn_engineer(
     prompt_path = nexus_dir / "engineer_prompt.txt"
     prompt_path.write_text(prompt, encoding="utf-8")
 
+    extra_dirs = [canonical_relay_dir]
+    if provider == "codex":
+        extra_dirs.append(_worktree_git_dir(worktree_path))
     argv = adapter.build_argv(
         prompt_path=prompt_path, worktree=worktree_path, model=model, effort=effort,
-        budget_usd=max_budget_usd, extra_dirs=[canonical_relay_dir],
+        budget_usd=max_budget_usd, extra_dirs=extra_dirs,
         resume_session_id=resume_session_id,
     )
     env = adapter.build_env(env, worktree=worktree_path, relay_dir=canonical_relay_dir, relay_file=relay_file)
