@@ -17,7 +17,8 @@ _CEILINGS = {
     # (AGENTS.md "## Role dispatch"), net of a small vendor-name edit in
     # the opening paragraph -- raised by exactly the words added, per the
     # movement's own instruction.
-    "AGENTS.md": 3404,
+    # PR #359: +124 words for the new "## Host action boundary" section.
+    "AGENTS.md": 3528,
     "AI_START_HERE.md": 2250,
     "CURRENT_STATE.md": 1050,
     "AI_HANDOVER.md": 300,
