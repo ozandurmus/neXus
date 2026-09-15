@@ -414,6 +414,51 @@
       "priority": "P3",
       "target": "14I MS-1 successor",
       "note": ""
+    },
+    {
+      "id": "backup_retrieval_audit_fail_closed_and_reason_persists",
+      "category": "security",
+      "title": "Backup retrieval must be fail-closed on its audit row, and the reason and role must survive to execution",
+      "status": "planned",
+      "priority": "P0",
+      "target": "BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md Tier 1: OR-3, BK-12, BW-4",
+      "note": ""
+    },
+    {
+      "id": "backup_artefact_id_opaque_not_storage_path",
+      "category": "security",
+      "title": "The artefact id returned over HTTP must be opaque, not the storage path",
+      "status": "planned",
+      "priority": "P0",
+      "target": "BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md Tier 1: BK-14, OR-1",
+      "note": ""
+    },
+    {
+      "id": "ci_full_regression_skipped_lets_red_merge",
+      "category": "governance",
+      "title": "CI full-regression is skipped, so a red main merges green -- PR #359 landed with five failing tests",
+      "status": "planned",
+      "priority": "P0",
+      "target": ".github/workflows; evidence 2026-09-15",
+      "note": ""
+    },
+    {
+      "id": "api_routes_without_security_mapping_refused_by_default",
+      "category": "security",
+      "title": "UNVERIFIED claim: custom API routes with no security mapping should be refused by default",
+      "status": "planned",
+      "priority": "P1",
+      "target": "verify against ui2 service gate chain before scoping",
+      "note": ""
+    },
+    {
+      "id": "ui_overview_operations_show_stale_or_empty_state",
+      "category": "UI 2.0 (Java product line)",
+      "title": "UNVERIFIED claim: Overview and Operations render empty state while devices and jobs exist",
+      "status": "planned",
+      "priority": "P1",
+      "target": "verify against a running deployment before scoping",
+      "note": ""
     }
   ]
 }
