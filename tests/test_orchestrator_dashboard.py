@@ -27,11 +27,12 @@ def test_dashboard_css_uses_the_generated_product_theme_tokens():
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", css)
     assert "--provider-claude:" in theme
     assert "--provider-codex:" in theme
+    assert set(re.findall(r"var\((--[\w-]+)\)", css)) <= set(re.findall(r"(--[\w-]+):", theme))
 
 
 def test_dashboard_assets_render_provider_classes_without_changing_provider_text():
     js = (ROOT / "scripts" / "dashboard_assets" / "dashboard.js").read_text(encoding="utf-8")
-    assert 'card.className = "board-card provider-" + providerClass' in js
+    assert '<tr class="provider-' in js
     assert 'class="provider-line provider-' in js
     assert "fmtModelEffort(row)" in js
 
@@ -569,14 +570,8 @@ def test_build_board_archives_a_closed_relay_without_a_state_record(tmp_path):
     assert {row["movement_id"] for row in board["archive"]} == {movement_id}
 
 
-def test_build_board_rows_carry_every_field_the_kanban_card_needs(tmp_path):
-    # AC-12: the JS render function is pure DOM string-building with no
-    # jsdom-free harness available in this suite -- per the contract's own
-    # fallback, this asserts the server-side board row carries every field
-    # section 3.5's card content lists (movement id/objective, provider ·
-    # model · effort requested-and-observed, process status, work stage,
-    # duration, idle time, tokens in/cache-read/out + cache-hit% + cost,
-    # PR number/state).
+def test_build_board_rows_carry_every_field_the_table_needs(tmp_path):
+    # Browser interaction coverage lives in test_orchestrator_dashboard_browser.py.
     state_dir, relay_dir, repo_root = tmp_path / "state", tmp_path / "relay", tmp_path
     _save_minimal_record(state_dir, "NXS-LOCAL-0060")
 
@@ -587,6 +582,7 @@ def test_build_board_rows_carry_every_field_the_kanban_card_needs(tmp_path):
         "model_observed", "effort_observed", "health", "stage", "process_status",
         "idle_seconds", "started_at", "ended_at", "duration_s", "usage",
         "pr_number", "pr_state", "verify_passed", "branch",
+        "phase", "relay_status", "terminal_outcome", "last_activity",
     ):
         assert field in row, field
     for field in (
@@ -715,3 +711,63 @@ def test_send_message_queues_to_outbox_when_not_po_turn(tmp_path):
     # Never appended -- the relay is unchanged.
     updated = json.loads(relay_file.read_text(encoding="utf-8"))
     assert len(updated["entries"]) == 1
+
+
+def test_board_projects_cancelled_phase_without_changing_health(tmp_path):
+    state_dir, relay_dir = tmp_path / "state", tmp_path / "relay"
+    relay_file = _make_relay_named(tmp_path, "stopped")
+    movement_id = _relay_id_of(relay_file)
+    _post_engineer_question(relay_file, "[DECISION] synthetic pending turn")
+    _save_minimal_record(state_dir, movement_id, phase=orch.PHASE_CANCELLED, pid=None)
+    board = dash.build_board(state_dir, relay_dir, tmp_path, 2)
+    row = board["closed"][0]
+    assert row["phase"] == "cancelled"
+    assert row["health"] == "done"
+    assert row["terminal_outcome"] is None
+    assert row["ended_at"] is not None
+
+
+def test_board_projects_close_outcome_and_preserves_full_objective(tmp_path, monkeypatch):
+    state_dir, relay_dir = tmp_path / "state", tmp_path / "relay"
+    relay_file = _make_relay_named(tmp_path, "terminal-outcome")
+    movement_id = _relay_id_of(relay_file)
+    lr.main(["append", "--file", str(relay_file), "--role", "engineer", "--marker", "SESSION_CLOSE",
+             "--report", str(_write_close_report(tmp_path)), "--outcome", "DONE"])
+    _save_minimal_record(state_dir, movement_id, phase=orch.PHASE_RUNNING)
+    monkeypatch.setattr(dash, "_load_approved_task", lambda _: {"report": {"objective": "x" * 150 + " searchable tail"}})
+    row = dash.build_board(state_dir, relay_dir, tmp_path, 2)["closed"][0]
+    assert row["terminal_outcome"] == "DONE"
+    assert row["objective"].endswith(" searchable tail")
+    assert row["ended_at"] == json.loads(relay_file.read_text())["entries"][-1]["timestamp"]
+    archive_row = dash._relay_archive_rows(relay_dir, set())[0]
+    assert archive_row["terminal_outcome"] == "DONE"
+    assert archive_row["archived"] is True
+
+
+def test_dashboard_http_auth_and_origin_remain_enforced(tmp_path):
+    from http.client import HTTPConnection
+    from http.server import ThreadingHTTPServer
+    from threading import Thread
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), dash.make_handler_class(
+        token="synthetic-test-token", relay_dir=tmp_path / "relay", state_dir=tmp_path / "state",
+        repo_root=tmp_path, retry_limit=2, port=0))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    connection = HTTPConnection("127.0.0.1", server.server_port)
+    try:
+        connection.request("GET", "/api/board")
+        response = connection.getresponse()
+        assert response.status == 401
+        response.read()
+        connection.request("POST", "/api/movements/SYNTHETIC/message", body="{}", headers={
+            "Authorization": "Bearer synthetic-test-token", "Origin": "https://invalid.test",
+            "Content-Type": "application/json"})
+        response = connection.getresponse()
+        assert response.status == 403
+        response.read()
+    finally:
+        connection.close()
+        server.shutdown()
+        server.server_close()
+        thread.join()
