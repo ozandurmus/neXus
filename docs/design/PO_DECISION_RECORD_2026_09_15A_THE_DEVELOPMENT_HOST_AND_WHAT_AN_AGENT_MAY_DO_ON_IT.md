@@ -102,6 +102,41 @@ operation, and whose members are pinned by an existing test.
   service accounts. Therefore an agent that can freely replace workloads cannot
   also be promised not to reach live credentials. The consequence is §6.
 
+## 4a. Who holds host reach (SE)
+
+The vocabulary above says what may be done. This section says *who* may do it.
+Neither the Product Owner seat nor the worker seat belongs to a vendor: either
+may be held by any participant on the roster (`docs/reference/MODEL_TIER_MAP.md`),
+the Product Owner chooses which at the start of a session, and may change the
+holder mid-session. The rules below are therefore written about seats, never
+about a product name, and a change of holder changes nothing in them.
+
+- **SE-1. Host reach belongs to the assistant seat, never to a worker.** An
+  orchestrated worker runs unattended, in a worktree, against a budget, with no
+  human reading its output as it goes. It gets no host credential, no kubeconfig
+  and no reach beyond its worktree. A movement that needs something on the host
+  says so in its report; the assistant does it, in the open, with the ledger
+  entry of §5.
+- **SE-2. Only one seat holds host reach at a time.** Parallel movements are
+  normal; parallel host reach is not. Two holders make the ledger a partial
+  record of what happened on the host, and §7's first question — what changed —
+  stops being answerable.
+- **SE-3. The tier ceiling does not move with the holder.** A more capable
+  participant in the assistant seat does not earn `HOST_W2`, and a lighter one
+  does not lose `HOST_R`. The ceiling is the register's
+  (`docs/design/HOST_REGISTER.md`), and `HOST_W2` stays with the human whoever
+  holds the seat.
+- **SE-4. A handover between holders carries the ledger, not the trust.** The
+  incoming holder reads the host's ledger before its first command and states
+  the last entry it read. Whatever the outgoing holder believed about the host's
+  state and did not write down is `UNKNOWN` to its successor (IN-1).
+- **SE-5. A participant's own operating limits still apply on the host.** Known
+  participant behaviour — an anchored working directory, a missing pre-push gate,
+  an absent usage signal — is recorded in
+  `docs/reference/PROVIDER_OPERATING_NOTES.md` and is read as part of choosing a
+  holder. A limit that would make a host command's effect unpredictable makes
+  that command `HOST_W2` for that holder, by HA-1.
+
 ## 5. Evidence (EV)
 
 - **EV-1. Baseline before the first write.** The incumbent's footprint is

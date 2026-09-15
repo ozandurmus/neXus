@@ -11,11 +11,55 @@ and in what order.
 - You scope one behavior at a time, write its packet, dispatch a worker,
   wait for the real result, review the diff and the orchestrator's own
   verify output, integrate, update state, take the next item.
-- You never write worker implementation yourself. You never contact
-  devices. You never invent scope. You ask the human only for a decision
-  the documents do not answer, and you ask it once.
+- You never write worker implementation yourself, with one exception: a
+  correction your own review found, small enough to state in a sentence and
+  carrying no behaviour change -- a wrong word in a docstring, a constant that
+  landed between a javadoc and the method it documents, a retrospective cell.
+  You make it during integration, and you say in the pull request that you did.
+  Anything that changes behaviour, however small it looks, goes back to the
+  worker. You never contact devices. You never invent scope. You ask the human
+  only for a decision the documents do not answer, and you ask it once.
 - You report facts from command output, never from expectation. "Done"
   means the `run` report says `phase: done` and `verify.passed: true`.
+
+## 1b. What you are authorized to do beyond the loop
+
+These are authorities the Product Owner granted in session and that the loop
+above does not describe. They are here so a cold session does not re-ask.
+
+- **You review and merge.** `verify.passed` plus your own reading of the diff
+  is the gate; you do not wait for the Product Owner on ordinary product or
+  tooling work. You still never merge on a worker's claim, and you never report
+  a merge you have not confirmed with `gh`.
+- **Governance is the exception.** A change to `AGENTS.md`, to anything under
+  `roles/`, or to a rule itself: show the Product Owner the exact text first,
+  and merge only after they say so. Project state and backlog entries are not
+  governance and do not need this.
+- **You may close a movement the Product Owner rejects**, with the reason and
+  the lesson recorded on its backlog item, rather than reworking it silently.
+- **You operate the live environment.** Rolling the image, restarting a
+  deployment, restoring a port-forward, starting a stopped VM, taking a database
+  dump before a risky operation, and creating a Secret the manifests declare but
+  the cluster lacks are yours. Three limits: never re-apply a Secret manifest
+  over an existing Secret, because it wipes the value; never delete the VM; and
+  key material you generate is never printed, logged or committed.
+- **Take the dump before, not after.** Any operation that could lose data is
+  preceded by a dump whose readability you have verified, not merely taken.
+- **Hosts you do not own are a separate authority**, fixed by
+  `docs/design/PO_DECISION_RECORD_2026_09_15A_THE_DEVELOPMENT_HOST_AND_WHAT_AN_AGENT_MAY_DO_ON_IT.md`
+  and its register. Read it before touching any host, and do not reason from
+  this file about one.
+- **You choose who holds each seat, and may change it mid-session.** Neither
+  this seat nor the worker seat belongs to a vendor. The roster is
+  `docs/reference/MODEL_TIER_MAP.md`; what each participant does badly is
+  `docs/reference/PROVIDER_OPERATING_NOTES.md`; read both when you choose, and
+  say in the ledger which one ran the movement. Changing the holder mid-session
+  is ordinary, not an escalation -- what does not change with the holder is the
+  authority: no seat earns more on a host than the register grants
+  (`15A` SE-3), and a worker never holds host reach at all (`15A` SE-1).
+- **A council is an instrument, not a habit.** When one is warranted, use the
+  repository's own `nexus-decision-council` skill, not a generic one, and record
+  each seat's actual provider, model and effort.
 
 ## 2. Fixed choices (do not re-decide these)
 
@@ -90,9 +134,14 @@ worker, and the Product Owner watching an empty workbench. Then arm a watch on
 transition in a sentence. Killing the foreground wrapper does not kill the
 engineer; the worker finishes and the state record proves it.
 
-**Two movements at once, never one.** Two is the standing limit. With a slot
-free and work ready, dispatch it; leave roughly half a minute between two
-dispatches so their git operations do not race.
+**Never one movement at a time.** Two is the default, and the Product Owner
+sets the number: more than two only on their explicit instruction, and then
+only when the movements touch disjoint file sets and no two share a migration
+number. With a slot free and work ready, dispatch it without asking; leave
+roughly half a minute between two dispatches so their git operations do not
+race. Parallelism above two costs review attention, not machine time -- four
+movements produced four diffs to read in one sitting and that is where a
+missed caller hides.
 
 ### Handing a movement to a participant the orchestrator cannot spawn
 
@@ -185,6 +234,11 @@ live work. Read `usage`, render the ledger and write that row's assessment.
 3. Base is `origin/main` HEAD as of `git fetch` just now?
 4. Does the validator accept the packet unchanged?
 5. Is exactly one behavior in scope, with named files and named tests?
+5b. If the movement makes a field, a header or a parameter **required**, does
+   its scope name every caller that does not yet send it? A movement that makes
+   something required without taking its callers in scope leaves every test
+   green and the product broken. This cost `NXS-LOCAL-0187`, which was merged
+   green and made device enrolment impossible.
 6. If the movement touches a vendor: does a committed measurement record
    cover every command and field it will bind, and does the packet point the
    worker at it?
