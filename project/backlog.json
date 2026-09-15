@@ -459,6 +459,15 @@
       "priority": "P1",
       "target": "verify against a running deployment before scoping",
       "note": ""
+    },
+    {
+      "id": "ui2_service_cannot_bootstrap_an_empty_database",
+      "category": "UI 2.0 (Java product line)",
+      "title": "The service cannot start against an empty database: a bean reads gate_registry during context refresh, before the ApplicationRunner that runs Flyway",
+      "status": "planned",
+      "priority": "P0",
+      "target": "MigrationStartupRunner (ApplicationRunner, @Order(0)) vs DeviceCompositionConfiguration.deviceCapabilityRegistry; observed on HOST-A 2026-09-15",
+      "note": ""
     }
   ]
 }
