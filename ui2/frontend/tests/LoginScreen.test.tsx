@@ -6,13 +6,13 @@ import { m3Theme } from "../src/theme/m3Theme";
 import { LoginScreen } from "../src/auth/LoginScreen";
 
 describe("LoginScreen", () => {
-  it("shows the neXus wordmark above the sign-in form", () => {
+  it("shows the approved neXus tagline lockup above the sign-in form", () => {
     render(
       <ThemeProvider theme={m3Theme}>
         <LoginScreen onAuthenticated={() => {}} />
       </ThemeProvider>,
     );
-    expect(screen.getByTitle("neXus")).toBeInTheDocument();
+    expect(screen.getByAltText("neXus — A CLEARER TOMORROW").getAttribute("src")).toContain("wordmark-tagline.svg");
     expect(screen.getByLabelText("Username")).toBeInTheDocument();
   });
 });
