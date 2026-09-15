@@ -1,0 +1,189 @@
+{
+  "created_at": "2026-09-14T22:41:10Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Backup, inventory and configuration collection each refuse a management_server device with the same code.",
+          "AC-2 The reason names the missing gate, not merely the role, so an operator reading it knows why nothing was issued and what would have to exist first.",
+          "AC-3 The refusal precedes every vendor, allowlist, credential and admission check; a test proves a management server is refused even when it would also have failed one of those.",
+          "AC-4 A gateway device is unaffected: its existing refusals fire in their existing order with their existing codes.",
+          "AC-5 No job is admitted, and no command is issued, for a refused device.",
+          "AC-6 The ui2 service tests pass with the new tests, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md -- FROZEN, Product Owner directives 2026-09-14. MS-2: inventory, configuration and backup are collected from management servers with their own per-vendor read sets, measured and gated exactly as the gateway ones were, and nothing is issued against one until its own gate entries exist. MS-4: those read sets carry known constraints -- a Check Point management export is a long, heavy class-1 operation an open management client can block, and a Panorama configuration is large and must be streamed -- so a management-server capability is a separate movement with its own pilot device. MS-5: until MS-2's gates exist, a management server is a device that can be discovered from and confirmed, and whose collection actions are refused with a reason naming the missing gate.",
+          "context_not_loaded": null,
+          "engineering_baseline": "The three collect services share one refusal shape and each already refuses an unsupported vendor before doing anything else.",
+          "product_baseline": "Devices are added, enrolled and confirmed. Inventory, configuration and backup collection are admitted per device through three services that already refuse for other reasons. A device now carries a role, gateway or management_server, and every existing row is a gateway.",
+          "test_baseline": "The ui2 service test suite passes on origin/main today.",
+          "what_exists": "All three services declare the same outcome shape -- `record AdmissionRefused(String code, String reason) implements Outcome` -- and BackupCollectService.requestCollect refuses in this order and with these literal codes:\n\n        if (reason == null || reason.strip().length() < MIN_REASON_LENGTH) {\n            return new Outcome.AdmissionRefused(\"REASON_TOO_SHORT\", ...);\n        }\n        Optional<DeviceRecord> device = deviceRepository.find(deviceId);\n        if (device.isEmpty()) {\n            return new Outcome.DeviceNotFound();\n        }\n        if (!\"check_point\".equals(device.get().vendorHint())) {\n            return new Outcome.AdmissionRefused(\"VENDOR_UNSUPPORTED\", \"device \" + deviceId + \" vendor_hint=\"\n                    + device.get().vendorHint() + \" has no registered backup capability (14H BK-9: Check Point \"\n                    + \"gateway only)\");\n        }\n        if (!pilotAllowlist.contains(deviceId)) {\n            return new Outcome.AdmissionRefused(\"DEVICE_NOT_IN_BACKUP_PILOT_ALLOWLIST\", ...);\n        }\n\nInventoryCollectService and ConfigurationCollectService each refuse with `VENDOR_UNSUPPORTED` in the same position, around lines 69 and 60 respectively.\n\nThe device row carries the role as `DeviceRecord.role()`, a String whose only two values are `gateway` and `management_server`, enforced by a CHECK constraint in migration V21. Every row existing before that migration was backfilled to `gateway`.\n\nThe controllers already map an AdmissionRefused to HTTP 409 with a body of `error`, `code` and `reason`; nothing about that mapping changes."
+        },
+        "context_not_loaded": [
+          "ui2/frontend/**",
+          "docs/history/**",
+          "application/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/management-server-collection-refused"
+        },
+        "invariants": [
+          "Nothing is issued against a management server. A refusal is the whole behaviour.",
+          "Fail-closed: an unrecognised role is not treated as a gateway.",
+          "The refusal names the gate, never a raw address, hostname or credential.",
+          "A gateway device's admission path is byte-for-byte what it is today."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Refuse collection against a management server, naming the gate that is missing. Record 14I MS-2 forbids issuing anything against a management server until its own command gate entries exist, and none do. MS-5 says such a device may still be added, discovered from and confirmed, but its collection actions are refused with a reason naming the missing gate. NXS-LOCAL-0187 gave the device model the role this needs; nothing yet reads it.",
+        "output_contract": [
+          "A management server can be added and confirmed, and the product refuses to collect from it in words that say what is missing.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "One check in three services that already share a refusal shape; the model field exists and the clause states the behaviour exactly.",
+          "tier": "bounded tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "The gradle command runs from ui2; the privacy gate runs from the repository root.",
+          "Every changed file names the clause it implements (14I MS-n).",
+          "Run only the commands named above.",
+          "Run `git diff --check origin/main` before every commit and fix what it names.",
+          "Leave the worktree clean: write reports outside the repository or remove them before closing.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE quotes the refusal reason you wrote and says where in each service the check sits."
+        ],
+        "risks": [
+          "Placing the check after the vendor or allowlist test, which would let a management server of a supported vendor reach a capability lookup before being refused.",
+          "Writing a reason that names the device rather than the gate, which tells the operator what they can see already and not what is missing.",
+          "Treating an unexpected role value as a gateway, which fails open on exactly the axis this movement exists to close."
+        ],
+        "scope": {
+          "in": [
+            "All three collect services refuse a device whose role is management_server, with one shared refusal code and a reason that names the missing gate in words an operator can act on: that the device is a management server, that its per-vendor read set has not been measured or gated yet, and that this is why nothing was issued. Follow the wording style of the refusals already there -- they cite their clause and say plainly what was refused and why.",
+            "The refusal is positioned so it cannot be reached around: after the device is found, and before any vendor, allowlist, credential or admission check, because none of those questions apply to a device the product may not touch at all.",
+            "Tests for each of the three services: a management_server device is refused with that code; a gateway device is unaffected and still reaches its existing checks in their existing order."
+          ],
+          "out": [
+            "Any read set, command, route or capability for a management server. MS-2 forbids issuing anything until its own gate entries exist, and this movement creates none.",
+            "Any change to discovery or to the enrollment and confirm paths. MS-5 keeps a management server discoverable and confirmable; only collection is refused.",
+            "Any change to the existing refusal codes, their order relative to each other, or their wording.",
+            "Any change to the device model, to migration V21, or to the role vocabulary.",
+            "Any UI change. Showing the refusal is a separate movement."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && JAVA_HOME=/Users/OzanDur/.local/jdk/Contents/Home ./gradlew :service:test --console=plain"
+            ],
+            "name": "service_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T22:41:10Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/backup/BackupCollectService.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/configuration/ConfigurationCollectService.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryCollectService.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/backup/BackupCollectServiceTest.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/configuration/ConfigurationCollectServiceTest.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryCollectServiceTest.java"
+        ],
+        "completed": [
+          "AC-1: Backup, inventory and configuration collection each refuse a management_server device with the same code.",
+          "AC-2: The reason names the missing gate (14I MS-2).",
+          "AC-3: The refusal precedes every vendor, allowlist, credential and admission check.",
+          "AC-4: A gateway device is unaffected.",
+          "AC-5: No job is admitted, and no command is issued, for a refused device.",
+          "AC-6: The ui2 service tests pass with the new tests, and the repository privacy gate passes.",
+          "Refusal reason exactly: 'device ' + deviceId + ' is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)'",
+          "Refusal locations: BackupCollectService line 73, ConfigurationCollectService line 58, InventoryCollectService line 67. In all three files, it sits immediately after 'device.isEmpty()' and before the vendor checks.",
+          "Fails closed on unrecognized roles: Added an explicit ROLE_UNRECOGNISED check that prevents collection against any role other than gateway or management_server."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Unchanged",
+          "ui": "Unchanged"
+        },
+        "integration": {
+          "branch": "feature/management-server-collection-refused",
+          "ci": "passed local ui2 tests and privacy gate",
+          "head_sha": "62974f479042fbf02a75e04c861f3368b9ae8066",
+          "merge_commit": null,
+          "merge_decision": "the orchestrator handles the pull request and merge after its own verification passes",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0189",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Follow on movements as directed by the product owner.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No change to any existing read set, command, route or capability for a management server.",
+          "No change to discovery or enrollment and confirm paths.",
+          "No change to the existing refusal codes, their order relative to each other, or their wording for gateways.",
+          "No change to the device model, migration V21, or role vocabulary.",
+          "No UI changes were made."
+        ],
+        "recommended_reasoning": {
+          "reason": "This task involved minor branching logic for a known missing gate across three classes with existing models.",
+          "tier": "bounded tier"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "Existing tests for gateways were run and remain unaffected.",
+          "diff_check": "Ran git diff --check origin/main and ensured clean commit without whitespace errors.",
+          "full_regression": "Ran ui2 gradle :service:test suite successfully.",
+          "privacy": "Ran scripts/repository_privacy_check.py successfully.",
+          "real_environment": "None required for this local validation dispatch.",
+          "state_consistency": "N/A for this code-only change.",
+          "targeted": "Added unit tests verifying management_server refusal with MANAGEMENT_SERVER_UNGATED, and arbitrary roles with ROLE_UNRECOGNISED."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T22:49:46Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0188",
+  "movement": "management-server-collection-refused",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/backup/BackupCollectService.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/InventoryCollectService.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/configuration/ConfigurationCollectService.java",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T22:49:46Z"
+}

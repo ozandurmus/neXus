@@ -57,6 +57,28 @@ wrong.
   would, then hands the participant the worktree instead of spawning a
   process; the participant closes the relay with its own `SESSION_CLOSE`; the
   assistant runs `orchestrator.py verify`, reviews and merges as usual.
+- **How the bridge is set up, so it survives a new session.** Two files in a
+  `700` directory outside the repository (`~/.nexus-antigravity/`): an `env`
+  file, mode `600`, holding exactly two names -- the language server's address
+  and its CSRF token -- and an executable wrapper that sources that file and
+  execs the desktop application's bundled `language_server` binary with its
+  `agentapi` subcommand. Neither value is a credential of the vendor's: both
+  are handles to the desktop session running on this machine, both change when
+  it restarts, and both are re-read from the running application rather than
+  stored anywhere durable. Nothing about this bridge belongs in the
+  repository -- not the path to the binary, not the address, not the token --
+  which is why only its shape is written here. The project id
+  (`ANTIGRAVITY_PROJECT_ID`) is a third value, required to create a
+  conversation and absent from the help text; read it from an existing
+  conversation's metadata, as above.
+- **When the desktop session restarts, the bridge is stale, not broken.**
+  Rewrite the `env` file's two values from the running application. A wrapper
+  that exits with `ANTIGRAVITY_LS_ADDRESS is not set` means the file was not
+  sourced; one that fails to reach the server means the values are from a
+  previous session.
+- **Its import path is `google.antigravity`.** A bare `import antigravity`
+  resolves to CPython's standard-library easter egg and opens a comic in the
+  operator's browser.
 - **No credential and no outbound path of its own.** Its command-line tool is
   a client of the running desktop session, so it needs no API key. It does
   need that session to be running: from an ordinary shell it exits with

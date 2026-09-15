@@ -1,0 +1,187 @@
+{
+  "created_at": "2026-09-14T23:51:12Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 The test passes against the two contracts as they stand today.",
+          "AC-2 Removing a clause from either section fails the test; a test fixture or a temporary-file variant proves it rather than an edit to the real document.",
+          "AC-3 Adding a clause fails it, and reordering two clauses fails it.",
+          "AC-4 Rewording a clause's explanation without changing its identifier or position does NOT fail it.",
+          "AC-5 The failure message names the document, the section, the expectation and the finding, and says that changing a frozen shape is a Product Owner decision.",
+          "AC-6 The new test and tests/test_contract_authority_status.py pass, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md and docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md, both FROZEN. A FROZEN document is authority level 2 in AGENTS.md's hierarchy: implementation is written against it and a reviewer trusts it has not changed. The contract-status law requires every contract-bearing document to state its status; nothing yet requires the content behind that status to stay put. This movement adds no rule -- it makes an existing one checkable.",
+          "context_not_loaded": null,
+          "engineering_baseline": "tests/test_contract_authority_status.py already reads design documents and asserts properties of their status lines, so the repository has an established pattern for a test that reads a contract as text.",
+          "product_baseline": "Not a product change. No Java, no TypeScript, no device, no schema.",
+          "test_baseline": "tests/test_contract_authority_status.py passes on origin/main today, run locally on 2026-09-15 before this packet was written.",
+          "what_exists": "The two clause lists to pin, located by heading in the current text:\n\n  docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md\n    line 629: `### 5.3 Preconditions (`AC-5`)`\n\n  docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md\n    line 356: `## 6. Pre-execution checks`\n\nA predecessor attempt existed and was deliberately not imported: tests/test_ui2_d1_restore_admission_contract.py, carried on pull request #180, asserted that C7 section 5.3 has seven checks in a fixed order and C2 section 6 has six claim-time checks. Run against main's contracts on 2026-09-13 all four of its assertions FAILED, because it pinned the exact wording of an earlier generation of those sections. Do not import it and do not copy its numbers: derive the shape from the text as it stands today.\n\nLine numbers in this packet are a locator, not a contract; find the sections by their headings, since any edit above them moves the numbers."
+        },
+        "context_not_loaded": [
+          "ui2/**",
+          "docs/history/**",
+          "application/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/a-frozen-contract-cannot-drift"
+        },
+        "invariants": [
+          "Neither contract is edited by this movement.",
+          "The guard pins shape, never prose.",
+          "The test locates its sections by heading, not by line number."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the pull request and does not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Stop a frozen contract drifting in content while its status line still reads FROZEN. The test tree pins contract STATUSES -- that a document says FROZEN -- and nothing pins the SHAPE of what it froze. A clause can be added, removed or reordered inside a FROZEN document and every gate stays green. This movement pins the shape of the two clause lists that gate the most dangerous behaviour in the product.",
+        "output_contract": [
+          "A frozen contract that changes shape fails the build instead of passing quietly.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "One text-reading test over two named sections; the hard part is pinning shape without pinning prose, and the predecessor's failure says exactly what to avoid.",
+          "tier": "bounded tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every command runs from the repository root.",
+          "Run only the commands named above plus your own new test file.",
+          "Run `git diff --check origin/main` before every commit and fix what it names.",
+          "Leave the worktree clean: write reports outside the repository or remove them before closing.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE states the shape you pinned for each section -- how many clauses and their identifiers -- and what you deliberately did not pin."
+        ],
+        "risks": [
+          "Copying the superseded test's counts instead of reading today's text, which reproduces exactly the failure that kept it out of the tree.",
+          "Pinning sentence wording, which makes every future clarification a test failure and trains people to edit the guard.",
+          "Anchoring on line numbers, which any edit above the section silently breaks.",
+          "Editing a contract to make the test pass, which inverts the whole point."
+        ],
+        "scope": {
+          "in": [
+            "One test that reads the two documents as text, extracts the clause list under each of the two named sections, and asserts its shape: how many clauses there are, and their identifiers or leading labels in order. Derive both from the current text -- read it, do not assume a count.",
+            "Pin the shape, not the prose. A clause's explanatory sentences may be improved without failing the test; adding, removing or reordering a clause must fail it.",
+            "The failure message must say what a reader needs in order to act: which document, which section, what was expected and what was found, and that changing a frozen contract's shape is a Product Owner decision rather than a test to update.",
+            "A short comment in the test saying why it exists: a FROZEN status line is a claim about content, and this is what makes the claim checkable."
+          ],
+          "out": [
+            "Editing either contract. Not one character. If the current text looks wrong, say so in the SESSION_CLOSE and leave it.",
+            "Importing or adapting tests/test_ui2_d1_restore_admission_contract.py from pull request #180.",
+            "Pinning any other document, or widening the guard to every contract in the tree. Two sections, named above.",
+            "Pinning prose, sentence wording or punctuation; a test that fails on an improved explanation is worse than no test.",
+            "Any change to tests/test_contract_authority_status.py."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_status_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T23:51:12Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "tests/test_frozen_contract_shapes.py"
+        ],
+        "completed": [
+          "Added a heading-based frozen-contract clause-shape guard.",
+          "Pinned C7 section 5.3 to seven ordered labels and C2 section 6 to six ordered labels.",
+          "Proved temporary variants reject removal, addition, and reordering while allowing explanation-only rewording."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "No change."
+        },
+        "integration": {
+          "branch": "feature/a-frozen-contract-cannot-drift",
+          "ci": "Not awaited; orchestrator verification is the merge gate.",
+          "head_sha": "2acc0ed",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode: pull request opened; no gh pr merge was run.",
+          "merge_state": "OPEN",
+          "pr": 354,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/354"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0195",
+          "movement_type": "VALIDATION",
+          "objective": "Product Owner assistant review and orchestrator verification of pull request 354.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "Neither frozen contract was edited.",
+          "The guard does not pin explanatory prose, sentence wording, or punctuation outside the bold leading labels.",
+          "The guard finds sections by heading, not line number."
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work is review of a single text-only test change.",
+          "tier": "bounded tier"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "tests/test_contract_authority_status.py: 5 passed; tests/test_architecture_convergence.py: 23 passed.",
+          "diff_check": "git diff --check origin/main passed before commit.",
+          "full_regression": "Not run; dispatch required targeted and affected validation only.",
+          "privacy": "scripts/repository_privacy_check.py: PASS, 0 findings.",
+          "real_environment": "Not applicable: text-only test change with local validation only.",
+          "state_consistency": "Not applicable: no project state changed.",
+          "targeted": "tests/test_frozen_contract_shapes.py: 10 passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T23:54:29Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0195",
+  "movement": "a-frozen-contract-cannot-drift",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "tests/test_contract_authority_status.py",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T23:54:29Z"
+}

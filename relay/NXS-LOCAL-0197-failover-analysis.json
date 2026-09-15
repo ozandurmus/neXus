@@ -1,0 +1,202 @@
+{
+  "created_at": "2026-09-14T23:59:27Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Every capability the Python assessment layer provides is listed with a verdict: portable now, or blocked by a named decision id.",
+          "AC-2 Every blocking decision is named by its id, with what it blocks and whether answering it needs real-device evidence.",
+          "AC-3 Facts the Java product cannot yet produce are named, distinguishing a fact with no collector from one whose collector exists but is ungated.",
+          "AC-4 The document says plainly how much could ship before any open decision is answered, in one sentence near the top.",
+          "AC-5 No open decision is answered or assumed, and no vendor semantic recorded as unknown is filled in.",
+          "AC-6 The status line reads DRAFT -- ARCHITECTURE ANALYSIS, NOT AUTHORITY, NOT A CONTRACT, and no other file is changed.",
+          "AC-7 The repository privacy gate passes and no device value, address, serial or credential appears."
+        ],
+        "baseline": {
+          "authority": "docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md -- FROZEN, Product Owner approved 2026-09-05. PO-NAV-2 and its promotion rule govern where any new operational surface may live and which roots are reserved rather than rendered, so it is the frozen law this analysis must respect when it says where a readiness surface would sit. Read with AGENTS.md's architectural invariants, which are test-enforced: utils/failover/ contains only read-only assessment and evidence modules with exactly one verdict roll-up, the absence of a plan, executor or vendor adapter is enforced by tests/test_architecture_convergence.py, OP.0a's assessment cannot emit a proceed verdict, and readiness is never authorization. docs/design/FAILOVER_ENGINE_ARCHITECTURE.md is DESIGN/roadmap, explicitly not implemented and not frozen: it is an input to this analysis and authorizes nothing.",
+          "context_not_loaded": null,
+          "engineering_baseline": "The three Python modules are offline derivation: none talks to a device, issues a command or holds a credential. assessment.py answers what is known about a cluster's failover readiness and what would still have to be asked of a device. preflight_model.py is a pure domain model for one normalized preflight fact and its provenance envelope. preflight_readiness.py is the one explicit typed mapping from those facts into the canonical readiness stop-conditions. tests/test_op0c_failover_readiness_ui.py and tests/test_op1_failover_plan_compiler.py pass today: 52 tests.",
+          "product_baseline": "The Java product enrols devices, collects inventory and configuration, takes Check Point gateway backups against a pilot allowlist, and refuses collection from a management server. It has no failover surface of any kind. No feature in this product has reached a real device.",
+          "test_baseline": "The two failover test files pass on origin/main, run locally on 2026-09-15 before this packet was written.",
+          "what_exists": "The open decisions that gate this work, from project/QUEUE.md, quoted by id:\n\n  Product Owner decisions: op_track_id, op_four_eyes, op_emergency_evac, op_aa_vsls_scope, op_continuity_tolerance.\n  Vendor semantics: D-V1, D-V2, D-V3a, D-V3b, D-V5a, D-V6, D-V7b, D-V8, D-V9b.\n\nSeveral of the vendor ones say in their own text that they are STILL_UNKNOWN or that they need evidence from an approved real pair -- and no feature in this product has yet reached a real device.\n\nThe backlog also carries, planned and not started: failover_readiness_check_contract, failover_peer_reciprocal_agreement_check, failover_recheck_on_request, failover_vsx_vsls_mentality_contract, cp_cphaprob_command_gate, cp_failover_command_gate_batch; and deferred: failover_readiness_assessment, failover_controlled_execution."
+        },
+        "context_not_loaded": [
+          "ui2/frontend/node_modules/**",
+          "docs/history/**",
+          "application/**",
+          "data/**"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/failover-readiness-analysis"
+        },
+        "invariants": [
+          "Readiness is not authorization.",
+          "The assessment layer is read-only; this analysis neither designs nor prepares an executor.",
+          "An unknown vendor semantic stays unknown.",
+          "One new document; nothing else in the tree is touched."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the pull request and does not merge.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Say precisely what it would take to bring failover readiness into the Java product, and what is genuinely close versus what only looks close. Three read-only assessment modules exist in the earlier Python line with 52 passing tests, and the Java product has no failover code at all. The Product Owner believes this work is near ready. This movement replaces that belief with a map: which parts could ship without a single open decision being answered, which parts are blocked and by exactly which decision, and what the port would actually cost. It writes one document and no code.",
+        "output_contract": [
+          "A truthful answer to whether failover is close, and to what exactly would have to happen first.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A cross-line architecture question whose main hazard is producing a confident plan over unanswered decisions.",
+          "tier": "heavy tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every command runs from the repository root.",
+          "Run only the commands named above. This is a reading and writing task; build nothing.",
+          "Run `git diff --check origin/main` before committing and fix what it names.",
+          "Leave the worktree clean: write reports outside the repository or remove them before closing.",
+          "A mechanical mismatch between this packet and the code is settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE answers in one sentence how much could ship before any open decision is answered, and names the decision that blocks the most."
+        ],
+        "risks": [
+          "Producing an implementation plan that quietly assumes the open decisions will go a particular way, which is how an assumption becomes a contract.",
+          "Filling a vendor semantic from general model knowledge because the gap is inconvenient.",
+          "Reading the 52 passing tests as evidence of readiness for the Java product; they prove the Python derivation, not that the facts it needs can be produced here.",
+          "Recommending that an invariant be relaxed as though that were an engineering decision rather than a Product Owner one."
+        ],
+        "scope": {
+          "in": [
+            "Read the three modules and the architecture document, and describe what the Python line actually computes today -- the inputs it needs, the verdict vocabulary it may emit, and the stop-conditions it maps. Describe behaviour, not file structure.",
+            "For each capability it provides, state whether it could be brought into the Java product with no open decision answered, or name the exact decision id that blocks it. A capability blocked by a decision that needs real-device evidence must say so, because that evidence does not exist for any feature yet.",
+            "Identify what the Java product would have to gain for the unblocked part to work: which existing collectors already produce the facts, which facts have no producer, and where a readiness surface would sit in the frozen information architecture.",
+            "State plainly what is close and what is not. If the honest answer is that little can ship before the open decisions and the first real-device run, say that in those words rather than producing a plan that depends on them.",
+            "Respect the invariants as boundaries of the analysis, not obstacles to route around: readiness is not authorization, the assessment may not emit a proceed verdict, and no plan, executor or vendor adapter belongs in the assessment layer. If the analysis suggests any of these should change, say so as a recommendation to the Product Owner and never as a design.",
+            "Write it to docs/design/FAILOVER_READINESS_IN_THE_JAVA_PRODUCT_2026_09_15.md with a status line of DRAFT -- ARCHITECTURE ANALYSIS. NOT AUTHORITY, NOT A CONTRACT."
+          ],
+          "out": [
+            "Writing any Java, Python, TypeScript, SQL or test. This movement writes exactly one document.",
+            "Designing or proposing a failover execution path, a plan compiler, an executor or a vendor adapter. The assessment layer is read-only by test-enforced invariant and this analysis does not prepare its removal.",
+            "Answering, pre-empting or assuming any open decision. Name it, say what it blocks, and stop.",
+            "Inferring a vendor semantic that a decision records as unknown. The vendor-semantics law forbids filling that gap from general knowledge and this document must not.",
+            "Any change to project/*.json, to the backlog, or to any contract."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_op0c_failover_readiness_ui.py",
+              "tests/test_op1_failover_plan_compiler.py",
+              "-q"
+            ],
+            "name": "failover_tests"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T23:59:27Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added docs/design/FAILOVER_READINESS_IN_THE_JAVA_PRODUCT_2026_09_15.md with status DRAFT -- ARCHITECTURE ANALYSIS, NOT AUTHORITY, NOT A CONTRACT."
+        ],
+        "completed": [
+          "Mapped every Python assessment capability to portable-now, named-decision-blocked, or governing-invariant-prohibited status.",
+          "Distinguished Java facts with existing producers, existing collector paths with ungated reads, and facts with no producer.",
+          "Placed the future read-only surface under Operations and the entity HA/Readiness tab per the frozen navigation architecture.",
+          "Before any open decision is answered, only a read-only, fail-closed readiness shell and pure derivation can ship; useful positive live readiness is not close, and D-V3b blocks the most because unresolved reciprocal PAN pair identity prevents every cross-member positive PAN conclusion."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Unchanged.",
+          "ui": "Unchanged."
+        },
+        "integration": {
+          "branch": "feature/failover-readiness-analysis",
+          "ci": "Pending orchestrator verification; local mandated gates passed.",
+          "head_sha": "d72fef4",
+          "merge_commit": null,
+          "merge_decision": "Not merged by worker; merge is reserved to the orchestrator after verify.passed.",
+          "merge_state": "OPEN",
+          "pr": 356,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/356"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0197 Product Owner review and orchestrator verification",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Review PR 356, run orchestrator verification, and merge only after verify.passed.",
+          "status": "planned"
+        },
+        "preserved": [
+          "Readiness remains distinct from authorization.",
+          "The assessment layer remains read-only with no plan, executor, or vendor adapter.",
+          "Unknown vendor semantics remain unknown.",
+          "No code, test, contract, project state, backlog, or additional repository file changed."
+        ],
+        "recommended_reasoning": {
+          "reason": "Reconcile the proceed-verdict boundary and freeze the read-only Java readiness contract before any implementation movement.",
+          "tier": "heavy tier"
+        },
+        "state_updates": [
+          "None; the approved scope requires exactly one draft document and prohibits project-state and contract changes."
+        ],
+        "unresolved_risks": [
+          "The 52 tests validate Python derivation, not Java collectors or real vendor output.",
+          "The dispatch baseline says the assessment cannot emit a proceed verdict, while the current Python fresh-preflight roll-up can emit SAFE_TO_FAILOVER and the named OP.1 test consumes that case; the document reports both facts and keeps proceed emission out of the Java port.",
+          "Open vendor semantics must remain UNKNOWN until their named decisions close."
+        ],
+        "validation": {
+          "affected": "Architecture convergence: 23 passed in 0.15s.",
+          "diff_check": "git diff --check origin/main passed before commit.",
+          "full_regression": "Not run; the approved validation plan names only the targeted architecture and failover suites for this one-document movement.",
+          "privacy": "PASS; 1463 files scanned, 0 findings.",
+          "real_environment": "Not run; local validation only, and no Java feature has reached a real device.",
+          "state_consistency": "Not applicable; project-state changes were prohibited, and both the dispatch and commit worktrees were clean at close.",
+          "targeted": "Failover tests: 52 passed in 0.66s."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T00:11:03Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0197",
+  "movement": "what-failover-readiness-would-cost-in-the-java-product",
+  "next_actor": null,
+  "refs": [
+    "docs/design/FAILOVER_ENGINE_ARCHITECTURE.md",
+    "utils/failover/assessment.py",
+    "utils/failover/preflight_model.py",
+    "utils/failover/preflight_readiness.py",
+    "AGENTS.md",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T00:11:03Z"
+}

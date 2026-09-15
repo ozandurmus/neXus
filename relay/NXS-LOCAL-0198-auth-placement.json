@@ -1,0 +1,203 @@
+{
+  "created_at": "2026-09-15T05:19:14Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Every check and every piece of state the current gate chain depends on is enumerated, so each option can be measured against the whole boundary rather than a summary of it.",
+          "AC-2 All three placements are analysed against the same questions, in the same order, so they can be compared rather than argued.",
+          "AC-3 Each option names the frozen documents and clause ids it would require amending, or states plainly that it requires none.",
+          "AC-4 Each option states its failure mode under partial outage and its blast radius under compromise of one component.",
+          "AC-5 Each option states what it costs to reverse.",
+          "AC-6 No option is recommended, ranked or presented as the obvious one.",
+          "AC-7 The status line reads DRAFT -- OPTIONS ANALYSIS FOR PRODUCT OWNER DECISION, NOT AUTHORITY, NOT A RECOMMENDATION; no other file is changed; the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_13D_INDEPENDENTLY_DEPLOYABLE_SERVICES.md -- FROZEN, Product Owner directives 2026-09-13. DS-1: a capability may be its own deployable unit, superseding 01C EP-1's one-image prohibition; the Product Owner's stated reason is that discovery, directory login or the UI web server must be replaceable. DS-2: role selection stays typed and explicit. DS-3: 13C's three services stand and the set is open; adding one is a contract clause, never an implementation decision. DS-4: the cost -- distributed transactions, duplicated authorization, cross-service evidence joins -- was put to the Product Owner and replaceability was chosen over it. Section 3 names AUTH-PLACEMENT as the largest open question and states: until it is decided, only one authenticated surface exists and it is the existing service. Read with UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN), which fixes one active session per identity and places RBAC enforcement and the gate chain in service.",
+          "context_not_loaded": null,
+          "engineering_baseline": "The gate chain is one class in the service module. It resolves the session from a cookie, checks the session row's state and deadlines, requires a CSRF token matching the session's own secret on every state-changing method, requires an origin header, heartbeats the session, and then runs the remaining gates. Every authenticated route passes through it.",
+          "product_baseline": "One deployable service holds every authenticated surface today: identity administration, credentials, device enrolment, discovery, inventory, configuration and backup. A worker and a database sit behind it. Nothing else authenticates.",
+          "test_baseline": "The ui2 service suite passes on origin/main today.",
+          "what_exists": "13D section 3 states the question verbatim:\n\n  AUTH-PLACEMENT. UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN) fixes one active session per identity and places RBAC enforcement and the gate chain in service. With several deployable services, either every service enforces it -- duplicating the boundary the contract deliberately keeps in one place -- or something in front of them does. This is the largest open question created by DS-1 and it blocks any second service reaching an authenticated surface.\n\nand its closing paragraph:\n\n  Until AUTH-PLACEMENT is decided, only one authenticated surface exists and it is the existing service.\n\nThe gate chain's own sequence, from ui2/service/.../security/GateChain.java, is: session cookie present; session row found by hashed id; row ACTIVE; idle deadline not elapsed; absolute expiry not elapsed; for a state-changing method the CSRF header present and equal to the session row's secret, and an origin header present; then heartbeat, then the must-change-password gate, then the remaining gates.\n\nC3 fixes one active session per identity structurally, not by convention."
+        },
+        "context_not_loaded": [
+          "ui2/frontend/node_modules/**",
+          "docs/history/**",
+          "application/**",
+          "data/**"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/auth-placement-options"
+        },
+        "invariants": [
+          "One active session per identity is a frozen structural guarantee, not a convention; an option that cannot hold it must say so.",
+          "Readiness of an option is not authorization to build it: this document decides nothing.",
+          "No frozen clause is amended, reinterpreted or routed around by this movement.",
+          "Three options, presented symmetrically, none recommended."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the pull request and does not merge.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Lay out the three ways the authentication boundary can be placed once a capability is its own deployable service, with what each actually costs, so the Product Owner can choose. Record 13D calls this the largest open question its own decision created, and says in its own words that it blocks any second service reaching an authenticated surface. Backup and failover are both authenticated surfaces, so nothing of either can become its own service until this is settled. This movement analyses and recommends nothing; the Product Owner chooses.",
+        "output_contract": [
+          "Three placements the Product Owner can choose between, each with its real cost, and no thumb on the scale.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A security-boundary decision across three topologies whose main hazard is an advocacy document dressed as an analysis.",
+          "tier": "heavy tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every command runs from the repository root.",
+          "Run only the commands named above. This is a reading and writing task; build nothing.",
+          "Run `git diff --check origin/main` before committing and fix what it names.",
+          "Leave the worktree clean: write reports outside the repository or remove them before closing.",
+          "A mechanical mismatch between this packet and the code is settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE names, in one sentence each, the single hardest problem each option has to solve."
+        ],
+        "risks": [
+          "Writing an advocacy document with two straw men, which is the most likely way this fails and the least likely to be noticed.",
+          "Describing an option's cost in effort while omitting its cost in security surface, or the reverse.",
+          "Treating the session cookie, the CSRF secret and the origin check as one thing; they fail differently across a service boundary and each must be analysed separately.",
+          "Quietly assuming a shared database makes shared session state free, without saying what that does to the replaceability the decision was taken for."
+        ],
+        "scope": {
+          "in": [
+            "Describe exactly what the boundary does today -- every check the gate chain performs and every piece of state it depends on -- because each option has to reproduce or relocate all of it, and an option that quietly drops one is not an option.",
+            "Analyse three placements, each on its own terms: every service carries its own gate chain; a component in front of the services terminates authentication and passes an established identity behind it; authentication stays in one service and the others accept a token derived from it.",
+            "For each, state: what has to be built; what state must be shared or replicated and how a service learns that a session ended; how one active session per identity stays true; how CSRF and origin checking work when the browser talks to more than one origin or path; what happens when a service is unreachable or lagging; what a compromise of one service gives an attacker; and what must be true before the second service can ship.",
+            "Name, for each option, the frozen clauses it would require amending, by document and clause id. An option that needs C3 amended must say so plainly rather than describing the amendment as a detail.",
+            "State the failure modes honestly and symmetrically, including the one the Product Owner already named for the middle option: a new component in front of everything is a new single point of failure.",
+            "Say what each option costs to reverse, because this decision outlives the services it enables.",
+            "Write it to docs/design/AUTH_PLACEMENT_OPTIONS_2026_09_15.md with a status line of DRAFT -- OPTIONS ANALYSIS FOR PRODUCT OWNER DECISION. NOT AUTHORITY, NOT A RECOMMENDATION."
+          ],
+          "out": [
+            "Recommending one. The document presents three and chooses none. If one option is unworkable, say which clause makes it unworkable and let that stand on its own.",
+            "Writing any code, test, manifest or migration. One document and nothing else.",
+            "Amending, reinterpreting or working around any frozen clause. Name what would have to change and stop.",
+            "Designing the second service, or deciding which capability becomes one. That is DS-3's contract clause and belongs to the Product Owner.",
+            "Assuming the answer to DATA-OWNERSHIP or any other open item 13D section 3 lists; name a dependency where one exists and leave it open."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_status_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_frozen_contract_shapes.py",
+              "-q"
+            ],
+            "name": "frozen_contract_shapes"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T05:19:14Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added docs/design/AUTH_PLACEMENT_OPTIONS_2026_09_15.md with the exact required status line.",
+          "Recorded that the current GateChain checks Origin header presence only and executes no current action-specific E5/E6 check; this matches the dispatch baseline and is not a packet/source divergence."
+        ],
+        "completed": [
+          "Created the required DRAFT options analysis and chose no placement.",
+          "Enumerated the current gate-chain inputs, state, checks, side effects, and fail-closed outcomes.",
+          "Applied the same nine comparison questions to all three options.",
+          "Named required frozen-clause amendments, partial-outage behavior, compromise blast radius, ship prerequisites, and reversal costs for every option.",
+          "Opened pull request 358 and left it unmerged for orchestrator verification."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Unchanged.",
+          "ui": "Unchanged."
+        },
+        "integration": {
+          "branch": "feature/auth-placement-options",
+          "ci": "Local dispatch validation passed; orchestrator verification pending.",
+          "head_sha": "bb5e988",
+          "merge_commit": null,
+          "merge_decision": "Do not merge in worker session; orchestrator merges only after Product Owner review and verify.passed.",
+          "merge_state": "OPEN",
+          "pr": 358,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "Product Owner AUTH-PLACEMENT decision and successor contract",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Choose one placement, amend the named frozen clauses through a successor, and define the selected option's state, transport, CSRF/Origin, outage, and version-skew contract before a second authenticated surface ships.",
+          "status": "planned"
+        },
+        "preserved": [
+          "One active session per identity remains a structural guarantee in every option.",
+          "No frozen clause was amended, reinterpreted, or routed around.",
+          "DATA-OWNERSHIP and every other 13D open item remain undecided.",
+          "No option is recommended, ranked, or framed as obvious.",
+          "No source, test, manifest, migration, project-state file, or handover file changed."
+        ],
+        "recommended_reasoning": {
+          "reason": "The next movement freezes a cross-service security boundary and must resolve the selected option's fail-closed session and compromise semantics.",
+          "tier": "heavy tier"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Option A hardest problem: preserve immediate fail-closed session termination and structural one-session enforcement across independently released enforcement points without letting shared or replicated state silently defeat service independence.",
+          "Option B hardest problem: keep the new shared front component available and impossible to bypass while proving that its request-bound identity assertion preserves the split E1-PWD-E6 order.",
+          "Option C hardest problem: make every derived token unacceptable as soon as its underlying session ends without relying on expiry-only lag or accidentally recreating a mandatory per-request authentication-service dependency.",
+          "No option may be implemented from this draft; the Product Owner must choose and freeze a successor first."
+        ],
+        "validation": {
+          "affected": "PASS -- the two dispatch-named contract tests passed on the final document.",
+          "diff_check": "PASS -- git diff --check origin/main; worktree clean after commit.",
+          "full_regression": "Not run; the dispatch authorized only the named document validations.",
+          "privacy": "PASS -- repository_privacy_check.py scanned 1466 files with 0 findings.",
+          "real_environment": "Not applicable; architecture-options documentation only.",
+          "state_consistency": "Not applicable; this DRAFT makes no architecture decision or project-state change.",
+          "targeted": "PASS -- test_contract_authority_status.py: 5 passed; test_frozen_contract_shapes.py: 10 passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T05:33:43Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0198",
+  "movement": "where-the-authentication-boundary-lives",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_13D_INDEPENDENTLY_DEPLOYABLE_SERVICES.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_AND_DEVICE_ADD.md",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/GateChain.java",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T05:33:43Z"
+}

@@ -1,0 +1,184 @@
+{
+  "created_at": "2026-09-14T23:47:55Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 An operator reading the Backup tab can tell that the verdict was reached by comparing digests and not by inspecting the archive.",
+          "AC-2 The explanation is visible without hovering or expanding anything.",
+          "AC-3 The four deviation values render exactly as they do today, in the same neutral tone.",
+          "AC-4 Nothing in the tab offers or implies inspection, extraction, download or decryption of an archive.",
+          "AC-5 npx vitest run passes with the new tests, npx tsc --noEmit is clean, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md -- FROZEN, Product Owner directives 2026-09-14. DV-1: every artefact carries a plaintext digest and the product records unchanged, changed or first against the previous artefact of the same class for the same device. DV-2: for the text-shaped artefacts the changed verdict is refined into a structural summary, by section name and count, never by value. DV-3: a Gaia system backup archive is opaque -- for it, deviation is digest-level only, and the product says so rather than implying it inspected the contents. DV-4: deviation is shown on the device's backup and configuration views.",
+          "context_not_loaded": null,
+          "engineering_baseline": "The backup list is read from GET /devices/{deviceId}/backups and rendered by BackupPanel in ui2/frontend/src/screens/InventoryPanels.tsx. The configuration side now carries a structural summary; the backup side does not and, for an opaque archive, cannot.",
+          "product_baseline": "The device's Backup tab lists retained artefacts with their deviation state rendered as a neutral chip: unchanged, changed, first, or not evaluated. Nothing distinguishes a digest-level verdict from an inspected one.",
+          "test_baseline": "npx vitest run and npx tsc --noEmit pass on origin/main today.",
+          "what_exists": "BackupController.toSummaryBody returns exactly these keys: artefact_id, device_id, collected_at, size_bytes, digest_prefix, validation_level, deviation_state. deviation_state is null or one of unchanged, changed, first -- a CHECK constraint in migration V18 enforces the three.\n\nBackupPanel renders the state like this:\n\n              {b.deviation_state === null ? (\n                <StatusChip tone=\"neutral\" label=\"not evaluated\" dense />\n              ) : (\n                <StatusChip tone=\"neutral\" label={b.deviation_state} dense />\n              )}\n\nEvery deviation value is deliberately neutral in tone: a changed configuration is evidence, not a fault, and none of the four may be styled as an alarm."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "application/**",
+          "ui2/service/**",
+          "ui2/worker/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/an-opaque-archive-says-so"
+        },
+        "invariants": [
+          "The archive is opaque and the product never implies otherwise.",
+          "No deviation value is styled as an alarm.",
+          "No artefact byte, path, download link or decrypt affordance anywhere."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the pull request and does not merge.",
+        "movement_type": "UI",
+        "objective": "Stop a digest-level verdict reading like an inspection. A Gaia system backup archive is opaque: the product compares two of them by digest alone and can say only that the bytes differ. The device's Backup tab shows that verdict as `unchanged` or `changed` with no indication of how it was reached, so an operator reasonably reads it as the product having looked inside. Record 14I DV-3 requires the product to say so rather than imply it inspected the contents.",
+        "output_contract": [
+          "An operator knows what the backup verdict is based on, and is not left believing the product looked inside.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "One explanatory line on a surface that already exists; the constraint is the wording, not the markup.",
+          "tier": "bounded tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "The two frontend commands run from ui2/frontend; the privacy gate runs from the repository root.",
+          "Run only the commands named above. Do not run the Java build.",
+          "Run `git diff --check origin/main` before every commit and fix what it names.",
+          "Leave the worktree clean: write reports outside the repository or remove them before closing.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE quotes the wording you chose and says where it is placed."
+        ],
+        "risks": [
+          "Writing the explanation as a warning, which turns an honest limitation into an apparent fault.",
+          "Hiding it behind a hover, where the reader who most needs it never sees it.",
+          "Wording it so it reads as a promise that a future version will look inside."
+        ],
+        "scope": {
+          "in": [
+            "The Backup tab says, where the verdict is shown, that a backup archive is compared by digest alone -- so unchanged means the bytes are identical and changed means they are not, and neither is a statement about what is inside.",
+            "Say it once, where it is needed, in the product's own voice. A column heading, a short note under the table, or an explanation attached to the verdict are all acceptable; a tooltip alone is not, because it is invisible to a reader who does not hover.",
+            "Keep every deviation value neutral in tone. This movement adds an explanation, not an alarm.",
+            "Tests: the explanation is present when the list has rows; it does not appear as an error or a warning; the existing rendering of the four values is unchanged."
+          ],
+          "out": [
+            "Any attempt to inspect an archive, open it, or derive structure from it. The archive is opaque and this movement's whole point is to say so.",
+            "Any change to the API, the deviation vocabulary, or the CHECK constraint.",
+            "Any change to the configuration side's structural summary.",
+            "Any artefact byte, path, download link or decrypt affordance.",
+            "Restyling the existing chips or introducing a tone that reads as a fault."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npx vitest run"
+            ],
+            "name": "frontend_suite"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npx tsc --noEmit"
+            ],
+            "name": "typecheck"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T23:47:55Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "Added visible digest-only explanation below populated Backup table.",
+          "Extended BackupPanel rendering coverage to all four deviation states and the explanation."
+        ],
+        "completed": [
+          "Implementation is staged but blocked before commit and PR creation."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "MODIFIED"
+        },
+        "integration": {
+          "branch": "feature/an-opaque-archive-says-so",
+          "ci": "NOT_RUN",
+          "head_sha": "NOT_CREATED",
+          "merge_commit": "NOT_CREATED",
+          "merge_decision": "NOT_REQUESTED",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": "NOT_CREATED"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0194",
+          "movement_type": "UI",
+          "objective": "Restore writable Git metadata and frontend dependencies, then validate and open the PR.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Archive remains opaque.",
+          "Existing deviation chips retain neutral rendering.",
+          "No archive inspection, extraction, download, decryption, API, or vocabulary change."
+        ],
+        "recommended_reasoning": {
+          "reason": "Environment recovery and existing small UI diff verification.",
+          "tier": "bounded tier"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Frontend suite and typecheck did not start because project-local frontend dependencies are absent.",
+          "Commit and pull request creation are blocked because shared Git metadata is outside the writable scope."
+        ],
+        "validation": {
+          "affected": "ui2/frontend/src/screens/InventoryPanels.tsx and ui2/frontend/tests/InventoryPanels.test.tsx",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "NOT_RUN: dispatch limited validation to frontend suite, typecheck, and privacy gate.",
+          "privacy": "PASS: repository privacy gate reported 0 findings.",
+          "real_environment": "NOT_APPLICABLE: local UI-only movement.",
+          "state_consistency": "NOT_RUN: no durable project-state change in scope.",
+          "targeted": "BLOCKED: vitest could not resolve project-local vitest or @vitejs/plugin-react after isolated-cache retry."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T23:51:18Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0194",
+  "movement": "an-opaque-archive-says-so",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md",
+    "ui2/frontend/src/screens/InventoryPanels.tsx",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/BackupController.java",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T23:51:18Z"
+}

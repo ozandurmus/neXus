@@ -1,0 +1,198 @@
+{
+  "created_at": "2026-09-14T22:42:09Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 The Backup tab offers a control that submits a backup request for the selected device, with a reason the operator types.",
+          "AC-2 A reason shorter than eight characters after stripping is refused in the UI, with the minimum stated, and no request is sent.",
+          "AC-3 A 409 renders the server's own code and reason verbatim; an unrecognised code still renders.",
+          "AC-4 A 202 tells the operator the request was accepted and that the result appears in the list when the job completes, and the list refreshes.",
+          "AC-5 Nothing in the tab offers a restore, a download or a decrypt, and a test asserts no such control exists.",
+          "AC-6 npx vitest run passes with the new tests, npx tsc --noEmit is clean, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14K_A_BACKUP_IS_NOT_A_RECOVERY_WRITE.md -- FROZEN, Product Owner directive 2026-09-14. BW-1: a recovery write changes what a device is or does and stays never console-submittable; restore remains disabled. BW-2: a backup creation writes a transient artefact and removes it, leaving the device in the state it was in. BW-4: a backup creation IS console-submittable, under every guard 14H already fixed and no fewer -- the device inside the pilot allowlist (BK-1), role:backup_admin, a reason of at least eight characters (BK-12), one device per job, every step audited. BW-5: the refusal precedent for a browser-submitted recovery write stands unchanged.",
+          "context_not_loaded": null,
+          "engineering_baseline": "The device detail tab strip carries a read-only Backup tab, added by NXS-LOCAL-0184: it lists retained artefacts through listDeviceBackups, renders the four deviation values neutrally, reads its pending state off the fetch hook and never renders a pending fetch as an answer.",
+          "product_baseline": "Check Point gateway backup is implemented and gated. The pilot allowlist is currently empty, so on this installation every device is refused with DEVICE_NOT_IN_BACKUP_PILOT_ALLOWLIST. The screen must therefore be correct and informative when every attempt is refused, because that is the only behaviour anyone can see today.",
+          "test_baseline": "npx vitest run and npx tsc --noEmit pass on origin/main today, run locally on 2026-09-15 before this packet was written.",
+          "what_exists": "The route is POST /devices/{deviceId}/backup/collect. Its request body is `record CollectRequest(@JsonProperty(\"nonce\") String nonce, @JsonProperty(\"reason\") String reason)`; both may be absent. On admission it answers 202 with `{\"job_id\": ...}`. On refusal it answers 409 with exactly three keys: `error` (always the literal \"ADMISSION_REFUSED\"), `code`, and `reason`.\n\nThe refusal codes the service produces, verbatim, in the order it tests them:\n\n  REASON_TOO_SHORT -- \"a backup requires a reason of at least eight characters (BK-12)\"\n  DEVICE_NOT_FOUND -- \"no device row for device_id=<id>\"\n  VENDOR_UNSUPPORTED -- \"device <id> vendor_hint=<vendor> has no registered backup capability (14H BK-9: Check Point gateway only)\"\n  DEVICE_NOT_IN_BACKUP_PILOT_ALLOWLIST -- \"device <id> is not on the backup pilot allowlist (14H BK-1) -- refused, never a silent skip\"\n  BACKUP_CREDENTIAL_NOT_CONFIGURED -- \"no distinct backup credential is configured for check_point (BK-11: never falls back to the collection credential)\"\n\nplus whatever code the job admission service itself returns. The minimum reason length constant in the service is eight characters, measured after stripping.\n\nThe existing tab and its API helper are in ui2/frontend/src/screens/InventoryPanels.tsx (`BackupPanel`) and ui2/frontend/src/auth/adminApi.ts (`listDeviceBackups`, `BackupArtefact`). The file's own idiom for a failed request is a local `describeApiError` plus an `EmptyPanel` carrying a Retry button; `InventoryPanels.tsx` also contains a `CollectNowButton` for inventory, which is the nearest existing example of submitting an action from this screen."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "application/**",
+          "ui2/service/**",
+          "ui2/worker/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/operator-can-ask-for-a-backup"
+        },
+        "invariants": [
+          "A backup is not a restore. Nothing in this surface writes to a device or implies it does.",
+          "No artefact byte, path, download link or decrypt affordance anywhere.",
+          "A refusal is shown in the server's own words; the UI never invents a friendlier explanation that loses the clause.",
+          "One device per job.",
+          "Absence of evidence is not evidence of absence: a pending request is never rendered as a result."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "UI",
+        "objective": "Let an operator ask for a backup. Record 14K decided that creating a backup is console-submittable -- it writes a transient archive and removes it, leaving the device as it was -- and 14H BK-12 chose a manual backup as the first form of the feature. The route exists, every guard behind it exists, and nothing calls it. Without a trigger, BK-12's manual backup cannot happen at all.",
+        "output_contract": [
+          "An operator can ask for a backup of one device, with a reason, and is told plainly what happened.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A submit path onto a contract-guarded action: the guards, the refusal vocabulary and what must never be implied all matter more than the markup.",
+          "tier": "extended"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "The two frontend commands run from ui2/frontend; the privacy gate runs from the repository root.",
+          "Run only the commands named above. Do not run the Java build or the Python suite.",
+          "Match the surrounding file's style: the same shared widgets, the same error helper shape, the same spacing idiom.",
+          "Run `git diff --check origin/main` before every commit and fix what it names.",
+          "Leave the worktree clean: write reports outside the repository or remove them before closing.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE quotes the wording you chose for the accepted case and for the minimum-reason message, and says how a refusal is displayed."
+        ],
+        "risks": [
+          "Rewriting the server's refusal into friendlier prose, which throws away the clause citation that is the operator's only route to understanding why.",
+          "Letting the control submit with no reason, or with whitespace, which shifts a contract guard from the product into the operator's habits.",
+          "Rendering an in-flight request as success, or leaving the operator unable to tell a queued job from a finished one.",
+          "Adding anything that reads as restoring or downloading, on a screen whose whole contract is that neither exists."
+        ],
+        "scope": {
+          "in": [
+            "ui2/frontend/src/auth/adminApi.ts: one helper posting to the backup collect route with a reason, following the existing one-line style, and typed so a caller must supply the reason.",
+            "ui2/frontend/src/screens/InventoryPanels.tsx: a control on the Backup tab that asks for a backup. It collects the operator's reason first and does not submit without one; the eight-character minimum is enforced in the UI as well as by the server, and the UI says what the minimum is rather than letting the operator discover it through a refusal.",
+            "A refusal is shown as the server worded it -- its own reason text, not a rewrite -- because those sentences cite the clause that refused and are the operator's only explanation. An unrecognised code must still display, never be swallowed.",
+            "On admission, the operator is told the request was accepted and that a backup is a job whose result appears in the list when it completes; the list refreshes rather than requiring a reload.",
+            "The control must not imply a capability that is not there. A backup is one device per job, it is not a restore, and nothing about it may suggest a configuration is being written back.",
+            "Tests: a submit with a valid reason calls the route with that reason; a too-short reason is refused by the UI without a request; a 409 shows the server's own code and reason; an admission refreshes the list."
+          ],
+          "out": [
+            "Any restore, any download, any decrypt affordance, any artefact byte or path. 14I OR-1 forbids all of them from ever reaching an HTTP response and 14K BW-1 keeps restore disabled; nothing here may hint otherwise.",
+            "Any change to the Java service, the route, the refusal codes or their wording.",
+            "Any bulk or multi-device action. One device per job is the contract.",
+            "Any change to the read-only listing added by NXS-LOCAL-0184 beyond refreshing it after an admission.",
+            "Any new root screen or navigation change."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npx vitest run"
+            ],
+            "name": "frontend_suite"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npx tsc --noEmit"
+            ],
+            "name": "typecheck"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T22:42:09Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/frontend/src/auth/adminApi.ts: added collectDeviceBackup(deviceId, reason) -- one POST to /devices/{id}/backup/collect with {reason} in the body; reason is a required string so no caller can omit it.",
+          "ui2/frontend/src/screens/InventoryPanels.tsx: added RequestBackupControl component (BK-12 manual backup trigger); BackupPanel now embeds it above the artefact list and calls fetcher.refresh() on admission. No change to the listing logic. Added TextField import from @mui/material/TextField and collectDeviceBackup import.",
+          "ui2/frontend/tests/InventoryPanels.test.tsx: five new tests in the BackupPanel describe block: valid reason calls the route with that reason; short reason is refused by the UI without a request; 409 shows the server's own code and reason verbatim; 202 refreshes the list; no restore/download/decrypt control exists."
+        ],
+        "completed": [
+          "AC-1: BackupPanel now embeds RequestBackupControl above the read-only listing. The control renders a Reason text field and a Request backup button; it submits POST /devices/{id}/backup/collect with the typed reason.",
+          "AC-2: The button is disabled and no request is sent when reason.trim().length < 8. Both the field helper text and a below-field message state the minimum: 'Provide a reason of at least 8 characters.' and 'Reason must be at least 8 characters (after trimming).'",
+          "AC-3: A 409 response renders as '{code}: {reason}' verbatim from the server's own body fields, e.g. 'DEVICE_NOT_IN_BACKUP_PILOT_ALLOWLIST: device dev-1 is not on the backup pilot allowlist (14H BK-1) -- refused, never a silent skip'. An unrecognised code still renders because the display logic is: code ? `${code}: ${serverReason}` : serverReason || 'request refused'.",
+          "AC-4: A 202 response sets phase to 'admitted' which renders: 'Backup request accepted. The result appears in the list below when the job completes.' The list refreshes via fetcher.refresh() immediately on admission.",
+          "AC-5: The tab and its new control contain no restore, download, or decrypt text or controls. Test 'has no restore, download, or decrypt control' asserts this with queryByRole/queryByText checks for all three words.",
+          "AC-6: npx vitest run -- 85 tests pass, 14 files. npx tsc --noEmit -- clean. repository_privacy_check.py -- PASS, 0 findings."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change -- UI-only movement.",
+          "ui": "BackupPanel on the device detail Backup tab now includes RequestBackupControl above the read-only artefact listing. The control has a Reason text field (minimum 8 characters after trimming, enforced in UI) and a Request backup button. On 202: success message and list refresh. On 409: server's own code and reason verbatim. No restore, download, or decrypt affordance."
+        },
+        "integration": {
+          "branch": "feature/operator-can-ask-for-a-backup",
+          "ci": "not run -- local validation only",
+          "head_sha": "9bde88a55ba60ef45f2cae5ba12e11a45bc416b9",
+          "merge_commit": null,
+          "merge_decision": "Merge gate: Product Owner assistant review plus orchestrator verify.passed. Worker does not open a pull request and does not merge.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "orchestrator verify",
+          "movement_type": "VALIDATION",
+          "objective": "Orchestrator runs verify.passed gate on feature/operator-can-ask-for-a-backup and merges if it passes.",
+          "status": "planned"
+        },
+        "preserved": [
+          "The read-only artefact listing from NXS-LOCAL-0184 is unchanged except that it is now embedded inside a Stack with the new control above it.",
+          "All existing 80 tests pass without modification.",
+          "No new root screen, no navigation change, no restore or download affordance."
+        ],
+        "recommended_reasoning": {
+          "reason": "Next step is orchestrator validation, not a new engineering decision.",
+          "tier": "bounded tier"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Every device is refused with DEVICE_NOT_IN_BACKUP_PILOT_ALLOWLIST on this installation because the allowlist is empty. The screen is correct and informative in this state -- the server's own refusal text is shown verbatim."
+        ],
+        "validation": {
+          "affected": "PASS -- BackupPanel describe block: all 9 tests pass (4 existing + 5 new).",
+          "diff_check": "PASS -- git diff --check origin/main: clean.",
+          "full_regression": "PASS -- npx vitest run: all 85 tests pass.",
+          "privacy": "PASS -- repository_privacy_check.py: 0 findings, 1460 files scanned.",
+          "real_environment": "Not applicable -- local validation only per deployment_direction.",
+          "state_consistency": "No project state files touched; UI-only movement.",
+          "targeted": "PASS -- npx vitest run: 85 tests pass (5 new), 14 files."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T22:59:48Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0189",
+  "movement": "operator-can-ask-for-a-backup",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14K_A_BACKUP_IS_NOT_A_RECOVERY_WRITE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14H_BACKUP_STEP_SCOPE_PILOT_DEVICE_AND_THE_ASYNCHRONOUS_TRUTH.md",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/BackupController.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/backup/BackupCollectService.java",
+    "ui2/frontend/src/screens/InventoryPanels.tsx",
+    "ui2/frontend/src/auth/adminApi.ts"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T22:59:48Z"
+}
