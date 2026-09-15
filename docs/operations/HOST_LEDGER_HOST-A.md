@@ -216,3 +216,88 @@ Secrets and the dump stay recoverable if the decision is revisited. Deleting it
 is refused by `roles/PO.md` §1b in any case.
 
 ---
+## Entry 4 — phase C, the product deployed and serving, 2026-09-15
+
+**Why.** `HOST_A_MIGRATION.md` steps 13-16, less steps 11, 12 and the restore
+half of 15, which entry 3 records as not carried across. The human ran every
+command; the assistant prepared each one and read the output.
+
+**What was prepared and run, as literals.** A registry Deployment, Service and
+claim inside the cluster, named so that the in-cluster registry hostname the
+build and both Deployments already reference resolves unchanged — no file under
+`deploy/` was edited. A registry mirror configuration under `/etc/rancher` and a
+service restart (`HOST_W2`). The corporate CA chain into the build context's own
+`.ca/` directory, which the `Containerfile` already reads for exactly this case.
+The in-cluster Kaniko build. The five Secrets, created once and patched, never
+applied over. The manifest set minus the Secret files. Both Deployments pointed
+at the digest the build produced. A one-off Flyway job. A port-forward.
+
+**Five obstacles, four of them this network's and one of them ours.**
+
+1. The first installation attempt had written the intercepting proxy's sign-in
+   page into the binary path (entry 2). Fixed by installing the corporate CA
+   chain on the host.
+2. Kaniko could not pull base images: the host trust store is not the
+   container's. Fixed by mounting the host's trust bundle into the builder.
+3. The Gradle wrapper could not fetch its own distribution. The download
+   succeeds from the host through the proxy and fails from inside the build,
+   and the proxy settings offered to the build did not change that. Rather than
+   keep guessing at propagation, the distribution was placed in the build
+   context at the path the wrapper checks before downloading. Whether the
+   builder propagates its environment into build steps is `UNKNOWN` and was not
+   measured.
+4. `containerd` could not resolve the in-cluster registry name: it runs on the
+   host, and the name is cluster-internal. Fixed by pointing the mirror at the
+   service's cluster address, which is routable from the host on this
+   distribution. No host port was bound.
+5. The product could not start against an empty database. This one is not the
+   network's: a bean reads a table during context refresh, while the runner that
+   applies migrations only runs after refresh completes, so on an empty schema
+   the context fails before migrations are ever attempted. Backlog item
+   `ui2_service_cannot_bootstrap_an_empty_database`, `P0`.
+
+**The workaround for 5, and what it does not change.** Migrations were applied
+once by a one-off job using the same migration engine at the same version, the
+same SQL carried in from the repository, running as the migration role. Flyway
+remains the sole migration authority (`C1`) and the schema is at its head
+revision. The job is a way to open a first environment, not a fix: the next
+empty database will fail the same way until the bean ordering is corrected.
+
+**Observed end state.**
+
+| Measure | Value |
+|---|---|
+| Database workload | running |
+| Service workload | running, serving its login page |
+| Worker workload | running |
+| Migrations | all applied, schema at head |
+| Secrets | five, each carrying the key lengths its consumer requires |
+| Host ports bound by neXus | none; reach is a loopback forward |
+| Data carried from the previous environment | none (entry 3) |
+
+**Incumbent, across the whole day (`EV-3`).**
+
+| Measure | Entry 0 | After installation | After the registry restart | After deployment |
+|---|---|---|---|---|
+| Containers running | 14 | 14 | 14 | 14 |
+| Daemon-managed chains | — | 7 | 7 | 7 |
+| `FORWARD` default policy | — | `DROP` | `DROP` | `DROP` |
+
+**Divergence from the expected end state.** None for the incumbent. For neXus,
+obstacle 5 above: the environment is open by a documented workaround rather than
+by the product starting unaided, and that distinction is the reason it is
+recorded here rather than reported as a clean first start.
+
+**Seat and tier.** Product Owner assistant, held by Claude. Every `HOST_W2` step
+was performed by the human. The assistant issued no `sudo`, joined no privileged
+group, and held no container runtime socket. A request to operate the host shell
+directly was declined against `15A` HA-2 and HA-3, and the narrower authorized
+form — a kubeconfig scoped to neXus's own namespace — was offered instead and
+not taken up; the register's ceiling therefore stays at `HOST_R`.
+
+**Cleanup outstanding.** Two unmanaged certificate files in the system
+certificate directory from an earlier attempt (entry 2). A build-context copy of
+the build tool's distribution, which is ignored by the repository and must stay
+so.
+
+---
