@@ -2,7 +2,19 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER REVIEW, 2026-09-15.** Authored under
+**SUPERSEDED — 2026-09-15**, by
+`docs/design/UI2_0_C9_PRODUCTION_REPLAY_ROLE_CONTRACT.md` (FROZEN — PRODUCT
+OWNER APPROVED, 2026-09-15), which resolves every item in §12 below (using,
+among other evidence, a targeted read of every controller in `ui2/service/
+src/main/java/.../api/` this document's own §13 evidence item 1 called for)
+and freezes an initial narrow surface, the session/RBAC/HMAC/audit/refusal/
+export/search/cache boundaries, and an implementation order. This document
+remains as historical record of the trust-boundary reasoning and the §9/§10
+risk analysis; it is not authority for any clause `C9` restates, corrects or
+resolves — read `C9` first. Everything below this notice is the original
+draft, unmodified.
+
+**Original status (superseded).** DRAFT — FOR PRODUCT OWNER REVIEW, 2026-09-15. Authored under
 `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md` (FROZEN) as bounded
 `ARCHITECTURE` work (movement `NXS-LOCAL-0229`). This document is **not
 implementation authority**: it names a server-side trust boundary and a list

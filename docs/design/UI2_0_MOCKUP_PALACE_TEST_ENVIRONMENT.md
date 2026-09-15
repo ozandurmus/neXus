@@ -2,7 +2,20 @@
 
 ## Status
 
-**DRAFT.** Written under `docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md`
+**SUPERSEDED — 2026-09-15**, by
+`docs/design/UI2_0_C8_MOCKUP_PALACE_TEST_ENVIRONMENT_CONTRACT.md` (FROZEN —
+PRODUCT OWNER APPROVED, 2026-09-15), which resolves every item in §11 below
+and freezes the scope this document only proposed. This document remains as
+historical record of the fixture-inventory and mapping work (§3/§4); it is
+not authority for any clause `C8` restates, corrects or resolves — read `C8`
+first. One correction `C8` makes that this document's own §4.5/§10 did not
+have: `cp_inventory_projection` has no current controller/service/repository
+read path anywhere in `ui2/service/src/main/java` (confirmed by a targeted
+grep during the freeze review), so it is not, in fact, "the one seedable Java
+slice" this document's §4.5 called it — `C8` narrows the frozen v1 seed scope
+accordingly. Everything below this notice is the original draft, unmodified.
+
+**Original status (superseded).** DRAFT. Written under `docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md`
 (FROZEN) §5's test-harness carrier and `docs/design/UI2_0_BASELINE_CONTRACT.md`
 (FROZEN) / `docs/design/UI2_0_BASELINE_DIRECTORY.md` (FROZEN) for the Java UI 2.0
 schema, RBAC and screen-state facts this document maps against. This document
