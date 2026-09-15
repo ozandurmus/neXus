@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-15T08:22:10Z
+Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-15T11:09:39Z
 
 ## Now
 - NXS-LOCAL-0176 — Expire a past-deadline session on read so it never blocks a login (automated_validated)
@@ -9,13 +9,18 @@ Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-15T08:22:10Z
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test env (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
+- P0/planned backup_artefact_id_opaque_not_storage_path — The artefact id returned over HTTP must be opaque, not the (target: BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09)
+- P0/planned backup_retrieval_audit_fail_closed_and_reason_persists — Backup retrieval must be fail-closed on its audit row, and (target: BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09)
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
+- P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason a (target: jobs.outcome/terminal_reason/finished_at)
+- P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner vs DeviceComposit)
 - P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect, warn with the (target: ui2 worker HostKeyVerifier / TrustRuleRe)
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
 - P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI jo (target: workflow §5 B1-1)
 - P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, sing (target: workflow §5 B1-3)
 - P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, s (target: workflow §5 B1-4)
 - P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
+- P1/planned api_routes_without_security_mapping_refused_by_default — UNVERIFIED claim: custom API routes with no security mappi (target: verify against ui2 service gate chain be)
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
@@ -38,6 +43,7 @@ Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-15T08:22:10Z
 - P1/planned ui2_networkpolicy_in_cluster_db_reach — NetworkPolicy restricting in-cluster reach to PostgreSQL (target: UI2_0_B1_01C successor)
 - P1/planned ui2_pan_transport_no_credentials_in_url — UI2 Palo Alto transport: no credential ever appears in a U (target: PAN_DISCOVERY_CONTRACT.md T-1/T-5; the P)
 - P1/planned ui2_reproducible_in_cluster_image_build — UI2 reproducible in-cluster image build and release assura (target: UI2_0_B1_01C in-cluster OCI build; 13D B)
+- P1/planned ui_overview_operations_show_stale_or_empty_state — UNVERIFIED claim: Overview and Operations render empty sta (target: verify against a running deployment befo)
 - P2/in_progress ui2_m3_design_transfer_pass
 - P2/planned antigravity_provider_adapter
 - P2/planned auth_radius_mechanism

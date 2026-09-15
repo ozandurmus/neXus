@@ -423,6 +423,60 @@
       "priority": "P3",
       "target": "docs/reference/WAF_FORTIWEB_EXTERNAL_SOURCE_SURVEY_2026_09_15.md; blocked on AUTH-PLACEMENT (13D section 3)",
       "note": ""
+    },
+    {
+      "id": "backup_retrieval_audit_fail_closed_and_reason_persists",
+      "category": "security",
+      "title": "Backup retrieval must be fail-closed on its audit row, and the reason and role must survive to execution",
+      "status": "planned",
+      "priority": "P0",
+      "target": "BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md Tier 1: OR-3, BK-12, BW-4",
+      "note": ""
+    },
+    {
+      "id": "backup_artefact_id_opaque_not_storage_path",
+      "category": "security",
+      "title": "The artefact id returned over HTTP must be opaque, not the storage path",
+      "status": "planned",
+      "priority": "P0",
+      "target": "BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md Tier 1: BK-14, OR-1",
+      "note": ""
+    },
+    {
+      "id": "api_routes_without_security_mapping_refused_by_default",
+      "category": "security",
+      "title": "UNVERIFIED claim: custom API routes with no security mapping should be refused by default",
+      "status": "planned",
+      "priority": "P1",
+      "target": "verify against ui2 service gate chain before scoping",
+      "note": ""
+    },
+    {
+      "id": "ui_overview_operations_show_stale_or_empty_state",
+      "category": "UI 2.0 (Java product line)",
+      "title": "UNVERIFIED claim: Overview and Operations render empty state while devices and jobs exist",
+      "status": "planned",
+      "priority": "P1",
+      "target": "verify against a running deployment before scoping",
+      "note": ""
+    },
+    {
+      "id": "ui2_service_cannot_bootstrap_an_empty_database",
+      "category": "UI 2.0 (Java product line)",
+      "title": "The service cannot start against an empty database: a bean reads gate_registry during context refresh, before the ApplicationRunner that runs Flyway",
+      "status": "planned",
+      "priority": "P0",
+      "target": "MigrationStartupRunner vs DeviceCompositionConfiguration.deviceCapabilityRegistry; observed HOST-A 2026-09-15",
+      "note": ""
+    },
+    {
+      "id": "job_failure_reason_is_never_recorded",
+      "category": "evidence",
+      "title": "A FAILED job records no reason: outcome, terminal_reason and finished_at stay empty and the run summary is circular",
+      "status": "planned",
+      "priority": "P0",
+      "target": "jobs.outcome/terminal_reason/finished_at; blocks ui2_b1_07 and ui2_b1_08 being useful",
+      "note": ""
     }
   ]
 }
