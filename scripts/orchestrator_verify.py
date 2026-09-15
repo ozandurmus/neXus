@@ -130,12 +130,15 @@ def _tail(text: str, lines: int = TAIL_LINES) -> str:
     return "\n".join(text.splitlines()[-lines:])
 
 
-def _run_argv_step(name: str, argv: list[str], cwd: Path, timeout: int = DEFAULT_STEP_TIMEOUT) -> dict[str, Any]:
+def _run_argv_step(
+    name: str, argv: list[str], cwd: Path, timeout: int = DEFAULT_STEP_TIMEOUT,
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Run one argv list with shell=False and record the §2.2 step shape."""
     started = time.monotonic()
     try:
         result = subprocess.run(
-            argv, cwd=str(cwd), capture_output=True, text=True, timeout=timeout,
+            argv, cwd=str(cwd), capture_output=True, text=True, timeout=timeout, env=env,
         )
         exit_code = result.returncode
         output = (result.stdout or "") + (result.stderr or "")
@@ -168,7 +171,9 @@ def _uncommitted_changes_step(worktree_path: Path) -> dict[str, Any]:
     }
 
 
-def _validation_plan_step(index: int, entry: Any, worktree_path: Path) -> dict[str, Any]:
+def _validation_plan_step(
+    index: int, entry: Any, worktree_path: Path, env: dict[str, str] | None = None,
+) -> dict[str, Any]:
     name = f"validation_plan[{index}]"
     if isinstance(entry, str):
         # §2.2 step 2: a prose entry is recorded skipped_prose and never
@@ -180,7 +185,7 @@ def _validation_plan_step(index: int, entry: Any, worktree_path: Path) -> dict[s
         }
     step_name = entry.get("name") or name
     argv = entry.get("argv")
-    step = _run_argv_step(step_name, list(argv), worktree_path)
+    step = _run_argv_step(step_name, list(argv), worktree_path, env=env)
     step["name"] = name if not entry.get("name") else f"{name} ({entry['name']})"
     return step
 
@@ -203,13 +208,14 @@ def _step_passed(step: dict[str, Any]) -> bool:
 
 def verify_movement(
     *, worktree_path: Path, validation_plan: list[Any], base_ref: str | None,
+    env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """§2.2's full orchestrator-side verification sequence, run in
     `worktree_path`. Returns the §2.4 `verify` object: `{"passed": bool,
     "steps": [...]}`."""
     steps = [_uncommitted_changes_step(worktree_path)]
     for i, entry in enumerate(validation_plan or []):
-        steps.append(_validation_plan_step(i, entry, worktree_path))
+        steps.append(_validation_plan_step(i, entry, worktree_path, env))
     steps.append(_run_argv_step(
         "git_diff_check", ["git", "diff", "--check", base_ref] if base_ref else ["git", "diff", "--check"],
         worktree_path,
