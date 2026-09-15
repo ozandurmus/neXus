@@ -19,6 +19,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public final class SecurityWebMvcConfig implements WebMvcConfigurer {
 
     static final Map<String, String> ACTION_ID_BY_ROUTE = Map.ofEntries(
+            Map.entry("POST /session/replay/activate", ActionRegistry.REPLAY_ACTIVATE),
+            Map.entry("POST /session/replay/deactivate", ActionRegistry.REPLAY_DEACTIVATE),
             Map.entry("POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("POST /role-bindings/revoke", ActionRegistry.ROLE_BINDING_REVOKE),
             Map.entry("POST /sessions/revoke", ActionRegistry.SESSION_REVOKE),
@@ -79,13 +81,19 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /project-plan", ActionRegistry.PROJECT_PLAN_READ));
 
     private final GateChain gateChain;
+    private final ReplayViewerBoundary replayBoundary;
 
     public SecurityWebMvcConfig(GateChain gateChain) {
+        this(gateChain, null);
+    }
+
+    public SecurityWebMvcConfig(GateChain gateChain, ReplayViewerBoundary replayBoundary) {
         this.gateChain = gateChain;
+        this.replayBoundary = replayBoundary;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new GateChainInterceptor(gateChain, ACTION_ID_BY_ROUTE));
+        registry.addInterceptor(new GateChainInterceptor(gateChain, ACTION_ID_BY_ROUTE, replayBoundary));
     }
 }

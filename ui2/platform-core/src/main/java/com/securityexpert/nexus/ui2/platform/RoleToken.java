@@ -13,7 +13,8 @@ public enum RoleToken {
     ONBOARDING_ADMIN("role:onboarding_admin"),
     BACKUP_ADMIN("role:backup_admin"),
     COMPLIANCE_ADMIN("role:compliance_admin"),
-    SECURITY_ADMIN("role:security_admin");
+    SECURITY_ADMIN("role:security_admin"),
+    REPLAY_VIEWER("role:replay_viewer");
 
     private final String token;
 

@@ -46,21 +46,43 @@ public final class GateChainInterceptor implements HandlerInterceptor {
     public static final String ACTOR_FINGERPRINT_ATTRIBUTE = "ui2.gate.actorFingerprint";
     public static final String SESSION_ID_ATTRIBUTE = "ui2.gate.sessionId";
 
+    private final ReplayViewerBoundary replayBoundary;
     private final GateChain gateChain;
     private final Map<String, String> actionIdByRoute;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public GateChainInterceptor(GateChain gateChain, Map<String, String> actionIdByRoute) {
+        this(gateChain, actionIdByRoute, null);
+    }
+
+    public GateChainInterceptor(GateChain gateChain, Map<String, String> actionIdByRoute,
+            ReplayViewerBoundary replayBoundary) {
         this.gateChain = gateChain;
         this.actionIdByRoute = actionIdByRoute;
+        this.replayBoundary = replayBoundary;
     }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
+        Optional<String> cookie = findSessionCookie(request);
+        boolean replay;
+        try {
+            replay = replayBoundary != null && cookie.isPresent()
+                    && replayBoundary.isReplay(SessionHasher.hash(cookie.get()));
+        } catch (RuntimeException failure) {
+            response.setStatus(403);
+            response.setContentType("application/json");
+            objectMapper.writeValue(response.getWriter(), ReplayViewerBoundary.refusal());
+            return false;
+        }
         String actionId = actionIdFor(request.getMethod(), request.getServletPath());
         if (actionId == null) {
-            return true;
+            if (!replay) {
+                return true;
+            }
+            // Even unmapped surfaces run E1-E4 before the exclusive-session refusal.
+            actionId = ActionRegistry.REPLAY_DEACTIVATE;
         }
 
         GateRequest gateRequest = new GateRequest(
@@ -75,6 +97,20 @@ public final class GateChainInterceptor implements HandlerInterceptor {
         if (outcome instanceof GateOutcome.Proceed proceed) {
             request.setAttribute(ACTOR_FINGERPRINT_ATTRIBUTE, proceed.actorFingerprint());
             request.setAttribute(SESSION_ID_ATTRIBUTE, proceed.sessionId());
+            if (replay) {
+                boolean allowed;
+                try {
+                    allowed = replayBoundary.afterGate(request);
+                } catch (RuntimeException failure) {
+                    allowed = false;
+                }
+                if (!allowed) {
+                    response.setStatus(403);
+                    response.setContentType("application/json");
+                    objectMapper.writeValue(response.getWriter(), ReplayViewerBoundary.refusal());
+                    return false;
+                }
+            }
             return true;
         }
         GateOutcome.Refused refused = (GateOutcome.Refused) outcome;
