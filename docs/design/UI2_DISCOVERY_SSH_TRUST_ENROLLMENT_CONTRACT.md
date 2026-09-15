@@ -2,16 +2,18 @@
 
 ## Status
 
-**DRAFT — NOT FROZEN, NOT IMPLEMENTATION AUTHORITY.** Movement `NXS-LOCAL-0222`
-(`ARCHITECTURE`). This document traces the current discovery host-key trust
-flow to source, names the contradiction it found, and proposes a
-management-endpoint-scoped trust enrollment design. It authorizes nothing:
-no new network-device command, no new storage, no migration number, no
-production behavior change. `AGENTS.md` "Contract-status law" applies —
-this may guide the next movement's investigation; it must not be cited as
-approving any command, schema or identity model until the Product Owner
-freezes a successor. Where this document is uncertain it says `UNKNOWN`
-rather than inventing a decision.
+**SUPERSEDED — historical only, not implementation authority.** Movement
+`NXS-LOCAL-0222` (`ARCHITECTURE`) produced this document as a DRAFT trace-
+to-source and proposal; movement `NXS-LOCAL-0234` froze
+`docs/design/UI2_0_C10_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md` as its
+successor, resolving every load-bearing `UNKNOWN` this document left open
+(its §11 register and §14 open items) for a Check Point v1 implementation.
+This document remains the repository's trace-to-source evidence base for
+that contract — its source citations and defect trace are not
+re-derived there — but per `AGENTS.md` "Contract-status law" and
+"Authority hierarchy" item 2, a superseded document is never implementation
+authority; the C10 contract above is authoritative for this subject from
+here forward.
 
 Evidence grade: repository source only. No real Check Point or Palo Alto
 management server was contacted while writing this; every code path cited
