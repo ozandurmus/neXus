@@ -19,10 +19,11 @@ Owner choose. Silent drift back to Claude happened once, on movement
 
 ## Codex
 
-- **It cannot always commit.** Its sandbox is frequently refused `index.lock`
-  in a linked worktree, so a movement finishes green and uncommitted and the
-  orchestrator records it `failed`. Read `.nexus/engineer_last_message.txt`
-  and `git status` in the worktree before concluding anything.
+- **Linked-worktree commits need the real Git directory granted.** A linked
+  worktree's `.git` is a pointer; its index and `index.lock` live in the
+  directory returned by `git rev-parse --git-dir`, outside the worktree. The
+  dispatcher grants that one derived directory alongside the worktree, so an
+  engineer can commit without access to the main checkout.
 - **Its event stream carries no model field**, so cost is estimated from the
   requested model and the figure is marked with a trailing asterisk — a
   comparable, never billed spend (GOV.ORCH.4-A CU-4). Every Codex dispatch is
