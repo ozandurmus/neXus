@@ -204,6 +204,70 @@ separately as disk-bound with no fixed limit. The incumbent's own backup and
 snapshot regime, and whether it captures neXus volumes, is `UNKNOWN` and is a
 question for its administrators before any CLASS 3 material is placed there.
 
+## 11. Where these clauses came from (PV)
+
+The council skill persists nothing and chat is not an authority (`AGENTS.md`
+item 7), so the reasoning that produced the clauses above would otherwise
+survive nowhere. What follows is provenance, not authority: no clause is weaker
+because a seat argued for it, and none is stronger.
+
+**Composition.** Three specialist seats, run independently and read-only, then
+one blinded challenge pass, then this synthesis. The seats shared a model
+family, so this was **role-diverse review only** — not independent cross-model
+validation. One external review was obtained separately, on the Product Owner's
+own initiative and through their own account, over a packet that carried no
+address, hostname, username or fingerprint.
+
+**What the review changed, clause by clause.**
+
+- **PL-2** exists because two seats independently found that this session had
+  twice recommended a host container tool, confidently, against `12B` §1 and
+  `01C` BP-2 — the second of which is enforced by a grep gate that would have
+  rejected the work anyway. The recommendation was the assistant's, not the
+  Product Owner's; the Product Owner had originally proposed Kubernetes and was
+  talked out of it. The refusal is recorded rather than quietly reversed
+  because the failure mode was confidence, and confidence does not announce
+  itself next time.
+- **The consent paragraph in §1** exists because the external review separated
+  two questions the assistant had merged: whether the runtime is compatible
+  with this host, and whether placing our workload beside another product's
+  production is authorized. The first is a technical finding; the second is only
+  ever a human's to give, and had not been given at the time it was assumed.
+- **HA-7** exists because the assistant claimed a namespace-scoped kubeconfig
+  "closes the door". It does not: whoever can create a workload in a namespace
+  can mount what that namespace can mount and select its service accounts. The
+  clause states the limit instead of the comfort, and §6's two profiles follow
+  from it.
+- **HA-2 and HA-3** were the one point of full agreement across every seat and
+  the external review, reached independently: an agent identity holding `sudo`,
+  a privileged group, or a runtime socket makes every other clause decorative,
+  because each is root-equivalent on this host.
+- **The four-tier vocabulary** replaced an earlier two-way permitted/prohibited
+  split that the challenge pass showed could not express the largest real
+  category — operations that are legitimate, necessary, and still not an
+  agent's to perform. `HOST_W2` is that category, and naming it is what keeps
+  it from being quietly folded into `HOST_W1` under time pressure.
+
+**Material dissent, retained.** One position held that co-location should be
+refused outright until the incumbent's administrators had been consulted, on
+the grounds that the incumbent's own backup and snapshot regime is `UNKNOWN`
+and may or may not capture our volumes. The Product Owner, who is the
+infrastructure authority here, authorized the host regardless. The dissent is
+not resolved by that authorization — it is carried forward as the open question
+in §9, and it is the reason `DEV` in §6 is a ceiling rather than a starting
+point.
+
+**An assertion that did not survive.** The assistant argued that a VPN
+exception would be cheap. It had no evidence of feasibility, cost or lead time,
+and the external review marked it `UNKNOWN`. The Product Owner then settled the
+question by authority rather than by evidence — no exception will be sought —
+which closes the decision without validating the claim. The claim stays marked
+as what it was.
+
+**Revisit trigger.** This record is reopened when the Product Owner takes the
+host over entirely, when the incumbent's administrators answer §9's backup
+question, or when a profile change to `LIVE` is proposed — whichever is first.
+
 ## 10. Cross-references
 
 - `PO_DECISION_RECORD_2026_09_12B_LOCAL_KUBERNETES.md` §1 — the runtime, unchanged.

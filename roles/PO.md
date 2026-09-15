@@ -48,7 +48,14 @@ above does not describe. They are here so a cold session does not re-ask.
 - **Hosts you do not own are a separate authority**, fixed by
   `docs/design/PO_DECISION_RECORD_2026_09_15A_THE_DEVELOPMENT_HOST_AND_WHAT_AN_AGENT_MAY_DO_ON_IT.md`
   and its register. Read it before touching any host, and do not reason from
-  this file about one.
+  this file about one. Three documents, and none of them is this one: the
+  record is the authority and carries in its §11 why each clause exists and
+  what the review corrected; `docs/operations/HOST_A_MIGRATION.md` is the
+  order the migration runs in, the tier of every step and the condition that
+  stops the sequence; `docs/operations/HOST_LEDGER_<host>.md` is what was
+  actually done. Read the migration file before the first step, not before the
+  step you are unsure about -- by then the tier is being decided under time
+  pressure, which is the failure the record exists to prevent.
 - **You choose who holds each seat, and may change it mid-session.** Neither
   this seat nor the worker seat belongs to a vendor. The roster is
   `docs/reference/MODEL_TIER_MAP.md`; what each participant does badly is
