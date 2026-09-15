@@ -46,6 +46,36 @@ const VENDOR_LABEL: Record<Vendor, string> = {
   palo_alto: "Palo Alto",
 };
 
+const FAILURE_REASON_PREFIX = "failure_reason_class:";
+
+// Closed allowlist (DiscoveryJobExecutor safe classes): the only reason
+// codes this dialog will ever render. Anything else -- an unknown key, a
+// malformed key, or more than one reason key in the same summary -- falls
+// through to the generic UNKNOWN explanation rather than echoing the raw
+// API text.
+const DISCOVERY_FAILURE_EXPLANATIONS: Record<string, string> = {
+  UNREACHABLE: "The management server did not respond on the network within the timeout.",
+  REFUSED: "The management server refused the connection. This class does not yet distinguish an authentication failure from a trust failure.",
+  UNKNOWN_FAILURE: "Discovery failed for a reason that is not yet classified.",
+  UNSUPPORTED_VENDOR: "The management server's vendor or product is not supported by discovery.",
+  CANDIDATE_PERSIST_FAILED: "Discovery completed but its candidate results could not be saved.",
+};
+
+const UNKNOWN_DISCOVERY_FAILURE_EXPLANATION = "Discovery did not complete for an unclassified reason.";
+
+function discoveryFailureReason(outcomeSummary: Record<string, number> | undefined | null): {
+  readonly code: string;
+  readonly explanation: string;
+} {
+  const reasonKeys = Object.keys(outcomeSummary ?? {}).filter((key) => key.startsWith(FAILURE_REASON_PREFIX));
+  if (reasonKeys.length === 1) {
+    const candidate = reasonKeys[0].slice(FAILURE_REASON_PREFIX.length);
+    const explanation = DISCOVERY_FAILURE_EXPLANATIONS[candidate];
+    if (explanation) return { code: candidate, explanation };
+  }
+  return { code: "UNKNOWN", explanation: UNKNOWN_DISCOVERY_FAILURE_EXPLANATION };
+}
+
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
   const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
@@ -497,9 +527,22 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
         )}
 
         {mode === "discovery" && discoveryPhase === "failed" && (
-          <Typography variant="body2" color="error">
-            Discovery did not complete.
-          </Typography>
+          <Stack spacing={0.5}>
+            <Typography variant="body2" color="error">
+              Discovery did not complete.
+            </Typography>
+            {(() => {
+              const { code, explanation } = discoveryFailureReason(run?.outcome_summary);
+              return (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <StatusChip tone="bad" label={code} dense />
+                  <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                    {explanation}
+                  </Typography>
+                </Stack>
+              );
+            })()}
+          </Stack>
         )}
 
         {mode === "discovery" && (discoveryPhase === "candidates" || discoveryPhase === "importing" || discoveryPhase === "done") && run && (
