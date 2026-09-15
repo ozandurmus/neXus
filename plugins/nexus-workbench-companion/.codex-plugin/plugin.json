@@ -1,0 +1,19 @@
+{
+  "name": "nexus-workbench-companion",
+  "version": "0.1.0",
+  "description": "Private read-only Workbench Companion inspection for Codex.",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Nexus Workbench Companion",
+    "shortDescription": "Inspect private Workbench Companion facts.",
+    "longDescription": "Read local Companion snapshots without execution authority or raw source access.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Inspect the current Workbench Companion status."
+  },
+  "mcpServers": "./.mcp.json"
+}
