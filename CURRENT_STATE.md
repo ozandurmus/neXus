@@ -37,6 +37,19 @@ vendor semantics (`D-V1`–`D-V9b`), enrollment exposure, LDAP TLS trust, and
 the Check Point backup asynchronous semantics. These decisions do not enable
 restore or scheduling.
 
+## Development environment
+
+Moving off the Product Owner's laptop: the corporate VPN captures every RFC1918
+range the local cluster needs. The destination is a registered host that also
+carries another product's production workload, on Kubernetes, on CGNAT blocks.
+What an agent may execute there is a separate authority from the network action
+taxonomy and is fixed by
+`docs/design/PO_DECISION_RECORD_2026_09_15A_THE_DEVELOPMENT_HOST_AND_WHAT_AN_AGENT_MAY_DO_ON_IT.md`,
+with the allowlist in `docs/design/HOST_REGISTER.md`, the step order in
+`docs/operations/HOST_A_MIGRATION.md` and the record of what was done in
+`docs/operations/HOST_LEDGER_HOST-A.md`. The migration is at phase A. No host
+write has been performed.
+
 ## Production and real-environment posture
 
 Development-ready, not production-ready. Production still needs OIDC/RBAC,
