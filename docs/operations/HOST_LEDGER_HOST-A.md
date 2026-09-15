@@ -46,3 +46,18 @@ existed. It is recorded here once, reduced to counts and shapes, and is not
 re-taken without a named authorization.
 
 ---
+
+## Entry 1 — Phase A, 2026-09-15, `HOST_R`
+
+**Why.** Execute Phase A of the migration (measure, decide nothing), specifically steps 2 through 4, to determine if K3s networking would collide with the incumbent.
+
+**Taken.** Read-only evaluation of network blocks.
+
+**Observed.**
+- Incumbent container networks: 2, both `/16` inside `172.16/12` (from baseline).
+- CGNAT blocks (`100.64.32.0/20`, `100.65.0.0/16`) do not collide with incumbent or corporate tunnel (from baseline).
+- CNI collision with daemon-managed rules: Cannot be determined purely from static readings without inspecting the specific iptables chains managed by Docker, which is not possible without `HOST_X` or active probing.
+
+**Divergence / Result.**
+Migration stopped at Step 5.
+**CAUSE: UNKNOWN**. K3s CNI compatibility with existing Docker iptables rules cannot be proven from safe reads. Escalating as a question to the incumbent's administrators.
