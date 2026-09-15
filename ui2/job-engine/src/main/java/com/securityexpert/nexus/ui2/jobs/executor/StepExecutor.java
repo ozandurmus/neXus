@@ -260,8 +260,9 @@ public final class StepExecutor {
             throw new IllegalStateException("unreachable: unknown ParsedStepResult variant " + parsed);
         }
 
-        boolean written = attemptRepository.writeOutcome(attemptId, leaseEpoch, outcome, errorClass, 0L, 0L,
-                fingerprintOf(String.valueOf(parsed)));
+        boolean written = attemptRepository.writeOutcome(attemptId, leaseEpoch, outcome, errorClass,
+                parsed instanceof ParsedStepResult.Matched, null, null,
+                fingerprintOf(String.valueOf(parsed))); // Parsed results carry no response byte/line measurement.
         if (!written) {
             return new StepRunOutcome(StepOutcomeKind.ZOMBIE, "fenced outcome write affected zero rows", session);
         }
@@ -269,7 +270,7 @@ public final class StepExecutor {
         evidenceWriter.writeStepEvidence(attemptId, leaseEpoch,
                 new ProvenanceRecordData(attemptId, jobId, attemptId, "UNKNOWN", capabilityVersionPlaceholder(),
                         Optional.empty(), "device-response", Optional.empty(), fingerprintOf(String.valueOf(parsed))),
-                new StepAttemptOutcome(String.valueOf(outcome), Optional.ofNullable(errorClass), 0L, 0L,
+                new StepAttemptOutcome(String.valueOf(outcome), Optional.ofNullable(errorClass), null, null,
                         fingerprintOf(String.valueOf(parsed)), Instant.now()));
 
         return new StepRunOutcome(kind, detail, session);

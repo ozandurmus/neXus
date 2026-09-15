@@ -82,9 +82,21 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
     @Override
     public boolean transitionState(String jobId, long leaseEpoch, String expectedFromState, String toState,
             String actorFingerprint, String actionId) {
+        return transitionState(jobId, leaseEpoch, expectedFromState, toState, actorFingerprint, actionId, null);
+    }
+
+    @Override
+    public boolean transitionState(String jobId, long leaseEpoch, String expectedFromState, String toState,
+            String actorFingerprint, String actionId, String terminalReason) {
         int updated = auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> dsl.execute(
-                "update jobs set state = {0} where job_id = {1} and lease_epoch = {2} and state = {3}",
-                toState, jobId, leaseEpoch, expectedFromState));
+                "update jobs set state = {0}, outcome = case when {0} in ('COMPLETED', 'FAILED', 'REJECTED', "
+                        + "'CANCELLED', 'OUTCOME_UNKNOWN', 'RECONCILED') then {0} else outcome end, "
+                        + "terminal_reason = case when {0} in ('COMPLETED', 'FAILED', 'REJECTED', 'CANCELLED', "
+                        + "'OUTCOME_UNKNOWN', 'RECONCILED') then {4} else terminal_reason end, "
+                        + "finished_at = case when {0} in ('COMPLETED', 'FAILED', 'REJECTED', 'CANCELLED', "
+                        + "'OUTCOME_UNKNOWN', 'RECONCILED') then now() else finished_at end "
+                        + "where job_id = {1} and lease_epoch = {2} and state = {3}",
+                toState, jobId, leaseEpoch, expectedFromState, terminalReason == null ? toState : terminalReason));
         return updated == 1;
     }
 

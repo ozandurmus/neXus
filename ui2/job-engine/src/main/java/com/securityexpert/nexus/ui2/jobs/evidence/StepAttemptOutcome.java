@@ -14,8 +14,8 @@ import java.util.Optional;
 public record StepAttemptOutcome(
         String outcome,
         Optional<String> errorClass,
-        long outputBytes,
-        long outputLines,
+        Long outputBytes,
+        Long outputLines,
         String fingerprintSha256,
         Instant recordedAt) {
 

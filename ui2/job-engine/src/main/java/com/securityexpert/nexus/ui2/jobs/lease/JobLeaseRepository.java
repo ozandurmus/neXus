@@ -53,6 +53,12 @@ public interface JobLeaseRepository {
     boolean transitionState(String jobId, long leaseEpoch, JobState expectedFrom, JobState to,
             String actorFingerprint, String actionId);
 
+    /** Writes a safe terminal reason as part of the same fenced transition. */
+    default boolean transitionState(String jobId, long leaseEpoch, JobState expectedFrom, JobState to,
+            String actorFingerprint, String actionId, String terminalReason) {
+        return transitionState(jobId, leaseEpoch, expectedFrom, to, actorFingerprint, actionId);
+    }
+
     /** C2 §4.4-1: a lease-expired {@code CLAIMED} job with no attempt row requeues. Carries the epoch to requeue at (fenced). */
     List<ClaimedJob> findExpiredWithNoAttempt();
 
