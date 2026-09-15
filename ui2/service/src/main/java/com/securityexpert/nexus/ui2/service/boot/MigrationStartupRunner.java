@@ -10,6 +10,7 @@ import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.PriorityOrdered;
+import org.springframework.core.env.Environment;
 
 import com.securityexpert.nexus.ui2.persistence.FlywayMigrationRunner;
 
@@ -37,20 +38,10 @@ public class MigrationStartupRunner implements BeanFactoryPostProcessor, Priorit
 
     private static final Logger LOG = LoggerFactory.getLogger(MigrationStartupRunner.class);
 
-    private final String jdbcUrl;
-    private final Path userFile;
-    private final Path passwordFile;
-    private final String migrationLocation;
+    private final Environment environment;
 
-    public MigrationStartupRunner(
-            String jdbcUrl,
-            String userFile,
-            String passwordFile,
-            String migrationLocation) {
-        this.jdbcUrl = jdbcUrl;
-        this.userFile = Path.of(userFile);
-        this.passwordFile = Path.of(passwordFile);
-        this.migrationLocation = migrationLocation;
+    public MigrationStartupRunner(Environment environment) {
+        this.environment = environment;
     }
 
     @Override
@@ -64,6 +55,14 @@ public class MigrationStartupRunner implements BeanFactoryPostProcessor, Priorit
     }
 
     void migrate() {
+        migrate(
+                environment.getRequiredProperty("ui2.db.url"),
+                Path.of(environment.getRequiredProperty("ui2.db.migrate-user-file")),
+                Path.of(environment.getRequiredProperty("ui2.db.migrate-password-file")),
+                environment.getProperty("ui2.db.migration-location", "classpath:db/migration"));
+    }
+
+    void migrate(String jdbcUrl, Path userFile, Path passwordFile, String migrationLocation) {
         MigrateResult result = new FlywayMigrationRunner(
                 jdbcUrl, userFile, passwordFile, migrationLocation).migrate();
         // Counts and versions only: never a DSN, never a credential.
