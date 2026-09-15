@@ -79,6 +79,13 @@ public final class BackupArtefactRetrieval implements BackupArtefactRetrievalPor
             return new RetrieveResult.ArtefactNotFound();
         }
 
+        try {
+            retrievalRepository.record(UUID.randomUUID().toString(), artefactId, reason, destinationPath,
+                    actorFingerprint, "backup_artefact_retrieved");
+        } catch (RuntimeException e) {
+            return new RetrieveResult.AuditRefused();
+        }
+
         Path destination = Path.of(destinationPath);
         try (InputStream decrypted = artefactStore.retrieve(new ArtefactRef(artefactId), manifest.get().wrappedDataKey(),
                 false);
@@ -88,8 +95,6 @@ public final class BackupArtefactRetrieval implements BackupArtefactRetrievalPor
             return new RetrieveResult.IoFailure(String.valueOf(e.getMessage()));
         }
 
-        retrievalRepository.record(UUID.randomUUID().toString(), artefactId, reason, destinationPath,
-                actorFingerprint, "backup_artefact_retrieved");
         return new RetrieveResult.Ok(destinationPath);
     }
 

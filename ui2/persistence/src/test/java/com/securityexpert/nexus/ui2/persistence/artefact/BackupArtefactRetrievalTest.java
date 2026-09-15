@@ -93,10 +93,14 @@ class BackupArtefactRetrievalTest {
 
     private static final class FakeRetrievalRepository implements BackupArtefactRetrievalRepository {
         final List<RecordedRetrieval> recorded = new ArrayList<>();
+        boolean throwOnRecord;
 
         @Override
         public void record(String retrievalId, String artefactId, String reason, String destinationPath,
                 String actorFingerprint, String actionId) {
+            if (throwOnRecord) {
+                throw new IllegalStateException("simulated audit failure");
+            }
             recorded.add(new RecordedRetrieval(retrievalId, artefactId, reason, destinationPath, actorFingerprint,
                     actionId));
         }
@@ -227,5 +231,18 @@ class BackupArtefactRetrievalTest {
         assertEquals(VALID_REASON, audited.reason());
         assertEquals(destination.toString(), audited.destinationPath());
         assertEquals(ACTOR, audited.actorFingerprint());
+    }
+
+    @Test
+    void refusesAndDoesNotCreatePlaintextWhenItsAuditCannotBeRecorded(@TempDir Path tempDir) {
+        Harness harness = new Harness();
+        harness.grantBackupAdmin();
+        harness.retrievalRepository.throwOnRecord = true;
+        Path destination = tempDir.resolve("retrieved-configuration.txt");
+
+        RetrieveResult result = harness.retrieval.retrieve(ACTOR, ARTEFACT_ID, destination.toString(), VALID_REASON);
+
+        assertTrue(result instanceof RetrieveResult.AuditRefused, "expected AuditRefused, got " + result);
+        assertTrue(Files.notExists(destination), "an audit refusal must not release plaintext");
     }
 }
