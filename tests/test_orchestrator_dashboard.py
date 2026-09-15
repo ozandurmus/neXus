@@ -21,14 +21,12 @@ import orchestrator_dashboard as dash  # noqa: E402
 import local_relay as lr  # noqa: E402
 
 
-def test_dashboard_css_colours_are_root_tokens_and_provider_tokens_exist():
+def test_dashboard_css_uses_the_generated_product_theme_tokens():
     css = (ROOT / "scripts" / "dashboard_assets" / "dashboard.css").read_text(encoding="utf-8")
-    root_end = css.index("}")
-    colours = list(re.finditer(r"#[0-9a-fA-F]{3,8}\b", css))
-    assert colours
-    assert all(match.start() < root_end for match in colours)
-    assert "--provider-claude:" in css
-    assert "--provider-codex:" in css
+    theme = dash.product_theme_css().decode("utf-8")
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b", css)
+    assert "--provider-claude:" in theme
+    assert "--provider-codex:" in theme
 
 
 def test_dashboard_assets_render_provider_classes_without_changing_provider_text():
@@ -557,6 +555,18 @@ def test_build_board_groups_one_movement_per_health_into_the_right_columns(tmp_p
     assert board["totals"]["open"] == len(board["open"])
     assert board["totals"]["awaiting_po"] == 1
     assert board["totals"]["closed"] == 1
+
+
+def test_build_board_archives_a_closed_relay_without_a_state_record(tmp_path):
+    state_dir, relay_dir, repo_root = tmp_path / "state", tmp_path / "relay", tmp_path
+    relay_file = _make_relay_named(tmp_path, "archived-one")
+    movement_id = _relay_id_of(relay_file)
+    lr.main(["append", "--file", str(relay_file), "--role", "engineer", "--marker", "SESSION_CLOSE",
+             "--report", str(_write_close_report(tmp_path)), "--outcome", "DONE"])
+
+    board = dash.build_board(state_dir, relay_dir, repo_root, retry_limit=2, stuck_after_seconds=900)
+
+    assert {row["movement_id"] for row in board["archive"]} == {movement_id}
 
 
 def test_build_board_rows_carry_every_field_the_kanban_card_needs(tmp_path):
