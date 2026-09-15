@@ -9,11 +9,15 @@ import socket
 import stat
 import subprocess
 import threading
+from pathlib import Path
 
 import pytest
 
 from scripts import workbench_companion as companion
 from scripts import workbench_companion_mcp as mcp
+
+
+PLUGIN_ROOT = Path(__file__).parents[1] / "plugins" / "nexus-workbench-companion"
 
 
 IDENTITY = "SYNTHETIC-0001"
@@ -682,3 +686,19 @@ def test_mcp_concurrent_atomic_readers_and_source_hashes_unchanged(tmp_path):
                 thread.join(timeout=10)
         assert reads and failures == [] and all(not t.is_alive() for t in threads)
     assert hashlib.sha256(source.read_bytes()).digest() == before
+
+
+def test_private_codex_plugin_has_only_the_c3_read_only_mapping_and_finite_skill():
+    manifest = json.loads((PLUGIN_ROOT / ".codex-plugin" / "plugin.json").read_text())
+    mapping = json.loads((PLUGIN_ROOT / ".mcp.json").read_text())
+    skill = (PLUGIN_ROOT / "skills" / "workbench-inspect" / "SKILL.md").read_text()
+
+    assert manifest["name"] == "nexus-workbench-companion"
+    assert manifest["skills"] == "./skills/" and manifest["mcpServers"] == "./.mcp.json"
+    assert set(mapping) == {"mcpServers"} and set(mapping["mcpServers"]) == {"nexus-workbench-companion"}
+    server = mapping["mcpServers"]["nexus-workbench-companion"]
+    assert server == {"command": "python3", "args": [
+        "-m", "scripts.workbench_companion_mcp", "--snapshot-directory",
+        "${NEXUS_WORKBENCH_SNAPSHOT_DIRECTORY}"]}
+    assert all(tool in skill for tool in mcp.TOOLS)
+    assert "at most three tool calls" in skill and "Do not retry, paginate" in skill
