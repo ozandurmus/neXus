@@ -1,0 +1,190 @@
+{
+  "created_at": "2026-09-14T23:10:52Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Adding a device from the dialog succeeds again: the request carries a role and is no longer refused with role_invalid.",
+          "AC-2 The gateway value is the default and is what an operator who changes nothing sends.",
+          "AC-3 Choosing the management server sends that value and nothing else changes about the flow.",
+          "AC-4 The chooser offers exactly two options and no empty or placeholder third.",
+          "AC-5 The operator is told, before adding a management server, that collection from it is refused until its read sets are gated.",
+          "AC-6 A test asserts the request body contains the role; npx vitest run passes, npx tsc --noEmit is clean, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md -- FROZEN, Product Owner directives 2026-09-14. MS-1: a Check Point management server or MDS, and a Panorama, are devices in their own right, added through the same one add menu, holding the same device row, carrying the same enrollment and confirm path. MS-5: until MS-2's per-vendor read sets are measured and gated, such a device can be added, discovered from and confirmed, and its collection actions are refused with a reason naming the missing gate -- which NXS-LOCAL-0188 now does.",
+          "context_not_loaded": null,
+          "engineering_baseline": "The role is a required field on the registration request, validated against a closed vocabulary before every other check, and enforced again by a CHECK constraint in migration V21.",
+          "product_baseline": "An operator adds a device by address, vendor and credential. Since NXS-LOCAL-0187 that path is broken: the service requires a role and the dialog does not send one.",
+          "test_baseline": "npx vitest run and npx tsc --noEmit pass on origin/main today, run locally on 2026-09-15 before this packet was written. They pass because no test covers the dialog's request body against the server's requirement.",
+          "what_exists": "ui2/frontend/src/auth/adminApi.ts sends exactly this body and no role:\n\nexport function addDeviceSingle(\n  address: string,\n  vendor: Vendor,\n  credentialReferenceId: string,\n): Promise<AddDeviceSingleResult> {\n  return call(\"/devices/add-single\", \"POST\", {\n    address,\n    vendor,\n    credential_reference_id: credentialReferenceId,\n  });\n}\n\nThe controller's request record is `record AddSingleRequest(@JsonProperty(\"address\") String address, @JsonProperty(\"role\") String role, @JsonProperty(\"vendor\") String vendor, @JsonProperty(\"credential_reference_id\") String credentialReferenceId)`, so the wire name is `role`.\n\nDeviceRegistrationService.register refuses first, before the vendor check:\n\n        if (role == null || (!role.equals(\"gateway\") && !role.equals(\"management_server\"))) {\n            return new Outcome.ValidationFailed(REASON_ROLE_INVALID);\n        }\n\nwith `public static final String REASON_ROLE_INVALID = \"role_invalid\";`. The two values are the whole vocabulary and the database enforces the same two.\n\nThe dialog is ui2/frontend/src/shell/AddDeviceDialog.tsx. It already holds `const [vendor, setVendor] = useState<Vendor>(\"check_point\")` and filters the eligible credential list by vendor, so it has an existing pattern for a bounded choice that drives the rest of the form."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "application/**",
+          "ui2/service/**",
+          "ui2/worker/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/add-device-sends-its-role"
+        },
+        "invariants": [
+          "The vocabulary is exactly two values, the same two the service and the database enforce.",
+          "A missing role must not be expressible: the type, not a runtime check, is what prevents it.",
+          "No collection is enabled for a management server by this movement.",
+          "The existing add flow's behaviour is otherwise unchanged."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "UI",
+        "objective": "Repair device enrolment and finish 14I MS-1. Movement NXS-LOCAL-0187 made the device role a required field and validated it before anything else; the add-device dialog was never taught to send one, so every add from the user interface is now refused with role_invalid. This is a regression on the main branch, not a new feature: no device can be enrolled today. The same change also completes MS-1, because choosing the role is how a management server gets added at all.",
+        "output_contract": [
+          "An operator can add a device again, and can say which kind of device it is.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "One request field and one bounded chooser, against a vocabulary the service and the database both already enforce.",
+          "tier": "bounded tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "The two frontend commands run from ui2/frontend; the privacy gate runs from the repository root.",
+          "Run only the commands named above. Do not run the Java build.",
+          "Match the surrounding file's style: the same shared widgets and the same idiom the vendor choice already uses.",
+          "Run `git diff --check origin/main` before every commit and fix what it names.",
+          "Leave the worktree clean: write reports outside the repository or remove them before closing.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE quotes the two labels you chose and the warning wording for the management server."
+        ],
+        "risks": [
+          "Defaulting to an empty value or a placeholder, which reproduces the refusal this movement exists to remove.",
+          "Labelling the chooser with the wire values, which asks the operator to learn the schema instead of the product.",
+          "Letting an operator add a management server with no warning and discover the refusal only when a collection is attempted.",
+          "Touching the vendor-to-credential filtering while passing the role through, which would change a flow that is working."
+        ],
+        "scope": {
+          "in": [
+            "ui2/frontend/src/auth/adminApi.ts: addDeviceSingle takes a role and sends it under the wire name `role`. Type it so the two values are the only ones a caller can pass and a missing one does not compile.",
+            "ui2/frontend/src/shell/AddDeviceDialog.tsx: the operator chooses the role, with the gateway value selected by default because that is what almost every device is. Label the choice in the product's own words, not in the wire values: what the operator picks is whether this is a firewall or the management server that governs firewalls.",
+            "Say plainly, where the operator makes the choice, that a management server can be added and confirmed but that collection from it is refused until its read sets are gated. An operator who adds one and then sees a refusal should have been told first.",
+            "Tests: the request body carries the role; the default is the gateway value; choosing the management server sends that value; the existing add flow still passes end to end."
+          ],
+          "out": [
+            "Any change to the Java service, the controller, the request record, the vocabulary or the refusal.",
+            "Any change to migration V21 or to the database constraint.",
+            "Any collection, read set, command or route for a management server. NXS-LOCAL-0188 already refuses those and this movement does not touch it.",
+            "Any change to discovery, to the confirm step, or to the credential selection beyond passing the role through.",
+            "Inventing a third role value anywhere, including a placeholder or an empty option in the chooser."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npx vitest run"
+            ],
+            "name": "frontend_suite"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npx tsc --noEmit"
+            ],
+            "name": "typecheck"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T23:10:52Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/frontend/src/auth/adminApi.ts: added DeviceRole type and modified addDeviceSingle to require it",
+          "ui2/frontend/src/shell/AddDeviceDialog.tsx: added role state ('gateway' by default), selector UI with 'Firewall' and 'Management server' labels, and management server warning text.",
+          "ui2/frontend/tests/AddDeviceDialog.test.tsx: added assertion for role: 'gateway' in the request body."
+        ],
+        "completed": [
+          "AC-1 Adding a device from the dialog succeeds again: the request carries a role and is no longer refused with role_invalid.",
+          "AC-2 The gateway value is the default and is what an operator who changes nothing sends.",
+          "AC-3 Choosing the management server sends that value and nothing else changes about the flow.",
+          "AC-4 The chooser offers exactly two options and no empty or placeholder third.",
+          "AC-5 The operator is told, before adding a management server, that collection from it is refused until its read sets are gated.",
+          "AC-6 A test asserts the request body contains the role; npx vitest run passes, npx tsc --noEmit is clean, and the repository privacy gate passes."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "None",
+          "ui": "Backward compatible UI change, fixes breaking API change"
+        },
+        "integration": {
+          "branch": "feature/add-device-sends-its-role",
+          "ci": "NOT_RUN",
+          "head_sha": "19c75807e01f659c56612f6fbf703da72f0658ca",
+          "merge_commit": null,
+          "merge_decision": "The orchestrator handles the pull request and merge after its own verification passes",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0191",
+          "movement_type": "UI",
+          "objective": "Finish 14I MS-1",
+          "status": "done"
+        },
+        "preserved": [
+          "Existing vendor filtering and credential selection flow intact."
+        ],
+        "recommended_reasoning": {
+          "reason": "Feature completed.",
+          "tier": "bounded tier"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "Ran ui2/frontend tests targeting AddDeviceDialog.",
+          "diff_check": "git diff --check origin/main clean",
+          "full_regression": "Ran all vitest tests in ui2/frontend (85 passed) and typechecked (tsc --noEmit clean).",
+          "privacy": "Ran scripts/repository_privacy_check.py (0 findings, passed).",
+          "real_environment": "N/A - local validation only",
+          "state_consistency": "N/A",
+          "targeted": "Ran ui2/frontend tests targeting AddDeviceDialog."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-14T23:15:26Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0191",
+  "movement": "add-device-sends-its-role",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md",
+    "ui2/frontend/src/shell/AddDeviceDialog.tsx",
+    "ui2/frontend/src/auth/adminApi.ts",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/DeviceRegistrationService.java",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-14T23:15:26Z"
+}

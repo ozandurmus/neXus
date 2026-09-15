@@ -1,0 +1,130 @@
+{
+  "created_at": "2026-09-14T23:32:45Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 An authenticated GET of the session status returns the session's CSRF token under the key the client reads.",
+          "AC-2 The returned token equals the secret stored on that session row, and a different session gets a different token.",
+          "AC-3 An unauthenticated caller's response is byte-for-byte what it is today and contains no token key.",
+          "AC-4 A state-changing request carrying that token is admitted; one without it is still refused with 401 SESSION_INVALID, unchanged.",
+          "AC-5 The response cannot be cached: a test asserts the no-store headers.",
+          "AC-6 The token appears in no log line at any level; a test or an inspection named in the SESSION_CLOSE establishes it.",
+          "AC-7 The ui2 service tests and the frontend suite pass with the new tests, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md -- FROZEN, Product Owner approved 2026-09-09. Its sessions schema declares `csrf_secret TEXT NOT NULL -- opaque, minted at session creation, never logged`. Its identity section states the secret is minted at session creation, never logged, and required on every state-changing request. Its gate table makes E1 refuse a state-changing method whose CSRF token is absent or does not match `sessions.csrf_secret`, with 401 SESSION_INVALID. The contract requires the client to present the token; it does not say the client may never be told it, and no clause forbids returning it on the authenticated session-status response. This movement closes that gap and changes no gate, no schema and no status code.",
+          "context_not_loaded": null,
+          "engineering_baseline": "GateChain checks the token only for state-changing methods, after the session row is found and before the origin check. The frontend requests the token before each write and omits the header when it cannot get one.",
+          "product_baseline": "An operator can sign in and read every screen. Every write is refused with SESSION_INVALID. Reported by the Product Owner on 2026-09-15 while creating an identity; the same refusal explains a credential that appeared not to save.",
+          "test_baseline": "The ui2 service and frontend suites pass on origin/main today. They pass because no test asserts that a browser can obtain a token it is required to send.",
+          "what_exists": "ui2/frontend/src/auth/adminApi.ts reads the token like this, and its own file header already calls the gap a disclosed, temporary limitation:\n\nasync function csrfToken(): Promise<string | undefined> {\n  try {\n    const response = await fetch(\"/session/status\", { credentials: \"include\" });\n    const body = await response.json();\n    return typeof body?.csrf_token === \"string\" ? body.csrf_token : undefined;\n  } catch {\n    return undefined;\n  }\n}\n\nui2/service/.../api/SessionStatusController.java builds its body with exactly these keys and no other -- the string `csrf` does not appear anywhere in that file:\n\n        body.put(\"authenticated\", true);\n        Optional<LocalCredentialRecord> identity = localIdentityResolver.resolve(session.get().actorFingerprint());\n        identity.ifPresent(record -> {\n            body.put(\"display_name\", record.localIdentityName());\n            body.put(\"must_change_password\", enforcePasswordChangeOnFirstLogin && record.mustChangePassword());\n            List<String> roleTokens = ...;\n            body.put(\"role_tokens\", roleTokens);\n        });\n\nand for an unauthenticated caller it answers 401 with `authenticated: false` alone.\n\nui2/service/.../security/GateChain.java refuses like this:\n\n        if (request.isStateChanging()) {\n            if (request.csrfHeader().isEmpty() || !request.csrfHeader().get().equals(session.csrfSecret())) {\n                return refuse(\"E1\", 401, \"SESSION_INVALID\", \"CSRF token missing or mismatched\");\n            }\n\nThe secret itself is minted in LoginFlow (`String csrfSecret = randomCookieValue();`) and passed to `sessionRepository.createActive(...)`, in two places -- the direct login and the pending-conflict resolution."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "application/**",
+          "ui2/worker/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/csrf-token-reaches-the-client"
+        },
+        "invariants": [
+          "The token is returned only to a caller who already holds the session it belongs to.",
+          "Never logged, never in a URL, never in an unauthenticated response, never cacheable.",
+          "The gate's behaviour is unchanged: this movement makes the required token obtainable, it does not relax what is required.",
+          "One session's token is never valid for another."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Give the browser the CSRF token it is required to send. Every state-changing request in the product is refused today. The secret is minted at session creation and stored on the session row, the gate requires it on every state-changing method, and it is never returned to the client -- not in the login response, not in the session-status response, not as a cookie. So no write succeeds: no identity created, no credential stored, no device added, no backup requested. Reads work, so the product looks healthy while nothing can be saved.",
+        "output_contract": [
+          "An operator can save something again: identities, credentials, devices and backup requests all reach the server.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "One field on one response plus its cache headers, against a frozen contract that already says the client must present the token.",
+          "tier": "bounded tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "The gradle command runs from ui2, the vitest command from ui2/frontend, the privacy gate from the repository root.",
+          "Every changed file names the clause it implements (C3, and the gate it must not change).",
+          "Run only the commands named above.",
+          "Run `git diff --check origin/main` before every commit and fix what it names.",
+          "Leave the worktree clean: write reports outside the repository or remove them before closing.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE states which headers you used to make the response uncacheable and what establishes the token is never logged."
+        ],
+        "risks": [
+          "Returning the token to an unauthenticated caller, which would hand it to anyone who asks.",
+          "Leaving the response cacheable, which would let a shared cache serve one session's token to the next reader.",
+          "Adding a debug log line while working and leaving it in; the contract says never logged.",
+          "Relaxing the gate instead of supplying the token, which would remove the protection rather than complete it."
+        ],
+        "scope": {
+          "in": [
+            "The authenticated session-status response carries the session's own CSRF token, under the key the client already reads. An unauthenticated caller's response is unchanged and carries nothing.",
+            "The response must not be cacheable by anything: set the headers that prevent a shared or browser cache from storing it, because a cached body would hand one session's token to whoever reads the cache next.",
+            "Tests: an authenticated status response carries a token that matches the session's stored secret; an unauthenticated one carries no such key at all; a state-changing request made with the token from that response is admitted, and one made without it is still refused exactly as today.",
+            "Remove the disclosed-limitation note from the frontend file header once it is no longer true, and say in the SESSION_CLOSE that it was removed."
+          ],
+          "out": [
+            "Any change to the gate, its order, its status codes or its reason strings. GateChain is not edited by this movement.",
+            "Any change to the sessions schema, to how the secret is minted, or to its lifetime.",
+            "Any change to the origin check that follows the CSRF check.",
+            "Logging the token, anywhere, at any level. The contract says never logged and that includes a debug line added while working.",
+            "Putting the token in a URL, a query string, a redirect, or any response to an unauthenticated caller.",
+            "Any change to the frontend's request flow beyond deleting a note that has stopped being true."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && JAVA_HOME=/Users/OzanDur/.local/jdk/Contents/Home ./gradlew :service:test --console=plain"
+            ],
+            "name": "service_tests"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npx vitest run"
+            ],
+            "name": "frontend_suite"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T23:32:45Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0193",
+  "movement": "csrf-token-reaches-the-client",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/SessionStatusController.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/GateChain.java",
+    "ui2/frontend/src/auth/adminApi.ts",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-14T23:32:45Z"
+}

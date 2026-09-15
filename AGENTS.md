@@ -426,6 +426,22 @@ unsupported behavior, secret-output risk, safe telemetry. A parse-scope
 extension of a command already issued (same command/session/timeout/
 frequency) is not a command addition and needs no new gate entry.
 
+## Host action boundary
+
+What the *product* may execute against a *device* is the network action
+taxonomy above. What an *agent* may execute on a *host* is a different axis and
+a different vocabulary, fixed by
+`docs/design/PO_DECISION_RECORD_2026_09_15A_THE_DEVELOPMENT_HOST_AND_WHAT_AN_AGENT_MAY_DO_ON_IT.md`
+with the allowlist in `docs/design/HOST_REGISTER.md`. Do not conflate the two
+schemes; neither extends the other.
+
+The invariant: **no agent executes a mutating command on a host it does not
+own without an authorization recorded in the repository, and no agent holds
+`sudo`, a privileged group, or a container runtime socket on such a host.**
+Reading, copying or querying another product's data on a shared host is
+prohibited outright and has no authorization form. A host absent from the
+register authorizes no command at all, including a read.
+
 ## Architectural invariants (test-enforced, not merely current)
 
 - No Browser → device path. The operator console submits typed intent

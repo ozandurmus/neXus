@@ -1,0 +1,195 @@
+{
+  "created_at": "2026-09-15T05:26:04Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A conflict shows the operator that a session is already active, when it started and when it was last seen, and offers takeover and refuse as two explicit choices.",
+          "AC-2 Doing nothing, and pressing return, both mean refuse; a test asserts no resolve call with the takeover action happens without an explicit choice.",
+          "AC-3 Takeover calls POST /login/resolve with the conflict token and the literal action, and on 200 proceeds exactly as a successful login does.",
+          "AC-4 A resolve refusal whose reason code says the token expired or is unknown renders as a lapsed offer that invites signing in again, not as a generic error.",
+          "AC-5 The screen says that takeover ends the other session, before the operator commits to it.",
+          "AC-6 The conflict token appears in no rendered output and no console output; a test asserts it.",
+          "AC-7 npx vitest run passes with the new tests, npx tsc --noEmit is clean, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md -- FROZEN, Product Owner approved 2026-09-09. It fixes one active session per identity structurally, and section 3.4 gives the conflict its resolution: an explicit takeover or refuse, with refuse-by-inaction as the default. The one-session rule is not in question here and this movement does not touch it; what is missing is the operator's half of section 3.4.",
+          "context_not_loaded": null,
+          "engineering_baseline": "The backend implements the whole of C3 section 3.4 already. LoginFlow mints a conflict token bound to the prior session id with a short lifetime, and resolve either takes over -- ending the prior session and issuing a new cookie -- or refuses, leaving the prior session untouched. An expired or unknown token refuses by inaction.",
+          "product_baseline": "An operator signs in with a local identity. If a session is already active the screen says so and offers nothing. The idle deadline is thirty minutes and an expired session is closed on read, so the only way back in today is to wait.",
+          "test_baseline": "npx vitest run and npx tsc --noEmit pass on origin/main today, run locally on 2026-09-15 before this packet was written.",
+          "what_exists": "ui2/frontend/src/auth/LoginScreen.tsx reduces the response to an enum and throws the body away:\n\n    if (response.ok) return \"ok\";\n    if (response.status === 409) return \"conflict\";\n    if (response.status === 401) return \"invalid\";\n    return \"unexpected\";\n\nand then:\n\n        case \"conflict\":\n          setError(CONFLICT_MESSAGE);\n          return;\n\nwhere `const CONFLICT_MESSAGE = \"Another session is already active for this account.\";`\n\nThe 409 body it discards is built by LoginFlow.conflictBody and carries exactly:\n\n  error            the literal \"LOGIN_CONFLICT\"\n  conflict_token   the token that authorizes the resolve call\n  prior_session    an object with created_at and last_seen_at, both ISO instants\n\nThe resolve route is POST /login/resolve. Its request record is `record ResolveRequest(String conflictToken, String action)` and its action is the literal string \"takeover\" or anything else, which is treated as refuse. On takeover it answers 200 with `{\"ok\": true}` and sets the session cookie itself. On refusal it answers 409 with `error` LOGIN_REFUSED_ACTIVE_SESSION and a `reason_code`; the reason code for an expired or unrecognized token is `conflict_token_expired_or_unknown`. The route is deliberately not gated by E1-E6: the conflict token, not a session cookie, authorizes it."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "application/**",
+          "ui2/service/**",
+          "ui2/worker/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/session-conflict-takeover"
+        },
+        "invariants": [
+          "One active session per identity stays exactly as frozen; this movement adds the operator's choice, not an exception.",
+          "Refuse-by-inaction is the default and cannot be reached by accident.",
+          "No session is ended without an explicit choice made in that moment.",
+          "The conflict token is a credential for one call and is never displayed or logged."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the pull request and does not merge.",
+        "movement_type": "UI",
+        "objective": "Let an operator take over their own stranded session. C3 gives an identity at most one active session and gives the operator an explicit way through it: the login answers a conflict with a token and a description of the prior session, and a resolve route accepts takeover or refuse. The login screen reads none of that. It turns a 409 into one sentence and stops, so an operator whose previous session was orphaned -- by a closed browser, a lost cookie, or a service restart -- is locked out of their own product until a thirty-minute idle deadline elapses. The mechanism exists; the screen is a dead end over it. Reported by the Product Owner on 2026-09-15 after a rollout ended their session mid-task.",
+        "output_contract": [
+          "An operator whose own session was stranded can get back into the product, deliberately, instead of waiting out a deadline.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "One screen reading a body it already receives and calling a route that already exists; the care is in the default, not the wiring.",
+          "tier": "bounded tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "The two frontend commands run from ui2/frontend; the privacy gate runs from the repository root.",
+          "Run only the commands named above. Do not run the Java build.",
+          "Match the login screen's existing error-presentation idiom rather than introducing a new one.",
+          "Run `git diff --check origin/main` before every commit and fix what it names.",
+          "Leave the worktree clean: write reports outside the repository or remove them before closing.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE quotes the wording you chose for the takeover warning and for the lapsed-offer case."
+        ],
+        "risks": [
+          "Making takeover the default action of the form, so an operator ends a colleague's session by pressing return.",
+          "Rendering the prior session's timestamps as raw instants, which tells an operator nothing about whether the session is theirs.",
+          "Treating a lapsed conflict token as a hard failure, leaving the operator as stuck as before.",
+          "Leaking the token into a rendered attribute, a query string or a console line while wiring the call."
+        ],
+        "scope": {
+          "in": [
+            "On a conflict, the screen reads the body, keeps the conflict token, and shows the operator what they are being asked to decide: that a session for this account is already active, when it started and when it was last seen, rendered as times a person can read rather than raw instants.",
+            "Offer both choices explicitly, and make refuse the one that happens if the operator does nothing -- C3 section 3.4's default is refuse-by-inaction, so the screen must not make takeover the accidental outcome of pressing return.",
+            "On takeover, call the resolve route with the token and proceed exactly as a successful login does. On refuse, return to the form with nothing taken over.",
+            "Handle the refusal the resolve route can itself return: an expired or unrecognized token means the offer has lapsed, so say that and let the operator sign in again rather than showing a generic failure.",
+            "Say plainly what takeover does -- the other session ends -- because it may be a colleague's, and an operator who is about to end someone else's session should know that before pressing it.",
+            "Tests: a 409 renders the choice and the prior-session times; refuse leaves the prior session alone and sends no resolve call with takeover; takeover calls the route with the token and the literal action and then authenticates; an expired token renders the lapsed-offer message; the conflict token never appears in the rendered output."
+          ],
+          "out": [
+            "Any change to the one-active-session rule, to the idle or absolute lifetimes, or to any session state. The rule is frozen and correct; only the operator's way through it is missing.",
+            "Any change to the Java service, the login route, the resolve route, or their bodies.",
+            "Automatic takeover, a remembered preference, or any path that ends another session without an explicit choice in that moment.",
+            "Showing the conflict token anywhere a person or a log can see it.",
+            "Any change to the credential fields, the password flow, or the must-change-password screen."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npx vitest run"
+            ],
+            "name": "frontend_suite"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npx tsc --noEmit"
+            ],
+            "name": "typecheck"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T05:26:04Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "LoginScreen renders active-session conflict details without rendering or logging the conflict token.",
+          "LoginScreen requires an explicit takeover click; form submission during a conflict refuses by inaction.",
+          "LoginScreen tests cover conflict rendering, refusal, explicit takeover, token non-rendering, and lapsed offers."
+        ],
+        "completed": [
+          "Implemented and committed the frontend-only conflict resolution UI.",
+          "Opened PR #357 without merging."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "changed"
+        },
+        "integration": {
+          "branch": "feature/session-conflict-takeover",
+          "ci": "not run locally because npm cache access failed",
+          "head_sha": "dbd9fec",
+          "merge_commit": "none",
+          "merge_decision": "orchestrator merge mode; no worker merge",
+          "merge_state": "OPEN",
+          "pr": 357,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/357"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0199",
+          "movement_type": "VALIDATION",
+          "objective": "Repair npm cache ownership outside this movement, then run the required frontend suite, typecheck, and privacy gate.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "One active session per identity remains unchanged.",
+          "Takeover remains explicit and no automatic session termination is introduced.",
+          "The conflict token remains component-local and is not rendered or logged."
+        ],
+        "recommended_reasoning": {
+          "reason": "Only the required validation commands remain after an environment repair.",
+          "tier": "bounded tier"
+        },
+        "state_updates": [
+          "None; delivery is not complete while required validation is blocked."
+        ],
+        "unresolved_risks": [
+          "AC-7 remains unverified because npm failed before test execution."
+        ],
+        "validation": {
+          "affected": "ui2/frontend/src/auth/LoginScreen.tsx and ui2/frontend/tests/LoginScreen.test.tsx",
+          "diff_check": "PASS: git diff --check origin/main",
+          "full_regression": "NOT RUN: not requested",
+          "privacy": "NOT RUN after the npm runtime failure",
+          "real_environment": "NOT APPLICABLE: UI local validation movement",
+          "state_consistency": "NOT RUN: no durable project state changed",
+          "targeted": "BLOCKED: npx vitest run could not open npm cache because it contains root-owned files; typecheck was not run after that runtime failure."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T05:30:57Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0199",
+  "movement": "an-active-session-is-not-a-locked-door",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "ui2/frontend/src/auth/LoginScreen.tsx",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/LoginResolveController.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/LoginFlow.java",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T05:30:57Z"
+}

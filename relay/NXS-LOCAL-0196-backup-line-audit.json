@@ -1,0 +1,190 @@
+{
+  "created_at": "2026-09-14T23:54:22Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Every numbered clause of the four documents that concerns backup appears in the audit with exactly one of the four verdicts.",
+          "AC-2 An IMPLEMENTED verdict names the file and, where it exists, the test; a NOT_IMPLEMENTED verdict names what is absent rather than merely asserting absence.",
+          "AC-3 Every clause is checked for the join, not only for the presence of one half.",
+          "AC-4 Findings are ordered by consequence, with the ordering justified.",
+          "AC-5 The document's status line reads DRAFT -- AUDIT, NOT AUTHORITY, and it changes no other file.",
+          "AC-6 No configuration value, address, hostname, serial, credential or artefact content appears in the document; the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "The four documents in refs, all FROZEN: 14H (the backup step, the pilot allowlist, the asynchronous submit-then-poll truth), 14I (where artefacts live, how an operator reads one, deviation, management servers), 14K (a backup creation is not a recovery write and is console-submittable), and C7 (the artefact and restore engine contract, with restore disabled). AGENTS.md's authority hierarchy makes a FROZEN document implementation law; this audit measures how far the implementation actually goes.",
+          "context_not_loaded": null,
+          "engineering_baseline": "The Java product lives under ui2/: service, worker, persistence and frontend modules, with migrations under ui2/service/src/main/resources/db/migration. The Python tree at the repository root is the earlier line and is not the audit's subject.",
+          "product_baseline": "Check Point gateway backup is implemented end to end and gated to a pilot allowlist that is currently empty. The device workspace lists retained artefacts with their deviation state, an operator can request a backup with a reason, collection is refused against a management server, and a configuration run carries a structural deviation summary. Every live outcome is UNVERIFIED: no feature in this product has yet reached a real device.",
+          "test_baseline": "The ui2 suites and the repository privacy gate pass on origin/main today.",
+          "what_exists": "The gap that motivated this audit, as an example of the shape being hunted: UI2_0_C3's gate table required a CSRF token on every state-changing method and the sessions schema declared `csrf_secret TEXT NOT NULL`. The token was minted, stored and required -- and never returned to the client in any response or cookie, so every write was refused with 401 SESSION_INVALID. The frontend's own file header described the gap as `a disclosed, temporary limitation` and named a movement that never closed it. No test failed, because no test asserted that a browser could obtain a token it was obliged to send.\n\nThat is the pattern: a clause whose two halves were each implemented by a different movement, with nothing testing the join."
+        },
+        "context_not_loaded": [
+          "ui2/frontend/node_modules/**",
+          "docs/history/**",
+          "application/**",
+          "checkpoint/**",
+          "panorama/**"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/backup-line-implementation-audit"
+        },
+        "invariants": [
+          "Read only. One new file, nothing else touched.",
+          "Evidence over assertion: a verdict names where it looked.",
+          "Absence of evidence is not evidence of absence -- NOT_EVALUABLE exists so a clause that cannot be checked from the repository is not silently called implemented.",
+          "No secret, identity or device value enters the document."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the pull request and does not merge.",
+        "movement_type": "READ_ONLY_AUDIT",
+        "objective": "Find the clauses the backup line claims and does not have. On 2026-09-15 it emerged that every write in the product was being refused, because the CSRF token the gate required was never returned to the client -- a gap that had been written down in a source comment and never closed, while every test stayed green and the product looked healthy. This audit looks for the same shape of gap across the frozen backup contracts: a clause that is frozen, believed implemented, and is not actually wired, or is wired with nothing testing it. Read only. Change nothing.",
+        "output_contract": [
+          "A list of what the backup line promises and does not yet do, ordered by what it would cost to be wrong.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A cross-module reading task whose value is in following each clause to its join, which is where the last failure of this shape hid.",
+          "tier": "heavy tier"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Both commands run from the repository root.",
+          "Run only the commands named above. Do not build, do not run the Java or frontend suites; this is a reading task.",
+          "Run `git diff --check origin/main` before committing and fix what it names.",
+          "Leave the worktree clean: write reports outside the repository or remove them before closing.",
+          "A mechanical mismatch between this packet and the code is settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE gives the verdict counts, names the three findings you consider most consequential, and says which clauses you could not evaluate and why."
+        ],
+        "risks": [
+          "Calling a clause implemented because a symbol with the right name exists, without following it to a caller -- the exact failure that let the write path stay broken.",
+          "Grepping for a keyword and concluding absence when the implementation uses different words; look for the behaviour, not the phrase.",
+          "Drifting into fixing what is found, which turns a read-only audit into an unreviewed change.",
+          "Padding the document with restated contract text instead of findings."
+        ],
+        "scope": {
+          "in": [
+            "Read the four contracts and enumerate their numbered clauses -- 14H BK-n, 14I AL-n/DV-n/OR-n/RC-n/MS-n, 14K BW-n, and C7's own numbered obligations for backup (not restore, which is disabled).",
+            "For each clause, find the code that implements it and the test that holds it. Report one of four verdicts per clause: IMPLEMENTED_AND_TESTED with the file and test named; IMPLEMENTED_UNTESTED with the file named and the missing assertion described; NOT_IMPLEMENTED with what is absent; or NOT_EVALUABLE with the reason the clause cannot be checked from the repository alone.",
+            "Say explicitly, for every clause, whether both halves of it are joined -- a producer with no consumer, a field written and never read, a guard required and never satisfiable, are the failures this audit exists to catch.",
+            "Write the findings to docs/design/BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md with a status line of DRAFT -- AUDIT. NOT AUTHORITY. It records findings; it decides nothing and freezes nothing.",
+            "Order the findings by consequence: a clause whose absence would let something unsafe happen first, a clause whose absence merely leaves a feature incomplete last. Say which is which and why."
+          ],
+          "out": [
+            "Changing any code, any test, any contract or any project data. This movement writes exactly one new file and nothing else.",
+            "Restore. C7 keeps it disabled and this audit does not examine, propose or prepare it.",
+            "Contacting a device, running the product, or reading any credential, artefact or database content.",
+            "Judging whether a frozen clause is a good decision. The audit measures implementation against the clause as written; disagreeing with a clause is a Product Owner matter and belongs in the SESSION_CLOSE, not in a verdict.",
+            "Opening backlog items or editing project/*.json. Findings go in the document; the Product Owner decides what becomes work."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_status_tests"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T23:54:22Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added docs/design/BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md with status DRAFT -- AUDIT, NOT AUTHORITY."
+        ],
+        "completed": [
+          "Audited all 55 in-scope backup clauses with exactly one verdict and an explicit producer-consumer join assessment per clause.",
+          "Verdicts: 19 IMPLEMENTED_AND_TESTED, 11 IMPLEMENTED_UNTESTED, 20 NOT_IMPLEMENTED, and 5 NOT_EVALUABLE.",
+          "Most consequential: BK-14/OR-1 exposes a filesystem-relative path through artefact_id; BK-12/BW-4 loses allowlist-role-reason evidence across the asynchronous boundary; BW-3/C7-2 collapses the gated sequence into one aggregate attempt.",
+          "Not evaluable: BK-4 and BK-7 require the pilot device; AL-2 and AL-4 require deployment/custody evidence; MS-4 requires the deferred management-server movement and live measurement.",
+          "Opened PR 355 at commit cddf89a and did not merge.",
+          "Process note: the mandatory relay re-read occurred immediately after rather than immediately before PR creation; it contained no post-dispatch correction or decision and required no deliverable change."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No effect.",
+          "ui": "No runtime effect; audit documentation only."
+        },
+        "integration": {
+          "branch": "feature/backup-line-implementation-audit",
+          "ci": "Orchestrator verification pending.",
+          "head_sha": "cddf89a",
+          "merge_commit": null,
+          "merge_decision": "Do not merge in worker mode; Product Owner assistant review and orchestrator verify.passed are required.",
+          "merge_state": "OPEN",
+          "pr": 355,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "PO-selected backup gap remediation",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Select and freeze the smallest remediation scope for the identifier disclosure, asynchronous authorization evidence, and per-step audit findings before implementation.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No product code, test, frozen contract, project data, credential, artefact, database content, or restore behavior changed.",
+          "The dispatched worktree and disposable commit clone are clean.",
+          "No device or running product was contacted."
+        ],
+        "recommended_reasoning": {
+          "reason": "The top findings cross HTTP privacy, asynchronous authorization, persistence, and class-1 execution evidence boundaries.",
+          "tier": "heavy tier"
+        },
+        "state_updates": [
+          "None: project data and rotating state were explicitly out of scope."
+        ],
+        "unresolved_risks": [
+          "BK-14/OR-1 path disclosure through artefact_id remains unfixed by audit scope.",
+          "BK-12/BW-4 asynchronous authorization and reason-evidence gap remains unfixed by audit scope.",
+          "BW-3/C7-2 per-step audit gap remains unfixed by audit scope."
+        ],
+        "validation": {
+          "affected": "PASS: clause inventory checked once each across 18 BK, 4 AL, 4 DV, 5 OR, 3 RC, 5 MS, 6 BW, and 10 C7 backup obligations.",
+          "diff_check": "PASS: git diff --check origin/main before commit.",
+          "full_regression": "NOT RUN: dispatch explicitly limited validation to the named contract-status test and privacy gate.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py; 0 findings.",
+          "real_environment": "NOT RUN: read-only audit; every live outcome remains UNVERIFIED.",
+          "state_consistency": "NOT APPLICABLE: dispatch prohibited project-state changes.",
+          "targeted": "PASS: python3 -m pytest tests/test_contract_authority_status.py -q; 5 passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T00:08:01Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0196",
+  "movement": "what-the-backup-line-claims-versus-what-is-wired",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14H_BACKUP_STEP_SCOPE_PILOT_DEVICE_AND_THE_ASYNCHRONOUS_TRUTH.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14K_A_BACKUP_IS_NOT_A_RECOVERY_WRITE.md",
+    "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T00:08:01Z"
+}

@@ -1,0 +1,140 @@
+{
+  "created_at": "2026-09-14T22:43:44Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A run whose change state is `changed` carries a summary naming each section that gained, lost or altered entries, with its context and its old and new counts.",
+          "AC-2 A section present only in the new index is reported as added; one present only in the old is reported as removed; one in both with a different count is reported with both counts.",
+          "AC-3 Two index entries that differ only by source are treated as different entries, so a Palo Alto category whose provenance moved is not silently reported as unchanged.",
+          "AC-4 A first run and an unchanged run carry no summary.",
+          "AC-5 A predecessor with no stored index yields an explicit not-computable summary, never a list reporting every section as added.",
+          "AC-6 No configuration value appears anywhere in the summary, its persistence or its tests; a test asserts the summary contains only section names, contexts and integers.",
+          "AC-7 The named test suites pass with the new tests, and the repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md -- FROZEN, Product Owner directives 2026-09-14. DV-1: every artefact carries a plaintext digest and the product compares each new artefact with the previous one of the same class for the same device, recording unchanged, changed or first. DV-2: for the text-shaped artefacts -- Check Point Gaia configuration, Palo Alto running configuration -- `changed` is refined into a structural deviation summary: which sections gained, lost or altered entries, by section name and count, never by value; the Check Point section index and the Palo Alto category index already computed for the configuration view are the inputs, and nothing new is read from a device. DV-3: a Gaia system backup archive is opaque, so its deviation stays digest-level only and the product says so rather than implying it inspected the contents. DV-4: deviation is shown on the device's backup and configuration views.",
+          "context_not_loaded": null,
+          "engineering_baseline": "The index is computed at collection time and stored with the run. The change state is already derived against the previous run in the worker's configuration executor, around line 144.",
+          "product_baseline": "Configuration collection stores a run per device with its section index and a change state against the previous run. Nothing is read from a device by this movement; every input is already held.",
+          "test_baseline": "The ui2 persistence, service and worker test suites pass on origin/main today.",
+          "what_exists": "A run is `record ConfigurationRun(String runId, String deviceId, String jobId, Instant collectedAt, String vendor, String readKind, boolean primary, String canonicalHash, String rawHash, long rawBytes, String artefactRef, int withheldLineCount, Optional<String> sanitizedText, String changeState, List<ConfigurationIndexEntry> index, List<ConfigurationOverride> overrides)`.\n\nThe index entry is `record ConfigurationIndexEntry(String context, String section, Optional<String> source, int entryCount)` -- one `device_configuration_index` row (13F CF-1, 14G CG-6): a section or category count within one context. Its `source` carries Palo Alto's per-element provenance (CG-7a: `tpl`/`dg`/`shared`/`local`) counted per category (CG-7b), and is empty for Check Point, which has no such attribute.\n\nThe change state is derived in ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/configuration/ConfigurationJobExecutor.java, where line 144 reads `String changeState = previous.isEmpty() ? ChangeState.FIRST_RUN` and line 154 passes it into the run alongside `data.index()` and `data.overrides()`.\n\nSo both indexes -- the current run's and the previous run's -- are available at the point the change state is already being decided."
+        },
+        "context_not_loaded": [
+          "ui2/frontend/**",
+          "docs/history/**",
+          "application/**",
+          "vendor documents"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/structural-deviation-summary"
+        },
+        "invariants": [
+          "By section name and count, never by value. No configuration content leaves the parser.",
+          "Absence of evidence is not evidence of absence: a missing predecessor index is not an empty predecessor index.",
+          "Nothing new is read from a device; every input is already held.",
+          "The existing change state, digest comparison and override detection are unchanged."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Say what changed between two configuration reads, by section and count, never by value. Record 14I DV-2 requires that for the text-shaped artefacts a `changed` verdict is refined into a structural deviation summary: which sections gained, lost or altered entries. Today a run records only that it differs from its predecessor; an operator is told that something changed and nothing about where.",
+        "output_contract": [
+          "An operator who is told a configuration changed can also be told which sections changed, and by how much, without ever being shown a value.",
+          "SESSION_CLOSE per requirements."
+        ],
+        "recommended_reasoning": {
+          "reason": "A comparison whose identity rule differs per vendor and whose central constraint is what must never appear in the output.",
+          "tier": "extended"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "The gradle commands run from ui2; the privacy gate runs from the repository root.",
+          "Every changed file names the clause it implements (14I DV-n).",
+          "If you add a migration, it is V22 and no other number, and if it writes to an audited table it sets app.actor_fingerprint and app.action_id transaction-locally -- read an existing audited migration and follow it exactly.",
+          "Run only the commands named above.",
+          "Run `git diff --check origin/main` before every commit and fix what it names.",
+          "Leave the worktree clean: write reports outside the repository or remove them before closing.",
+          "Mechanical mismatches between this packet and the code are settled against the code and named in the SESSION_CLOSE; a RELAY_QUESTION is only for a decision in conflict.",
+          "No emoji, no tool-identifying footer, no external URL in commits, the pull request or code comments.",
+          "Commit early and often on your lane.",
+          "The SESSION_CLOSE states what identity you compared entries on, how a missing predecessor index is represented, and what proves no value can reach the summary."
+        ],
+        "risks": [
+          "Comparing on section name alone, which collapses two Palo Alto categories that differ by provenance and reports a real move as no change.",
+          "Treating a missing predecessor index as empty, which reports an entire configuration as newly added the first time the index was stored.",
+          "Letting a value in through an example, a message, a log line or a test fixture -- the clause forbids values everywhere, not only in the persisted summary.",
+          "Computing the summary somewhere the previous run is not actually available, and reaching for the device or the artefact bytes to get it."
+        ],
+        "scope": {
+          "in": [
+            "Compute, for a run whose change state is `changed`, a structural summary against the previous run's index: which sections appear only in the new index, which only in the old, and which appear in both with a different entry count. Carry the section name, the context it belongs to, and the counts -- old and new -- and nothing else.",
+            "Persist the summary with the run and expose it wherever the run's change state is already exposed, so a caller that can see `changed` can see where.",
+            "Respect the two vendors' shapes: a Check Point entry has no source, a Palo Alto entry has one, and two entries differing only in source are different entries. Compare on the whole identity the index actually has, not on the section name alone.",
+            "A run that is `first` or `unchanged` carries no summary, and an absent previous index is not an empty one: if the predecessor's index was never stored, say the summary could not be computed rather than reporting every section as added.",
+            "Tests: sections added, removed and recounted; the two vendor shapes; a first run; an unchanged run; a predecessor whose index is missing."
+          ],
+          "out": [
+            "Any value from a configuration. Section names and counts only. Not a line, not a fragment, not a field value, not an example. This is the clause the movement exists to honour and it has no exceptions.",
+            "Any new read from a device, any new command, any new route to a device.",
+            "Any change to how the change state itself is decided, or to the digest comparison of DV-1.",
+            "Any treatment of the opaque backup archive. DV-3 keeps it digest-level and this movement does not touch it.",
+            "Any UI. DV-4's display is a separate movement.",
+            "Any change to the override detection that shares the same run."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && JAVA_HOME=/Users/OzanDur/.local/jdk/Contents/Home ./gradlew :persistence:test --console=plain"
+            ],
+            "name": "persistence_tests"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && JAVA_HOME=/Users/OzanDur/.local/jdk/Contents/Home ./gradlew :worker:test --console=plain"
+            ],
+            "name": "worker_tests"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && JAVA_HOME=/Users/OzanDur/.local/jdk/Contents/Home ./gradlew :service:test --console=plain"
+            ],
+            "name": "service_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-14T22:43:44Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0190",
+  "movement": "structural-deviation-summary",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/configuration/ConfigurationIndexEntry.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/configuration/ConfigurationRun.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/configuration/ConfigurationJobExecutor.java",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-14T22:43:44Z"
+}
