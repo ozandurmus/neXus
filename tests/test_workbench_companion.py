@@ -15,6 +15,7 @@ import pytest
 
 from scripts import workbench_companion as companion
 from scripts import workbench_companion_mcp as mcp
+from scripts import workbench_companion_launchagent as launchagent
 
 
 PLUGIN_ROOT = Path(__file__).parents[1] / "plugins" / "nexus-workbench-companion"
@@ -702,3 +703,109 @@ def test_private_codex_plugin_has_only_the_c3_read_only_mapping_and_finite_skill
         "${NEXUS_WORKBENCH_SNAPSHOT_DIRECTORY}"]}
     assert all(tool in skill for tool in mcp.TOOLS)
     assert "at most three tool calls" in skill and "Do not retry, paginate" in skill
+
+
+def lifecycle_plan(tmp_path):
+    return launchagent.artifacts(tmp_path, tmp_path / "releases" / "v1",
+                                 tmp_path / "config" / "observer.json",
+                                 tmp_path / "private", uid=501)
+
+
+def test_launchagent_plist_roundtrip_fixed_argv_and_no_execution(tmp_path, monkeypatch):
+    import plistlib
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("generation must not execute, install or notify")
+
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    monkeypatch.setattr(os, "system", forbidden)
+    monkeypatch.setattr(os, "open", forbidden)
+    monkeypatch.setattr(socket, "socket", forbidden)
+    plan = lifecycle_plan(tmp_path)
+    definition = plistlib.loads(plistlib.dumps(plan["plist"]))
+    assert definition == plan["plist"]
+    assert definition["ProgramArguments"] == [
+        str(tmp_path / "releases" / "v1" / "bin" / "nexus-workbench-observer"),
+        "--configuration", str(tmp_path / "config" / "observer.json")]
+    assert definition["RunAtLoad"] is True and definition["KeepAlive"] is True
+    assert definition["ThrottleInterval"] == 30 and definition["Umask"] == 0o077
+    assert definition["LimitLoadToSessionType"] == "Aqua"
+    assert definition["StandardOutPath"] == definition["StandardErrorPath"] == "/dev/null"
+    assert definition["HardResourceLimits"] == {"Core": 0}
+    assert set(definition) == {"Label", "ProgramArguments", "WorkingDirectory",
+        "LimitLoadToSessionType", "RunAtLoad", "KeepAlive", "ThrottleInterval",
+        "Umask", "StandardOutPath", "StandardErrorPath", "HardResourceLimits"}
+    assert plan["notification_status"] == "UNSUPPORTED"
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("field,value", [
+    ("release", "relative"), ("release", "/"), ("release", "/outside/v1"),
+    ("release", "/tmp/../release"), ("release", "/tmp/release\nprivate"),
+    ("configuration", "/tmp//configuration"), ("configuration", "/tmp/secret\x00"),
+    ("uid", 0), ("uid", True), ("uid", -1),
+])
+def test_launchagent_invalid_configuration_is_rejected(tmp_path, field, value):
+    args = dict(home=tmp_path, release=tmp_path / "releases" / "v1",
+                configuration=tmp_path / "config.json", snapshot_directory=tmp_path / "private",
+                uid=501)
+    args[field] = value
+    with pytest.raises(ValueError, match="INVALID_CONFIGURATION"):
+        launchagent.artifacts(**args)
+
+
+def test_launchagent_rejects_checkout_and_overlapping_removal_roots(tmp_path):
+    checkout = Path(__file__).resolve().parents[1]
+    with pytest.raises(ValueError, match="INVALID_CONFIGURATION"):
+        launchagent.artifacts(checkout.parent, checkout / "release", checkout.parent / "config",
+                             checkout.parent / "private")
+    for release, configuration, snapshot_directory in [
+        (tmp_path / "private" / "v1", tmp_path / "config", tmp_path / "private"),
+        (tmp_path / "v1", tmp_path / "config", tmp_path / "v1" / "private"),
+        (tmp_path / "v1", tmp_path / "private" / "config", tmp_path / "private"),
+        (tmp_path / "v1", tmp_path / "v1" / "config", tmp_path / "private"),
+        (tmp_path / "Library" / "LaunchAgents" / "v1", tmp_path / "config", tmp_path / "private"),
+    ]:
+        with pytest.raises(ValueError, match="INVALID_CONFIGURATION"):
+            launchagent.artifacts(tmp_path, release, configuration, snapshot_directory)
+
+
+def test_launchagent_uninstall_stops_only_owned_service_and_preserves_snapshot(tmp_path):
+    plan = lifecycle_plan(tmp_path)
+    service = "gui/501/" + launchagent.LABEL
+    assert plan["commands"]["start"] == [
+        ["/bin/launchctl", "enable", service],
+        ["/bin/launchctl", "bootstrap", "gui/501", plan["plist_path"]]]
+    assert plan["uninstall"]["commands"] == plan["commands"]["stop"] == [
+        ["/bin/launchctl", "disable", service], ["/bin/launchctl", "bootout", service]]
+    with observer(tmp_path) as worker:
+        worker.poll(projection, now=100)
+    before = snapshot(tmp_path)
+    assert plan["uninstall"]["preserve"] == [str(tmp_path / "private")]
+    assert not any(Path(p).is_relative_to(tmp_path / "private")
+                   for p in plan["uninstall"]["remove_after_stop"])
+    assert snapshot(tmp_path) == before
+    with observer(tmp_path) as worker:
+        with pytest.raises(BlockingIOError):
+            observer(tmp_path)
+        changed = projection()
+        changed[IDENTITY]["relay"].update(sequence=2, next_actor="po")
+        worker.poll(lambda: changed, now=200)
+        assert all(event["gap"] for event in worker.state["transitions"])
+        assert worker.state["notification"]["delivery_attempt"] == "UNSUPPORTED"
+
+
+def test_launchagent_cli_generates_artifacts_without_installing(tmp_path):
+    import plistlib
+
+    args = ["python3", "-m", "scripts.workbench_companion_launchagent", "plist",
+            "--home", str(tmp_path), "--release", str(tmp_path / "releases" / "v1"),
+            "--configuration", str(tmp_path / "config.json"),
+            "--snapshot-directory", str(tmp_path / "private")]
+    result = subprocess.run(args, capture_output=True, check=True, timeout=10)
+    assert plistlib.loads(result.stdout)["Label"] == launchagent.LABEL
+    assert result.stderr == b"" and list(tmp_path.iterdir()) == []
+    args[3] = "plan"
+    result = subprocess.run(args, capture_output=True, check=True, timeout=10)
+    assert json.loads(result.stdout)["notification_status"] == "UNSUPPORTED"
+    assert list(tmp_path.iterdir()) == []
