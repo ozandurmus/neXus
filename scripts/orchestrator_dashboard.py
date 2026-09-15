@@ -73,6 +73,7 @@ import hashlib
 import hmac
 import io
 import json
+import re
 import secrets
 import shutil
 import subprocess
@@ -92,6 +93,7 @@ import orchestrator as orch  # noqa: E402
 import orchestrator_usage as ou  # noqa: E402
 
 ASSETS_DIR = Path(__file__).resolve().parent / "dashboard_assets"
+PRODUCT_THEME_PATH = REPO_ROOT / "ui2" / "frontend" / "src" / "theme" / "m3Theme.ts"
 DEFAULT_PORT = 8765
 DEFAULT_CONFIG_FILENAME = "dashboard_config.json"
 CONFIG_INTERVAL_MIN = 2
@@ -104,6 +106,26 @@ LOG_TAIL_MAX = 2000
 CONFIG_STUCK_MIN = 30
 CONFIG_STUCK_MAX = 86400
 DEFAULT_STUCK_AFTER_SECONDS = 900
+
+
+def product_theme_css() -> bytes:
+    """Expose the product palette to the standalone workbench without copying it."""
+    try:
+        colors = dict(re.findall(r'^\s*(\w+): "(#[0-9a-fA-F]{6})",', PRODUCT_THEME_PATH.read_text(encoding="utf-8"), re.MULTILINE))
+        aliases = {
+            "surface": "surface", "surface-container": "scLow", "surface-container-high": "scHigh",
+            "outline": "outline", "outline-variant": "outlineVar", "on-surface": "onSurface",
+            "on-surface-variant": "onSurfaceVar", "primary": "primary", "success": "success",
+            "success-container": "successContainer", "on-success-container": "onSuccessContainer",
+            "warning": "warning", "warning-container": "warningContainer", "on-warning-container": "onWarningContainer",
+            "error": "error", "error-container": "errorContainer", "on-error-container": "onErrorContainer", "member": "member",
+            "member-container": "memberContainer", "on-member-container": "onMemberContainer",
+            "attention": "attention", "attention-container": "attentionContainer",
+            "provider-claude": "attention", "provider-codex": "primary", "provider-neutral": "onSurfaceVar",
+        }
+        return (":root {" + "".join(f"--{name}:{colors[key]};" for name, key in aliases.items()) + "}\n").encode()
+    except (OSError, KeyError):
+        return b""
 
 #: Section 3.3's health field, seven-valued since GOV.ORCH.4-B -- `derive_health` below returns
 #: exactly one of these and never anything else (AC-5).
@@ -905,6 +927,36 @@ def _board_row(record: dict, summary: dict, state_dir: Path) -> dict:
     }
 
 
+def _relay_archive_rows(relay_dir: Path, active_ids: set[str]) -> list[dict]:
+    """Terminal relays outlive their deleted process-state records."""
+    rows = []
+    for path in relay_dir.glob("*.json"):
+        try:
+            relay = orch._load_relay(path)
+        except (OSError, orch.OrchestratorError):
+            continue
+        movement_id = relay.get("id") or relay.get("movement")
+        entries = relay.get("entries") or []
+        close = next((entry for entry in reversed(entries) if entry.get("marker") == "SESSION_CLOSE"), None)
+        if not isinstance(movement_id, str) or movement_id in active_ids or not close:
+            continue
+        outcome = str(close.get("outcome", "")).lower()
+        if relay.get("status") != "CLOSED" and outcome not in {"done", "cancelled"}:
+            continue
+        start = next((entry for entry in entries if entry.get("marker") == "SESSION_START"), {})
+        report = start.get("report") if isinstance(start, dict) else {}
+        rows.append({
+            "movement_id": movement_id,
+            "objective": (report or {}).get("objective", ""),
+            "health": HEALTH_DONE,
+            "stage": "archived",
+            "process_status": "disconnected",
+            "ended_at": close.get("timestamp"),
+            "archived": True,
+        })
+    return rows
+
+
 def build_board(
     state_dir: Path, relay_dir: Path, repo_root: Path, retry_limit: int,
     stuck_after_seconds: int = DEFAULT_STUCK_AFTER_SECONDS,
@@ -923,6 +975,7 @@ def build_board(
         )
         rows.append(_board_row(record, summary, state_dir))
     rows.sort(key=lambda r: r["movement_id"])
+    archived = _relay_archive_rows(relay_dir, {row["movement_id"] for row in rows})
 
     columns: dict[str, list[dict]] = {"open": [], "awaiting_po": [], "closed": []}
     for row in rows:
@@ -938,7 +991,7 @@ def build_board(
         "silent": sum(1 for r in rows if r["health"] == HEALTH_SILENT),
         "failed": sum(1 for r in rows if r["health"] == HEALTH_FAILED),
     }
-    return {**columns, "totals": totals}
+    return {**columns, "archive": archived, "totals": totals}
 
 
 def build_traffic(relay_entries: list) -> list:
@@ -1082,6 +1135,13 @@ def make_handler_class(*, token: str, relay_dir: Path, state_dir: Path, repo_roo
             self.end_headers()
             self.wfile.write(body)
 
+        def _send_bytes(self, body: bytes, content_type: str) -> None:
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def _read_json_body(self) -> Any:
             length = int(self.headers.get("Content-Length", 0) or 0)
             if length <= 0:
@@ -1102,6 +1162,13 @@ def make_handler_class(*, token: str, relay_dir: Path, state_dir: Path, repo_roo
                 return
             if path == "/dashboard.css":
                 self._send_static(ASSETS_DIR / "dashboard.css", "text/css; charset=utf-8")
+                return
+            if path == "/dashboard-theme.css":
+                body = product_theme_css()
+                if not body:
+                    self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "product theme unavailable"})
+                    return
+                self._send_bytes(body, "text/css; charset=utf-8")
                 return
             if path == "/dashboard.js":
                 self._send_static(ASSETS_DIR / "dashboard.js", "application/javascript; charset=utf-8")

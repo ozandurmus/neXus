@@ -19,12 +19,9 @@
 
   var TOKEN_KEY = "nexus_dashboard_token";
   var SECTIONS_KEY = "nexus_dashboard_open_sections";
-  var DONE_EXPANDED_LIMIT = 10;
-
   var TOKEN = null;
   var POLL_TIMER = null;
   var SELECTED_MOVEMENT = null;
-  var DONE_EXPANDED = false;
 
   var COLUMNS = [
     { key: "awaiting_you", title: "Awaiting you" },
@@ -32,7 +29,6 @@
     { key: "silent", title: "Silent / stuck" },
     { key: "integration", title: "Integration" },
     { key: "failed", title: "Failed" },
-    { key: "done", title: "Done" },
   ];
 
   // -- small storage helpers -- never let a blocked/absent localStorage
@@ -139,7 +135,7 @@
   // -- board -------------------------------------------------------------
 
   function bucketBoard(board) {
-    var buckets = { awaiting_you: [], running: [], silent: [], integration: [], failed: [], done: [] };
+    var buckets = { awaiting_you: [], running: [], silent: [], integration: [], failed: [], archive: [] };
     (board.awaiting_po || []).forEach(function (r) { buckets.awaiting_you.push(r); });
     (board.open || []).forEach(function (r) {
       if (r.health === "silent") buckets.silent.push(r);
@@ -147,9 +143,9 @@
       else if (r.stage === "integration") buckets.integration.push(r);
       else buckets.running.push(r);
     });
-    (board.closed || []).slice().sort(function (a, b) {
+    (board.closed || []).concat(board.archive || []).slice().sort(function (a, b) {
       return (b.ended_at || b.started_at || "").localeCompare(a.ended_at || a.started_at || "");
-    }).forEach(function (r) { buckets.done.push(r); });
+    }).forEach(function (r) { buckets.archive.push(r); });
     return buckets;
   }
 
@@ -193,37 +189,27 @@
       header.textContent = col.title + " (" + rows.length + ")";
       section.appendChild(header);
 
-      var shown = rows;
-      var showAllToggle = null;
-      if (col.key === "done" && rows.length > DONE_EXPANDED_LIMIT && !DONE_EXPANDED) {
-        shown = rows.slice(0, DONE_EXPANDED_LIMIT);
-      }
-
       var list = document.createElement("div");
       list.className = "column-cards";
-      if (!shown.length) {
+      if (!rows.length) {
         var empty = document.createElement("p");
         empty.className = "muted";
         empty.textContent = "(none)";
         list.appendChild(empty);
       } else {
-        shown.forEach(function (row) { list.appendChild(renderCard(row)); });
+        rows.forEach(function (row) { list.appendChild(renderCard(row)); });
       }
       section.appendChild(list);
 
-      if (col.key === "done" && rows.length > DONE_EXPANDED_LIMIT) {
-        showAllToggle = document.createElement("button");
-        showAllToggle.className = "show-all";
-        showAllToggle.textContent = DONE_EXPANDED ? "show latest " + DONE_EXPANDED_LIMIT : "show all " + rows.length;
-        showAllToggle.onclick = function () {
-          DONE_EXPANDED = !DONE_EXPANDED;
-          refresh();
-        };
-        section.appendChild(showAllToggle);
-      }
-
       el.appendChild(section);
     });
+    var archive = document.getElementById("archive-cards");
+    archive.innerHTML = "";
+    if (!buckets.archive.length) {
+      archive.innerHTML = '<p class="muted">(none)</p>';
+    } else {
+      buckets.archive.forEach(function (row) { archive.appendChild(renderCard(row)); });
+    }
   }
 
   function renderCard(row) {
@@ -231,7 +217,7 @@
     var provider = String(row.provider || "").toLowerCase();
     var providerClass = provider === "claude" || provider === "codex" ? provider : "neutral";
     card.className = "board-card provider-" + providerClass;
-    card.onclick = function () { openDetail(row.movement_id); };
+    if (!row.archived) card.onclick = function () { openDetail(row.movement_id); };
 
     var top = document.createElement("div");
     top.className = "card-top";
