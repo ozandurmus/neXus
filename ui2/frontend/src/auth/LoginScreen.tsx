@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
@@ -13,10 +14,15 @@ import { NexusWordmark } from "../brand/NexusWordmark";
 // body from the server. This screen mirrors that on the client: one
 // message, regardless of which of those four caused the 401.
 const GENERIC_ERROR = "Incorrect username or password.";
-const CONFLICT_MESSAGE = "Another session is already active for this account.";
 const UNEXPECTED_ERROR = "Something went wrong. Please try again.";
 
-type Outcome = "ok" | "invalid" | "conflict" | "unexpected";
+type Conflict = {
+  readonly token: string;
+  readonly createdAt: string;
+  readonly lastSeenAt: string;
+};
+
+type Outcome = "ok" | "invalid" | "unexpected" | { readonly conflict: Conflict };
 
 async function submitLogin(username: string, password: string): Promise<Outcome> {
   try {
@@ -27,12 +33,50 @@ async function submitLogin(username: string, password: string): Promise<Outcome>
       body: JSON.stringify({ username, password, mechanism_id: "local" }),
     });
     if (response.ok) return "ok";
-    if (response.status === 409) return "conflict";
+    if (response.status === 409) {
+      const body = await response.json();
+      if (
+        typeof body.conflict_token === "string" &&
+        typeof body.prior_session?.created_at === "string" &&
+        typeof body.prior_session?.last_seen_at === "string"
+      ) {
+        return {
+          conflict: {
+            token: body.conflict_token,
+            createdAt: body.prior_session.created_at,
+            lastSeenAt: body.prior_session.last_seen_at,
+          },
+        };
+      }
+      return "unexpected";
+    }
     if (response.status === 401) return "invalid";
     return "unexpected";
   } catch {
     return "unexpected";
   }
+}
+
+async function takeOver(conflictToken: string): Promise<"ok" | "lapsed" | "unexpected"> {
+  try {
+    const response = await fetch("/login/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ conflictToken, action: "takeover" }),
+    });
+    if (response.ok) return "ok";
+    if (response.status === 409 && (await response.json()).reason_code === "conflict_token_expired_or_unknown") {
+      return "lapsed";
+    }
+    return "unexpected";
+  } catch {
+    return "unexpected";
+  }
+}
+
+function readableTime(instant: string) {
+  return new Date(instant).toLocaleString();
 }
 
 /**
@@ -45,21 +89,27 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<Conflict | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event?: FormEvent) {
     event?.preventDefault();
+    if (conflict) {
+      setConflict(null);
+      return;
+    }
     if (submitting) return;
     setSubmitting(true);
     setError(null);
     try {
       const outcome = await submitLogin(username, password);
+      if (typeof outcome !== "string") {
+        setConflict(outcome.conflict);
+        return;
+      }
       switch (outcome) {
         case "ok":
           onAuthenticated();
-          return;
-        case "conflict":
-          setError(CONFLICT_MESSAGE);
           return;
         case "invalid":
           setError(GENERIC_ERROR);
@@ -67,6 +117,23 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
         default:
           setError(UNEXPECTED_ERROR);
       }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleTakeover() {
+    if (!conflict || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const outcome = await takeOver(conflict.token);
+      if (outcome === "ok") {
+        onAuthenticated();
+        return;
+      }
+      setConflict(null);
+      setError(outcome === "lapsed" ? "This session offer has lapsed. Please sign in again." : UNEXPECTED_ERROR);
     } finally {
       setSubmitting(false);
     }
@@ -100,32 +167,51 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
         }}
       >
         <Typography variant="h4">Sign in</Typography>
-        <TextField
-          label="Username"
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-          autoFocus
-          required
-          fullWidth
-          inputProps={{ "aria-label": "Username" }}
-        />
-        <TextField
-          label="Password"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-          fullWidth
-          inputProps={{ "aria-label": "Password" }}
-        />
+        {conflict ? (
+          <>
+            <Typography role="alert" variant="body2" sx={{ color: m3.error }}>
+              A session for this account is already active. It started {readableTime(conflict.createdAt)} and was last seen {readableTime(conflict.lastSeenAt)}.
+            </Typography>
+            <Typography variant="body2">Taking over ends the other session.</Typography>
+            <Button type="button" variant="contained" onClick={handleTakeover} disabled={submitting}>
+              {submitting ? "Taking over…" : "Take over session"}
+            </Button>
+            <Button type="button" variant="outlined" onClick={() => setConflict(null)} disabled={submitting}>
+              Refuse and return to sign in
+            </Button>
+          </>
+        ) : (
+          <>
+            <TextField
+              label="Username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoFocus
+              required
+              fullWidth
+              inputProps={{ "aria-label": "Username" }}
+            />
+            <TextField
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              fullWidth
+              inputProps={{ "aria-label": "Password" }}
+            />
+          </>
+        )}
         {error ? (
           <Typography role="alert" variant="body2" sx={{ color: m3.error }}>
             {error}
           </Typography>
         ) : null}
-        <M3Button emphasis="filled" onClick={() => handleSubmit()}>
-          {submitting ? "Signing in…" : "Sign in"}
-        </M3Button>
+        {!conflict ? (
+          <M3Button emphasis="filled">
+            {submitting ? "Signing in…" : "Sign in"}
+          </M3Button>
+        ) : null}
       </Box>
     </Box>
   );
