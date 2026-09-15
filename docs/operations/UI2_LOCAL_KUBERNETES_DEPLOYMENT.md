@@ -69,9 +69,9 @@ the cluster API; the workstation's filesystem is never mounted into the
 cluster.
 
 ```sh
-kubectl -n ui2-build exec ui2-build-context-loader -- sh -c 'rm -rf /workspace/ui2'
+kubectl -n ui2-build exec ui2-build-context-loader -- sh -c 'rm -rf /workspace/ui2 /workspace/project'
 
-tar -cf - --exclude=node_modules --exclude=.gradle --exclude=build --exclude=.git ui2 \
+tar -cf - --exclude=node_modules --exclude=.gradle --exclude=build --exclude=.git ui2 project \
   | kubectl -n ui2-build exec -i ui2-build-context-loader -- tar -xf - -C /workspace
 ```
 
@@ -97,8 +97,8 @@ kubectl -n ui2-build exec ui2-build-context-loader -- cat /workspace/image-diges
 
 `deploy/ui2/50-service-deployment.yaml` carries the digest of the image built
 from the commit that introduced it. If the digest above differs — any change
-under `ui2/` produces a different one — point the Deployment at the new image
-after step 6:
+under `ui2/` or to the copied `project/` inputs produces a different one —
+point the Deployment at the new image after step 6:
 
 ```sh
 kubectl -n ui2 set image deployment/ui2-service \

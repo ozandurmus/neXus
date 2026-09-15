@@ -157,6 +157,10 @@ public final class ProjectPlanReader {
         }
 
         List<String> metadataWarnings = new ArrayList<>();
+        if (Stream.of(roadmapLoad, registryLoad, backlogLoad, backlogTerminalLoad, historyLoad)
+                .noneMatch(FileLoad::present)) {
+            metadataWarnings.add("No project-plan source is configured.");
+        }
         appendFileAvailabilityWarning(metadataWarnings, "roadmap.json", roadmapLoad.present());
         appendFileAvailabilityWarning(metadataWarnings, "feature_registry.json", registryLoad.present());
         appendFileAvailabilityWarning(metadataWarnings, "backlog.json", backlogLoad.present());

@@ -480,6 +480,10 @@ export function ProjectPlanPanel() {
     return <EmptyPanel title="Project plan" body="Loading…" />;
   }
 
+  if (plan.metadata_warnings.includes("No project-plan source is configured.")) {
+    return <EmptyPanel title="Project plan unavailable" body="No project-plan source is configured." />;
+  }
+
   return (
     <Stack spacing={3}>
       <HeroCards plan={plan} />
