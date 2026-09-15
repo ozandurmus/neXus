@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-15T10:10:53Z
+Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-15T11:09:39Z
 
 ## Now
 - NXS-LOCAL-0176 — Expire a past-deadline session on read so it never blocks a login (automated_validated)
@@ -11,10 +11,9 @@ Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-15T10:10:53Z
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
 - P0/planned backup_artefact_id_opaque_not_storage_path — The artefact id returned over HTTP must be opaque, not the (target: BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09)
 - P0/planned backup_retrieval_audit_fail_closed_and_reason_persists — Backup retrieval must be fail-closed on its audit row, and (target: BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09)
-- P0/planned ci_full_regression_skipped_lets_red_merge — CI full-regression is skipped, so a red main merges green (target: .github/workflows; evidence 2026-09-15)
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason a (target: jobs.outcome/terminal_reason/finished_at)
-- P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner (ApplicationRunne)
+- P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner vs DeviceComposit)
 - P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect, warn with the (target: ui2 worker HostKeyVerifier / TrustRuleRe)
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
 - P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI jo (target: workflow §5 B1-1)
@@ -58,6 +57,7 @@ Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-15T10:10:53Z
 - P3/planned cp_cphaprob_peer_observation_corroboration
 - P3/planned device_role_vocabulary_declared_twice
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race
+- P3/planned waf_fortiweb_capability_scope_and_measurement
 - P3/planned workbench_borrow_from_agent_orchestration_tools
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
 - P0 deploy1_oidc_viewer
