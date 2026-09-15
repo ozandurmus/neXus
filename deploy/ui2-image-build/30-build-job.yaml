@@ -27,7 +27,7 @@ spec:
         - name: builder
           image: gcr.io/kaniko-project/executor@sha256:4e7a52dd1f14872430652bb3b027405b8dfd17c4538751c620ac005741ef9698
           args:
-            - --context=dir:///workspace/ui2
+            - --context=dir:///workspace
             - --dockerfile=/workspace/ui2/Containerfile
             - --destination=registry.kube-system.svc.cluster.local/nexus-ui2-service:$(UI2_IMAGE_TAG)
             - --digest-file=/workspace/image-digest.txt

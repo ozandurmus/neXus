@@ -60,6 +60,15 @@ const EMPTY_PROJECT_PLAN = {
   },
 };
 
+const UNCONFIGURED_PROJECT_PLAN = {
+  "/project-plan": {
+    body: {
+      ...EMPTY_PROJECT_PLAN["/project-plan"].body,
+      metadata_warnings: ["No project-plan source is configured."],
+    },
+  },
+};
+
 const TABS = [
   { label: "Device management", marker: "Device registry · 0 entries" },
   { label: "Inventory exclusions", marker: "No device excluded" },
@@ -96,6 +105,14 @@ describe("AdministrationScreen tabs", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Project plan" }));
     await waitFor(() => expect(screen.getByText("Declared roadmap completion")).toBeInTheDocument());
     expect(screen.queryByText("No project plan")).toBeNull();
+  });
+
+  it("Project plan states when no source is configured", async () => {
+    vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...UNCONFIGURED_PROJECT_PLAN }));
+    render(withTheme(<AdministrationScreen />));
+    fireEvent.click(screen.getByRole("tab", { name: "Project plan" }));
+    await waitFor(() => expect(screen.getByText("No project-plan source is configured.")).toBeInTheDocument());
+    expect(screen.queryByText("Declared roadmap completion")).toBeNull();
   });
 
   it("defaults to the Device management tab, empty", async () => {
