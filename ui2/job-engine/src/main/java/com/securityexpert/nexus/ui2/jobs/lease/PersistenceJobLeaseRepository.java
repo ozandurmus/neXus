@@ -44,6 +44,13 @@ public final class PersistenceJobLeaseRepository implements JobLeaseRepository {
     }
 
     @Override
+    public boolean transitionState(String jobId, long leaseEpoch, JobState expectedFrom, JobState to,
+            String actorFingerprint, String actionId, String terminalReason) {
+        return dao.transitionState(jobId, leaseEpoch, expectedFrom.name(), to.name(), actorFingerprint, actionId,
+                terminalReason);
+    }
+
+    @Override
     public List<ClaimedJob> findExpiredWithNoAttempt() {
         return dao.findExpiredWithNoAttempt().stream().map(r -> new ClaimedJob(r.jobId(), r.leaseEpoch())).toList();
     }

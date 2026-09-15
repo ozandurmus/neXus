@@ -21,6 +21,11 @@ public interface JobStepAttemptDao {
     boolean writeOutcome(String attemptId, long leaseEpoch, String outcome, String errorClass, long outputBytes,
             long outputLines, String fingerprintSha256);
 
+    default boolean writeOutcome(String attemptId, long leaseEpoch, String outcome, String errorClass,
+            boolean matchedExpectation, Long outputBytes, Long outputLines, String fingerprintSha256) {
+        return writeOutcome(attemptId, leaseEpoch, outcome, errorClass, outputBytes, outputLines, fingerprintSha256);
+    }
+
     Optional<StepAttemptRow> find(String attemptId);
 
     /** Every attempt row for one {@code (job_id, step_index)}, in {@code attempt_number} order. */

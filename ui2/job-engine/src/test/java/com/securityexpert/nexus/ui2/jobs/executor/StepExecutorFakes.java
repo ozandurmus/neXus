@@ -96,6 +96,8 @@ final class StepExecutorFakes {
         final AtomicInteger idSeq = new AtomicInteger();
         boolean boundaryCrossWriteSucceeds = true;
         boolean outcomeWriteSucceeds = true;
+        final List<Long> outputBytes = new ArrayList<>();
+        final List<Long> outputLines = new ArrayList<>();
 
         FakeStepAttemptRepository(List<String> callOrder) {
             this.callOrder = callOrder;
@@ -120,6 +122,15 @@ final class StepExecutorFakes {
         @Override
         public boolean writeOutcome(String attemptId, long leaseEpoch, String outcome, String errorClass,
                 long outputBytes, long outputLines, String fingerprintSha256) {
+            callOrder.add("OUTCOME_WRITTEN:" + attemptId + ":" + outcome);
+            return outcomeWriteSucceeds;
+        }
+
+        @Override
+        public boolean writeOutcome(String attemptId, long leaseEpoch, String outcome, String errorClass,
+                boolean matchedExpectation, Long outputBytes, Long outputLines, String fingerprintSha256) {
+            this.outputBytes.add(outputBytes);
+            this.outputLines.add(outputLines);
             callOrder.add("OUTCOME_WRITTEN:" + attemptId + ":" + outcome);
             return outcomeWriteSucceeds;
         }

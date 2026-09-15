@@ -23,6 +23,11 @@ public interface JobStepAttemptRepository {
     boolean writeOutcome(String attemptId, long leaseEpoch, String outcome, String errorClass, long outputBytes,
             long outputLines, String fingerprintSha256);
 
+    default boolean writeOutcome(String attemptId, long leaseEpoch, String outcome, String errorClass,
+            boolean matchedExpectation, Long outputBytes, Long outputLines, String fingerprintSha256) {
+        return writeOutcome(attemptId, leaseEpoch, outcome, errorClass, outputBytes, outputLines, fingerprintSha256);
+    }
+
     Optional<StepAttempt> find(String attemptId);
 
     List<StepAttempt> findByJobAndStep(String jobId, int stepIndex);

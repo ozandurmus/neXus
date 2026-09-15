@@ -11,6 +11,6 @@ public interface EvidenceDao {
     void writeStepEvidence(
             String provenanceId, String runId, String stepId, String parserVersion, String capabilityVersion,
             String captureArtifactId, String sourceLocation, String sanitizedFragment, String fingerprintSha256,
-            String attemptId, long leaseEpoch, String outcome, String errorClass, long outputBytes,
-            long outputLines);
+            String attemptId, long leaseEpoch, String outcome, String errorClass, Long outputBytes,
+            Long outputLines);
 }

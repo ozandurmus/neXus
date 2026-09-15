@@ -35,6 +35,13 @@ public final class PersistenceJobStepAttemptRepository implements JobStepAttempt
     }
 
     @Override
+    public boolean writeOutcome(String attemptId, long leaseEpoch, String outcome, String errorClass,
+            boolean matchedExpectation, Long outputBytes, Long outputLines, String fingerprintSha256) {
+        return dao.writeOutcome(attemptId, leaseEpoch, outcome, errorClass, matchedExpectation, outputBytes,
+                outputLines, fingerprintSha256);
+    }
+
+    @Override
     public Optional<StepAttempt> find(String attemptId) {
         return dao.find(attemptId).map(PersistenceJobStepAttemptRepository::toStepAttempt);
     }

@@ -51,6 +51,10 @@ class ReadClassBoundedRetryTest {
         for (int i = 0; i < attempts.size(); i++) {
             assertEquals(i + 1, attempts.get(i).attemptNumber());
         }
+        assertTrue(attemptRepo.outputBytes.stream().allMatch(java.util.Objects::isNull),
+                "output_bytes must stay unmeasured until the executor receives a genuine measurement");
+        assertTrue(attemptRepo.outputLines.stream().allMatch(java.util.Objects::isNull),
+                "output_lines must stay unmeasured until the executor receives a genuine measurement");
     }
 
     @Test
