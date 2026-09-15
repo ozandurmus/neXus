@@ -4,6 +4,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jooq.JooqAutoConfiguration;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 
@@ -68,6 +70,15 @@ import org.springframework.context.annotation.FilterType;
                 type = FilterType.REGEX,
                 pattern = "com\\.securityexpert\\.nexus\\.ui2\\.service\\.api\\.SessionAdminController"))
 public class Ui2Application {
+
+    @Bean
+    static MigrationStartupRunner migrationStartupRunner(
+            @Value("${ui2.db.url}") String jdbcUrl,
+            @Value("${ui2.db.migrate-user-file}") String userFile,
+            @Value("${ui2.db.migrate-password-file}") String passwordFile,
+            @Value("${ui2.db.migration-location:classpath:db/migration}") String migrationLocation) {
+        return new MigrationStartupRunner(jdbcUrl, userFile, passwordFile, migrationLocation);
+    }
 
     public static void main(String[] args) {
         SpringApplication.run(Ui2Application.class, args);
