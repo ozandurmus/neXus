@@ -454,6 +454,96 @@ describe("AddDeviceDialog discovery mode", () => {
     expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
   }, 10000);
 
+  it("shows the safe failure class and explanation for a known FAILED reason (REFUSED)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "/credentials": CREDENTIALS_ROUTE,
+        "/session/status": { body: { csrf_token: "test-csrf" } },
+        "/discovery/runs": { status: 202, body: { run_id: "run-1", job_id: "job-1" } },
+        "/discovery/runs/run-1": {
+          body: {
+            run_id: "run-1",
+            vendor: "check_point",
+            state: "FAILED",
+            job_id: "job-1",
+            outcome_summary: { "failure_reason_class:REFUSED": 1 },
+            candidates: [],
+          },
+        },
+      }),
+    );
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndSwitchToDiscovery("mds.example");
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+
+    await waitFor(() => expect(screen.getByText("REFUSED")).toBeInTheDocument(), { timeout: 8000 });
+    // REFUSED must read as a generic refusal, never asserted as an auth or trust failure specifically.
+    expect(screen.getByText(/refused the connection/)).toBeInTheDocument();
+    expect(screen.queryByText(/authentication failure$/)).not.toBeInTheDocument();
+  }, 10000);
+
+  it("falls back to the generic UNKNOWN class when the reason is absent", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "/credentials": CREDENTIALS_ROUTE,
+        "/session/status": { body: { csrf_token: "test-csrf" } },
+        "/discovery/runs": { status: 202, body: { run_id: "run-1", job_id: "job-1" } },
+        "/discovery/runs/run-1": {
+          body: {
+            run_id: "run-1",
+            vendor: "check_point",
+            state: "FAILED",
+            job_id: "job-1",
+            outcome_summary: {},
+            candidates: [],
+          },
+        },
+      }),
+    );
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndSwitchToDiscovery("mds.example");
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+
+    await waitFor(() => expect(screen.getByText("UNKNOWN")).toBeInTheDocument(), { timeout: 8000 });
+    expect(screen.getByText(/unclassified reason/)).toBeInTheDocument();
+  }, 10000);
+
+  it("never renders an untrusted/unknown reason key or multiple reason keys as a diagnostic", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "/credentials": CREDENTIALS_ROUTE,
+        "/session/status": { body: { csrf_token: "test-csrf" } },
+        "/discovery/runs": { status: 202, body: { run_id: "run-1", job_id: "job-1" } },
+        "/discovery/runs/run-1": {
+          body: {
+            run_id: "run-1",
+            vendor: "check_point",
+            state: "FAILED",
+            job_id: "job-1",
+            outcome_summary: {
+              "failure_reason_class:<script>alert(1)</script>": 1,
+              "failure_reason_class:REFUSED": 1,
+            },
+            candidates: [],
+          },
+        },
+      }),
+    );
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndSwitchToDiscovery("mds.example");
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+
+    await waitFor(() => expect(screen.getByText("UNKNOWN")).toBeInTheDocument(), { timeout: 8000 });
+    expect(screen.queryByText(/script/)).not.toBeInTheDocument();
+    expect(screen.queryByText("REFUSED")).not.toBeInTheDocument();
+  }, 10000);
+
   it("offers inline credential creation on discovery path and selects the created credential", async () => {
     vi.stubGlobal(
       "fetch",
