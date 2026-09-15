@@ -26,6 +26,8 @@ import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionRepository;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentReadPort;
 import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentSnapshot;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupJobAuthorizationRecord;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupJobAuthorizationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceDraft;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
@@ -147,6 +149,20 @@ class BackupCollectServiceTest {
         }
     }
 
+    private static final class InMemoryAuthorizationRepository implements BackupJobAuthorizationRepository {
+        private final Map<String, BackupJobAuthorizationRecord> byJobId = new HashMap<>();
+
+        @Override
+        public void record(String jobId, String deviceId, String actorFingerprint, String reason, String actionId) {
+            byJobId.put(jobId, new BackupJobAuthorizationRecord(jobId, deviceId, actorFingerprint, reason));
+        }
+
+        @Override
+        public Optional<BackupJobAuthorizationRecord> find(String jobId) {
+            return Optional.ofNullable(byJobId.get(jobId));
+        }
+    }
+
     private static JobAdmissionService admissionService() {
         DeviceEnrollmentReadPort enrolledEverywhere = deviceId ->
                 Optional.of(new DeviceEnrollmentSnapshot(deviceId, DeviceEnrollmentState.ENROLLED, false));
@@ -160,7 +176,7 @@ class BackupCollectServiceTest {
     @Test
     void refusesAReasonShorterThanEightCharacters() {
         BackupCollectService service = new BackupCollectService(new StubDeviceRepository().put(PILOT_DEVICE, "check_point"),
-                admissionService(), Set.of(PILOT_DEVICE), true);
+                admissionService(), Set.of(PILOT_DEVICE), true, new InMemoryAuthorizationRepository());
 
         BackupCollectService.Outcome outcome = service.requestCollect(PILOT_DEVICE, "actor", "short", Optional.empty());
 
@@ -171,7 +187,7 @@ class BackupCollectServiceTest {
     @Test
     void admitsTheAllowlistedPilotDevice() {
         BackupCollectService service = new BackupCollectService(new StubDeviceRepository().put(PILOT_DEVICE, "check_point"),
-                admissionService(), Set.of(PILOT_DEVICE), true);
+                admissionService(), Set.of(PILOT_DEVICE), true, new InMemoryAuthorizationRepository());
 
         BackupCollectService.Outcome outcome =
                 service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());
@@ -180,9 +196,27 @@ class BackupCollectServiceTest {
     }
 
     @Test
+    void recordsImmutableAuthorizationEvidenceOnAdmission() {
+        InMemoryAuthorizationRepository authorizationRepository = new InMemoryAuthorizationRepository();
+        BackupCollectService service = new BackupCollectService(new StubDeviceRepository().put(PILOT_DEVICE, "check_point"),
+                admissionService(), Set.of(PILOT_DEVICE), true, authorizationRepository);
+
+        BackupCollectService.Outcome outcome =
+                service.requestCollect(PILOT_DEVICE, "actor-fingerprint-1", VALID_REASON, Optional.empty());
+
+        assertTrue(outcome instanceof BackupCollectService.Outcome.Admitted, "expected Admitted, got " + outcome);
+        String jobId = ((BackupCollectService.Outcome.Admitted) outcome).jobId();
+        BackupJobAuthorizationRecord evidence = authorizationRepository.find(jobId)
+                .orElseThrow(() -> new AssertionError("expected authorization evidence for job " + jobId));
+        assertEquals(PILOT_DEVICE, evidence.deviceId());
+        assertEquals("actor-fingerprint-1", evidence.actorFingerprint());
+        assertEquals(VALID_REASON, evidence.reason());
+    }
+
+    @Test
     void refusesAManagementServerNamingTheMissingGate() {
         BackupCollectService service = new BackupCollectService(new StubDeviceRepository().putManagementServer(PILOT_DEVICE, "check_point"),
-                admissionService(), Set.of(PILOT_DEVICE), true);
+                admissionService(), Set.of(PILOT_DEVICE), true, new InMemoryAuthorizationRepository());
 
         BackupCollectService.Outcome outcome = service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());
 
@@ -195,7 +229,7 @@ class BackupCollectServiceTest {
     @Test
     void refusesAnUnrecognisedRoleNamingTheRole() {
         BackupCollectService service = new BackupCollectService(new StubDeviceRepository().putUnrecognizedRole(PILOT_DEVICE, "check_point", "future_role"),
-                admissionService(), Set.of(PILOT_DEVICE), true);
+                admissionService(), Set.of(PILOT_DEVICE), true, new InMemoryAuthorizationRepository());
 
         BackupCollectService.Outcome outcome = service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());
 
@@ -209,7 +243,7 @@ class BackupCollectServiceTest {
     void refusesADeviceOutsideTheAllowlistNamingTheAllowlist() {
         BackupCollectService service = new BackupCollectService(
                 new StubDeviceRepository().put(PILOT_DEVICE, "check_point").put(OTHER_DEVICE, "check_point"),
-                admissionService(), Set.of(PILOT_DEVICE), true);
+                admissionService(), Set.of(PILOT_DEVICE), true, new InMemoryAuthorizationRepository());
 
         BackupCollectService.Outcome outcome = service.requestCollect(OTHER_DEVICE, "actor", VALID_REASON, Optional.empty());
 
@@ -222,7 +256,7 @@ class BackupCollectServiceTest {
     @Test
     void anEmptyAllowlistRefusesEveryDevice() {
         BackupCollectService service = new BackupCollectService(new StubDeviceRepository().put(PILOT_DEVICE, "check_point"),
-                admissionService(), Set.of(), true);
+                admissionService(), Set.of(), true, new InMemoryAuthorizationRepository());
 
         BackupCollectService.Outcome outcome =
                 service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());
@@ -235,7 +269,7 @@ class BackupCollectServiceTest {
     @Test
     void refusesWhenNoBackupCredentialIsConfigured() {
         BackupCollectService service = new BackupCollectService(new StubDeviceRepository().put(PILOT_DEVICE, "check_point"),
-                admissionService(), Set.of(PILOT_DEVICE), false);
+                admissionService(), Set.of(PILOT_DEVICE), false, new InMemoryAuthorizationRepository());
 
         BackupCollectService.Outcome outcome =
                 service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());

@@ -80,6 +80,8 @@ class BackupJobExecutorEndToEndTest {
         final BackupJobExecutorFakes.FakeDeviceRepository deviceRepo;
         final BackupJobExecutorFakes.FakeBackupArtefactManifestRepository manifestRepo;
         final BackupJobExecutorFakes.FakeBackupEndpointEligibilityRepository eligibilityRepo;
+        final BackupJobExecutorFakes.FakeBackupJobAuthorizationRepository authorizationRepo;
+        final BackupJobExecutorFakes.FakeRoleBindingRepository roleBindingRepo;
         final BackupJobExecutor executor;
 
         Harness(ScriptedBackupTransport transport, ArtefactStore artefactStore, Duration pollInterval,
@@ -92,10 +94,15 @@ class BackupJobExecutorEndToEndTest {
             this.deviceRepo.confirmFacts = Optional.of(BackupJobExecutorFakes.confirmFactsWithSoftwareVersion("R81.20"));
             this.manifestRepo = new BackupJobExecutorFakes.FakeBackupArtefactManifestRepository();
             this.eligibilityRepo = new BackupJobExecutorFakes.FakeBackupEndpointEligibilityRepository();
+            this.authorizationRepo = new BackupJobExecutorFakes.FakeBackupJobAuthorizationRepository();
+            this.authorizationRepo.record(JOB_ID, DEVICE_ID, "actor-fingerprint-1", "operator requested a backup",
+                    "backup_job_authorization_recorded");
+            this.roleBindingRepo = new BackupJobExecutorFakes.FakeRoleBindingRepository();
             BackupCapabilityExecutor capabilityExecutor =
                     new BackupCapabilityExecutor(transport, artefactStore, 1L, pollInterval, runDeadline);
             this.executor = new BackupJobExecutor(leaseRepo, attemptRepo, enrollmentPort, deviceRepo,
-                    capabilityExecutor, manifestRepo, eligibilityRepo, testFingerprint(), recoveryVolume.toString());
+                    capabilityExecutor, manifestRepo, eligibilityRepo, authorizationRepo, roleBindingRepo,
+                    java.util.Set.of(DEVICE_ID), testFingerprint(), recoveryVolume.toString());
         }
     }
 

@@ -4,6 +4,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 import com.securityexpert.nexus.ui2.jobs.JobState;
 import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentReadPort;
@@ -16,10 +17,14 @@ import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactValidation;
 import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRecord;
 import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRepository;
 import com.securityexpert.nexus.ui2.persistence.artefact.BackupEndpointEligibilityRepository;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupJobAuthorizationRecord;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupJobAuthorizationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
 import com.securityexpert.nexus.ui2.platform.ActionClass;
 import com.securityexpert.nexus.ui2.platform.HostnameFingerprint;
+import com.securityexpert.nexus.ui2.platform.RoleToken;
 import com.securityexpert.nexus.ui2.platform.WorkerActor;
 
 /**
@@ -40,11 +45,21 @@ import com.securityexpert.nexus.ui2.platform.WorkerActor;
  * device is read first, compared, and the run's own manifest row carries
  * the result -- {@code unchanged}/{@code changed}/{@code first}, never a
  * structural summary for the opaque Gaia archive (DV-3).</p>
+ *
+ * <p>NXS-LOCAL-0224 (BK-12/BW-4): before any of the above, {@code
+ * authorizationRefusalReason} re-evaluates the admission-time evidence
+ * {@code BackupCollectService} wrote to {@code backup_job_authorization}
+ * (migration V23) against the worker's own current view of role:backup_admin
+ * and the pilot allowlist -- a missing/malformed evidence row, a revoked
+ * role, or a removed device refuses the claim (CLAIMED -> REJECTED) before
+ * the device-enrollment check below ever runs and before {@link
+ * #backupExecutor} makes device contact.</p>
  */
 public final class BackupJobExecutor {
 
     private static final String ACTOR = WorkerActor.RESERVED_ACTOR_FINGERPRINT;
     private static final String ACTION_CLAIM_TO_EXECUTING = "job_backup_claim_to_executing";
+    private static final String ACTION_CLAIM_TIME_AUTHORIZATION_CHECK = "job_backup_claim_time_authorization_check";
     private static final String ACTION_CLAIM_TIME_DEVICE_CHECK = "job_backup_claim_time_device_check";
     private static final String ACTION_COMPLETED = "job_backup_completed";
     private static final String ACTION_FAILED = "job_backup_failed";
@@ -52,6 +67,8 @@ public final class BackupJobExecutor {
     private static final String ACTION_MANIFEST_RECORDED = "job_backup_manifest_recorded";
     private static final String ACTION_INELIGIBILITY_MARKED = "job_backup_endpoint_marked_ineligible";
     private static final String ACTION_INELIGIBILITY_CLEARED = "job_backup_endpoint_cleared";
+    /** BK-12: mirrors {@code service.device.backup.BackupCollectService}'s own admission-time gate, re-applied here to the persisted reason. */
+    private static final int MIN_REASON_LENGTH = 8;
 
     /** section 3.4: the only validation level this movement honestly claims -- it writes and digests, nothing more. */
     private static final String BACKUP_VALIDATION_LEVEL = ArtefactValidation.V1;
@@ -66,14 +83,18 @@ public final class BackupJobExecutor {
     private final BackupCapabilityExecutor backupExecutor;
     private final BackupArtefactManifestRepository manifestRepository;
     private final BackupEndpointEligibilityRepository eligibilityRepository;
+    private final BackupJobAuthorizationRepository authorizationRepository;
+    private final RoleBindingRepository roleBindingRepository;
+    private final Set<String> pilotAllowlist;
     private final HostnameFingerprint hostnameFingerprint;
     private final String recoveryVolumePath;
 
     public BackupJobExecutor(JobLeaseRepository leaseRepository, JobStepAttemptRepository attemptRepository,
             DeviceEnrollmentReadPort deviceEnrollmentReadPort, DeviceRepository deviceRepository,
             BackupCapabilityExecutor backupExecutor, BackupArtefactManifestRepository manifestRepository,
-            BackupEndpointEligibilityRepository eligibilityRepository, HostnameFingerprint hostnameFingerprint,
-            String recoveryVolumePath) {
+            BackupEndpointEligibilityRepository eligibilityRepository,
+            BackupJobAuthorizationRepository authorizationRepository, RoleBindingRepository roleBindingRepository,
+            Set<String> pilotAllowlist, HostnameFingerprint hostnameFingerprint, String recoveryVolumePath) {
         this.leaseRepository = Objects.requireNonNull(leaseRepository, "leaseRepository");
         this.attemptRepository = Objects.requireNonNull(attemptRepository, "attemptRepository");
         this.deviceEnrollmentReadPort = Objects.requireNonNull(deviceEnrollmentReadPort, "deviceEnrollmentReadPort");
@@ -81,11 +102,21 @@ public final class BackupJobExecutor {
         this.backupExecutor = Objects.requireNonNull(backupExecutor, "backupExecutor");
         this.manifestRepository = Objects.requireNonNull(manifestRepository, "manifestRepository");
         this.eligibilityRepository = Objects.requireNonNull(eligibilityRepository, "eligibilityRepository");
+        this.authorizationRepository = Objects.requireNonNull(authorizationRepository, "authorizationRepository");
+        this.roleBindingRepository = Objects.requireNonNull(roleBindingRepository, "roleBindingRepository");
+        this.pilotAllowlist = Set.copyOf(Objects.requireNonNull(pilotAllowlist, "pilotAllowlist"));
         this.hostnameFingerprint = Objects.requireNonNull(hostnameFingerprint, "hostnameFingerprint");
         this.recoveryVolumePath = Objects.requireNonNull(recoveryVolumePath, "recoveryVolumePath");
     }
 
     public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, BackupRequest request) {
+        Optional<String> authorizationRefusal = authorizationRefusalReason(jobId, targetDeviceId);
+        if (authorizationRefusal.isPresent()) {
+            leaseRepository.transitionState(jobId, leaseEpoch, JobState.CLAIMED, JobState.REJECTED, ACTOR,
+                    ACTION_CLAIM_TIME_AUTHORIZATION_CHECK);
+            return new JobOutcome.Rejected("BACKUP_AUTHORIZATION_STALE_AT_CLAIM_TIME: " + authorizationRefusal.get());
+        }
+
         Optional<com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentSnapshot> enrollment =
                 deviceEnrollmentReadPort.findEnrollment(targetDeviceId);
         if (enrollment.isEmpty() || !enrollment.get().permitsReadCollection()) {
@@ -168,6 +199,38 @@ public final class BackupJobExecutor {
 
         leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, ACTION_FAILED);
         return new JobOutcome.Failed("cleanup_failed: " + cleanupFailed.reason());
+    }
+
+    /**
+     * NXS-LOCAL-0224 (BK-12/BW-4): re-evaluates admission's own role/
+     * allowlist/reason gates against their current, claim-time truth --
+     * never against the admission-time decision alone. Returns the refusal
+     * reason, or empty if the claim may proceed. A missing evidence row (no
+     * {@code backup_job_authorization} for this job -- legacy or malformed)
+     * refuses exactly like a live check failing: absence of evidence is
+     * never treated as authorization.
+     */
+    private Optional<String> authorizationRefusalReason(String jobId, String deviceId) {
+        Optional<BackupJobAuthorizationRecord> evidence = authorizationRepository.find(jobId);
+        if (evidence.isEmpty()) {
+            return Optional.of("no backup_job_authorization row for job " + jobId
+                    + " (legacy row predating V23, or admission failed to record evidence)");
+        }
+        BackupJobAuthorizationRecord record = evidence.get();
+        if (record.actorFingerprint() == null || record.actorFingerprint().isBlank()) {
+            return Optional.of("persisted authorization evidence for job " + jobId + " has no actor_fingerprint");
+        }
+        if (record.reason() == null || record.reason().strip().length() < MIN_REASON_LENGTH) {
+            return Optional.of("persisted authorization evidence for job " + jobId
+                    + " carries no reason of at least eight characters (BK-12)");
+        }
+        if (!pilotAllowlist.contains(deviceId)) {
+            return Optional.of("device " + deviceId + " is no longer on the backup pilot allowlist (BK-1)");
+        }
+        if (!roleBindingRepository.hasAnyActiveBinding(RoleToken.BACKUP_ADMIN.token())) {
+            return Optional.of("role:backup_admin has no active binding at claim time (BK-12)");
+        }
+        return Optional.empty();
     }
 
     /** 14I DV-1: compares against the previous {@code backup}-class artefact for this device, by plaintext digest only. */
