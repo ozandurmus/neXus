@@ -414,6 +414,15 @@
       "priority": "P3",
       "target": "14I MS-1 successor",
       "note": ""
+    },
+    {
+      "id": "waf_fortiweb_capability_scope_and_measurement",
+      "category": "collection",
+      "title": "WAF (FortiWeb): decide scope, then measurement record and command gate before any implementation",
+      "status": "planned",
+      "priority": "P3",
+      "target": "docs/reference/WAF_FORTIWEB_EXTERNAL_SOURCE_SURVEY_2026_09_15.md; blocked on AUTH-PLACEMENT (13D section 3)",
+      "note": ""
     }
   ]
 }
