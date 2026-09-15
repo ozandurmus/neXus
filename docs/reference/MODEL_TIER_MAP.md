@@ -18,7 +18,7 @@ their words, not a derivation.
 | Main engineer | Codex | `gpt-5.6-terra` | `medium` | The standing dispatch. Ordinary bounded implementation |
 | Strong implementation | Codex | `gpt-5.6-sol` | `medium`, `high` where argued | Strong code writing and reasoning |
 | Architecture and feature design | Codex | `gpt-6-astra` | `medium`, `high` where argued | Architectural design, and high-level feature-level design and implementation |
-| Micro edit | Codex | `gpt-5.3-spark` | `medium` | Minimal micro edits only. A movement that needs judgement is not this tier |
+| Micro edit | Codex | `gpt-5.3-spark` | — | **Not dispatchable.** Measured 2026-09-15: `codex exec` refuses it with `The 'gpt-5.3-spark' model is not supported when using Codex with a ChatGPT account`. A micro edit goes to the main engineer until that changes |
 | Fallback dispatch | Claude | `claude-sonnet-5` | `medium` | Only after a Codex dispatch has failed twice for a reason that is not a defect in the packet |
 | Not used | Codex | Luna | — | — |
 | Trial, hybrid relay only | Antigravity | `pro`, `flash`, `flash_lite` | no effort flag exists | — |
@@ -42,7 +42,6 @@ Product Owner's decision (`docs/reference/PROVIDER_OPERATING_NOTES.md`).
 
 | Tier | Claude Code | Codex / Copilot |
 | --- | --- | --- |
-| Micro edit | — | Spark |
 | Fast/normal, Normal (strong) | Sonnet 5, normal | Terra |
 | High | Sonnet 5, extended thinking (high) | Sol |
 | PO — PLAN/REVIEW | Sonnet 5, normal | Terra |
