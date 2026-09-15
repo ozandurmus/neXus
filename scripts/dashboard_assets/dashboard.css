@@ -1,23 +1,4 @@
 :root {
-  --surface: #12111a;
-  --surface-container: #1e1d28;
-  --surface-container-high: #292835;
-  --outline: #9694a3;
-  --outline-variant: #484651;
-  --on-surface: #e6e1e9;
-  --on-surface-variant: #cac4d0;
-  --primary: #c2c1ff;
-  --primary-container: #5f5ca9;
-  --on-primary: #1b1a4d;
-  --success: #79d6a4;
-  --success-container: #174e35;
-  --warning: #ffd38a;
-  --warning-container: #604a1a;
-  --error: #ffb4ab;
-  --error-container: #93000a;
-  --provider-claude: #ffb77a;
-  --provider-codex: #b6c4ff;
-  --provider-neutral: #cac4d0;
   font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -66,11 +47,16 @@ main#app { padding: 16px 24px; max-width: 1400px; margin: 0 auto; }
 .provider-line.provider-codex { color: var(--provider-codex); }
 
 .badge { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: 12px; border: 1px solid var(--outline-variant); white-space: nowrap; }
-.badge.health-healthy { color: var(--success); border-color: var(--success); background: var(--success-container); }
-.badge.health-silent { color: var(--warning); border-color: var(--warning); background: var(--warning-container); }
-.badge.health-failed, .badge.health-exited_without_close { color: var(--error); border-color: var(--error); background: var(--error-container); }
-.badge.health-awaiting_po { color: var(--primary); border-color: var(--primary); background: var(--primary-container); }
+.badge.health-healthy { color: var(--on-success-container); border-color: var(--success); background: var(--success-container); }
+.badge.health-silent { color: var(--on-warning-container); border-color: var(--warning); background: var(--warning-container); }
+.badge.health-failed, .badge.health-exited_without_close { color: var(--on-error-container); border-color: var(--error); background: var(--error-container); }
+.badge.health-awaiting_po { color: var(--on-surface); border-color: var(--attention); background: var(--attention-container); }
 .badge.health-done { color: var(--on-surface-variant); }
+.badge.health-handed_over { color: var(--on-member-container); border-color: var(--member); background: var(--member-container); }
+
+#archive { margin-top: 24px; background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: 16px; padding: 8px; }
+#archive > summary { cursor: pointer; font-weight: 600; padding: 8px; }
+#archive-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; padding: 8px; }
 
 #detail-panel { margin-top: 24px; background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: 16px; }
 #detail-header { display: flex; align-items: center; gap: 16px; padding: 16px; border-bottom: 1px solid var(--outline-variant); }
