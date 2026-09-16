@@ -96,7 +96,9 @@ def _directory(path):
 class Observer:
     """Single writer, one bounded scan per tick, explicit private local state.
 
-    Configuration pins exact movement identities and safe metadata vocabularies.
+    Configuration may seed movement identities and pins safe metadata vocabularies.
+    C1-validated record entries define current coverage; relay-only entries remain
+    visible as historical source quality and do not block a current successful scan.
     Timestamps in the C1 projection are finite nonnegative Unix seconds. The
     callback returns {movement_id: {record/relay/usage: {status, allowed fields}}}.
     A missing source is unavailable, never a workflow failure. The callback must
@@ -398,12 +400,19 @@ class Observer:
                 if len(inputs) > MAX_MOVEMENTS:
                     errors.add("LIMIT_EXCEEDED")
                     inputs = {}
-                if any(identity not in self.ids for identity in inputs):
+                if any(not _token(identity) or type(value) is not dict
+                       for identity, value in inputs.items()):
                     raise ValueError("MALFORMED")
+                known = self.ids | set(state["observations"])
+                inputs = {identity: value for identity, value in inputs.items()
+                          if identity in known or any(source in value for source in SOURCES)}
             except Exception:
                 inputs = {}
                 errors.add("MALFORMED")
-            identities = sorted(self.ids | set(state["observations"]))
+            current = {identity for identity, value in inputs.items()
+                       if "record" in value and (type(value["record"]) is not dict
+                                                  or value["record"].get("status") != "MISSING")}
+            identities = sorted(self.ids | set(state["observations"]) | set(inputs))
             for identity in identities:
                 old = old_state["observations"].get(identity)
                 if old is None and len(state["observations"]) >= MAX_MOVEMENTS:
@@ -423,7 +432,7 @@ class Observer:
                     valid = status in {"VALID", "INSUFFICIENT_EVIDENCE"}
                     prior = old[source] if old else {}
                     fingerprint = hashlib.sha256(_json(data)).hexdigest() if valid else prior.get("fingerprint")
-                    if status != "VALID":
+                    if identity in current and status != "VALID":
                         errors.add(status)
                     observation[source] = {"status": status, "checked_at": now,
                                            "observed_at": now if valid and fingerprint != prior.get("fingerprint") else prior.get("observed_at"),
