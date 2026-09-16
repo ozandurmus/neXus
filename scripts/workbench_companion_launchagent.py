@@ -35,8 +35,8 @@ def artifacts(home, release, configuration, snapshot_directory, *, uid=None):
         raise ValueError("INVALID_CONFIGURATION")
     checkout = Path(__file__).resolve().parent.parent
     paths = (release, configuration, snapshot_directory)
-    if (any(not p.is_relative_to(home) or p == home or p.is_relative_to(checkout)
-            for p in paths)
+    if (any(not p.is_relative_to(home) or p == home for p in paths)
+            or any(p.is_relative_to(checkout) for p in (configuration, snapshot_directory))
             or snapshot_directory.is_relative_to(release)
             or release.is_relative_to(snapshot_directory)
             or configuration.is_relative_to(snapshot_directory)
