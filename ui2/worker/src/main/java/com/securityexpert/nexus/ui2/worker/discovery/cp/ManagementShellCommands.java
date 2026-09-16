@@ -29,8 +29,8 @@ public final class ManagementShellCommands {
 
     /** Closed set of command-string prefixes: every command this adapter can ever send starts with exactly one of these. */
     public static final List<String> CLOSED_COMMAND_PREFIXES = List.of(
-            ". /etc/profile && $MDSVERUTIL AllCMAs",
-            ". /etc/profile && mdsenv ",
+            "bash -l -c '$MDSVERUTIL AllCMAs'",
+            "bash -l -c 'mdsenv ",
             "netstat -an");
 
     public static boolean isMemberOfClosedSet(String command) {
@@ -43,7 +43,7 @@ public final class ManagementShellCommands {
      * per domain (record §10's "domain enumeration's per-line value").
      */
     public static String domainList() {
-        return ". /etc/profile && $MDSVERUTIL AllCMAs";
+        return "bash -l -c '$MDSVERUTIL AllCMAs'";
     }
 
     /**
@@ -64,8 +64,9 @@ public final class ManagementShellCommands {
         // (POSIX single-quote escaping) is reserved for domainIdentifier, the one value this run did not choose.
         // "&&", never ";": if the context switch fails, the query must NOT run in the wrong (top-level)
         // scope -- the measurement record (section 3 row 2) says a lost context yields confident wrong answers.
-        return ". /etc/profile && mdsenv " + quote(domainIdentifier) + " && cpmiquerybin object \"\" network_objects "
+        String script = "mdsenv " + quote(domainIdentifier) + " && cpmiquerybin object \"\" network_objects "
                 + "\"type='" + objectTypeFilterValue(objectType) + "'\"";
+        return "bash -l -c " + quote(script);
     }
 
     /**
