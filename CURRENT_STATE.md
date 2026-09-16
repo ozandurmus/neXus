@@ -24,6 +24,8 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0177` — `implemented`: implement Check Point mgmt_cli discovery adapter as an alternative to cpmiquerybin.
+
 `NXS-LOCAL-0176` — `automated_validated`: expire a past-deadline session on
 read so it cannot block login. The newest merged movement, its predecessor
 records, and the current roadmap pointer are in `project/QUEUE.md` and
