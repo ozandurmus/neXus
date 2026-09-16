@@ -244,6 +244,39 @@ def test_clock_rollback_then_reconciliation_and_removed_sources(tmp_path):
         assert "RECORDED_FAILURE" not in events(worker.state)
 
 
+def test_current_coverage_discovers_records_without_historical_gaps(tmp_path):
+    historical = tuple(f"SYNTHETIC-{index:04d}" for index in range(1, 229))
+    inputs = {}
+    for identity in historical:
+        inputs[identity] = copy.deepcopy(projection()[IDENTITY])
+        inputs[identity]["record"] = {"status": "MISSING"}
+        inputs[identity]["usage"] = {"status": "MISSING"}
+    inputs[historical[-1]]["record"] = projection()[IDENTITY]["record"]
+    inputs[historical[-1]]["usage"] = copy.deepcopy(projection()[IDENTITY]["usage"])
+    del inputs[historical[-1]]["usage"]["output_tokens"]
+
+    with observer(tmp_path, ids=()) as worker:
+        assert worker.poll(lambda: inputs, now=100) == "INCOMPLETE"
+        assert worker.state["last_success"] is None
+        assert len(worker.state["observations"]) == 228
+
+    for identity in historical:
+        inputs[identity]["record"] = {"status": "MISSING"}
+    current = "NXS-LOCAL-9999"
+    inputs[current] = copy.deepcopy(projection()[IDENTITY])
+    with observer(tmp_path, ids=()) as worker:
+        assert worker.poll(lambda: inputs, now=130) == "COMPLETE"
+        assert worker.state["last_success"] == 130
+        assert current in worker.state["observations"]
+        assert worker.state["observations"][historical[0]]["record"]["status"] == "MISSING"
+        assert worker.state["observations"][historical[0]]["relay"]["status"] == "VALID"
+    reader = mcp.Reader(tmp_path / "private", allowlists=ALLOWLISTS)
+    assert decoded(reader.call(mcp.TOOLS[0], {}, now=130))["coverage"] == "COMPLETE"
+    visible = decoded(reader.call(mcp.TOOLS[1], {}, now=130))["items"]
+    old = next(item for item in visible if item["movement_id"] == historical[0])
+    assert old["record"]["status"] == "MISSING" and old["relay"]["status"] == "VALID"
+
+
 def test_limits_retention_and_no_active_eviction(tmp_path, monkeypatch):
     with observer(tmp_path, ids=(IDENTITY, "SYNTHETIC-0002")) as worker:
         inputs = projection()
