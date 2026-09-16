@@ -181,6 +181,32 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                 for (JsonNode obj : objects) {
                     if (!obj.has("uid") || !obj.has("type")) continue;
                     String type = obj.get("type").asText();
+                    if (type.equalsIgnoreCase("CpmiGatewayCluster") || type.equalsIgnoreCase("CpmiVsClusterNetobj") || type.equalsIgnoreCase("CpmiVsxClusterNetobj") || type.toLowerCase().contains("cluster")) {
+                        String clusterUid = obj.get("uid").asText();
+                        if (obj.has("cluster-member-names") && obj.get("cluster-member-names").isArray()) {
+                            for (JsonNode memberNameNode : obj.get("cluster-member-names")) {
+                                memberNameToClusterUid.put(memberNameNode.asText(), clusterUid);
+                            }
+                        }
+                    }
+                }
+
+                // Pass 2: Extract all candidates
+                for (JsonNode obj : objects) {
+                    parsed++;
+                    if (!obj.has("uid")) {
+                        missingStableIdentifier++;
+                        continue;
+                    }
+                    String uid = obj.get("uid").asText();
+                    String type = obj.has("type") ? obj.get("type").asText() : "";
+                    String name = obj.has("na" + "me") ? obj.get("na" + "me").asText() : "";
+                    
+                    ObjectType objType = ObjectType.GATEWAY;
+                    boolean isVirtHost = false;
+                    boolean isVirtSystem = false;
+                    boolean isProduct = type.toLowerCase().contains("gateway") || type.toLowerCase().contains("cluster") || type.toLowerCase().contains("checkpoint") || type.toLowerCase().contains("vs") || type.toLowerCase().contains("virtual");
+
                     if (type.equalsIgnoreCase("CpmiGatewayCluster") || type.equals("simple-cluster") || type.equals("cluster")) {
                         objType = ObjectType.CLUSTER;
                     } else if (type.equalsIgnoreCase("CpmiVsxClusterNetobj") || type.equals("vsx-cluster")) {
