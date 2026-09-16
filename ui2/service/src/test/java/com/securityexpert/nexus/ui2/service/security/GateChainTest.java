@@ -256,7 +256,7 @@ class GateChainTest {
     private static GroupReferenceCipher cipher() {
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
-        return GroupReferenceCipher.fromBase64Key(Base64.getEncoder().encodeToString(key));
+        return GroupReferenceCipher.fromBase64Key(Base64.getEncoder().encodeToString(key), "k1");
     }
 
     private SessionRecord activeSession(String sessionId) {
