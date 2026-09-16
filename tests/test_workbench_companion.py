@@ -24,6 +24,9 @@ IDENTITY = "SYNTHETIC-0001"
 ALLOWLISTS = {"provider": {"synthetic"}, "effort": {"low"},
               "requested_model": {"requested"}, "observed_model": {"observed"},
               "provenance": {"synthetic"}, "audit_exception": {"NONE"}}
+RAW_SENTINEL = "private source body must not persist"
+SOURCE_TIME = "2020-01-01T00:00:00Z"
+SOURCE_IDENTITY = "NXS-LOCAL-0001"
 
 
 def projection(cost_source="reported"):
@@ -39,6 +42,61 @@ def projection(cost_source="reported"):
                   "event_time": 10, "requested_model": "requested", "observed_model": "observed",
                   "provenance": "synthetic", "audit_exception": "NONE",
                   "price_table_fingerprint": "0" * 64}}}
+
+
+def source_start_report():
+    return {
+        "baseline": {"source": "synthetic"}, "objective": RAW_SENTINEL,
+        "scope": {"in": ["synthetic"], "out": ["network"]},
+        "movement_type": "IMPLEMENTATION", "requirements": ["synthetic"],
+        "acceptance_criteria": ["synthetic"],
+        "validation_plan": [{"name": "synthetic", "argv": ["true"]}],
+        "invariants": ["read only"], "risks": [], "context_not_loaded": [],
+        "recommended_reasoning": {"tier": "ordinary", "reason": "synthetic"},
+        "git": {"lane": "synthetic", "base": "origin/main"}, "merge_gate": "PO",
+        "deployment_direction": "local validation only", "output_contract": ["synthetic"],
+    }
+
+
+def write_source_set(root, identity):
+    record = {"movement_id": identity, "phase": "running", "revision": 1,
+              "retry_count": 0, "started_at": SOURCE_TIME, "provider": "synthetic",
+              "model_requested": "requested", "effort_requested": "low",
+              "audit_exception": "NONE", "verify": {"passed": False},
+              "external_participant": True, "objective": RAW_SENTINEL}
+    cache = {field: index for index, field in enumerate(companion.usage.USAGE_FIELDS, 1)}
+    cache.update(provider="synthetic", turns=1, model="observed", result_usage=None,
+                 result_cost_usd=None, last_event_at=SOURCE_TIME, byte_offset=1)
+    relay = {"schema_version": 1, "id": identity, "movement": identity,
+             "refs": [RAW_SENTINEL], "status": "OPEN", "next_actor": "engineer",
+             "created_at": SOURCE_TIME, "updated_at": SOURCE_TIME,
+             "entries": [{"actor": "po", "marker": "SESSION_START", "seq": 1,
+                           "timestamp": SOURCE_TIME, "report": source_start_report()}]}
+    (root / "state" / f"{identity}.json").write_text(json.dumps(record))
+    (root / "state" / "usage" / f"{identity}.json").write_text(json.dumps(cache))
+    (root / "relay" / f"{identity}-synthetic.json").write_text(json.dumps(relay))
+
+
+def adapter_configuration(tmp_path):
+    for name in ("state", "relay", "prices"):
+        (tmp_path / name).mkdir()
+    (tmp_path / "state" / "usage").mkdir()
+    prices = {model: dict(zip(companion.RATES, (1, 1, 1, 1)))
+              for model in ("requested", "observed")}
+    (tmp_path / "prices" / "prices.json").write_text(json.dumps(prices))
+    write_source_set(tmp_path, SOURCE_IDENTITY)
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({
+        "schema_version": 1, "source_set_token": "synthetic-set",
+        "snapshot_directory": str(tmp_path / "private"),
+        "state_root": str(tmp_path / "state"), "relay_root": str(tmp_path / "relay"),
+        "price_root": str(tmp_path / "prices"), "price_file": "prices.json",
+        "providers": ["synthetic"], "models": ["requested", "observed"],
+        "efforts": ["low"], "audit_exceptions": ["NONE"],
+        "subscription_providers": ["synthetic"],
+    }))
+    path.chmod(0o600)
+    return path
 
 
 def observer(tmp_path, *, token="synthetic-set", ids=(IDENTITY,), name="private"):
@@ -375,6 +433,75 @@ def test_scan_error_redaction_and_unknown_identity(tmp_path):
         assert "unapproved" not in json.dumps(worker.state)
 
 
+def test_adapter_drives_observer_discovers_movement_and_restarts(tmp_path):
+    path = adapter_configuration(tmp_path)
+    runtime = companion._configuration(path)
+    adapter = companion.SourceAdapter(runtime)
+    roots = (runtime.source.state_root, runtime.source.relay_root, runtime.source.price_root)
+    with companion.Observer(runtime.snapshot_directory, runtime.source_set_token, (),
+                            source_roots=roots, allowlists=adapter.allowlists,
+                            allow_dynamic_ids=True) as worker:
+        assert worker.poll(adapter.scan) == "COMPLETE"
+        first_generation = worker.state["observer_generation"]
+        write_source_set(tmp_path, "NXS-LOCAL-0002")
+        assert worker.poll(adapter.scan) == "COMPLETE"
+        assert set(worker.state["observations"]) == {SOURCE_IDENTITY, "NXS-LOCAL-0002"}
+        assert RAW_SENTINEL not in json.dumps(worker.state)
+        usage = worker.state["observations"][SOURCE_IDENTITY]["usage"]["data"]
+        assert usage["requested_model"] == "requested"
+        assert usage["observed_model"] == "observed"
+        assert usage["attempt_attribution"] == "UNKNOWN"
+        assert usage["cost_source"] == "estimated"
+    process = subprocess.run(
+        ["python3", "-m", "scripts.workbench_companion", "--configuration", str(path), "--once"],
+        capture_output=True, timeout=10, check=True)
+    assert process.stdout == b"" and process.stderr == b""
+    state = snapshot(tmp_path)
+    assert state["observer_generation"] != first_generation
+    assert set(state["observations"]) == {SOURCE_IDENTITY, "NXS-LOCAL-0002"}
+    assert state["transitions"] == []
+
+
+def test_adapter_configuration_requires_private_regular_file(tmp_path):
+    path = adapter_configuration(tmp_path)
+    path.chmod(0o644)
+    with pytest.raises(companion.SourceError, match="^CONFIG_INVALID$"):
+        companion._configuration(path)
+    path.chmod(0o600)
+    moved = tmp_path / "moved.json"
+    path.rename(moved)
+    path.symlink_to(moved)
+    with pytest.raises(companion.SourceError, match="^CONFIG_INVALID$"):
+        companion._configuration(path)
+
+
+def test_adapter_preserves_unrecognized_and_missing_price_unknowns(tmp_path):
+    path = adapter_configuration(tmp_path)
+    record_path = tmp_path / "state" / f"{SOURCE_IDENTITY}.json"
+    record = json.loads(record_path.read_text())
+    record.update(provider=RAW_SENTINEL, model_requested=RAW_SENTINEL,
+                  effort_requested=RAW_SENTINEL, audit_exception=RAW_SENTINEL)
+    record_path.write_text(json.dumps(record))
+    cache_path = tmp_path / "state" / "usage" / f"{SOURCE_IDENTITY}.json"
+    cache = json.loads(cache_path.read_text())
+    cache.update(provider=RAW_SENTINEL, model=RAW_SENTINEL)
+    cache_path.write_text(json.dumps(cache))
+    runtime = companion._configuration(path)
+    adapter = companion.SourceAdapter(runtime)
+    roots = (runtime.source.state_root, runtime.source.relay_root, runtime.source.price_root)
+    with companion.Observer(runtime.snapshot_directory, runtime.source_set_token, (),
+                            source_roots=roots, allowlists=adapter.allowlists,
+                            allow_dynamic_ids=True) as worker:
+        assert worker.poll(adapter.scan) == "COMPLETE"
+        observation = worker.state["observations"][SOURCE_IDENTITY]
+        assert observation["record"]["data"]["classification"] == "UNRECOGNIZED"
+        assert observation["usage"]["data"]["classification"] == "UNRECOGNIZED"
+        assert RAW_SENTINEL not in json.dumps(worker.state)
+        (tmp_path / "prices" / "prices.json").unlink()
+        assert worker.poll(adapter.scan) == "INCOMPLETE"
+        usage = worker.state["observations"][SOURCE_IDENTITY]["usage"]
+        assert usage["status"] == "INSUFFICIENT_EVIDENCE"
+        assert usage["data"]["cost_source"] == "unavailable"
 def decoded(result):
     return json.loads(result["content"][0]["text"])
 
