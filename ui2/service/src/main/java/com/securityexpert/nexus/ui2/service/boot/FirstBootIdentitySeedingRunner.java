@@ -19,7 +19,7 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
  * BOOT-1..BOOT-5b, corrected 2026-09-13).
  *
  * <p>BOOT-1: when {@code local_credentials} holds no rows, this runner
- * creates exactly {@code nexusadmin} and {@code claudeadmin} with their
+ * creates exactly {@code nexusadmin} and {@code readonlyadmin} with their
  * documented initial passwords ({@link BootstrapCredentialDefaults}).</p>
  *
  * <p>BOOT-2, the decisive rule: the gate is {@link LocalCredentialsRepository#anyExist()}
@@ -48,7 +48,7 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
  * administrative capability" (ROLE-1), since no token implies another and
  * ROLE-2 places this account outside the separation-of-duties rule that
  * would otherwise forbid holding {@code role:security_admin} alongside an
- * execution role. {@code claudeadmin} is bound only to {@code role:viewer}
+ * execution role. {@code readonlyadmin} is bound only to {@code role:viewer}
  * (ROLE-3). Both bindings commit in the same transaction as their
  * identity's own row (BOOT-5a/AC-3), so a crash between the two can never
  * leave an identity seeded with no binding for a restart to silently miss
@@ -71,7 +71,7 @@ public class FirstBootIdentitySeedingRunner implements ApplicationRunner {
     static final List<RoleToken> NEXUSADMIN_ROLE_TOKENS = List.of(RoleToken.values());
 
     /** ROLE-3: read-only, and nothing else. */
-    static final List<RoleToken> CLAUDEADMIN_ROLE_TOKENS = List.of(RoleToken.VIEWER);
+    static final List<RoleToken> READONLYADMIN_ROLE_TOKENS = List.of(RoleToken.VIEWER);
 
     private final LocalCredentialsRepository repository;
     private final FirstBootIdentityRoleBindingSeeder seeder;
@@ -92,10 +92,10 @@ public class FirstBootIdentitySeedingRunner implements ApplicationRunner {
         seeder.seed(List.of(
                 new FirstBootIdentityRoleBindingSeeder.IdentitySpec(BootstrapCredentialDefaults.NEXUSADMIN_NAME,
                         BootstrapCredentialDefaults.nexusadminInitialPassword(), NEXUSADMIN_ROLE_TOKENS, true),
-                new FirstBootIdentityRoleBindingSeeder.IdentitySpec(BootstrapCredentialDefaults.CLAUDEADMIN_NAME,
-                        BootstrapCredentialDefaults.claudeadminInitialPassword(), CLAUDEADMIN_ROLE_TOKENS)));
+                new FirstBootIdentityRoleBindingSeeder.IdentitySpec(BootstrapCredentialDefaults.READONLYADMIN_NAME,
+                        BootstrapCredentialDefaults.readonlyadminInitialPassword(), READONLYADMIN_ROLE_TOKENS)));
         // Never the password or its hash (C3A §3.1/§8): counts and names only.
         LOG.info("ui2 first-boot identities and role bindings seeded: identities=2 role_bindings={}",
-                NEXUSADMIN_ROLE_TOKENS.size() + CLAUDEADMIN_ROLE_TOKENS.size());
+                NEXUSADMIN_ROLE_TOKENS.size() + READONLYADMIN_ROLE_TOKENS.size());
     }
 }

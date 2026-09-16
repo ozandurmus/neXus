@@ -86,6 +86,7 @@ final class CpObjectDumpParser {
         int start = pos;
         boolean inQuotes = false;
         boolean escaped = false;
+        int parenDepth = 0;
         while (pos < text.length()) {
             char c = peek();
             if (escaped) {
@@ -94,8 +95,15 @@ final class CpObjectDumpParser {
                 escaped = true;
             } else if (c == '"') {
                 inQuotes = !inQuotes;
-            } else if (!inQuotes && c == ')') {
-                break;
+            } else if (!inQuotes) {
+                if (c == '(') {
+                    parenDepth++;
+                } else if (c == ')') {
+                    if (parenDepth == 0) {
+                        break;
+                    }
+                    parenDepth--;
+                }
             }
             pos++;
         }

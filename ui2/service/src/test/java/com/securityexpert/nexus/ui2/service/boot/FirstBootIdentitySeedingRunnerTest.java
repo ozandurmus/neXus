@@ -216,7 +216,7 @@ class FirstBootIdentitySeedingRunnerTest {
 
         assertEquals(2, fixture.localCredentials.byId.size(), "AC-1: exactly two identities, no more");
         assertTrue(fixture.localCredentials.findByName(BootstrapCredentialDefaults.NEXUSADMIN_NAME).isPresent());
-        assertTrue(fixture.localCredentials.findByName(BootstrapCredentialDefaults.CLAUDEADMIN_NAME).isPresent());
+        assertTrue(fixture.localCredentials.findByName(BootstrapCredentialDefaults.READONLYADMIN_NAME).isPresent());
     }
 
     @Test
@@ -231,7 +231,7 @@ class FirstBootIdentitySeedingRunnerTest {
         assertEquals(1, fixture.localCredentials.byId.size(), "AC-2: first boot creates nothing and changes nothing");
         assertTrue(fixture.localCredentials.findById(operatorCreatedId).isPresent());
         assertFalse(fixture.localCredentials.findByName(BootstrapCredentialDefaults.NEXUSADMIN_NAME).isPresent());
-        assertFalse(fixture.localCredentials.findByName(BootstrapCredentialDefaults.CLAUDEADMIN_NAME).isPresent());
+        assertFalse(fixture.localCredentials.findByName(BootstrapCredentialDefaults.READONLYADMIN_NAME).isPresent());
         assertTrue(fixture.roleBindings.bindings.isEmpty(), "AC-5: no binding is created when seeding is skipped");
     }
 
@@ -249,7 +249,7 @@ class FirstBootIdentitySeedingRunnerTest {
         fixture.runner.run(null);
 
         assertEquals(1, fixture.localCredentials.byId.size(), "AC-4: the partially-seeded table gains no second identity");
-        assertFalse(fixture.localCredentials.findByName(BootstrapCredentialDefaults.CLAUDEADMIN_NAME).isPresent());
+        assertFalse(fixture.localCredentials.findByName(BootstrapCredentialDefaults.READONLYADMIN_NAME).isPresent());
         assertTrue(fixture.roleBindings.bindings.isEmpty(), "no binding is created for the untouched partial state");
     }
 
@@ -257,7 +257,7 @@ class FirstBootIdentitySeedingRunnerTest {
     void aRestartOfTheSeedingRoutineNeverResetsAPasswordOrDuplicatesARoleBinding() {
         // AC-5, THE DECISIVE TEST for idempotence, extended to bindings.
         Fixture fixture = new Fixture();
-        fixture.runner.run(null); // first boot: seeds nexusadmin/claudeadmin with their documented passwords and bindings
+        fixture.runner.run(null); // first boot: seeds nexusadmin/readonlyadmin with their documented passwords and bindings
 
         char[] changedPassword = "correct-horse-battery-staple".toCharArray();
         PasswordChangeService passwordChangeService = new PasswordChangeService(fixture.localCredentials);
@@ -292,8 +292,8 @@ class FirstBootIdentitySeedingRunnerTest {
 
         assertTrue(fixture.localCredentials.findByName(BootstrapCredentialDefaults.NEXUSADMIN_NAME)
                 .orElseThrow().mustChangePassword(), "nexusadmin must be seeded still holding its seeded password");
-        assertTrue(fixture.localCredentials.findByName(BootstrapCredentialDefaults.CLAUDEADMIN_NAME)
-                .orElseThrow().mustChangePassword(), "claudeadmin must be seeded still holding its seeded password");
+        assertTrue(fixture.localCredentials.findByName(BootstrapCredentialDefaults.READONLYADMIN_NAME)
+                .orElseThrow().mustChangePassword(), "readonlyadmin must be seeded still holding its seeded password");
 
         PasswordChangeService passwordChangeService = new PasswordChangeService(fixture.localCredentials);
         PasswordChangeService.Result changeResult = passwordChangeService.changePassword(
@@ -309,8 +309,8 @@ class FirstBootIdentitySeedingRunnerTest {
         assertFalse(fixture.localCredentials.findByName(BootstrapCredentialDefaults.NEXUSADMIN_NAME)
                         .orElseThrow().mustChangePassword(),
                 "AC-2/BOOT-2: a restart must never re-set the flag for an identity whose password was already changed");
-        assertTrue(fixture.localCredentials.findByName(BootstrapCredentialDefaults.CLAUDEADMIN_NAME)
-                .orElseThrow().mustChangePassword(), "claudeadmin (untouched) must still require a password change");
+        assertTrue(fixture.localCredentials.findByName(BootstrapCredentialDefaults.READONLYADMIN_NAME)
+                .orElseThrow().mustChangePassword(), "readonlyadmin (untouched) must still require a password change");
     }
 
     @Test
@@ -324,10 +324,10 @@ class FirstBootIdentitySeedingRunnerTest {
 
         String nexusadminId = fixture.localCredentials.findByName(BootstrapCredentialDefaults.NEXUSADMIN_NAME)
                 .orElseThrow().localIdentityId();
-        String claudeadminId = fixture.localCredentials.findByName(BootstrapCredentialDefaults.CLAUDEADMIN_NAME)
+        String readonlyadminId = fixture.localCredentials.findByName(BootstrapCredentialDefaults.READONLYADMIN_NAME)
                 .orElseThrow().localIdentityId();
         String nexusadminActor = LocalMechanism.actorFingerprintFor(nexusadminId);
-        String claudeadminActor = LocalMechanism.actorFingerprintFor(claudeadminId);
+        String readonlyadminActor = LocalMechanism.actorFingerprintFor(readonlyadminId);
 
         // Exercise the production local resolver branch; local logins publish no directory cache.
         RecordingActorAuthzStateRepository authzState = new RecordingActorAuthzStateRepository();
@@ -342,14 +342,14 @@ class FirstBootIdentitySeedingRunnerTest {
                     "AC-1: nexusadmin must resolve full administrative capability -- " + token + " was refused");
         }
 
-        RbacEvaluator.Decision claudeadminViewer = evaluator.evaluate(claudeadminActor, Optional.of(RoleToken.VIEWER), now);
-        assertEquals(AuthzOutcome.PERMITTED, claudeadminViewer.outcome(), "AC-2: claudeadmin must resolve role:viewer");
+        RbacEvaluator.Decision readonlyadminViewer = evaluator.evaluate(readonlyadminActor, Optional.of(RoleToken.VIEWER), now);
+        assertEquals(AuthzOutcome.PERMITTED, readonlyadminViewer.outcome(), "AC-2: readonlyadmin must resolve role:viewer");
 
         for (RoleToken mutatingToken : List.of(RoleToken.OPERATOR, RoleToken.ONBOARDING_ADMIN, RoleToken.BACKUP_ADMIN,
                 RoleToken.COMPLIANCE_ADMIN, RoleToken.SECURITY_ADMIN)) {
-            RbacEvaluator.Decision decision = evaluator.evaluate(claudeadminActor, Optional.of(mutatingToken), now);
+            RbacEvaluator.Decision decision = evaluator.evaluate(readonlyadminActor, Optional.of(mutatingToken), now);
             assertFalse(decision.outcome().proceeds(),
-                    "AC-2: a mutation path (" + mutatingToken + ") must be refused for claudeadmin, visibly, never a silent pass");
+                    "AC-2: a mutation path (" + mutatingToken + ") must be refused for readonlyadmin, visibly, never a silent pass");
         }
     }
 }

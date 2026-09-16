@@ -13,10 +13,10 @@ public final class BootstrapCredentialDefaults {
     public static final String NEXUSADMIN_NAME = "nexusadmin";
 
     /** ROLE-3/BOOT-1: the read-only automation identity's name. */
-    public static final String CLAUDEADMIN_NAME = "claudeadmin";
+    public static final String READONLYADMIN_NAME = "readonlyadmin";
 
     private static final char[] NEXUSADMIN_INITIAL_PASSWORD = "nexusadmin".toCharArray();
-    private static final char[] CLAUDEADMIN_INITIAL_PASSWORD = "claudeadmin".toCharArray();
+    private static final char[] READONLYADMIN_INITIAL_PASSWORD = "readonlyadmin".toCharArray();
 
     private BootstrapCredentialDefaults() {
     }
@@ -27,7 +27,7 @@ public final class BootstrapCredentialDefaults {
     }
 
     /** BOOT-3a. A fresh copy per call: the caller consumes (zeroes) its own array. */
-    public static char[] claudeadminInitialPassword() {
-        return CLAUDEADMIN_INITIAL_PASSWORD.clone();
+    public static char[] readonlyadminInitialPassword() {
+        return READONLYADMIN_INITIAL_PASSWORD.clone();
     }
 }
