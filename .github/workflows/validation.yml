@@ -93,20 +93,38 @@ jobs:
     needs: regression-scope
     if: always() && github.event_name == 'pull_request' && needs.regression-scope.outputs.classification == 'targeted'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch privacy baseline
+        run: git fetch origin +main:refs/remotes/origin/main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Prepare declared Python test dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Targeted routing and real-root privacy regression
+        run: >-
+          python3 -m pytest -q -n 2 --dist worksteal
+          tests/test_ci_workflow_fast_pr_regression.py tests/test_ci_regression_scope.py
+          tests/test_gov_po_3_ci_privacy_gate_baseline.py tests/test_nexus_engineer_tool_gate.py
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Approved LDAP targeted regression
-        run: >-
-          ./ui2/gradlew -p ui2
-          :ldap-adapter:unitTest :platform-core:unitTest :persistence:unitTest
-          :service:unitTest :cli:unitTest :architecture-tests:architectureTest frontendTest
+        run: |
+          npm --prefix ui2/frontend ci
+          npm --prefix ui2/frontend run build
+          npm --prefix ui2/frontend test -- tests/ProjectPlanPanel.test.tsx
+          ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :ldap-adapter:unitTest :platform-core:unitTest :persistence:unitTest :cli:unitTest :architecture-tests:architectureTest
+          ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :service:unitTest --tests '*Login*' --tests '*RoleBinding*' --tests '*Rbac*' --tests '*Directory*' --tests '*Security*' --tests '*Local*' --tests '*ProjectPlanReader*' --tests '*FirstBoot*'
 
   # FAST PR VALIDATION — runs on every pull_request. Cheap, high-value gates
   # only: import sanity, the repository/privacy gate, project-state

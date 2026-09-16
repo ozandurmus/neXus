@@ -10,6 +10,9 @@ def test_approved_ldap_delivery_is_targeted():
         "ui2/frontend/tests/ProjectPlanPanel.test.tsx",
         "ui2/frontend/tests/fixtures/project-plan-provenance.json",
         ".github/workflows/validation.yml",
+        "tests/conftest.py",
+        "tests/test_gov_po_3_ci_privacy_gate_baseline.py",
+        "tests/test_nexus_engineer_tool_gate.py",
     ]) == "targeted"
 
 

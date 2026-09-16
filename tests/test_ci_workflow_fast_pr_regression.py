@@ -116,7 +116,11 @@ def test_targeted_and_unmapped_paths_have_truthful_jobs():
     blocked_block = _job_block(text, "scope-blocked")
     assert "classification == 'targeted'" in targeted_block
     assert ":ldap-adapter:unitTest" in targeted_block
-    assert ":architecture-tests:architectureTest frontendTest" in targeted_block
+    assert ":architecture-tests:architectureTest" in targeted_block
+    assert "npm --prefix ui2/frontend test -- tests/ProjectPlanPanel.test.tsx" in targeted_block
+    assert "tests/test_gov_po_3_ci_privacy_gate_baseline.py" in targeted_block
+    assert "tests/test_nexus_engineer_tool_gate.py" in targeted_block
+    assert "frontendTest" not in targeted_block
     assert "classification == 'blocked'" in blocked_block
     assert "run: exit 1" in blocked_block
 

@@ -25,6 +25,9 @@ DELIVERY_FILES = {
     "scripts/ci_regression_scope.py",
     "tests/test_ci_regression_scope.py",
     "tests/test_ci_workflow_fast_pr_regression.py",
+    "tests/conftest.py",
+    "tests/test_gov_po_3_ci_privacy_gate_baseline.py",
+    "tests/test_nexus_engineer_tool_gate.py",
 }
 MAJOR_PREFIXES = ("ui2/build.gradle.kts", "ui2/settings.gradle.kts", "gradle/", "requirements")
 
@@ -46,7 +49,8 @@ def main() -> None:
     parser.add_argument("--github-output", type=Path, required=True)
     args = parser.parse_args()
     paths = [line for line in sys.stdin.read().splitlines() if line]
-    args.github_output.write_text(f"classification={classify(paths)}\n", encoding="utf-8")
+    with args.github_output.open("a", encoding="utf-8") as output:
+        output.write(f"classification={classify(paths)}\n")
 
 
 if __name__ == "__main__":

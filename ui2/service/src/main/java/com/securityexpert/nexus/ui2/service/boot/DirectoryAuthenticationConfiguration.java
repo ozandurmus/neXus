@@ -30,7 +30,8 @@ public class DirectoryAuthenticationConfiguration {
         return new DirectoryTrustPolicy(profile, actors::expireDirectory);
     }
     @Bean public LdapMechanism ldapMechanism(DirectoryProfile profile, DirectoryTrustPolicy trust) {
-        return new LdapMechanism(UnboundIdOperatorBindAdapter.create(profile, trust), false);
+        // C3 §4.4: initial operator admission is not the gated service-account function.
+        return new LdapMechanism(UnboundIdOperatorBindAdapter.create(profile, trust));
     }
     @Bean public UnboundIdRevalidationAdapter ldapRevalidationAdapter(DirectoryProfile profile, DirectoryTrustPolicy trust) {
         // No service-account path is resolved/read while corporate posture is disabled.
