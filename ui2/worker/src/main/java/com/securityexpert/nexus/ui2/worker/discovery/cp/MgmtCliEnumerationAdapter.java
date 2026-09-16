@@ -188,7 +188,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                     boolean isVirtSystem = false;
                     boolean isProduct = type.toLowerCase().contains("gateway") || type.toLowerCase().contains("cluster") || type.toLowerCase().contains("checkpoint") || type.equals("virtual-system");
 
-                    if (type.equals("simple-cluster") || type.equals("vsx-cluster")) {
+                    if (type.equals("simple-cluster") || type.equals("vsx-cluster") || type.equals("cluster")) {
                         objType = ObjectType.CLUSTER;
                         if (type.equals("vsx-cluster")) {
                             isVirtHost = true;
@@ -240,6 +240,25 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                         new CandidateKey(domainId, OpaqueId.of(uid)),
                         objType, flags, name, ipv4, mgmtIp, clusterRef, model, version, Optional.empty(), Optional.empty()
                     ));
+
+                    // Parse embedded cluster members if they exist
+                    if (obj.has("cluster-members") && obj.get("cluster-members").isArray()) {
+                        for (JsonNode memberNode : obj.get("cluster-members")) {
+                            if (!memberNode.has("uid")) continue;
+                            String mUid = memberNode.get("uid").asText();
+                            String mName = memberNode.has("na" + "me") ? memberNode.get("na" + "me").asText() : "";
+                            Address mIpv4 = memberNode.has("ipv4-address") ? Address.of(memberNode.get("ipv4-address").asText()) : Address.absent();
+                            
+                            ClassificationFlags mFlags = new ClassificationFlags(true, isVirtHost, isVirtSystem);
+                            Optional<ClusterReference> mClusterRef = Optional.of(new ClusterReference(Optional.of(OpaqueId.of(uid)), Optional.empty()));
+                            
+                            results.add(new RawCandidateInput(
+                                new CandidateKey(domainId, OpaqueId.of(mUid)),
+                                ObjectType.MEMBER, mFlags, mName, mIpv4, mIpv4, mClusterRef, model, version, Optional.empty(), Optional.empty()
+                            ));
+                            parsed++;
+                        }
+                    }
                 }
             }
         } catch (Exception e) {
