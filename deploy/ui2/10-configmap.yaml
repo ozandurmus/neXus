@@ -24,8 +24,9 @@ data:
 
   # FIRST-1: the database workload initializes an empty cluster, creates the
   # `ui2` database and the `ui2_migrate` and `ui2_app` roles, and nothing
-  # else. The image's own initialization creates the database and the
-  # migrate role; this hook creates the application role and nothing more.
+  # else. The image's own initialization creates the database and migration
+  # role; this hook removes cluster-wide role attributes from it and creates
+  # the equally bounded application role.
   #
   # The credential never reaches a command line: psql reads both values from
   # the process environment with \getenv and binds them through `format`, so
@@ -38,10 +39,14 @@ data:
     # the local socket. Idempotent: the role is created on a first start and
     # re-set on every start after it.
     psql --set ON_ERROR_STOP=1 <<'UI2_SQL'
+    \getenv ui2_migrate_role POSTGRESQL_USER
     \getenv ui2_app_role UI2_DB_APP_USER
     \getenv ui2_app_pw UI2_DB_APP_PASSWORD
     SELECT format(
-        '%s ROLE %I LOGIN PASSWORD %L',
+        'ALTER ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS',
+        :'ui2_migrate_role') \gexec
+    SELECT format(
+        '%s ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD %L',
         CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'ui2_app_role')
              THEN 'ALTER' ELSE 'CREATE' END,
         :'ui2_app_role',

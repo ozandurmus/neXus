@@ -70,8 +70,9 @@ class Ui2LauncherTest {
     }
 
     @Test
-    void productionRoleTableNamesExactlyServiceAndWorker() {
+    void productionRoleTableNamesExactlyMigrationServiceAndWorker() {
         assertEquals(Map.of(
+                "migrate", "com.securityexpert.nexus.ui2.service.boot.MigrationMain",
                 "service", "com.securityexpert.nexus.ui2.service.boot.Ui2Application",
                 "worker", "com.securityexpert.nexus.ui2.worker.Ui2WorkerMain"),
                 Ui2Launcher.MAIN_CLASS_BY_ROLE);

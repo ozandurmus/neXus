@@ -58,8 +58,8 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
  * {@code bootstrap-local-identity} paths are untouched by this class and
  * remain the way a binding is created or changed outside first boot.</p>
  *
- * <p>Ordered after {@link MigrationStartupRunner}: {@code local_credentials}
- * must exist before this runner can query it.</p>
+ * <p>The deployment starts this process only after {@link MigrationMain}:
+ * {@code local_credentials} must exist before this runner can query it.</p>
  */
 @Component
 @Order(1)
