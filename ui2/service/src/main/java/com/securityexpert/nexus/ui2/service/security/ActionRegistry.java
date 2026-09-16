@@ -49,6 +49,8 @@ public final class ActionRegistry {
     public static final String CREDENTIAL_REPLACE_SECRET = "credential_replace_secret";
     public static final String CREDENTIAL_DELETE = "credential_delete";
     /** 14F section 3: {@code POST /discovery/runs} -- a write action, {@code role:onboarding_admin} only (same gate as {@link #DEVICE_REGISTER}). */
+    public static final String DISCOVERY_SSH_TRUST_ENROLL = "discovery_ssh_trust_enroll";
+    public static final String DISCOVERY_SSH_TRUST_RE_ENROLL = "discovery_ssh_trust_re_enroll";
     public static final String DISCOVERY_RUN_START = "discovery_run_start";
     /** 14F section 3: {@code GET /discovery/runs/{run_id}} -- any authenticated session, like {@link #DEVICE_READ}. */
     public static final String DISCOVERY_RUN_READ = "discovery_run_read";
@@ -128,6 +130,8 @@ public final class ActionRegistry {
         // single-device add routes -- write actions require
         // role:onboarding_admin, the read is open to any authenticated
         // session, through this same E4 evaluation.
+        register(new ActionDescriptor(DISCOVERY_SSH_TRUST_ENROLL, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(DISCOVERY_SSH_TRUST_RE_ENROLL, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(DISCOVERY_RUN_START, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DISCOVERY_RUN_READ, true, Optional.empty()));
         register(new ActionDescriptor(DISCOVERY_RUN_IMPORT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));

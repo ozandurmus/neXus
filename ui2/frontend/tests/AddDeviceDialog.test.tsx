@@ -494,3 +494,56 @@ describe("AddDeviceDialog discovery mode", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Start discovery" })).not.toBeDisabled());
   });
 });
+
+
+describe("C10 SSH trust enrollment", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("requires explicit independent verification, sends the gated action, and displays only MATCH", async () => {
+    const fetchMock = routedFetch({
+      "/credentials": CREDENTIALS_ROUTE,
+      "/session/status": { body: { csrf_token: "test-csrf" } },
+      "/discovery/ssh-trust/enroll": { body: { relationship: "MATCH", fingerprint: "sensitive-response-marker" } },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndSwitchToDiscovery("fixture-management");
+    fireEvent.click(screen.getByRole("button", { name: "SSH trust authorization" }));
+    const button = screen.getByRole("button", { name: "Authorize SSH trust" });
+    expect(button).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Independently verified SHA-256 key (lowercase hex)"), { target: { value: "0".repeat(64) } });
+    fireEvent.change(screen.getByLabelText("Key observed at"), { target: { value: "2026-09-01T10:00" } });
+    expect(button).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("I independently verified the observed key"));
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("SSH trust: MATCH"));
+    expect(screen.queryByText("sensitive-response-marker")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Independently verified SHA-256 key (lowercase hex)")).toHaveValue("");
+    const call = fetchMock.mock.calls.find(([input]) => String(input) === "/discovery/ssh-trust/enroll")!;
+    const init = call[1] as RequestInit;
+    expect(init.headers).toEqual({ "Content-Type": "application/json", "X-CSRF-Token": "test-csrf" });
+    expect(JSON.parse(init.body as string)).toMatchObject({ management_port: 22, key_algorithm: "ssh-rsa", independently_verified: true });
+  });
+
+  it.each([
+    ["TRUST_ENTRY_MISSING", "SSH trust: MISSING."],
+    ["TRUST_MISMATCH", "SSH trust: MISMATCH."],
+    ["AUTH_FAILED", "SSH authentication failed."],
+    ["CONNECT_TIMEOUT", "SSH connection timed out"],
+  ])("displays the safe %s failure without management identity", async (failure, copy) => {
+    vi.stubGlobal("fetch", routedFetch({
+      "/credentials": CREDENTIALS_ROUTE,
+      "/session/status": { body: { csrf_token: "test-csrf" } },
+      "/discovery/runs": { status: 202, body: { run_id: "run-safe", job_id: "job-safe" } },
+      "/discovery/runs/run-safe": { body: { run_id: "run-safe", vendor: "check_point", state: "FAILED",
+        outcome_summary: { [failure]: 1 }, candidates: [], error: "sensitive-response-marker" } },
+    }));
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndSwitchToDiscovery("fixture-management");
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+    await waitFor(() => expect(screen.getByText(new RegExp(copy))).toBeInTheDocument());
+    expect(screen.queryByText("fixture-management")).not.toBeInTheDocument();
+    expect(screen.queryByText("sensitive-response-marker")).not.toBeInTheDocument();
+  });
+});

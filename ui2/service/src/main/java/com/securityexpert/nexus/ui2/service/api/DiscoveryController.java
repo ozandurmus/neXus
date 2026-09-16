@@ -43,10 +43,40 @@ public final class DiscoveryController {
             @JsonProperty("credential_reference_id") String credentialReferenceId) {
     }
 
+    public record TrustRequest(
+            @JsonProperty("management_address") String managementAddress,
+            @JsonProperty("management_port") int managementPort,
+            @JsonProperty("key_algorithm") String keyAlgorithm,
+            @JsonProperty("fingerprint_sha256") String fingerprint,
+            @JsonProperty("observed_at") java.time.Instant observedAt,
+            @JsonProperty("independently_verified") boolean independentlyVerified) {
+    }
+
+    private final com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService trustService;
     private final DiscoveryRunService discoveryRunService;
 
-    public DiscoveryController(DiscoveryRunService discoveryRunService) {
+    public DiscoveryController(DiscoveryRunService discoveryRunService,
+            com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService trustService) {
         this.discoveryRunService = discoveryRunService;
+        this.trustService = trustService;
+    }
+
+    @PostMapping("/discovery/ssh-trust/enroll")
+    public ResponseEntity<Map<String, Object>> enrollTrust(@RequestBody TrustRequest request, HttpServletRequest servletRequest) {
+        return authorizeTrust(request, servletRequest, false);
+    }
+
+    @PostMapping("/discovery/ssh-trust/re-enroll")
+    public ResponseEntity<Map<String, Object>> reEnrollTrust(@RequestBody TrustRequest request, HttpServletRequest servletRequest) {
+        return authorizeTrust(request, servletRequest, true);
+    }
+
+    private ResponseEntity<Map<String, Object>> authorizeTrust(TrustRequest request, HttpServletRequest servletRequest,
+            boolean reEnroll) {
+        var outcome = trustService.enroll(actingUser(servletRequest), request.managementAddress(), request.managementPort(),
+                request.keyAlgorithm(), request.fingerprint(), request.observedAt(), request.independentlyVerified(), reEnroll);
+        return ResponseEntity.status(outcome == com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService.Outcome.MATCH
+                ? HttpStatus.OK : HttpStatus.CONFLICT).body(Map.of("relationship", outcome.name()));
     }
 
     @PostMapping("/discovery/runs")

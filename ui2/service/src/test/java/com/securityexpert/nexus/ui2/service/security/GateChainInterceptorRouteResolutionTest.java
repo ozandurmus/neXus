@@ -36,6 +36,17 @@ class GateChainInterceptorRouteResolutionTest {
     }
 
     @Test
+    void discoveryTrustRoutesResolveToDistinctSecurityAdminActions() throws Exception {
+        var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
+        var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
+        method.setAccessible(true);
+        assertEquals(ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL,
+                method.invoke(interceptor, "POST", "/discovery/ssh-trust/enroll"));
+        assertEquals(ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL,
+                method.invoke(interceptor, "POST", "/discovery/ssh-trust/re-enroll"));
+    }
+
+    @Test
     void theOriginalLastSegmentRouteStillResolvesOnItsFirstWildcardAttempt() throws Exception {
         assertEquals("device_read", actionIdFor("GET", "/devices/device-1"));
     }
