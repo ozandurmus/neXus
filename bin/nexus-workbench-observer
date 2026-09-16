@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
-"""Release entrypoint: ship bin/ and scripts/workbench_companion.py together."""
+"""Release entrypoint for the observer and its read-only MCP sibling."""
 
 from pathlib import Path
 import runpy
+import sys
 
-runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts" / "workbench_companion.py"),
-               run_name="__main__")
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+if sys.argv[1:2] == ["mcp"]:
+    del sys.argv[1]
+    runpy.run_module("scripts.workbench_companion_mcp", run_name="__main__")
+else:
+    from scripts.workbench_companion import main
+
+    raise SystemExit(main())

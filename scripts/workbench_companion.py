@@ -1,8 +1,10 @@
-"""C1 bounded source adapter and C2 local observer foreground service.
+"""C1 source adapter and C2 local observer for the Workbench Companion.
 
-No process probe, notifier or client server lives here. Stop the foreground
-loop to roll back; private state is retained.
+No source discovery, raw-source adapter, process probe, notifier or client server
+lives here. Stop the foreground loop to roll back; private state is retained.
 """
+
+from __future__ import annotations
 
 import argparse
 import copy
@@ -16,7 +18,9 @@ import math
 import os
 from pathlib import Path
 import re
+import signal
 import stat
+import sys
 import threading
 import time
 import uuid
@@ -29,10 +33,13 @@ SCHEMA = 1
 MAX_BYTES = 2 * 1024 * 1024
 MAX_MOVEMENTS = 1000
 MAX_DIRECTORY_ENTRIES = 4000
-MAX_TRANSITIONS = 2000
-RETENTION = 30 * 86400
+MAX_CONFIGURATION_BYTES = 64 * 1024
+MOVEMENT = re.compile(r"NXS-LOCAL-[0-9]{4}\Z")
 PHASES = {"running", "done", "failed", "cancelled"}
 RATES = ("input_per_mtok", "cache_write_per_mtok", "cache_read_per_mtok", "output_per_mtok")
+PROVENANCE = "orchestrator_usage_cache"
+MAX_TRANSITIONS = 2000
+RETENTION = 30 * 86400
 SOURCES = ("record", "relay", "usage")
 QUALITY = {"VALID", "MISSING", "UNREADABLE", "MALFORMED", "INCONSISTENT",
            "LIMIT_EXCEEDED", "INSUFFICIENT_EVIDENCE"}
@@ -51,6 +58,40 @@ FIELDS = {
 }
 
 
+def _json(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+
+
+def _unique(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise SourceError("MALFORMED")
+        result[key] = value
+    return result
+
+
+def _number(value, integer=False):
+    if value is None:
+        return None
+    if type(value) not in (int, float) or value < 0:
+        raise ValueError("MALFORMED")
+    try:
+        finite = math.isfinite(value)
+    except OverflowError:
+        finite = False
+    if not finite:
+        raise ValueError("MALFORMED")
+    if integer and type(value) is not int:
+        raise ValueError("MALFORMED")
+    return value
+
+
+def _token(value):
+    return (type(value) is str and 1 <= len(value) <= 128
+            and all(c.isascii() and (c.isalnum() or c in "-_.:") for c in value))
+
+
 class SourceError(ValueError):
     """Fixed error codes only; never carry source text or local paths."""
 
@@ -59,21 +100,10 @@ def _fail(code="MALFORMED"):
     raise SourceError(code)
 
 
-def _source_number(value, integer=False):
-    if value is not None and (
-        type(value) not in ((int,) if integer else (int, float))
-        or value < 0 or not math.isfinite(value)
-    ):
-        _fail()
-    return value
-
-
 def _timestamp(value):
     if value is not None:
         if not isinstance(value, str) or not re.fullmatch(
-            r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
-            r"(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})", value
-        ):
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})", value):
             _fail()
         try:
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -82,11 +112,6 @@ def _timestamp(value):
         if parsed.tzinfo is None:
             _fail()
     return value
-
-
-def _seconds(value):
-    return (datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
-            if value is not None else None)
 
 
 def _boolean(value):
@@ -99,15 +124,6 @@ def _object(value):
     if not isinstance(value, dict):
         _fail()
     return value
-
-
-def _source_unique(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            _fail()
-        result[key] = value
-    return result
 
 
 def _fingerprint(value):
@@ -130,17 +146,14 @@ class SourceConfig:
         for root in (self.state_root, self.relay_root, self.price_root):
             if not isinstance(root, Path) or not root.is_absolute() or ".." in root.parts:
                 _fail("PATH_REJECTED")
-        if not isinstance(self.price_file, str) or not re.fullmatch(
-            r"[A-Za-z0-9_-]+\.json", self.price_file
-        ):
+        if not isinstance(self.price_file, str) or not re.fullmatch(r"[A-Za-z0-9_-]+\.json", self.price_file):
             _fail("PATH_REJECTED")
-        for values in (self.providers, self.models, self.efforts,
-                       self.audit_exceptions, self.subscription_providers):
+        for values in (self.providers, self.models, self.efforts, self.audit_exceptions,
+                       self.subscription_providers):
             if not isinstance(values, frozenset) or len(values) > 100:
                 _fail("CONFIG_INVALID")
-            if any(not isinstance(value, str)
-                   or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,100}", value)
-                   for value in values):
+            if any(not isinstance(v, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,100}", v)
+                   for v in values):
                 _fail("CONFIG_INVALID")
         if not self.subscription_providers <= self.providers:
             _fail("CONFIG_INVALID")
@@ -181,14 +194,14 @@ class _Sources:
             try:
                 parts = Path(relative).parts
                 for part in parts[:-1]:
-                    child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-                                    | os.O_CLOEXEC, dir_fd=fd)
+                    child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                    dir_fd=fd)
                     os.close(fd)
                     fd = child
                     if os.fstat(fd).st_uid != os.getuid():
                         _fail("PATH_REJECTED")
-                source = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
-                                 | os.O_CLOEXEC, dir_fd=fd)
+                source = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                                 dir_fd=fd)
                 try:
                     before = os.fstat(source)
                     if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid()
@@ -215,8 +228,7 @@ class _Sources:
             finally:
                 os.close(fd)
             self._track(key, fingerprint)
-            value = json.loads(data, object_pairs_hook=_source_unique,
-                               parse_constant=lambda _: _fail())
+            value = json.loads(data, object_pairs_hook=_unique, parse_constant=lambda _: _fail())
             return _object(value)
         except FileNotFoundError:
             self._track(key, "MISSING")
@@ -224,8 +236,7 @@ class _Sources:
         except (UnicodeError, json.JSONDecodeError, RecursionError, OverflowError):
             _fail()
         except OSError as error:
-            _fail("PATH_REJECTED" if error.errno in (errno.ELOOP, errno.ENOTDIR)
-                  else "UNREADABLE")
+            _fail("PATH_REJECTED" if error.errno in (errno.ELOOP, errno.ENOTDIR) else "UNREADABLE")
 
     def names(self, root, pattern):
         try:
@@ -252,8 +263,7 @@ class _Sources:
             self._track((root, pattern), "MISSING")
             _fail("MISSING")
         except OSError as error:
-            _fail("PATH_REJECTED" if error.errno in (errno.ELOOP, errno.ENOTDIR)
-                  else "UNREADABLE")
+            _fail("PATH_REJECTED" if error.errno in (errno.ELOOP, errno.ENOTDIR) else "UNREADABLE")
 
     def _track(self, key, fingerprint):
         if key in self.checks and self.checks[key] != fingerprint:
@@ -292,8 +302,8 @@ def _record(value, movement, config):
         verify = _boolean(_object(verify).get("passed"))
     result = {
         "movement_id": movement, "phase": value["phase"],
-        "revision": _source_number(value.get("revision"), True),
-        "retry_count": _source_number(value.get("retry_count"), True),
+        "revision": _number(value.get("revision"), True),
+        "retry_count": _number(value.get("retry_count"), True),
         "started_at": _timestamp(value.get("started_at")),
         "external_participant": _boolean(value.get("external_participant")),
         "verification": verify,
@@ -302,10 +312,9 @@ def _record(value, movement, config):
                            ("effort_requested", config.efforts),
                            ("audit_exception", config.audit_exceptions)):
         result[field], result[field + "_recognition"] = _allowed(value.get(field), allowed)
-    result["attempt_count"] = (
-        max(1, (result["revision"] or 1) + result["retry_count"])
-        if result["revision"] is not None and result["retry_count"] is not None else None
-    )
+    result["attempt_count"] = (max(1, (result["revision"] or 1) + result["retry_count"])
+                               if result["revision"] is not None
+                               and result["retry_count"] is not None else None)
     return result
 
 
@@ -335,7 +344,7 @@ def _prices(value, config):
         for rate in RATES:
             if rate not in entry or entry[rate] is None:
                 _fail("INSUFFICIENT_EVIDENCE")
-            _source_number(entry[rate])
+            _number(entry[rate])
         if model in config.models:
             result[model] = {rate: entry[rate] for rate in RATES}
     return result
@@ -343,24 +352,22 @@ def _prices(value, config):
 
 def _usage(value, record, prices, config, observed_at):
     for field in (*usage.USAGE_FIELDS, "turns", "byte_offset"):
-        _source_number(value.get(field), True)
-    _source_number(value.get("result_cost_usd"))
+        _number(value.get(field), True)
+    _number(value.get("result_cost_usd"))
     _timestamp(value.get("last_event_at"))
     tokens = value.get("result_usage")
     if tokens is not None:
         _object(tokens)
         for field in usage.USAGE_FIELDS:
-            _source_number(tokens.get(field), True)
+            _number(tokens.get(field), True)
     else:
         tokens = value
     model, recognition = _allowed(value.get("model"), config.models)
     cache_provider, provider_recognition = _allowed(value.get("provider"), config.providers)
-    if (cache_provider is not None and record["provider"] is not None
-            and cache_provider != record["provider"]):
+    if cache_provider is not None and record["provider"] is not None and cache_provider != record["provider"]:
         _fail("IDENTITY_MISMATCH")
     safe = {field: tokens.get(field) for field in usage.USAGE_FIELDS}
-    safe.update(turns=value.get("turns"), model=model,
-                last_event_at=value.get("last_event_at"),
+    safe.update(turns=value.get("turns"), model=model, last_event_at=value.get("last_event_at"),
                 result_cost_usd=value.get("result_cost_usd"))
     complete = all(safe[field] is not None for field in usage.USAGE_FIELDS)
     requested = record["model_requested"] if recognition != "UNRECOGNIZED" else None
@@ -368,31 +375,27 @@ def _usage(value, record, prices, config, observed_at):
     if not complete:
         projection.update(total_tokens=None, cache_hit_ratio=None,
                           cost_usd=safe["result_cost_usd"],
-                          cost_source=("reported" if safe["result_cost_usd"] is not None
-                                       else "unavailable"))
+                          cost_source="reported" if safe["result_cost_usd"] is not None else "unavailable")
     for field in ("total_tokens", "cache_hit_ratio", "cost_usd"):
-        _source_number(projection[field])
+        _number(projection[field])
     projection.update(model_recognition=recognition,
                       cache_provider_recognition=provider_recognition,
                       attempt_attribution="UNKNOWN",
                       quality="VALID" if complete else "INSUFFICIENT_EVIDENCE")
     event_time = safe["last_event_at"]
-    age = ((observed_at - datetime.fromisoformat(
-        event_time.replace("Z", "+00:00"))).total_seconds() if event_time is not None else None)
+    age = ((observed_at - datetime.fromisoformat(event_time.replace("Z", "+00:00"))).total_seconds()
+           if event_time is not None else None)
     projection["age_seconds"] = age if age is not None and age >= 0 else None
-    projection["freshness"] = (
-        "UNKNOWN" if age is None or age < 0 else "STALE" if age > 90 else "FRESH"
-    )
+    projection["freshness"] = "UNKNOWN" if age is None or age < 0 else "STALE" if age > 90 else "FRESH"
     provider = record["provider"]
-    projection["accounting_class"] = (
-        None if provider is None else
-        "subscription" if provider in config.subscription_providers else "metered"
-    )
+    projection["accounting_class"] = (None if provider is None else
+                                      "subscription" if provider in config.subscription_providers
+                                      else "metered")
     return projection
 
 
 def scan_sources(config: SourceConfig, *, observed_at: datetime | None = None) -> dict:
-    """Return safe in-memory observations; a changed scan returns no mixed data."""
+    """Return only safe in-memory observations; changed input yields no mixed data."""
     if not all(hasattr(os, name) for name in ("O_NOFOLLOW", "O_DIRECTORY", "getuid")):
         return {"status": "UNSUPPORTED", "coverage": "INCOMPLETE", "movements": []}
     observed_at = observed_at or datetime.now(timezone.utc)
@@ -411,12 +414,11 @@ def scan_sources(config: SourceConfig, *, observed_at: datetime | None = None) -
             return None
 
     prices = get("prices", lambda: sources.read(config.price_root, config.price_file),
-                 lambda value: _prices(value, config))
+                 lambda v: _prices(v, config))
     records = get("records", lambda: sources.names(
-        config.state_root, re.compile(r"NXS-LOCAL-[0-9]{4}\.json")), lambda value: value)
+        config.state_root, re.compile(r"NXS-LOCAL-[0-9]{4}\.json")), lambda v: v)
     relays = get("relays", lambda: sources.names(
-        config.relay_root, re.compile(r"NXS-LOCAL-[0-9]{4}-[a-z0-9-]+\.json")),
-        lambda value: value)
+        config.relay_root, re.compile(r"NXS-LOCAL-[0-9]{4}-[a-z0-9-]+\.json")), lambda v: v)
     matches = {}
     for name in relays or []:
         matches.setdefault(name[:14], []).append(name)
@@ -426,9 +428,8 @@ def scan_sources(config: SourceConfig, *, observed_at: datetime | None = None) -
     observations = []
     for movement in movements:
         name = movement + ".json"
-        record = get(movement + ":record",
-                     lambda: sources.read(config.state_root, name),
-                     lambda value: _record(value, movement, config))
+        record = get(movement + ":record", lambda: sources.read(config.state_root, name),
+                     lambda v: _record(v, movement, config))
         observation = {"movement_id": movement, "record": record,
                        "health": None, "work_stage": None}
         candidates = matches.get(movement, [])
@@ -437,30 +438,22 @@ def scan_sources(config: SourceConfig, *, observed_at: datetime | None = None) -
             observation["relay"] = None
         elif candidates:
             observation["relay"] = get(
-                movement + ":relay",
-                lambda: sources.read(config.relay_root, candidates[0]),
-                lambda value: _relay(value, movement))
+                movement + ":relay", lambda: sources.read(config.relay_root, candidates[0]),
+                lambda v: _relay(v, movement))
         else:
-            statuses[movement + ":relay"] = (
-                "MISSING" if relays is not None else statuses["relays"]
-            )
+            statuses[movement + ":relay"] = "MISSING" if relays is not None else statuses["relays"]
             observation["relay"] = None
-        observation["usage"] = (
-            get(movement + ":usage",
-                lambda: sources.read(config.state_root, "usage/" + name),
-                lambda value: _usage(value, record, prices or {}, config, observed_at))
-            if record is not None else None
-        )
+        observation["usage"] = get(
+            movement + ":usage", lambda: sources.read(config.state_root, "usage/" + name),
+            lambda v: _usage(v, record, prices or {}, config, observed_at)) if record is not None else None
         observation["sources"] = {
             kind: statuses.get(movement + ":" + kind, "NOT_EVALUABLE")
-            for kind in ("record", "relay", "usage")
-        }
+            for kind in ("record", "relay", "usage")}
         fingerprint_fields = dict(observation)
         if observation["usage"] is not None:
             fingerprint_fields["usage"] = {
                 key: value for key, value in observation["usage"].items()
-                if key not in ("age_seconds", "freshness")
-            }
+                if key not in ("age_seconds", "freshness")}
         observation["fingerprint"] = _fingerprint(fingerprint_fields)
         observations.append(observation)
     try:
@@ -475,215 +468,6 @@ def scan_sources(config: SourceConfig, *, observed_at: datetime | None = None) -
             "sources": {key: statuses[key] for key in ("records", "relays", "prices")},
             "price_table_fingerprint": _fingerprint(prices) if prices is not None else None,
             "movements": [] if status == "INCONSISTENT" else observations}
-
-
-@dataclass(frozen=True)
-class RuntimeConfig:
-    snapshot_directory: Path
-    source_set_token: str
-    source: SourceConfig
-
-
-def _configuration(path):
-    path = Path(path)
-    if not path.is_absolute() or path == Path("/") or ".." in path.parts:
-        _fail("CONFIG_INVALID")
-    try:
-        parent = _open_directory(path.parent)
-        try:
-            fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
-                         | os.O_CLOEXEC, dir_fd=parent)
-            try:
-                before = os.fstat(fd)
-                if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid()
-                        or before.st_nlink != 1 or stat.S_IMODE(before.st_mode) != 0o600):
-                    _fail("CONFIG_INVALID")
-                if before.st_size > MAX_BYTES:
-                    _fail("CONFIG_INVALID")
-                chunks, size = [], 0
-                while size <= MAX_BYTES:
-                    chunk = os.read(fd, min(65536, MAX_BYTES + 1 - size))
-                    if not chunk:
-                        break
-                    chunks.append(chunk)
-                    size += len(chunk)
-                raw = b"".join(chunks)
-                after = os.fstat(fd)
-                if len(raw) > MAX_BYTES or _stat_key(before) != _stat_key(after):
-                    _fail("CONFIG_INVALID")
-            finally:
-                os.close(fd)
-        finally:
-            os.close(parent)
-        value = json.loads(raw, object_pairs_hook=_source_unique,
-                           parse_constant=lambda _: _fail("CONFIG_INVALID"))
-    except SourceError:
-        _fail("CONFIG_INVALID")
-    except (OSError, UnicodeError, json.JSONDecodeError, RecursionError, OverflowError):
-        _fail("CONFIG_INVALID")
-    required = {"schema_version", "source_set_token", "snapshot_directory",
-                "state_root", "relay_root", "price_root", "price_file",
-                "providers", "models"}
-    optional = {"efforts", "audit_exceptions", "subscription_providers"}
-    if not isinstance(value, dict) or not required <= set(value) or set(value) - required - optional:
-        _fail("CONFIG_INVALID")
-    if type(value["schema_version"]) is not int or value["schema_version"] != 1:
-        _fail("CONFIG_INVALID")
-    if not _token(value["source_set_token"]):
-        _fail("CONFIG_INVALID")
-
-    def root(name):
-        candidate = value[name]
-        if not isinstance(candidate, str):
-            _fail("CONFIG_INVALID")
-        return Path(candidate)
-
-    def values(name):
-        items = value.get(name, [])
-        if (not isinstance(items, list) or any(not isinstance(item, str) for item in items)
-                or len(items) != len(set(items))):
-            _fail("CONFIG_INVALID")
-        return frozenset(items)
-
-    source = SourceConfig(root("state_root"), root("relay_root"), root("price_root"),
-                          value["price_file"], values("providers"), values("models"),
-                          values("efforts"), values("audit_exceptions"),
-                          values("subscription_providers"))
-    snapshot = root("snapshot_directory")
-    checkout = Path(__file__).resolve().parent.parent
-    if (not snapshot.is_absolute() or ".." in snapshot.parts
-            or snapshot.is_relative_to(checkout)
-            or path.is_relative_to(checkout)
-            or path.is_relative_to(snapshot)
-            or any(path.is_relative_to(source_root)
-                   for source_root in (source.state_root, source.relay_root, source.price_root))):
-        _fail("CONFIG_INVALID")
-    return RuntimeConfig(snapshot, value["source_set_token"], source)
-
-
-def _quality(value):
-    if value in QUALITY:
-        return value
-    if value in {"PATH_REJECTED", "UNREADABLE"}:
-        return "UNREADABLE"
-    if value in {"AMBIGUOUS", "IDENTITY_MISMATCH", "INCONSISTENT"}:
-        return "INCONSISTENT"
-    if value in {"NOT_EVALUABLE", "UNSUPPORTED"}:
-        return "INSUFFICIENT_EVIDENCE"
-    return "MALFORMED"
-
-
-def _recognized(value, recognition):
-    return "" if recognition == "UNRECOGNIZED" else value
-
-
-class SourceAdapter:
-    """Convert the approved C1 projection into C2's closed field vocabulary."""
-
-    def __init__(self, config):
-        self.config = config
-
-    @property
-    def allowlists(self):
-        source = self.config.source
-        return {"provider": source.providers, "effort": source.efforts,
-                "requested_model": source.models, "observed_model": source.models,
-                "provenance": COST_SOURCES, "audit_exception": source.audit_exceptions}
-
-    def scan(self):
-        result = scan_sources(self.config.source)
-        if result["status"] in {"INCONSISTENT", "LIMIT_EXCEEDED", "UNSUPPORTED"}:
-            _fail(_quality(result["status"]))
-        if result["coverage"] != "COMPLETE" and not result["movements"]:
-            _fail(_quality(next((value for value in result.get("sources", {}).values()
-                                 if value != "VALID"), "INSUFFICIENT_EVIDENCE")))
-        projected = {}
-        price_quality = _quality(result.get("sources", {}).get("prices", "VALID"))
-        for movement in result["movements"]:
-            blocks = {}
-            record = movement["record"]
-            status = _quality(movement["sources"]["record"])
-            blocks["record"] = {"status": status}
-            if record is not None and status == "VALID":
-                blocks["record"].update(
-                    revision=record["revision"], retry_count=record["retry_count"],
-                    start_time=_seconds(record["started_at"]), phase=record["phase"],
-                    external_participant=record["external_participant"],
-                    verification=record["verification"],
-                    provider=_recognized(record["provider"], record["provider_recognition"]),
-                    effort=_recognized(record["effort_requested"],
-                                       record["effort_requested_recognition"]))
-            relay_value = movement["relay"]
-            status = _quality(movement["sources"]["relay"])
-            blocks["relay"] = {"status": status}
-            if relay_value is not None and status == "VALID":
-                blocks["relay"].update(
-                    relay_status=relay_value["status"], next_actor=relay_value["next_actor"],
-                    sequence=relay_value["sequence"], marker=relay_value["marker"],
-                    event_time=_seconds(relay_value["timestamp"]),
-                    outcome=relay_value["outcome"])
-            usage_value = movement["usage"]
-            status = _quality(movement["sources"]["usage"])
-            if usage_value is not None and status == "VALID":
-                status = usage_value["quality"]
-            if status == "VALID" and price_quality != "VALID":
-                status = "INSUFFICIENT_EVIDENCE"
-            blocks["usage"] = {"status": status}
-            if usage_value is not None and status in {"VALID", "INSUFFICIENT_EVIDENCE"}:
-                blocks["usage"].update(
-                    input_tokens=usage_value["input_tokens"],
-                    output_tokens=usage_value["output_tokens"],
-                    cache_read_tokens=usage_value["cache_read_input_tokens"],
-                    cache_creation_tokens=usage_value["cache_creation_input_tokens"],
-                    turns=usage_value["turns"], cache_ratio=usage_value["cache_hit_ratio"],
-                    cost=usage_value["cost_usd"], cost_source=usage_value["cost_source"],
-                    event_time=_seconds(usage_value["last_event_at"]),
-                    requested_model=(_recognized(record["model_requested"],
-                                                 record["model_requested_recognition"])
-                                     if record is not None else None),
-                    observed_model=_recognized(usage_value["model"],
-                                               usage_value["model_recognition"]),
-                    provenance=usage_value["cost_source"],
-                    audit_exception=(_recognized(record["audit_exception"],
-                                                 record["audit_exception_recognition"])
-                                     if record is not None else None),
-                    price_table_fingerprint=result["price_table_fingerprint"])
-            projected[movement["movement_id"]] = blocks
-        return projected
-
-
-def _json(value):
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
-
-
-def _unique(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError("STATE_INVALID")
-        result[key] = value
-    return result
-
-
-def _number(value, integer=False):
-    if value is None:
-        return None
-    if type(value) not in (int, float) or value < 0:
-        raise ValueError("MALFORMED")
-    try:
-        finite = math.isfinite(value)
-    except OverflowError:
-        finite = False
-    if not finite:
-        raise ValueError("MALFORMED")
-    if integer and type(value) is not int:
-        raise ValueError("MALFORMED")
-    return value
-
-
-def _token(value):
-    return (type(value) is str and 1 <= len(value) <= 128
-            and all(c.isascii() and (c.isalnum() or c in "-_.:") for c in value))
 
 
 def _directory(path):
@@ -716,7 +500,7 @@ class Observer:
     """
 
     def __init__(self, directory, source_set_token, movement_ids, *, source_roots,
-                 allowlists=None, allow_dynamic_ids=False):
+                 allowlists=None):
         if not _token(source_set_token):
             raise ValueError("INVALID_CONFIGURATION")
         self.ids = frozenset(movement_ids)
@@ -725,7 +509,6 @@ class Observer:
         self.allowlists = {key: frozenset(values) for key, values in (allowlists or {}).items()}
         if any(not _token(value) for values in self.allowlists.values() for value in values):
             raise ValueError("INVALID_CONFIGURATION")
-        self.allow_dynamic_ids = allow_dynamic_ids is True
         directory = Path(os.path.abspath(directory))
         excluded = [Path(__file__).resolve().parent.parent, *map(Path, source_roots)]
         if directory.resolve() != directory or any(directory.is_relative_to(p.resolve()) for p in excluded):
@@ -797,8 +580,7 @@ class Observer:
                     raise ValueError("MALFORMED")
             else:
                 choices = {
-                    "phase": {"pending", "running", "verifying", "failed", "done", "closed",
-                              "cancelled"},
+                    "phase": {"pending", "running", "verifying", "failed", "done", "closed", "cancelled"},
                     "relay_status": {"OPEN", "CLOSED"},
                     "next_actor": {"po", "engineer"},
                     "marker": {"SESSION_START", "SESSION_CLOSE", "RELAY_ACK", "RELAY_NOTE",
@@ -1012,15 +794,8 @@ class Observer:
                 if len(inputs) > MAX_MOVEMENTS:
                     errors.add("LIMIT_EXCEEDED")
                     inputs = {}
-                if any(not _token(identity) for identity in inputs):
+                if any(identity not in self.ids for identity in inputs):
                     raise ValueError("MALFORMED")
-                unknown = set(inputs) - self.ids
-                if unknown and not self.allow_dynamic_ids:
-                    raise ValueError("MALFORMED")
-                self.ids = frozenset(self.ids | unknown)
-            except SourceError as error:
-                inputs = {}
-                errors.add(str(error) if str(error) in QUALITY else "MALFORMED")
             except Exception:
                 inputs = {}
                 errors.add("MALFORMED")
@@ -1099,33 +874,209 @@ class Observer:
         self.close()
 
 
-def run_configuration(path, *, once=False):
-    config = _configuration(path)
-    adapter = SourceAdapter(config)
-    source = config.source
-    roots = (source.state_root, source.relay_root, source.price_root)
-    with Observer(config.snapshot_directory, config.source_set_token, (), source_roots=roots,
-                  allowlists=adapter.allowlists, allow_dynamic_ids=True) as observer:
-        if observer.error:
-            return observer.error
-        if once:
-            return observer.poll(adapter.scan)
-        observer.run(adapter.scan, threading.Event())
+@dataclass(frozen=True)
+class RuntimeConfig:
+    snapshot_directory: Path
+    source_set_token: str
+    movement_ids: tuple[str, ...]
+    sources: SourceConfig
+
+
+CONFIGURATION_FIELDS = {
+    "schema_version", "snapshot_directory", "source_set_token", "movement_ids",
+    "state_root", "relay_root", "price_root", "price_file", "providers", "models",
+    "efforts", "audit_exceptions", "subscription_providers",
+}
+QUALITY_MAP = {
+    "VALID": "VALID",
+    "MISSING": "MISSING",
+    "UNREADABLE": "UNREADABLE",
+    "PATH_REJECTED": "UNREADABLE",
+    "MALFORMED": "MALFORMED",
+    "IDENTITY_MISMATCH": "INCONSISTENT",
+    "AMBIGUOUS": "INCONSISTENT",
+    "INCONSISTENT": "INCONSISTENT",
+    "LIMIT_EXCEEDED": "LIMIT_EXCEEDED",
+    "INSUFFICIENT_EVIDENCE": "INSUFFICIENT_EVIDENCE",
+    "NOT_EVALUABLE": "INSUFFICIENT_EVIDENCE",
+    "UNSUPPORTED": "INSUFFICIENT_EVIDENCE",
+    "DEGRADED": "INSUFFICIENT_EVIDENCE",
+}
+
+
+def _configured_values(value, *, maximum=100):
+    if (type(value) is not list or len(value) > maximum or len(set(value)) != len(value)
+            or any(type(item) is not str for item in value)):
+        raise ValueError("INVALID_CONFIGURATION")
+    return frozenset(value)
+
+
+def load_configuration(value):
+    """Load one private, bounded configuration without following links."""
+    try:
+        path = Path(value)
+        if not path.is_absolute() or ".." in path.parts or path == Path("/"):
+            raise ValueError
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        try:
+            info = os.fstat(fd)
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                    or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) & 0o077
+                    or info.st_size > MAX_CONFIGURATION_BYTES):
+                raise ValueError
+            raw = os.read(fd, MAX_CONFIGURATION_BYTES + 1)
+            if len(raw) > MAX_CONFIGURATION_BYTES or os.read(fd, 1):
+                raise ValueError
+        finally:
+            os.close(fd)
+        data = json.loads(raw, object_pairs_hook=_unique, parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
+        if (type(data) is not dict or set(data) != CONFIGURATION_FIELDS
+                or type(data["schema_version"]) is not int or data["schema_version"] != 1):
+            raise ValueError
+        movement_ids = data["movement_ids"]
+        if (type(movement_ids) is not list or not movement_ids or len(movement_ids) > MAX_MOVEMENTS
+                or len(set(movement_ids)) != len(movement_ids)
+                or any(type(item) is not str or not MOVEMENT.fullmatch(item) for item in movement_ids)):
+            raise ValueError
+        if not _token(data["source_set_token"]):
+            raise ValueError
+        sources = SourceConfig(
+            Path(data["state_root"]), Path(data["relay_root"]), Path(data["price_root"]),
+            data["price_file"], _configured_values(data["providers"]),
+            _configured_values(data["models"]), _configured_values(data["efforts"]),
+            _configured_values(data["audit_exceptions"]),
+            _configured_values(data["subscription_providers"]),
+        )
+        snapshot_directory = Path(data["snapshot_directory"])
+        if not snapshot_directory.is_absolute() or ".." in snapshot_directory.parts:
+            raise ValueError
+        return RuntimeConfig(snapshot_directory, data["source_set_token"],
+                             tuple(movement_ids), sources)
+    except (KeyError, TypeError, ValueError, OSError, UnicodeError, json.JSONDecodeError,
+            RecursionError, OverflowError) as error:
+        raise ValueError("INVALID_CONFIGURATION") from None
+
+
+def _quality(value):
+    return QUALITY_MAP.get(value, "MALFORMED")
+
+
+def _epoch(value):
+    return None if value is None else datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+
+
+def _recognized(value, recognition):
+    return "UNRECOGNIZED" if recognition == "UNRECOGNIZED" else value
+
+
+def observer_projection(result, movement_ids):
+    """Translate the C1 safe projection into the sole C2 callback schema."""
+    if type(result) is not dict or type(result.get("movements")) is not list:
+        raise ValueError("MALFORMED")
+    expected = frozenset(movement_ids)
+    found = {item.get("movement_id") for item in result["movements"] if type(item) is dict}
+    if len(found) != len(result["movements"]) or not found <= expected:
+        raise ValueError("MALFORMED")
+    if not result["movements"] and result.get("status") in {
+            "INCONSISTENT", "LIMIT_EXCEEDED", "UNSUPPORTED"}:
+        status = _quality(result["status"])
+        return {identity: {source: {"status": status} for source in SOURCES}
+                for identity in movement_ids}
+    projected = {}
+    by_id = {item["movement_id"]: item for item in result["movements"]}
+    for identity in movement_ids:
+        item = by_id.get(identity)
+        if item is None:
+            projected[identity] = {source: {"status": "MISSING"} for source in SOURCES}
+            continue
+        record = item.get("record")
+        relay_value = item.get("relay")
+        usage_value = item.get("usage")
+        statuses = item.get("sources", {})
+        blocks = {
+            "record": {"status": _quality(statuses.get("record"))},
+            "relay": {"status": _quality(statuses.get("relay"))},
+            "usage": {"status": _quality(statuses.get("usage"))},
+        }
+        if record is not None and blocks["record"]["status"] == "VALID":
+            blocks["record"].update(
+                phase=record.get("phase"), revision=record.get("revision"),
+                retry_count=record.get("retry_count"), start_time=_epoch(record.get("started_at")),
+                external_participant=record.get("external_participant"),
+                verification=record.get("verification"),
+                provider=_recognized(record.get("provider"), record.get("provider_recognition")),
+                effort=_recognized(record.get("effort_requested"),
+                                   record.get("effort_requested_recognition")),
+            )
+        if relay_value is not None and blocks["relay"]["status"] == "VALID":
+            blocks["relay"].update(
+                relay_status=relay_value.get("status"), next_actor=relay_value.get("next_actor"),
+                sequence=relay_value.get("sequence"), marker=relay_value.get("marker"),
+                event_time=_epoch(relay_value.get("timestamp")), outcome=relay_value.get("outcome"),
+            )
+        if usage_value is not None and blocks["usage"]["status"] == "VALID":
+            blocks["usage"]["status"] = usage_value.get("quality", "VALID")
+            blocks["usage"].update(
+                input_tokens=usage_value.get("input_tokens"),
+                output_tokens=usage_value.get("output_tokens"),
+                cache_read_tokens=usage_value.get("cache_read_input_tokens"),
+                cache_creation_tokens=usage_value.get("cache_creation_input_tokens"),
+                turns=usage_value.get("turns"), cache_ratio=usage_value.get("cache_hit_ratio"),
+                cost=usage_value.get("cost_usd"), cost_source=usage_value.get("cost_source"),
+                event_time=_epoch(usage_value.get("last_event_at")),
+                requested_model=_recognized(record.get("model_requested"),
+                                            record.get("model_requested_recognition")),
+                observed_model=_recognized(usage_value.get("model"),
+                                           usage_value.get("model_recognition")),
+                provenance=PROVENANCE,
+                audit_exception=_recognized(record.get("audit_exception"),
+                                            record.get("audit_exception_recognition")),
+                price_table_fingerprint=result.get("price_table_fingerprint"),
+            )
+        projected[identity] = blocks
+    return projected
+
+
+def _run(runtime, stop):
+    allowlists = {
+        "provider": runtime.sources.providers,
+        "effort": runtime.sources.efforts,
+        "requested_model": runtime.sources.models,
+        "observed_model": runtime.sources.models,
+        "provenance": {PROVENANCE},
+        "audit_exception": runtime.sources.audit_exceptions,
+    }
+    with Observer(runtime.snapshot_directory, runtime.source_set_token,
+                  runtime.movement_ids,
+                  source_roots=(runtime.sources.state_root, runtime.sources.relay_root,
+                                runtime.sources.price_root),
+                  allowlists=allowlists) as observer:
+        observer.run(lambda: observer_projection(scan_sources(runtime.sources),
+                                                 runtime.movement_ids), stop)
         return observer.error
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--configuration", required=True)
-    parser.add_argument("--once", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
-        result = run_configuration(args.configuration, once=args.once)
-    except (SourceError, ValueError, OSError):
+        runtime = load_configuration(args.configuration)
+    except ValueError:
         parser.exit(2, "INVALID_CONFIGURATION\n")
-    if result not in (None, "COMPLETE", "INCOMPLETE"):
-        parser.exit(1, result + "\n")
+    stop = threading.Event()
+    for name in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(name, lambda *_: stop.set())
+    try:
+        error = _run(runtime, stop)
+    except (OSError, ValueError):
+        print("OBSERVER_START_FAILED", file=sys.stderr)
+        return 1
+    if error:
+        print(error, file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
