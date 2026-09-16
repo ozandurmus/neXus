@@ -482,11 +482,39 @@ async function consoleInitDeviceManagementPanel() {
     await consoleRefreshDeviceManagementTable();
 }
 
+async function consoleInitLdapSettings() {
+    const form = document.getElementById("ldapSettingsForm");
+    if (!form) return;
+    const status = document.getElementById("ldapSettingsStatus");
+    const setStatus = (message) => { status.textContent = message; };
+    const load = await fetch("/api/settings/ldap", { headers: _consoleAuthHeaders() });
+    if (!load.ok) {
+        setStatus(`LDAP settings unavailable: HTTP ${load.status}`);
+        return;
+    }
+    const settings = await load.json();
+    for (const field of ["server_uri", "base_dn", "bind_dn"]) {
+        form.elements[field].value = settings[field] || "";
+    }
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        setStatus("Saving...");
+        const response = await fetch("/api/settings/ldap", {
+            method: "POST",
+            headers: _consoleAuthHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify(Object.fromEntries(new FormData(form))),
+        });
+        const body = await response.json().catch(() => ({}));
+        setStatus(response.ok ? "LDAP server settings saved." : `Save failed: ${body.detail || `HTTP ${response.status}`}`);
+    });
+}
+
 _consoleLaunchToken = _consoleReadLaunchToken();
 consoleRefreshPayloads();
 consoleInitJobsPanel().catch(() => {});
 consoleInitEnrollmentDialog();
 consoleInitDeviceManagementPanel().catch(() => {});
+consoleInitLdapSettings().catch(() => {});
 
 document.getElementById("consoleRefreshButton")?.addEventListener("click", () => {
     consoleRefreshPayloads().catch(() => {});

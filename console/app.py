@@ -16,10 +16,11 @@ route must classify it):
     POST      /api/enrollment/probe      authenticated    queue a pre-registration identity probe (M9)
     GET/HEAD  /api/registry/devices      authenticated    read-only Device Registry list (M9)
     POST      /api/registry/enrollments  authenticated    confirm + persist an enrollment (M9)
+    GET/HEAD  /api/settings/ldap         authenticated    read LDAP server settings
+    POST      /api/settings/ldap         authenticated    persist LDAP server settings
 
 No other route exists. No method other than GET/HEAD/POST is exposed
-anywhere, and POST exists only on ``/api/jobs``, ``/api/enrollment/probe``
-and ``/api/registry/enrollments`` (AC-2). This module imports no vendor/
+anywhere. This module imports no vendor/
 collector module, transitively (AC-8; ``console.payloads`` ->
 ``utils.html_export`` -> the same UI-payload builders the exported report
 already uses; ``console.jobs``/``console.runner`` -> ``main.main()`` for
@@ -32,7 +33,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
@@ -100,6 +103,7 @@ CONSOLE_CSP = (
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _CONSOLE_TEMPLATE = _REPO_ROOT / "templates" / "console.html"
+_LDAP_SETTINGS_FIELDS = ("server_uri", "base_dn", "bind_dn")
 
 
 class _SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -122,6 +126,76 @@ def _known_entity_ids(unified_path: Path) -> set[str]:
     if not isinstance(rows, list):
         return set()
     return {resolve_entity_id(row) for row in rows if isinstance(row, dict) and resolve_entity_id(row)}
+
+
+def _ldap_settings_path(data_root: Path) -> Path:
+    return Path(data_root) / "state" / "ldap_server.json"
+
+
+def _read_ldap_settings(data_root: Path) -> dict[str, str]:
+    path = _ldap_settings_path(data_root)
+    if not path.exists():
+        return {field: "" for field in _LDAP_SETTINGS_FIELDS}
+    try:
+        stored = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=503, detail={"error": "ldap_settings_unavailable"})
+    if not isinstance(stored, dict) or set(stored) != set(_LDAP_SETTINGS_FIELDS) or not all(
+        isinstance(stored[field], str) for field in _LDAP_SETTINGS_FIELDS
+    ):
+        raise HTTPException(status_code=503, detail={"error": "ldap_settings_invalid"})
+    return {field: stored[field] for field in _LDAP_SETTINGS_FIELDS}
+
+
+def _validate_ldap_settings(body) -> dict[str, str]:
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="request body must be a JSON object")
+    unknown = set(body) - set(_LDAP_SETTINGS_FIELDS)
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"unknown field(s): {sorted(unknown)}")
+    if set(body) != set(_LDAP_SETTINGS_FIELDS) or not all(isinstance(body[field], str) for field in _LDAP_SETTINGS_FIELDS):
+        raise HTTPException(status_code=400, detail=f"required string fields: {list(_LDAP_SETTINGS_FIELDS)}")
+
+    settings = {field: body[field].strip() for field in _LDAP_SETTINGS_FIELDS}
+    if not settings["server_uri"] or not settings["base_dn"]:
+        raise HTTPException(status_code=400, detail="server_uri and base_dn are required")
+    if any(len(value) > 2048 or any(ord(char) < 32 or ord(char) == 127 for char in value) for value in settings.values()):
+        raise HTTPException(status_code=400, detail="LDAP setting is too long or contains control characters")
+    try:
+        parsed = urlsplit(settings["server_uri"])
+        port = parsed.port
+    except ValueError:
+        raise HTTPException(status_code=400, detail="server_uri must be a valid ldaps:// URI")
+    if (
+        parsed.scheme.lower() != "ldaps"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in ("", "/")
+        or parsed.query
+        or parsed.fragment
+        or (port is not None and not 1 <= port <= 65535)
+    ):
+        raise HTTPException(status_code=400, detail="server_uri must be an ldaps:// host with an optional port")
+    return settings
+
+
+def _write_ldap_settings(data_root: Path, settings: dict[str, str]) -> None:
+    path = _ldap_settings_path(data_root)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+            temporary_path = Path(handle.name)
+            os.chmod(temporary_path, 0o600)
+            json.dump(settings, handle, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+    except OSError:
+        if "temporary_path" in locals():
+            temporary_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=503, detail={"error": "ldap_settings_unavailable"})
 
 
 # ---------------------------------------------------------------------------
@@ -471,6 +545,20 @@ def create_app(
         except DeviceRegistryError:
             raise HTTPException(status_code=503, detail={"error": "device_registry_unavailable"})
         return JSONResponse([record.to_dict() for record in records])
+
+    @app.api_route("/api/settings/ldap", methods=["GET", "HEAD"], dependencies=[Depends(_require_api_auth)])
+    def get_ldap_settings() -> JSONResponse:
+        return JSONResponse(_read_ldap_settings(runtime_paths.data_root))
+
+    @app.post("/api/settings/ldap", dependencies=[Depends(_require_api_auth)])
+    async def post_ldap_settings(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="request body must be JSON")
+        settings = _validate_ldap_settings(body)
+        _write_ldap_settings(runtime_paths.data_root, settings)
+        return JSONResponse(settings)
 
     @app.post("/api/registry/enrollments", dependencies=[Depends(_require_api_auth)])
     async def post_registry_enrollment(request: Request) -> JSONResponse:
