@@ -32,6 +32,7 @@ RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
     fi
 RUN npm ci
 COPY ui2/frontend/ ./
+COPY docs/ /build/docs/
 RUN npm run build
 
 # Stage 1 -- Java build.
