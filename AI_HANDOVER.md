@@ -1,5 +1,7 @@
 # Handover — NXS-LOCAL-0242
 
+> NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY.
+
 ## Snapshot
 Java Project Plan reconciliation is implemented, validation pending.
 State: in_progress; no deployment or device access.
