@@ -50,7 +50,7 @@ import com.securityexpert.nexus.ui2.worker.configuration.ConfigurationCapability
 import com.securityexpert.nexus.ui2.worker.configuration.ConfigurationJobExecutor;
 import com.securityexpert.nexus.ui2.worker.configuration.pan.PanoramaCrossCheckPort;
 import com.securityexpert.nexus.ui2.worker.discovery.DiscoveryJobExecutor;
-import com.securityexpert.nexus.ui2.worker.discovery.cp.ManagementPlaneEnumerationAdapter;
+import com.securityexpert.nexus.ui2.worker.discovery.cp.MgmtCliEnumerationAdapter;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.StoreBackedSshCredentialResolver;
 import com.securityexpert.nexus.ui2.worker.discovery.pan.PanoramaEnumerationAdapter;
 import com.securityexpert.nexus.ui2.worker.discovery.pan.StoreBackedPanCredentialResolver;
@@ -209,8 +209,8 @@ public final class Ui2WorkerMain {
                 backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString());
 
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
-        ManagementPlaneEnumerationAdapter checkPointDiscoveryAdapter =
-                new ManagementPlaneEnumerationAdapter(compositeTransport, sshCredentialResolver);
+        MgmtCliEnumerationAdapter checkPointDiscoveryAdapter =
+                new MgmtCliEnumerationAdapter(compositeTransport, sshCredentialResolver);
         PanoramaEnumerationAdapter paloAltoDiscoveryAdapter =
                 new PanoramaEnumerationAdapter(compositeTransport, panCredentialResolver, panTrustRuleResolver);
         DiscoveryJobExecutor discoveryJobExecutor = new DiscoveryJobExecutor(leaseRepository, attemptRepository,

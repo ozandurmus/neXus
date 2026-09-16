@@ -16,6 +16,7 @@ dependencies {
     // (contract section 1: no real device; container-hosted-endpoint tests
     // are disabled placeholders, see WorkerTransportContainerPlaceholderTest).
     implementation(libs.jsch)
+    implementation(libs.jackson.databind)
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
