@@ -14,6 +14,8 @@ LDAP_PREFIXES = {
     "ui2/service/",
     "ui2/frontend/tests/ProjectPlanPanel.test.tsx",
     "ui2/frontend/tests/fixtures/project-plan-provenance.json",
+    "ui2/frontend/src/auth/LoginScreen.tsx",
+    "ui2/frontend/tests/LoginScreen.test.tsx",
 }
 DELIVERY_FILES = {
     ".github/workflows/validation.yml",
