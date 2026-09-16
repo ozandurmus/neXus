@@ -31,16 +31,14 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.SshExecTransport;
  * UI2_CREDENTIAL_STORE_KEY_FILE} names. Both are read once, at startup,
  * failing closed (never a fallback to an environment-variable credential --
  * SB-16: "refuse before contact when the reference cannot be resolved").
- * Trust rules stay environment-variable-backed (a trust store is a later
- * movement).</p>
+ * Discovery host-key authorization is read from the same persisted C10 store as the worker.</p>
  *
  * <p>Invocation:</p>
  * <pre>
  * UI2_DB_URL=... UI2_DB_APP_USER_FILE=... UI2_DB_APP_PASSWORD_FILE=... UI2_CREDENTIAL_STORE_KEY_FILE=... \
- *   CP_DISCOVERY_TRUST_FINGERPRINT=... \
  *   java -cp worker.jar:... com.securityexpert.nexus.ui2.worker.discovery.cp.DiscoveryRunnerMain \
  *   --management-host &lt;host&gt; --management-ssh-port &lt;port&gt; \
- *   --credential-ref &lt;opaque-ref&gt; --trust-rule-ref &lt;opaque-ref&gt; \
+ *   --credential-ref &lt;opaque-ref&gt; \
  *   --channel-observation-interval-seconds &lt;n&gt; [--configured-channel-port &lt;port&gt;]
  * </pre>
  */
@@ -53,12 +51,20 @@ public final class DiscoveryRunnerMain {
         Arguments arguments = Arguments.parse(args);
         SshCredentialResolver credentialResolver = storeBackedCredentialResolver();
         DeviceTransport transport =
-                new SshExecTransport(credentialResolver, EnvironmentTrustRuleResolver.INSTANCE);
+                new SshExecTransport(credentialResolver, new com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver(
+                        new com.securityexpert.nexus.ui2.persistence.discovery.JooqManagementEndpointSshTrustRepository(
+                                com.securityexpert.nexus.ui2.persistence.TransactionBoundaryFactory.fromJdbc(
+                                        requireEnv("UI2_DB_URL"),
+                                        SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_USER_FILE")), "discovery.db_user"),
+                                        SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_PASSWORD_FILE")), "discovery.db_password"))),
+                        ref -> Optional.empty()));
         ManagementPlaneEnumerationAdapter adapter =
                 new ManagementPlaneEnumerationAdapter(transport, credentialResolver);
 
         ManagementPlaneEnumerationRequest request = new ManagementPlaneEnumerationRequest(
-                arguments.managementHost, arguments.managementSshPort, arguments.credentialRef, arguments.trustRuleRef,
+                arguments.managementHost, arguments.managementSshPort, arguments.credentialRef,
+                com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
+                        arguments.managementHost, arguments.managementSshPort),
                 Duration.ofSeconds(arguments.channelObservationIntervalSeconds), arguments.configuredChannelPort);
 
         ManagementPlaneEnumerationResult result = adapter.run(request);
@@ -96,7 +102,6 @@ public final class DiscoveryRunnerMain {
             String managementHost,
             int managementSshPort,
             String credentialRef,
-            String trustRuleRef,
             long channelObservationIntervalSeconds,
             Optional<Integer> configuredChannelPort) {
 
@@ -109,7 +114,6 @@ public final class DiscoveryRunnerMain {
                     require(flags, "--management-host"),
                     Integer.parseInt(require(flags, "--management-ssh-port")),
                     require(flags, "--credential-ref"),
-                    require(flags, "--trust-rule-ref"),
                     Long.parseLong(require(flags, "--channel-observation-interval-seconds")),
                     Optional.ofNullable(flags.get("--configured-channel-port")).map(Integer::parseInt));
         }

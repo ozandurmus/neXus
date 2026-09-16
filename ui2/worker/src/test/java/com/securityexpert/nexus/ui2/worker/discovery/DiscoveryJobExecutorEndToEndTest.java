@@ -129,6 +129,22 @@ class DiscoveryJobExecutorEndToEndTest {
     }
 
     @Test
+    void allC10FailuresRemainDistinguishableInThePersistedRunAndJob() {
+        for (var failure : ManagementPlaneEnumerationResult.FailureClass.values()) {
+            FakeLeaseRepository lease = new FakeLeaseRepository("job-safe", 1, JobState.CLAIMED);
+            FakeDiscoveryRunRepository runs = new FakeDiscoveryRunRepository();
+            runs.run = DiscoveryJobExecutorFakes.requestedRun("run-safe", "check_point");
+            FakeManagementPlaneEnumeration cp = new FakeManagementPlaneEnumeration();
+            cp.result = new ManagementPlaneEnumerationResult.Failed(failure, 0, SessionDisconnectOutcome.NOT_OPENED);
+            var outcome = new DiscoveryJobExecutor(lease, new FakeStepAttemptRepository(), runs, cp,
+                    new FakePanoramaEnumeration()).execute("job-safe", 1, "run-safe");
+            assertTrue(outcome instanceof JobOutcome.Failed);
+            assertEquals(failure.name(), runs.lastFailureReasonClass);
+            assertEquals(failure.name(), lease.terminalReason);
+        }
+    }
+
+    @Test
     void failedDiscoveryPersistsNamedReasonTerminalTripleAndNoInventedMeasurements() {
         FakeLeaseRepository lease = new FakeLeaseRepository("job-failed", 1, JobState.CLAIMED);
         FakeStepAttemptRepository attempts = new FakeStepAttemptRepository();

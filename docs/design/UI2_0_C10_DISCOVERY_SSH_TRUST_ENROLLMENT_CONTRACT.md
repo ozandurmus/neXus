@@ -380,3 +380,12 @@ contract closes that `UNKNOWN` by deferring it, not by approving it.
   successor closes or rewords the line via `scripts/project_queue.py`.
 - `.nexus/WORKER.md` and `.nexus/approved_task.json` — this movement's own
   dispatch, objective, and Product Owner authorization for `FROZEN` status.
+
+## Migration allocation amendment — PO authorized, 2026-09-16
+
+NXS-LOCAL-0236 relay seq3 and NXS-LOCAL-0268 approved dispatch allocate
+`ui2/service/src/main/resources/db/migration/V24__management_endpoint_ssh_trust.sql`
+to this implementation. This allocation supersedes the root `0010` path
+in §6 and §9; no root migration loader is introduced. V23 remains reserved
+for unrelated work and is not integrated by this movement. All C10 trust,
+security, lifecycle and evidence requirements remain unchanged.

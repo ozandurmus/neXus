@@ -87,10 +87,19 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         // T-4: the ONLY ConnectionTarget this run ever builds -- request.managementHost(), nothing parsed later.
         ConnectionTarget target = new ConnectionTarget(request.managementHost(), request.managementHost(), request.managementPort());
         ConnectSpec spec = new ConnectSpec(request.credentialRef(), request.trustRuleRef(), Optional.empty());
-        ConnectResult connectResult = transport.connect(target, spec, CONNECT_TIMEOUT);
+        ConnectResult connectResult;
+        try {
+            connectResult = transport.connect(target, spec, CONNECT_TIMEOUT);
+        } catch (RuntimeException e) {
+            return new ManagementPlaneEnumerationResult.Failed("NOT_EVALUABLE", 0, SessionDisconnectOutcome.NOT_OPENED);
+        }
+        if (connectResult instanceof ConnectResult.AuthenticationFailed failure
+                && "NOT_EVALUABLE".equals(failure.reason())) {
+            return new ManagementPlaneEnumerationResult.Failed("NOT_EVALUABLE", 0, SessionDisconnectOutcome.NOT_OPENED);
+        }
         if (!(connectResult instanceof ConnectResult.Authenticated authenticated)) {
             return new ManagementPlaneEnumerationResult.Failed(
-                    "management-plane session could not be authenticated", 0, SessionDisconnectOutcome.NOT_OPENED);
+                    connectFailure(connectResult), 0, SessionDisconnectOutcome.NOT_OPENED);
         }
 
         TransportSession session = authenticated.session();
@@ -127,6 +136,17 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         return new ManagementPlaneEnumerationResult.Completed(
                 attachChannelStates(candidates, channelStates), channelStates, managementPlaneRequestCount,
                 disconnectOutcome, parseCounts);
+    }
+
+    static ManagementPlaneEnumerationResult.FailureClass connectFailure(ConnectResult result) {
+        if (result instanceof ConnectResult.HostKeyRejected rejected) {
+            return "TRUST_ENTRY_MISSING".equals(rejected.reason())
+                    ? ManagementPlaneEnumerationResult.FailureClass.TRUST_ENTRY_MISSING
+                    : ManagementPlaneEnumerationResult.FailureClass.TRUST_MISMATCH;
+        }
+        return result instanceof ConnectResult.AuthenticationFailed
+                ? ManagementPlaneEnumerationResult.FailureClass.AUTH_FAILED
+                : ManagementPlaneEnumerationResult.FailureClass.CONNECT_TIMEOUT;
     }
 
     private SshCredentialMaterial resolveCredentialOrNull(String credentialRef) {
