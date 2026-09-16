@@ -186,7 +186,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                     ObjectType objType = ObjectType.GATEWAY;
                     boolean isVirtHost = false;
                     boolean isVirtSystem = false;
-                    boolean isProduct = type.contains("gateway") || type.contains("cluster") || type.contains("CheckPoint");
+                    boolean isProduct = type.toLowerCase().contains("gateway") || type.toLowerCase().contains("cluster") || type.toLowerCase().contains("checkpoint") || type.equals("virtual-system");
 
                     if (type.equals("simple-cluster") || type.equals("vsx-cluster")) {
                         objType = ObjectType.CLUSTER;
@@ -194,6 +194,20 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                             isVirtHost = true;
                             isVirtSystem = true;
                         }
+                    } else if (type.equals("virtual-system")) {
+                        objType = ObjectType.GATEWAY;
+                        isVirtSystem = true;
+                    } else if (type.equals("vsx-gateway")) {
+                        objType = ObjectType.GATEWAY;
+                        isVirtHost = true;
+                        isVirtSystem = true;
+                    } else if (type.equals("cluster-member") || type.equals("vsx-cluster-member")) {
+                        objType = ObjectType.MEMBER;
+                        if (type.equals("vsx-cluster-member")) {
+                            isVirtSystem = true;
+                        }
+                    } else if (type.equals("simple-gateway") || type.equals("checkpoint-host") || type.equals("gateway")) {
+                        objType = ObjectType.GATEWAY;
                     } else if (type.equals("virtual-system")) {
                         objType = ObjectType.GATEWAY;
                         isVirtSystem = true;
