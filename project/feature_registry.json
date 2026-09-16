@@ -1,2038 +1,2038 @@
 {
-  "schema_version": "1.0",
-  "features": [
-    {
-      "id": "network_inventory",
-      "title": "Unified Network Inventory",
-      "status": "done",
-      "introduced": "0.5 Final",
-      "weight": 8,
-      "summary": "Normalized multi-vendor inventory with search, filters, freshness and logical device views",
-      "why": "Creates the trusted SEE layer used by every later configuration, alignment and recovery wo",
-      "criteria": [
-        {
-          "id": "normalized_inventory",
-          "label": "Normalized inventory model",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "search_filter",
-          "label": "Search/filter UX",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "freshness",
-          "label": "Failure-aware freshness",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/network_inventory.md"
-    },
-    {
-      "id": "failure_aware_inventory",
-      "title": "Failure-Aware Snapshot Semantics",
-      "status": "done",
-      "introduced": "0.5",
-      "weight": 4,
-      "summary": "Separates collection failure, management-reported state and last-known-good evidence.",
-      "why": "Prevents unavailable collection from being misrepresented as device failure or fresh state",
-      "criteria": [
-        {
-          "id": "failure_states",
-          "label": "Failure states",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "lkg",
-          "label": "Last-known-good handling",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/failure_aware_inventory.md"
-    },
-    {
-      "id": "clusterxl_inventory",
-      "title": "ClusterXL Inventory Hierarchy",
-      "status": "done",
-      "introduced": "0.5",
-      "weight": 5,
-      "summary": "Represents ClusterXL clusters, members, VIP/member addresses and member-specific route/int",
-      "why": "Keeps physical member evidence without losing the logical cluster view.",
-      "criteria": [
-        {
-          "id": "members",
-          "label": "Member hierarchy",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "vip",
-          "label": "VIP/member address semantics",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/clusterxl_inventory.md"
-    },
-    {
-      "id": "vsx_inventory",
-      "title": "VSX Inventory Hierarchy",
-      "status": "done",
-      "introduced": "0.5",
-      "weight": 5,
-      "summary": "Models VSX physical members and Virtual Systems as a hierarchy instead of independent fire",
-      "why": "Preserves the execution endpoint/context relationship required for correct collection and",
-      "criteria": [
-        {
-          "id": "contexts",
-          "label": "VS contexts",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "logical_hierarchy",
-          "label": "Logical hierarchy",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/vsx_inventory.md"
-    },
-    {
-      "id": "pan_runtime_inventory",
-      "title": "PAN Runtime Inventory",
-      "status": "done",
-      "introduced": "0.5",
-      "weight": 5,
-      "summary": "Discovers managed Palo Alto firewalls and VSYS runtime context through Panorama.",
-      "why": "Provides management-led target discovery and topology for PAN current-state collection.",
-      "criteria": [
-        {
-          "id": "fleet",
-          "label": "Fleet discovery",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "vsys",
-          "label": "VSYS identity",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/pan_runtime_inventory.md"
-    },
-    {
-      "id": "pan_config_evidence",
-      "title": "PAN Effective Configuration Evidence",
-      "status": "done",
-      "introduced": "0.6.0A",
-      "weight": 12,
-      "summary": "Collects direct-firewall effective-running configuration while retaining Panorama/local/me",
-      "why": "Answers what the firewall is actually configured as now without confusing management inten",
-      "criteria": [
-        {
-          "id": "identity",
-          "label": "Direct identity gate",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "effective",
-          "label": "Effective-running primary evidence",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "fleet",
-          "label": "Connected fleet validation",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/pan_config_evidence.md"
-    },
-    {
-      "id": "pan_alignment_foundation",
-      "title": "PAN Expected ↔ Actual Alignment",
-      "status": "done",
-      "introduced": "0.6.0A4.2",
-      "weight": 10,
-      "summary": "Compiles Panorama expected configuration and classifies setting-level alignment, override,",
-      "why": "Separates benign local/member semantics from unexplained effective drift and reduces false",
-      "criteria": [
-        {
-          "id": "compiler",
-          "label": "Expected compiler",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "identity_translation",
-          "label": "VSYS identity translation",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "semantic_states",
-          "label": "Semantic classifications",
-          "state": "done",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/pan_alignment_foundation.md"
-    },
-    {
-      "id": "content_addressed_history",
-      "title": "Content-Addressed Configuration History",
-      "status": "done",
-      "introduced": "0.6.0A4.3.2",
-      "weight": 8,
-      "summary": "Stores one immutable object per unique configuration payload while history snapshots refer",
-      "why": "Preserves history without duplicating identical multi-gigabyte configuration payloads.",
-      "evidence": "1295 legacy snapshots migrated to 153 unique CAS objects; approximately 2.98 GiB duplicate payload storage reclaimed in the validated migration.",
-      "criteria": [
-        {
-          "id": "cas",
-          "label": "Vendor-neutral CAS",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "migration",
-          "label": "Safe legacy migration",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "rollback",
-          "label": "Rollback manifest/integrity gates",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "distributed_metadata_backend",
-          "label": "Shared metadata index backend (DEV.3.3, Postgres; blobs stay on the volume)",
-          "state": "done",
-          "weight": 2,
-          "note": "backlog.json distributed_evidence_store_migration, AUTOMATED_VALIDATED 2026-08-31."
-        }
-      ],
-      "detail": "docs/history/features/content_addressed_history.md"
-    },
-    {
-      "id": "configuration_ui",
-      "title": "Configuration UI",
-      "status": "done",
-      "introduced": "0.6.0A4.3",
-      "weight": 8,
-      "summary": "Vendor-neutral current configuration, evidence, alignment, history and backup placeholders",
-      "why": "Gives operators one consistent view while retaining vendor-specific evidence semantics und",
-      "criteria": [
-        {
-          "id": "fleet",
-          "label": "Fleet/device navigation",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "current",
-          "label": "Current-state projection",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "responsive",
-          "label": "Responsive/collapsible device UX",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/configuration_ui.md"
-    },
-    {
-      "id": "workflow_modes",
-      "title": "Development Workflow Modes",
-      "status": "done",
-      "introduced": "0.6.0A4.3.3.2",
-      "weight": 5,
-      "summary": "Adds render-only, PAN-config, VSX-only, CP-only and full-checkpoint workflows with mixed-c",
-      "why": "Keeps development loops fast without presenting partial reused evidence as a fresh full ch",
-      "criteria": [
-        {
-          "id": "partial_modes",
-          "label": "Partial modes",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "checkpoint_semantics",
-          "label": "Checkpoint/mixed-cycle semantics",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/workflow_modes.md"
-    },
-    {
-      "id": "living_project_plan",
-      "title": "Living Project Plan UI",
-      "status": "done",
-      "introduced": "0.6.1B.1.2",
-      "weight": 4,
-      "summary": "In-product roadmap, progress, Now/Next/Upcoming, backlog, completed-feature explanations a",
-      "why": "Keeps implementation position, deferred work and technical debt visible so build-by-build",
-      "criteria": [
-        {
-          "id": "metadata",
-          "label": "Versioned roadmap/feature/backlog/build metadata",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "progress",
-          "label": "Acceptance-criterion progress calculation",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "ui",
-          "label": "Responsive Project Plan module",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "maintenance",
-          "label": "Per-build metadata update contract",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/living_project_plan.md"
-    },
-    {
-      "id": "cp_config_probe",
-      "title": "Check Point Configuration Evidence Probe",
-      "status": "done",
-      "introduced": "0.6.1A",
-      "weight": 6,
-      "summary": "Validated direct read-only Check Point actual-configuration evidence, identity gating and",
-      "why": "Proved the collection semantics on real Standalone, ClusterXL and VSX devices before produ",
-      "criteria": [
-        {
-          "id": "expert_clish",
-          "label": "Expert→Clish evidence path",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "identity",
-          "label": "Identity gate",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "vsx",
-          "label": "VSX context distinctness",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/cp_config_probe.md"
-    },
-    {
-      "id": "cp_config_collector",
-      "title": "Check Point Current Configuration",
-      "status": "done",
-      "introduced": "0.6.1B",
-      "weight": 12,
-      "summary": "Collects secret-aware current Gaia configuration for Standalone, ClusterXL members, VSX ho",
-      "why": "Extends Configuration beyond PAN while keeping member/VS context and raw-secret boundaries",
-      "criteria": [
-        {
-          "id": "standalone",
-          "label": "Standalone current state",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "clusterxl",
-          "label": "ClusterXL member state",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "vsx",
-          "label": "VSX host/VS state",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "redaction",
-          "label": "Secret-aware CAS/UI projection",
-          "state": "done",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/cp_config_collector.md"
-    },
-    {
-      "id": "cp_coverage_closure",
-      "title": "CP Coverage Closure",
-      "status": "in_progress",
-      "introduced": "0.6.1B.1",
-      "target": "0.6.1B.1.2",
-      "weight": 10,
-      "summary": "Closes shell/platform/metadata coverage gaps and distinguishes operational failure from un",
-      "why": "A management-discovered device should be collectable according to observed capabilities, n",
-      "criteria": [
-        {
-          "id": "failure_taxonomy",
-          "label": "Coverage/failure taxonomy",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "model_serial",
-          "label": "Model/Serial recovery",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "interactive_adapter",
-          "label": "Interactive SSH adapter implemented",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "spark_runtime",
-          "label": "Direct-Clish/Spark real-environment validation",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "ha_runtime",
-          "label": "ClusterXL runtime HA role validation",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "coverage_gate",
-          "label": "Fleet coverage closure validation",
-          "state": "pending",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/cp_coverage_closure.md"
-    },
-    {
-      "id": "discovery_capability_foundation",
-      "title": "Discovery Lifecycle + Capability Profiles",
-      "status": "automated_validated",
-      "introduced": "0.6.1C",
-      "target": "0.6.1C",
-      "weight": 10,
-      "summary": "Management-led discovery lifecycle, topology/identity confidence and capability-driven col",
-      "why": "Preserves zero-touch onboarding while making uncertainty explicit instead of automating by",
-      "criteria": [
-        {
-          "id": "lifecycle",
-          "label": "Entity lifecycle",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "capability",
-          "label": "Capability registry",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "planner",
-          "label": "Collection planner",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "production_wiring_preflight",
-          "label": "Production runtime wiring preflight",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "real_environment_validation",
-          "label": "Representative real-environment validation",
-          "state": "pending",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/discovery_capability_foundation.md"
-    },
-    {
-      "id": "cp_management_alignment",
-      "title": "Check Point Management Intent Alignment",
-      "status": "real_env_validated",
-      "target": "0.6.1D",
-      "weight": 10,
-      "summary": "Compare Management intent/expected state with gateway/member/VS actual state using CP-spec",
-      "why": "Adds VERIFY semantics without treating benign ClusterXL/VSX member differences as drift.",
-      "criteria": [
-        {
-          "id": "intent",
-          "label": "Intent evidence model",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "semantic_alignment",
-          "label": "Semantic alignment",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "trusted_intent_source_approval",
-          "label": "Trusted Management intent source approval",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "real_environment_validation",
-          "label": "Representative real-environment validation",
-          "state": "pending",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/cp_management_alignment.md"
-    },
-    {
-      "id": "configuration_history_ux",
-      "title": "Unified Configuration History + Diff UX",
-      "status": "done",
-      "introduced": "0.6.3",
-      "target": "0.6.3",
-      "weight": 8,
-      "summary": "Chronological snapshot selection, normalized change views and safe configuration diffs.",
-      "why": "Turns existing FIRST/SAME/CHANGED history signals into operator-usable TRACE workflows.",
-      "criteria": [
-        {
-          "id": "timeline",
-          "label": "Timeline",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "diff",
-          "label": "Safe normalized diff",
-          "state": "done",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/configuration_history_ux.md"
-    },
-    {
-      "id": "native_backup_foundation",
-      "title": "Vendor-Native Backup Foundation",
-      "status": "in_progress",
-      "target": "RB.1-RB.3 (rebase of original 0.6.0B)",
-      "weight": 10,
-      "summary": "Encrypted recovery plane separate from the evidence plane: vendor-native recovery artifact",
-      "why": "Configuration evidence is deliberately redacted (secrets_redacted: True) and therefore NON",
-      "criteria": [
-        {
-          "id": "pan_export",
-          "label": "PAN device-state export",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "integrity",
-          "label": "Backup integrity/retention",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "cp_backup",
-          "label": "CP native recovery strategy",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/native_backup_foundation.md"
-    },
-    {
-      "id": "production_read_trust",
-      "title": "Read-Plane Production Trust Hardening",
-      "status": "in_progress",
-      "weight": 7,
-      "summary": "Close transport trust, credential, dependency and deployment hardening before production r",
-      "why": "Read-only does not remove the need for authenticated endpoints, trusted TLS/SSH and contro",
-      "criteria": [
-        {
-          "id": "secret_redaction",
-          "label": "Secret redaction/storage boundaries",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "support_privacy",
-          "label": "Privacy-safe support bundles",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "ssh_host_key",
-          "label": "Strict CP SSH host-key trust",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "pan_tls",
-          "label": "PAN corporate CA verification",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "viewer_data_boundary",
-          "label": "Report-only viewer data boundary",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "browser_render_boundary",
-          "label": "CSP and hostile-data rendering tests",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/production_read_trust.md"
-    },
-    {
-      "id": "compliance_posture_foundation",
-      "title": "Compliance Posture Foundation",
-      "status": "done",
-      "introduced": "0.6.1B.1.5",
-      "weight": 6,
-      "summary": "Builds an evidence-backed compliance control-area view from existing CP/PAN normalized con",
-      "why": "Creates the VERIFY on-ramp without over-claiming certification: PASS/FINDING/UNKNOWN/NOT_A",
-      "criteria": [
-        {
-          "id": "control_states",
-          "label": "Control state model with bounded evidence",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "framework_area_mapping",
-          "label": "CIS/PCI DSS/BDDK evidence-area mappings",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "privacy_boundary",
-          "label": "No secret/raw config/real identity in compliance payload",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "fleet_subject_drilldown",
-          "label": "Fleet summary plus anonymized per-subject drilldown",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/compliance_posture_foundation.md"
-    },
-    {
-      "id": "compliance_control_pack_v1",
-      "title": "Compliance Control Pack v1 (CP/PAN)",
-      "status": "done",
-      "target": "0.6.1B.1.6",
-      "weight": 7,
-      "summary": "Expanded compliance posture with 10 vendor-neutral benchmark-aligned subject controls usin",
-      "why": "Strengthens VERIFY signal quality and transparency while preserving privacy boundaries and",
-      "criteria": [
-        {
-          "id": "ten_controls",
-          "label": "10 deterministic controls implemented",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "scope_partition",
-          "label": "Subject/platform/global scope partition maintained",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "framework_traceability",
-          "label": "CIS/PCI DSS/BDDK traceability metadata",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "ui_taxonomy",
-          "label": "Compliance UI taxonomy clarity (top/sub menu semantics)",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "privacy_no_claim",
-          "label": "Privacy boundary and no-certification claim preserved",
-          "state": "done",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/compliance_control_pack_v1.md"
-    },
-    {
-      "id": "compliance_engine",
-      "title": "Compliance Rule Engine",
-      "status": "in_progress",
-      "target": "0.7.x",
-      "weight": 12,
-      "early_foundation": "Early evidence-backed control state model and framework area mappings delivered in 0.6.1B.1.5/1.6. Formal rule engine with versioned rule packs, stronger framework governance and compliance_posture_rulepack_transition bridge opens the 0.7.x track.",
-      "summary": "Vendor-neutral rule evaluation over verified normalized configuration facts.",
-      "why": "Transforms verified current/expected state into actionable compliance findings, and lets o",
-      "criteria": [
-        {
-          "id": "rules",
-          "label": "Rule engine",
-          "state": "pending",
-          "weight": 2,
-          "note": "In progress: 0.6.6B static rule pack + 0.7.1a/b catalog + 0.7.3 (CE.1) data-driven user check engine (compliance_check_pack.py / compliance_check_engine.py) all"
-        }
-      ],
-      "detail": "docs/history/features/compliance_engine.md"
-    },
-    {
-      "id": "framework_mappings",
-      "title": "Framework Mappings",
-      "status": "in_progress",
-      "target": "0.7.x",
-      "weight": 5,
-      "early_foundation": "CIS/PCI-DSS/BDDK control-area mappings and benchmark references delivered in 0.6.1B.1.5/1.6 as evidence-bounded area mappings. 0.7.1a added real per-control per-framework membership; 0.7.4 added the framework SIDE - a declarative requirement catalog (utils/framework_catalog.py) with requirement-level COVERED/PARTIALLY_COVERED/UNCOVERED/NOT_APPLICABLE + posture, version/profile, unmapped-ref drift guard, and a UI requirement drill-down.",
-      "summary": "Map technical evidence/findings to internal and external control frameworks.",
-      "why": "Connects engineering evidence to audit and governance requirements - requirement by requir",
-      "criteria": [
-        {
-          "id": "mapping",
-          "label": "Control mappings",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "requirement_coverage",
-          "label": "Requirement-level coverage",
-          "state": "done",
-          "weight": 1,
-          "note": "0.7.4: framework_catalog.py + compliance_overview.by_framework[].requirements[] with coverage + posture. DEPLOY.1A: custom/signed framework packs + UI mapping editor."
-        }
-      ],
-      "detail": "docs/history/features/framework_mappings.md"
-    },
-    {
-      "id": "evidence_reporting",
-      "title": "Evidence Reports",
-      "status": "in_progress",
-      "target": "0.7.x",
-      "weight": 5,
-      "summary": "Generate bounded evidence reports without exposing raw configuration secrets.",
-      "why": "Supports review, audit and management communication from the same evidence model.",
-      "criteria": [
-        {
-          "id": "reports",
-          "label": "Report model",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/evidence_reporting.md"
-    },
-    {
-      "id": "cross_vendor_change_timeline",
-      "title": "Cross-Vendor Change Timeline",
-      "status": "planned",
-      "target": "0.8.x",
-      "weight": 10,
-      "summary": "Trace normalized configuration changes across devices and vendors over time.",
-      "why": "Makes change investigation independent of vendor-specific raw syntax.",
-      "criteria": [
-        {
-          "id": "timeline",
-          "label": "Cross-vendor timeline",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/cross_vendor_change_timeline.md"
-    },
-    {
-      "id": "root_cause_trace",
-      "title": "Root Cause Trace",
-      "status": "planned",
-      "target": "0.8.x",
-      "weight": 8,
-      "summary": "Correlate evidence, alignment and history to explain what changed and why a finding appear",
-      "why": "Moves from detecting difference to explaining causality and provenance.",
-      "criteria": [
-        {
-          "id": "trace",
-          "label": "Trace graph",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/root_cause_trace.md"
-    },
-    {
-      "id": "native_backup_validation",
-      "title": "Native Backup Validation",
-      "status": "automated_validated",
-      "target": "RB.4",
-      "weight": 10,
-      "summary": "Validation battery V1 transport / V2 structural / V3 semantic.",
-      "why": "A hash proves a file arrived intact; it proves nothing about restorability.",
-      "criteria": [
-        {
-          "id": "validation",
-          "label": "Artifact validation",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/native_backup_validation.md"
-    },
-    {
-      "id": "restore_readiness",
-      "title": "Restore Readiness",
-      "status": "in_progress",
-      "target": "RB.0 (pulled forward from 0.9.x) + RB.5 (delivered by CON.4)",
-      "weight": 8,
-      "summary": "Per-device READY / STALE / PARTIAL / UNPROTECTED / UNKNOWN readiness over already-collecte",
-      "why": "Answers 'if this device died right now, what do we actually have?' with zero new device co",
-      "criteria": [
-        {
-          "id": "readiness",
-          "label": "Readiness model",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "recovery_ui_module",
-          "label": "Recovery UI module (roll-up, coverage-vs-inventory, per-artifact verdicts) in both delivery modes",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/restore_readiness.md"
-    },
-    {
-      "id": "server_data_plane",
-      "title": "Server Data Plane",
-      "status": "planned",
-      "target": "1.0",
-      "weight": 10,
-      "summary": "Deliberate single-worker server data plane first: PostgreSQL when enabled, durable evidenc",
-      "why": "Hardens local persistence for an internal server while avoiding premature distributed comp",
-      "criteria": [
-        {
-          "id": "db",
-          "label": "PostgreSQL metadata",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "workers",
-          "label": "Worker queue",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "object_store",
-          "label": "Shared payload storage decision after measured multi-worker need",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "migrations_roles",
-          "label": "Reviewed migrations and DML-only database role",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "recovery_durability",
-          "label": "Off-host recovery storage and key custody",
-          "state": "pending",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/server_data_plane.md"
-    },
-    {
-      "id": "oidc_rbac_audit",
-      "title": "OIDC / RBAC / Audit",
-      "status": "planned",
-      "target": "1.0",
-      "weight": 8,
-      "summary": "Enterprise authentication, authorization and audited access to sensitive evidence/actions.",
-      "why": "Required before broader multi-user production use and any future write plane.",
-      "criteria": [
-        {
-          "id": "oidc",
-          "label": "OIDC",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "rbac",
-          "label": "RBAC",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "audit",
-          "label": "Audit trail",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/oidc_rbac_audit.md"
-    },
-    {
-      "id": "production_observability",
-      "title": "Production Observability & Deployment",
-      "status": "planned",
-      "target": "1.0",
-      "weight": 7,
-      "summary": "Container/pod topology, health, metrics, logs, dependency and supply-chain controls.",
-      "why": "Makes collector/network access boundaries and operational health supportable in production",
-      "criteria": [
-        {
-          "id": "containers",
-          "label": "Container deployment",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "health",
-          "label": "Health/metrics",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "least_privilege_runtime",
-          "label": "Non-root, restricted container runtime",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "release_assurance",
-          "label": "Locked CI release, SBOM and provenance",
-          "state": "pending",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/production_observability.md"
-    },
-    {
-      "id": "collection_execution_coordinator",
-      "title": "Collection Execution Coordinator & Safety Policy",
-      "status": "automated_validated",
-      "introduced": "0.6.1C",
-      "target": "0.6.1C / DEPLOY.1",
-      "weight": 10,
-      "summary": "Per-device canonical identity lock, vendor/context concurrency budget, cooldown, coalescin",
-      "why": "Required before recurring scheduling or event-driven triggers; prevents concurrent CP/VSX/",
-      "criteria": [
-        {
-          "id": "device_lock",
-          "label": "Per-canonical-device job lock",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "concurrency_budget",
-          "label": "Vendor/context concurrency budget",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "job_provenance",
-          "label": "Job provenance: manual / scheduled (event reserved only)",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "cancellation",
-          "label": "Cancellation and bounded retry",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "production_runtime_wiring",
-          "label": "Shared production runtime admission and scheduler dispatch",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "real_environment_validation",
-          "label": "Coordinator/scheduler real-environment validation",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "distributed_backend",
-          "label": "Cross-process backend (DEV.3.2, Postgres advisory locks)",
-          "state": "done",
-          "weight": 2,
-          "note": "backlog.json distributed_endpoint_lock, AUTOMATED_VALIDATED 2026-08-30."
-        }
-      ],
-      "detail": "docs/history/features/collection_execution_coordinator.md"
-    },
-    {
-      "id": "deploy1_oidc_viewer",
-      "title": "DEPLOY.1A â€” Authenticated Read-Only Viewer Boundary",
-      "status": "planned",
-      "target": "DEPLOY.1A",
-      "weight": 9,
-      "summary": "Corporate OIDC login gate in front of all UI and API surfaces before the server is opened",
-      "why": "Network topology, rule sets and configuration evidence are sensitive even after redaction.",
-      "criteria": [
-        {
-          "id": "oidc_login",
-          "label": "Corporate OIDC login required",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "viewer_role",
-          "label": "Viewer role / explicit deny-by-default",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "audit_access",
-          "label": "Login and view/export audit events",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "no_secret_in_browser",
-          "label": "No credential or raw operational artifact in browser/export",
-          "state": "pending",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/deploy1_oidc_viewer.md"
-    },
-    {
-      "id": "deploy1_evidence_egress_policy",
-      "title": "DEPLOY.1 â€” Evidence Egress & Sharing Policy",
-      "status": "planned",
-      "target": "DEPLOY.1",
-      "weight": 6,
-      "summary": "Explicit policy and enforcement for every path evidence can leave the system: UI export, s",
-      "why": "As server, event intake and TI integration add new egress paths, a single governed policy",
-      "criteria": [
-        {
-          "id": "egress_inventory",
-          "label": "Egress path inventory",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "retention_redaction",
-          "label": "Retention and redaction rules per path",
-          "state": "pending",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/deploy1_evidence_egress_policy.md"
-    },
-    {
-      "id": "crypto_agility_pqc",
-      "title": "Cryptographic Posture, Crypto-Agility & PQC Readiness",
-      "status": "automated_validated",
-      "target": "0.7.x",
-      "weight": 10,
-      "summary": "Normalize IPsec/IKE proposal, TLS policy, certificate and platform-capability facts for Ch",
-      "why": "Turns existing configuration evidence into actionable crypto risk findings without adding",
-      "criteria": [
-        {
-          "id": "crypto_facts",
-          "label": "IPsec/IKE/TLS/cert normalized facts (CP + PAN)",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "rule_packs",
-          "label": "Versioned crypto rule packs (weak/agility/PQC)",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "evidence_confidence",
-          "label": "Configured vs negotiated vs inferred confidence model",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "pqc_capability",
-          "label": "Platform/OS PQC capability evidence",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/crypto_agility_pqc.md"
-    },
-    {
-      "id": "event_signal_intake",
-      "title": "External Change Signal Intake & Bounded Evidence Trigger",
-      "status": "in_progress",
-      "target": "0.8.x",
-      "weight": 8,
-      "summary": "Authenticated webhook ingress (e.g.",
-      "why": "Enables near-real-time configuration snapshots after policy-install events without polling",
-      "criteria": [
-        {
-          "id": "authenticated_ingress",
-          "label": "Authenticated / signed webhook ingress (mTLS or OIDC-client)",
-          "state": "done",
-          "weight": 2,
-          "note": "Slice 1 (docs/design/EVENT_SIGNAL_INTAKE_ARCHITECTURE.md) ships HMAC-SHA256 shared-secret ingress (signal_intake/app.py, utils/event_signal_intake.py) instead of mTLS/OIDC -- a deliberate substitution, not a gap left unbuilt. Upgrading to mTLS/OIDC-client is a separate, later decision."
-        },
-        {
-          "id": "signal_validation",
-          "label": "Schema allowlist, replay protection and dedup/cooldown",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "identity_resolution",
-          "label": "Canonical device identity resolution via discovery lifecycle",
-          "state": "done",
-          "weight": 1,
-          "note": "Resolves via utils.device_registry.DeviceRegistry (reused, not a parallel model) rather than utils/discovery_lifecycle.py -- AC-3 asked to reuse existing identity/registry code, and DeviceRegistry is the Product Control Plane's own identity registry; discovery_lifecycle tracks management-plane trust confidence, a different concept."
-        },
-        {
-          "id": "coordinator_queue",
-          "label": "Coordinator-queued bounded read-only evidence capture",
-          "state": "done",
-          "weight": 1,
-          "note": "Check Point only in Slice 1 -- no PAN per-device config target-selection seam exists yet (utils.collection_executor._TARGET_SEAM_WORKFLOWS omits pan-config); see project/backlog.json's event_signal_intake note."
-        },
-        {
-          "id": "signal_outcome",
-          "label": "Explicit signal outcome: triggered / coalesced / ignored / unknown_identity",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/event_signal_intake.md"
-    },
-    {
-      "id": "passive_ti_enrichment",
-      "title": "Passive Threat-Intelligence Enrichment for Confirmed Changes",
-      "status": "planned",
-      "target": "0.8.x",
-      "weight": 6,
-      "summary": "After a normalized, confirmed diff finding is produced, extract safe observables and check",
-      "why": "Surfaces potential risk context without manual investigation, while keeping raw config, fu",
-      "criteria": [
-        {
-          "id": "observable_extraction",
-          "label": "Safe observable extraction from normalized findings",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "local_feed",
-          "label": "Local/corporate-proxy TI feed integration (internet off by default)",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "ti_confidence",
-          "label": "TI match confidence, source, age and false-positive model",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/passive_ti_enrichment.md"
-    },
-    {
-      "id": "repository_privacy_gate",
-      "title": "Corporate Git Repository Privacy Gate",
-      "status": "done",
-      "introduced": "DEV.0.4/DEV.0.4.1",
-      "weight": 3,
-      "summary": "Offline fail-closed repository scan plus runtime-only inventory exclusion policy removes e",
-      "why": "Keeps operational identities and runtime artifacts outside Git/AI context while preserving",
-      "criteria": [
-        {
-          "id": "offline_gate",
-          "label": "Offline privacy gate",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "runtime_exclusions",
-          "label": "Runtime-only exact inventory exclusions",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "zero_findings",
-          "label": "Corporate Git candidate zero findings",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/repository_privacy_gate.md"
-    },
-    {
-      "id": "failover_readiness_assessment",
-      "title": "HA Readiness / Failover-Safety Assessment",
-      "status": "automated_validated",
-      "introduced": "OP.0",
-      "weight": 6,
-      "summary": "Read-only per-vendor preflight battery that scores whether an HA cluster is safe to fail o",
-      "why": "The safety net and foundation for any controlled failover; valuable on its own as a VERIFY",
-      "note": "Split 2026-09-01 into OP.0a / OP.0b / OP.0c - docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md decision P1.",
-      "criteria": [
-        {
-          "id": "ha_unit_derivation",
-          "label": "OP.0a - HA unit derivation + fail-closed assessment over already-collected evidence (no new device command)",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "preflight_battery",
-          "label": "OP.0b - Per-vendor preflight battery: S1-S8 all REAL_ENV_VALIDATED 2026-09-04 (CP ClusterXL, CP/VSX VSLS per-VSID, PAN dedicated-HA1 pairing correction)",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "readiness_verdict",
-          "label": "SAFE / DEGRADED / UNSAFE / INSUFFICIENT verdict with blocking line items (SAFE and DEGRADED unreachable until D-F3 flap threshold + D-V7b CP recovery read are resolved; UNSAFE/INSUFFICIENT/NOT_A_FAILOVER_UNIT live on fresh preflight evidence since S7)",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "scc_readiness_dashboard",
-          "label": "OP.0c - SCC readiness dashboard + history (read-only) -- done: fleet view + blocking reasons; history is future scope",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "ui_authority_reconciliation",
-          "label": "OP.0b S9 - retired client-side PAN/CP pairing and HA-vocabulary heuristics (static/inventory_ui.js, utils/merge.py, utils/config_ui.py) in favor of the canonical compute_ha_readiness evaluator; the failover-readiness report/console module's own PAN-label debt (VSYS-composed display_name) was corrected first (op0b_s9_pan_ha_label_authority_correction, 2026-09-04); this criterion's own named files were corrected in op0b_s9_ui_authority_reconciliation, 2026-09-04 -- DONE",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/failover_readiness_assessment.md"
-    },
-    {
-      "id": "failover_plan_compiler",
-      "title": "Failover Plan Compiler & Dry-Run",
-      "status": "automated_validated",
-      "introduced": "OP.1",
-      "weight": 4,
-      "summary": "Compiles the exact graceful vendor action, rollback, impact window and preemption note int",
-      "why": "Makes the action explicit and reviewable before any write capability exists.",
-      "criteria": [
-        {
-          "id": "action_rollback_compile",
-          "label": "Compile active-initiated action + rollback per vendor/mode",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "impact_window_preemption",
-          "label": "Impact-window estimate + preemption/fall-back note",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "dry_run_only",
-          "label": "Dry-run only; executes nothing",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/failover_plan_compiler.md"
-    },
-    {
-      "id": "failover_controlled_execution",
-      "title": "Controlled Failover Execution",
-      "status": "planned",
-      "introduced": "OP.2",
-      "weight": 8,
-      "summary": "The single write-capable component: one authorised, confirmed action with fresh same-workf",
-      "why": "The payoff of a trustworthy SEE/VERIFY/TRACE/RECOVER stack; the tool's first OPERATE capab",
-      "criteria": [
-        {
-          "id": "single_action_executor",
-          "label": "One authorised action per run; re-assess between actions",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "preflight_act_verify_no_autorollback",
-          "label": "Fresh preflight -> guarded single submission -> independent verify; no automatic rollback; OUTCOME_UNKNOWN quarantines",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "audit_record",
-          "label": "Immutable who/when/intent/verdict/plan/steps/outcome audit record",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "operate_rbac_gate",
-          "label": "Feature flag + per-run token + OIDC/RBAC OPERATE role + maintenance window",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "vendor_action_adapters",
-          "label": "CP ClusterXL, CP VSX per-VS, PAN A/P (+A/A) action adapters",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/failover_controlled_execution.md"
-    },
-    {
-      "id": "codebase_modularization",
-      "title": "Behavior-Preserving Codebase Modularization",
-      "status": "done",
-      "introduced": "Local architecture health",
-      "target": "Local development, before and during DEPLOY.1",
-      "weight": 7,
-      "summary": "Separates large UI, orchestration and vendor-collector modules by stable responsibility wh",
-      "why": "Reduces change risk, improves testability and creates clear server migration seams without",
-      "criteria": [
-        {
-          "id": "frontend_composition",
-          "label": "Responsibility-owned frontend fragments compose to one report",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "main_workflow_seams",
-          "label": "CLI orchestration has explicit workflow/service seams",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "vendor_collector_seams",
-          "label": "PAN and Check Point collector responsibilities are isolated",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "behavior_preservation",
-          "label": "Render, privacy and regression gates stay green for each extraction",
-          "state": "pending",
-          "weight": 2
-        }
-      ],
-      "detail": "docs/history/features/codebase_modularization.md"
-    },
-    {
-      "id": "operator_console_surface",
-      "title": "Operator Console - read-only surface",
-      "status": "done",
-      "introduced": "CON.1",
-      "weight": 5,
-      "summary": "Authenticated loopback HTTP surface serving the existing UI modules and report payloads li",
-      "why": "Establishes transport, authentication, CSP and the dual delivery mode (portable static rep",
-      "criteria": [
-        {
-          "id": "loopback_auth",
-          "label": "Loopback bind + cookieless per-launch bearer token",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "dual_mode_ui",
-          "label": "One UI source, two delivery modes; report keeps no action surface",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "payload_parity",
-          "label": "Console payloads byte-equal to the exported report's",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "no_mutating_route",
-          "label": "No mutating HTTP route exists (asserted on the route table)",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/operator_console_surface.md"
-    },
-    {
-      "id": "operator_console_job_engine",
-      "title": "Operator Console - job engine and read-class actions",
-      "status": "automated_validated",
-      "introduced": "CON.2",
-      "weight": 8,
-      "summary": "Durable job records plus a closed registry of read-class actions (re-collect an inventory",
-      "why": "The phase where the product becomes an operator tool rather than a report you regenerate f",
-      "criteria": [
-        {
-          "id": "closed_registry",
-          "label": "Closed job-type registry; browser sends intent, never a command",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "durable_jobs",
-          "label": "Durable job records on the evidence backend; terminal state on crash",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "single_orchestration_path",
-          "label": "Every execution goes through main(); no second orchestration path",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "console_provenance",
-          "label": "provenance='console' in every manifest and job record",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/operator_console_job_engine.md"
-    },
-    {
-      "id": "operator_console_operational_actions",
-      "title": "Operator Console - operational-write actions",
-      "status": "planned",
-      "introduced": "CON.3",
-      "weight": 6,
-      "summary": "Per-device Check Point Gaia backup triggered from the console, inside the D3 pilot allowli",
-      "why": "The BackBox-parity moment for the CP pilot set, in its smallest safe form: one device per",
-      "criteria": [
-        {
-          "id": "three_gates",
-          "label": "UI / API / collector refuse independently",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "preflight_confirm",
-          "label": "Zero-device-contact preflight + single-use bound confirm token",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "ledger_authority",
-          "label": "24h operational-write ledger stays authoritative; no force control",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "no_payload_route",
-          "label": "No route exposes recovery bytes, paths or a decrypt path",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/operator_console_operational_actions.md"
-    },
-    {
-      "id": "operator_console_scheduler_view",
-      "title": "Operator Console - scheduler surface (read-only)",
-      "status": "planned",
-      "introduced": "CON.5",
-      "weight": 3,
-      "summary": "Read-only view of the RuntimeRoot scheduler policy, due-ness and last/next run, including",
-      "why": "'recovery-cp' is absent from ALLOWLISTED_WORKFLOWS because D3 approved the CP backup comma",
-      "criteria": [
-        {
-          "id": "derived_unschedulable",
-          "label": "Unschedulable list derived from ALLOWLISTED_WORKFLOWS, never authored in the UI",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "read_only",
-          "label": "No policy or state mutation route",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "honest_empty_state",
-          "label": "Default-disabled scheduler renders as disabled, not as broken",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/operator_console_scheduler_view.md"
-    },
-    {
-      "id": "device_registry_enrollment_foundation",
-      "title": "Product Control Plane - Device Registry + manual enrollment foundation",
-      "status": "in_progress",
-      "introduced": "PCP.1",
-      "weight": 8,
-      "summary": "Persistent, RuntimeRoot-resident Device Registry (opaque device_id, endpoints, vendor clas",
-      "why": "The first persistent product object: stable targets to schedule, display and relate withou",
-      "criteria": [
-        {
-          "id": "registry_model",
-          "label": "DeviceRecord + lifecycle table; no secret-capable field; opaque ids; mutation lock release is instance-safe (ownership-token equality check, never a bare unlink)",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "filesystem_backend",
-          "label": "Eighth evidence_backend concern, filesystem only, atomic, RuntimeRoot-resident",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "cli_enrollment",
-          "label": "--registry-enroll / --registry-list / --registry-disable; mode-exclusive; no vendor import, no network",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "privacy_bundle_exclusion",
-          "label": "Registry file and its mutation lock file (both LOCAL-SENSITIVE/CLASS 2) never in the support bundle, report, console payload or repository",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "evidence_identity_untouched",
-          "label": "unified.json / entity_id / console registry / ALLOWLISTED_WORKFLOWS / utils.operate byte-unchanged",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/device_registry_enrollment_foundation.md"
-    },
-    {
-      "id": "management_plane_enrollment_providers",
-      "title": "Product Control Plane - Panorama and Check Point management enrollment providers",
-      "status": "planned",
-      "introduced": "PCP.2",
-      "weight": 6,
-      "summary": "Candidates derived from already-collected Panorama and MDS/CMA discovery artifacts, explic",
-      "why": "Default behaviour is candidate -> explicit enrollment; no phantom devices from unverified",
-      "criteria": [
-        {
-          "id": "candidates_from_existing_artifacts",
-          "label": "No new device command; candidates from the existing collections",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "explicit_enrollment",
-          "label": "Operator selects candidates; nothing auto-enrolls by default",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "first_contact_job",
-          "label": "Class 0 first contact establishes identity/capability evidence; gate entry recorded for the reuse",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "trust_policy",
-          "label": "pcp_first_contact_trust_policy decided and enforced",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/management_plane_enrollment_providers.md"
-    },
-    {
-      "id": "capability_resolution_module_activation",
-      "title": "Product Control Plane - capability resolution + module activation",
-      "status": "planned",
-      "introduced": "PCP.3",
-      "weight": 6,
-      "summary": "Per-device capability projection (inventory, configuration, backup, ha_readiness, controll",
-      "why": "Modules light up from evidence, not from labels or user claims; capability != readiness !=",
-      "criteria": [
-        {
-          "id": "projection_from_evidence",
-          "label": "Derived from existing capability/lifecycle/platform/identity inputs",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "unsupported_explicit",
-          "label": "Unresolvable combinations yield UNSUPPORTED(reason)",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "not_authorization",
-          "label": "controlled_operations presence never implies permission; DenyAllAuthorizer unchanged",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/capability_resolution_module_activation.md"
-    },
-    {
-      "id": "control_plane_console_experience",
-      "title": "Product Control Plane - first-run onboarding + device experience (console)",
-      "status": "planned",
-      "introduced": "PCP.4",
-      "weight": 6,
-      "summary": "Welcome / Add Devices (candidates) and per-device Overview / Inventory / Configuration / B",
-      "why": "The product interaction model of a persistent control plane; OP.2.D's class 2 flow is expe",
-      "criteria": [
-        {
-          "id": "add_devices_from_candidates",
-          "label": "Candidate ids only cross the intent boundary",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "device_tabs_projections",
-          "label": "Tabs are projections; UI computes no identity/topology/readiness",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "payload_parity_render_harness",
-          "label": "Report/console parity; render harness green; report stays action-free",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "manual_entry_gate_decided",
-          "label": "pcp_console_registry_write_gate decided and honoured",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/control_plane_console_experience.md"
-    },
-    {
-      "id": "typed_job_plane_current_projections",
-      "title": "Product Control Plane - typed job plane + current-state projections",
-      "status": "planned",
-      "introduced": "PCP.5",
-      "weight": 7,
-      "summary": "Job definitions and runs keyed by device_id targets with independent cadences, closed job-",
-      "why": "Enrollment and collection are separate; schedules reference typed capabilities, never vend",
-      "criteria": [
-        {
-          "id": "job_definitions_runs",
-          "label": "Durable typed definitions/runs over registry targets",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "closed_vocabulary_fail_closed",
-          "label": "Closed job types; default-disabled; >= 10 min floor preserved",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "projection_freshness",
-          "label": "Provenance/freshness/staleness fields; no TTL invented",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "storage_engine_decided",
-          "label": "pcp_storage_engine decided against the recorded criteria",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/typed_job_plane_current_projections.md"
-    },
-    {
-      "id": "independent_capability_jobs",
-      "title": "Product Control Plane - independent inventory / configuration / backup / readiness jobs",
-      "status": "planned",
-      "introduced": "PCP.6",
-      "weight": 5,
-      "summary": "Collector target-selection seams so each capability runs as its own typed job over registr",
-      "why": "Independent cadences without multiplying device contact: every job still enters the admiss",
-      "criteria": [
-        {
-          "id": "target_selection_seams",
-          "label": "Each collector accepts a registry-derived target set",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "backup_capability_driven",
-          "label": "Backup jobs resolve through RB.x contract state; recovery-cp stays unscheduled per D3",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "no_contact_multiplication",
-          "label": "Aggregate per-endpoint contact bounded as today",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/independent_capability_jobs.md"
-    },
-    {
-      "id": "fast_telemetry_plane",
-      "title": "Product Control Plane - optional fast telemetry plane (SNMPv3 candidate)",
-      "status": "deferred",
-      "introduced": "PCP.7",
-      "weight": 3,
-      "summary": "Inexpensive periodic observation (availability, uptime, interface state, resource health)",
-      "why": "A future cheap signal plane behind its own security/command/OID gate; explicitly not a fir",
-      "criteria": [
-        {
-          "id": "own_gate",
-          "label": "Security review + OID/command gate + CLASS 3 secret handling before any code",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "trigger_not_evidence",
-          "label": "Telemetry only marks stale and triggers; never authoritative",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/fast_telemetry_plane.md"
-    },
-    {
-      "id": "diagnostic_runbooks",
-      "title": "Product Control Plane - Diagnostic Runbooks (CLASS 0, closed catalog)",
-      "status": "planned",
-      "introduced": "PCP.8",
-      "weight": 4,
-      "summary": "Bounded ordered read-only diagnostic sequences over registered targets from a closed sourc",
-      "why": "Operators run diagnostics from the product without a browser-to-shell path; every step pas",
-      "criteria": [
-        {
-          "id": "closed_catalog",
-          "label": "Catalog in source; class 0 steps only; validator rejects class 1+",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "bounded_execution",
-          "label": "Timeout, output limits, deterministic framing, redaction, audit",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "shared_primitive_registry",
-          "label": "One primitive registry with CE.2, not two",
-          "state": "pending",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/diagnostic_runbooks.md"
-    },
-    {
-      "id": "left_vertical_product_navigation",
-      "title": "Left vertical product navigation (architecture FROZEN; M2 accessibility closure merged via PR #85; availability_rule still pending)",
-      "status": "in_progress",
-      "introduced": "NAV.1 (prototype)",
-      "weight": 5,
-      "summary": "ARCHITECTURE FROZEN 2026-09-05.",
-      "why": "The flat one-root-per-view topbar strip could not express which entries are product domain",
-      "criteria": [
-        {
-          "id": "domain_grouping",
-          "label": "Six evaluated product-domain roots; Devices first-class; device-scoped views are tabs, not roots -- FROZEN: six roots in the approved order, Recovery reserved seventh, Jobs under Operations (PO-NAV-8)",
-          "state": "done",
-          "weight": 2
-        },
-        {
-          "id": "availability_rule",
-          "label": "An entry/tab renders iff its shell ships the surface; no disabled, greyed or 'coming soon' placeholder anywhere -- Direction FROZEN as four predicates (P1 surface eligibility / P2 entity applicability / P3 evidence state / P4 future authorization). M11 (relay/NXS-LOCAL-0022, 2026-09-08): P1/D1 is now the sole, explicit render/not-render gate, formalized as the client-side mirror of the M10.2 resolver's stage 0 union tag (static/navigation_ui.js::navigationResolveSurface), with a cross-product regression test proving D2..D7 never change it (AC-CS-2). P2 (entity applicability) and P3 (evidence state) stay pending at the CONTENT level -- they are structurally forbidden from ever gating render (AC-CS-2/AC-CS-25/AC-CS-33) so 'closing' them can only ever mean a content-level case (e.g. a D-NAV13 NOT_APPLICABLE device tab), which needs a real-device -> logical-entity-type classifier that does not exist yet and is out of this movement's own producer scope; tracked as future work. P4 stays pending/out-of-scope (no D7/RBAC model exists).",
-          "state": "pending",
-          "weight": 2
-        },
-        {
-          "id": "collapse_is_density",
-          "label": "Collapse/expand changes presentation only -- Browser-verified: identical data-module set collapsed and expanded, state persisted, no availability effect",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "routes_preserved",
-          "label": "Every pre-existing hash/localStorage route resolves; the module universe is derived from the model, not re-listed -- Every pre-existing hash/localStorage route resolves; the module universe is derived from the model, not re-listed",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "no_enrollment_affordance",
-          "label": "Movement M9 (2026-09-07) implemented manual-endpoint enrollment: 'Add Device' now renders in the Inventory/entity-list pane header (PO-NAV-1 primary location) and all seventeen section 9.1 conditions are enforced server-side (closed schema, no device I/O in the request, first contact as a separate queued CLASS 0 job, positive-evidence identity, explicit preview and confirmation, immutable audit before the DeviceRegistry mutation, loopback-only). Candidate-based enrollment is schema-present but refused server-side pending M10's registry<->evidence reconciliation join (section 9.2 amendment A6). The Administration -> Device Management second entry point (PO-NAV-1's lifecycle home) is built (Movement M9, round 2) and opens the same shared enrollment dialog as the primary location; it is console-shell-only by design (D-NAV6 shell integrity).",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "authorization_seam_only",
-          "label": "Authorization-aware seam with model 'none'; no role/permission/scope/claim gates any navigation decision -- navigationAuthorizationContext() returns model 'none'; no role/permission/scope/claim gates any navigation decision",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "accessibility_closure",
-          "label": "Four named accessibility gaps closed: icon-only accessible names, prefers-reduced-motion, focus management after navigation, group semantics -- Movement M2 closed AC-A11Y-1..4 2026-09-06 (real-Chromium validated, both shells), merged to main via PR #85. This criterion alone does not complete the feature: availability_rule (below) is a separate, still-pending criterion",
-          "state": "done",
-          "weight": 1
-        }
-      ],
-      "detail": "docs/history/features/left_vertical_product_navigation.md"
-    },
-    {
-      "id": "ui2_java_product_line",
-      "title": "UI 2.0 -- Java product line (implementation active; release gates open)",
-      "status": "in_progress",
-      "introduced": "UI2.B0 (contracts)",
-      "weight": 30,
-      "summary": "Java is the sole development line. Local Java deliveries are recorded in build history; real-device and production acceptance remain unverified. Product scope is projected by project/java_product_plan.json.",
-      "why": "The Line-1 feature scripts were written to feed static, task-specific pages.",
-      "detail": "docs/history/features/ui2_java_product_line.md"
-    },
-    {
-      "id": "java_identity",
-      "title": "Local identity and session administration",
-      "status": "automated_validated",
-      "introduced": "NXS-LOCAL-0176",
-      "weight": 1,
-      "summary": "Local login, root identity and expiry-on-read are recorded; directory-backed production acceptance remains open.",
-      "why": "Track Java delivery independently of historical Line-1 outcomes.",
-      "evidence": "project/build_history.json#NXS-LOCAL-0176",
-      "criteria": [
-        {
-          "id": "automated",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "acceptance",
-          "state": "pending",
-          "weight": 1
-        }
-      ]
-    },
-    {
-      "id": "java_discovery",
-      "title": "Discovery and device enrollment",
-      "status": "automated_validated",
-      "introduced": "NXS-LOCAL-0173",
-      "weight": 1,
-      "summary": "Discovery, import marking and enrollment have recorded Java deliveries; real-device acceptance remains UNVERIFIED.",
-      "why": "Track Java delivery independently of historical Line-1 outcomes.",
-      "evidence": "project/build_history.json#NXS-LOCAL-0173",
-      "criteria": [
-        {
-          "id": "automated",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "acceptance",
-          "state": "pending",
-          "weight": 1
-        }
-      ]
-    },
-    {
-      "id": "java_inventory",
-      "title": "Inventory and cluster views",
-      "status": "automated_validated",
-      "introduced": "NXS-LOCAL-0164",
-      "weight": 1,
-      "summary": "Inventory reads and collection have recorded Java deliveries; live field bindings remain UNVERIFIED.",
-      "why": "Track Java delivery independently of historical Line-1 outcomes.",
-      "evidence": "project/build_history.json#NXS-LOCAL-0164",
-      "criteria": [
-        {
-          "id": "automated",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "acceptance",
-          "state": "pending",
-          "weight": 1
-        }
-      ]
-    },
-    {
-      "id": "java_configuration",
-      "title": "Configuration evidence and encrypted artefacts",
-      "status": "automated_validated",
-      "introduced": "NXS-LOCAL-0167",
-      "weight": 1,
-      "summary": "Configuration collection and view have recorded Java deliveries; live outcomes remain UNVERIFIED.",
-      "why": "Track Java delivery independently of historical Line-1 outcomes.",
-      "evidence": "project/build_history.json#NXS-LOCAL-0167",
-      "criteria": [
-        {
-          "id": "automated",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "acceptance",
-          "state": "pending",
-          "weight": 1
-        }
-      ]
-    },
-    {
-      "id": "java_backup",
-      "title": "Check Point gateway backup pilot",
-      "status": "automated_validated",
-      "introduced": "NXS-LOCAL-0175",
-      "weight": 1,
-      "summary": "Pilot allowlist remains a gate. Automated delivery does not prove a successful device backup.",
-      "why": "Track Java delivery independently of historical Line-1 outcomes.",
-      "evidence": "project/build_history.json#NXS-LOCAL-0175",
-      "criteria": [
-        {
-          "id": "automated",
-          "state": "done",
-          "weight": 1
-        },
-        {
-          "id": "acceptance",
-          "state": "pending",
-          "weight": 1
-        }
-      ]
-    },
-    {
-      "id": "java_project_plan",
-      "title": "Java product roadmap projection",
-      "status": "in_progress",
-      "introduced": "NXS-LOCAL-0242",
-      "weight": 1,
-      "summary": "Java features, release debt and converted lessons are separate; source freshness is explicit.",
-      "why": "Track Java delivery independently of historical Line-1 outcomes.",
-      "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
-      "criteria": [
-        {
-          "id": "automated",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "acceptance",
-          "state": "pending",
-          "weight": 1
-        }
-      ]
-    },
-    {
-      "id": "java_restore",
-      "title": "Restore acceptance for Release 1",
-      "status": "blocked",
-      "introduced": null,
-      "weight": 1,
-      "summary": "Restore is disabled. The frozen baseline requires restore for Release 1; the first pilot is not Release 1.",
-      "why": "Track Java delivery independently of historical Line-1 outcomes.",
-      "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
-      "criteria": [
-        {
-          "id": "automated",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "acceptance",
-          "state": "pending",
-          "weight": 1
-        }
-      ]
-    },
-    {
-      "id": "java_checks",
-      "title": "REL-CHECKS capability release",
-      "status": "planned",
-      "introduced": null,
-      "weight": 1,
-      "summary": "Frozen baseline names the release slice; Java delivery and real-environment acceptance are not established by Python outcomes.",
-      "why": "Track Java delivery independently of historical Line-1 outcomes.",
-      "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
-      "criteria": [
-        {
-          "id": "automated",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "acceptance",
-          "state": "pending",
-          "weight": 1
-        }
-      ]
-    },
-    {
-      "id": "java_failover_readiness",
-      "title": "REL-FAILOVER-READINESS capability release",
-      "status": "planned",
-      "introduced": null,
-      "weight": 1,
-      "summary": "Readiness is distinct from authorization and controlled execution; Java delivery is not inferred from Python history.",
-      "why": "Track Java delivery independently of historical Line-1 outcomes.",
-      "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
-      "criteria": [
-        {
-          "id": "automated",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "acceptance",
-          "state": "pending",
-          "weight": 1
-        }
-      ]
-    },
-    {
-      "id": "java_scheduler",
-      "title": "Per-capability scheduling",
-      "status": "deferred",
-      "introduced": null,
-      "weight": 1,
-      "summary": "Scheduler has no enabled product path; M12 is a historical Line-1 horizon, not the Java next build.",
-      "why": "Track Java delivery independently of historical Line-1 outcomes.",
-      "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
-      "criteria": [
-        {
-          "id": "automated",
-          "state": "pending",
-          "weight": 1
-        },
-        {
-          "id": "acceptance",
-          "state": "pending",
-          "weight": 1
-        }
-      ]
+ "schema_version": "1.0",
+ "features": [
+  {
+   "id": "network_inventory",
+   "title": "Unified Network Inventory",
+   "status": "done",
+   "introduced": "0.5 Final",
+   "weight": 8,
+   "summary": "Normalized multi-vendor inventory with search, filters, freshness and logical device views",
+   "why": "Creates the trusted SEE layer used by every later configuration, alignment and recovery wo",
+   "criteria": [
+    {
+     "id": "normalized_inventory",
+     "label": "Normalized inventory model",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "search_filter",
+     "label": "Search/filter UX",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "freshness",
+     "label": "Failure-aware freshness",
+     "state": "done",
+     "weight": 1
     }
-  ]
+   ],
+   "detail": "docs/history/features/network_inventory.md"
+  },
+  {
+   "id": "failure_aware_inventory",
+   "title": "Failure-Aware Snapshot Semantics",
+   "status": "done",
+   "introduced": "0.5",
+   "weight": 4,
+   "summary": "Separates collection failure, management-reported state and last-known-good evidence.",
+   "why": "Prevents unavailable collection from being misrepresented as device failure or fresh state",
+   "criteria": [
+    {
+     "id": "failure_states",
+     "label": "Failure states",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "lkg",
+     "label": "Last-known-good handling",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/failure_aware_inventory.md"
+  },
+  {
+   "id": "clusterxl_inventory",
+   "title": "ClusterXL Inventory Hierarchy",
+   "status": "done",
+   "introduced": "0.5",
+   "weight": 5,
+   "summary": "Represents ClusterXL clusters, members, VIP/member addresses and member-specific route/int",
+   "why": "Keeps physical member evidence without losing the logical cluster view.",
+   "criteria": [
+    {
+     "id": "members",
+     "label": "Member hierarchy",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "vip",
+     "label": "VIP/member address semantics",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/clusterxl_inventory.md"
+  },
+  {
+   "id": "vsx_inventory",
+   "title": "VSX Inventory Hierarchy",
+   "status": "done",
+   "introduced": "0.5",
+   "weight": 5,
+   "summary": "Models VSX physical members and Virtual Systems as a hierarchy instead of independent fire",
+   "why": "Preserves the execution endpoint/context relationship required for correct collection and",
+   "criteria": [
+    {
+     "id": "contexts",
+     "label": "VS contexts",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "logical_hierarchy",
+     "label": "Logical hierarchy",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/vsx_inventory.md"
+  },
+  {
+   "id": "pan_runtime_inventory",
+   "title": "PAN Runtime Inventory",
+   "status": "done",
+   "introduced": "0.5",
+   "weight": 5,
+   "summary": "Discovers managed Palo Alto firewalls and VSYS runtime context through Panorama.",
+   "why": "Provides management-led target discovery and topology for PAN current-state collection.",
+   "criteria": [
+    {
+     "id": "fleet",
+     "label": "Fleet discovery",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "vsys",
+     "label": "VSYS identity",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/pan_runtime_inventory.md"
+  },
+  {
+   "id": "pan_config_evidence",
+   "title": "PAN Effective Configuration Evidence",
+   "status": "done",
+   "introduced": "0.6.0A",
+   "weight": 12,
+   "summary": "Collects direct-firewall effective-running configuration while retaining Panorama/local/me",
+   "why": "Answers what the firewall is actually configured as now without confusing management inten",
+   "criteria": [
+    {
+     "id": "identity",
+     "label": "Direct identity gate",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "effective",
+     "label": "Effective-running primary evidence",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "fleet",
+     "label": "Connected fleet validation",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/pan_config_evidence.md"
+  },
+  {
+   "id": "pan_alignment_foundation",
+   "title": "PAN Expected ↔ Actual Alignment",
+   "status": "done",
+   "introduced": "0.6.0A4.2",
+   "weight": 10,
+   "summary": "Compiles Panorama expected configuration and classifies setting-level alignment, override,",
+   "why": "Separates benign local/member semantics from unexplained effective drift and reduces false",
+   "criteria": [
+    {
+     "id": "compiler",
+     "label": "Expected compiler",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "identity_translation",
+     "label": "VSYS identity translation",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "semantic_states",
+     "label": "Semantic classifications",
+     "state": "done",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/pan_alignment_foundation.md"
+  },
+  {
+   "id": "content_addressed_history",
+   "title": "Content-Addressed Configuration History",
+   "status": "done",
+   "introduced": "0.6.0A4.3.2",
+   "weight": 8,
+   "summary": "Stores one immutable object per unique configuration payload while history snapshots refer",
+   "why": "Preserves history without duplicating identical multi-gigabyte configuration payloads.",
+   "evidence": "1295 legacy snapshots migrated to 153 unique CAS objects; approximately 2.98 GiB duplicate payload storage reclaimed in the validated migration.",
+   "criteria": [
+    {
+     "id": "cas",
+     "label": "Vendor-neutral CAS",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "migration",
+     "label": "Safe legacy migration",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "rollback",
+     "label": "Rollback manifest/integrity gates",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "distributed_metadata_backend",
+     "label": "Shared metadata index backend (DEV.3.3, Postgres; blobs stay on the volume)",
+     "state": "done",
+     "weight": 2,
+     "note": "backlog.json distributed_evidence_store_migration, AUTOMATED_VALIDATED 2026-08-31."
+    }
+   ],
+   "detail": "docs/history/features/content_addressed_history.md"
+  },
+  {
+   "id": "configuration_ui",
+   "title": "Configuration UI",
+   "status": "done",
+   "introduced": "0.6.0A4.3",
+   "weight": 8,
+   "summary": "Vendor-neutral current configuration, evidence, alignment, history and backup placeholders",
+   "why": "Gives operators one consistent view while retaining vendor-specific evidence semantics und",
+   "criteria": [
+    {
+     "id": "fleet",
+     "label": "Fleet/device navigation",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "current",
+     "label": "Current-state projection",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "responsive",
+     "label": "Responsive/collapsible device UX",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/configuration_ui.md"
+  },
+  {
+   "id": "workflow_modes",
+   "title": "Development Workflow Modes",
+   "status": "done",
+   "introduced": "0.6.0A4.3.3.2",
+   "weight": 5,
+   "summary": "Adds render-only, PAN-config, VSX-only, CP-only and full-checkpoint workflows with mixed-c",
+   "why": "Keeps development loops fast without presenting partial reused evidence as a fresh full ch",
+   "criteria": [
+    {
+     "id": "partial_modes",
+     "label": "Partial modes",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "checkpoint_semantics",
+     "label": "Checkpoint/mixed-cycle semantics",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/workflow_modes.md"
+  },
+  {
+   "id": "living_project_plan",
+   "title": "Living Project Plan UI",
+   "status": "done",
+   "introduced": "0.6.1B.1.2",
+   "weight": 4,
+   "summary": "In-product roadmap, progress, Now/Next/Upcoming, backlog, completed-feature explanations a",
+   "why": "Keeps implementation position, deferred work and technical debt visible so build-by-build",
+   "criteria": [
+    {
+     "id": "metadata",
+     "label": "Versioned roadmap/feature/backlog/build metadata",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "progress",
+     "label": "Acceptance-criterion progress calculation",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "ui",
+     "label": "Responsive Project Plan module",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "maintenance",
+     "label": "Per-build metadata update contract",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/living_project_plan.md"
+  },
+  {
+   "id": "cp_config_probe",
+   "title": "Check Point Configuration Evidence Probe",
+   "status": "done",
+   "introduced": "0.6.1A",
+   "weight": 6,
+   "summary": "Validated direct read-only Check Point actual-configuration evidence, identity gating and",
+   "why": "Proved the collection semantics on real Standalone, ClusterXL and VSX devices before produ",
+   "criteria": [
+    {
+     "id": "expert_clish",
+     "label": "Expert→Clish evidence path",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "identity",
+     "label": "Identity gate",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "vsx",
+     "label": "VSX context distinctness",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/cp_config_probe.md"
+  },
+  {
+   "id": "cp_config_collector",
+   "title": "Check Point Current Configuration",
+   "status": "done",
+   "introduced": "0.6.1B",
+   "weight": 12,
+   "summary": "Collects secret-aware current Gaia configuration for Standalone, ClusterXL members, VSX ho",
+   "why": "Extends Configuration beyond PAN while keeping member/VS context and raw-secret boundaries",
+   "criteria": [
+    {
+     "id": "standalone",
+     "label": "Standalone current state",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "clusterxl",
+     "label": "ClusterXL member state",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "vsx",
+     "label": "VSX host/VS state",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "redaction",
+     "label": "Secret-aware CAS/UI projection",
+     "state": "done",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/cp_config_collector.md"
+  },
+  {
+   "id": "cp_coverage_closure",
+   "title": "CP Coverage Closure",
+   "status": "in_progress",
+   "introduced": "0.6.1B.1",
+   "target": "0.6.1B.1.2",
+   "weight": 10,
+   "summary": "Closes shell/platform/metadata coverage gaps and distinguishes operational failure from un",
+   "why": "A management-discovered device should be collectable according to observed capabilities, n",
+   "criteria": [
+    {
+     "id": "failure_taxonomy",
+     "label": "Coverage/failure taxonomy",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "model_serial",
+     "label": "Model/Serial recovery",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "interactive_adapter",
+     "label": "Interactive SSH adapter implemented",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "spark_runtime",
+     "label": "Direct-Clish/Spark real-environment validation",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "ha_runtime",
+     "label": "ClusterXL runtime HA role validation",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "coverage_gate",
+     "label": "Fleet coverage closure validation",
+     "state": "pending",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/cp_coverage_closure.md"
+  },
+  {
+   "id": "discovery_capability_foundation",
+   "title": "Discovery Lifecycle + Capability Profiles",
+   "status": "automated_validated",
+   "introduced": "0.6.1C",
+   "target": "0.6.1C",
+   "weight": 10,
+   "summary": "Management-led discovery lifecycle, topology/identity confidence and capability-driven col",
+   "why": "Preserves zero-touch onboarding while making uncertainty explicit instead of automating by",
+   "criteria": [
+    {
+     "id": "lifecycle",
+     "label": "Entity lifecycle",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "capability",
+     "label": "Capability registry",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "planner",
+     "label": "Collection planner",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "production_wiring_preflight",
+     "label": "Production runtime wiring preflight",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "real_environment_validation",
+     "label": "Representative real-environment validation",
+     "state": "pending",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/discovery_capability_foundation.md"
+  },
+  {
+   "id": "cp_management_alignment",
+   "title": "Check Point Management Intent Alignment",
+   "status": "real_env_validated",
+   "target": "0.6.1D",
+   "weight": 10,
+   "summary": "Compare Management intent/expected state with gateway/member/VS actual state using CP-spec",
+   "why": "Adds VERIFY semantics without treating benign ClusterXL/VSX member differences as drift.",
+   "criteria": [
+    {
+     "id": "intent",
+     "label": "Intent evidence model",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "semantic_alignment",
+     "label": "Semantic alignment",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "trusted_intent_source_approval",
+     "label": "Trusted Management intent source approval",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "real_environment_validation",
+     "label": "Representative real-environment validation",
+     "state": "pending",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/cp_management_alignment.md"
+  },
+  {
+   "id": "configuration_history_ux",
+   "title": "Unified Configuration History + Diff UX",
+   "status": "done",
+   "introduced": "0.6.3",
+   "target": "0.6.3",
+   "weight": 8,
+   "summary": "Chronological snapshot selection, normalized change views and safe configuration diffs.",
+   "why": "Turns existing FIRST/SAME/CHANGED history signals into operator-usable TRACE workflows.",
+   "criteria": [
+    {
+     "id": "timeline",
+     "label": "Timeline",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "diff",
+     "label": "Safe normalized diff",
+     "state": "done",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/configuration_history_ux.md"
+  },
+  {
+   "id": "native_backup_foundation",
+   "title": "Vendor-Native Backup Foundation",
+   "status": "in_progress",
+   "target": "RB.1-RB.3 (rebase of original 0.6.0B)",
+   "weight": 10,
+   "summary": "Encrypted recovery plane separate from the evidence plane: vendor-native recovery artifact",
+   "why": "Configuration evidence is deliberately redacted (secrets_redacted: True) and therefore NON",
+   "criteria": [
+    {
+     "id": "pan_export",
+     "label": "PAN device-state export",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "integrity",
+     "label": "Backup integrity/retention",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "cp_backup",
+     "label": "CP native recovery strategy",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/native_backup_foundation.md"
+  },
+  {
+   "id": "production_read_trust",
+   "title": "Read-Plane Production Trust Hardening",
+   "status": "in_progress",
+   "weight": 7,
+   "summary": "Close transport trust, credential, dependency and deployment hardening before production r",
+   "why": "Read-only does not remove the need for authenticated endpoints, trusted TLS/SSH and contro",
+   "criteria": [
+    {
+     "id": "secret_redaction",
+     "label": "Secret redaction/storage boundaries",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "support_privacy",
+     "label": "Privacy-safe support bundles",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "ssh_host_key",
+     "label": "Strict CP SSH host-key trust",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "pan_tls",
+     "label": "PAN corporate CA verification",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "viewer_data_boundary",
+     "label": "Report-only viewer data boundary",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "browser_render_boundary",
+     "label": "CSP and hostile-data rendering tests",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/production_read_trust.md"
+  },
+  {
+   "id": "compliance_posture_foundation",
+   "title": "Compliance Posture Foundation",
+   "status": "done",
+   "introduced": "0.6.1B.1.5",
+   "weight": 6,
+   "summary": "Builds an evidence-backed compliance control-area view from existing CP/PAN normalized con",
+   "why": "Creates the VERIFY on-ramp without over-claiming certification: PASS/FINDING/UNKNOWN/NOT_A",
+   "criteria": [
+    {
+     "id": "control_states",
+     "label": "Control state model with bounded evidence",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "framework_area_mapping",
+     "label": "CIS/PCI DSS/BDDK evidence-area mappings",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "privacy_boundary",
+     "label": "No secret/raw config/real identity in compliance payload",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "fleet_subject_drilldown",
+     "label": "Fleet summary plus anonymized per-subject drilldown",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/compliance_posture_foundation.md"
+  },
+  {
+   "id": "compliance_control_pack_v1",
+   "title": "Compliance Control Pack v1 (CP/PAN)",
+   "status": "done",
+   "target": "0.6.1B.1.6",
+   "weight": 7,
+   "summary": "Expanded compliance posture with 10 vendor-neutral benchmark-aligned subject controls usin",
+   "why": "Strengthens VERIFY signal quality and transparency while preserving privacy boundaries and",
+   "criteria": [
+    {
+     "id": "ten_controls",
+     "label": "10 deterministic controls implemented",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "scope_partition",
+     "label": "Subject/platform/global scope partition maintained",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "framework_traceability",
+     "label": "CIS/PCI DSS/BDDK traceability metadata",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "ui_taxonomy",
+     "label": "Compliance UI taxonomy clarity (top/sub menu semantics)",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "privacy_no_claim",
+     "label": "Privacy boundary and no-certification claim preserved",
+     "state": "done",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/compliance_control_pack_v1.md"
+  },
+  {
+   "id": "compliance_engine",
+   "title": "Compliance Rule Engine",
+   "status": "in_progress",
+   "target": "0.7.x",
+   "weight": 12,
+   "early_foundation": "Early evidence-backed control state model and framework area mappings delivered in 0.6.1B.1.5/1.6. Formal rule engine with versioned rule packs, stronger framework governance and compliance_posture_rulepack_transition bridge opens the 0.7.x track.",
+   "summary": "Vendor-neutral rule evaluation over verified normalized configuration facts.",
+   "why": "Transforms verified current/expected state into actionable compliance findings, and lets o",
+   "criteria": [
+    {
+     "id": "rules",
+     "label": "Rule engine",
+     "state": "pending",
+     "weight": 2,
+     "note": "In progress: 0.6.6B static rule pack + 0.7.1a/b catalog + 0.7.3 (CE.1) data-driven user check engine (compliance_check_pack.py / compliance_check_engine.py) all"
+    }
+   ],
+   "detail": "docs/history/features/compliance_engine.md"
+  },
+  {
+   "id": "framework_mappings",
+   "title": "Framework Mappings",
+   "status": "in_progress",
+   "target": "0.7.x",
+   "weight": 5,
+   "early_foundation": "CIS/PCI-DSS/BDDK control-area mappings and benchmark references delivered in 0.6.1B.1.5/1.6 as evidence-bounded area mappings. 0.7.1a added real per-control per-framework membership; 0.7.4 added the framework SIDE - a declarative requirement catalog (utils/framework_catalog.py) with requirement-level COVERED/PARTIALLY_COVERED/UNCOVERED/NOT_APPLICABLE + posture, version/profile, unmapped-ref drift guard, and a UI requirement drill-down.",
+   "summary": "Map technical evidence/findings to internal and external control frameworks.",
+   "why": "Connects engineering evidence to audit and governance requirements - requirement by requir",
+   "criteria": [
+    {
+     "id": "mapping",
+     "label": "Control mappings",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "requirement_coverage",
+     "label": "Requirement-level coverage",
+     "state": "done",
+     "weight": 1,
+     "note": "0.7.4: framework_catalog.py + compliance_overview.by_framework[].requirements[] with coverage + posture. DEPLOY.1A: custom/signed framework packs + UI mapping editor."
+    }
+   ],
+   "detail": "docs/history/features/framework_mappings.md"
+  },
+  {
+   "id": "evidence_reporting",
+   "title": "Evidence Reports",
+   "status": "in_progress",
+   "target": "0.7.x",
+   "weight": 5,
+   "summary": "Generate bounded evidence reports without exposing raw configuration secrets.",
+   "why": "Supports review, audit and management communication from the same evidence model.",
+   "criteria": [
+    {
+     "id": "reports",
+     "label": "Report model",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/evidence_reporting.md"
+  },
+  {
+   "id": "cross_vendor_change_timeline",
+   "title": "Cross-Vendor Change Timeline",
+   "status": "planned",
+   "target": "0.8.x",
+   "weight": 10,
+   "summary": "Trace normalized configuration changes across devices and vendors over time.",
+   "why": "Makes change investigation independent of vendor-specific raw syntax.",
+   "criteria": [
+    {
+     "id": "timeline",
+     "label": "Cross-vendor timeline",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/cross_vendor_change_timeline.md"
+  },
+  {
+   "id": "root_cause_trace",
+   "title": "Root Cause Trace",
+   "status": "planned",
+   "target": "0.8.x",
+   "weight": 8,
+   "summary": "Correlate evidence, alignment and history to explain what changed and why a finding appear",
+   "why": "Moves from detecting difference to explaining causality and provenance.",
+   "criteria": [
+    {
+     "id": "trace",
+     "label": "Trace graph",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/root_cause_trace.md"
+  },
+  {
+   "id": "native_backup_validation",
+   "title": "Native Backup Validation",
+   "status": "automated_validated",
+   "target": "RB.4",
+   "weight": 10,
+   "summary": "Validation battery V1 transport / V2 structural / V3 semantic.",
+   "why": "A hash proves a file arrived intact; it proves nothing about restorability.",
+   "criteria": [
+    {
+     "id": "validation",
+     "label": "Artifact validation",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/native_backup_validation.md"
+  },
+  {
+   "id": "restore_readiness",
+   "title": "Restore Readiness",
+   "status": "in_progress",
+   "target": "RB.0 (pulled forward from 0.9.x) + RB.5 (delivered by CON.4)",
+   "weight": 8,
+   "summary": "Per-device READY / STALE / PARTIAL / UNPROTECTED / UNKNOWN readiness over already-collecte",
+   "why": "Answers 'if this device died right now, what do we actually have?' with zero new device co",
+   "criteria": [
+    {
+     "id": "readiness",
+     "label": "Readiness model",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "recovery_ui_module",
+     "label": "Recovery UI module (roll-up, coverage-vs-inventory, per-artifact verdicts) in both delivery modes",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/restore_readiness.md"
+  },
+  {
+   "id": "server_data_plane",
+   "title": "Server Data Plane",
+   "status": "planned",
+   "target": "1.0",
+   "weight": 10,
+   "summary": "Deliberate single-worker server data plane first: PostgreSQL when enabled, durable evidenc",
+   "why": "Hardens local persistence for an internal server while avoiding premature distributed comp",
+   "criteria": [
+    {
+     "id": "db",
+     "label": "PostgreSQL metadata",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "workers",
+     "label": "Worker queue",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "object_store",
+     "label": "Shared payload storage decision after measured multi-worker need",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "migrations_roles",
+     "label": "Reviewed migrations and DML-only database role",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "recovery_durability",
+     "label": "Off-host recovery storage and key custody",
+     "state": "pending",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/server_data_plane.md"
+  },
+  {
+   "id": "oidc_rbac_audit",
+   "title": "OIDC / RBAC / Audit",
+   "status": "planned",
+   "target": "1.0",
+   "weight": 8,
+   "summary": "Enterprise authentication, authorization and audited access to sensitive evidence/actions.",
+   "why": "Required before broader multi-user production use and any future write plane.",
+   "criteria": [
+    {
+     "id": "oidc",
+     "label": "OIDC",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "rbac",
+     "label": "RBAC",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "audit",
+     "label": "Audit trail",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/oidc_rbac_audit.md"
+  },
+  {
+   "id": "production_observability",
+   "title": "Production Observability & Deployment",
+   "status": "planned",
+   "target": "1.0",
+   "weight": 7,
+   "summary": "Container/pod topology, health, metrics, logs, dependency and supply-chain controls.",
+   "why": "Makes collector/network access boundaries and operational health supportable in production",
+   "criteria": [
+    {
+     "id": "containers",
+     "label": "Container deployment",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "health",
+     "label": "Health/metrics",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "least_privilege_runtime",
+     "label": "Non-root, restricted container runtime",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "release_assurance",
+     "label": "Locked CI release, SBOM and provenance",
+     "state": "pending",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/production_observability.md"
+  },
+  {
+   "id": "collection_execution_coordinator",
+   "title": "Collection Execution Coordinator & Safety Policy",
+   "status": "automated_validated",
+   "introduced": "0.6.1C",
+   "target": "0.6.1C / DEPLOY.1",
+   "weight": 10,
+   "summary": "Per-device canonical identity lock, vendor/context concurrency budget, cooldown, coalescin",
+   "why": "Required before recurring scheduling or event-driven triggers; prevents concurrent CP/VSX/",
+   "criteria": [
+    {
+     "id": "device_lock",
+     "label": "Per-canonical-device job lock",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "concurrency_budget",
+     "label": "Vendor/context concurrency budget",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "job_provenance",
+     "label": "Job provenance: manual / scheduled (event reserved only)",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "cancellation",
+     "label": "Cancellation and bounded retry",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "production_runtime_wiring",
+     "label": "Shared production runtime admission and scheduler dispatch",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "real_environment_validation",
+     "label": "Coordinator/scheduler real-environment validation",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "distributed_backend",
+     "label": "Cross-process backend (DEV.3.2, Postgres advisory locks)",
+     "state": "done",
+     "weight": 2,
+     "note": "backlog.json distributed_endpoint_lock, AUTOMATED_VALIDATED 2026-08-30."
+    }
+   ],
+   "detail": "docs/history/features/collection_execution_coordinator.md"
+  },
+  {
+   "id": "deploy1_oidc_viewer",
+   "title": "DEPLOY.1A â€” Authenticated Read-Only Viewer Boundary",
+   "status": "planned",
+   "target": "DEPLOY.1A",
+   "weight": 9,
+   "summary": "Corporate OIDC login gate in front of all UI and API surfaces before the server is opened",
+   "why": "Network topology, rule sets and configuration evidence are sensitive even after redaction.",
+   "criteria": [
+    {
+     "id": "oidc_login",
+     "label": "Corporate OIDC login required",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "viewer_role",
+     "label": "Viewer role / explicit deny-by-default",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "audit_access",
+     "label": "Login and view/export audit events",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "no_secret_in_browser",
+     "label": "No credential or raw operational artifact in browser/export",
+     "state": "pending",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/deploy1_oidc_viewer.md"
+  },
+  {
+   "id": "deploy1_evidence_egress_policy",
+   "title": "DEPLOY.1 â€” Evidence Egress & Sharing Policy",
+   "status": "planned",
+   "target": "DEPLOY.1",
+   "weight": 6,
+   "summary": "Explicit policy and enforcement for every path evidence can leave the system: UI export, s",
+   "why": "As server, event intake and TI integration add new egress paths, a single governed policy",
+   "criteria": [
+    {
+     "id": "egress_inventory",
+     "label": "Egress path inventory",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "retention_redaction",
+     "label": "Retention and redaction rules per path",
+     "state": "pending",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/deploy1_evidence_egress_policy.md"
+  },
+  {
+   "id": "crypto_agility_pqc",
+   "title": "Cryptographic Posture, Crypto-Agility & PQC Readiness",
+   "status": "automated_validated",
+   "target": "0.7.x",
+   "weight": 10,
+   "summary": "Normalize IPsec/IKE proposal, TLS policy, certificate and platform-capability facts for Ch",
+   "why": "Turns existing configuration evidence into actionable crypto risk findings without adding",
+   "criteria": [
+    {
+     "id": "crypto_facts",
+     "label": "IPsec/IKE/TLS/cert normalized facts (CP + PAN)",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "rule_packs",
+     "label": "Versioned crypto rule packs (weak/agility/PQC)",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "evidence_confidence",
+     "label": "Configured vs negotiated vs inferred confidence model",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "pqc_capability",
+     "label": "Platform/OS PQC capability evidence",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/crypto_agility_pqc.md"
+  },
+  {
+   "id": "event_signal_intake",
+   "title": "External Change Signal Intake & Bounded Evidence Trigger",
+   "status": "in_progress",
+   "target": "0.8.x",
+   "weight": 8,
+   "summary": "Authenticated webhook ingress (e.g.",
+   "why": "Enables near-real-time configuration snapshots after policy-install events without polling",
+   "criteria": [
+    {
+     "id": "authenticated_ingress",
+     "label": "Authenticated / signed webhook ingress (mTLS or OIDC-client)",
+     "state": "done",
+     "weight": 2,
+     "note": "Slice 1 (docs/design/EVENT_SIGNAL_INTAKE_ARCHITECTURE.md) ships HMAC-SHA256 shared-secret ingress (signal_intake/app.py, utils/event_signal_intake.py) instead of mTLS/OIDC -- a deliberate substitution, not a gap left unbuilt. Upgrading to mTLS/OIDC-client is a separate, later decision."
+    },
+    {
+     "id": "signal_validation",
+     "label": "Schema allowlist, replay protection and dedup/cooldown",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "identity_resolution",
+     "label": "Canonical device identity resolution via discovery lifecycle",
+     "state": "done",
+     "weight": 1,
+     "note": "Resolves via utils.device_registry.DeviceRegistry (reused, not a parallel model) rather than utils/discovery_lifecycle.py -- AC-3 asked to reuse existing identity/registry code, and DeviceRegistry is the Product Control Plane's own identity registry; discovery_lifecycle tracks management-plane trust confidence, a different concept."
+    },
+    {
+     "id": "coordinator_queue",
+     "label": "Coordinator-queued bounded read-only evidence capture",
+     "state": "done",
+     "weight": 1,
+     "note": "Check Point only in Slice 1 -- no PAN per-device config target-selection seam exists yet (utils.collection_executor._TARGET_SEAM_WORKFLOWS omits pan-config); see project/backlog.json's event_signal_intake note."
+    },
+    {
+     "id": "signal_outcome",
+     "label": "Explicit signal outcome: triggered / coalesced / ignored / unknown_identity",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/event_signal_intake.md"
+  },
+  {
+   "id": "passive_ti_enrichment",
+   "title": "Passive Threat-Intelligence Enrichment for Confirmed Changes",
+   "status": "planned",
+   "target": "0.8.x",
+   "weight": 6,
+   "summary": "After a normalized, confirmed diff finding is produced, extract safe observables and check",
+   "why": "Surfaces potential risk context without manual investigation, while keeping raw config, fu",
+   "criteria": [
+    {
+     "id": "observable_extraction",
+     "label": "Safe observable extraction from normalized findings",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "local_feed",
+     "label": "Local/corporate-proxy TI feed integration (internet off by default)",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "ti_confidence",
+     "label": "TI match confidence, source, age and false-positive model",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/passive_ti_enrichment.md"
+  },
+  {
+   "id": "repository_privacy_gate",
+   "title": "Corporate Git Repository Privacy Gate",
+   "status": "done",
+   "introduced": "DEV.0.4/DEV.0.4.1",
+   "weight": 3,
+   "summary": "Offline fail-closed repository scan plus runtime-only inventory exclusion policy removes e",
+   "why": "Keeps operational identities and runtime artifacts outside Git/AI context while preserving",
+   "criteria": [
+    {
+     "id": "offline_gate",
+     "label": "Offline privacy gate",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "runtime_exclusions",
+     "label": "Runtime-only exact inventory exclusions",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "zero_findings",
+     "label": "Corporate Git candidate zero findings",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/repository_privacy_gate.md"
+  },
+  {
+   "id": "failover_readiness_assessment",
+   "title": "HA Readiness / Failover-Safety Assessment",
+   "status": "automated_validated",
+   "introduced": "OP.0",
+   "weight": 6,
+   "summary": "Read-only per-vendor preflight battery that scores whether an HA cluster is safe to fail o",
+   "why": "The safety net and foundation for any controlled failover; valuable on its own as a VERIFY",
+   "note": "Split 2026-09-01 into OP.0a / OP.0b / OP.0c - docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md decision P1.",
+   "criteria": [
+    {
+     "id": "ha_unit_derivation",
+     "label": "OP.0a - HA unit derivation + fail-closed assessment over already-collected evidence (no new device command)",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "preflight_battery",
+     "label": "OP.0b - Per-vendor preflight battery: S1-S8 all REAL_ENV_VALIDATED 2026-09-04 (CP ClusterXL, CP/VSX VSLS per-VSID, PAN dedicated-HA1 pairing correction)",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "readiness_verdict",
+     "label": "SAFE / DEGRADED / UNSAFE / INSUFFICIENT verdict with blocking line items (SAFE and DEGRADED unreachable until D-F3 flap threshold + D-V7b CP recovery read are resolved; UNSAFE/INSUFFICIENT/NOT_A_FAILOVER_UNIT live on fresh preflight evidence since S7)",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "scc_readiness_dashboard",
+     "label": "OP.0c - SCC readiness dashboard + history (read-only) -- done: fleet view + blocking reasons; history is future scope",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "ui_authority_reconciliation",
+     "label": "OP.0b S9 - retired client-side PAN/CP pairing and HA-vocabulary heuristics (static/inventory_ui.js, utils/merge.py, utils/config_ui.py) in favor of the canonical compute_ha_readiness evaluator; the failover-readiness report/console module's own PAN-label debt (VSYS-composed display_name) was corrected first (op0b_s9_pan_ha_label_authority_correction, 2026-09-04); this criterion's own named files were corrected in op0b_s9_ui_authority_reconciliation, 2026-09-04 -- DONE",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/failover_readiness_assessment.md"
+  },
+  {
+   "id": "failover_plan_compiler",
+   "title": "Failover Plan Compiler & Dry-Run",
+   "status": "automated_validated",
+   "introduced": "OP.1",
+   "weight": 4,
+   "summary": "Compiles the exact graceful vendor action, rollback, impact window and preemption note int",
+   "why": "Makes the action explicit and reviewable before any write capability exists.",
+   "criteria": [
+    {
+     "id": "action_rollback_compile",
+     "label": "Compile active-initiated action + rollback per vendor/mode",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "impact_window_preemption",
+     "label": "Impact-window estimate + preemption/fall-back note",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "dry_run_only",
+     "label": "Dry-run only; executes nothing",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/failover_plan_compiler.md"
+  },
+  {
+   "id": "failover_controlled_execution",
+   "title": "Controlled Failover Execution",
+   "status": "planned",
+   "introduced": "OP.2",
+   "weight": 8,
+   "summary": "The single write-capable component: one authorised, confirmed action with fresh same-workf",
+   "why": "The payoff of a trustworthy SEE/VERIFY/TRACE/RECOVER stack; the tool's first OPERATE capab",
+   "criteria": [
+    {
+     "id": "single_action_executor",
+     "label": "One authorised action per run; re-assess between actions",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "preflight_act_verify_no_autorollback",
+     "label": "Fresh preflight -> guarded single submission -> independent verify; no automatic rollback; OUTCOME_UNKNOWN quarantines",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "audit_record",
+     "label": "Immutable who/when/intent/verdict/plan/steps/outcome audit record",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "operate_rbac_gate",
+     "label": "Feature flag + per-run token + OIDC/RBAC OPERATE role + maintenance window",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "vendor_action_adapters",
+     "label": "CP ClusterXL, CP VSX per-VS, PAN A/P (+A/A) action adapters",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/failover_controlled_execution.md"
+  },
+  {
+   "id": "codebase_modularization",
+   "title": "Behavior-Preserving Codebase Modularization",
+   "status": "done",
+   "introduced": "Local architecture health",
+   "target": "Local development, before and during DEPLOY.1",
+   "weight": 7,
+   "summary": "Separates large UI, orchestration and vendor-collector modules by stable responsibility wh",
+   "why": "Reduces change risk, improves testability and creates clear server migration seams without",
+   "criteria": [
+    {
+     "id": "frontend_composition",
+     "label": "Responsibility-owned frontend fragments compose to one report",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "main_workflow_seams",
+     "label": "CLI orchestration has explicit workflow/service seams",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "vendor_collector_seams",
+     "label": "PAN and Check Point collector responsibilities are isolated",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "behavior_preservation",
+     "label": "Render, privacy and regression gates stay green for each extraction",
+     "state": "pending",
+     "weight": 2
+    }
+   ],
+   "detail": "docs/history/features/codebase_modularization.md"
+  },
+  {
+   "id": "operator_console_surface",
+   "title": "Operator Console - read-only surface",
+   "status": "done",
+   "introduced": "CON.1",
+   "weight": 5,
+   "summary": "Authenticated loopback HTTP surface serving the existing UI modules and report payloads li",
+   "why": "Establishes transport, authentication, CSP and the dual delivery mode (portable static rep",
+   "criteria": [
+    {
+     "id": "loopback_auth",
+     "label": "Loopback bind + cookieless per-launch bearer token",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "dual_mode_ui",
+     "label": "One UI source, two delivery modes; report keeps no action surface",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "payload_parity",
+     "label": "Console payloads byte-equal to the exported report's",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "no_mutating_route",
+     "label": "No mutating HTTP route exists (asserted on the route table)",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/operator_console_surface.md"
+  },
+  {
+   "id": "operator_console_job_engine",
+   "title": "Operator Console - job engine and read-class actions",
+   "status": "automated_validated",
+   "introduced": "CON.2",
+   "weight": 8,
+   "summary": "Durable job records plus a closed registry of read-class actions (re-collect an inventory",
+   "why": "The phase where the product becomes an operator tool rather than a report you regenerate f",
+   "criteria": [
+    {
+     "id": "closed_registry",
+     "label": "Closed job-type registry; browser sends intent, never a command",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "durable_jobs",
+     "label": "Durable job records on the evidence backend; terminal state on crash",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "single_orchestration_path",
+     "label": "Every execution goes through main(); no second orchestration path",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "console_provenance",
+     "label": "provenance='console' in every manifest and job record",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/operator_console_job_engine.md"
+  },
+  {
+   "id": "operator_console_operational_actions",
+   "title": "Operator Console - operational-write actions",
+   "status": "planned",
+   "introduced": "CON.3",
+   "weight": 6,
+   "summary": "Per-device Check Point Gaia backup triggered from the console, inside the D3 pilot allowli",
+   "why": "The BackBox-parity moment for the CP pilot set, in its smallest safe form: one device per",
+   "criteria": [
+    {
+     "id": "three_gates",
+     "label": "UI / API / collector refuse independently",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "preflight_confirm",
+     "label": "Zero-device-contact preflight + single-use bound confirm token",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "ledger_authority",
+     "label": "24h operational-write ledger stays authoritative; no force control",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "no_payload_route",
+     "label": "No route exposes recovery bytes, paths or a decrypt path",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/operator_console_operational_actions.md"
+  },
+  {
+   "id": "operator_console_scheduler_view",
+   "title": "Operator Console - scheduler surface (read-only)",
+   "status": "planned",
+   "introduced": "CON.5",
+   "weight": 3,
+   "summary": "Read-only view of the RuntimeRoot scheduler policy, due-ness and last/next run, including",
+   "why": "'recovery-cp' is absent from ALLOWLISTED_WORKFLOWS because D3 approved the CP backup comma",
+   "criteria": [
+    {
+     "id": "derived_unschedulable",
+     "label": "Unschedulable list derived from ALLOWLISTED_WORKFLOWS, never authored in the UI",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "read_only",
+     "label": "No policy or state mutation route",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "honest_empty_state",
+     "label": "Default-disabled scheduler renders as disabled, not as broken",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/operator_console_scheduler_view.md"
+  },
+  {
+   "id": "device_registry_enrollment_foundation",
+   "title": "Product Control Plane - Device Registry + manual enrollment foundation",
+   "status": "in_progress",
+   "introduced": "PCP.1",
+   "weight": 8,
+   "summary": "Persistent, RuntimeRoot-resident Device Registry (opaque device_id, endpoints, vendor clas",
+   "why": "The first persistent product object: stable targets to schedule, display and relate withou",
+   "criteria": [
+    {
+     "id": "registry_model",
+     "label": "DeviceRecord + lifecycle table; no secret-capable field; opaque ids; mutation lock release is instance-safe (ownership-token equality check, never a bare unlink)",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "filesystem_backend",
+     "label": "Eighth evidence_backend concern, filesystem only, atomic, RuntimeRoot-resident",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "cli_enrollment",
+     "label": "--registry-enroll / --registry-list / --registry-disable; mode-exclusive; no vendor import, no network",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "privacy_bundle_exclusion",
+     "label": "Registry file and its mutation lock file (both LOCAL-SENSITIVE/CLASS 2) never in the support bundle, report, console payload or repository",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "evidence_identity_untouched",
+     "label": "unified.json / entity_id / console registry / ALLOWLISTED_WORKFLOWS / utils.operate byte-unchanged",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/device_registry_enrollment_foundation.md"
+  },
+  {
+   "id": "management_plane_enrollment_providers",
+   "title": "Product Control Plane - Panorama and Check Point management enrollment providers",
+   "status": "planned",
+   "introduced": "PCP.2",
+   "weight": 6,
+   "summary": "Candidates derived from already-collected Panorama and MDS/CMA discovery artifacts, explic",
+   "why": "Default behaviour is candidate -> explicit enrollment; no phantom devices from unverified",
+   "criteria": [
+    {
+     "id": "candidates_from_existing_artifacts",
+     "label": "No new device command; candidates from the existing collections",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "explicit_enrollment",
+     "label": "Operator selects candidates; nothing auto-enrolls by default",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "first_contact_job",
+     "label": "Class 0 first contact establishes identity/capability evidence; gate entry recorded for the reuse",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "trust_policy",
+     "label": "pcp_first_contact_trust_policy decided and enforced",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/management_plane_enrollment_providers.md"
+  },
+  {
+   "id": "capability_resolution_module_activation",
+   "title": "Product Control Plane - capability resolution + module activation",
+   "status": "planned",
+   "introduced": "PCP.3",
+   "weight": 6,
+   "summary": "Per-device capability projection (inventory, configuration, backup, ha_readiness, controll",
+   "why": "Modules light up from evidence, not from labels or user claims; capability != readiness !=",
+   "criteria": [
+    {
+     "id": "projection_from_evidence",
+     "label": "Derived from existing capability/lifecycle/platform/identity inputs",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "unsupported_explicit",
+     "label": "Unresolvable combinations yield UNSUPPORTED(reason)",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "not_authorization",
+     "label": "controlled_operations presence never implies permission; DenyAllAuthorizer unchanged",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/capability_resolution_module_activation.md"
+  },
+  {
+   "id": "control_plane_console_experience",
+   "title": "Product Control Plane - first-run onboarding + device experience (console)",
+   "status": "planned",
+   "introduced": "PCP.4",
+   "weight": 6,
+   "summary": "Welcome / Add Devices (candidates) and per-device Overview / Inventory / Configuration / B",
+   "why": "The product interaction model of a persistent control plane; OP.2.D's class 2 flow is expe",
+   "criteria": [
+    {
+     "id": "add_devices_from_candidates",
+     "label": "Candidate ids only cross the intent boundary",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "device_tabs_projections",
+     "label": "Tabs are projections; UI computes no identity/topology/readiness",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "payload_parity_render_harness",
+     "label": "Report/console parity; render harness green; report stays action-free",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "manual_entry_gate_decided",
+     "label": "pcp_console_registry_write_gate decided and honoured",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/control_plane_console_experience.md"
+  },
+  {
+   "id": "typed_job_plane_current_projections",
+   "title": "Product Control Plane - typed job plane + current-state projections",
+   "status": "planned",
+   "introduced": "PCP.5",
+   "weight": 7,
+   "summary": "Job definitions and runs keyed by device_id targets with independent cadences, closed job-",
+   "why": "Enrollment and collection are separate; schedules reference typed capabilities, never vend",
+   "criteria": [
+    {
+     "id": "job_definitions_runs",
+     "label": "Durable typed definitions/runs over registry targets",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "closed_vocabulary_fail_closed",
+     "label": "Closed job types; default-disabled; >= 10 min floor preserved",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "projection_freshness",
+     "label": "Provenance/freshness/staleness fields; no TTL invented",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "storage_engine_decided",
+     "label": "pcp_storage_engine decided against the recorded criteria",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/typed_job_plane_current_projections.md"
+  },
+  {
+   "id": "independent_capability_jobs",
+   "title": "Product Control Plane - independent inventory / configuration / backup / readiness jobs",
+   "status": "planned",
+   "introduced": "PCP.6",
+   "weight": 5,
+   "summary": "Collector target-selection seams so each capability runs as its own typed job over registr",
+   "why": "Independent cadences without multiplying device contact: every job still enters the admiss",
+   "criteria": [
+    {
+     "id": "target_selection_seams",
+     "label": "Each collector accepts a registry-derived target set",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "backup_capability_driven",
+     "label": "Backup jobs resolve through RB.x contract state; recovery-cp stays unscheduled per D3",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "no_contact_multiplication",
+     "label": "Aggregate per-endpoint contact bounded as today",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/independent_capability_jobs.md"
+  },
+  {
+   "id": "fast_telemetry_plane",
+   "title": "Product Control Plane - optional fast telemetry plane (SNMPv3 candidate)",
+   "status": "deferred",
+   "introduced": "PCP.7",
+   "weight": 3,
+   "summary": "Inexpensive periodic observation (availability, uptime, interface state, resource health)",
+   "why": "A future cheap signal plane behind its own security/command/OID gate; explicitly not a fir",
+   "criteria": [
+    {
+     "id": "own_gate",
+     "label": "Security review + OID/command gate + CLASS 3 secret handling before any code",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "trigger_not_evidence",
+     "label": "Telemetry only marks stale and triggers; never authoritative",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/fast_telemetry_plane.md"
+  },
+  {
+   "id": "diagnostic_runbooks",
+   "title": "Product Control Plane - Diagnostic Runbooks (CLASS 0, closed catalog)",
+   "status": "planned",
+   "introduced": "PCP.8",
+   "weight": 4,
+   "summary": "Bounded ordered read-only diagnostic sequences over registered targets from a closed sourc",
+   "why": "Operators run diagnostics from the product without a browser-to-shell path; every step pas",
+   "criteria": [
+    {
+     "id": "closed_catalog",
+     "label": "Catalog in source; class 0 steps only; validator rejects class 1+",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "bounded_execution",
+     "label": "Timeout, output limits, deterministic framing, redaction, audit",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "shared_primitive_registry",
+     "label": "One primitive registry with CE.2, not two",
+     "state": "pending",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/diagnostic_runbooks.md"
+  },
+  {
+   "id": "left_vertical_product_navigation",
+   "title": "Left vertical product navigation (architecture FROZEN; M2 accessibility closure merged via PR #85; availability_rule still pending)",
+   "status": "in_progress",
+   "introduced": "NAV.1 (prototype)",
+   "weight": 5,
+   "summary": "ARCHITECTURE FROZEN 2026-09-05.",
+   "why": "The flat one-root-per-view topbar strip could not express which entries are product domain",
+   "criteria": [
+    {
+     "id": "domain_grouping",
+     "label": "Six evaluated product-domain roots; Devices first-class; device-scoped views are tabs, not roots -- FROZEN: six roots in the approved order, Recovery reserved seventh, Jobs under Operations (PO-NAV-8)",
+     "state": "done",
+     "weight": 2
+    },
+    {
+     "id": "availability_rule",
+     "label": "An entry/tab renders iff its shell ships the surface; no disabled, greyed or 'coming soon' placeholder anywhere -- Direction FROZEN as four predicates (P1 surface eligibility / P2 entity applicability / P3 evidence state / P4 future authorization). M11 (relay/NXS-LOCAL-0022, 2026-09-08): P1/D1 is now the sole, explicit render/not-render gate, formalized as the client-side mirror of the M10.2 resolver's stage 0 union tag (static/navigation_ui.js::navigationResolveSurface), with a cross-product regression test proving D2..D7 never change it (AC-CS-2). P2 (entity applicability) and P3 (evidence state) stay pending at the CONTENT level -- they are structurally forbidden from ever gating render (AC-CS-2/AC-CS-25/AC-CS-33) so 'closing' them can only ever mean a content-level case (e.g. a D-NAV13 NOT_APPLICABLE device tab), which needs a real-device -> logical-entity-type classifier that does not exist yet and is out of this movement's own producer scope; tracked as future work. P4 stays pending/out-of-scope (no D7/RBAC model exists).",
+     "state": "pending",
+     "weight": 2
+    },
+    {
+     "id": "collapse_is_density",
+     "label": "Collapse/expand changes presentation only -- Browser-verified: identical data-module set collapsed and expanded, state persisted, no availability effect",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "routes_preserved",
+     "label": "Every pre-existing hash/localStorage route resolves; the module universe is derived from the model, not re-listed -- Every pre-existing hash/localStorage route resolves; the module universe is derived from the model, not re-listed",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "no_enrollment_affordance",
+     "label": "Movement M9 (2026-09-07) implemented manual-endpoint enrollment: 'Add Device' now renders in the Inventory/entity-list pane header (PO-NAV-1 primary location) and all seventeen section 9.1 conditions are enforced server-side (closed schema, no device I/O in the request, first contact as a separate queued CLASS 0 job, positive-evidence identity, explicit preview and confirmation, immutable audit before the DeviceRegistry mutation, loopback-only). Candidate-based enrollment is schema-present but refused server-side pending M10's registry<->evidence reconciliation join (section 9.2 amendment A6). The Administration -> Device Management second entry point (PO-NAV-1's lifecycle home) is built (Movement M9, round 2) and opens the same shared enrollment dialog as the primary location; it is console-shell-only by design (D-NAV6 shell integrity).",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "authorization_seam_only",
+     "label": "Authorization-aware seam with model 'none'; no role/permission/scope/claim gates any navigation decision -- navigationAuthorizationContext() returns model 'none'; no role/permission/scope/claim gates any navigation decision",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "accessibility_closure",
+     "label": "Four named accessibility gaps closed: icon-only accessible names, prefers-reduced-motion, focus management after navigation, group semantics -- Movement M2 closed AC-A11Y-1..4 2026-09-06 (real-Chromium validated, both shells), merged to main via PR #85. This criterion alone does not complete the feature: availability_rule (below) is a separate, still-pending criterion",
+     "state": "done",
+     "weight": 1
+    }
+   ],
+   "detail": "docs/history/features/left_vertical_product_navigation.md"
+  },
+  {
+   "id": "ui2_java_product_line",
+   "title": "UI 2.0 -- Java product line (implementation active; release gates open)",
+   "status": "in_progress",
+   "introduced": "UI2.B0 (contracts)",
+   "weight": 30,
+   "summary": "Java is the sole development line. Local Java deliveries are recorded in build history; real-device and production acceptance remain unverified. Product scope is projected by project/java_product_plan.json.",
+   "why": "The Line-1 feature scripts were written to feed static, task-specific pages.",
+   "detail": "docs/history/features/ui2_java_product_line.md"
+  },
+  {
+   "id": "java_identity",
+   "title": "Local identity and session administration",
+   "status": "automated_validated",
+   "introduced": "NXS-LOCAL-0176",
+   "weight": 1,
+   "summary": "Local login, root identity and expiry-on-read are recorded; directory-backed production acceptance remains open.",
+   "why": "Track Java delivery independently of historical Line-1 outcomes.",
+   "evidence": "project/build_history.json#NXS-LOCAL-0176",
+   "criteria": [
+    {
+     "id": "automated",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "acceptance",
+     "state": "pending",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "id": "java_discovery",
+   "title": "Discovery and device enrollment",
+   "status": "automated_validated",
+   "introduced": "NXS-LOCAL-0173",
+   "weight": 1,
+   "summary": "Discovery, import marking and enrollment have recorded Java deliveries; real-device acceptance remains UNVERIFIED.",
+   "why": "Track Java delivery independently of historical Line-1 outcomes.",
+   "evidence": "project/build_history.json#NXS-LOCAL-0173",
+   "criteria": [
+    {
+     "id": "automated",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "acceptance",
+     "state": "pending",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "id": "java_inventory",
+   "title": "Inventory and cluster views",
+   "status": "automated_validated",
+   "introduced": "NXS-LOCAL-0164",
+   "weight": 1,
+   "summary": "Inventory reads and collection have recorded Java deliveries; live field bindings remain UNVERIFIED.",
+   "why": "Track Java delivery independently of historical Line-1 outcomes.",
+   "evidence": "project/build_history.json#NXS-LOCAL-0164",
+   "criteria": [
+    {
+     "id": "automated",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "acceptance",
+     "state": "pending",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "id": "java_configuration",
+   "title": "Configuration evidence and encrypted artefacts",
+   "status": "automated_validated",
+   "introduced": "NXS-LOCAL-0167",
+   "weight": 1,
+   "summary": "Configuration collection and view have recorded Java deliveries; live outcomes remain UNVERIFIED.",
+   "why": "Track Java delivery independently of historical Line-1 outcomes.",
+   "evidence": "project/build_history.json#NXS-LOCAL-0167",
+   "criteria": [
+    {
+     "id": "automated",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "acceptance",
+     "state": "pending",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "id": "java_backup",
+   "title": "Check Point gateway backup pilot",
+   "status": "automated_validated",
+   "introduced": "NXS-LOCAL-0175",
+   "weight": 1,
+   "summary": "Pilot allowlist remains a gate. Automated delivery does not prove a successful device backup.",
+   "why": "Track Java delivery independently of historical Line-1 outcomes.",
+   "evidence": "project/build_history.json#NXS-LOCAL-0175",
+   "criteria": [
+    {
+     "id": "automated",
+     "state": "done",
+     "weight": 1
+    },
+    {
+     "id": "acceptance",
+     "state": "pending",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "id": "java_project_plan",
+   "title": "Java product roadmap projection",
+   "status": "in_progress",
+   "introduced": "NXS-LOCAL-0242",
+   "weight": 1,
+   "summary": "Java features, release debt and converted lessons are separate; source freshness is explicit.",
+   "why": "Track Java delivery independently of historical Line-1 outcomes.",
+   "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+   "criteria": [
+    {
+     "id": "automated",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "acceptance",
+     "state": "pending",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "id": "java_restore",
+   "title": "Restore acceptance for Release 1",
+   "status": "blocked",
+   "introduced": null,
+   "weight": 1,
+   "summary": "Restore is disabled. The frozen baseline requires restore for Release 1; the first pilot is not Release 1.",
+   "why": "Track Java delivery independently of historical Line-1 outcomes.",
+   "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+   "criteria": [
+    {
+     "id": "automated",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "acceptance",
+     "state": "pending",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "id": "java_checks",
+   "title": "REL-CHECKS capability release",
+   "status": "planned",
+   "introduced": null,
+   "weight": 1,
+   "summary": "Frozen baseline names the release slice; Java delivery and real-environment acceptance are not established by Python outcomes.",
+   "why": "Track Java delivery independently of historical Line-1 outcomes.",
+   "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+   "criteria": [
+    {
+     "id": "automated",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "acceptance",
+     "state": "pending",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "id": "java_failover_readiness",
+   "title": "REL-FAILOVER-READINESS capability release",
+   "status": "planned",
+   "introduced": null,
+   "weight": 1,
+   "summary": "Readiness is distinct from authorization and controlled execution; Java delivery is not inferred from Python history.",
+   "why": "Track Java delivery independently of historical Line-1 outcomes.",
+   "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+   "criteria": [
+    {
+     "id": "automated",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "acceptance",
+     "state": "pending",
+     "weight": 1
+    }
+   ]
+  },
+  {
+   "id": "java_scheduler",
+   "title": "Per-capability scheduling",
+   "status": "deferred",
+   "introduced": null,
+   "weight": 1,
+   "summary": "Scheduler has no enabled product path; M12 is a historical Line-1 horizon, not the Java next build.",
+   "why": "Track Java delivery independently of historical Line-1 outcomes.",
+   "evidence": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+   "criteria": [
+    {
+     "id": "automated",
+     "state": "pending",
+     "weight": 1
+    },
+    {
+     "id": "acceptance",
+     "state": "pending",
+     "weight": 1
+    }
+   ]
+  }
+ ]
 }
