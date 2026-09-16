@@ -59,11 +59,12 @@ public final class SecurityAdminLockoutGuard {
             if (excludedBindingId.isPresent() && excludedBindingId.get().equals(binding.bindingId())) {
                 continue;
             }
-            String reference = groupReferenceCipher.decrypt(binding.groupReferenceEncrypted());
+            if (binding.bindingKind() != com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.LEGACY) continue;
+            String reference;
+            try { reference = groupReferenceCipher.decrypt(binding.groupReferenceEncrypted()); }
+            catch (RuntimeException e) { continue; }
             Optional<LocalCredentialRecord> localIdentity = localCredentialsRepository.findById(reference);
-            if (localIdentity.isEmpty()) {
-                return true;
-            }
+            if (localIdentity.isEmpty()) continue; // Unproven legacy provenance cannot prove a remaining administrator.
             boolean excludedByThisOperation = excludedLocalIdentityId.isPresent()
                     && excludedLocalIdentityId.get().equals(reference);
             if (localIdentity.get().enabled() && !excludedByThisOperation) {

@@ -9,7 +9,9 @@ package com.securityexpert.nexus.ui2.platform;
 public sealed interface AttemptOutcome {
 
     /** @param resolvedActorFingerprint present only on success (§2.1) */
-    record Success(String resolvedActorFingerprint) implements AttemptOutcome {
+    record Success(String resolvedActorFingerprint, DirectoryObservation directoryObservation) implements AttemptOutcome {
+        public Success(String resolvedActorFingerprint) { this(resolvedActorFingerprint, null); }
+        @Override public String toString() { return "Success[redacted]"; }
     }
 
     /** A closed-vocabulary reason, per mechanism -- never surfaced past the HTTP layer (§2.3, §5.3). */

@@ -32,7 +32,7 @@ public final class JooqActorAuthzStateRepository implements ActorAuthzStateRepos
     public Optional<ActorAuthzStateRecord> find(String actorFingerprint) {
         return transactionBoundary.inTransaction(dsl -> {
             Result<Record> rows = dsl.fetch(
-                    "select actor_fingerprint, group_references, resolved_at, valid_until "
+                    "select actor_fingerprint, group_references, resolved_at, valid_until, directory_profile_id, principal_reference_encrypted, principal_reference_key_id "
                             + "from actor_authz_state where actor_fingerprint = {0}", actorFingerprint);
             return rows.stream().findFirst().map(JooqActorAuthzStateRepository::toRecord);
         });
@@ -46,8 +46,39 @@ public final class JooqActorAuthzStateRepository implements ActorAuthzStateRepos
                         + "values ({0}, {1}::jsonb, {2}, {3}) "
                         + "on conflict (actor_fingerprint) do update set "
                         + "group_references = excluded.group_references, resolved_at = excluded.resolved_at, "
-                        + "valid_until = excluded.valid_until",
+                        + "valid_until = excluded.valid_until, directory_profile_id = null, "
+                        + "principal_reference_encrypted = null, principal_reference_key_id = null",
                 actorFingerprint, json, Timestamp.from(resolvedAt), Timestamp.from(validUntil)));
+    }
+
+    @Override
+    public void upsertDirectory(ActorAuthzStateRecord observation) {
+        if (!observation.hasDirectoryProof()) throw new IllegalArgumentException("directory_identity_not_proven");
+        transactionBoundary.inTransaction(dsl -> {
+            // Never attach two independently proven principals to one truncated actor correlator.
+            dsl.fetch("select actor_fingerprint from sessions where actor_fingerprint = {0} for update", observation.actorFingerprint());
+            var existing = dsl.fetch("select actor_fingerprint, group_references, resolved_at, valid_until, directory_profile_id, "
+                    + "principal_reference_encrypted, principal_reference_key_id from actor_authz_state where actor_fingerprint = {0}",
+                    observation.actorFingerprint()).stream().findFirst().map(JooqActorAuthzStateRepository::toRecord);
+            if (existing.isPresent() && (!java.util.Objects.equals(existing.get().directoryProfileId(), observation.directoryProfileId())
+                    || !java.util.Objects.equals(existing.get().principalReferenceKeyId(), observation.principalReferenceKeyId()))) {
+                throw new IllegalStateException("directory_actor_ambiguous");
+            }
+            return dsl.execute("insert into actor_authz_state(actor_fingerprint, group_references, resolved_at, valid_until, "
+                    + "directory_profile_id, principal_reference_encrypted, principal_reference_key_id) "
+                    + "values ({0}, {1}::jsonb, {2}, {3}, {4}, {5}, {6}) "
+                    + "on conflict (actor_fingerprint) do update set group_references = excluded.group_references, "
+                    + "resolved_at = excluded.resolved_at, valid_until = excluded.valid_until, "
+                    + "directory_profile_id = excluded.directory_profile_id, principal_reference_encrypted = excluded.principal_reference_encrypted, "
+                    + "principal_reference_key_id = excluded.principal_reference_key_id",
+                    observation.actorFingerprint(), toJsonArray(observation.groupReferences()), Timestamp.from(observation.resolvedAt()),
+                    Timestamp.from(observation.validUntil()), observation.directoryProfileId(), observation.principalReferenceEncrypted(),
+                    observation.principalReferenceKeyId());
+        });
+    }
+
+    @Override public void expireDirectory() {
+        transactionBoundary.inTransaction(dsl -> dsl.execute("delete from actor_authz_state where directory_profile_id is not null"));
     }
 
     @Override
@@ -62,7 +93,9 @@ public final class JooqActorAuthzStateRepository implements ActorAuthzStateRepos
                 row.get("actor_fingerprint", String.class),
                 fromJsonArray(json),
                 row.get("resolved_at", Timestamp.class).toInstant(),
-                row.get("valid_until", Timestamp.class).toInstant());
+                row.get("valid_until", Timestamp.class).toInstant(),
+                row.get("directory_profile_id", String.class), row.get("principal_reference_encrypted", byte[].class),
+                row.get("principal_reference_key_id", String.class));
     }
 
     static String toJsonArray(Set<String> values) {

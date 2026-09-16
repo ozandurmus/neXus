@@ -95,7 +95,7 @@ public final class CliEntryPoint {
         System.out.println("  credential-delete <jdbcUrl> <migrateUser> <migratePasswordFile> "
                 + "<credentialStoreKeyBase64> <credentialStoreKeyId> <credentialId> <actingAdminActorFingerprint>");
         System.out.println("  role-bind-create <baseUrl> <sessionCookieValue> <csrfToken> <roleToken> "
-                + "<groupReference> <groupReferenceKeyId>");
+                + "<selectionHandle> <directoryProfileId> <bindingKind>");
         System.out.println("  role-bind-revoke <baseUrl> <sessionCookieValue> <csrfToken> <bindingId>");
         System.out.println("  backup-retrieve <jdbcUrl> <migrateUser> <migratePasswordFile> "
                 + "<artefactStoreKeyBase64> <artefactStoreRoot> <groupReferenceKeyBase64> <artefactId> "
@@ -400,13 +400,14 @@ public final class CliEntryPoint {
     // ---------------------------------------------------------------
 
     private static void roleBindCreate(String[] args) {
-        if (args.length != 7) {
-            System.err.println("role-bind-create requires exactly 6 arguments; see usage.");
+        if (args.length != 8) {
+            System.err.println("role-bind-create requires exactly 7 arguments; see usage.");
             printUsage();
             return;
         }
-        String body = "{\"roleToken\":\"" + jsonEscape(args[4]) + "\",\"groupReference\":\"" + jsonEscape(args[5])
-                + "\",\"groupReferenceKeyId\":\"" + jsonEscape(args[6]) + "\"}";
+        String targetField = "LEGACY".equals(args[7]) ? "localIdentityId" : "selectionHandle";
+        String body = "{\"roleToken\":\"" + jsonEscape(args[4]) + "\",\"" + targetField + "\":\"" + jsonEscape(args[5])
+                + "\",\"directoryProfileId\":\"" + jsonEscape(args[6]) + "\",\"bindingKind\":\"" + jsonEscape(args[7]) + "\"}";
         postToRoleBindings(args[1], args[2], args[3], "/role-bindings", body);
     }
 

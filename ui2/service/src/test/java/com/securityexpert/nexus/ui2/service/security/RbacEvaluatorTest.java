@@ -68,11 +68,16 @@ class RbacEvaluatorTest {
     private static GroupReferenceCipher cipher() {
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
-        return GroupReferenceCipher.fromBase64Key(Base64.getEncoder().encodeToString(key));
+        return GroupReferenceCipher.fromBase64Key(Base64.getEncoder().encodeToString(key), "k1");
     }
 
     private static final class FakeRoleBindingRepository implements RoleBindingRepository {
         private final List<RoleBindingRecord> bindings = new ArrayList<>();
+
+        void addDirectory(String id, String token, byte[] reference) {
+            bindings.add(new RoleBindingRecord(id, token, reference, "k1", "creator", Instant.EPOCH,
+                    Optional.empty(), Optional.empty(), com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP, "synthetic"));
+        }
 
         void addActive(String bindingId, String roleToken, byte[] encryptedGroupReference) {
             bindings.add(new RoleBindingRecord(bindingId, roleToken, encryptedGroupReference, "k1",
@@ -109,9 +114,13 @@ class RbacEvaluatorTest {
 
     private static final class FakeActorAuthzStateRepository implements ActorAuthzStateRepository {
         private final Map<String, ActorAuthzStateRecord> rows = new HashMap<>();
+        private final GroupReferenceCipher cipher;
+        FakeActorAuthzStateRepository() { this(cipher()); }
+        FakeActorAuthzStateRepository(GroupReferenceCipher cipher) { this.cipher = cipher; }
 
         void put(String actorFingerprint, Set<String> groupReferences, Instant resolvedAt, Instant validUntil) {
-            rows.put(actorFingerprint, new ActorAuthzStateRecord(actorFingerprint, groupReferences, resolvedAt, validUntil));
+            rows.put(actorFingerprint, new ActorAuthzStateRecord(actorFingerprint, groupReferences, resolvedAt, validUntil, "synthetic",
+                    cipher.encryptDirectory("synthetic-principal", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_PRINCIPAL), "k1"));
         }
 
         @Override
@@ -155,9 +164,9 @@ class RbacEvaluatorTest {
     void staleActorAuthzStateIsAuthzNotEvaluatedNeverDenied() {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
-        bindings.addActive("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encrypt("cn=backup-admins,dc=example,dc=com"));
+        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
 
-        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository();
+        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         Instant now = Instant.now();
         // valid_until in the past: stale.
         authzState.put("actor1", Set.of("cn=backup-admins,dc=example,dc=com"), now.minus(20, ChronoUnit.MINUTES),
@@ -174,9 +183,9 @@ class RbacEvaluatorTest {
     void boundButNotAMemberIsDeniedWithActorNotInRequiredGroup() {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
-        bindings.addActive("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encrypt("cn=backup-admins,dc=example,dc=com"));
+        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
 
-        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository();
+        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         Instant now = Instant.now();
         authzState.put("actor1", Set.of("cn=some-other-group,dc=example,dc=com"), now, now.plus(15, ChronoUnit.MINUTES));
 
@@ -184,16 +193,16 @@ class RbacEvaluatorTest {
         var decision = evaluator.evaluate("actor1", Optional.of(RoleToken.BACKUP_ADMIN), now);
 
         assertEquals(AuthzOutcome.DENIED, decision.outcome());
-        assertEquals(RbacEvaluator.REASON_ACTOR_NOT_IN_REQUIRED_GROUP, decision.reasonCode().orElseThrow());
+        assertEquals(RbacEvaluator.REASON_ACTOR_NOT_IN_REQUIRED_BINDING, decision.reasonCode().orElseThrow());
     }
 
     @Test
     void boundAndAMemberIsPermittedWithTheMatchingBindingId() {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
-        bindings.addActive("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encrypt("cn=backup-admins,dc=example,dc=com"));
+        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
 
-        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository();
+        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         Instant now = Instant.now();
         authzState.put("actor1", Set.of("cn=backup-admins,dc=example,dc=com"), now, now.plus(15, ChronoUnit.MINUTES));
 
@@ -213,10 +222,10 @@ class RbacEvaluatorTest {
         // play must never evaluate PERMITTED for that token.
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
-        bindings.addActive("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encrypt("cn=backup-admins,dc=example,dc=com"));
-        bindings.addActive("b2", RoleToken.COMPLIANCE_ADMIN.token(), cipher.encrypt("cn=compliance,dc=example,dc=com"));
+        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
+        bindings.addDirectory("b2", RoleToken.COMPLIANCE_ADMIN.token(), cipher.encryptDirectory("cn=compliance,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
 
-        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository();
+        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         Instant now = Instant.now();
         authzState.put("unmapped-actor", Set.of("cn=unrelated,dc=example,dc=com"), now, now.plus(15, ChronoUnit.MINUTES));
 

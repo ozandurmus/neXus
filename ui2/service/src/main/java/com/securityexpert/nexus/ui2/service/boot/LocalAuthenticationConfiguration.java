@@ -110,7 +110,7 @@ public class LocalAuthenticationConfiguration {
     @Bean
     public GroupReferenceCipher groupReferenceCipher() {
         String base64Key = SecretFile.readRequired(groupReferenceKeyFile, "role_binding_group_ref_key");
-        return GroupReferenceCipher.fromBase64Key(base64Key);
+        return GroupReferenceCipher.fromBase64Key(base64Key, groupReferenceKeyId);
     }
 
     /** C3B contract §2 (BOOT-1..BOOT-5a): the seeder {@link FirstBootIdentitySeedingRunner} runs through. */
@@ -127,23 +127,15 @@ public class LocalAuthenticationConfiguration {
         return new LocalMechanism(localCredentialsRepository, clock);
     }
 
-    /**
-     * {@code local} only (contract §2.1) -- no {@code ldap} member is
-     * registered here: no directory host/CA/bind-DN configuration exists
-     * for this build, and building it is {@code C3}'s scope (§1.2), not
-     * this movement's. {@link com.securityexpert.nexus.ui2.identity.ldap.LdapMechanism}
-     * exists and compiles against this exact registry shape, ready to be
-     * added to the {@code List} below without any other change, once that
-     * configuration exists.
-     */
+    /** Existing explicit mechanism registry; absent LDAP profile leaves local behavior unchanged. */
     @Bean
-    public MechanismRegistry mechanismRegistry(LocalMechanism localMechanism) {
-        return new MechanismRegistry(localMechanism, List.of());
+    public MechanismRegistry mechanismRegistry(LocalMechanism localMechanism, org.springframework.beans.factory.ObjectProvider<com.securityexpert.nexus.ui2.identity.ldap.LdapMechanism> ldap) {
+        return new MechanismRegistry(localMechanism, ldap.orderedStream().map(m -> (com.securityexpert.nexus.ui2.platform.Mechanism) m).toList());
     }
 
     @Bean
-    public LoginFlow loginFlow(SessionRepository sessionRepository) {
-        return new LoginFlow(sessionRepository, IDLE_TIMEOUT, ABSOLUTE_LIFETIME);
+    public LoginFlow loginFlow(SessionRepository sessionRepository, RoleBindingRepository bindings, GroupReferenceCipher cipher) {
+        return new LoginFlow(sessionRepository, IDLE_TIMEOUT, ABSOLUTE_LIFETIME, bindings, cipher, false);
     }
 
     @Bean

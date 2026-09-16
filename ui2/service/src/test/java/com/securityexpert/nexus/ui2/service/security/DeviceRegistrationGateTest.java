@@ -121,7 +121,7 @@ class DeviceRegistrationGateTest {
 
         void addActive(String bindingId, String roleToken, byte[] encryptedGroupReference) {
             bindings.add(new RoleBindingRecord(bindingId, roleToken, encryptedGroupReference, "k1", "creator",
-                    Instant.now(), Optional.empty(), Optional.empty()));
+                    Instant.now(), Optional.empty(), Optional.empty(), com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP, "synthetic"));
         }
 
         @Override
@@ -153,6 +153,8 @@ class DeviceRegistrationGateTest {
 
     private static final class FakeActorAuthzStateRepository implements ActorAuthzStateRepository {
         private final Map<String, Set<String>> groupsByActor = new HashMap<>();
+        private final GroupReferenceCipher cipher;
+        FakeActorAuthzStateRepository(GroupReferenceCipher cipher) { this.cipher = cipher; }
 
         void put(String actorFingerprint, Set<String> groupReferences) {
             groupsByActor.put(actorFingerprint, groupReferences);
@@ -165,7 +167,8 @@ class DeviceRegistrationGateTest {
                 return Optional.empty();
             }
             return Optional.of(new ActorAuthzStateRecord(actorFingerprint, groups, NOW.minusSeconds(10),
-                    NOW.plusSeconds(900)));
+                    NOW.plusSeconds(900), "synthetic", cipher.encryptDirectory("synthetic-principal", "synthetic",
+                    com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_PRINCIPAL), "k1"));
         }
 
         @Override
@@ -181,7 +184,7 @@ class DeviceRegistrationGateTest {
     private static GroupReferenceCipher cipher() {
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
-        return GroupReferenceCipher.fromBase64Key(Base64.getEncoder().encodeToString(key));
+        return GroupReferenceCipher.fromBase64Key(Base64.getEncoder().encodeToString(key), "k1");
     }
 
     private SessionRecord activeSession(String sessionId, String actor) {
@@ -205,7 +208,7 @@ class DeviceRegistrationGateTest {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
         // role:onboarding_admin has zero active bindings in this scenario.
-        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository();
+        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         authzState.put("viewer-actor", Set.of());
         RbacEvaluator evaluator = new RbacEvaluator(bindings, authzState, cipher);
         GateChain chain = new GateChain(sessions, new ActionRegistry(), evaluator, new FakeAuthzDecisionRepository());
@@ -227,8 +230,8 @@ class DeviceRegistrationGateTest {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
         bindings.addActive("b1", RoleToken.ONBOARDING_ADMIN.token(),
-                cipher.encrypt("cn=onboarding-admins,dc=example,dc=com"));
-        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository();
+                cipher.encryptDirectory("cn=onboarding-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
+        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         authzState.put("operator-actor", Set.of("cn=operators,dc=example,dc=com"));
         RbacEvaluator evaluator = new RbacEvaluator(bindings, authzState, cipher);
         GateChain chain = new GateChain(sessions, new ActionRegistry(), evaluator, new FakeAuthzDecisionRepository());
@@ -251,9 +254,9 @@ class DeviceRegistrationGateTest {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
         bindings.addActive("b1", RoleToken.SECURITY_ADMIN.token(),
-                cipher.encrypt("cn=security-admins,dc=example,dc=com"));
+                cipher.encryptDirectory("cn=security-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
         // role:onboarding_admin has zero active bindings.
-        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository();
+        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         authzState.put("security-admin-actor", Set.of("cn=security-admins,dc=example,dc=com"));
         RbacEvaluator evaluator = new RbacEvaluator(bindings, authzState, cipher);
         GateChain chain = new GateChain(sessions, new ActionRegistry(), evaluator, new FakeAuthzDecisionRepository());
@@ -279,10 +282,10 @@ class DeviceRegistrationGateTest {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
         bindings.addActive("b1", RoleToken.SECURITY_ADMIN.token(),
-                cipher.encrypt("cn=security-admins,dc=example,dc=com"));
+                cipher.encryptDirectory("cn=security-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
         bindings.addActive("b2", RoleToken.ONBOARDING_ADMIN.token(),
-                cipher.encrypt("cn=onboarding-admins,dc=example,dc=com"));
-        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository();
+                cipher.encryptDirectory("cn=onboarding-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
+        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         authzState.put("security-admin-actor-2", Set.of("cn=security-admins,dc=example,dc=com"));
         RbacEvaluator evaluator = new RbacEvaluator(bindings, authzState, cipher);
         GateChain chain = new GateChain(sessions, new ActionRegistry(), evaluator, new FakeAuthzDecisionRepository());
@@ -303,8 +306,8 @@ class DeviceRegistrationGateTest {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
         bindings.addActive("b1", RoleToken.ONBOARDING_ADMIN.token(),
-                cipher.encrypt("cn=onboarding-admins,dc=example,dc=com"));
-        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository();
+                cipher.encryptDirectory("cn=onboarding-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
+        FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         authzState.put("onboarding-admin-actor", Set.of("cn=onboarding-admins,dc=example,dc=com"));
         RbacEvaluator evaluator = new RbacEvaluator(bindings, authzState, cipher);
         GateChain chain = new GateChain(sessions, new ActionRegistry(), evaluator, new FakeAuthzDecisionRepository());
