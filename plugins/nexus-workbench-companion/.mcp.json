@@ -1,10 +1,9 @@
 {
   "mcpServers": {
     "nexus-workbench-companion": {
-      "command": "python3",
+      "command": "${NEXUS_WORKBENCH_RELEASE_DIRECTORY}/bin/nexus-workbench-observer",
       "args": [
-        "-m",
-        "scripts.workbench_companion_mcp",
+        "mcp",
         "--snapshot-directory",
         "${NEXUS_WORKBENCH_SNAPSHOT_DIRECTORY}"
       ]

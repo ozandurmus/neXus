@@ -1,4 +1,8 @@
-"""C5 artifact generation only: never install, launch, notify or remove files."""
+"""C5 artifact generation only: never install, launch, notify or remove files.
+
+The release contains bin/nexus-workbench-observer and scripts/workbench_companion.py.
+Configuration is the observer's explicit private projection-input configuration.
+"""
 
 import argparse
 import json
@@ -31,8 +35,8 @@ def artifacts(home, release, configuration, snapshot_directory, *, uid=None):
         raise ValueError("INVALID_CONFIGURATION")
     checkout = Path(__file__).resolve().parent.parent
     paths = (release, configuration, snapshot_directory)
-    if (any(not p.is_relative_to(home) or p == home or p.is_relative_to(checkout)
-            for p in paths)
+    if (any(not p.is_relative_to(home) or p == home for p in paths)
+            or any(p.is_relative_to(checkout) for p in (configuration, snapshot_directory))
             or snapshot_directory.is_relative_to(release)
             or release.is_relative_to(snapshot_directory)
             or configuration.is_relative_to(snapshot_directory)
@@ -67,7 +71,9 @@ def artifacts(home, release, configuration, snapshot_directory, *, uid=None):
                      "stop": [[launchctl, "disable", service], [launchctl, "bootout", service]],
                      "status": [[launchctl, "print", service]]},
         "uninstall": {"commands": [[launchctl, "disable", service], [launchctl, "bootout", service]],
-                      "remove_after_stop": [str(plist), str(executable), str(configuration)],
+                      "remove_after_stop": [str(plist), str(executable),
+                                            str(release / "scripts" / "workbench_companion.py"),
+                                            str(configuration)],
                       "preserve": [str(snapshot_directory)]},
     }
 

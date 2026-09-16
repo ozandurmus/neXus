@@ -42,6 +42,7 @@ class BackupArtefactRetrievalTest {
 
     private static final class FakeArtefactStore implements ArtefactStore {
         String decryptedContent = "plaintext-configuration-with-secret-lines";
+        int retrieveCalls;
         boolean throwOnRetrieve;
 
         @Override
@@ -51,6 +52,7 @@ class BackupArtefactRetrievalTest {
 
         @Override
         public InputStream retrieve(ArtefactRef ref, byte[] wrappedDataKey, boolean gzip) throws IOException {
+            retrieveCalls++;
             if (throwOnRetrieve) {
                 throw new IOException("simulated store failure");
             }
@@ -231,6 +233,7 @@ class BackupArtefactRetrievalTest {
         assertEquals(VALID_REASON, audited.reason());
         assertEquals(destination.toString(), audited.destinationPath());
         assertEquals(ACTOR, audited.actorFingerprint());
+        assertEquals("backup_artefact_retrieved", audited.actionId());
     }
 
     @Test
@@ -243,6 +246,7 @@ class BackupArtefactRetrievalTest {
         RetrieveResult result = harness.retrieval.retrieve(ACTOR, ARTEFACT_ID, destination.toString(), VALID_REASON);
 
         assertTrue(result instanceof RetrieveResult.AuditRefused, "expected AuditRefused, got " + result);
+        assertEquals(0, harness.artefactStore.retrieveCalls, "audit persistence must precede decryption");
         assertTrue(Files.notExists(destination), "an audit refusal must not release plaintext");
     }
 }
