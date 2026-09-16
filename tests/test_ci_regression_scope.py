@@ -8,6 +8,8 @@ def test_approved_ldap_delivery_is_targeted():
         "ui2/persistence/src/test/java/ExampleTest.java",
         "ui2/service/src/main/resources/db/migration/V25__directory_principal_bindings.sql",
         "ui2/frontend/tests/ProjectPlanPanel.test.tsx",
+        "ui2/frontend/src/auth/LoginScreen.tsx",
+        "ui2/frontend/tests/LoginScreen.test.tsx",
         "ui2/frontend/tests/fixtures/project-plan-provenance.json",
         ".github/workflows/validation.yml",
         "tests/conftest.py",

@@ -152,10 +152,19 @@ class GateChainTest {
 
     private static final class FakeActorAuthzStateRepository implements ActorAuthzStateRepository {
         private final Set<String> groups;
+        private final GroupReferenceCipher proofCipher;
         FakeActorAuthzStateRepository() { this(Set.of()); }
-        FakeActorAuthzStateRepository(Set<String> groups) { this.groups = groups; }
+        FakeActorAuthzStateRepository(Set<String> groups) { this(groups, null); }
+        FakeActorAuthzStateRepository(Set<String> groups, GroupReferenceCipher proofCipher) {
+            this.groups = groups;
+            this.proofCipher = proofCipher;
+        }
         @Override
         public Optional<ActorAuthzStateRecord> find(String actorFingerprint) {
+            if (proofCipher != null) return Optional.of(new ActorAuthzStateRecord(actorFingerprint, groups,
+                    NOW.minusSeconds(10), NOW.plusSeconds(900), "synthetic",
+                    proofCipher.encryptDirectory("synthetic-principal", "synthetic",
+                        com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_PRINCIPAL), "k1"));
             return Optional.of(new ActorAuthzStateRecord(actorFingerprint, groups, NOW.minusSeconds(10),
                     NOW.plusSeconds(900)));
         }
@@ -247,7 +256,7 @@ class GateChainTest {
     private static GroupReferenceCipher cipher() {
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
-        return GroupReferenceCipher.fromBase64Key(Base64.getEncoder().encodeToString(key));
+        return GroupReferenceCipher.fromBase64Key(Base64.getEncoder().encodeToString(key), "k1");
     }
 
     private SessionRecord activeSession(String sessionId) {
@@ -268,11 +277,14 @@ class GateChainTest {
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
         bindings.bindings.add(new RoleBindingRecord("fixture-security-binding",
                 com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN.token(),
-                groupCipher.encrypt("fixture-security-group"), "k1", "fixture-creator", NOW, Optional.empty(), Optional.empty()));
+                groupCipher.encryptDirectory("fixture-security-group", "synthetic",
+                    com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP),
+                "k1", "fixture-creator", NOW, Optional.empty(), Optional.empty(),
+                com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP, "synthetic"));
         for (String group : List.of("fixture-security-group", "fixture-onboarding-group", "fixture-viewer-group")) {
             FakeSessionRepository sessions = new FakeSessionRepository();
             sessions.put(activeSession(SessionHasher.hash("fixture-role-cookie")));
-            var evaluator = new RbacEvaluator(bindings, new FakeActorAuthzStateRepository(Set.of(group)), groupCipher);
+            var evaluator = new RbacEvaluator(bindings, new FakeActorAuthzStateRepository(Set.of(group), groupCipher), groupCipher);
             var chain = new GateChain(sessions, new ActionRegistry(), evaluator, new FakeAuthzDecisionRepository());
             for (String action : List.of(ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL, ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL)) {
                 var outcome = chain.evaluate(new GateRequest("POST", Optional.of("fixture-role-cookie"), Optional.of("csrf-secret"),
