@@ -78,6 +78,8 @@ class PersistedManagementEndpointTrustResolverTest {
         assertEquals(ALGORITHM, new com.jcraft.jsch.HostKey(HOST, KEY).getType());
         assertEquals(HostKeyRepository.OK, hook.check(HOST, KEY));
         assertTrue(trusted[0]);
+        assertEquals(HostKeyRepository.NOT_INCLUDED, hook.check(HOST, key("ecdsa-sha2-nistp256")));
+        assertEquals("TRUST_ENTRY_MISSING", failure[0]);
         store.fingerprint = "0".repeat(64);
         assertEquals(HostKeyRepository.NOT_INCLUDED, hook.check(HOST, KEY));
         assertEquals("TRUST_MISMATCH", failure[0]);
@@ -104,11 +106,29 @@ class PersistedManagementEndpointTrustResolverTest {
                 SshExecTransport.discoveryFailure(raw, null, true)).reason());
     }
 
-    private static byte[] key() {
+    @Test
+    void workerAndStandalonePoliciesResolvePersistedDiscoveryIdentically() {
+        Store store = new Store();
+        var worker = new HostKeyVerifier(new PersistedManagementEndpointTrustResolver(store, ref -> Optional.of(FINGERPRINT)));
+        var cli = new HostKeyVerifier(new PersistedManagementEndpointTrustResolver(store, ref -> Optional.empty()));
+        for (String host : List.of(HOST, "other-management")) {
+            for (String pin : List.of(FINGERPRINT, "0".repeat(64))) {
+                String ref = PersistedManagementEndpointTrustResolver.scopeRef(host, PORT);
+                assertEquals(worker.verify(ref, host, PORT, ALGORITHM, pin), cli.verify(ref, host, PORT, ALGORITHM, pin));
+            }
+        }
+        store.fingerprint = null;
+        String ref = PersistedManagementEndpointTrustResolver.scopeRef(HOST, PORT);
+        assertEquals(HostKeyVerifier.Decision.MISSING, worker.verify(ref, HOST, PORT, ALGORITHM, FINGERPRINT));
+        assertEquals(HostKeyVerifier.Decision.MISSING, cli.verify(ref, HOST, PORT, ALGORITHM, FINGERPRINT));
+    }
+
+    private static byte[] key() { return key(ALGORITHM); }
+    private static byte[] key(String keyAlgorithm) {
         try {
             var bytes = new ByteArrayOutputStream();
             var out = new DataOutputStream(bytes);
-            byte[] algorithm = ALGORITHM.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            byte[] algorithm = keyAlgorithm.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             out.writeInt(algorithm.length); out.write(algorithm);
             out.writeInt(32); out.write(new byte[32]);
             return bytes.toByteArray();
