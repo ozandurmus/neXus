@@ -1,7 +1,6 @@
 package com.securityexpert.nexus.ui2.worker.discovery.cp;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.logging.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -61,7 +60,7 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.SshCredentialResolver;
  */
 public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneEnumeration {
 
-    private static final Logger log = LoggerFactory.getLogger(ManagementPlaneEnumerationAdapter.class);
+    private static final Logger log = Logger.getLogger(ManagementPlaneEnumerationAdapter.class.getName());
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration EXEC_TIMEOUT = Duration.ofSeconds(30);
@@ -135,13 +134,13 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         int managementPlaneRequestCount = 1 + counter.count();
 
         if (caught != null) {
-            log.warn("discovery enumeration failed: requestCount={} reason={}", managementPlaneRequestCount,
-                    caught.getClass().getSimpleName());
+            log.warning(String.format("discovery enumeration failed: requestCount=%d reason=%s", managementPlaneRequestCount,
+                    caught.getClass().getSimpleName()));
             return new ManagementPlaneEnumerationResult.Failed(
                     "management-plane enumeration did not complete", managementPlaneRequestCount, disconnectOutcome);
         }
-        log.info("discovery enumeration completed: candidateCount={} requestCount={} disconnectOutcome={}",
-                candidates.size(), managementPlaneRequestCount, disconnectOutcome);
+        log.info(String.format("discovery enumeration completed: candidateCount=%d requestCount=%d disconnectOutcome=%s",
+                candidates.size(), managementPlaneRequestCount, disconnectOutcome));
         return new ManagementPlaneEnumerationResult.Completed(
                 attachChannelStates(candidates, channelStates), channelStates, managementPlaneRequestCount,
                 disconnectOutcome, parseCounts);
@@ -186,7 +185,7 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
                 domains.add(trimmed);
             }
         }
-        log.info("discovery domain enumeration: responseLength={} domainCount={}", response.length(), domains.size());
+        log.info(String.format("discovery domain enumeration: responseLength=%d domainCount=%d", response.length(), domains.size()));
         return domains;
     }
 
@@ -215,8 +214,8 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
             }
             results.add(parseCandidate(domainId, objectType, OpaqueId.of(stableIdentifier.get()), object));
         }
-        log.info("discovery queryObjects: objectType={} responseLength={} parsedObjects={} withStableId={} missingStableId={}",
-                objectType, response.length(), objects.size(), results.size(), missingStableIdentifier);
+        log.info(String.format("discovery queryObjects: objectType=%s responseLength=%d parsedObjects=%d withStableId=%d missingStableId=%d",
+                objectType, response.length(), objects.size(), results.size(), missingStableIdentifier));
         ParseCounts previous = parseCounts.getOrDefault(objectType, new ParseCounts(0, 0));
         parseCounts.put(objectType, new ParseCounts(
                 previous.parsed() + objects.size(), previous.missingStableIdentifier() + missingStableIdentifier));
