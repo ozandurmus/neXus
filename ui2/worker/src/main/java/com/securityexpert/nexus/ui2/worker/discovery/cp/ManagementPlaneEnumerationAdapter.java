@@ -231,23 +231,29 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
     /** §6: every field read through {@link ManagementApiFieldBinding} (FB-2) -- no field-name literal here. */
     private RawCandidateInput parseCandidate(OpaqueId domainId, ObjectType objectType, OpaqueId stableIdentifier,
             Map<String, Object> obj) {
-        CandidateKey key = new CandidateKey(domainId, stableIdentifier);
-        // record §5: present on every object -- a run that cannot find it fails closed rather than guessing "".
-        String displayName = optionalString(obj, Role.DISPLAY_NAME).orElseThrow(ManagementPlaneQueryFailedException::new);
-        Address ownAddress = optionalAddress(obj, Role.OWN_ADDRESS);
-        Address managementAddress = optionalAddress(obj, Role.MANAGEMENT_ADDRESS);
-        ClassificationFlags flags = new ClassificationFlags(
-                optionalBoolean(obj, Role.PRODUCT_FLAG),
-                optionalBoolean(obj, Role.VIRT_HOST_FLAG, objectType),
-                optionalBoolean(obj, Role.VIRT_SYSTEM_FLAG, objectType));
-        Optional<ClusterReference> clusterReference = optionalClusterReference(obj);
-        Optional<String> model = optionalString(obj, Role.MODEL);
-        Optional<String> softwareVersion = optionalString(obj, Role.SOFTWARE_VERSION);
-        Optional<String> managementPlaneConnectionState = optionalString(obj, Role.MANAGEMENT_PLANE_CONNECTION_STATE);
-        // connectionTableChannelState is attached in a second pass (attachChannelStates), once both
-        // connection-table observations exist -- CR-5-style: supplied by the run, not by this object.
-        return new RawCandidateInput(key, objectType, flags, displayName, ownAddress, managementAddress,
-                clusterReference, model, softwareVersion, managementPlaneConnectionState, Optional.empty());
+        try {
+            CandidateKey key = new CandidateKey(domainId, stableIdentifier);
+            // record §5: present on every object -- a run that cannot find it fails closed rather than guessing "".
+            String displayName = optionalString(obj, Role.DISPLAY_NAME).orElseThrow(ManagementPlaneQueryFailedException::new);
+            Address ownAddress = optionalAddress(obj, Role.OWN_ADDRESS);
+            Address managementAddress = optionalAddress(obj, Role.MANAGEMENT_ADDRESS);
+            ClassificationFlags flags = new ClassificationFlags(
+                    optionalBoolean(obj, Role.PRODUCT_FLAG),
+                    optionalBoolean(obj, Role.VIRT_HOST_FLAG, objectType),
+                    optionalBoolean(obj, Role.VIRT_SYSTEM_FLAG, objectType));
+            Optional<ClusterReference> clusterReference = optionalClusterReference(obj);
+            Optional<String> model = optionalString(obj, Role.MODEL);
+            Optional<String> softwareVersion = optionalString(obj, Role.SOFTWARE_VERSION);
+            Optional<String> managementPlaneConnectionState = optionalString(obj, Role.MANAGEMENT_PLANE_CONNECTION_STATE);
+            // connectionTableChannelState is attached in a second pass (attachChannelStates), once both
+            // connection-table observations exist -- CR-5-style: supplied by the run, not by this object.
+            return new RawCandidateInput(key, objectType, flags, displayName, ownAddress, managementAddress,
+                    clusterReference, model, softwareVersion, managementPlaneConnectionState, Optional.empty());
+        } catch (ManagementPlaneQueryFailedException e) {
+            log.warning(String.format("parseCandidate failed! Lacking DISPLAY_NAME? stableId=%s keysPresent=%s",
+                    stableIdentifier.value(), obj.keySet()));
+            throw e;
+        }
     }
 
     private static List<RawCandidateInput> attachChannelStates(
