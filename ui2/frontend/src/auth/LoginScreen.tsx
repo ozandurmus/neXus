@@ -140,7 +140,7 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
             {error}
           </Typography>
         ) : null}
-        <M3Button emphasis="filled" onClick={() => handleSubmit()}>
+        <M3Button emphasis="filled" type="submit">
           {submitting ? "Signing in…" : "Sign in"}
         </M3Button>
       </Box>

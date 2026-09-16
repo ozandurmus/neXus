@@ -28,6 +28,7 @@ export function M3Button({
   onClick,
   href,
   disabled,
+  type,
 }: {
   readonly emphasis: "filled" | "tonal" | "outlined" | "text";
   readonly icon?: IconName;
@@ -35,6 +36,7 @@ export function M3Button({
   readonly onClick?: () => void;
   readonly href?: string;
   readonly disabled?: boolean;
+  readonly type?: "button" | "submit" | "reset";
 }) {
   const byEmphasis = {
     filled: { bgcolor: m3.primary, color: m3.onPrimary, "&:hover": { bgcolor: m3.primary } },
@@ -46,6 +48,7 @@ export function M3Button({
     <Button
       href={href}
       onClick={onClick}
+      type={type}
       disabled={disabled}
       startIcon={icon ? <Icon name={icon} size={20} /> : undefined}
       sx={{
