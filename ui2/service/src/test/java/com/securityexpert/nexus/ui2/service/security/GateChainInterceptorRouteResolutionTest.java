@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.web.servlet.resource.ResourceHttpRequestHandler;
 
 /**
  * NXS-LOCAL-0160 "Routes": {@link GateChainInterceptor}'s wildcard fallback
@@ -111,5 +112,21 @@ class GateChainInterceptorSecurityTest {
         Mockito.when(request.getServletPath()).thenReturn("/login");
 
         assertTrue(interceptor.preHandle(request, response, null));
+    }
+
+    @Test
+    void spaRootAndStaticBundleDoNotNeedProductActionMappings() throws Exception {
+        GateChainInterceptor interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE,
+                SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES);
+        HttpServletRequest root = Mockito.mock(HttpServletRequest.class);
+        HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+        Mockito.when(root.getMethod()).thenReturn("GET");
+        Mockito.when(root.getServletPath()).thenReturn("/");
+        assertTrue(interceptor.preHandle(root, response, null));
+
+        HttpServletRequest asset = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(asset.getMethod()).thenReturn("GET");
+        Mockito.when(asset.getServletPath()).thenReturn("/assets/app.js");
+        assertTrue(interceptor.preHandle(asset, response, new ResourceHttpRequestHandler()));
     }
 }
