@@ -1,12 +1,20 @@
 package com.securityexpert.nexus.ui2.service.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Method;
 import java.util.Map;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 /**
  * NXS-LOCAL-0160 "Routes": {@link GateChainInterceptor}'s wildcard fallback
@@ -19,7 +27,7 @@ import org.junit.jupiter.api.Test;
  * this test is about the route map lookup alone, not the gate chain it
  * feeds.
  */
-class GateChainInterceptorRouteResolutionTest {
+class GateChainInterceptorSecurityTest {
 
     private static final Map<String, String> ROUTES = Map.ofEntries(
             Map.entry("GET /devices", "device_read"),
@@ -64,5 +72,33 @@ class GateChainInterceptorRouteResolutionTest {
     void aRouteAbsentFromTheMapResolvesToNullRegardlessOfSegmentCount() throws Exception {
         assertNull(actionIdFor("GET", "/healthz"));
         assertNull(actionIdFor("GET", "/devices/device-1/unknown-suffix"));
+    }
+
+    @Test
+    void anUnmappedRouteIsRefusedUnlessItIsAnExplicitException() throws Exception {
+        GateChainInterceptor interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE,
+                SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES);
+        HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+        StringWriter body = new StringWriter();
+        Mockito.when(request.getMethod()).thenReturn("GET");
+        Mockito.when(request.getServletPath()).thenReturn("/new-controller-route");
+        Mockito.when(response.getWriter()).thenReturn(new PrintWriter(body));
+
+        assertFalse(interceptor.preHandle(request, response, null));
+        Mockito.verify(response).setStatus(404);
+        assertTrue(body.toString().contains("ACTION_MAPPING_REQUIRED"));
+    }
+
+    @Test
+    void anExplicitlyUngatedRouteStillReachesItsOwnSecurityCheck() throws Exception {
+        GateChainInterceptor interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE,
+                SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES);
+        HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+        Mockito.when(request.getMethod()).thenReturn("POST");
+        Mockito.when(request.getServletPath()).thenReturn("/login");
+
+        assertTrue(interceptor.preHandle(request, response, null));
     }
 }
