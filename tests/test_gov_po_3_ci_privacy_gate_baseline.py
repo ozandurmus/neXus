@@ -171,7 +171,7 @@ def test_ci_privacy_check_without_baseline_ref_fails_exactly_as_before(tmp_path,
 # --- AC-6: real reproduction against this repository's actual current state -
 
 
-def test_ac6_live_repository_findings_are_pre_existing_against_origin_main():
+def test_ac6_live_repository_findings_are_pre_existing_against_origin_main(real_repository_privacy_lock):
     # The two AC-1 locations were prose about the scanner itself (quoted
     # credential-keyword-plus-assignment fragments), never credentials; the credential rule now
     # ignores such prose (utils.repository_privacy._is_prose_not_secret),
@@ -199,7 +199,7 @@ def test_ac6_live_repository_findings_are_pre_existing_against_origin_main():
             assert finding_key(ROOT, finding) in keys, (finding, note)
 
 
-def test_ac6_synthetic_new_finding_still_fails_against_origin_main():
+def test_ac6_synthetic_new_finding_still_fails_against_origin_main(real_repository_privacy_lock):
     # AC-6: one clearly-fake, untracked finding-shaped scratch file, dropped
     # directly into this repository's own working tree (not committed) and
     # removed again immediately after -- the exact reproduction the

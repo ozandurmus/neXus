@@ -135,7 +135,7 @@ def test_handle_pre_wires_privacy_check_into_git_push_decision(tmp_path):
     assert gate.handle_pre(payload) == 0
 
 
-def test_ac1_live_bug_regression_against_real_repository_state():
+def test_ac1_live_bug_regression_against_real_repository_state(real_repository_privacy_lock):
     # AC-1: two pre-existing prose false positives (project/build_history.json:47
     # and relay/NXS-LOCAL-0003-local-relay-watch-command.json:155, both
     # build-history-immutable) blocked an unrelated push before this fix.
