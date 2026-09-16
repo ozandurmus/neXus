@@ -80,6 +80,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
      * becoming open merely because its mapping was omitted here.
      */
     static final Set<String> EXPLICITLY_UNGATED_ROUTES = Set.of(
+            "GET /",
             "POST /login",
             "POST /login/resolve",
             "POST /session/logout",

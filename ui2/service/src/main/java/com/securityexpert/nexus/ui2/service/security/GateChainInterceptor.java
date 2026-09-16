@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.resource.ResourceHttpRequestHandler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -66,6 +67,11 @@ public final class GateChainInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
+        // Static resources are selected by Spring's resource handler, not a
+        // controller. They carry no product action and must not need RBAC.
+        if (handler instanceof ResourceHttpRequestHandler) {
+            return true;
+        }
         String actionId = actionIdFor(request.getMethod(), request.getServletPath());
         if (actionId == null) {
             if (explicitlyUngatedRoutes.contains(request.getMethod() + " " + request.getServletPath())) {
