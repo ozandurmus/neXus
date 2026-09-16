@@ -35,7 +35,7 @@ function routedFetch(
   routes: Readonly<Record<string, { readonly status?: number; readonly body: unknown } | ReadonlyArray<{ readonly status?: number; readonly body: unknown }>>>,
 ) {
   const counters: Record<string, number> = {};
-  return vi.fn((input: RequestInfo | URL) => {
+  return vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
     const path = url.split("?")[0];
     const route = routes[path];
