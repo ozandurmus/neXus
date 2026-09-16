@@ -268,8 +268,19 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
     /** T-7: the raw response lives only inside this call's return value on its way to being parsed, then discarded. */
     private String execRead(TransportSession session, String command) {
         ExecResult result = transport.exec(session, new ExecSpec(command), EXEC_TIMEOUT);
-        if (result instanceof ExecResult.Completed completed && completed.exitStatus() == 0) {
-            return completed.output();
+        if (result instanceof ExecResult.Completed completed) {
+            if (completed.exitStatus() == 0) {
+                return completed.output();
+            }
+            String out = completed.output();
+            if (out != null && out.length() > 500) {
+                out = out.substring(0, 500) + "... (truncated)";
+            }
+            log.warning(String.format("execRead command failed! exitStatus=%d output=%s command=%s",
+                    completed.exitStatus(), out, command));
+        } else {
+            log.warning(String.format("execRead command failed to complete! resultClass=%s command=%s",
+                    result.getClass().getSimpleName(), command));
         }
         throw new ManagementPlaneQueryFailedException();
     }
