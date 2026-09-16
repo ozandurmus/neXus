@@ -28,6 +28,14 @@ function NotificationBadge() {
   return <StatusChip tone="warn" label={String(unread)} dense />;
 }
 
+export function roleLabel(roleTokens: readonly string[]): string {
+  const labels = roleTokens
+    .map((token) => token.replace(/^role:/, "").replaceAll("_", " "))
+    .map((role) => role.replace(/\b\w/g, (letter) => letter.toUpperCase()))
+    .join(", ");
+  return labels || "No role assigned";
+}
+
 /**
  * The canvas's top app bar: product name, a search affordance and a
  * notification glyph. The canvas also shows a run-status chip and an
@@ -36,7 +44,7 @@ function NotificationBadge() {
  * nor authenticated, so showing them here would be fabricated certainty.
  *
  * The signed-in identity and its role tokens (this movement's brief) are
- * shown as plain text only, whatever the session carries -- this component
+ * shown as plain text only, with token syntax cleaned for display -- this component
  * computes no visibility decision from a role token's value
  * (NoRoleConditionalRenderingInFrontendTest, AG-J3); it renders the identity
  * block at all only when a session is present (useSession() is non-null
@@ -63,7 +71,7 @@ export function TopAppBar() {
               <Typography variant="body1" sx={{ fontWeight: 500, color: m3.onSurface }}>
                 {session.displayName}
               </Typography>
-              <Typography variant="body2">{session.roleTokens.join(", ")}</Typography>
+              <Typography variant="body2">{roleLabel(session.roleTokens)}</Typography>
             </Box>
             <M3Button emphasis="text" onClick={session.onSignOut}>
               Sign out
