@@ -152,6 +152,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
             } else if (response.trim().isEmpty() || response.contains("command not found")) {
                 domains.add("SMC User"); // Fallback for single domain / non-MDS environments
             }
+        log.info(String.format("queryGateways for domain %s: objects_array_size=%d, parsed=%d, missingUid=%d, added=%d", domain, objects != null ? objects.size() : -1, parsed, missingStableIdentifier, results.size()));
         } catch (Exception e) {
             log.warning("Failed to parse domains JSON, assuming single domain. error: " + e.getMessage());
             domains.add("SMC User");
@@ -261,6 +262,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                     }
                 }
             }
+        log.info(String.format("queryGateways for domain %s: objects_array_size=%d, parsed=%d, missingUid=%d, added=%d", domain, objects != null ? objects.size() : -1, parsed, missingStableIdentifier, results.size()));
         } catch (Exception e) {
             log.warning("Failed to parse show-gateways-and-servers JSON: " + e.getMessage());
             throw new ManagementPlaneQueryFailedException();
