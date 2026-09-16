@@ -593,7 +593,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
 
         {mode === "discovery" && discoveryPhase === "failed" && (
           <Typography variant="body2" color="error">
-            {Object.keys(run?.outcome_summary ?? {}).map((key) => DISCOVERY_FAILURE_COPY[key]).find(Boolean)
+            {Object.keys(run?.outcome_summary ?? {}).map((key) => DISCOVERY_FAILURE_COPY[key.replace("failure_reason_class:", "")] || DISCOVERY_FAILURE_COPY[key]).find(Boolean)
               ?? "Discovery did not complete."}
           </Typography>
         )}
