@@ -181,60 +181,37 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                 for (JsonNode obj : objects) {
                     if (!obj.has("uid") || !obj.has("type")) continue;
                     String type = obj.get("type").asText();
-                    if (type.equalsIgnoreCase("CpmiGatewayCluster") || type.toLowerCase().contains("cluster")) {
-                        String clusterUid = obj.get("uid").asText();
-                        if (obj.has("cluster-member-names") && obj.get("cluster-member-names").isArray()) {
-                            for (JsonNode memberNameNode : obj.get("cluster-member-names")) {
-                                memberNameToClusterUid.put(memberNameNode.asText(), clusterUid);
-                            }
-                        }
-                    }
-                }
-
-                // Pass 2: Extract all candidates
-                for (JsonNode obj : objects) {
-                    parsed++;
-                    if (!obj.has("uid")) {
-                        missingStableIdentifier++;
-                        continue;
-                    }
-                    String uid = obj.get("uid").asText();
-                    String type = obj.has("type") ? obj.get("type").asText() : "";
-                    String name = obj.has("na" + "me") ? obj.get("na" + "me").asText() : "";
-                    
-                    ObjectType objType = ObjectType.GATEWAY;
-                    boolean isVirtHost = false;
-                    boolean isVirtSystem = false;
-                    boolean isProduct = type.toLowerCase().contains("gateway") || type.toLowerCase().contains("cluster") || type.toLowerCase().contains("checkpoint") || type.equals("virtual-system");
-
-                    if (type.equalsIgnoreCase("CpmiGatewayCluster") || type.equals("simple-cluster") || type.equals("vsx-cluster") || type.equals("cluster")) {
+                    if (type.equalsIgnoreCase("CpmiGatewayCluster") || type.equals("simple-cluster") || type.equals("cluster")) {
                         objType = ObjectType.CLUSTER;
-                        if (type.equals("vsx-cluster")) {
-                            isVirtHost = true;
-                            isVirtSystem = true;
-                        }
-                    } else if (type.equals("virtual-system")) {
+                    } else if (type.equalsIgnoreCase("CpmiVsxClusterNetobj") || type.equals("vsx-cluster")) {
+                        objType = ObjectType.CLUSTER;
+                        isVirtHost = true;
+                    } else if (type.equalsIgnoreCase("CpmiVsClusterNetobj")) {
+                        objType = ObjectType.CLUSTER;
+                        isVirtSystem = true;
+                    } else if (type.equalsIgnoreCase("CpmiVsNetobj") || type.equals("virtual-system")) {
                         objType = ObjectType.GATEWAY;
                         isVirtSystem = true;
-                    } else if (type.equals("vsx-gateway")) {
+                    } else if (type.equalsIgnoreCase("CpmiVsxNetobj") || type.equals("vsx-gateway")) {
                         objType = ObjectType.GATEWAY;
                         isVirtHost = true;
-                        isVirtSystem = true;
+                    } else if (type.equalsIgnoreCase("CpmiVsxClusterMember") || type.equals("vsx-cluster-member")) {
+                        objType = ObjectType.MEMBER;
+                        isVirtHost = true;
+                    } else if (type.equals("cluster-member")) {
+                        objType = ObjectType.MEMBER;
                     } else if (type.equals("simple-gateway") || type.equals("checkpoint-host") || type.equals("gateway")) {
                         if (memberNameToClusterUid.containsKey(name)) {
                             objType = ObjectType.MEMBER;
                         } else {
                             objType = ObjectType.GATEWAY;
                         }
-                    } else if (type.equals("cluster-member") || type.equals("vsx-cluster-member")) {
-                        objType = ObjectType.MEMBER;
-                        if (type.equals("vsx-cluster-member")) {
-                            isVirtSystem = true;
-                        }
                     } else {
                         if (isProduct && obj.has("ipv4-address")) {
                             if (memberNameToClusterUid.containsKey(name)) {
                                 objType = ObjectType.MEMBER;
+                            } else if (type.toLowerCase().contains("cluster")) {
+                                objType = ObjectType.CLUSTER;
                             } else {
                                 objType = ObjectType.GATEWAY;
                             }
