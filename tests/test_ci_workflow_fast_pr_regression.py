@@ -2,8 +2,8 @@
 
 Mostly text/regex-based, matching the repository's original no-new-
 YAML-dependency pattern for the shape checks below: `pull_request` always
-runs the fast `validate` gate; `full-regression` runs for a pull request
-unless every changed path is `docs/**` or `*.md`, and always remains
+runs the fast `validate` gate; a closed approved mapping selects targeted
+LDAP checks, full regression, or a visible block. Full regression remains
 available on demand via `workflow_dispatch`. Also checks that the cheap
 safety gates are not accidentally dropped from either job.
 
@@ -46,7 +46,7 @@ def test_workflow_yaml_parses():
     # GOV.ORCH.7 section 2.3 items 3/5: `po-scope-check` is a new,
     # gov/po-*-only job (PO write-scope enforcement) -- added, not a
     # replacement for either existing job.
-    assert set(data.get("jobs", {})) == {"validate", "full-regression", "po-scope-check", "regression-scope"}
+    assert set(data.get("jobs", {})) == {"validate", "full-regression", "po-scope-check", "regression-scope", "scope-blocked", "targeted-regression"}
 
 
 def _job_block(text: str, job_id: str) -> str:
@@ -102,19 +102,33 @@ def test_pr_job_retains_the_cheap_safety_gates():
         assert expected in validate_block, f"PR gate missing: {expected!r}"
 
 
-def test_regression_scope_runs_unmatched_paths_and_skips_only_docs_records():
+def test_regression_scope_uses_the_closed_fail_closed_selector():
     scope_block = _job_block(_read_workflow(), "regression-scope")
     assert "if: github.event_name == 'pull_request'" in scope_block
     assert "git fetch origin +${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}" in scope_block
-    assert "grep -qvE '(^docs/|\\.md$)'" in scope_block
-    assert 'echo "run=true" >> "$GITHUB_OUTPUT"' in scope_block
-    assert 'echo "run=false" >> "$GITHUB_OUTPUT"' in scope_block
+    assert "scripts/ci_regression_scope.py --github-output" in scope_block
+    assert 'echo "classification=blocked" >> "$GITHUB_OUTPUT"' in scope_block
 
 
-def test_full_regression_runs_for_core_prs_and_manual_dispatch():
+def test_targeted_and_unmapped_paths_have_truthful_jobs():
+    text = _read_workflow()
+    targeted_block = _job_block(text, "targeted-regression")
+    blocked_block = _job_block(text, "scope-blocked")
+    assert "classification == 'targeted'" in targeted_block
+    assert ":ldap-adapter:unitTest" in targeted_block
+    assert ":architecture-tests:architectureTest" in targeted_block
+    assert "npm --prefix ui2/frontend test -- tests/ProjectPlanPanel.test.tsx" in targeted_block
+    assert "tests/test_gov_po_3_ci_privacy_gate_baseline.py" in targeted_block
+    assert "tests/test_nexus_engineer_tool_gate.py" in targeted_block
+    assert "frontendTest" not in targeted_block
+    assert "classification == 'blocked'" in blocked_block
+    assert "run: exit 1" in blocked_block
+
+
+def test_full_regression_runs_for_major_prs_and_manual_dispatch():
     full_block = _job_block(_read_workflow(), "full-regression")
     assert "needs: regression-scope" in full_block
-    assert "if: always() && (github.event_name == 'workflow_dispatch' || needs.regression-scope.outputs.run == 'true')" in full_block
+    assert "if: always() && (github.event_name == 'workflow_dispatch' || needs.regression-scope.outputs.classification == 'full')" in full_block
     full_suite_lines = [line.strip() for line in full_block.splitlines() if line.strip() == FULL_SUITE_LINE]
     assert full_suite_lines, (
         "the `full-regression` job must still run "
@@ -141,7 +155,7 @@ def test_pull_request_schedules_validate_and_conditionally_full_regression():
     validate_block = _job_block(text, "validate")
     full_block = _job_block(text, "full-regression")
     assert "if: github.event_name == 'pull_request'" in validate_block
-    assert "needs.regression-scope.outputs.run == 'true'" in full_block
+    assert "needs.regression-scope.outputs.classification == 'full'" in full_block
     assert "if: github.event_name == 'workflow_dispatch'" not in validate_block
 
 

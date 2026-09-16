@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import types
 from pathlib import Path
 
 import pytest
+
+import fcntl
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +29,19 @@ def _clear_ambient_relay_env(monkeypatch):
     state, exactly as it does in CI, where neither variable is ever set."""
     monkeypatch.delenv("NEXUS_RELAY_FILE", raising=False)
     monkeypatch.delenv("NEXUS_CANONICAL_RELAY_DIR", raising=False)
+
+
+@pytest.fixture
+def real_repository_privacy_lock():
+    """Serialize tests that scan or mutate the shared repository root."""
+    # ponytail: global test lock; scope by repository if concurrent suites need throughput.
+    lock_path = Path(tempfile.gettempdir()) / "nexus-real-repository-privacy.lock"
+    with lock_path.open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 # The parser characterization tests do not open SSH sessions.  Allow them to

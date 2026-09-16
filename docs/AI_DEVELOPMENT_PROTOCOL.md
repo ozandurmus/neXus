@@ -50,9 +50,10 @@ candidates.
 
 Do not run expensive real-device collection for UI-only or documentation work.
 
-## CI validation policy (canonical — PO decision 2026-09-15C)
+## CI validation policy (canonical — PO decision 2026-09-16 successor amendment)
 
-`.github/workflows/validation.yml` implements the tiers above as three jobs.
+`.github/workflows/validation.yml` implements the tiers above as fast,
+classification, targeted, blocking, and full-regression jobs.
 This is the one canonical statement of the policy; other files (`AGENTS.md`/
 `CLAUDE.md`, `AI_START_HERE.md`, `AI_HANDOVER.md`) reference it rather than
 restating it.
@@ -65,32 +66,34 @@ restating it.
   frontend-rendering shared-state-leak guard), and the whitespace/
   conflict-marker check. Deliberately **not** a path→test classifier —
   bounded feature PRs are expected to pay for this job, not the full suite.
-  This is the only job that runs automatically.
-- **`regression-scope`** (`pull_request`): compares the PR's changed paths.
-  It returns false only when every path is `docs/**` or `*.md`; unmatched
-  paths run by default. That keeps documentation and records cheap without
-  treating a mixed documentation directory as documentation-only.
-- **`full-regression`** (`workflow_dispatch`, or a pull request whose scope
-  says to run): the same gates plus the full pytest suite, **parallel**
+- **`regression-scope`** (`pull_request`): uses a closed, auditable mapping.
+  Documentation-only paths skip full regression; the approved bounded LDAP
+  delivery selects its fixed targeted checks; major architecture/runtime paths
+  select full regression. Unmapped paths and selector failures are visibly
+  blocked, never skipped or silently broadened.
+- **`targeted-regression`** (`pull_request`, selected bounded LDAP delivery):
+  runs the fixed LDAP, CLI, platform-core, persistence, service-security,
+  V25, architecture, and provenance-fixture checks. Its result is targeted
+  evidence, not a claim that full regression passed.
+- **`full-regression`** (`workflow_dispatch`, or a major pull request): the
+  same gates plus the full pytest suite, **parallel**
   (`python -m pytest -q -n auto --dist worksteal`, `DEV.TEST.1`, 2026-09-06 —
   Test execution economy above explains why parallel is safe). One
   pytest-xdist master process still yields one aggregate exit code across
   every worker, so no worker's failure is masked by another's pass. It does
-  runs automatically for source, tests, project state, workflows and
-  deployment manifests because their paths are not excluded. It does not
-  run for documentation-only PRs. There is no `push:` trigger. Manual
+  runs automatically only for closed-path major architecture/runtime changes.
+  It does not run for the approved bounded LDAP delivery or documentation-only
+  PRs. There is no `push:` trigger. Manual
   dispatch remains available; a GitHub-hosted manual run is exceptional
   when local/agent-cloud evidence is sufficient.
 
-**Why the automatic trigger is conditional (Product Owner decision,
-2026-09-15C):** running the suite on every pull request was considered and
-rejected because it pays the full GitHub-hosted cost for documentation-only
-changes. Leaving it manual was also rejected: PR #359 merged with failing
-tests because a skipped gate reports green. Therefore `full-regression` runs
-for every path except `docs/**` and `*.md`, with unmatched paths failing safe
-by running. The workflow has no `push:` trigger. Workflow run `34020356372`
-remains one-time proof that the parallel command works on GitHub-hosted
-infrastructure, not authorization for an unconditional PR gate.
+**Successor policy (Product Owner decision, 2026-09-16):** full regression is
+mandatory for major architecture/runtime transformations. Bounded features and
+corrections run affected-component tests plus architecture and privacy gates;
+unexecuted full regression is `NOT_RUN`. The closed selector blocks unmapped
+or failed selection visibly. The workflow has no `push:` trigger. Workflow run
+`34020356372` remains one-time proof that the parallel command works on
+GitHub-hosted infrastructure, not authorization for an unconditional PR gate.
 
 **Post-merge YAML-syntax incident (2026-09-06, corrects an in-session
 misdiagnosis, kept for context):** while iterating on the intermediate
@@ -112,11 +115,10 @@ test_workflow_yaml_parses` (`pyyaml` dev dependency) now parses this file
 on every test run specifically so a future syntax defect fails locally
 before push, not silently in the cloud after merge.
 
-A PR that is not documentation-only runs the GitHub-hosted full regression
-before merge. The excluded expressions are deliberately narrow: `docs/**`
-means documentation, and `*.md` covers standalone records; `project/**` is
-not excluded because project state can break the suite. A path not covered by
-either expression runs the suite. Manual dispatch remains available.
+A major PR runs the GitHub-hosted full regression before merge. A bounded LDAP
+PR runs only its named targeted checks and reports full regression `NOT_RUN`.
+Documentation-only PRs do not run full regression. A path not covered by the
+closed mapping blocks visibly. Manual dispatch remains available.
 
 Because there is no automatic push-to-main trigger, a PR that is
 documentation-only has no full-suite CI safety net. If a `full-regression`

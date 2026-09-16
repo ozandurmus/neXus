@@ -21,5 +21,9 @@ public interface LdapRevalidationPort {
      * {@code false} — callers must check first; an implementation may also
      * defensively refuse.
      */
+    default Result<DirectoryObservation> revalidatePrincipal(String principalReference) {
+        return Result.err("directory_identity_not_proven", "typed directory observation required");
+    }
+
     Result<Set<String>> revalidate(String actorFingerprint, String bindDn);
 }

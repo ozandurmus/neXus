@@ -95,9 +95,10 @@ public class RbacConfiguration {
     @Bean
     public RoleBindingAdminService roleBindingAdminService(RoleBindingRepository roleBindingRepository,
             ActorAuthzStateRepository actorAuthzStateRepository, GroupReferenceCipher groupReferenceCipher,
-            SecurityAdminLockoutGuard securityAdminLockoutGuard, RootIdentityRepository rootIdentityRepository) {
+            SecurityAdminLockoutGuard securityAdminLockoutGuard, RootIdentityRepository rootIdentityRepository,
+            SessionRepository sessions, LocalIdentityResolver locals) {
         return new RoleBindingAdminService(roleBindingRepository, actorAuthzStateRepository, groupReferenceCipher,
-                securityAdminLockoutGuard, rootIdentityRepository);
+                securityAdminLockoutGuard, rootIdentityRepository, false, sessions, locals, null);
     }
 
     /** 13G LIA-2: the exact same class the CLI's own composition (job-engine) constructs. */

@@ -70,3 +70,19 @@ what "full regression" means and needs its own record.
   must be corrected to match this record.
 - `AGENTS.md` — automated validation is not real-environment validation; this
   record changes when the automated gate runs, and nothing about that boundary.
+
+## 7. 2026-09-16 successor amendment
+
+**FROZEN — PRODUCT OWNER DIRECTIVE, 2026-09-16.** This amendment explicitly
+supersedes section 3's automatic "all non-document paths" rule. Full
+regression is mandatory for major architecture or runtime transformations.
+Bounded features and corrections require affected-component tests plus the
+relevant architecture and privacy gates; an unexecuted full regression is
+reported `NOT_RUN`, never passed by implication.
+
+The workflow uses a closed, auditable mapping for the approved LDAP delivery:
+LDAP, CLI, platform-core, persistence, service-security, V25 migration, and
+the named provenance fixture corrections run their fixed targeted Java,
+architecture, and frontend checks. Manual `workflow_dispatch` remains the
+full-regression path. An unmapped path or failed selector blocks visibly;
+it neither skips validation nor launches a full suite by surprise.

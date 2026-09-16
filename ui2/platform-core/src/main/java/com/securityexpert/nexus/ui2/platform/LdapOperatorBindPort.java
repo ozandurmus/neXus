@@ -33,7 +33,11 @@ public interface LdapOperatorBindPort {
      *                             never a corporate group name, never persisted
      *                             in plaintext outside this in-flight value
      */
-    record OperatorBindOutcome(String actorFingerprint, Set<String> groupReferences) {
+    record OperatorBindOutcome(String actorFingerprint, Set<String> groupReferences, DirectoryObservation observation) {
+        public OperatorBindOutcome(String actorFingerprint, Set<String> groupReferences) {
+            this(actorFingerprint, groupReferences, null);
+        }
+        @Override public String toString() { return "OperatorBindOutcome[redacted]"; }
     }
 
     /** Closed failure-code vocabulary for {@link Result#err}, C3 §2.2/§2.4. */

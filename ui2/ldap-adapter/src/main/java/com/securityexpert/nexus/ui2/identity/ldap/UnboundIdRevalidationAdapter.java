@@ -1,135 +1,76 @@
 package com.securityexpert.nexus.ui2.identity.ldap;
 
 import java.nio.file.Path;
-import java.security.GeneralSecurityException;
-import java.util.LinkedHashSet;
+import java.util.Arrays;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
+import com.unboundid.ldap.sdk.*;
+import com.securityexpert.nexus.ui2.platform.*;
 
-import com.unboundid.ldap.sdk.Filter;
-import com.unboundid.ldap.sdk.LDAPConnection;
-import com.unboundid.ldap.sdk.LDAPConnectionPool;
-import com.unboundid.ldap.sdk.LDAPException;
-import com.unboundid.ldap.sdk.SearchRequest;
-import com.unboundid.ldap.sdk.SearchResult;
-import com.unboundid.ldap.sdk.SearchResultEntry;
-import com.unboundid.ldap.sdk.SearchScope;
-import com.unboundid.util.ssl.SSLUtil;
-import com.unboundid.util.ssl.TrustStoreTrustManager;
-
-import com.securityexpert.nexus.ui2.platform.LdapRevalidationPort;
-import com.securityexpert.nexus.ui2.platform.Result;
-import com.securityexpert.nexus.ui2.platform.SecretFile;
-
-/**
- * The {@code DIRECTORY-POSTURE} (D-6) re-validation adapter (C3 §2.1,
- * §4.4). A small bounded connection pool (min 0, max 4, tunable), idle
- * connections recycled after 60s. <b>Inert while
- * {@code directoryPostureEnabled} is {@code false}</b> (C3 §4.4.3, AC-12):
- * the constructor opens no pool at all unless enabled, and
- * {@link #revalidate} refuses defensively even if somehow called while
- * disabled.
- *
- * <p>The service-account password is never cached for process lifetime —
- * re-read from its {@code _FILE} mount on every cycle (C3 §4.4.2), so
- * rotation applies without a restart.</p>
- */
+/** Disabled in corporate composition. One-shot connections retire credentials every cycle; no pool. */
 public final class UnboundIdRevalidationAdapter implements LdapRevalidationPort {
-
-    private static final int MIN_POOL_SIZE = 0;
-    private static final int MAX_POOL_SIZE = 4;
-    private static final long IDLE_RECYCLE_MILLIS = 60_000L;
-
     private final boolean directoryPostureEnabled;
-    private final String host;
-    private final int port;
-    private final Path caBundlePath;
+    private final DirectoryProfile profile;
+    private final DirectoryTrustPolicy trust;
     private final String serviceAccountBindDn;
     private final Path serviceAccountPasswordFile;
-    private final String groupSearchBaseDn;
 
-    private final AtomicReference<LDAPConnectionPool> pool = new AtomicReference<>();
-
-    public UnboundIdRevalidationAdapter(boolean directoryPostureEnabled, String host, int port,
-            Path caBundlePath, String serviceAccountBindDn, Path serviceAccountPasswordFile,
-            String groupSearchBaseDn) {
-        this.directoryPostureEnabled = directoryPostureEnabled;
-        this.host = host;
-        this.port = port;
-        this.caBundlePath = caBundlePath;
+    public UnboundIdRevalidationAdapter(boolean enabled, DirectoryProfile profile, DirectoryTrustPolicy trust,
+            String serviceAccountBindDn, Path serviceAccountPasswordFile) {
+        this.directoryPostureEnabled = enabled;
+        this.profile = profile;
+        this.trust = trust;
         this.serviceAccountBindDn = serviceAccountBindDn;
         this.serviceAccountPasswordFile = serviceAccountPasswordFile;
-        this.groupSearchBaseDn = groupSearchBaseDn;
-        // C3 §4.4.3: while disabled, no code path opens a connection pool
-        // at all -- the pool field simply stays null for this adapter's
-        // entire lifetime.
+        if (enabled) {
+            if (profile == null || trust == null || serviceAccountBindDn == null || serviceAccountBindDn.isBlank()
+                    || serviceAccountPasswordFile == null) throw new LdapStartupException("directory_profile_invalid");
+            trust.snapshot();
+        }
     }
 
-    @Override
-    public boolean directoryPostureEnabled() {
-        return directoryPostureEnabled;
+    /** Disabled compatibility only: enabling without an explicit shared profile is refused. */
+    public UnboundIdRevalidationAdapter(boolean enabled, String host, int port, Path caBundlePath,
+            String serviceAccountBindDn, Path serviceAccountPasswordFile, String groupSearchBaseDn) {
+        this(enabled, null, null, serviceAccountBindDn, serviceAccountPasswordFile);
     }
 
-    @Override
-    public Result<Set<String>> revalidate(String actorFingerprint, String bindDn) {
-        if (!directoryPostureEnabled) {
-            // Defensive fail-closed: this adapter must never be invoked
-            // while disabled, but if it is, it never opens a connection.
-            return Result.err("directory_posture_disabled", "re-validation adapter is inert while disabled");
-        }
-        LDAPConnectionPool connectionPool;
-        try {
-            connectionPool = poolOrOpen();
-        } catch (GeneralSecurityException | LDAPException e) {
-            return Result.err("directory_unavailable", "service-account bind unavailable");
-        }
+    @Override public boolean directoryPostureEnabled() { return directoryPostureEnabled; }
 
-        // Re-read the service-account password fresh on every cycle (C3
-        // §4.4.2) -- never cached across cycles, so rotation applies
-        // without a restart.
-        String password = SecretFile.readRequired(serviceAccountPasswordFile, "ldap_service_account");
+    @Override public Result<Set<String>> revalidate(String actorFingerprint, String bindDn) {
+        Result<DirectoryObservation> result = revalidatePrincipal(bindDn);
+        if (result instanceof Result.Err<DirectoryObservation> err) return Result.err(err.code(), "directory unavailable");
+        // Legacy callers cannot publish a principal-less freshness observation.
+        return Result.err("directory_identity_not_proven", "typed directory observation required");
+    }
+
+    @Override public Result<DirectoryObservation> revalidatePrincipal(String principalReference) {
+        if (!directoryPostureEnabled) return Result.err("directory_posture_disabled", "revalidation disabled");
+        char[] password = null;
+        byte[] passwordBytes = null;
         LDAPConnection connection = null;
         try {
-            connection = connectionPool.getConnection();
-            connection.bind(serviceAccountBindDn, password);
-            SearchRequest request = new SearchRequest(groupSearchBaseDn, SearchScope.SUB,
-                    Filter.createEqualityFilter("member", bindDn));
-            SearchResult result = connection.search(request);
-            Set<String> groupReferences = new LinkedHashSet<>();
-            for (SearchResultEntry entry : result.getSearchEntries()) {
-                groupReferences.add(entry.getDN());
+            DirectoryTrustPolicy.Snapshot snapshot = trust.snapshot();
+            password = DirectoryTrustPolicy.readSecret(serviceAccountPasswordFile);
+            passwordBytes = DirectoryTrustPolicy.passwordBytes(password);
+            connection = DirectoryConnection.open(profile, trust, snapshot);
+            try { connection.bind(new SimpleBindRequest(serviceAccountBindDn, passwordBytes)); }
+            finally {
+                Arrays.fill(password, '\0');
+                Arrays.fill(passwordBytes, (byte) 0);
             }
-            connectionPool.releaseConnection(connection);
-            connection = null;
-            return Result.ok(groupReferences);
-        } catch (LDAPException e) {
-            // A failed connection is discarded, never retried on the same
-            // handle (C3 §2.1).
-            if (connection != null) {
-                connectionPool.releaseDefunctConnection(connection);
-                connection = null;
-            }
-            return Result.err("directory_unavailable", "re-validation bind or search failed");
+            String principal = DirectoryConnection.principal(connection, principalReference);
+            Set<String> groups = DirectoryConnection.groups(connection, profile, principal);
+            if (!groups.contains(profile.accessGroupReference())) return Result.err("access_group_lost", "access refused");
+            DirectoryObservation observation = new DirectoryObservation(profile.profileId(), principal, groups,
+                    write -> trust.publish(snapshot, write));
+            if (!observation.publication().ifCurrent(() -> { })) return Result.err("directory_unavailable", "directory unavailable");
+            return Result.ok(observation);
+        } catch (LDAPException | RuntimeException e) {
+            return Result.err("directory_unavailable", "directory unavailable");
         } finally {
-            if (connection != null) {
-                connectionPool.releaseConnection(connection);
-            }
+            if (password != null) Arrays.fill(password, '\0');
+            if (passwordBytes != null) Arrays.fill(passwordBytes, (byte) 0);
+            if (connection != null) trust.release(connection);
         }
-    }
-
-    private LDAPConnectionPool poolOrOpen() throws GeneralSecurityException, LDAPException {
-        LDAPConnectionPool existing = pool.get();
-        if (existing != null) {
-            return existing;
-        }
-        SSLUtil sslUtil = new SSLUtil(new TrustStoreTrustManager(caBundlePath.toString()));
-        LDAPConnection seed = new LDAPConnection(sslUtil.createSSLSocketFactory(), host, port);
-        LDAPConnectionPool created = new LDAPConnectionPool(seed, MIN_POOL_SIZE, MAX_POOL_SIZE);
-        created.setMaxConnectionAgeMillis(IDLE_RECYCLE_MILLIS);
-        if (pool.compareAndSet(null, created)) {
-            return created;
-        }
-        created.close();
-        return pool.get();
     }
 }

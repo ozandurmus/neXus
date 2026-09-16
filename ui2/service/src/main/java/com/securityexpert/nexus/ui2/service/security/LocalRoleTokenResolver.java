@@ -35,7 +35,7 @@ public final class LocalRoleTokenResolver {
         List<RoleToken> resolved = new ArrayList<>();
         for (RoleToken token : RoleToken.values()) {
             for (RoleBindingRecord binding : roleBindingRepository.findActiveByToken(token.token())) {
-                if (localIdentityId.equals(groupReferenceCipher.decrypt(binding.groupReferenceEncrypted()))) {
+                if (binding.bindingKind() == com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.LEGACY && localIdentityId.equals(groupReferenceCipher.decrypt(binding.groupReferenceEncrypted()))) {
                     resolved.add(token);
                     break;
                 }
@@ -47,6 +47,7 @@ public final class LocalRoleTokenResolver {
     /** The matching direct binding, retained for E4's audit row. */
     public Optional<RoleBindingRecord> resolveBinding(String localIdentityId, RoleToken token) {
         return roleBindingRepository.findActiveByToken(token.token()).stream()
+                .filter(binding -> binding.bindingKind() == com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.LEGACY)
                 .filter(binding -> localIdentityId.equals(groupReferenceCipher.decrypt(binding.groupReferenceEncrypted())))
                 .findFirst();
     }

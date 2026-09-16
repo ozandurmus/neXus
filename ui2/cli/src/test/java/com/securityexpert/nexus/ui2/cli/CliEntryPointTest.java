@@ -24,6 +24,27 @@ import org.junit.jupiter.api.Test;
 class CliEntryPointTest {
 
     @Test
+    void directoryRoleBindingCallerSubmitsOnlyScopedSelectionFields() throws Exception {
+        var body = new java.util.concurrent.atomic.AtomicReference<String>();
+        var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/role-bindings", exchange -> {
+            body.set(new String(exchange.getRequestBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+            exchange.sendResponseHeaders(200, 2);
+            exchange.getResponseBody().write("{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            exchange.close();
+        });
+        server.start();
+        try {
+            CliEntryPoint.main(new String[] { "role-bind-create", "http://127.0.0.1:" + server.getAddress().getPort(),
+                    "synthetic-session", "synthetic-csrf", "role:backup_admin", "opaque-handle", "synthetic-profile", "DIRECTORY_PRINCIPAL" });
+            assertTrue(body.get().contains("\"selectionHandle\":\"opaque-handle\""));
+            assertTrue(body.get().contains("\"directoryProfileId\":\"synthetic-profile\""));
+            assertTrue(body.get().contains("\"bindingKind\":\"DIRECTORY_PRINCIPAL\""));
+            assertTrue(!body.get().contains("groupReference"));
+        } finally { server.stop(0); }
+    }
+
+    @Test
     void bootstrapLocalIdentityIsStillARecognizedCommandAndValidatesItsArgumentCountBeforeTouchingAnyDatabase() {
         String output = captureStdErr(() -> CliEntryPoint.main(new String[] {"bootstrap-local-identity"}));
 
@@ -67,7 +88,7 @@ class CliEntryPointTest {
     @Test
     void roleBindSubcommandsAreRecognizedAndValidateTheirArgumentCountBeforeAnyHttpCall() {
         assertTrue(captureStdErr(() -> CliEntryPoint.main(new String[] {"role-bind-create"}))
-                .contains("role-bind-create requires exactly 6 arguments"));
+                .contains("role-bind-create requires exactly 7 arguments"));
         assertTrue(captureStdErr(() -> CliEntryPoint.main(new String[] {"role-bind-revoke"}))
                 .contains("role-bind-revoke requires exactly 4 arguments"));
     }

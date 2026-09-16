@@ -329,18 +329,12 @@ class FirstBootIdentitySeedingRunnerTest {
         String nexusadminActor = LocalMechanism.actorFingerprintFor(nexusadminId);
         String claudeadminActor = LocalMechanism.actorFingerprintFor(claudeadminId);
 
-        // Simulates what a real login resolves into actor_authz_state for a
-        // local identity (C3A §7.1): the single-element set containing the
-        // identity's own reference. This movement does not wire that write
-        // path (out of scope, C3's own RBAC wiring) -- only the seeded
-        // role_bindings rows this movement is responsible for are under
-        // test here.
+        // Exercise the production local resolver branch; local logins publish no directory cache.
         RecordingActorAuthzStateRepository authzState = new RecordingActorAuthzStateRepository();
         Instant now = NOW.plusSeconds(60);
-        authzState.upsert(nexusadminActor, Set.of(nexusadminId), now, now.plus(15, java.time.temporal.ChronoUnit.MINUTES));
-        authzState.upsert(claudeadminActor, Set.of(claudeadminId), now, now.plus(15, java.time.temporal.ChronoUnit.MINUTES));
-
-        RbacEvaluator evaluator = new RbacEvaluator(fixture.roleBindings, authzState, fixture.cipher);
+        RbacEvaluator evaluator = new RbacEvaluator(fixture.roleBindings, authzState, fixture.cipher,
+                new com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver(fixture.localCredentials),
+                new com.securityexpert.nexus.ui2.service.security.LocalRoleTokenResolver(fixture.roleBindings, fixture.cipher), null);
 
         for (RoleToken token : RoleToken.values()) {
             RbacEvaluator.Decision decision = evaluator.evaluate(nexusadminActor, Optional.of(token), now);
