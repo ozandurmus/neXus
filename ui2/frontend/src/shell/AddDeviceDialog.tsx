@@ -52,7 +52,24 @@ const VENDOR_LABEL: Record<Vendor, string> = {
   palo_alto: "Palo Alto",
 };
 
+
+const FRIENDLY_KINDS: Record<string, string> = {
+  "STANDALONE_PRODUCT_GATEWAY": "Standalone Gateway",
+  "NON_PRODUCT_INTEROPERABLE_DEVICE": "Generic Device",
+  "STANDALONE_VIRTUALIZATION_HOST": "VSX Chassis",
+  "STANDALONE_VIRTUAL_SYSTEM": "Virtual System",
+  "VIRTUALIZATION_CLUSTER": "VSX Chassis Cluster",
+  "VIRTUAL_SYSTEM_CLUSTER": "Virtual System Cluster",
+  "PLAIN_HIGH_AVAILABILITY_CLUSTER": "HA Cluster",
+  "PHYSICAL_VIRTUALIZATION_CHASSIS_MEMBER": "VSX Chassis Member",
+  "VIRTUAL_SYSTEM_MEMBER": "Virtual System Member",
+  "PLAIN_CLUSTER_MEMBER": "Cluster Member",
+  "UNCLASSIFIED": "Unknown Device",
+  "AMBIGUOUS": "Ambiguous Device"
+};
+
 function describeApiError(err: unknown): string {
+
   const apiErr = err as Partial<ApiError>;
   const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
   if (serverError === "ACTION_REFUSED") return "You do not have permission to create credentials.";
@@ -795,7 +812,7 @@ function CandidateRows({
           )}
         </TableCell>
         <TableCell>
-          {candidate.kind}
+          {FRIENDLY_KINDS[candidate.kind] ?? candidate.kind}
           {!candidate.importable && !isGroup && (
             <Typography component="span" variant="body2" sx={{ color: m3.onSurfaceVar, ml: 1 }}>
               (not importable)
