@@ -250,6 +250,9 @@ jobs:
           pip install -r requirements-dev.txt
           pip install -r requirements-console.txt
 
+      - name: Prepare declared Chromium test runtime
+        run: python -m playwright install --with-deps chromium
+
       - name: Import validation
         # Catches a syntax error or a broken import before the suite spends
         # time on it, and covers modules no test imports directly.
