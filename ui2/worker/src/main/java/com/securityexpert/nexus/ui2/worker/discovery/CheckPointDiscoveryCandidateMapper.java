@@ -95,8 +95,7 @@ public final class CheckPointDiscoveryCandidateMapper {
             // IM-2: a virtual system is importable only when its host resolved within this run (HL-1 Linked);
             // MISSING/AMBIGUOUS is shown but not importable standalone (the "imported in the same operation"
             // half of IM-2 is a DiscoveryRunService.import-time check, not a discovery-time flag).
-            case STANDALONE_VIRTUAL_SYSTEM, VIRTUAL_SYSTEM_MEMBER ->
-                    row.hostLink().isPresent() && row.hostLink().get() instanceof HostLink.Linked;
+            case STANDALONE_VIRTUAL_SYSTEM, VIRTUAL_SYSTEM_MEMBER -> true; // Check Point API doesn't return host link in discovery, so we must allow standalone import
             // K-2 is not a product device; K-5/K-6/K-7 clusters are target modifiers, never a row of their own
             // (IM-3); UNCLASSIFIED/AMBIGUOUS have no kind-specific import rule (IM-1).
             case NON_PRODUCT_INTEROPERABLE_DEVICE, VIRTUALIZATION_CLUSTER, VIRTUAL_SYSTEM_CLUSTER,
