@@ -5,16 +5,20 @@ import hashlib
 import io
 import json
 import os
+import shutil
+import signal
 import socket
 import stat
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 import pytest
 
 from scripts import workbench_companion as companion
 from scripts import workbench_companion_mcp as mcp
+from scripts import workbench_companion_launchagent as launchagent
 
 
 PLUGIN_ROOT = Path(__file__).parents[1] / "plugins" / "nexus-workbench-companion"
@@ -702,3 +706,163 @@ def test_private_codex_plugin_has_only_the_c3_read_only_mapping_and_finite_skill
         "${NEXUS_WORKBENCH_SNAPSHOT_DIRECTORY}"]}
     assert all(tool in skill for tool in mcp.TOOLS)
     assert "at most three tool calls" in skill and "Do not retry, paginate" in skill
+
+
+def cli_configuration(tmp_path):
+    sources = tmp_path / "sources"
+    sources.mkdir()
+    projection_file = sources / "projection.json"
+    projection_file.write_bytes(companion._json(projection("estimated_from_requested_model")))
+    projection_file.chmod(0o600)
+    config = {"snapshot_directory": str(tmp_path / "private"),
+              "source_set_token": "synthetic-set", "movement_ids": [IDENTITY],
+              "source_roots": [str(sources)],
+              "allowlists": {key: sorted(values) for key, values in ALLOWLISTS.items()},
+              "projection_file": str(projection_file)}
+    path = tmp_path / "configuration.json"
+    path.write_bytes(companion._json(config))
+    path.chmod(0o600)
+    return path, config, projection_file
+
+
+@pytest.mark.parametrize("field,value", [
+    ("extra", "private sentinel"), ("source_set_token", "../private sentinel"),
+    ("movement_ids", IDENTITY), ("movement_ids", [IDENTITY, IDENTITY]),
+    ("movement_ids", []), ("source_roots", []), ("source_roots", ["relative"]),
+    ("snapshot_directory", "/tmp/../private"), ("projection_file", "/outside/projection.json"),
+    ("allowlists", {"shell": ["execute"]}), ("allowlists", {"provider": "synthetic"}),
+])
+def test_observer_cli_rejects_configuration_before_state_writes(tmp_path, field, value, capsys):
+    path, config, _ = cli_configuration(tmp_path)
+    config[field] = value
+    path.write_bytes(companion._json(config))
+    assert companion.main(["--configuration", str(path)]) == 2
+    assert capsys.readouterr().err == "INVALID_CONFIGURATION\n"
+    assert not (tmp_path / "private").exists()
+
+
+def test_observer_cli_strict_arguments_and_private_config(tmp_path, capsys):
+    path, _, _ = cli_configuration(tmp_path)
+    for argv in ([], ["--config", str(path)], ["--configuration", str(path), "private sentinel"]):
+        with pytest.raises(SystemExit) as error:
+            companion.main(argv)
+        assert error.value.code == 2
+        assert capsys.readouterr().err == "INVALID_CONFIGURATION\n"
+    path.chmod(0o644)
+    assert companion.main(["--configuration", str(path)]) == 2
+    assert not (tmp_path / "private").exists()
+
+
+@pytest.mark.parametrize("kind,status", [
+    ("missing", "MISSING"), ("malformed", "MALFORMED"), ("duplicate", "MALFORMED"),
+    ("permissions", "UNREADABLE"), ("symlink", "UNREADABLE"),
+    ("hardlink", "UNREADABLE"), ("fifo", "UNREADABLE"), ("oversize", "LIMIT_EXCEEDED"),
+])
+def test_observer_cli_projection_failures_preserve_last_good(tmp_path, kind, status):
+    _, _, path = cli_configuration(tmp_path)
+    with observer(tmp_path) as worker:
+        worker.poll(lambda: companion._scan_projection(path, worker.ids), now=100)
+        good = worker.state["observations"][IDENTITY]["usage"]["data"]
+        if kind in {"missing", "symlink", "fifo"}:
+            path.unlink()
+        if kind == "malformed":
+            path.write_bytes(b"{private sentinel")
+        elif kind == "duplicate":
+            path.write_bytes(b'{"duplicate":1,"duplicate":2}')
+        elif kind == "permissions":
+            path.chmod(0o644)
+        elif kind == "symlink":
+            path.symlink_to(tmp_path / "configuration.json")
+        elif kind == "hardlink":
+            os.link(path, path.parent / "alias.json")
+        elif kind == "fifo":
+            os.mkfifo(path, mode=0o600)
+        elif kind == "oversize":
+            path.write_bytes(b" " * (companion.MAX_BYTES + 1))
+        worker.poll(lambda: companion._scan_projection(path, worker.ids), now=130)
+        usage = worker.state["observations"][IDENTITY]["usage"]
+        assert usage["status"] == status and usage["data"] == good
+        assert usage["observed_at"] == 100
+        assert "private sentinel" not in json.dumps(worker.state)
+
+
+def test_observer_cli_detects_projection_generation_change(tmp_path, monkeypatch):
+    _, _, path = cli_configuration(tmp_path)
+    original = os.fstat
+    calls = 0
+
+    def changed(fd):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            path.write_bytes(path.read_bytes() + b" ")
+        return original(fd)
+
+    monkeypatch.setattr(os, "fstat", changed)
+    assert companion._scan_projection(path, [IDENTITY])[IDENTITY]["record"] == {"status": "INCONSISTENT"}
+
+
+def test_observer_cli_state_failure_is_sanitized_and_restores_handlers(tmp_path, monkeypatch, capsys):
+    path, _, _ = cli_configuration(tmp_path)
+    previous = {s: signal.getsignal(s) for s in (signal.SIGINT, signal.SIGTERM)}
+
+    def failed(*args):
+        raise OSError("private sentinel")
+
+    monkeypatch.setattr(companion.Observer, "_write", failed)
+    assert companion.main(["--configuration", str(path)]) == 1
+    assert capsys.readouterr().err == "OBSERVER_UNAVAILABLE\n"
+    assert {s: signal.getsignal(s) for s in previous} == previous
+    with observer(tmp_path):
+        pass  # Failed CLI released its single-writer lock.
+
+
+def test_launchagent_real_release_entrypoint_shutdown_restart_and_read_only_sources(tmp_path):
+    path, config, source = cli_configuration(tmp_path)
+    release = tmp_path / "release"
+    root = Path(__file__).parents[1]
+    for relative in ("bin/nexus-workbench-observer", "scripts/workbench_companion.py"):
+        destination = release / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / relative, destination)
+    plan = launchagent.artifacts(tmp_path, release, path, config["snapshot_directory"], uid=501)
+    assert plan["plist"]["ProgramArguments"] == [str(release / "bin/nexus-workbench-observer"),
+                                                "--configuration", str(path)]
+    assert plan["notification_status"] == "UNSUPPORTED"
+    assert plan["uninstall"]["preserve"] == [config["snapshot_directory"]]
+    before = {p: p.read_bytes() for p in (path, source)}
+    release_files = sorted(str(p.relative_to(release)) for p in release.rglob("*") if p.is_file())
+    generation = None
+    for stop_signal in (signal.SIGTERM, signal.SIGINT):
+        process = subprocess.Popen(plan["plist"]["ProgramArguments"], cwd=release,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if process.poll() is not None:
+                    pytest.fail("release entrypoint stopped before snapshot")
+                try:
+                    state = snapshot(tmp_path)
+                    if state["observer_generation"] != generation:
+                        break
+                except FileNotFoundError:
+                    pass
+                time.sleep(0.02)
+            else:
+                pytest.fail("release entrypoint did not publish snapshot")
+            generation = state["observer_generation"]
+            usage = state["observations"][IDENTITY]["usage"]["data"]
+            assert usage["cost_source"] == "estimated_from_requested_model"
+            assert usage["attempt_attribution"] == "UNKNOWN"
+            process.send_signal(stop_signal)
+            stdout, stderr = process.communicate(timeout=5)
+            assert process.returncode == 0 and stdout == stderr == b""
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.communicate(timeout=5)
+    with observer(tmp_path):
+        pass
+    assert all(p.read_bytes() == raw for p, raw in before.items())
+    assert sorted(str(p.relative_to(release)) for p in release.rglob("*") if p.is_file()) == release_files
+    assert not (tmp_path / "Library").exists()
