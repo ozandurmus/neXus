@@ -142,106 +142,18 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
     private List<String> enumerateDomains(TransportSession session) {
         String response = execRead(session, MgmtCliCommands.domainList());
         List<String> domains = new ArrayList<>();
-        
         try {
             JsonNode root = mapper.readTree(response);
             JsonNode objects = root.get("objects");
-            
             if (objects != null && objects.isArray()) {
-                // Pass 1: Find all clusters and map member names to their cluster UIDs
-                Map<String, String> memberNameToClusterUid = new HashMap<>();
                 for (JsonNode obj : objects) {
-                    if (!obj.has("uid") || !obj.has("type")) continue;
-                    String type = obj.get("type").asText();
-                    if (type.equalsIgnoreCase("CpmiGatewayCluster") || type.toLowerCase().contains("cluster")) {
-                        String clusterUid = obj.get("uid").asText();
-                        if (obj.has("cluster-member-names") && obj.get("cluster-member-names").isArray()) {
-                            for (JsonNode memberNameNode : obj.get("cluster-member-names")) {
-                                memberNameToClusterUid.put(memberNameNode.asText(), clusterUid);
-                            }
-                        }
+                    if (obj.has("na" + "me")) {
+                        domains.add(obj.get("na" + "me").asText());
                     }
                 }
-
-                // Pass 2: Extract all candidates
-                for (JsonNode obj : objects) {
-                    parsed++;
-                    if (!obj.has("uid")) {
-                        missingStableIdentifier++;
-                        continue;
-                    }
-                    String uid = obj.get("uid").asText();
-                    String type = obj.has("type") ? obj.get("type").asText() : "";
-                    String name = obj.has("na" + "me") ? obj.get("na" + "me").asText() : "";
-                    
-                    ObjectType objType = ObjectType.GATEWAY;
-                    boolean isVirtHost = false;
-                    boolean isVirtSystem = false;
-                    boolean isProduct = type.toLowerCase().contains("gateway") || type.toLowerCase().contains("cluster") || type.toLowerCase().contains("checkpoint") || type.equals("virtual-system");
-
-                    if (type.equalsIgnoreCase("CpmiGatewayCluster") || type.equals("simple-cluster") || type.equals("vsx-cluster") || type.equals("cluster")) {
-                        objType = ObjectType.CLUSTER;
-                        if (type.equals("vsx-cluster")) {
-                            isVirtHost = true;
-                            isVirtSystem = true;
-                        }
-                    } else if (type.equals("virtual-system")) {
-                        objType = ObjectType.GATEWAY;
-                        isVirtSystem = true;
-                    } else if (type.equals("vsx-gateway")) {
-                        objType = ObjectType.GATEWAY;
-                        isVirtHost = true;
-                        isVirtSystem = true;
-                    } else if (type.equals("simple-gateway") || type.equals("checkpoint-host") || type.equals("gateway")) {
-                        // If this gateway's name is in the memberNameToClusterUid map, it's a MEMBER
-                        if (memberNameToClusterUid.containsKey(name)) {
-                            objType = ObjectType.MEMBER;
-                        } else {
-                            objType = ObjectType.GATEWAY;
-                        }
-                    } else if (type.equals("cluster-member") || type.equals("vsx-cluster-member")) {
-                        objType = ObjectType.MEMBER;
-                        if (type.equals("vsx-cluster-member")) {
-                            isVirtSystem = true;
-                        }
-                    } else {
-                        // Dynamically fall back to GATEWAY if it has an IP and is a product
-                        if (isProduct && obj.has("ipv4-address")) {
-                            if (memberNameToClusterUid.containsKey(name)) {
-                                objType = ObjectType.MEMBER;
-                            } else {
-                                objType = ObjectType.GATEWAY;
-                            }
-                        } else {
-                            // Skip non-product objects
-                            continue;
-                        }
-                    }
-
-                    Address ipv4 = obj.has("ipv4-address") ? Address.of(obj.get("ipv4-address").asText()) : Address.absent();
-                    Address mgmtIp = ipv4;
-                    
-                    ClassificationFlags flags = new ClassificationFlags(isProduct, isVirtHost, isVirtSystem);
-                    Optional<ClusterReference> clusterRef = Optional.empty();
-                    
-                    if (objType == ObjectType.MEMBER && memberNameToClusterUid.containsKey(name)) {
-                         String clusterUid = memberNameToClusterUid.get(name);
-                         clusterRef = Optional.of(new ClusterReference(Optional.of(OpaqueId.of(clusterUid)), Optional.empty()));
-                    } else if (obj.has("cluster")) {
-                         String clusterUid = obj.get("cluster").asText();
-                         clusterRef = Optional.of(new ClusterReference(Optional.of(OpaqueId.of(clusterUid)), Optional.empty()));
-                    }
-
-                    Optional<String> model = obj.has("hardware") ? Optional.of(obj.get("hardware").asText()) : Optional.empty();
-                    Optional<String> version = obj.has("version") ? Optional.of(obj.get("version").asText()) : Optional.empty();
-
-                    results.add(new RawCandidateInput(
-                        new CandidateKey(domainId, OpaqueId.of(uid)),
-                        objType, flags, name, ipv4, mgmtIp, clusterRef, model, version, Optional.empty(), Optional.empty()
-                    ));
-                }
+            } else if (response.trim().isEmpty() || response.contains("command not found")) {
+                domains.add("SMC User"); // Fallback for single domain / non-MDS environments
             }
-            log.info(String.format("queryGateways for domain %s: objects_array_size=%d, parsed=%d, missingUid=%d, added=%d", domain, objects != null ? objects.size() : -1, parsed, missingStableIdentifier, results.size()));
         } catch (Exception e) {
             log.warning("Failed to parse domains JSON, assuming single domain. error: " + e.getMessage());
             domains.add("SMC User");
