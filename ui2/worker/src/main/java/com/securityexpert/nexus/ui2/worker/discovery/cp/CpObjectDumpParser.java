@@ -109,6 +109,10 @@ final class CpObjectDumpParser {
 
     private void expect(char expected) {
         if (pos >= text.length() || text.charAt(pos) != expected) {
+            String snippet = text.substring(Math.max(0, pos - 20), Math.min(text.length(), pos + 100));
+            java.util.logging.Logger.getLogger(CpObjectDumpParser.class.getName())
+                    .warning(String.format("Parser error! Expected '%c' but found '%s' at pos %d. Snippet: %s",
+                            expected, pos < text.length() ? text.charAt(pos) : "EOF", pos, snippet));
             throw new ManagementPlaneQueryFailedException();
         }
         pos++;
