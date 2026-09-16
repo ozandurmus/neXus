@@ -76,6 +76,11 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
           {preview && <PreviewBanner />}
           {preview ? <Preview /> : <Product />}
         </Box>
+        {typeof __BUILD_TIMESTAMP__ !== "undefined" && (
+          <Box sx={{ position: "fixed", bottom: 8, right: 8, color: "text.disabled", fontSize: "0.7rem", pointerEvents: "none" }}>
+            Build: {__BUILD_TIMESTAMP__}
+          </Box>
+        )}
       </Box>
     </ThemeProvider>
   );

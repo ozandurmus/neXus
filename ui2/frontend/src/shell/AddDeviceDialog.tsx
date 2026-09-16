@@ -591,12 +591,43 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
           </Stack>
         )}
 
-        {mode === "discovery" && discoveryPhase === "failed" && (
-          <Typography variant="body2" color="error">
-            {Object.keys(run?.outcome_summary ?? {}).map((key) => DISCOVERY_FAILURE_COPY[key.replace("failure_reason_class:", "")] || DISCOVERY_FAILURE_COPY[key]).find(Boolean)
-              ?? "Discovery did not complete."}
-          </Typography>
-        )}
+        {mode === "discovery" && discoveryPhase === "failed" && (() => {
+          const failureKeyRaw = Object.keys(run?.outcome_summary ?? {}).find(k => k.includes("TRUST_ENTRY_MISSING") || k.includes("TRUST_MISMATCH"));
+          const isTrustError = !!failureKeyRaw;
+          const msg = Object.keys(run?.outcome_summary ?? {}).map((key) => DISCOVERY_FAILURE_COPY[key.replace("failure_reason_class:", "")] || DISCOVERY_FAILURE_COPY[key]).find(Boolean)
+              ?? "Discovery did not complete.";
+          return (
+            <Stack spacing={1.5}>
+              <Typography variant="body2" color="error">{msg}</Typography>
+              {isTrustError && (
+                <Stack spacing={1} sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+                  <Typography variant="body2" fontWeight="500">SSH Trust Verification</Typography>
+                  <Typography variant="body2">The product requires explicit authorization of the management server's SSH identity.</Typography>
+                  {!trustObservationId && <Button variant="outlined" onClick={observeSshTrust} disabled={trustBusy}>Inspect SSH Host Key</Button>}
+                  {trustObservationId && <>
+                    <Typography variant="body2">SSH host key observed ({trustAlgorithm}).</Typography>
+                    <TextField label="Observed SHA-256 fingerprint" size="small" value={trustFingerprint} InputProps={{ readOnly: true }} />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Checkbox checked={trustConfirmed} disabled={trustBusy} onChange={(e) => setTrustConfirmed(e.target.checked)} />
+                      Trust and cache observed SSH key
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Checkbox checked={trustReEnroll} disabled={trustBusy} onChange={(e) => setTrustReEnroll(e.target.checked)} />
+                      Replace existing cached key
+                    </label>
+                    <Button variant="contained" onClick={async () => {
+                      await authorizeSshTrust();
+                      setDiscoveryPhase("form");
+                    }} disabled={trustBusy || !trustConfirmed}>
+                      {trustReEnroll ? "Replace cached SSH key" : "Trust and cache SSH key"}
+                    </Button>
+                  </>}
+                  {trustRelationship && <Typography role="status" color={trustRelationship === "MATCH" ? "success.main" : "error.main"}>SSH trust result: {trustRelationship}</Typography>}
+                </Stack>
+              )}
+            </Stack>
+          );
+        })()}
 
         {mode === "discovery" && (discoveryPhase === "candidates" || discoveryPhase === "importing" || discoveryPhase === "done") && run && (
           <Stack spacing={1.5}>

@@ -6,6 +6,9 @@ import react from "@vitejs/plugin-react";
 // long-lived Node process in production.
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __BUILD_TIMESTAMP__: JSON.stringify(new Date().toISOString()),
+  },
   build: {
     outDir: "dist",
     emptyOutDir: true,
