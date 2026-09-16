@@ -1,0 +1,191 @@
+{
+  "created_at": "2026-09-16T09:06:39Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Existing ProjectPlanPanel tests including source-refresh exact historical label run without unhandled errors; source-fixture values/assertions unchanged.",
+          "Existing ProjectPlanReader provenance tests and unmodified DIR10 architecture gate pass.",
+          "Only named tests and synthetic fixture data change; no product implementation, package/dependency, guard, global workflow, or privacy changes.",
+          "Targeted/privacy/diff evidence, commit/PR/close report returned for parent independent review; full regression follows final417 integration, not inferred here."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+          "observed": "User authorizes recovering PR417 through required gates without broad refactor or repeated C10 implementation. Existing full frontend95 assertions pass but run exits1 for ProjectPlanPanel undefined.includes after refresh. DIR10 architecture rule flags historical provenance literals in ProjectPlanPanel.test.tsx and ProjectPlanReaderTest.java. Current main b584a40 has the same fixtures; production C10 unaffected.",
+          "what_exists": "ProjectPlanPanel.test.tsx renderWithPlan(plan) uses vi.fn().mockResolvedValue(jsonResponse(200,plan)), reusing a stateful consumed Response for refresh. adminApi's JSON catch returns{} on consumed-body parse, causing metadata_warnings undefined. The Java provenance test embeds feature_registry.json with legacy id python in a source string. Frontend provenance source_id and expected label contain the historical source name. Existing DIR10 scan explicitly excludes directories named fixtures; use that designated location for unchanged historical test metadata, never concatenate/encode words merely to evade the guard."
+        },
+        "context_not_loaded": [
+          "Unrelated history, raw logs/credentials/data/support artifacts, production and HOST-A."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/project-plan-fixture-gates-0270"
+        },
+        "invariants": [
+          "Do not weaken or bypass any existing gate; preserve exact historical metadata and assertion coverage.",
+          "Synthetic fixture correction only; no repeated completed worker implementation.",
+          "No main-checkout edits; original0270 worktree only; parent owns merge."
+        ],
+        "merge_gate": "Engineer commits/pushes/opens PR, never merges. Parent reviews exact correction and integrates only after independent required gate evidence; native supervisor only bridges terminal result.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Repair the existing Project Plan synthetic test-fixture regressions that block C10 delivery; do not change product code or weaken DIR10.",
+        "output_contract": [
+          "Commit(s), PR and sanitized actual SESSION_CLOSE; no extra implementation job."
+        ],
+        "recommended_reasoning": {
+          "reason": "Small deterministic synthetic-fixture correction; no new architecture/security semantics.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Codex gpt-5.6-terra medium, intention budgetUSD0.75 for approximately15 bounded fixture/metadata turns at the recorded USD0.05 class estimate; not a proved spend cap.",
+          "Read named frozen baseline/skeleton rule on sole Java runtime/fixtures, not the DRAFT project publication record as authority.",
+          "Inspect every use of renderWithPlan and actual refresh/JSON handling before correction. Create a new simulatedHTTP Response per fetch call and await refresh consumption if needed; preserve real assertions and zero unhandled errors. Do not hide errors through Vitest suppression or change production error handling.",
+          "Move the unchanged historical provenance metadata/expected exact display label into designated test-only fixtures excluded by the EXISTING architecture contract scanner. Preserve actual historical values and assertions. No guard/exclusion/assertion weakening, source-word camouflage, renamed evidence identities or runtime Line1 bridge.",
+          "Existing Java/Gradle and frontend modules from0220 reused only; link ignored node_modules if needed. No install/bootstrap/live data/host/device/container access, no tracking or Companion project.",
+          "Commit, push, open PR and canonical honest SESSION_CLOSE; parent will inspect/integrate the bounded correction into417, not reimplement C10. Reports outside source; no further job."
+        ],
+        "risks": [
+          "If root cause requires a product behavior change or contract/guard modification, report the exact scope blocker instead of implementing it."
+        ],
+        "scope": {
+          "in": [
+            "ui2/frontend/tests/ProjectPlanPanel.test.tsx and minimal synthetic provenance data in ui2/frontend/tests/fixtures/.",
+            "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/projectplan/ProjectPlanReaderTest.java and minimal unchanged provenance JSON in ui2/service/src/test/resources/fixtures/.",
+            "Read-only existing ProjectPlanPanel/adminApi/useFetchOnMount and architecture scanner for root-cause confirmation."
+          ],
+          "out": [
+            "Production source, C10/LDAP implementation, architecture test/scanner modifications, dependency additions, runtime/host/device/container/deployment/corporate access, project state, Companion/Workbench/orchestration/accounting/global workflow, unrelated tests."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test",
+              "--",
+              "tests/ProjectPlanPanel.test.tsx"
+            ],
+            "name": "frontend_project_plan"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "--no-daemon",
+              "--console=plain",
+              "-p",
+              "ui2",
+              "-PfrontendPrebuilt=true",
+              ":service:unitTest",
+              "--tests",
+              "*ProjectPlanReaderTest"
+            ],
+            "name": "service_project_plan"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "--no-daemon",
+              "--console=plain",
+              "-p",
+              "ui2",
+              "-PfrontendPrebuilt=true",
+              ":architecture-tests:architectureTest"
+            ],
+            "name": "architecture"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T09:06:39Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "ProjectPlanPanel test fetch mock returns a fresh Response for each request.",
+          "Historical frontend provenance moved to ui2/frontend/tests/fixtures/project-plan-provenance.json.",
+          "Historical Java feature registry moved to ui2/service/src/test/resources/fixtures/projectplan/legacy-feature-registry.json."
+        ],
+        "completed": [
+          "Corrected the two synthetic fixture regressions without changing production source, C10/LDAP implementation, or the DIR10 scanner."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "test fixtures only; production UI unchanged"
+        },
+        "integration": {
+          "branch": "feature/project-plan-fixture-gates-0270",
+          "ci": "NOT_RUN",
+          "head_sha": "UNCOMMITTED",
+          "merge_commit": null,
+          "merge_decision": "No merge or PR action: git add could not write the shared object database (Operation not permitted).",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0270",
+          "movement_type": "VALIDATION",
+          "objective": "Restore permitted Git object and local test-runtime access, then independently validate, commit, push, and open the PR.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Exact historical provenance values and assertions.",
+          "Existing DIR10 scanner and all production implementation."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded validation and Git-environment recovery; no new product semantics.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Required frontend, service, and architecture gates remain UNVERIFIED until local test-runtime access is restored."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: architecture Gradle command could not start because the same existing distribution lock file was not permitted.",
+          "diff_check": "PASS: git diff --check origin/main completed without output.",
+          "full_regression": "NOT_RUN: explicitly deferred to final417 integration.",
+          "privacy": "PASS: repository_privacy_check.py reported 0 findings.",
+          "real_environment": "NOT_APPLICABLE: local synthetic-test correction only.",
+          "state_consistency": "NOT_RUN: no project-state files were in scope or changed.",
+          "targeted": "UNVERIFIED: frontend command could not start because vitest was not found; service test could not start because Gradle could not open its existing distribution lock file (Operation not permitted)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-16T09:12:48Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0270",
+  "movement": "NXS-LOCAL-0270",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T09:12:48Z"
+}

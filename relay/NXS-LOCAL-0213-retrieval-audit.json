@@ -1,0 +1,164 @@
+{
+  "created_at": "2026-09-15T11:59:15Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A retrieval whose audit write fails leaves no readable plaintext at the destination and returns a refusal rather than Ok.",
+          "A named test drives the audit-write failure and asserts both halves: the refusal, and the absence of the file.",
+          "The success path is unchanged and still audited.",
+          "The persistence suite and the repository privacy gate pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md (FROZEN) OR-3: every retrieval is audited as its own action.",
+          "observed": "The backup-line audit of 2026-09-15 recorded OR-3 as NOT_IMPLEMENTED with the note that the existing test covers the success path only and has no audit-write-failure case. The defect is an ordering, not an omission: the call is there, it is simply last.",
+          "what_exists": "ui2/persistence/src/main/java/.../artefact/BackupArtefactRetrieval.java, the tail of retrieve(), verbatim:\n\n        Path destination = Path.of(destinationPath);\n        try (InputStream decrypted = artefactStore.retrieve(new ArtefactRef(artefactId), manifest.get().wrappedDataKey(),\n                false);\n                OutputStream out = Files.newOutputStream(destination)) {\n            decrypted.transferTo(out);\n        } catch (IOException e) {\n            return new RetrieveResult.IoFailure(String.valueOf(e.getMessage()));\n        }\n\n        retrievalRepository.record(UUID.randomUUID().toString(), artefactId, reason, destinationPath,\n                actorFingerprint, \"backup_artefact_retrieved\");\n        return new RetrieveResult.Ok(destinationPath);\n\nThe decrypted bytes reach the destination before record() is called. If record() throws, the file is on disk and nothing says who took it or why.\n\nThe checks that come first are already correct and stay: a reason shorter than the minimum is refused, an actor without an active backup_admin binding is refused, and a missing manifest is refused. Only the ordering of the write and the audit is wrong.\n\nThe result vocabulary is a sealed set: ReasonTooShort, RoleRefused, ArtefactNotFound, IoFailure, Ok."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links.",
+          "BK-12 and BW-4, the reason and role that disappear between admission and execution. Same audit, different files, separate movement."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/no-retrieval-without-its-audit"
+        },
+        "invariants": [
+          "No new route and no change to who may retrieve.",
+          "The existing refusal semantics for reason, role and missing manifest are unchanged.",
+          "No artefact byte and no decrypt affordance reaches an HTTP response."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "A backup artefact is not released until its retrieval is audited. Today the plaintext is written first and the audit row second, so a retrieval can exist that nothing recorded.",
+        "output_contract": [
+          "One pull request on feature/no-retrieval-without-its-audit.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "One method's ordering inside a frozen clause, with the failure path named and its test missing. The judgement is in the partial-write question, which the packet asks to be answered explicitly.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "AGENTS.md fail-closed law: when the audit cannot be written, the safe outcome is no retrieval, not an unrecorded one.",
+          "Do not catch and swallow an audit failure to keep the happy path green. An audit that fails silently is worse than one that is absent, because the absence is visible.",
+          "The IoFailure message already carries an exception string. Do not widen that pattern: a new failure member carries a class, not a message built from an exception."
+        ],
+        "risks": [
+          "Writing to a temporary path and moving it into place after the audit is the obvious shape, and it is only correct if the move is atomic on the target filesystem. If that is the chosen shape, say what makes the move atomic.",
+          "Auditing before the write and rolling the audit back on failure trades one unrecorded retrieval for one recorded retrieval that did not happen. Say which of the two the chosen design prefers and why."
+        ],
+        "scope": {
+          "in": [
+            "Make the retrieval fail closed on its audit: no plaintext reaches the destination unless the retrieval has been recorded, and an audit write that fails leaves no artefact behind.",
+            "Decide and state how a partially written destination is handled if the audit fails after bytes have started moving. Leaving a partial plaintext file on disk with no audit row is the same defect in a smaller form.",
+            "A test for the audit-write-failure path. Its absence is why this shipped: the existing test covers success only.",
+            "Extend the result vocabulary only if the new failure genuinely has no existing member. Say in the pull request which member it uses and why."
+          ],
+          "out": [
+            "Changing the reason, role or manifest checks that precede the write. They are correct.",
+            "Changing what is audited, or the audit action name.",
+            "Adding a retrieval route, or changing who may retrieve.",
+            "Any schema migration."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew --no-daemon --console=plain :persistence:test"
+            ],
+            "name": "persistence_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T11:59:15Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "Added AuditRefused and CLI refusal output.",
+          "Recorded the retrieval audit before plaintext streaming.",
+          "Added the named audit-write-failure test."
+        ],
+        "completed": [
+          "Implemented the fail-closed audit ordering in the working tree.",
+          "Passed repository privacy and diff checks."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No Python changes.",
+          "ui": "CLI reports AUDIT_REFUSED when audit persistence fails."
+        },
+        "integration": {
+          "branch": "feature/no-retrieval-without-its-audit",
+          "ci": "NOT_RUN: persistence test task cannot start without a Java Runtime.",
+          "head_sha": "d9d9ea1aa293942b83985b0ea21736749bf753cb",
+          "merge_commit": "NONE",
+          "merge_decision": "NOT_REQUESTED: merge-mode orchestrator; PR publication is blocked before commit.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": "NONE"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0213",
+          "movement_type": "VALIDATION",
+          "objective": "Restore Git metadata write access and a Java runtime, then validate, commit, push, and open the PR without merging.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Reason, role, and manifest refusal semantics are unchanged.",
+          "The success path remains audited.",
+          "No artefact byte or decrypt affordance reaches an HTTP response."
+        ],
+        "recommended_reasoning": {
+          "reason": "Complete blocked local validation and publication after environment access is restored.",
+          "tier": "main engineer"
+        },
+        "state_updates": [
+          "None: blocked before a deliverable commit or pull request."
+        ],
+        "unresolved_risks": [
+          "Persistence tests could not start because no Java Runtime is available.",
+          "Git cannot create the linked-worktree index lock because its metadata is not writable."
+        ],
+        "validation": {
+          "affected": "Backup artefact retrieval audit ordering and CLI result handling.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "NOT RUN: outside this dispatch and persistence suite is blocked by missing Java runtime.",
+          "privacy": "PASS: repository privacy gate found 0 findings.",
+          "real_environment": "NOT APPLICABLE: local validation only.",
+          "state_consistency": "NOT RUN: no state files changed.",
+          "targeted": "BLOCKED: :persistence:test could not start because no Java Runtime is available."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T12:02:55Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0213",
+  "movement": "NXS-LOCAL-0213",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T12:02:55Z"
+}

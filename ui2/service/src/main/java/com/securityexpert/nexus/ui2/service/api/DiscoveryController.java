@@ -43,10 +43,55 @@ public final class DiscoveryController {
             @JsonProperty("credential_reference_id") String credentialReferenceId) {
     }
 
+    public record TrustRequest(
+            @JsonProperty("observation_id") String observationId,
+            @JsonProperty("trust_observed_key") boolean trustObservedKey) {
+    }
+
+    public record ObserveTrustRequest(
+            @JsonProperty("management_address") String managementAddress,
+            @JsonProperty("management_port") int managementPort) {
+    }
+
+    private final com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService trustService;
     private final DiscoveryRunService discoveryRunService;
 
-    public DiscoveryController(DiscoveryRunService discoveryRunService) {
+    public DiscoveryController(DiscoveryRunService discoveryRunService,
+            com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService trustService) {
         this.discoveryRunService = discoveryRunService;
+        this.trustService = trustService;
+    }
+
+    @PostMapping("/discovery/ssh-trust/enroll")
+    public ResponseEntity<Map<String, Object>> enrollTrust(@RequestBody TrustRequest request, HttpServletRequest servletRequest) {
+        return authorizeTrust(request, servletRequest, false);
+    }
+
+    @PostMapping("/discovery/ssh-trust/re-enroll")
+    public ResponseEntity<Map<String, Object>> reEnrollTrust(@RequestBody TrustRequest request, HttpServletRequest servletRequest) {
+        return authorizeTrust(request, servletRequest, true);
+    }
+
+    private ResponseEntity<Map<String, Object>> authorizeTrust(TrustRequest request, HttpServletRequest servletRequest,
+            boolean reEnroll) {
+        var outcome = trustService.authorizeObserved(actingUser(servletRequest),
+                (String) servletRequest.getAttribute(GateChainInterceptor.SESSION_ID_ATTRIBUTE), request.observationId(),
+                request.trustObservedKey(), reEnroll);
+        return ResponseEntity.status(outcome == com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService.Outcome.MATCH
+                ? HttpStatus.OK : HttpStatus.CONFLICT).body(Map.of("relationship", outcome.name()));
+    }
+
+    @PostMapping("/discovery/ssh-trust/observe")
+    public ResponseEntity<Map<String, Object>> observeTrust(@RequestBody ObserveTrustRequest request,
+            HttpServletRequest servletRequest) {
+        return trustService.observe(actingUser(servletRequest),
+                (String) servletRequest.getAttribute(GateChainInterceptor.SESSION_ID_ATTRIBUTE),
+                request.managementAddress(), request.managementPort())
+                .<ResponseEntity<Map<String, Object>>>map(observation -> ResponseEntity.ok(Map.of(
+                        "observation_id", observation.observationId(), "key_algorithm", observation.keyAlgorithm(),
+                        "fingerprint_sha256", observation.fingerprint())))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                        .body(Map.of("error", "SSH_KEY_NOT_OBSERVED")));
     }
 
     @PostMapping("/discovery/runs")

@@ -62,14 +62,6 @@ public final class DiscoveryJobExecutor {
     static final int DEFAULT_PAN_HTTPS_PORT = 443;
     /** WORKER.md: "channel observation interval 5 s for Check Point" (contract §7.4 CS-3's sampling interval). */
     static final Duration CP_CHANNEL_OBSERVATION_INTERVAL = Duration.ofSeconds(5);
-    /**
-     * WORKER.md "trust rule ref from the existing env defaults": both
-     * vendor trust resolvers (worker.discovery.cp.EnvironmentTrustRuleResolver,
-     * worker.discovery.pan.EnvironmentPanTrustRuleResolver) read an
-     * environment variable regardless of the ref string's own value -- these
-     * two literals are opaque placeholders, never a lookup key.
-     */
-    static final String CP_TRUST_RULE_REF = "cp_discovery_trust_default";
     static final String PAN_TRUST_RULE_REF = "pan_discovery_trust_default";
 
     private final JobLeaseRepository leaseRepository;
@@ -152,12 +144,15 @@ public final class DiscoveryJobExecutor {
 
     private EnumerationOutcome enumerateCheckPoint(DiscoveryRun run) {
         ManagementPlaneEnumerationRequest request = new ManagementPlaneEnumerationRequest(
-                run.managementAddress(), DEFAULT_CP_SSH_PORT, run.credentialReferenceId(), CP_TRUST_RULE_REF,
+                run.managementAddress(), DEFAULT_CP_SSH_PORT, run.credentialReferenceId(),
+                com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
+                        run.managementAddress(), DEFAULT_CP_SSH_PORT),
                 CP_CHANNEL_OBSERVATION_INTERVAL, Optional.empty());
         ManagementPlaneEnumerationResult result = checkPointEnumeration.run(request);
         return switch (result) {
-            case ManagementPlaneEnumerationResult.Refused refused -> EnumerationOutcome.failed("REFUSED");
-            case ManagementPlaneEnumerationResult.Failed failed -> EnumerationOutcome.failed(failureClass(failed.reason()));
+            case ManagementPlaneEnumerationResult.Refused refused -> EnumerationOutcome.failed("AUTH_FAILED");
+            case ManagementPlaneEnumerationResult.Failed failed -> EnumerationOutcome.failed(
+                    failed.failureClass().map(Enum::name).orElseGet(() -> failureClass(failed.reason())));
             case ManagementPlaneEnumerationResult.Completed completed -> {
                 var rows = CandidateRowAssembler.assemble(completed.candidates());
                 var records = CheckPointDiscoveryCandidateMapper.map(run.runId(), rows);

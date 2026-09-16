@@ -1,0 +1,162 @@
+{
+  "created_at": "2026-09-16T04:56:25Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract resolves local platform/lifecycle/persistence/MCP/plugin boundaries or explicitly defers unsupported clients.",
+          "Implementation sequence is independently testable and rollback safe.",
+          "Authority/privacy/diff gates pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); Workbench Companion C1-C5 contract on origin/main.",
+          "observed": "Workbench table-first Material 3 work is separately in progress. User provides a follow-up directive for independent reliable tracking with a supervised service, read-only MCP, private plugin and skill, no new execution authority.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-companion-live-adapter"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw transcripts or sensitive notifications.",
+          "Unknown/cost provenance semantics preserved.",
+          "Notification state separate from workflow authority."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Complete Workbench Companion automatic tracking: wire C1 bounded orchestrator/relay/usage adapter directly into C2 observer CLI and remove external projection-file dependency.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Closes critical observer/adapter integration; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Observer CLI must use C1 bounded no-follow reads from explicit local state/relay/usage roots; no projection-file producer required. Preserve C1 limits/unknown semantics and C2 atomic snapshot.",
+          "Config stays 0600/local; no raw relay bodies/logs. Add synthetic end-to-end observer scan/restart tests. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "scripts/workbench_companion.py configuration/CLI integration, C1 adapter bridge, observer tests and LaunchAgent configuration docs."
+          ],
+          "out": [
+            "MCP tool expansion, new data storage, raw logs, network/subprocess, host/device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_workbench_companion.py"
+            ],
+            "name": "companion"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T04:56:25Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/workbench_companion.py now loads a strict local 0600 configuration, performs bounded no-follow state/relay/usage reads, maps safe projections into the atomic observer, and discovers canonical movement IDs without an external projection file.",
+          "tests/test_workbench_companion.py adds synthetic direct-scan, new-movement discovery, CLI restart, configuration-permission, unknown-redaction, and missing-price evidence checks."
+        ],
+        "completed": [
+          "Restored the approved bounded C1 adapter and connected it directly to the C2 observer CLI.",
+          "Opened PR #411 for orchestrator verification and merge."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/workbench-companion-live-adapter",
+          "ci": "Not observed before handoff.",
+          "head_sha": "ed4ce721531493e4529f0fd352ea8cca4cd9a844",
+          "merge_commit": null,
+          "merge_decision": "Reserved for merge-mode orchestrator verification.",
+          "merge_state": "OPEN",
+          "pr": 411,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/411"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0258 orchestrator verification",
+          "movement_type": "VALIDATION",
+          "objective": "Verify PR #411 gates and merge only through the orchestrator if they pass.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No new execution authority, subprocess/network path, raw log or relay-body retention, MCP expansion, notification authority, device access, deployment, or merge action.",
+          "Unknown values, nullable counters, cost provenance, attempt attribution, and C2 atomic snapshot behavior remain fail-closed."
+        ],
+        "recommended_reasoning": {
+          "reason": "The implementation is bounded and automated gates are green; remaining work is independent PR verification and orchestrator-controlled merge.",
+          "tier": "ordinary validation"
+        },
+        "state_updates": [
+          "None; project-state files were outside this bounded dispatch."
+        ],
+        "unresolved_risks": [
+          "The managed sandbox could not write the shared Git object or remote-tracking reference directories. The server accepted commit ed4ce721531493e4529f0fd352ea8cca4cd9a844 as PR #411 head; after verification, the two committed working files were restored to leave the local worktree clean."
+        ],
+        "validation": {
+          "affected": "PASS: synthetic C1-to-C2 scan, dynamic discovery, real CLI restart, redaction, permissions, and existing C2/C3 coverage.",
+          "diff_check": "PASS: git diff --check and git diff --check origin/main before commit.",
+          "full_regression": "Not run; the approved dispatch names the targeted Companion module only.",
+          "privacy": "PASS: repository privacy gate scanned 1515 files with 0 findings and no network access.",
+          "real_environment": "Not run; deployment direction is local synthetic validation only.",
+          "state_consistency": "Not applicable: no project-state file was in the approved implementation scope.",
+          "targeted": "PASS: 74 tests in tests/test_workbench_companion.py."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-16T05:13:29Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0258",
+  "movement": "NXS-LOCAL-0258",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T05:13:29Z"
+}

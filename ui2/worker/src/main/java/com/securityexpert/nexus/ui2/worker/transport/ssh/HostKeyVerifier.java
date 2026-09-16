@@ -13,6 +13,8 @@ import java.util.Optional;
  */
 public final class HostKeyVerifier {
 
+    public enum Decision { MATCH, MISMATCH, MISSING }
+
     private final TrustRuleResolver trustRuleResolver;
 
     public HostKeyVerifier(TrustRuleResolver trustRuleResolver) {
@@ -25,6 +27,16 @@ public final class HostKeyVerifier {
      *         exactly. Never {@code true} for an unregistered rule, and
      *         never a partial/case-insensitive match.
      */
+    public boolean isTrusted(String ref, String host, int port, String algorithm, String presentedFingerprint) {
+        return verify(ref, host, port, algorithm, presentedFingerprint) == Decision.MATCH;
+    }
+
+    public Decision verify(String ref, String host, int port, String algorithm, String presentedFingerprint) {
+        return trustRuleResolver.resolveExpectedFingerprint(ref, host, port, algorithm)
+                .map(expected -> expected.equals(presentedFingerprint) ? Decision.MATCH : Decision.MISMATCH)
+                .orElse(Decision.MISSING);
+    }
+
     public boolean isTrusted(String trustRuleRef, String presentedFingerprint) {
         Optional<String> expected = trustRuleResolver.resolveExpectedFingerprint(trustRuleRef);
         return expected.isPresent() && expected.get().equals(presentedFingerprint);

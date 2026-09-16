@@ -17,14 +17,15 @@ const CONFLICT_MESSAGE = "Another session is already active for this account.";
 const UNEXPECTED_ERROR = "Something went wrong. Please try again.";
 
 type Outcome = "ok" | "invalid" | "conflict" | "unexpected";
+type LoginMechanism = "local" | "ldap";
 
-async function submitLogin(username: string, password: string): Promise<Outcome> {
+async function submitLogin(username: string, password: string, mechanism: LoginMechanism): Promise<Outcome> {
   try {
     const response = await fetch("/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ username, password, mechanism_id: "local" }),
+      body: JSON.stringify({ username, password, mechanism_id: mechanism }),
     });
     if (response.ok) return "ok";
     if (response.status === 409) return "conflict";
@@ -43,6 +44,7 @@ async function submitLogin(username: string, password: string): Promise<Outcome>
  */
 export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () => void }) {
   const [username, setUsername] = useState("");
+  const [mechanism, setMechanism] = useState<LoginMechanism>("local");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -53,7 +55,7 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
     setSubmitting(true);
     setError(null);
     try {
-      const outcome = await submitLogin(username, password);
+      const outcome = await submitLogin(username, password, mechanism);
       switch (outcome) {
         case "ok":
           onAuthenticated();
@@ -68,6 +70,7 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
           setError(UNEXPECTED_ERROR);
       }
     } finally {
+      if (mechanism === "ldap") setPassword("");
       setSubmitting(false);
     }
   }
@@ -100,6 +103,20 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
         }}
       >
         <Typography variant="h4">Sign in</Typography>
+        <TextField
+          select
+          label="Authentication"
+          value={mechanism}
+          disabled={submitting}
+          SelectProps={{ native: true }}
+          inputProps={{ "aria-label": "Authentication" }}
+          onChange={(event) => {
+            if (event.target.value === "local" || event.target.value === "ldap") setMechanism(event.target.value);
+          }}
+        >
+          <option value="local">Local account</option>
+          <option value="ldap">LDAP account</option>
+        </TextField>
         <TextField
           label="Username"
           value={username}

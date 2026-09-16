@@ -1,0 +1,162 @@
+{
+  "created_at": "2026-09-15T12:01:36Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A deployed container renders the project screen with content, or states plainly that no project-plan source is configured.",
+          "If the build context changed, every caller named in what_exists reflects it.",
+          "A named test holds the honest-empty behaviour.",
+          "The service and frontend suites and the repository privacy gate pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md (FROZEN): the image is built in-cluster and is the unit of deployment, so anything the running service reads is either in the image or supplied to it. A path into a developer checkout is neither.",
+          "observed": "On the deployment brought up on HOST-A on 2026-09-15 the project screen renders empty. The service starts cleanly and every other screen works.",
+          "what_exists": "ui2/service/src/main/resources/application.yml:\n\n  ui2:\n    project-plan:\n      # Empty by default: ProjectPlanConfiguration then locates the repository\n      # checkout own project/ directory itself.\n      directory: ${UI2_PROJECT_PLAN_DIRECTORY:}\n\nand ProjectPlanConfiguration.java:25 reads that value. In a container there is no checkout to locate, so the source resolves to nothing and the screen has nothing to render. The route is GET /project-plan (ProjectPlanController.java:28).\n\nA previous attempt (movement NXS-LOCAL-0203, never pushed) chose to move the image build context from ui2/ to the repository root so that project/ could be copied in. It changed ui2/Containerfile accordingly and changed nothing else. That is the defect this packet exists to prevent repeating: the build context is named in at least two other places, and a change to it that leaves them alone breaks the in-cluster build that is currently the only way this product is deployed.\n\nThe callers of the build context, measured 2026-09-15:\n\n  deploy/ui2-image-build/30-build-job.yaml\n      --context=dir:///workspace/ui2\n      --dockerfile=/workspace/ui2/Containerfile\n\n  docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md, section 3, streams the\n  context in with:\n      tar -cf - --exclude=node_modules --exclude=.gradle --exclude=build \\\n          --exclude=.git ui2 | kubectl -n ui2-build exec -i ... tar -xf - -C /workspace\n\n  ui2/Containerfile itself, which copies .ca/ relative to that context.\n\nThe in-cluster build was brought up and proven working on 2026-09-15 with the context as ui2/."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/project-screen-has-its-data"
+        },
+        "invariants": [
+          "The image stays the unit of deployment and is still built in-cluster.",
+          "No credential, address or host path enters the image or a manifest.",
+          "Start-up does not begin to fail when the source is absent."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "The project screen has its data in a deployed container, and every caller of whatever makes that true is changed with it.",
+        "output_contract": [
+          "One pull request on feature/project-screen-has-its-data.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "The fix is small; the blast radius is not. The work is in choosing between three defensible options and then following the chosen one through every caller, which a previous attempt did not.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "If the build context moves, the build job manifest, the operations procedure and the Containerfile's own relative copies move with it, in this movement. A change that makes something required without taking its callers into scope leaves every test green and the product broken -- it has happened here before, on NXS-LOCAL-0187.",
+          "Name the option chosen. Copying published repository data into the image, streaming it in alongside the existing context, and serving it from somewhere else entirely are all defensible; choosing silently is not.",
+          "If repository data is copied into the image, say which files and how large."
+        ],
+        "risks": [
+          "The in-cluster build is the only path this product is deployed by, and it was proven working today with the context as ui2/. Breaking it to fix a screen is a bad trade, and it is the trade the previous attempt made without noticing."
+        ],
+        "scope": {
+          "in": [
+            "Choose how the deployed service obtains its project-plan data, and say in the pull request which option was chosen and why the others were not.",
+            "If the chosen option changes the build context, change every caller listed in what_exists in the same movement, and say how the change was verified.",
+            "Make the empty case honest: a service with no project-plan source says so on the screen and in the response. An empty list is an invented certainty and AGENTS.md prefers an explicit unknown.",
+            "A targeted test that fails if the deployed configuration resolves to no source without the screen saying so."
+          ],
+          "out": [
+            "Mounting a host path into the pod. That reintroduces the workstation-filesystem dependency 01C exists to remove.",
+            "Baking a developer machine path into the image or a manifest.",
+            "Changing what the project-plan payload contains, or the GET /project-plan contract.",
+            "Making a missing source a startup failure. ProjectPlanConfiguration's own comment says it is not one, and that stays true: the absence becomes visible, not fatal."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew --no-daemon --console=plain :service:test"
+            ],
+            "name": "service_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T12:01:36Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Kaniko now builds from the streamed repository-root context while retaining ui2/Containerfile.",
+          "The image copies six current project-plan files totaling 322931 bytes into /app/project.",
+          "The reader emits No project-plan source is configured when all canonical inputs are unavailable.",
+          "The Project plan panel renders that warning as an honest empty state."
+        ],
+        "completed": [
+          "Baked the canonical project-plan inputs into the deployed service image.",
+          "Updated every named build-context caller and opened PR #375.",
+          "Made an absent source explicit in the existing response warning field and on the screen."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "Project plan now renders an explicit unavailable state when the response reports no configured source."
+        },
+        "integration": {
+          "branch": "feature/project-screen-has-its-data",
+          "ci": "Frontend and privacy gates pass; service gate blocked locally before execution by sandbox cache permissions.",
+          "head_sha": "fa2913f",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator-controlled; worker did not merge.",
+          "merge_state": "OPEN",
+          "pr": 375,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/375"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0215 orchestrator verification",
+          "movement_type": "VALIDATION",
+          "objective": "Run the service suite and deployment build-context verification, then merge PR #375 if green.",
+          "status": "planned"
+        },
+        "preserved": [
+          "The image remains the deployment unit and is built in-cluster.",
+          "No host path, credential, or address enters the image or manifest.",
+          "A missing source remains non-fatal and GET /project-plan retains its response shape."
+        ],
+        "recommended_reasoning": {
+          "reason": "The implementation is bounded; remaining work is execution of the blocked service gate and orchestrator merge verification.",
+          "tier": "standard validation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The service test gate requires orchestrator execution where the existing Gradle cache lock is writable."
+        ],
+        "validation": {
+          "affected": "PASS: frontend suite, 14 files and 88 tests; production frontend build passed.",
+          "diff_check": "PASS: git diff --check origin/main before commit.",
+          "full_regression": "NOT RUN: not required by WORKER.md; prescribed service suite was attempted and blocked before execution by the sandboxed Gradle cache lock.",
+          "privacy": "PASS: repository privacy gate scanned 1490 files with 0 findings.",
+          "real_environment": "NOT RUN: deployment direction is local validation only; orchestrator verification remains.",
+          "state_consistency": "NOT APPLICABLE: no project-state authority was in worker scope.",
+          "targeted": "PASS: frontend honest-empty test included in the 88-test frontend suite; service assertion added but could not execute because the sandbox denied the Gradle wrapper cache lock."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T12:09:03Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0215",
+  "movement": "NXS-LOCAL-0215",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md",
+    "docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T12:09:03Z"
+}

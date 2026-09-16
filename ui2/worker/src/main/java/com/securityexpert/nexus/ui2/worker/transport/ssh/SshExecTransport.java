@@ -61,10 +61,18 @@ public final class SshExecTransport implements DeviceTransport {
 
     @Override
     public ConnectResult connect(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
+        var algorithms = trustRuleResolver.authorizedAlgorithms(spec.trustRuleRef(), target.host(), target.port());
+        if (algorithms.isPresent() && algorithms.get().isEmpty()) {
+            return new ConnectResult.HostKeyRejected("TRUST_ENTRY_MISSING");
+        }
         SshCredentialMaterial credential = credentialResolver.resolve(spec.credentialRef());
+        // Per-connect state: a rejection is determined by the key hook, never exception substrings.
+        String[] trustFailure = {null};
+        boolean[] trusted = {false};
+        Session session = null;
         try {
             JSch jsch = new JSch();
-            Session session = jsch.getSession(credential.username(), target.host(), target.port());
+            session = jsch.getSession(credential.username(), target.host(), target.port());
             session.setUserInfo(silentUserInfo(credential));
             if (credential.password() != null) {
                 session.setPassword(new String(credential.password()));
@@ -73,13 +81,16 @@ public final class SshExecTransport implements DeviceTransport {
             // production SSH requires a trusted host key -- never accept-any,
             // never trust-on-first-use. HostKeyVerifier is the pure decision;
             // this repository wires it to JSch's own verification hook.
-            session.setHostKeyRepository(trustedOnlyRepository(spec.trustRuleRef()));
+            session.setHostKeyRepository(trustedOnlyRepository(spec.trustRuleRef(), target, trustFailure, trusted));
             session.setConfig("StrictHostKeyChecking", "yes");
             session.connect((int) timeout.toMillis());
 
             SshTransportSession wrapped = new SshTransportSession(UUID.randomUUID().toString(), session);
             return new ConnectResult.Authenticated(wrapped);
         } catch (JSchException e) {
+            if (algorithms.isPresent()) {
+                return discoveryFailure(e, trustFailure[0], trusted[0]);
+            }
             String message = String.valueOf(e.getMessage());
             if (message.contains("HostKey") || message.contains("reject")) {
                 return new ConnectResult.HostKeyRejected(message);
@@ -88,7 +99,34 @@ public final class SshExecTransport implements DeviceTransport {
                 return new ConnectResult.TimedOut();
             }
             return new ConnectResult.AuthenticationFailed(message);
+        } finally {
+            if (session != null && !session.isConnected()) {
+                session.disconnect();
+            }
         }
+    }
+
+    static ConnectResult discoveryFailure(JSchException failure, String trustFailure, boolean trusted) {
+        if (trustFailure != null) {
+            return new ConnectResult.HostKeyRejected(trustFailure);
+        }
+        if (trusted && ("Auth fail".equals(failure.getMessage()) || "Auth cancel".equals(failure.getMessage()))) {
+            return new ConnectResult.AuthenticationFailed("AUTH_FAILED");
+        }
+        if (!trusted && isNetworkFailure(failure)) {
+            return new ConnectResult.TimedOut();
+        }
+        return new ConnectResult.AuthenticationFailed("NOT_EVALUABLE");
+    }
+
+    private static boolean isNetworkFailure(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof java.net.SocketTimeoutException || cause instanceof java.net.ConnectException
+                    || cause instanceof java.net.NoRouteToHostException || cause instanceof java.net.UnknownHostException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -184,13 +222,27 @@ public final class SshExecTransport implements DeviceTransport {
         }
     }
 
-    private HostKeyRepository trustedOnlyRepository(String trustRuleRef) {
+    private HostKeyRepository trustedOnlyRepository(String trustRuleRef, ConnectionTarget target,
+            String[] trustFailure, boolean[] trusted) {
         HostKeyVerifier verifier = new HostKeyVerifier(trustRuleResolver);
         return new HostKeyRepository() {
             @Override
             public int check(String host, byte[] key) {
                 String presented = fingerprintOf(key);
-                return verifier.isTrusted(trustRuleRef, presented) ? OK : NOT_INCLUDED;
+                try {
+                    String algorithm = new HostKey(host, key).getType();
+                    var decision = verifier.verify(trustRuleRef, target.host(), target.port(), algorithm, presented);
+                    trusted[0] = decision == HostKeyVerifier.Decision.MATCH;
+                    trustFailure[0] = switch (decision) {
+                        case MATCH -> null;
+                        case MISSING -> "TRUST_ENTRY_MISSING";
+                        case MISMATCH -> "TRUST_MISMATCH";
+                    };
+                    return trusted[0] ? OK : NOT_INCLUDED;
+                } catch (JSchException e) {
+                    trustFailure[0] = "TRUST_ENTRY_MISSING";
+                    return NOT_INCLUDED;
+                }
             }
 
             @Override
@@ -210,7 +262,7 @@ public final class SshExecTransport implements DeviceTransport {
 
             @Override
             public String getKnownHostsRepositoryID() {
-                return "ui2-trust-rule:" + trustRuleRef;
+                return "ui2-trust-rule";
             }
 
             @Override

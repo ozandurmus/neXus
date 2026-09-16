@@ -115,9 +115,12 @@ public final class Ui2WorkerMain {
         JooqDeviceRepository deviceRepository = new JooqDeviceRepository(transactionBoundary);
         PersistenceDeviceEnrollmentReadPort deviceEnrollmentReadPort = new PersistenceDeviceEnrollmentReadPort(deviceRepository);
 
-        TrustRuleResolver trustRuleResolver = trustRuleRef -> Optional.ofNullable(
+        TrustRuleResolver enrolledDeviceTrustRuleResolver = trustRuleRef -> Optional.ofNullable(
                 System.getenv("UI2_" + trustRuleRef.toUpperCase(java.util.Locale.ROOT).replace('.', '_')
                         + "_FINGERPRINT"));
+        TrustRuleResolver trustRuleResolver = new com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver(
+                new com.securityexpert.nexus.ui2.persistence.discovery.JooqManagementEndpointSshTrustRepository(transactionBoundary),
+                enrolledDeviceTrustRuleResolver);
         StoreBackedSshCredentialResolver sshCredentialResolver =
                 new StoreBackedSshCredentialResolver(resolverComponents.credentialReferenceRepository(),
                         resolverComponents.credentialRepository(), resolverComponents.cipher());

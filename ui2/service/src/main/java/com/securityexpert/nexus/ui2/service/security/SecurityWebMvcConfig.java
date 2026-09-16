@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.service.security;
 
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -19,6 +20,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public final class SecurityWebMvcConfig implements WebMvcConfigurer {
 
     static final Map<String, String> ACTION_ID_BY_ROUTE = Map.ofEntries(
+            Map.entry("POST /role-bindings/selections", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("POST /role-bindings/revoke", ActionRegistry.ROLE_BINDING_REVOKE),
             Map.entry("POST /sessions/revoke", ActionRegistry.SESSION_REVOKE),
@@ -36,15 +38,6 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /devices/*/inventory", ActionRegistry.DEVICE_READ),
             Map.entry("POST /devices/*/inventory/collect", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
-            // NXS-LOCAL-0165 "Routes": same wildcard shapes as the inventory
-            // routes above; /devices/*/configuration/text is a four-segment
-            // route (GateChainInterceptor tries a single-segment wildcard at
-            // every position, so the id at position 2 resolves the same way
-            // /discovery/runs/*/import's own position-3 wildcard already does).
-            Map.entry("GET /configuration", ActionRegistry.DEVICE_READ),
-            Map.entry("GET /devices/*/configuration", ActionRegistry.DEVICE_READ),
-            Map.entry("GET /devices/*/configuration/text", ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ),
-            Map.entry("POST /devices/*/configuration/collect", ActionRegistry.DEVICE_CONFIGURATION_COLLECT),
             Map.entry("GET /notifications", ActionRegistry.NOTIFICATIONS_READ),
             // 13G: one resource, body-only (no path variable), matching
             // /role-bindings/revoke's own shape.
@@ -64,6 +57,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // read, and a two-segment-deep wildcard import (the run id is
             // not the route's last segment, matching /devices/*/inventory/
             // collect's own wildcard shape above).
+            Map.entry("POST /discovery/ssh-trust/enroll", ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL),
+            Map.entry("POST /discovery/ssh-trust/re-enroll", ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL),
+            Map.entry("POST /discovery/ssh-trust/observe", ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL),
             Map.entry("POST /discovery/runs", ActionRegistry.DISCOVERY_RUN_START),
             Map.entry("GET /discovery/runs/*", ActionRegistry.DISCOVERY_RUN_READ),
             Map.entry("POST /discovery/runs/*/import", ActionRegistry.DISCOVERY_RUN_IMPORT),
@@ -78,6 +74,21 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // same shape as /notifications' own route.
             Map.entry("GET /project-plan", ActionRegistry.PROJECT_PLAN_READ));
 
+    /**
+     * Routes whose endpoint performs its own deliberately non-RBAC security
+     * check. Every other route must have an action mapping and is refused by
+     * {@link GateChainInterceptor}; this prevents a new controller from
+     * becoming open merely because its mapping was omitted here.
+     */
+    static final Set<String> EXPLICITLY_UNGATED_ROUTES = Set.of(
+            "GET /",
+            "POST /login",
+            "POST /login/resolve",
+            "POST /session/logout",
+            "GET /session/status",
+            "POST /local-credentials/change-password",
+            "GET /healthz");
+
     private final GateChain gateChain;
 
     public SecurityWebMvcConfig(GateChain gateChain) {
@@ -86,6 +97,6 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new GateChainInterceptor(gateChain, ACTION_ID_BY_ROUTE));
+        registry.addInterceptor(new GateChainInterceptor(gateChain, ACTION_ID_BY_ROUTE, EXPLICITLY_UNGATED_ROUTES));
     }
 }

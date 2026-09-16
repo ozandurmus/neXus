@@ -1,0 +1,172 @@
+{
+  "created_at": "2026-09-15T22:00:36Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract resolves local platform/lifecycle/persistence/MCP/plugin boundaries or explicitly defers unsupported clients.",
+          "Implementation sequence is independently testable and rollback safe.",
+          "Authority/privacy/diff gates pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); Workbench Companion contract and C1-C5 slices on origin/main.",
+          "observed": "Workbench table-first Material 3 work is separately in progress. User provides a follow-up directive for independent reliable tracking with a supervised service, read-only MCP, private plugin and skill, no new execution authority.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-companion-observer-cli"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw transcripts or sensitive notifications.",
+          "Unknown/cost provenance semantics preserved.",
+          "Notification state separate from workflow authority."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Complete Workbench Companion C2/C5 integration: implement the observer foreground CLI/executable entrypoint and wire LaunchAgent plan to the real package entrypoint.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Executable lifecycle/security boundary; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Provide a foreground observer executable that accepts only explicit validated configuration, runs C2 bounded polling and writes its own snapshot. No shell/network/raw-log behavior.",
+          "Make C5 ProgramArguments reference an actual packaged entrypoint, not a future placeholder. Add synthetic lifecycle/CLI tests; do not install or load LaunchAgent.",
+          "Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "scripts/workbench_companion.py observer CLI/entrypoint, packaging metadata or wrapper required by C5, LaunchAgent plan/tests."
+          ],
+          "out": [
+            "Actual LaunchAgent install/load, notifications, MCP tool expansion, source writes beyond C2 snapshot, host/device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_workbench_companion.py"
+            ],
+            "name": "companion"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T22:00:36Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/workbench_companion.py: explicit private JSON configuration, bounded no-follow projection reads, generation checks, safe failure classes, fixed C2 polling, sanitized diagnostics and graceful SIGINT/SIGTERM shutdown.",
+          "bin/nexus-workbench-observer: executable release wrapper runs the sibling scripts/workbench_companion.py directly; no new dependency or source adapter.",
+          "scripts/workbench_companion_launchagent.py: document the actual release contents and include the observer module in uninstall planning while retaining snapshot state.",
+          "tests/test_workbench_companion.py: synthetic CLI configuration, unsafe-file, generation-race, failure-cleanup and real release lifecycle tests."
+        ],
+        "completed": [
+          "NXS-LOCAL-0257: foreground observer release entrypoint implemented and automated validated.",
+          "Commit pushed and PR #410 opened; worker has not merged."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED"
+        },
+        "integration": {
+          "branch": "feature/workbench-companion-observer-cli",
+          "ci": "UNVERIFIED: reserved for orchestrator verification.",
+          "head_sha": "fcf44e0e37c51dbeff08b6ceffa97804d95b8100",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merges after its own verification; worker merge prohibited.",
+          "merge_state": "OPEN",
+          "pr": 410,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/410"
+        },
+        "next": {
+          "movement": "Orchestrator verification of NXS-LOCAL-0257",
+          "movement_type": "VALIDATION",
+          "objective": "Verify PR #410 and merge only if orchestrator gates pass; worker stops without merging.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No new execution authority or host/device access.",
+          "No raw transcripts, raw-log adapter or sensitive notifications.",
+          "Unknown attempt attribution and cost provenance preserved.",
+          "Notification state remains separate from workflow authority; notification delivery is UNSUPPORTED."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded orchestrator verification of the approved change; deployment remains outside scope.",
+          "tier": "standard"
+        },
+        "state_updates": [
+          "Project-state and AI_HANDOVER edits are outside the worker-authorized scope; canonical relay SESSION_CLOSE supplies delivery evidence."
+        ],
+        "unresolved_risks": [
+          "Deployment and pinned-client behavior remain unverified by design. A trusted upstream C1 projection producer must provide the explicit projection file.",
+          "Actual LaunchAgent loading was not performed; frozen documents were not re-read under the worker read restriction.",
+          "Approved-task baseline.what_exists describes unrelated deploy/ui2 NetworkPolicy work. The explicit objective and scope were followed; deployment files were not inspected or changed.",
+          "The C5 ProgramArguments executable path was already correct; its missing release wrapper was implemented rather than changing the argv shape.",
+          "gh pr create failed on the GraphQL API rate limit; authorized PR creation and verification succeeded through gh api REST.",
+          "Git staging initially failed because shared metadata was outside the sandbox. Worktree-local common directory, objects and refs were configured in the permitted metadata path, with read-only shared object alternates and original commondir retained as commondir.original. Shared objects/config/refs were not mutated."
+        ],
+        "validation": {
+          "affected": "PASS: companion CLI/entrypoint, C5 plan and synthetic lifecycle tests.",
+          "diff_check": "PASS: git diff --check origin/main before and after commit; cached diff check also passed.",
+          "full_regression": "NOT_RUN: targeted companion suite is the approved regression scope.",
+          "privacy": "PASS: repository privacy gate; 1515 files scanned, zero findings.",
+          "real_environment": "NOT_RUN: actual LaunchAgent installation/loading and pinned clients are outside this dispatch.",
+          "state_consistency": "NOT_RUN: project-state inspection/editing excluded by worker scope.",
+          "targeted": "PASS: 94 companion tests in 1.28s on final code."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T22:05:52Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0257",
+  "movement": "NXS-LOCAL-0257",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T22:05:52Z"
+}

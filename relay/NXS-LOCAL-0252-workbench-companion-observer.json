@@ -1,0 +1,178 @@
+{
+  "created_at": "2026-09-15T21:07:56Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract resolves local platform/lifecycle/persistence/MCP/plugin boundaries or explicitly defers unsupported clients.",
+          "Implementation sequence is independently testable and rollback safe.",
+          "Authority/privacy/diff gates pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); Workbench Companion contract frozen on origin/main.",
+          "observed": "Workbench table-first Material 3 work is separately in progress. User provides a follow-up directive for independent reliable tracking with a supervised service, read-only MCP, private plugin and skill, no new execution authority.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-companion-observer"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw transcripts or sensitive notifications.",
+          "Unknown/cost provenance semantics preserved.",
+          "Notification state separate from workflow authority."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement Workbench Companion C2: bounded local observer, atomic derived snapshot and restart reconciliation.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Atomic persistence/reconciliation; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Implement frozen Companion C2: bounded read-only scans, atomic private snapshot, retention/gap/source-loss/restart semantics. No source writes/subprocess/network.",
+          "Worker commits only; PO PR/merge."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "Companion C2 observer/state only and synthetic tests."
+          ],
+          "out": [
+            "MCP/plugin/skill/LaunchAgent/notifier, source writes, raw logs, host/device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_workbench_companion.py"
+            ],
+            "name": "companion"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T21:07:56Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added scripts/workbench_companion.py: foreground single-writer observer accepting C1-validated projections through an injected read-only scan callback.",
+          "Added private descriptor-based state access, advisory lock, same-directory temporary writes, file/directory fsync and atomic replacement.",
+          "Added bounded latest observations and transitions, retention/history floor/dropped counts, explicit incomplete coverage and admission caps without active-observation eviction.",
+          "Added source-loss/recovery, restart, generation change, relay regression and clock rollback reconciliation; unchanged scans preserve usage age and cumulative values.",
+          "Added strict snapshot validation; corrupt or unsupported schemas stop writes and retain the private file.",
+          "Preserved all four cost-source enums, nullable counters, requested/observed model distinction, unknown attempt attribution and unsupported notification bookkeeping.",
+          "Added 32 synthetic tests, including forbidden subprocess/network/source-write checks and concurrent atomic readers."
+        ],
+        "completed": [
+          "NXS-LOCAL-0252 Companion C2 independently implemented and automated-validated under the existing FROZEN contract.",
+          "Committed and pushed 45f7ef481bcbc9e070e5b90a4a4d519469b15b5e; PR 406 is OPEN for orchestrator verification.",
+          "Canonical relay re-read immediately before PR creation: sequence 1, no appended RELAY_CORRECTION or RELAY_DECISION."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED"
+        },
+        "integration": {
+          "branch": "feature/workbench-companion-observer",
+          "ci": "UNVERIFIED: orchestrator verification pending; local requested gates PASS.",
+          "head_sha": "45f7ef481bcbc9e070e5b90a4a4d519469b15b5e",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator only. Worker did not run gh pr merge or any merge action.",
+          "merge_state": "OPEN",
+          "pr": 406,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/406"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0252",
+          "movement_type": "VALIDATION",
+          "objective": "Orchestrator verifies PR 406 and merges under its own authorization; C1 raw-source integration remains a separate approved slice.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "No new execution authority; no host/device access or deployment/installation.",
+          "No source writes, subprocess, network, raw logs/transcripts or arbitrary source text in observer output.",
+          "Usage unknowns and exact cost provenance preserved; no polling accumulation or attempt billing.",
+          "Notification bookkeeping remains UNSUPPORTED and does not affect workflow authority; SESSION_CLOSE does not imply merge."
+        ],
+        "recommended_reasoning": {
+          "reason": "Review and rerun the bounded C2 acceptance gates; strong implementation reasoning is unnecessary for this checkpoint.",
+          "tier": "ordinary feature validation"
+        },
+        "state_updates": [
+          "Only scripts/workbench_companion.py and tests/test_workbench_companion.py changed in commit 45f7ef481bcbc9e070e5b90a4a4d519469b15b5e.",
+          "Durable delivery evidence is this canonical relay SESSION_CLOSE; project state, AI_HANDOVER, source/configuration, deployment, devices and production data were not changed outside scope.",
+          "Reports and scratch files reside under /private/tmp; worktree is clean."
+        ],
+        "unresolved_risks": [
+          "C1 descriptor-bounded raw-source scanning and upstream generation consistency are callback obligations, not implemented or claimed by C2.",
+          "MacOS lifecycle, installation, notifications, MCP/plugin/client support and real-environment validation remain UNVERIFIED/out of scope.",
+          "Full repository regression was not requested or run; no UI or payload builder changed.",
+          "C1 adapter is absent at the approved baseline. C2 is implemented independently with an explicit validated-projection callback; raw-source adapter integration remains C1 scope.",
+          "Approved task contains an unrelated deployment baseline. The FROZEN Companion contract section 1 explicitly removes it; no deployment inspection or action was performed.",
+          "gh pr create failed due to exhausted GraphQL quota; the authorized PR was created successfully using the GitHub REST API.",
+          "First SESSION_CLOSE append was rejected due to report-schema mismatch; runtime schema of the named local_relay tool was verified and the report corrected. No repository engineering changes were needed."
+        ],
+        "validation": {
+          "affected": "PASS: combined companion plus contract authority/reference modules, 40 tests in 0.95 seconds.",
+          "diff_check": "PASS: git diff --check and git diff --check origin/main; latter repeated immediately before commit and after PR creation.",
+          "full_regression": "NOT_RUN: worker requested targeted gates only; no UI or payload builder changed.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py; zero findings.",
+          "real_environment": "UNVERIFIED: no installation, workstation lifecycle, clients, host/device access or deployment performed.",
+          "state_consistency": "PASS: corrupt/unsupported/private snapshot validation covered by synthetic tests; clean worktree verified. No project-state edits were authorized in this worker scope.",
+          "targeted": "PASS: 32 synthetic companion tests in tests/test_workbench_companion.py, including atomic concurrent reads, failed writes, source loss/recovery, caps, retention, clock rollback, restart and cost provenance."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T21:17:04Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0252",
+  "movement": "NXS-LOCAL-0252",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T21:17:04Z"
+}

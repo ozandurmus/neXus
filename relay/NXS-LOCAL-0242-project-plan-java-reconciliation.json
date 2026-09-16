@@ -1,0 +1,178 @@
+{
+  "created_at": "2026-09-15T18:05:48Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Authoritative JSON/state and Java frozen contracts reconcile with explicit classifications.",
+          "Project screen/API reflects Java-first roadmap and labels converted legacy lessons.",
+          "Targeted tests/privacy/diff pass; unresolved delivery facts explicit."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md (FROZEN); docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN); project/*.json authority per AGENTS.md.",
+          "observed": "Live Project Plan reads project JSON baked into the image and currently exposes stale/currently irrelevant Python-line and agent-operation history. Product Owner directs that the panel represent the live Java UI2 product, its feature completion roadmap, Java technical debt, and only converted Python learned lessons where they remain applicable.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/project-plan-java-reconciliation"
+        },
+        "invariants": [
+          "No fabrication of product status.",
+          "No historical deletion or raw sensitive data.",
+          "Project screen never claims real-environment validation absent evidence.",
+          "No host/device access."
+        ],
+        "merge_gate": "Worker commits only; PO opens/merges.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Reconcile Java UI2 product roadmap, converted Python lessons/debt, and agent operations into an honest Project Plan screen and authoritative project state.",
+        "output_contract": [
+          "Commit(s), precise classification and SESSION_CLOSE.",
+          "No host/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Cross-authority Java-vs-legacy roadmap reconciliation and UI/API transformation; gpt-6-astra high.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "Treat project/*.json as authority and CURRENT_STATE as projection. Do not silently delete/rewrite historical Python outcomes; archive/reclassify with explicit provenance.",
+          "Define Java-first product categories: current Java UI2 features, Java technical debt/security/release gates, converted Python lessons (clearly labeled historical/derived), and agent/operational records excluded from product roadmap unless they affect product delivery.",
+          "Make Project Plan show stale-source/version metadata, actual current build, Java feature backlog, technical debt and explicit historical lessons without conflating them. Ensure source is not merely image-build-time stale; propose/implement a controlled update mechanism consistent with deployment contract.",
+          "Use gpt-6-astra high. Worker commits only; PO opens/merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "Targeted audit of project JSON, CURRENT_STATE, Java UI2 frozen contracts/features, existing ProjectPlanReader/API/frontend tests.",
+            "A concrete reconciliation plan and implementation in project state + ProjectPlanReader/API/UI/tests if supported by authoritative data."
+          ],
+          "out": [
+            "Changing product implementation outside project-plan, deleting history, host/k3s operations, production data, device/credential access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test --tests '*ProjectPlan*'"
+            ],
+            "name": "project_plan_targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_state"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T18:05:48Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "Added project/java_product_plan.json: 10 Java features, 10 Java feature-backlog items, 29 Java debts, 3 converted Python lessons; 7 active legacy references and 7 agent-operation records excluded.",
+          "Corrected the Java umbrella feature to in_progress and added separate automated-delivery and pending-acceptance criteria. Historical statuses are preserved.",
+          "Reader/API use explicit Java selections, warn on unavailable sources and unclassified active rows, expose source content revision and stale-review metadata, and return no-store. Frontend separates categories, labels historical provenance and can refresh.",
+          "Added targeted Java reader/API and frontend tests; documented a proposed immutable read-only snapshot publication procedure.",
+          "Mechanical/scope divergence: ignored the unrelated NetworkPolicy baseline sentence; explicit dispatch PR-opening instruction overrides copied PO-opens wording."
+        ],
+        "completed": [
+          "Audited the existing ProjectPlanReader/API/frontend, project authorities and frozen Java baseline/architecture/deployment constraints.",
+          "Implemented explicit Java feature/debt selection, converted historical lessons and source provenance; committed and opened PR #399 without merging."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "Unchanged.",
+          "ui": "Java Project Plan now separates Java features, delivery/security debt and converted historical lessons, shows source revision/freshness and provides refresh."
+        },
+        "integration": {
+          "branch": "feature/project-plan-java-reconciliation",
+          "ci": "Queued at closeout; no passing CI claim.",
+          "head_sha": "ad46931c7b950dc56da6ac45e3f2bf797cfe77ee",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator-owned; worker did not run gh pr merge. Required validation remains pending.",
+          "merge_state": "OPEN",
+          "pr": 399,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/399"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0242 validation",
+          "movement_type": "VALIDATION",
+          "objective": "Run ProjectPlan Java/frontend checks and applicable regression in the approved runtime against PR #399 head; orchestrator verifies and owns merge.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No historical outcome deletion; Python tracks and legacy sequencing retained as historical source data.",
+          "No product changes outside project-plan, device commands, credentials, deployment, host/k3s operations or production data access.",
+          "Real-device acceptance and deployed software version remain UNVERIFIED/UNKNOWN; restore remains disabled and scheduling deferred."
+        ],
+        "recommended_reasoning": {
+          "reason": "Scope and classification are recorded; next work is bounded validation, not a new architecture decision.",
+          "tier": "standard implementation and debugging"
+        },
+        "state_updates": [
+          "In PR #399: project/java_product_plan.json, project/feature_registry.json, queue-managed current build/history/roadmap/QUEUE/index, CURRENT_STATE.md, AI_HANDOVER.md and docs/design/UI2_PROJECT_PLAN_RECONCILIATION.md.",
+          "Movement NXS-LOCAL-0242 remains in_progress; no validation or real-environment completion was fabricated."
+        ],
+        "unresolved_risks": [
+          "Required Java and frontend checks have not executed; delivery remains in_progress and close outcome is PARTIAL.",
+          "Controlled source publication is proposed, not deployed; upstream and deployed-code freshness remain UNKNOWN.",
+          "Broad contract-era backlog acceptance and Java NEXT sequencing require subsequent PO review.",
+          "The sandbox denied staging into the shared Git object database. Commit and push were completed from /private/tmp/nxs-0242-review-yjfd2oxz; the original worktree was restored to its baseline only after byte-for-byte comparison with that committed checkout. The orchestrator must verify PR head ad46931c7b950dc56da6ac45e3f2bf797cfe77ee rather than the original worktree HEAD."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: npm --prefix ui2/frontend test -- ProjectPlanPanel.test.tsx could not start because vitest was not found. No runtime bootstrap performed.",
+          "diff_check": "PASS: git diff --check origin/main before commit and at closeout. Original dispatch worktree and isolated review checkout are clean.",
+          "full_regression": "NOT RUN; frontend build and HTML render harness also UNVERIFIED. GitHub regression-scope/validate were queued at closeout.",
+          "privacy": "PASS on final committed checkout: repository_privacy_check.py, 1499 files scanned, zero findings.",
+          "real_environment": "NOT RUN; no host/device, deployment or production operations.",
+          "state_consistency": "PASS: project_queue.py check on final commit; explicit JSON membership/provenance/current-build and pending-acceptance assertions passed.",
+          "targeted": "UNVERIFIED: ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test --tests *ProjectPlan* failed before tests because the sandbox denied the Gradle wrapper cache lock."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T18:20:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0242",
+  "movement": "NXS-LOCAL-0242",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T18:20:23Z"
+}

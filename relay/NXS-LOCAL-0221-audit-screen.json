@@ -1,0 +1,218 @@
+{
+  "created_at": "2026-09-15T14:29:26Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "The audit list and detail API/UI implement the frozen projection, RBAC, pagination and refusal behavior.",
+          "Existing and required new projection, API, integration and architecture tests cover the contract; frontend build, privacy and render gates pass.",
+          "A failed database gate is explicitly reported and blocks acceptance/merge; no unsupported runtime bootstrap or device contact occurs."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md (FROZEN)",
+          "observed": "Queue ui2_b1_08_audit_logs_screen is P1/planned. Main has the audit projection helpers and V7 actor index but no audit API controller or frontend screen. Human now explicitly prioritizes and requests dispatch of logging work.",
+          "what_exists": "service/audit/AuditFieldProjector.java already implements project(tableName, JsonNode rawSnapshot) and server-side changeStates; AuditPresentationAllowlist and AuditRedactionPolicy exist. V7__audit_log_actor_index.sql already contains CREATE INDEX idx_audit_log_actor_fingerprint ON audit_log(actor_fingerprint); do not add a second index or reserve V6. Existing integration/schema AuditScreenRedactedValueNeverReachesPayloadTest, AuditScreenUnclassifiedColumnIsRefusedTest, AuditScreenDistinguishesRedactedNullAbsentTest, AuditScreenEveryDeclaredRedactionIsProjectedRedactedTest, AuditScreenFieldComparisonIsServerComputedTest and AuditPresentationAllowlistMatchesLiveSchemaTest cover projection but not a finished screen/API. In origin/main, integration-tests/gradle.lockfile lacks com.jcraft:jsch:0.1.55=testRuntimeClasspath while worker/gradle.lockfile already locks this exact existing dependency. A temporary one-line correction allowed test execution, then 15 Audit-related integration tests failed initialization because UI2_TEST_JDBC_URL is unset and no PostgreSQL 16 container could start. This is a KNOWN FAILING baseline, not a passed gate. Frontend tests passed 89/89 after dependency preparation; build/privacy/Python real-browser render passed. No runtime or toolchain bootstrap is authorized."
+        },
+        "context_not_loaded": [
+          "Unrelated history, runtime data, credentials and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/audit-screen"
+        },
+        "invariants": [
+          "Readiness is not authorization; every API read has the existing full gate.",
+          "Raw audit snapshots, sensitive values and digests remain server-side.",
+          "Opaque identity and redaction states remain distinct.",
+          "No device contact, export, data deletion or new migration."
+        ],
+        "merge_gate": "Worker is authorized to commit, push feature/audit-screen and open one PR (draft if required gates fail). Worker does not merge. A separate PO review and merge authorization require orchestrator verify.passed including real PostgreSQL tests.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the frozen B1-8 read-only Audit screen and its bounded, authorized API, reusing the existing server-side projection boundary.",
+        "output_contract": [
+          "One PR for feature/audit-screen; report changed files, acceptance coverage and every passed/failed gate.",
+          "Complete SESSION_CLOSE via the canonical relay, scratch/reports outside repository, clean final worktree. No host credential or access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Frozen design already exists; authorization, redaction and bounded database reads require careful implementation and tests, without new architecture.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Read the complete B1-8 FROZEN contract and referenced load-bearing auth/redaction contracts. Implement AC-1 through AC-12 within their decided scope; never implement UNKNOWN-1 through UNKNOWN-4.",
+          "Existing audit helpers and V7 index are implementation reality: reuse them. No migration is assigned or permitted. B1-8's original V6 reservation was already superseded by V7's committed amendment explanation.",
+          "Gate every route through the existing authenticated E1-E6 chain. Resolve own/all scope on the server, never from browser claims. Viewer reads only own rows; security_admin reads all. Out-of-scope detail is 404. Every evaluation writes exactly one authz_decisions row and no audit_log row.",
+          "Use bounded keyset pagination, opaque cursor/audit IDs, no total counts or OFFSET. Filter parameters follow section 4.1. Raw before_state/after_state and sha256 digests must never reach API/UI/error logs; unclassified snapshot values fail closed.",
+          "Always render Audit navigation and render explained refusal in the screen. Keep all artifact/report text English.",
+          "The lack of a PostgreSQL 16 test carrier and pre-existing jsch lock gap are recorded baseline failures. Repair only the bounded lock metadata; do not install/configure/start a runtime, use HOST-A's database, fake/skip database tests, or silently change validation argv. If the carrier remains absent, document the failing required gate in SESSION_CLOSE and open a draft PR with that limitation; never call verification passed or merge.",
+          "User directive makes Claude the primary developer for this session despite the older roster. Parallel file reservations are hard. Do not write canonical queue/state; return precise state recommendations to PO."
+        ],
+        "risks": [
+          "Required PostgreSQL integration gates currently fail for a missing real test carrier; feature must remain unaccepted until they pass.",
+          "Audit is sensitive; backend authorization/projection tests are required, not UI-only checks."
+        ],
+        "scope": {
+          "in": [
+            "Audit read repository/service/controller and composition wiring under ui2/service and ui2/persistence, plus the existing auth/action registry mappings required by the frozen contract.",
+            "Frontend audit list/detail screen, API client and always-visible shell navigation; synthetic tests/fixtures only.",
+            "Unit, integration and architecture tests specified in B1-8 section 8.",
+            "ui2/integration-tests/gradle.lockfile: lock the already-used jsch runtime dependency without adding/upgrading a dependency."
+          ],
+          "out": [
+            "ui2/frontend/src/shell/AddDeviceDialog.tsx and ui2/frontend/tests/AddDeviceDialog.test.tsx: reserved for parallel NXS-LOCAL-0220.",
+            "Worker, transports, device collection, discovery behavior, new network commands, host operations, new migrations, retention, purge, export, raw job logs.",
+            "Canonical project state files and AI_HANDOVER: PO owns parallel integration/state updates."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true check"
+            ],
+            "name": "ui2_suite"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true integrationTest --tests '*Audit*'"
+            ],
+            "name": "audit_integration"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npm test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npm run build"
+            ],
+            "name": "frontend_build"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_architecture_convergence.py",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py",
+              "tests/test_cold_start_budget.py",
+              "tests/test_html_render_harness.py"
+            ],
+            "name": "render_and_authority"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T14:29:26Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/audit/ (new package: AuditLogRow, AuditRedactionPolicyRow, AuditListFilters, AuditPage, AuditLogRepository, JooqAuditLogRepository)",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/GateChain.java, GateChainInterceptor.java, ActionRegistry.java (additive changes only)",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/audit/AuditService.java, AuditEntrySummary.java, AuditEntryDetail.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/AuditController.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/AuditConfiguration.java",
+          "ui2/service/src/test/java/.../audit/AuditServiceTest.java, FakeAuditLogRepository.java; .../api/AuditControllerTest.java; .../security/GateChainTest.java",
+          "ui2/architecture-tests/.../AuditScreenNoDeviceContactEdgeTest.java",
+          "ui2/integration-tests/.../schema/AuditScreenAuthorizationIntegrationTest.java; ui2/integration-tests/gradle.lockfile",
+          "ui2/frontend/src/shell/types.ts, NavigationRail.tsx, Icon.tsx, App.tsx, auth/adminApi.ts, screens/AuditScreen.tsx, screens/AuditPanels.tsx, preview/AuditPreview.tsx, tests/AuditScreen.test.tsx, tests/App.test.tsx"
+        ],
+        "completed": [
+          "Implemented GET /api/audit and GET /api/audit/{audit_id} per UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md: persistence (AuditLogRepository/JooqAuditLogRepository), service (AuditService reusing the existing AuditFieldProjector/AuditRedactionPolicy/AuditPresentationAllowlist), controller (AuditController), a new GateChain dynamic-action-resolver overload for the read_own/read_all split, ActionRegistry entries, and composition wiring (AuditConfiguration).",
+          "Implemented the matching React list/detail screen (AuditScreen.tsx/AuditPanels.tsx), an always-visible Audit nav entry, and the adminApi.ts client functions.",
+          "Added AuditScreenNoDeviceContactEdgeTest (architecture-tests) proving no dependency edge to job-engine/worker/scheduler/ldap.",
+          "Added AuditServiceTest (12 tests), AuditControllerTest (6 tests, including one 400-vs-403 regression) and 2 new GateChainTest cases -- all green without a database.",
+          "Added AuditScreenAuthorizationIntegrationTest.java covering contract section 8 tests 1, 6, 7, 8, 9 and 10 against the real production stack -- compiles, cannot execute here (see unresolved_risks).",
+          "Fixed the pre-existing integration-tests/gradle.lockfile gap by locking the already-used com.jcraft:jsch:0.1.55=testRuntimeClasspath (no dependency added or upgraded), unblocking the whole integration-tests module from running at all.",
+          "Corrected a real bug found by review before close: AuditService/AuditController originally returned 403 ACTION_REFUSED for all four section 4.1 filter-validation failures; split into ListOutcome.ValidationFailed (400) and ListOutcome.ScopeRefused (403) per the contract, fixed both the controller and its tests."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- this movement touches only ui2/ (Java/TypeScript), no Python entry point changed.",
+          "ui": "Adds a new always-visible Audit screen (list + detail) and its nav entry to the UI 2.0 React shell; no existing screen's behavior changed."
+        },
+        "integration": {
+          "branch": "feature/audit-screen",
+          "ci": "NOT_RUN",
+          "head_sha": "8f154d7",
+          "merge_commit": null,
+          "merge_decision": "BLOCKED_PENDING_PO_REVIEW",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0221-followup",
+          "movement_type": "VALIDATION",
+          "objective": "Run ./ui2/gradlew -p ui2 -PfrontendPrebuilt=true integrationTest --tests '*Audit*' against a real PostgreSQL 16 carrier (UI2_TEST_JDBC_URL or a container runtime), fix anything it finds, then complete PR review/merge for feature/audit-screen.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "All pre-existing audit projection classes (AuditFieldProjector, AuditRedactionPolicy, AuditPresentationAllowlist, AuditFieldProjection, AuditFieldState, AuditChangeState) and their tests are untouched and reused as-is.",
+          "GateChain.evaluate(request, now) single-arg overload is byte-for-byte behavior-preserving (delegates to the new 3-arg overload with a constant resolver); every pre-existing GateChain/controller caller and test is unaffected and still green.",
+          "V7__audit_log_actor_index.sql and every other migration file are untouched -- no new migration was added or needed.",
+          "AddDeviceDialog.tsx and its test were not read or touched (reserved for parallel NXS-LOCAL-0220)."
+        ],
+        "recommended_reasoning": {
+          "reason": "Matches the B1-8 contract's own worker-route guidance (section 13): deterministic implementation against frozen contracts, no new architecture decisions remain open other than the documented GateChain resolver-overload mechanism already justified in this report.",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [
+          "None written by this worker (project/*.json and CURRENT_STATE.md are explicitly out of scope per WORKER.md and approved_task.json -- 'PO owns parallel integration/state updates'). Recommend PO record: ui2_b1_08_audit_logs_screen moves from P1/planned to IMPLEMENTED (not AUTOMATED_VALIDATED/DONE) pending the real-PostgreSQL integration gate."
+        ],
+        "unresolved_risks": [
+          "The real-PostgreSQL-16 integration gate is unproven in this environment. AuditScreenAuthorizationIntegrationTest.java compiles and covers contract section 8 tests 1, 6, 7, 8, 9 and 10 against the real production stack, but has never actually run against a real database. Feature must remain unaccepted and unmerged until it runs and passes for real.",
+          "GitHub API rate limit was hit while running `gh pr create` immediately after pushing feature/audit-screen. The branch IS pushed (commit 8f154d7 on origin/feature/audit-screen) but no PR object exists yet -- create it manually at https://github.com/ozandurmus/neXus/pull/new/feature/audit-screen or retry gh pr create once the rate limit resets.",
+          "Contract test 11 (AuditScreenNeverResolvesIdentityOrExportsTest) has no new dedicated automated test in this movement -- AC-9 (no export, no identity resolution) is satisfied by construction and was manually reviewed (only two GET routes exist, no download/print/export affordance, actor_fingerprint/row_pk rendered verbatim) but not proven by a new automated assertion.",
+          "The ScopeRefused (403 ACTION_REFUSED, actor_not_in_required_group) envelope for the read_own actor_fingerprint-filter case omits decision_id, since that refusal is decided post-gate using the already-completed PERMITTED decision's actor context rather than a fresh E4 evaluation of its own -- a minor, documented gap against the envelope's full field list, not a contract UNKNOWN."
+        ],
+        "validation": {
+          "affected": "./ui2/gradlew -p ui2 -PfrontendPrebuilt=true check -x :integration-tests:test -- BUILD SUCCESSFUL (service, persistence, worker, job-engine, cli, architecture-tests, and full frontend build+94 tests).",
+          "diff_check": "git diff --check origin/main -- passed clean, no trailing whitespace or conflict markers.",
+          "full_regression": "python3 -m pytest tests/test_architecture_convergence.py tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py tests/test_cold_start_budget.py tests/test_html_render_harness.py -- 39 passed, 1 skipped.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings (one stray gitignored logs/ runtime-log artifact from this session's own pytest run was found and removed before the final passing run).",
+          "real_environment": "NOT_RUN -- the required real-PostgreSQL-16 integrationTest gate (./ui2/gradlew -p ui2 -PfrontendPrebuilt=true integrationTest --tests '*Audit*') fails closed with IllegalStateException from Ui2PostgresFixture: no UI2_TEST_JDBC_URL and no container runtime in this environment. This is the pre-existing documented baseline (SESSION_START), not a regression -- every other class in ui2/integration-tests fails the same way for the same reason.",
+          "state_consistency": "No project/*.json or CURRENT_STATE.md touched by this worker per scope; PO owns those updates per WORKER.md scope.",
+          "targeted": "AuditServiceTest (12/12 pass), AuditControllerTest (6/6 pass), 2 new GateChainTest cases (pass), AuditScreenNoDeviceContactEdgeTest (2/2 pass), AuditScreen.test.tsx (5/5 pass) -- all green."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T15:16:45Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0221",
+  "movement": "NXS-LOCAL-0221",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T15:16:45Z"
+}

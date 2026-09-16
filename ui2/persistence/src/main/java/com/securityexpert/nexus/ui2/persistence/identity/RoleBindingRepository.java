@@ -20,5 +20,13 @@ public interface RoleBindingRepository {
     String create(String bindingId, String roleToken, byte[] groupReferenceEncrypted, String groupReferenceKeyId,
             String createdByActorFingerprint, String actionId);
 
+    default String createDirectory(RoleBindingRecord binding, String actionId) {
+        throw new UnsupportedOperationException("typed_directory_writer_unavailable");
+    }
+
+    default <T> T directoryMutation(java.util.function.Function<DirectoryMutationRepositories, T> work) {
+        throw new UnsupportedOperationException("directory_mutation_boundary_unavailable");
+    }
+
     void revoke(String bindingId, String revokedByActorFingerprint, String actionId);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
@@ -40,6 +40,12 @@ import {
 import { enrollmentStateLabel, isTerminalJobState, jobPhaseLabel, peerFollowMessage } from "./deviceCopy";
 
 const POLL_INTERVAL_MS = 1750;
+const DISCOVERY_FAILURE_COPY: Record<string, string> = {
+  TRUST_ENTRY_MISSING: "SSH trust: MISSING. Check and trust the observed SSH key before discovery.",
+  TRUST_MISMATCH: "SSH trust: MISMATCH. Discovery is refused until explicit re-enrollment.",
+  AUTH_FAILED: "SSH authentication failed.",
+  CONNECT_TIMEOUT: "SSH connection timed out before trust could be verified.",
+};
 
 const VENDOR_LABEL: Record<Vendor, string> = {
   check_point: "Check Point",
@@ -90,6 +96,15 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [detail, setDetail] = useState<DeviceDetail | null>(null);
 
+  const [trustFormOpen, setTrustFormOpen] = useState(false);
+  const [trustAlgorithm, setTrustAlgorithm] = useState<string | null>(null);
+  const [trustObservationId, setTrustObservationId] = useState<string | null>(null);
+  const [trustConfirmed, setTrustConfirmed] = useState(false);
+  const [trustFingerprint, setTrustFingerprint] = useState("");
+  const trustGeneration = useRef(0);
+  const [trustReEnroll, setTrustReEnroll] = useState(false);
+  const [trustBusy, setTrustBusy] = useState(false);
+  const [trustRelationship, setTrustRelationship] = useState<string | null>(null);
   const [discoveryPhase, setDiscoveryPhase] = useState<DiscoveryPhase>("form");
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<DiscoveryRunView | null>(null);
@@ -182,6 +197,69 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
       clearInterval(intervalId);
     };
   }, [discoveryPhase, runId]);
+
+  useEffect(() => {
+    setTrustRelationship(null);
+    setTrustAlgorithm(null);
+    setTrustObservationId(null);
+    setTrustConfirmed(false);
+    setTrustFingerprint("");
+    trustGeneration.current += 1;
+  }, [address, vendor, mode]);
+
+  const observeSshTrust = async () => {
+    const generation = trustGeneration.current;
+    setTrustBusy(true);
+    setTrustRelationship(null);
+    try {
+      const status = await fetch("/session/status", { credentials: "same-origin" });
+      const session = await status.json() as { csrf_token?: string };
+      if (!status.ok || !session.csrf_token) throw new Error();
+      const response = await fetch("/discovery/ssh-trust/observe", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": session.csrf_token },
+        body: JSON.stringify({ management_address: address, management_port: 22 }),
+      });
+      const body = await response.json() as { observation_id?: string; key_algorithm?: string; fingerprint_sha256?: string };
+      if (generation !== trustGeneration.current) return;
+      if (!response.ok || !body.observation_id || !body.key_algorithm
+          || !body.fingerprint_sha256 || !/^[0-9a-f]{64}$/.test(body.fingerprint_sha256)) throw new Error();
+      setTrustObservationId(body.observation_id);
+      setTrustAlgorithm(body.key_algorithm);
+      setTrustFingerprint(body.fingerprint_sha256);
+    } catch {
+      setTrustRelationship("NOT_EVALUABLE");
+    } finally {
+      setTrustBusy(false);
+    }
+  };
+
+  const authorizeSshTrust = async () => {
+    setTrustBusy(true);
+    setTrustRelationship(null);
+    try {
+      const status = await fetch("/session/status", { credentials: "same-origin" });
+      const session = await status.json() as { csrf_token?: string };
+      if (!status.ok || !session.csrf_token) throw new Error();
+      const response = await fetch(`/discovery/ssh-trust/${trustReEnroll ? "re-enroll" : "enroll"}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": session.csrf_token },
+        body: JSON.stringify({ observation_id: trustObservationId, trust_observed_key: trustConfirmed }),
+      });
+      const body = await response.json() as { relationship?: string };
+      setTrustRelationship(response.ok && body.relationship === "MATCH" ? "MATCH"
+        : response.status === 409 && body.relationship === "MISMATCH" ? "MISMATCH" : "NOT_EVALUABLE");
+    } catch {
+      setTrustRelationship("NOT_EVALUABLE");
+    } finally {
+      setTrustObservationId(null);
+      setTrustConfirmed(false);
+      setTrustFingerprint("");
+      setTrustBusy(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setSubmitError(null);
@@ -288,16 +366,16 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
     }
   };
 
-  const canSubmit =
+  const canSubmit = !trustBusy && (
     mode === "single"
       ? address.trim().length > 0 && credentialId.length > 0 && phase === "form"
-      : address.trim().length > 0 && credentialId.length > 0 && discoveryPhase === "form";
+      : address.trim().length > 0 && credentialId.length > 0 && discoveryPhase === "form");
   const success = detail !== null && detail.enrollment_state === "ENROLLED";
   const mismatchOpen = detail !== null && detail.identity_mismatch_state === "OPEN";
   const peerMessage = detail !== null ? peerFollowMessage(detail) : null;
 
   const dialogBusy =
-    phase === "submitting" ||
+    trustBusy || phase === "submitting" ||
     phase === "polling" ||
     discoveryPhase === "starting" ||
     discoveryPhase === "polling" ||
@@ -350,7 +428,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
           onChange={(_e, next) => next && setMode(next)}
           size="small"
           fullWidth
-          disabled={phase !== "form" || discoveryPhase !== "form"}
+          disabled={trustBusy || phase !== "form" || discoveryPhase !== "form"}
         >
           <ToggleButton value="single" sx={{ textTransform: "none" }}>
             Single device
@@ -457,6 +535,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
               size="small"
               fullWidth
               value={address}
+              disabled={trustBusy}
               onChange={(e) => setAddress(e.target.value)}
               autoFocus
             />
@@ -466,12 +545,30 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
               size="small"
               fullWidth
               value={vendor}
+              disabled={trustBusy}
               onChange={(e) => setVendor(e.target.value as Vendor)}
             >
               <MenuItem value="check_point">Check Point (multi-domain server)</MenuItem>
               <MenuItem value="palo_alto">Palo Alto (Panorama)</MenuItem>
             </TextField>
             {credentialSelectorFragment}
+            {vendor === "check_point" && <>
+              <Button onClick={() => setTrustFormOpen(!trustFormOpen)} disabled={trustBusy}>SSH trust authorization</Button>
+              {trustFormOpen && <Stack spacing={1}>
+                <Typography variant="body2">Security administrator only. The product performs a credential-free SSH key exchange; no command or credential is sent.</Typography>
+                {!trustObservationId && <Button onClick={observeSshTrust} disabled={trustBusy || !address.trim()}>Check SSH host key</Button>}
+                {trustObservationId && <>
+                  <Typography variant="body2">SSH host key observed ({trustAlgorithm}). Trust and cache it for this management server?</Typography>
+                  <TextField label="Observed SHA-256 fingerprint" value={trustFingerprint} InputProps={{ readOnly: true }} />
+                  <label><Checkbox checked={trustConfirmed} disabled={trustBusy} onChange={(e) => setTrustConfirmed(e.target.checked)} />Trust and cache observed SSH key</label>
+                  <label><Checkbox checked={trustReEnroll} disabled={trustBusy} onChange={(e) => setTrustReEnroll(e.target.checked)} />Replace existing cached key</label>
+                  <Button onClick={authorizeSshTrust} disabled={trustBusy || !trustConfirmed}>
+                    {trustReEnroll ? "Replace cached SSH key" : "Trust and cache SSH key"}
+                  </Button>
+                </>}
+                {trustRelationship && <Typography role="status">SSH trust: {trustRelationship}</Typography>}
+              </Stack>}
+            </>}
             {validationReason && (
               <Typography variant="body2" color="error">
                 Validation failed: {validationReason}
@@ -490,15 +587,14 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
             <Typography variant="body1">
               {discoveryPhase === "starting" ? "Starting discovery…" : "Discovering…"}
             </Typography>
-            <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-              {address}
-            </Typography>
+            {vendor === "palo_alto" && <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{address}</Typography>}
           </Stack>
         )}
 
         {mode === "discovery" && discoveryPhase === "failed" && (
           <Typography variant="body2" color="error">
-            Discovery did not complete.
+            {Object.keys(run?.outcome_summary ?? {}).map((key) => DISCOVERY_FAILURE_COPY[key]).find(Boolean)
+              ?? "Discovery did not complete."}
           </Typography>
         )}
 

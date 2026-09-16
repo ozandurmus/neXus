@@ -1,0 +1,159 @@
+{
+  "created_at": "2026-09-16T05:48:17Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic browser tests reproduce and prevent draft loss/switch leakage, stopped classification/count agreement, unknown/estimated labels and keyboard behavior.",
+          "Privacy/diff/targeted tests pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (FROZEN).",
+          "observed": "Product Owner approves table-first Workbench: Active, Needs you and Archive filters, search by movement/objective, details below list, existing UI2 Material 3 theme bridge, Kanban secondary only if bounded.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/c7-c2-contract-shape-guard"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw logs/credentials.",
+          "Usage uncertainty remains honest."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Add current frozen C7/C2 contract-shape regression guards.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Tier-1 audit/data-release ordering; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Read frozen authority; implement only scope. No host/device/production access. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "Focused contract-shape tests only."
+          ],
+          "out": [
+            "Contract semantic changes, product behavior, host/device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_architecture_convergence.py"
+            ],
+            "name": "targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T05:48:17Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "No repository files changed; the requested guards were already present at the dispatched baseline."
+        ],
+        "completed": [
+          "Confirmed the C7 and C2 frozen clause-shape guards already exist.",
+          "Confirmed the requested browser regressions already have synthetic tests."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "No change."
+        },
+        "integration": {
+          "branch": "feature/c7-c2-contract-shape-guard",
+          "ci": "NOT RUN: no in-scope diff or PR.",
+          "head_sha": "6365c75ebbe7fa02ddd1438e41bb2dd2df253777",
+          "merge_commit": null,
+          "merge_decision": "No PR opened: no meaningful in-scope diff remained and the required gate is blocked outside scope.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0264",
+          "movement_type": "DOCS",
+          "objective": "Authorize the existing handover marker repair or supersede this duplicate movement; rerun browser checks in a host where Playwright can register its Mach port.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Contract semantics",
+          "Product behavior",
+          "Host/device access",
+          "Clean worktree"
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work is a bounded governance-marker repair or dispatch correction.",
+          "tier": "low"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The prescribed architecture-convergence gate remains red from the existing AI_HANDOVER.md governance marker outside allowed scope.",
+          "Playwright browser verification cannot launch under the current sandbox Mach-port restriction."
+        ],
+        "validation": {
+          "affected": "BLOCKED: frozen/browser/convergence run had 32 passed; browser launch was denied by the sandbox Mach-port policy and convergence retained the existing AI_HANDOVER.md failure.",
+          "diff_check": "PASS: git diff --check and git diff --check origin/main completed without output.",
+          "full_regression": "NOT RUN: dispatch did not require it; the focused acceptance gate is blocked outside scope.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py reported 0 findings.",
+          "real_environment": "NOT RUN: local validation-only dispatch.",
+          "state_consistency": "NOT RUN: no permitted state files changed.",
+          "targeted": "FAIL: 22 passed, 1 failed; existing AI_HANDOVER.md lacks NON-AUTHORITATIVE DERIVED SUMMARY."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-16T05:51:30Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0264",
+  "movement": "NXS-LOCAL-0264",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T05:51:30Z"
+}

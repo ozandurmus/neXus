@@ -3,12 +3,14 @@ package com.securityexpert.nexus.ui2.service.security;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.resource.ResourceHttpRequestHandler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -24,8 +26,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>{@code action_id} resolution here is a simple {@code "METHOD path"} →
  * {@code action_id} route map, this movement's own stand-in for a real
  * {@code C4} route→action mapping (deferred, contract §2). A route absent
- * from the map is outside this chain's scope entirely (e.g.
- * {@code /healthz}, {@code /login}) — never gated, never refused here.</p>
+ * from both that map and the explicit non-RBAC exception set is refused:
+ * adding a controller cannot infer open access.</p>
  *
  * <p>A path-variable route (WORKER.md "Routes": {@code GET /devices/{id}},
  * this map's first one) is looked up by its exact route first and, only on
@@ -48,19 +50,37 @@ public final class GateChainInterceptor implements HandlerInterceptor {
 
     private final GateChain gateChain;
     private final Map<String, String> actionIdByRoute;
+    private final Set<String> explicitlyUngatedRoutes;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public GateChainInterceptor(GateChain gateChain, Map<String, String> actionIdByRoute) {
+        this(gateChain, actionIdByRoute, Set.of());
+    }
+
+    public GateChainInterceptor(GateChain gateChain, Map<String, String> actionIdByRoute,
+            Set<String> explicitlyUngatedRoutes) {
         this.gateChain = gateChain;
         this.actionIdByRoute = actionIdByRoute;
+        this.explicitlyUngatedRoutes = explicitlyUngatedRoutes;
     }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
+        // Static resources are selected by Spring's resource handler, not a
+        // controller. They carry no product action and must not need RBAC.
+        if (handler instanceof ResourceHttpRequestHandler) {
+            return true;
+        }
         String actionId = actionIdFor(request.getMethod(), request.getServletPath());
         if (actionId == null) {
-            return true;
+            if (explicitlyUngatedRoutes.contains(request.getMethod() + " " + request.getServletPath())) {
+                return true;
+            }
+            response.setStatus(404);
+            response.setContentType("application/json");
+            objectMapper.writeValue(response.getWriter(), Map.of("error", "ACTION_MAPPING_REQUIRED"));
+            return false;
         }
 
         GateRequest gateRequest = new GateRequest(

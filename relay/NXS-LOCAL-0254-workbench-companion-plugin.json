@@ -1,0 +1,162 @@
+{
+  "created_at": "2026-09-15T21:27:52Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract resolves local platform/lifecycle/persistence/MCP/plugin boundaries or explicitly defers unsupported clients.",
+          "Implementation sequence is independently testable and rollback safe.",
+          "Authority/privacy/diff gates pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); Companion C1-C3 on origin/main.",
+          "observed": "Workbench table-first Material 3 work is separately in progress. User provides a follow-up directive for independent reliable tracking with a supervised service, read-only MCP, private plugin and skill, no new execution authority.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-companion-plugin"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw transcripts or sensitive notifications.",
+          "Unknown/cost provenance semantics preserved.",
+          "Notification state separate from workflow authority."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement Workbench Companion C4: private Codex plugin packaging and finite inspection skill over C3 MCP.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Private plugin/skill packaging; gpt-5.6-terra medium.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Use C3 three-tool MCP only. Package contains no service binary/config/credentials, no shell fallback and no additional tools.",
+          "Private Codex packaging only; Claude deferred. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "C4 private Codex plugin manifest, MCP mapping, one finite workbench-inspect skill and synthetic packaging tests."
+          ],
+          "out": [
+            "LaunchAgent/notifier, service install, Claude packaging, raw sources, network/host access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_workbench_companion.py"
+            ],
+            "name": "companion"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T21:27:52Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "plugins/nexus-workbench-companion/.codex-plugin/plugin.json",
+          "plugins/nexus-workbench-companion/.mcp.json",
+          "plugins/nexus-workbench-companion/skills/workbench-inspect/SKILL.md",
+          "tests/test_workbench_companion.py"
+        ],
+        "completed": [
+          "Implemented the private Codex plugin package, C3-only MCP mapping, finite read-only skill, and synthetic packaging check."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No main runtime Python change.",
+          "ui": "No UI change."
+        },
+        "integration": {
+          "branch": "feature/workbench-companion-plugin",
+          "ci": "NOT_RUN",
+          "head_sha": "1306479",
+          "merge_commit": null,
+          "merge_decision": "No merge decision: worker could not create a commit or PR.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0254",
+          "movement_type": "RELEASE_HANDOVER",
+          "objective": "Restore Git object-database write access, then stage, commit, push, and open the PR; the orchestrator remains the merger.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No new execution authority, raw-source access, credentials, service configuration, shell fallback, or additional MCP tools."
+        ],
+        "recommended_reasoning": {
+          "reason": "Resolve the bounded Git write boundary, then complete the already validated handover.",
+          "tier": "main engineer"
+        },
+        "state_updates": [
+          "None; the movement is blocked before a commit and no project-state update was in scope."
+        ],
+        "unresolved_risks": [
+          "Commit and PR creation are blocked: git add cannot create an object temporary file because the repository object database is outside this worker's writable boundary."
+        ],
+        "validation": {
+          "affected": "PASS: no separate affected-suite command was required by the dispatch.",
+          "diff_check": "PASS: git diff --check and git diff --check origin/main",
+          "full_regression": "NOT RUN: not required by the dispatch.",
+          "privacy": "PASS: 0 findings",
+          "real_environment": "NOT RUN: local validation only.",
+          "state_consistency": "NOT RUN: no durable project-state change was in scope.",
+          "targeted": "PASS: plugin validation; 71 companion tests passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T21:31:34Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0254",
+  "movement": "NXS-LOCAL-0254",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T21:31:34Z"
+}

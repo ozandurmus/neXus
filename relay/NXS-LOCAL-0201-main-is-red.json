@@ -1,0 +1,160 @@
+{
+  "created_at": "2026-09-15T10:24:04Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "python3 -m pytest tests/ -q reports zero failures.",
+          "No test file lost an assertion without a replacement or a docstring note naming what was lost.",
+          "AI_HANDOVER.md is under 300 words and still carries snapshot, what changed, exact next action, test delta and new risks."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_6_DOCUMENTATION_DIET.md -- the cold-start word-count ceilings this movement adjusts are that records AC-1, and the ceiling table carries its own precedent for raising a ceiling by exactly the words a deliberate section added.",
+          "observed": "Measured 2026-09-15 on a detached checkout of origin/main with no local changes: 5 failed, 3619 passed, 25 skipped.",
+          "what_exists": "The five failures, with the cause of each:\n\n1. tests/test_worker_brief.py::test_po_role_brief_section_3_has_pre_dispatch_checklist\n   Asserts literal phrases in roles/PO.md section 3. PR #359 rewrote section 3\n   as a transcript of the loop and moved the checklist. Three guarantees\n   survived and are still assertable against section 3s `Before dispatching`\n   list: `own scope`, `once, locally`, `lane is unused`.\n   Three did NOT survive and must not be silently dropped:\n     - `test tree has been searched` before a deletion-shaped movement\n     - `commit early and often` as an instruction the packet gives the worker\n     - the warning that a low default budget will not fit a CONTRACT, AUDIT or\n       DEPLOYMENT movement\n   roles/PO.md is governance: the worker must NOT edit it. Update the test to\n   assert what the merged file guarantees, and record the three lost\n   guarantees in the tests own docstring as an open Product Owner decision.\n\n2 and 3. tests/test_gov_orch_9_backlog_split.py (two tests)\n   These pin project/backlog.json against a fixture captured at the moment of\n   the GOV.ORCH.9 split, row for row and payload for payload. The backlog is a\n   living file that scripts/project_queue.py writes on every status change and\n   new item, so both can only pass at the instant of the split. Measured: 43\n   rows had legitimately changed and nothing was lost. The permanent invariant\n   is that no id disappears from the union of backlog.json and\n   project/archive/backlog_terminal.json, and that no id appears in both.\n   Re-scope to that. Do not restore a content-equality assertion.\n\n4. tests/test_cold_start_budget.py::test_cold_start_word_count_ceilings\n   Measured: AGENTS.md 3479 words against a 3404 ceiling; AI_HANDOVER.md 1220\n   against 300.\n   AGENTS.md: PR #359 added the `## Host action boundary` section, measured at\n   exactly 124 words (3355 before, 3479 after). The ceiling tables own comment\n   records the precedent -- GOV.ORCH.7 raised it `by exactly the words added,\n   per the movements own instruction`. Raise it the same way, to 3528, with a\n   comment naming PR #359. Do NOT edit AGENTS.md.\n   AI_HANDOVER.md: this is not a deliberate addition, it is the handover\n   economy rule being broken. AGENTS.md requires a snapshot of at most six\n   lines plus bullets. Rewrite it to fit under 300 words while keeping its\n   required sections: snapshot, what changed, exact next action, test delta,\n   new risks.\n\n5. tests/test_successor_index.py::test_committed_index_matches_fresh_render\n   PR #359 added docs/design/HOST_REGISTER.md and never re-rendered the index.\n   `python3 scripts/successor_index.py` writes it; the diff is two lines."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/main-is-red"
+        },
+        "invariants": [
+          "roles/PO.md and AGENTS.md are not edited by this movement.",
+          "project/backlog.json is not edited by hand; it is only read."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "VALIDATION",
+        "objective": "main is red. Five tests fail on a clean origin/main checkout and have since PR #359 merged. Make them pass without weakening what they guard.",
+        "output_contract": [
+          "One pull request on fix/main-is-red.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "Every failure is diagnosed and its remedy named. Bounded, no new design.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "A ceiling is raised by exactly the words a deliberate section added, and the comment says which change added them. A round number chosen for comfort is a defect.",
+          "Every assertion removed must be replaced by one that holds a real, current guarantee, or be named in the docstring as an open decision."
+        ],
+        "risks": [
+          "The easy way to pass four of these is to delete assertions. That converts a red suite into a suite that guards nothing, which is worse than red."
+        ],
+        "scope": {
+          "in": [
+            "Make the five named tests pass by the means described against each in what_exists.",
+            "Re-render docs/design/DECISION_RECORD_SUCCESSOR_INDEX.md with its own generator.",
+            "Rewrite AI_HANDOVER.md to fit its 300-word ceiling while keeping every section AGENTS.md requires of it."
+          ],
+          "out": [
+            "Editing AGENTS.md or anything under roles/. Both are governance and need the Product Owners word; the two tests that point at them are adjusted or their ceilings raised instead.",
+            "Deleting a test, or weakening an assertion to make red go green. Where a guarantee genuinely no longer exists, say so in the docstring rather than removing the test.",
+            "Any change under ui2/. A separate movement is live on those files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/",
+              "-q"
+            ],
+            "name": "-q"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "repository_privacy_check_py"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T10:24:04Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "Replaced stale PO brief assertions with the three surviving section-3 guarantees and documented the three removed guarantees as an open Product Owner decision.",
+          "Replaced point-in-time backlog row/payload checks with retained pre-split IDs and active/terminal disjointness.",
+          "Raised the AGENTS.md budget ceiling from 3404 to 3528, exactly the 124 words added by PR #359."
+        ],
+        "completed": [
+          "Corrected the five specified stale failure causes in the worktree.",
+          "Regenerated docs/design/DECISION_RECORD_SUCCESSOR_INDEX.md.",
+          "Reduced AI_HANDOVER.md to 195 words while retaining all required sections."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/main-is-red",
+          "ci": "Not run: no commit or PR could be created from this sandbox.",
+          "head_sha": "uncommitted",
+          "merge_commit": null,
+          "merge_decision": "No merge attempted; orchestrator merge mode applies after a PR exists.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0201",
+          "movement_type": "VALIDATION",
+          "objective": "Commit the prepared worktree diff, open the required PR, and rerun validation in an environment with Git metadata and browser permissions.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "AGENTS.md, roles/, project/backlog.json, and ui2/ were not edited.",
+          "No test was deleted; discontinued guarantees are named in the test docstring."
+        ],
+        "recommended_reasoning": {
+          "reason": "The code change is bounded and targeted checks are green; only environment-level validation and Git metadata access remain.",
+          "tier": "main engineer"
+        },
+        "state_updates": [
+          "AI_HANDOVER.md rewritten under its ceiling.",
+          "Decision-record successor index regenerated."
+        ],
+        "unresolved_risks": [
+          "The required PR cannot be opened because Git cannot create the parent-worktree index lock.",
+          "Full-suite browser validation cannot run under this sandbox."
+        ],
+        "validation": {
+          "affected": "The five specified failing checks now pass in the targeted run.",
+          "diff_check": "git diff --check origin/main passed.",
+          "full_regression": "Not clean: default collection is blocked by sandbox runtime-directory write denial. With XDG_DATA_HOME under /private/tmp, 2012 passed and 19 skipped before 16 sandbox Mach-port-denied Playwright browser-launch failures; the foreground run was interrupted after it stalled.",
+          "privacy": "repository_privacy_check.py reported baseline unavailable and three pre-existing classified findings; no matched values were emitted.",
+          "real_environment": "Not applicable; this is a local validation movement.",
+          "state_consistency": "AI_HANDOVER.md is 195 words; the worktree has only the five intended modified files.",
+          "targeted": "24 passed: tests/test_worker_brief.py, tests/test_gov_orch_9_backlog_split.py, tests/test_cold_start_budget.py, tests/test_successor_index.py."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T10:40:07Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0201",
+  "movement": "NXS-LOCAL-0201",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "roles/PO.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T10:40:07Z"
+}

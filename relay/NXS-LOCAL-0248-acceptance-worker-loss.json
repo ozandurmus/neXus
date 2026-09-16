@@ -1,0 +1,153 @@
+{
+  "created_at": "2026-09-15T20:01:48Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic browser tests reproduce and prevent draft loss/switch leakage, stopped classification/count agreement, unknown/estimated labels and keyboard behavior.",
+          "Privacy/diff/targeted tests pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_11_ACCEPTANCE_WORKER_LOSS_CONTRACT.md (FROZEN).",
+          "observed": "Product Owner approves table-first Workbench: Active, Needs you and Archive filters, search by movement/objective, details below list, existing UI2 Material 3 theme bridge, Kanban secondary only if bounded.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/acceptance-worker-loss"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw logs/credentials.",
+          "Usage uncertainty remains honest."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen B1-11 worker-loss acceptance scenario.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Frozen bounded acceptance scenario.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Read the frozen contract fully and implement only its acceptance scenario.",
+          "No device, host or production access. Worker commits only; PO handles PR and merge."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "B1-11 integration/acceptance tests and minimum worker test harness support."
+          ],
+          "out": [
+            "Production behavior, Device Workspace UI, host/device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true integrationTest"
+            ],
+            "name": "targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T20:01:48Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added the CI-safe expired-lease worker-loss acceptance scenario against the real PostgreSQL integration carrier.",
+          "Added minimal reconciliation assertions to the collection test harness."
+        ],
+        "completed": [
+          "Implemented and committed frozen B1-11 acceptance coverage."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "NONE",
+          "ui": "NONE"
+        },
+        "integration": {
+          "branch": "feature/acceptance-worker-loss",
+          "ci": "UNVERIFIED: Gradle could not open its sandbox-denied user-home wrapper lock.",
+          "head_sha": "ac051d8",
+          "merge_commit": "NONE",
+          "merge_decision": "ORCHESTRATOR",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": "NONE"
+        },
+        "next": {
+          "movement": "VALIDATION",
+          "movement_type": "VALIDATION",
+          "objective": "Run the targeted integration suite where Gradle can access its wrapper cache and open the PR after GitHub rate-limit recovery.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No production behavior, device access, host access, or execution authority changed.",
+          "The scenario uses synthetic identifiers and a test transport call count only."
+        ],
+        "recommended_reasoning": {
+          "reason": "Validation follow-up only.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Targeted integration validation is unverified because Gradle could not open its user-home wrapper lock file in this sandbox."
+        ],
+        "validation": {
+          "affected": "Test-only integration coverage.",
+          "diff_check": "PASS: git diff --check and git diff --check origin/main.",
+          "full_regression": "UNVERIFIED: not requested.",
+          "privacy": "PASS: repository_privacy_check.py reported 0 findings.",
+          "real_environment": "NOT APPLICABLE: synthetic test transport only.",
+          "state_consistency": "NOT APPLICABLE: no durable project state changed.",
+          "targeted": "UNVERIFIED: Gradle failed before startup because the sandbox denied its user-home wrapper lock file."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T20:06:52Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0248",
+  "movement": "NXS-LOCAL-0248",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T20:06:52Z"
+}

@@ -27,13 +27,8 @@ function describeApiError(err: unknown): string {
   return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
 }
 
-/**
- * Earlier product defect #1 (WORKER.md, SESSION_CLOSE): the open-backlog
- * hero counted every item whose status was not "done", which counts
- * "deferred" and the two validated states as open. The fix uses the
- * terminal set instead.
- */
-const TERMINAL_BACKLOG_STATUSES = new Set(["done", "automated_validated", "real_env_validated", "deferred"]);
+// Automated and real-environment validation remain open until delivery is closed.
+const TERMINAL_BACKLOG_STATUSES = new Set(["done", "complete", "complete_with_followup", "deferred"]);
 
 const ROADMAP_STATUS_TONE: Record<string, Tone> = {
   done: "ok",
@@ -145,15 +140,16 @@ function NowNextSection({ plan }: { readonly plan: ProjectPlanView }) {
   return (
     <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
       <Card sx={cardSx}>
-        <Typography variant="body2" sx={{ fontWeight: 700 }}>NOW</Typography>
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>CURRENT RECORDED MOVEMENT</Typography>
         <Typography variant="h4">{nowNext.now?.build ?? "—"}</Typography>
         <Typography variant="body1">{nowNext.now?.title ?? "Current build"}</Typography>
+        <StatusChip tone={roadmapStatusTone(nowNext.now?.status)} label={roadmapStatusLabel(nowNext.now?.status)} dense />
         {nowNext.now?.goal ? <Typography variant="body2">{nowNext.now.goal}</Typography> : null}
       </Card>
       <Card sx={cardSx}>
         <Typography variant="body2" sx={{ fontWeight: 700 }}>NEXT</Typography>
         <Typography variant="h4">{nowNext.next?.build ?? "—"}</Typography>
-        <Typography variant="body1">{nowNext.next?.title ?? "Next milestone"}</Typography>
+        <Typography variant="body1">{nowNext.next?.title ?? "Unassigned — pending Product Owner sequencing"}</Typography>
         {nowNext.next?.goal ? <Typography variant="body2">{nowNext.next.goal}</Typography> : null}
       </Card>
       <Card sx={cardSx}>
@@ -422,7 +418,7 @@ function BuildHistorySection({
       ))}
       {archivedCount > 0 ? (
         <Typography variant="caption" color="text.secondary">
-          {archivedCount} build{archivedCount === 1 ? "" : "s"} archived
+          {archivedCount} build{archivedCount === 1 ? "" : "s"} archived (all historical lines)
         </Typography>
       ) : null}
     </Stack>
@@ -454,15 +450,7 @@ function WarningsAndNotesSection({ warnings, notes }: { readonly warnings: strin
   );
 }
 
-/**
- * The Administration screen's "Project plan" tab (movement NXS-LOCAL-0174),
- * backed by a real `GET /project-plan` fetch. Reproduces the earlier
- * product's layout -- three hero cards, now/next/upcoming, major tracks
- * with collapsible feature maps, backlog and technical debt grouped by
- * category, completed features, build history and a metadata-warning block
- * followed by the roadmap notes -- in this product's own Material 3
- * components, with no role-conditional rendering.
- */
+/** Java product scope, delivery gates and separately labeled historical lessons. */
 export function ProjectPlanPanel() {
   const { data: plan, error, refresh } = useFetchOnMount(() => getProjectPlan(), describeApiError);
 
@@ -486,6 +474,13 @@ export function ProjectPlanPanel() {
 
   return (
     <Stack spacing={3}>
+      <Section title="Java UI2 product roadmap">
+        <Typography variant="body2">Current recorded product build: {plan.current_product_build ?? "UNKNOWN"}. Deployed software version: UNKNOWN.</Typography>
+        <Typography variant="body2">Source review: {plan.source_metadata?.reviewed_at ?? "UNKNOWN"} · Freshness: {plan.source_metadata?.freshness ?? "UNKNOWN"}</Typography>
+        <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>Source revision: {plan.source_metadata?.revision ?? "UNKNOWN"}</Typography>
+        <Typography variant="body2">{plan.source_metadata?.update_policy}</Typography>
+        <M3Button emphasis="outlined" onClick={refresh}>Refresh project plan</M3Button>
+      </Section>
       <HeroCards plan={plan} />
       <Section title="Now / Next / Upcoming">
         <NowNextSection plan={plan} />
@@ -493,15 +488,30 @@ export function ProjectPlanPanel() {
       <Section title="Major tracks">
         <TracksSection tracks={plan.tracks} currentTrackId={plan.current_track} />
       </Section>
-      <Section title="Backlog & technical debt">
-        <BacklogSection items={plan.backlog} />
+      <Section title="Java feature backlog">
+        <BacklogSection items={plan.backlog.filter(item => item.classification === "java_feature")} />
+      </Section>
+      <Section title="Java technical debt, security & release gates">
+        <BacklogSection items={plan.backlog.filter(item => item.classification !== "java_feature")} />
+      </Section>
+      <Section title="Converted Python lessons — historical / derived">
+        <Typography variant="body2">Historical outcomes are provenance, never Java delivery or real-environment validation.</Typography>
+        {(plan.converted_lessons ?? []).map(lesson => (
+          <Card key={lesson.id} sx={cardSx}>
+            <Typography variant="h4">{lesson.title}</Typography>
+            <Typography variant="body2">Source: {lesson.source_id} · Historical status: {lesson.source_status}</Typography>
+            <Typography variant="body2">{lesson.java_application}</Typography>
+            <Typography variant="body2">Java target: {lesson.target}</Typography>
+          </Card>
+        ))}
       </Section>
       <Section title="Completed features">
         <CompletedFeaturesSection features={plan.completed_features} />
       </Section>
-      <Section title="Build history">
+      <Section title="Java product build history">
         <BuildHistorySection builds={plan.build_history} archivedCount={plan.archived_build_count} />
       </Section>
+      <Typography variant="body2">{plan.excluded_backlog_count ?? 0} historical, agent-operation or unclassified backlog records excluded from the product roadmap.</Typography>
       <WarningsAndNotesSection warnings={plan.metadata_warnings} notes={plan.roadmap_notes} />
     </Stack>
   );

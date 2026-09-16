@@ -15,6 +15,14 @@ public interface ActorAuthzStateRepository {
 
     void upsert(String actorFingerprint, Set<String> groupReferences, Instant resolvedAt, Instant validUntil);
 
+    default void upsertDirectory(ActorAuthzStateRecord observation) {
+        throw new UnsupportedOperationException("typed_directory_cache_unavailable");
+    }
+
+    default void expireDirectory() {
+        throw new UnsupportedOperationException("directory_cache_expiry_unavailable");
+    }
+
     /** Called when an actor's last session ends (C3 §4.4: "deleted when its owning actor has no active session"). */
     void delete(String actorFingerprint);
 }

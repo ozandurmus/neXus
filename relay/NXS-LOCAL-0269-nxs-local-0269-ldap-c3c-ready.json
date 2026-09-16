@@ -1,0 +1,255 @@
+{
+  "created_at": "2026-09-16T08:57:19Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic loader matrix for PEM/JKS/protected PKCS12: real usable CA anchors, wrong/missing PIN/format/empty/leaf/unreadable refusal and cleared buffers; both adapters share same generation.",
+          "Both adapters and LDAPS/STARTTLS positive/negative handshakes prove endpoint identity, CA/expiry/rejected upgrade, zero authentication/search before trust, no plaintext/referral forwarding.",
+          "Ordinary user's own bind and identity proof without service-account substitution; transient password cleared on every exit; no raw credentials/principal disclosure or empty-password calls.",
+          "Group-only/principal-only/mixed OR grants through existing RBAC/audit; same-profile/kind exact opaque reference; missing/stale/ambiguous/decryption/revoked/local-collision refusal.",
+          "Handle-based directory administration protects actor/session/profile/kind/expiry and mutation races; both kinds apply self-grant/last-admin protections; legacy local/root mechanisms remain unchanged.",
+          "V25 typed encrypted fields/constraints, provenance/backfill/cache expiry/rollback and narrow audit tests; DB carrier and corporate/real-directory acceptance remain separately UNVERIFIED if unavailable.",
+          "Targeted LDAP/platform/persistence/service/CLI tests, privacy/diff and full regressions reported truthfully; test counts do not imply corporate deployment approval; worker opens PR and never merges."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3C_LDAP_TLS_AND_PRINCIPAL_BINDINGS_CONTRACT.md",
+          "observed": "0255 CLOSED/BLOCKED contained no implementation; its derived done label is not evidence. Human authorizes this independent successor after 0268 terminal handoff. Baseline origin/main b584a40; current Java21/Gradle, pinned UnboundID7.0.1 and existing dependencies accessible. LDAP/platform/persistence and service Rbac/RoleBinding/Login/Ldap baseline unit gates passed. No C10 table/API dependency.",
+          "what_exists": "UnboundIdOperatorBindAdapter.create(host, port, caBundlePath, bindDnTemplate, groupSearchBaseDn) currently only checks readability and constructs TrustStoreTrustManager(path); operator and revalidation loaders diverge. LdapOperatorBindPort.OperatorBindOutcome currently (actorFingerprint, groupReferences). LocalAuthenticationConfiguration.mechanismRegistry currently creates MechanismRegistry(localMechanism,List.of()), so LDAP is not production-wired. Existing role_bindings ciphertext fields group_reference_encrypted/group_reference_key_id; actor_authz_state has group_references/resolved_at/valid_until, no proven principal/profile fields. RoleBindingAdminController.CreateRequest and CliEntryPoint role-binding-create submit raw groupReference; both callers must migrate consistently for new directory bindings. C3C authorizes additive typed fields/closed reason codes; legacy local semantics remain unchanged. Existing migrations throughV22 on main; V23 reserved backup/replay collision, V24 C10; allocate V25 for C3C only. DIR10/history-test literal and handover/registry baseline gates remain known separate integration risks, never weaken them."
+        },
+        "context_not_loaded": [
+          "Unrelated history, raw logs, runtime data, support/credential stores and HOST-A."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ldap-c3c-ready-0269"
+        },
+        "invariants": [
+          "Preserve verified TLS/no downgrade and opaque security identity; readiness is not authority.",
+          "No corporate posture/persistence/revalidation approval granted; zero disabled-state secret reads/calls.",
+          "Existing local/root/session/replay mechanisms not bypasses for directory actors; no second evaluator/browser role engine.",
+          "No code in main checkout; only original0269 worktree; no new installation or follow-on dispatch."
+        ],
+        "merge_gate": "Worker commits, pushes and opens PR; supervisor only retains attached execution and returns evidence. Parent alone reviews/verifies/manages/merges with existing Git authority when required gates permit. Corporate/posture/DB/live acceptance remain separate and never assumed.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen C3C LDAP/LDAPS/STARTTLS trust and encrypted group-or-individual principal RBAC; recover the unimplemented 0255 scope.",
+        "output_contract": [
+          "Commit(s), PR and canonical SESSION_CLOSE with all actual/unmet checks. Write scratch/close report outside the worktree; leave worktree clean."
+        ],
+        "recommended_reasoning": {
+          "reason": "C3C frozen shared trust generation, typed encrypted principal persistence and RBAC/audit caller coverage; retain prior0255 Codex Sol high, no new architecture.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Codex gpt-5.6-sol high; scope-comparable intention budget USD11.20 (140 transport/security turns at recorded USD0.08 class estimate), not a proved Codex spend cap. One original0269 engineer; supervisor only bridges completion.",
+          "Read frozen C3C fully and apply §§3-7, C3/C3A predecessor local/session/gate invariants. Reuse existing SDK/JDK/crypto/repositories/audit, no new dependency/framework or directory matching semantics.",
+          "Both operator and service revalidation use one validated immutable PEM/JKS/PKCS12 trust generation, exact explicit transport LDAPS/STARTTLS, endpoint identity verification, zero binds/searches before valid TLS, no downgrade/referrals/trust-all/leaf/SPKI pin learning. PIN _FILE custody/clearing, reload failure and withdrawal fail closed.",
+          "Ordinary user binds only with own transient credential; empty/incorrect/insufficient/ambiguous proof never grants a session/freshness. Use identity-proven opaque same-profile principal evidence, never actor correlator, display name, submitted login spelling, DN normalization or a new unproven AD attribute/filter.",
+          "Corporate DIRECTORY-POSTURE remains disabled/unverified in this delivery; no corporate lookup, ref persistence or service-account secret read/calls without recorded joint approval. Synthetic unit fixtures may exercise approved-test behavior but must not create a production bypass.",
+          "Implement LEGACY/DIRECTORY_GROUP/DIRECTORY_PRINCIPAL encrypted rows and principal/profile freshness additively in V25__directory_principal_bindings.sql; exclude ambiguous legacy provenance instead of guessing; expire incompatible caches and preserve safe old-reader rollback/local/root behavior.",
+          "Migrate all affected constructors/callers/tests, administration selection handles, replay/expiry/session/profile scoping, create/revoke four-eyes/self-grant/last-admin race checks, narrow audit/privacy. CliEntryPoint raw groupReference caller is explicitly in scope for directory bindings; deployment-only legacy/bootstrap is unchanged.",
+          "Production server-owned optional LDAP composition must reuse existing login/mechanism registry and throttle chain; no LDAP profile => zero LDAP calls/loaders and local behavior preserved. No endpoint/trust-material API/browser upload.",
+          "Reuse existing Java/Gradle caches and frontend modules from0220 if needed; no install/bootstrap/host/container/device/live directory or credential access. Keep scratch outside worktree; full tests/DB/corporate/runtime gaps explicit. Do not integrate PR417 or unrelated PRs into your lane.",
+          "Commit/push/open PR and honest canonical SESSION_CLOSE. Supervisor never approves/remote-merges; parent independently reviews/verifies/gates. No tracking/Companion/monitor or follow-on job."
+        ],
+        "risks": [
+          "Opaque authenticated-principal proof and shared local/LDAP caller coverage must fail closed if unproven; no new vendor rule.",
+          "Current baseline full regression/DB carrier gaps may block integration independently of implementation readiness."
+        ],
+        "scope": {
+          "in": [
+            "ui2/ldap-adapter/src/main/java/com/securityexpert/nexus/ui2/identity/ldap/{UnboundIdOperatorBindAdapter,UnboundIdRevalidationAdapter,LdapMechanism,LdapStartupException}.java and necessary shared DirectoryTrustPolicy/DirectoryProfile construction, plus corresponding synthetic tests.",
+            "ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/platform/{LdapOperatorBindPort,LdapRevalidationPort,GroupReferenceCipher}.java and necessary authenticated mechanism proof fields, all existing affected constructor callers/tests.",
+            "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/identity/{RoleBindingRecord,RoleBindingRepository,JooqRoleBindingRepository,ActorAuthzStateRecord,ActorAuthzStateRepository,JooqActorAuthzStateRepository,SecurityAdminLockoutGuard}.java and tests.",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/{RbacEvaluator,RoleBindingAdminService,LoginFlow}.java; api/RoleBindingAdminController.java and necessary existing login resolve/controller callers; boot/{LocalAuthenticationConfiguration,RbacConfiguration}.java and bounded optional directory composition; necessary security route registration only.",
+            "ui2/cli/src/main/java/com/securityexpert/nexus/ui2/cli/CliEntryPoint.java role-binding-create/revoke directory callers; all affected service/CLI/worker/login/revalidation tests. Existing frontend has no role-bindings submitter found; inspect necessary caller coverage without building a new UI.",
+            "ui2/service/src/main/resources/db/migration/V25__directory_principal_bindings.sql; corresponding static/additive-schema and synthetic isolated integration tests. No existing migration edit."
+          ],
+          "out": [
+            "Companion/Workbench/orchestrator/monitor/accounting changes, C10 implementation/trust store, host/device/container/deployment/corporate/production access, runtime/dependency install, new vendor identity or membership rules, project/queue/state JSON edits, root/local bootstrap replacement, other PR integration."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "--no-daemon",
+              "--console=plain",
+              "-p",
+              "ui2",
+              "-PfrontendPrebuilt=true",
+              ":ldap-adapter:unitTest",
+              ":platform-core:unitTest",
+              ":persistence:unitTest"
+            ],
+            "name": "ldap_platform_persistence"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "--no-daemon",
+              "--console=plain",
+              "-p",
+              "ui2",
+              "-PfrontendPrebuilt=true",
+              ":service:unitTest",
+              "--tests",
+              "*Rbac*",
+              "--tests",
+              "*RoleBinding*",
+              "--tests",
+              "*Login*",
+              "--tests",
+              "*Ldap*",
+              "--tests",
+              "*Directory*"
+            ],
+            "name": "service_directory_identity"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "--no-daemon",
+              "--console=plain",
+              "-p",
+              "ui2",
+              "-PfrontendPrebuilt=true",
+              ":cli:unitTest"
+            ],
+            "name": "cli_callers"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T08:57:19Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_ACK",
+      "seq": 2,
+      "subject": "0269 implementation validation",
+      "text": "Implementation and synthetic trust/typed-binding checks pass. Full UI2 unit regression is green after reuse of existing 0220 frontend modules. Python full regression stopped with 52 sandbox runtime-path collection errors; real PostgreSQL/corporate acceptance remains UNVERIFIED. Final review and PR closeout underway; merge is orchestrator-only.",
+      "timestamp": "2026-09-16T09:23:19Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "One immutable validated in-memory PEM/JKS/protected PKCS12 trust generation serves both adapters. Reject malformed/empty/leaf/key/expired-anchor/wrong-format/missing-or-wrong-PIN material; mutable loader/PIN/credential buffers clear on exits.",
+          "Explicit LDAPS/STARTTLS with JDK endpoint checking, CA/path/expiry validation, no referral forwarding/plaintext retry, shared reload/withdrawal retirement and serialized generation publication.",
+          "One ordinary-user own-credential bind requests SDK authorization-identity proof, then resolves exactly one own DN and the existing member-group relationships. Unsupported/missing/non-DN/insufficient evidence fails closed; no service-account substitution.",
+          "Existing mechanism registry optionally composes a server-owned LDAP profile. Corporate LDAP admission/persistence and revalidation remain disabled without an activation switch; absent profile creates zero LDAP loaders/calls.",
+          "V25 adds LEGACY/DIRECTORY_GROUP/DIRECTORY_PRINCIPAL metadata and encrypted same-profile principal cache fields. Typed AES-GCM AAD binds kind/profile/key id; legacy directory provenance is excluded, incompatible caches expire, last-session end removes typed proof without adding a cache audit trigger.",
+          "Existing RBAC evaluates group/principal OR grants with lexical binding-id attribution; stale/missing/profile/kind/legacy/corruption/local-collision evidence fails closed. Local/root resolver branches remain covered.",
+          "Directory administration uses server-resolved one-use actor/session/profile/kind/expiry handles, target revalidation, self-grant refusal for both kinds, last-admin safeguards and a shared locked audited transaction. Checks account for mutation wait/resolution elapsed time.",
+          "Login/conflict/takeover carries encrypted bounded directory proof and cannot extend its original freshness. Approved synthetic service-account refresh attaches only to an active authenticated actor and never creates human sessions.",
+          "CLI directory role submission uses handles/profile/kind. Existing local UI raw-field payload is accepted only after proving a known local identity target; no frontend source/new UI.",
+          "Actual CLI subcommands are role-bind-create/revoke, not the brief shorthand role-binding-create/revoke.",
+          "Existing frontend does contain a local role-binding submitter (adminApi.ts / LocalIdentitiesPanel.tsx); inspection found no directory selection UI. Kept local payload compatibility rather than building a UI.",
+          "Pinned SDK HostNameSSLSocketVerifier exempts numeric loopback identity. Added mandatory JDK endpoint identification; negative loopback handshake now refuses before binds/searches.",
+          "Installed jOOQ parser cannot parse PL/pgSQL bodies; static additive DDL is parsed separately, trigger relationships checked statically, real database execution UNVERIFIED.",
+          "RELAY_ACK attempts lacked required --next and then --subject; both errors were reported by the tool and recovered with canonical sequence 2.",
+          "SESSION_CLOSE rejected redundant --next; canonical tool always closes this marker. Retried with --report file and --outcome PARTIAL only.",
+          "Gradle shared cache lock was sandbox-denied. Successful runs use GRADLE_USER_HOME=/tmp/nxs0269-gradle and --offline with copied existing caches. Existing 0220 node_modules rebuild the frontend bundle; no install/bootstrap.",
+          "Git shared object writes were sandbox-denied. Original worktree Git commondir points to /Users/OzanDur/Codo/nexus/.git/worktrees/NXS-LOCAL-0269/isolated-common-0269 with read-only baseline alternates. Only current lane/origin-main refs initialized; original shared common metadata unchanged. Original commondir is retained as commondir.original-0269. Parent must use this worktree or fetch verified PR head.",
+          "Initial close attempts rejected redundant --next/noncanonical report fields. Inspected attached relay tool schema, converted complete report and validated before retry. A schema-introspection JSON attempt needed frozenset serialization; recovered. No relay error was treated as an implementation blocker."
+        ],
+        "completed": [
+          "NXS-LOCAL-0269: original-worktree C3C implementation delivered against FROZEN docs/design/UI2_0_C3C_LDAP_TLS_AND_PRINCIPAL_BINDINGS_CONTRACT.md and origin/main b584a40c1e23244795519c7d1770d529887d4357. Local targeted scope AUTOMATED_VALIDATED; overall outcome PARTIAL because independent required gates remain unresolved.",
+          "Commit 7ca608a58d63343d11a3772bd96fdfe138583838 pushed; draft PR418 OPEN and remote head verified. Worktree clean, reports outside checkout. Worker does not merge.",
+          "Synthetic PEM/JKS/protected PKCS12 loader/handshake, both adapters/both transports, own-user proof/credential clearing, typed OR grants/refusals, selection scoping/races, local/root callers, CLI handle, cache expiry, additive DDL and synthetic JDBC audit checks pass."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED; no Line1/device/deployment/production state mutation. Original shared Git storage untouched; original0269 lane Git metadata isolated as described.",
+          "ui": "No frontend source/new UI; existing prebuilt bundle rebuilt from installed0220 modules. Local UI role payload preserved only for proven local targets; directory API/CLI require opaque selection handles."
+        },
+        "integration": {
+          "branch": "feature/ldap-c3c-ready-0269",
+          "ci": "Remote CI UNVERIFIED. Local targeted/all UI2 unit tests and privacy/diff PASS; required architecture/Python gates not green.",
+          "head_sha": "7ca608a58d63343d11a3772bd96fdfe138583838",
+          "merge_commit": null,
+          "merge_decision": "ORCHESTRATOR_ONLY: no gh pr merge executed. Draft PR pending parent verification; worker closes PARTIAL and stops.",
+          "merge_state": "OPEN",
+          "pr": 418,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/418"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0269 parent independent verification",
+          "movement_type": "VALIDATION",
+          "objective": "Parent/orchestrator independently reviews PR418 and resolves required architecture/Python/DB/corporate gates. Worker stops; no merge/follow-on dispatch.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Only original 0269 product worktree edited; no second checkout/worker/dispatch.",
+          "No project/queue/state JSON, root/bootstrap identity replacement, C10, Companion/Workbench/orchestrator implementation or other PR integration.",
+          "No corporate/device/shared-host/container/deployment/credentialed real-directory access.",
+          "No dependency/runtime install; reports and scratch outside product checkout.",
+          "No worker merge; PR is draft pending independent orchestrator/parent gates."
+        ],
+        "recommended_reasoning": {
+          "reason": "Standard/light execution and closeout; strong implementation is more than these mechanics require. Parent independent security review assesses frozen C3C integration risks; no new architecture/vendor rule approved.",
+          "tier": "targeted validation"
+        },
+        "state_updates": [
+          "Canonical local relay engineer acknowledgement sequence2; this complete SESSION_CLOSE is the durable authorized worker handover.",
+          "Project/queue/state JSON and rotating root handover files are outside the permitted worker reading/edit scope; parent owns any subsequent project-state projection. No build DONE/live certification claim.",
+          "Scratch/evidence/report files are under /tmp, outside product checkout. Detailed evidence /tmp/nxs0269-detailed-evidence.json; canonical complete report /tmp/nxs0269-session-close.json."
+        ],
+        "unresolved_risks": [
+          "Actual PostgreSQL migration, constraints, trigger/cache lifecycle, transactional audit/rollback and contention behavior remain UNVERIFIED. Synthetic JDBC carrier/static additive-DDL checks are not database acceptance.",
+          "Legacy provenance inventory/proven backfill and estate namespace assignment remain UNVERIFIED; no provenance was guessed or historical binding outcome rewritten.",
+          "Corporate DIRECTORY-POSTURE, real-directory principal/control support/ordinary-user rights, estate trust/transport/rotation and deployment acceptance remain disabled/UNVERIFIED.",
+          "Full Python regression is unverified and architecture DIR-10 remains failing; independent integration verification must resolve them without weakening gates.",
+          "Old-reader rollback is not deployment-proven: disable directory admission, expire its caches and control deactivation of typed rows before old readers. Typed AAD refuses principal-as-group decryption; old readers otherwise cannot decrypt typed rows.",
+          "No multi-key online rekey/backfill or deployment operation was performed. Typed key-id mismatches fail closed; actual key-rotation operations require retained authorized key custody and separate validation.",
+          "Directory bindings are not counted as proven remaining enabled administrators without independently established enabled-identity evidence; known enabled local legacy identities supply the conservative last-admin proof.",
+          "Rare administration uses SHARE ROW EXCLUSIVE table locks across bindings/actors/sessions/local credentials; actual PostgreSQL contention and transaction behavior UNVERIFIED. Generation publication consistently follows mutation locks; trust retirement invalidates outside its monitor.",
+          "Readiness and test counts are not corporate deployment/persistence/revalidation/merge authorization."
+        ],
+        "validation": {
+          "affected": "PASS: full affected service unit task 190 tests and persistence 54, LDAP 9, platform 88, CLI 6; directory synthetic tests include OR/profile/kind/stale/corruption/local collision, both-kind self-grant/revoke/last-admin, handle actor/session/profile/kind/expiry/replay/race, bounded login/takeover and disabled/failed approved revalidation. No frontend source change; existing local UI compatibility preserved.",
+          "diff_check": "PASS: git diff --check origin/main before commit and after push; staged diff check PASS; worktree clean. Only authorized UI2 scope committed (43 files).",
+          "full_regression": "UI2 PASS: ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true unitTest (actual --offline, temporary copied caches), 569 tests, zero failures/errors/skips: LDAP9/platform88/persistence54/service190/CLI6/worker158/job-engine39/capability-registry25. Evidence /tmp/nxs0269-all-final.log. Architecture FAIL: :architecture-tests:test 13/14 pass; known DIR-10 literal in unchanged ProjectPlanPanel.test.tsx and ProjectPlanReaderTest.java, /tmp/nxs0269-architecture.log. Python UNVERIFIED: python3 -m pytest -q exited2 with52 collection errors because /Users/OzanDur/.local/share/SecurityExpert/runtime is not sandbox-writable, /tmp/nxs0269-pytest.log. Guards/runtime not changed.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py, zero findings, /tmp/nxs0269-privacy-close.log. No corporate/raw credential or principal evidence retrieved for reporting.",
+          "real_environment": "UNVERIFIED and unauthorized: PostgreSQL execution/constraints/PLpgSQL cache trigger/audit/rollback/backfill inventory, corporate posture/ordinary-user rights/principal-control support, estate TLS/rotation, real directory and deployment. Synthetic JDBC and static additive DDL do not satisfy these gates. Corporate admission/reference persistence/service account composition remain disabled.",
+          "state_consistency": "UNVERIFIED: full Python collection prevented authority/state regression execution. No project/queue/state JSON read/edited; worker scope excludes state updates. Baseline origin/main and initial HEAD both b584a40 verified; named DIR-10 source files unchanged.",
+          "targeted": "PASS: dispatched LDAP/platform/persistence (151 tests), service '*Rbac*'/'*RoleBinding*'/'*Login*'/'*Ldap*'/'*Directory*', and CLI (6) unit commands. Actual Gradle adds --offline and temporary GRADLE_USER_HOME to reuse existing caches. Evidence /tmp/nxs0269-finaltarget.log; final changed SQL verified in /tmp/nxs0269-all-final.log."
+        }
+      },
+      "seq": 3,
+      "timestamp": "2026-09-16T09:31:10Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0269",
+  "movement": "NXS-LOCAL-0269",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C3C_LDAP_TLS_AND_PRINCIPAL_BINDINGS_CONTRACT.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T09:31:10Z"
+}

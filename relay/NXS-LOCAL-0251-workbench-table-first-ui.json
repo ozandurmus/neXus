@@ -1,0 +1,175 @@
+{
+  "created_at": "2026-09-15T20:24:06Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic browser tests reproduce and prevent draft loss/switch leakage, stopped classification/count agreement, unknown/estimated labels and keyboard behavior.",
+          "Privacy/diff/targeted tests pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); GOV.ORCH.4-C is frozen on origin/main.",
+          "observed": "Product Owner approves table-first Workbench: Active, Needs you and Archive filters, search by movement/objective, details below list, existing UI2 Material 3 theme bridge, Kanban secondary only if bounded.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-table-first-ui"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw logs/credentials.",
+          "Usage uncertainty remains honest."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "UI",
+        "objective": "Implement frozen GOV.ORCH.4-C table-first Material 3 Workbench navigation and interaction contract.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "UI/backend interaction contract; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Implement table-first default Active/Needs you/Archive, search, details below, M3 UI2 theme bridge, keyboard/focus/drafts and honest estimated cost labels exactly per GOV.ORCH.4-C.",
+          "One classifier and counts; Kanban only secondary if bounded. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "scripts/dashboard_assets/index.html, dashboard.js, dashboard.css, minimal orchestrator_dashboard projection and dashboard/browser tests named by GOV.ORCH.4-C §7."
+          ],
+          "out": [
+            "Retention storage, new execution authority, host/device access, raw logs."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_orchestrator_dashboard.py"
+            ],
+            "name": "dashboard"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T20:24:06Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "scripts/dashboard_assets/index.html",
+          "scripts/dashboard_assets/dashboard.js",
+          "scripts/dashboard_assets/dashboard.css",
+          "scripts/orchestrator_dashboard.py",
+          "tests/test_orchestrator_dashboard.py",
+          "tests/test_orchestrator_dashboard_browser.py"
+        ],
+        "completed": [
+          "Implemented frozen GOV.ORCH.4-C table-first navigation, exact-ID classification/counts, search, bounded archive and persistent selection in the published candidate.",
+          "Implemented memory-only per-movement drafts, stable editor/caret, generation-guarded detail/traffic/log/error responses, captured-version sends and isolated pending/consumed actions.",
+          "Reused the M3 theme bridge; added explicit unavailable, reported/estimated/requested-model cost labels and honest lifetime totals scope.",
+          "Authored the synthetic Playwright browser matrix; execution remains UNVERIFIED because Chromium launch is denied.",
+          "Published commit 6504b522d3ec86b337f67ad9582512d383777391 and draft PR #405; no merge performed.",
+          "The relay CLI accepts DONE/AUTOMATED_VALIDATED/PARTIAL/BLOCKED, not CANCELLED. Server projection tests use supported DONE; cancelled-phase and synthetic cancelled-terminal precedence remain covered.",
+          "Approved-task deployment/NetworkPolicy baseline is explicitly withdrawn by frozen GOV.ORCH.4-C; it was not investigated or implemented."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "Table-first Workbench candidate published in PR #405; original local checkout restored clean to dispatch base."
+        },
+        "integration": {
+          "branch": "feature/workbench-table-first-ui",
+          "ci": "Draft PR; pending combined status total_count=0",
+          "head_sha": "6504b522d3ec86b337f67ad9582512d383777391",
+          "merge_commit": null,
+          "merge_decision": "ORCHESTRATOR_ONLY; worker did not merge",
+          "merge_state": "OPEN",
+          "pr": 405,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/405"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0251 orchestrator verification",
+          "movement_type": "VALIDATION",
+          "objective": "Synchronize the local lane with PR #405 HEAD, run the required browser/full gates in an authorized runtime, obtain human UI validation, then let the orchestrator decide integration.",
+          "status": "planned"
+        },
+        "preserved": [
+          "Seven existing health values and precedence.",
+          "Existing authenticated same-origin routes and registered-action staleness/consumed-ID checks.",
+          "Controlled Log surface and section-open memory.",
+          "No execution authority, raw evidence retention, credentials, host/device access, deployment or production data changes."
+        ],
+        "recommended_reasoning": {
+          "reason": "Existing contract; execute the named gates and assess evidence. No new architecture or vendor semantics.",
+          "tier": "normal validation"
+        },
+        "state_updates": [
+          "Canonical relay SESSION_CLOSE only; project/handover edits are outside the explicit worker allowlist."
+        ],
+        "unresolved_risks": [
+          "Required synthetic browser matrix and HTML browser smoke are UNVERIFIED due to sandbox browser-launch denial.",
+          "Full suite is UNVERIFIED due to runtime-path collection failures; rerun in an authorized existing runtime.",
+          "Human browser validation has not run; candidate remains PARTIAL and draft.",
+          "Original worktree is clean at dispatch base, not candidate HEAD: shared Git object writes are forbidden. Candidate is on the remote lane and retained as a temporary Git bundle/patch for orchestrator synchronization.",
+          "Candidate recovery artifacts: /tmp/NXS-LOCAL-0251-workbench.bundle and /tmp/NXS-LOCAL-0251-workbench.patch; close report: /tmp/nxs0251-session-close.json."
+        ],
+        "validation": {
+          "affected": "301 passed, 1 skipped, 1 failed: existing HTML Playwright navigation smoke cannot launch Chromium (macOS MachPort registration denied).",
+          "diff_check": "PASS: git diff --check origin/main before commit; staged candidate diff checked against pinned base.",
+          "full_regression": "UNVERIFIED: full suite attempted; stopped with 52 collection errors because the configured runtime directory is outside writable sandbox paths. No environment/bootstrap changes made.",
+          "privacy": "PASS: 0 findings after deleting the test-generated logs directory; the full-suite attempt temporarily caused RUNTIME_DIRECTORY_PRESENT.",
+          "real_environment": "NOT_RUN: human browser validation remains a distinct completion gate; no production certification.",
+          "state_consistency": "NOT_RUN: no project-state files read or changed under the worker scope.",
+          "targeted": "PASS: final dashboard/server run 73 passed; node --check passed; browser test Python syntax passed. Browser: UNVERIFIED: installed Python Playwright/Chromium launch fails before assertions; initial browser run produced 9 setup errors. The final matrix includes an additional action-isolation check and has not executed. Command: python3 -m pytest -q -p no:cacheprovider tests/test_orchestrator_dashboard_browser.py"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T20:37:34Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0251",
+  "movement": "NXS-LOCAL-0251",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T20:37:34Z"
+}

@@ -1,0 +1,156 @@
+{
+  "created_at": "2026-09-15T10:28:25Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A deployed container renders the project screen with content, or states plainly that no project-plan source is configured.",
+          "A named test holds the honest-empty behaviour.",
+          "The full suite and the repository privacy gate pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md (FROZEN) -- the image is built in-cluster and is the unit of deployment, so anything the running service reads must either be in the image or be supplied to it; a path into a developer checkout is neither.",
+          "observed": "On the deployment brought up on HOST-A on 2026-09-15, the project screen renders with no content. The service starts cleanly and every other screen works.",
+          "what_exists": "ui2/service/src/main/resources/application.yml, verbatim:\n\n  ui2:\n    project-plan:\n      # Empty by default: ProjectPlanConfiguration then locates the repository\n      # checkout own project/ directory itself (deployment_direction: local\n      # validation only for this movement). An operator may point this at a\n      # different checkout path explicitly.\n      directory: ${UI2_PROJECT_PLAN_DIRECTORY:}\n\nand ui2/service/src/main/java/.../boot/ProjectPlanConfiguration.java:25\n\n  @Value(\"${ui2.project-plan.directory:}\") String configuredDirectory\n\nwith its own class comment at line 13:\n\n  * secret files, a missing project-plan source is not a startup failure --\n\nThe container image is built from ui2/Containerfile, which copies ui2/ into the\nbuild stage and the resulting jar into the runtime stage. The repository\nproject/ directory is not copied into either. In a deployed container there is\nno checkout to locate, the source resolves to nothing, and the screen has\nnothing to render. The route is GET /project-plan\n(ui2/service/src/main/java/.../api/ProjectPlanController.java:28)."
+        },
+        "context_not_loaded": [
+          "docs/history/**"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/project-screen-has-its-data"
+        },
+        "invariants": [
+          "No credential, address or host path enters the image or a manifest.",
+          "Startup does not begin to fail when the source is absent."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "The Administration project screen renders empty in a deployed container, because the data it reads lives in a repository checkout that is not in the image.",
+        "output_contract": [
+          "One pull request on feature/project-screen-has-its-data.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "The cause is located and quoted; the remaining work is one packaging decision and its honest empty case.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "The class comment already says a missing source is not a startup failure. Keep that: the fix is that the absence becomes visible, not that it becomes fatal.",
+          "If the chosen option copies repository data into the image, it must be data the repository already publishes, and the pull request says which files and how large."
+        ],
+        "risks": [
+          "The quick fix is to mount a host path into the pod, which reintroduces exactly the workstation-filesystem dependency 01C exists to remove."
+        ],
+        "scope": {
+          "in": [
+            "Decide and implement how the deployed service obtains its project-plan data, and say in the pull request body which of the options was chosen and why.",
+            "Make the empty case honest: a service that has no project-plan source must say so on the screen and in the response, rather than rendering an empty screen that looks like a project with no content. AGENTS.md prefers an explicit UNKNOWN over an invented certainty, and an empty list is an invented certainty here.",
+            "A targeted test that fails if the deployed configuration resolves to no source without the screen saying so."
+          ],
+          "out": [
+            "Changing what the project-plan payload contains, or the GET /project-plan contract.",
+            "Any change to the job engine, worker or discovery path. Separate movements are live there.",
+            "Baking a developer machine path into the image or the manifests."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew --no-daemon --console=plain :service:test"
+            ],
+            "name": "cd_563"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "repository_privacy_check_py"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T10:28:25Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "ui2/Containerfile now uses repository-root context and copies project/ into the runtime image; application.yml defaults to /app/project.",
+          "ProjectPlanReader detects all five sources unavailable without changing the GET /project-plan shape.",
+          "ProjectPlanPanel renders the unavailable state instead of empty plan cards."
+        ],
+        "completed": [
+          "Implemented repository-root image packaging of the five published project-plan JSON sources into /app/project.",
+          "Implemented an explicit unavailable-source message in the existing metadata_warnings response member and an unavailable screen state.",
+          "Added backend and frontend targeted tests for the honest unavailable-source behavior."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No Python production code changed.",
+          "ui": "The Project plan screen now states when no project-plan source is available rather than rendering empty plan cards."
+        },
+        "integration": {
+          "branch": "feature/project-screen-has-its-data",
+          "ci": "NOT RUN: local Java runtime unavailable.",
+          "head_sha": "737aced",
+          "merge_commit": null,
+          "merge_decision": "No PR was opened. The sandbox denied the worktree index lock required to commit; orchestrator merge mode remains respected.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0203",
+          "movement_type": "VALIDATION",
+          "objective": "Run the required suites and publish the existing minimal implementation from a Git-writable environment with the repository runtime installed.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Missing source remains non-fatal at startup.",
+          "No host path, credential, address, or manifest value was added.",
+          "GET /project-plan and its response members remain unchanged."
+        ],
+        "recommended_reasoning": {
+          "reason": "Only environment validation and normal Git publication remain; no new architecture is needed.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The runtime image has not been built or deployed in this environment.",
+          "The archive build-history shards are intentionally not copied because the UI only counts them."
+        ],
+        "validation": {
+          "affected": "BLOCKED: :service:test could not start because the host reported 'Unable to locate a Java Runtime.'",
+          "diff_check": "PASS: git diff --check origin/main passed before the attempted commit.",
+          "full_regression": "BLOCKED: the required Gradle suite cannot start without Java.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py reported 0 findings.",
+          "real_environment": "NOT RUN: deployment validation requires a published image and PR.",
+          "state_consistency": "NOT RUN: no durable state update is warranted while the PR is blocked.",
+          "targeted": "BLOCKED: frontend target test could not run because npm could not find vitest; no dependency installation was attempted."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T10:33:24Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0203",
+  "movement": "NXS-LOCAL-0203",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "roles/WORKER.md",
+    "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T10:33:24Z"
+}

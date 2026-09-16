@@ -1,0 +1,141 @@
+{
+  "created_at": "2026-09-15T10:27:49Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "full-regression and po-scope-check execute on a pull request rather than reporting skipping.",
+          "The pull request body names the condition that was wrong."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN) -- the merge gate it fixes is verify.passed plus a diff read, and a check that reports skipping satisfies neither while appearing to.",
+          "observed": "Measured 2026-09-15 with gh pr checks on three open pull requests: validate passes in about 20 seconds, full-regression reports skipping with duration 0, po-scope-check reports skipping with duration 0. PR #359 merged with all checks green while five tests were failing on main.",
+          "what_exists": "gh pr checks 359 output, verbatim:\n\n  validate         pass       23s\n  full-regression  skipping   0\n  po-scope-check   skipping   0\n\nThe same shape on #357 and #358. The workflow files live under .github/workflows/."
+        },
+        "context_not_loaded": [
+          "docs/history/**"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/regression-gate-actually-runs"
+        },
+        "invariants": [
+          "No test is deleted or marked skip to make a job green."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "VALIDATION",
+        "objective": "Pull-request validation skips the regression job, so a red main merges green. Make the gate run.",
+        "output_contract": [
+          "One pull request on fix/regression-gate-actually-runs.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "One workflow condition, diagnosed, with the evidence quoted.",
+          "tier": "micro edit"
+        },
+        "requirements": [
+          "Do not make a job pass by narrowing what it runs. If the full suite is too slow for every pull request, say so in the pull request body and propose the split rather than silently reducing coverage."
+        ],
+        "risks": [
+          "A green build produced by a skipped gate is the failure this movement exists to remove; reproducing it in another form would close the movement without fixing anything."
+        ],
+        "scope": {
+          "in": [
+            "Find why full-regression and po-scope-check evaluate to skipping on a pull request and make them run.",
+            "If a job is skipped by a path filter, a conditional or a required label, either the condition is corrected or the job is removed. A permanently skipped required check is worse than no check: it is green by construction.",
+            "State in the pull request body which condition was wrong and what it now evaluates to."
+          ],
+          "out": [
+            "Fixing the five failing tests. A separate movement is live on those files.",
+            "Adding new test suites or new jobs. This movement makes the existing gate run.",
+            "Any change under ui2/ or tests/."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "repository_privacy_check_py"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T10:27:49Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          ".github/workflows/validation.yml: full-regression now uses github.event_name == 'pull_request' instead of workflow_dispatch.",
+          ".github/workflows/validation.yml: po-scope-check now uses github.event_name == 'pull_request' instead of also requiring a gov/po-* head branch."
+        ],
+        "completed": [
+          "Changed the existing pull-request job conditions so full-regression and po-scope-check evaluate on every pull request.",
+          "Validated the repository privacy gate and whitespace diff check."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED"
+        },
+        "integration": {
+          "branch": "feature/regression-gate-actually-runs",
+          "ci": "NOT_RUN: PR not opened because the linked-worktree Git index is not writable.",
+          "head_sha": "737aced2fb1e401e48e11082eff3944af78468d0",
+          "merge_commit": null,
+          "merge_decision": "No merge action taken; dispatch requires orchestrator merge mode.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0202",
+          "movement_type": "VALIDATION",
+          "objective": "Restore linked-worktree Git metadata write access, then commit the prepared workflow change, open the PR, and verify both required PR jobs execute.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No tests, test suites, jobs, ui2 files, or tests files changed.",
+          "Manual workflow_dispatch remains available but does not run PR-only jobs."
+        ],
+        "recommended_reasoning": {
+          "reason": "The workflow condition diagnosis and minimal patch are complete; only the external Git metadata permission boundary remains.",
+          "tier": "micro edit"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "BLOCKED: git add could not create /Users/OzanDur/Codo/nexus/.git/worktrees/NXS-LOCAL-0202/index.lock (Operation not permitted); the workflow edit remains uncommitted and no PR was opened.",
+          "The required GitHub Actions execution remains unobserved until the host permission boundary is corrected and the branch is pushed."
+        ],
+        "validation": {
+          "affected": "NOT_RUN: GitHub Actions requires a pushed pull request; commit/push was blocked by linked-worktree metadata permissions.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "NOT_RUN: this movement changes the trigger condition; the resulting PR job could not be created.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py (0 findings).",
+          "real_environment": "NOT_APPLICABLE: CI workflow-only change.",
+          "state_consistency": "NOT_RUN: no project-state files changed.",
+          "targeted": "PASS: condition diff inspected; both conditions evaluate true for pull_request events."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T10:33:12Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0202",
+  "movement": "NXS-LOCAL-0202",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T10:33:12Z"
+}

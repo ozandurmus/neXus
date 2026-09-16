@@ -37,6 +37,7 @@ public final class LoginController {
 
     private final MechanismRegistry mechanismRegistry;
     private final LoginFlow loginFlow;
+    private final com.securityexpert.nexus.ui2.service.security.LoginAttemptThrottle directoryThrottle = new com.securityexpert.nexus.ui2.service.security.LoginAttemptThrottle();
 
     public LoginController(MechanismRegistry mechanismRegistry, LoginFlow loginFlow) {
         this.mechanismRegistry = mechanismRegistry;
@@ -45,33 +46,50 @@ public final class LoginController {
 
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> login(@RequestBody LoginRequest request,
-            HttpServletResponse response) {
-        Optional<Mechanism> mechanism = mechanismRegistry.find(request.mechanismId());
-        if (mechanism.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBody("UNKNOWN_MECHANISM"));
-        }
+            HttpServletResponse response, jakarta.servlet.http.HttpServletRequest servletRequest) {
+        try {
+            Optional<Mechanism> mechanism = mechanismRegistry.find(request.mechanismId());
+            if (mechanism.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBody("UNKNOWN_MECHANISM"));
+            }
 
-        AttemptOutcome outcome = mechanism.get().attempt(request.username(), request.password());
+            boolean directory = "ldap".equals(mechanism.get().mechanismId());
+            if (directory && !directoryThrottle.admit(servletRequest == null ? "unknown" : servletRequest.getRemoteAddr(),
+                    request.username(), Instant.now())) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(errorBody("LOGIN_RATE_LIMITED"));
+            }
+            AttemptOutcome outcome = mechanism.get().attempt(request.username(), request.password());
 
-        if (outcome instanceof AttemptOutcome.MechanismUnavailable) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(errorBody("DIRECTORY_UNAVAILABLE"));
-        }
-        if (outcome instanceof AttemptOutcome.Refused) {
-            // §2.3/§5.3: the identical body regardless of mechanism or
-            // reason -- reasonCode is internal only and never read here.
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody("INVALID_CREDENTIALS"));
-        }
-        AttemptOutcome.Success success = (AttemptOutcome.Success) outcome;
-        LoginFlow.LoginResult result = loginFlow.login(success.resolvedActorFingerprint(), Instant.now());
+            if (outcome instanceof AttemptOutcome.MechanismUnavailable) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(errorBody("DIRECTORY_UNAVAILABLE"));
+            }
+            if (outcome instanceof AttemptOutcome.Refused) {
+                // §2.3/§5.3: the identical body regardless of mechanism or
+                // reason -- reasonCode is internal only and never read here.
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody("INVALID_CREDENTIALS"));
+            }
+            if (directory) directoryThrottle.succeeded(request.username());
+            AttemptOutcome.Success success = (AttemptOutcome.Success) outcome;
+            LoginFlow.LoginResult result = loginFlow.login(success, Instant.now());
 
-        if (result instanceof LoginFlow.LoginResult.Conflict conflict) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(LoginFlow.conflictBody(conflict));
+            if (result instanceof LoginFlow.LoginResult.DirectoryUnavailable) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(errorBody("DIRECTORY_UNAVAILABLE"));
+            }
+            if (result instanceof LoginFlow.LoginResult.Conflict conflict) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(LoginFlow.conflictBody(conflict));
+            }
+            LoginFlow.LoginResult.NewSession newSession = (LoginFlow.LoginResult.NewSession) result;
+            setSessionCookie(response, newSession.rawCookieValue());
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("ok", true);
+            return ResponseEntity.ok(body);
+        } finally {
+            if (request.password() != null) java.util.Arrays.fill(request.password(), '\0');
         }
-        LoginFlow.LoginResult.NewSession newSession = (LoginFlow.LoginResult.NewSession) result;
-        setSessionCookie(response, newSession.rawCookieValue());
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("ok", true);
-        return ResponseEntity.ok(body);
+    }
+
+    public ResponseEntity<Map<String, Object>> login(LoginRequest request, HttpServletResponse response) {
+        return login(request, response, null);
     }
 
     static void setSessionCookie(HttpServletResponse response, String rawCookieValue) {

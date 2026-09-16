@@ -1,0 +1,157 @@
+{
+  "created_at": "2026-09-15T10:35:52Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A session idle for more than five minutes is refused at E1 with SESSION_EXPIRED.",
+          "A named test holds the value and fails on drift.",
+          "No source comment still states thirty minutes.",
+          "The full suite and the repository privacy gate pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_15B_SESSION_POLICY_AND_ADMIN_VISIBILITY.md (FROZEN, merged 2026-09-15) SP-1: five minutes from last_seen_at, recomputed into idle_deadline_at on every request that passes E1, superseding C3s thirty minutes.",
+          "observed": "The value is a source constant today.",
+          "what_exists": "ui2/service/src/main/java/.../boot/LocalAuthenticationConfiguration.java:49 and :56, verbatim:\n\n   * <p>Session durations (30 minutes idle, 10 hours absolute) are {@code C3}\n  ...\n  private static final Duration IDLE_TIMEOUT = Duration.ofMinutes(30);\n\nand line 146:\n\n  return new LoginFlow(sessionRepository, IDLE_TIMEOUT, ABSOLUTE_LIFETIME);\n\nThe deadline is enforced in ui2/service/src/main/java/.../security/GateChain.java:84:\n\n  if (!now.isBefore(session.idleDeadlineAt())) {\n      return refuse(\"E1\", 401, \"SESSION_EXPIRED\", \"idle_deadline_at elapsed\");\n\nand the heartbeat that recomputes it is GateChain.java:98."
+        },
+        "context_not_loaded": [
+          "docs/history/**"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/idle-timeout-is-five-minutes"
+        },
+        "invariants": [
+          "The recompute-on-every-request mechanism, the end_reason vocabulary and the absolute lifetime are untouched.",
+          "No new configuration surface is introduced by this movement."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "The idle timeout becomes five minutes. Only the value moves; the session model does not.",
+        "output_contract": [
+          "One pull request on feature/idle-timeout-is-five-minutes.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "One value, its comment, and the tests that pin it.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "The comment that cites the old value is part of the change. A constant that moves while its own documentation still states the old number is the defect this repository calls a contradiction between authorities."
+        ],
+        "risks": [
+          "A five-minute idle timeout will expire sessions during ordinary test runs that previously fit inside thirty; a fixture that relied on the longer window will fail and must be fixed rather than given a longer timeout."
+        ],
+        "scope": {
+          "in": [
+            "Change IDLE_TIMEOUT to five minutes and correct the class comment at line 49, which currently states thirty and cites C3 for it. The comment must cite the superseding record instead.",
+            "A targeted test that fails if the value drifts, asserting the configured idle timeout rather than a magic number repeated in the test.",
+            "Any test fixture that hardcodes a thirty-minute expectation."
+          ],
+          "out": [
+            "Making the value configurable. SP-1 requires that and it needs a maximum and an audited mutation; both are deferred to the implementing contract and are a separate movement.",
+            "The absolute lifetime, which SP-1 leaves unchanged.",
+            "Concurrent sessions, lockout, administrator visibility and unlock. All are in the same record and all are separate movements.",
+            "Editing UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md. It is FROZEN and superseded by a later record, never edited in place."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew --no-daemon --console=plain :service:test"
+            ],
+            "name": "cd_563"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "repository_privacy_check_py"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T10:35:52Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/LocalAuthenticationConfiguration.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/boot/LocalAuthenticationConfigurationTest.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/security/LoginFlowTest.java"
+        ],
+        "completed": [
+          "Changed the fixed idle timeout to five minutes.",
+          "Updated the superseded C3 comment and added a named configuration test.",
+          "Changed the thirty-minute LoginFlow fixture to five minutes."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No changes.",
+          "ui": "Fixed local-session idle timeout source constant, comment, and tests; changes remain uncommitted due to Git index-lock denial."
+        },
+        "integration": {
+          "branch": "feature/idle-timeout-is-five-minutes",
+          "ci": "NOT RUN: no commit or pull request due to Git index-lock permission denial.",
+          "head_sha": "uncommitted",
+          "merge_commit": null,
+          "merge_decision": "No merge attempted; orchestrator merge mode was respected.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0204",
+          "movement_type": "VALIDATION",
+          "objective": "Provide Java Runtime and Git worktree-index write access, then validate, commit, and open the non-merged PR for the completed timeout diff.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "E1 refusal behavior, the every-request heartbeat, end-reason vocabulary, and absolute lifetime.",
+          "No configuration surface was added."
+        ],
+        "recommended_reasoning": {
+          "reason": "Resolve host validation and Git-index access only; no product-scope change is required.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The Java Runtime absence prevents verification of the targeted and full service tests.",
+          "Sandbox denied creation of the Git worktree index lock, preventing staging, commit, push, and PR creation."
+        ],
+        "validation": {
+          "affected": "BLOCKED: the affected service tests could not run for the same Java Runtime failure.",
+          "diff_check": "PASS: git diff --check origin/main returned clean before the attempted commit.",
+          "full_regression": "BLOCKED: full :service:test was not run after the Java Runtime failure, per worker instruction not to bootstrap the environment.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py found zero findings.",
+          "real_environment": "NOT APPLICABLE: local validation only.",
+          "state_consistency": "NOT RUN: no durable project state was changed because validation and Git integration are blocked.",
+          "targeted": "BLOCKED: Gradle could not start because the host reported Unable to locate a Java Runtime."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T10:40:19Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0204",
+  "movement": "NXS-LOCAL-0204",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_15B_SESSION_POLICY_AND_ADMIN_VISIBILITY.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T10:40:19Z"
+}

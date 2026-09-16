@@ -1,0 +1,170 @@
+{
+  "created_at": "2026-09-15T16:29:03Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen C-series contract resolves all load-bearing v1 decisions and names exact implementation/migration successor.",
+          "Draft is superseded, not left implementation authority.",
+          "Authority/privacy/diff tests pass; no code changed."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md (FROZEN); explicit Product Owner direction in this session authorizes freezing the successor before implementation.",
+          "observed": "Draft commit ff721c9 / PR #385 traces the live missing discovery trust pin and endpoint-scoping gap. Product Owner directs to stop extending the draft phase, write the contract and implement discovery. The deployed worker lacks UI2_CP_DISCOVERY_TRUST_DEFAULT_FINGERPRINT, but v1 must replace global env pin rather than deploy a manual exception.",
+          "what_exists": "Cherry-pick exactly ff721c9 before review. Current HostKeyVerifier/SshExecTransport is fail-closed. Discovery failures collapse to UNKNOWN_FAILURE. User directs v1 decisions: Check Point only; endpoint+port+key-algorithm scoped trust; explicit security_admin enrollment; mismatch remains refusal; unified worker path, no standalone CLI trust path."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/discovery-trust-contract-freeze"
+        },
+        "invariants": [
+          "No trust-on-first-use or accept-any.",
+          "No credential/command after missing/mismatched trust.",
+          "No browser-to-device or raw identifier disclosure.",
+          "No Palo Alto behavior change."
+        ],
+        "merge_gate": "Worker commits/pushes only; PO opens/merges after review. This packet is explicit PO authorization for FROZEN status after decisions are written.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "PO-authorized freeze of the Check Point discovery SSH trust enrollment contract with all v1 decisions resolved for immediate implementation.",
+        "output_contract": [
+          "Commit(s) + SESSION_CLOSE, frozen contract, exact v1 implementation successor.",
+          "No code/device/host access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Endpoint-scoped trust storage and security boundary require a compact but rigorous contract; Claude Sonnet 5 high is selected after Codex worktree write limitation.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "Freeze explicit v1 choices: no connect-on-mismatch; stale queue wording is superseded for SSH transport; Check Point only; endpoint+port+algorithm identity scope; observed fingerprint is never automatically trusted; security_admin performs explicit audited enrollment after independently verifying fingerprint; host-key mismatch/key rotation requires new explicit enrollment.",
+          "Define a minimal new storage model/migration allocation for endpoint-scoped trust; no raw management address/fingerprint in UI/shareable artifacts; explicit local comparison and safe state labels only.",
+          "Retire standalone DiscoveryRunnerMain trust behavior from v1 support or require it to resolve the same persisted trust source; no second resolver remains.",
+          "Require structured trust/auth/timeout failure classes to reach UI safely; no raw exception text. State exact implementation and human real-environment DoD.",
+          "Worker commits/pushes only. PO owns PR/merge. User explicitly authorizes FROZEN status after this review."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "Cherry-pick ff721c9.",
+            "One FROZEN C-series successor contract resolving all draft UNKNOWNs necessary for a Check Point v1 implementation, plus supersession status update to draft."
+          ],
+          "out": [
+            "All implementation, migrations, manifests, host/device/network operations, Palo Alto TLS, production data/credentials, state files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py"
+            ],
+            "name": "authority_references"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T16:29:03Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "docs/design/UI2_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md -- Status section rewritten from DRAFT to SUPERSEDED.",
+          "docs/design/UI2_0_C10_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md -- new file, FROZEN."
+        ],
+        "completed": [
+          "Cherry-picked ff721c9 (the DRAFT trace-to-source, UI2_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md).",
+          "Froze docs/design/UI2_0_C10_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md, resolving every load-bearing UNKNOWN the draft left open (its Sec 11 register and Sec 14 open items) for a Check Point v1 implementation.",
+          "Adjudicated the draft's Sec 3.2 queue-item contradiction: ui2_ssh_strict_host_key_trust_in_production's 'on mismatch connect, warn' wording is superseded for SSH transport; transport stays fail-closed, no connect-on-mismatch.",
+          "Froze trust scope as (management address, management port, host-key algorithm), named security_admin as the enrollment role with independent out-of-band verification, required new explicit enrollment on mismatch/rotation, unified deployed-worker and standalone-CLI trust resolution onto one persisted source, allocated a minimal storage model and migration slot 0010, and defined a four-value structured failure taxonomy replacing the UNKNOWN_FAILURE collapse.",
+          "Updated the draft's Status line to SUPERSEDED, pointing at the C10 contract as successor.",
+          "Opened PR #394 against main; did not merge (orchestrator merge mode)."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- no source changed",
+          "ui": "none -- no source changed"
+        },
+        "integration": {
+          "branch": "feature/discovery-trust-contract-freeze",
+          "ci": "not observed by this session -- PR just opened",
+          "head_sha": "e2bfd681208fc680f5469bb4f35717343f7a6a83",
+          "merge_commit": null,
+          "merge_decision": "Worker commits/pushes and opens PR only; orchestrator merges after its own verification passes, per dispatch merge mode.",
+          "merge_state": "OPEN",
+          "pr": 394,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/394"
+        },
+        "next": {
+          "movement": "TBD -- next sequential NXS-LOCAL id",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Implement the C10 contract: migration 0010_management_endpoint_ssh_trust.sql, a per-endpoint trust resolver replacing both the worker's env-var lambda and the CLI's EnvironmentTrustRuleResolver, the four-value failure enum threaded through ManagementPlaneEnumerationAdapter and DiscoveryJobExecutor.failureClass, and a security_admin-gated enrollment action, per docs/design/UI2_0_C10_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md Sec 9.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No source code, migration, manifest, host/device/network operation, Palo Alto TLS, production data/credential, or state file (including project/QUEUE.md) was touched.",
+          "All source citations and defect trace in the draft were left intact -- the C10 contract quotes rather than re-derives them."
+        ],
+        "recommended_reasoning": {
+          "reason": "The successor is a deterministic build inside an already-frozen contract -- no new architecture decision remains. Escalate only if security_admin is found absent from C3's RBAC model, which would be a cross-subsystem gap, not a deterministic fix.",
+          "tier": "implementation-and-migration tier"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "security_admin role name is adopted from Product Owner direction; C3's RBAC model was not read for this movement (out of read scope) -- the implementation successor must verify the role exists in C3's authority chain before wiring an authorization check to it, per contract Sec 5.3."
+        ],
+        "validation": {
+          "affected": "not applicable -- documentation-only change, no source affected",
+          "diff_check": "git diff --check and git diff --check origin/main -- both clean",
+          "full_regression": "not run -- out of this movement's validation_plan scope (docs/design/*.md only, no code changed)",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 1496 files scanned, 0 findings",
+          "real_environment": "not applicable -- architecture/contract movement, no runtime behavior changed; the contract itself names its implementation successor's real-environment DoD (Sec 9)",
+          "state_consistency": "not applicable -- no project/*.json or CURRENT_STATE.md touched",
+          "targeted": "python3 -m pytest -q -p no:cacheprovider tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py -- 8 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T16:34:58Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0234",
+  "movement": "NXS-LOCAL-0234",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T16:34:58Z"
+}

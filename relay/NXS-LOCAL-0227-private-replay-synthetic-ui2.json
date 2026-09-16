@@ -1,0 +1,121 @@
+{
+  "created_at": "2026-09-15T15:20:15Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "One reproducible isolated test-container environment starts with fabricated seeded data and a readonly identity.",
+          "Automated acceptance verifies navigation and at least populated, empty, failure/refusal and unknown states from seeded records.",
+          "Tests demonstrate no production config/device transport is initialized; privacy gate passes.",
+          "Human can use the documented local endpoint and readonly synthetic identity for visual exploration without hand-editing DB rows."
+        ],
+        "baseline": {
+          "authority": "docs/design/PRIVATE_REPLAY_ARCHITECTURE.md (FROZEN, Phase A only); it authorizes SYNTHETIC_SCENARIO/PRIVATE_REPLAY isolation and explicitly excludes LIVE_PRIVATE.",
+          "observed": "User requests persistent mockup data in test containers so a readonly user can log in, navigate menus and visually test every state. Current main has PostgreSQL integration fixture conventions, bootstrap identities, UI screens and browser render tests, but not an isolated, seeded synthetic scenario suitable for agent/user visual acceptance.",
+          "what_exists": "PRIVATE_REPLAY §Phase A requires isolated stores and simulated providers, with no production runtime/device/credential access. `UI2_0_MOCKUP_REFERENCE_NOTES.md` is visual reference only. Existing UI integration fixture uses real PostgreSQL 16 when UI2_TEST_JDBC_URL is supplied or a test container is available. Bootstrap role bindings include a viewer identity but actual source and test hooks must be inspected before implementation."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/private-replay-synthetic-ui2"
+        },
+        "invariants": [
+          "SYNTHETIC_SCENARIO mode is visibly distinct and cannot fall back to production.",
+          "Test dataset contains no production identities, paths, secrets, raw evidence or vendor responses.",
+          "Readonly identity cannot execute collection/backup/administration actions.",
+          "No device I/O and no live private mode."
+        ],
+        "merge_gate": "Worker may commit, push feature/private-replay-synthetic-ui2 and open one PR, never merge. PO review plus successful isolated environment validation required; no live environment rollout.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement PRIVATE_REPLAY Phase A synthetic UI2 test environment: isolated PostgreSQL fixture data, readonly bootstrap identity, and browser-visible seeded states.",
+        "output_contract": [
+          "One PR and SESSION_CLOSE with exact launch target, seed classifications, readonly role, tested UI states and any unavailable test-container gate.",
+          "Clean worktree; no production data/host/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Isolated synthetic data and authentication boundary span test fixture, service boot and UI acceptance; use Claude Sonnet 5 high per active user developer preference.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Read PRIVATE_REPLAY Phase A and the existing UI2 integration fixture fully enough to select one existing test-container mechanism; do not add a second container framework.",
+          "All data must be fabricated and typed. No copy/export/read of data/, logs/, runtime objects, credentials, support bundles or production DB. Every seeded field is classified by reuse of current safe enums/fixtures; unclassified fields block fixture publication.",
+          "The user-facing login identity must be readonly and have only existing viewer capability. Visible-but-refused UI states are expected; never grant admin roles just to make menus clickable.",
+          "Provide a bounded command/documented test target for humans/agents to launch the isolated environment locally, then exercise UI navigation. It must make zero device/network calls beyond local test-container dependencies and must never bind/use production configuration.",
+          "No new browser-to-device path, no live collection, no production credential or host access. English engineering artifacts; worker may commit/push/open PR, never merge."
+        ],
+        "risks": [
+          "Existing integration container availability may be absent; do not bypass/skip its test gate.",
+          "Seed must avoid evolving into a second product data model."
+        ],
+        "scope": {
+          "in": [
+            "Synthetic-only test fixture/seeding and a documented reproducible local test-environment entry point within existing UI2 integration/test-container infrastructure.",
+            "A readonly test identity with the least existing role needed to browse all visible/refused navigation states.",
+            "Seeded safe records covering populated, empty, failed/refused, unknown and audit/discovery states already represented by UI contracts.",
+            "Automated browser/render acceptance tests that run only against the synthetic environment."
+          ],
+          "out": [
+            "Production manifests, HOST-A, live/private replay Phase B, device commands, credentials, collection transports, production DB/Secret data, automatic browser login to production.",
+            "Changes to running 0221 Audit, 0224 backup authorization, 0226 locator, or discovery trust files; no unapproved migrations."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true integrationTest --tests '*Synthetic*' --tests '*Replay*'"
+            ],
+            "name": "private_replay_targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_html_render_harness.py",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py"
+            ],
+            "name": "render_and_authority"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T15:20:15Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0227",
+  "movement": "NXS-LOCAL-0227",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-15T15:20:15Z"
+}

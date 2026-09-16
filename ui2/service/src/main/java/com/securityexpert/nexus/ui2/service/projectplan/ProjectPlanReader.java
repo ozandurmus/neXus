@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -22,20 +25,10 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Reads {@code project/roadmap.json}, {@code project/feature_registry.json},
- * {@code project/backlog.json}, {@code project/archive/backlog_terminal.json}
- * and {@code project/build_history.json} (plus {@code project/archive/
- * build_history_*.json}, counted only) from the repository checkout and
- * assembles the Project plan payload envelope the earlier product used to
- * inline into static HTML at render time. Every arithmetic and metadata-
- * warning rule here is a from-behaviour reimplementation of that earlier
- * product's own logic -- never a port, never invoked, never imported --
- * with two named corrections to defects in that behaviour (see the two
- * "earlier product defect" notes below and this movement's SESSION_CLOSE).
- *
- * <p>A missing or unreadable source file degrades to its empty default plus
- * one metadata warning naming the file; this reader never throws for a
- * missing or malformed source (WORKER.md AC-1).</p>
+ * Reads project authorities on each request and applies the explicit Java product
+ * selection in java_product_plan.json. Historical outcomes remain in their source
+ * files; missing projection data never falls back to a Python product roadmap.
+ * Missing or malformed files produce empty defaults and metadata warnings.
  */
 public final class ProjectPlanReader {
 
@@ -77,7 +70,25 @@ public final class ProjectPlanReader {
         FileLoad backlogTerminalLoad = loadObject("archive/backlog_terminal.json");
         FileLoad historyLoad = loadObject("build_history.json");
 
-        Map<String, Object> roadmap = roadmapLoad.value();
+        FileLoad productLoad = loadObject("java_product_plan.json");
+        boolean productAvailable = productLoad.present()
+                && "1.0".equals(productLoad.value().get("schema_version"))
+                && productLoad.value().get("tracks") instanceof List<?>;
+        Map<String, Object> product = productAvailable ? productLoad.value() : Map.of();
+        Map<String, Object> roadmap = new LinkedHashMap<>(roadmapLoad.value());
+        roadmap.put("tracks", product.getOrDefault("tracks", List.of()));
+        roadmap.put("current_track", product.get("current_track"));
+        roadmap.put("roadmap_notes", product.getOrDefault("notes", List.of()));
+        Map<String, Object> horizon = new LinkedHashMap<>();
+        horizon.put("now", asMap(roadmapLoad.value().get("now_next")).get("now"));
+        horizon.put("next", product.get("next"));
+        horizon.put("upcoming", product.getOrDefault("upcoming", List.of()));
+        roadmap.put("now_next", horizon);
+        Set<String> productFeatureIds = new LinkedHashSet<>();
+        for (Object id : asList(product.get("feature_ids"))) productFeatureIds.add(asString(id));
+        for (Object track : asList(product.get("tracks"))) {
+            for (Object id : asList(asMap(track).get("feature_ids"))) productFeatureIds.add(asString(id));
+        }
         Map<String, Object> registry = registryLoad.value();
         Map<String, Object> backlog = backlogLoad.value();
         Map<String, Object> backlogTerminal = backlogTerminalLoad.value();
@@ -90,6 +101,7 @@ public final class ProjectPlanReader {
                 continue;
             }
             Map<String, Object> feature = new LinkedHashMap<>(asMap(rawFeature));
+            if (!productFeatureIds.contains(asString(feature.get("id")))) continue;
             feature.put("progress_percent", criterionProgress(feature));
             features.add(feature);
             featureById.put(asString(feature.get("id")), feature);
@@ -168,6 +180,55 @@ public final class ProjectPlanReader {
         appendFileAvailabilityWarning(metadataWarnings, "build_history.json", historyLoad.present());
         metadataWarnings.addAll(computeMetadataWarnings(roadmap, features, backlogItems, builds));
 
+        appendFileAvailabilityWarning(metadataWarnings, "java_product_plan.json", productAvailable);
+        Map<String, Object> classifications = asMap(product.get("backlog_classifications"));
+        List<Map<String, Object>> lessons = new ArrayList<>();
+        for (Object raw : asList(product.get("converted_lessons"))) {
+            Map<String, Object> lesson = new LinkedHashMap<>(asMap(raw));
+            String sourceId = asString(lesson.get("source_id"));
+            Map<String, Object> source = backlogItems.stream()
+                    .filter(row -> sourceId.equals(asString(row.get("id")))).findFirst().orElse(Map.of());
+            lesson.put("source_status", source.getOrDefault("status", "UNKNOWN"));
+            if (source.isEmpty()) metadataWarnings.add("Converted lesson source is missing: " + sourceId);
+            lessons.add(lesson);
+        }
+        Set<String> activeBacklogIds = asList(backlog.get("items")).stream()
+                .map(row -> asString(asMap(row).get("id"))).collect(Collectors.toSet());
+        for (Map<String, Object> row : backlogItems) {
+            String id = asString(row.get("id"));
+            String classification = asString(classifications.getOrDefault(id,
+                    activeBacklogIds.contains(id) ? "unclassified" : "legacy_reference"));
+            if (!Set.of("java_feature", "java_debt", "legacy_reference", "agent_operations").contains(classification)) {
+                metadataWarnings.add("Backlog classification missing or invalid: " + id);
+                classification = "unclassified";
+            }
+            row.put("classification", classification);
+        }
+        long excludedBacklogCount = backlogItems.stream()
+                .filter(row -> !Set.of("java_feature", "java_debt").contains(row.get("classification"))).count();
+        backlogItems.removeIf(row -> !Set.of("java_feature", "java_debt").contains(row.get("classification")));
+        Set<String> productBuildIds = asList(product.get("product_build_ids")).stream()
+                .map(ProjectPlanReader::asString).collect(Collectors.toSet());
+        List<Map<String, Object>> productBuilds = builds.stream()
+                .filter(row -> productBuildIds.contains(asString(row.get("build")))).toList();
+        for (String id : productBuildIds) {
+            if (productBuilds.stream().noneMatch(row -> id.equals(row.get("build")))) {
+                metadataWarnings.add("Java product build source is missing: " + id);
+            }
+        }
+        String freshness = !productAvailable ? "UNAVAILABLE"
+                : Objects.equals(product.get("reviewed_current_build"), roadmap.get("current_build"))
+                        ? "UNKNOWN" : "STALE";
+        if ("STALE".equals(freshness)) metadataWarnings.add("Java classification review predates the current recorded build.");
+        int archivedBuildCount = loadArchivedBuilds().size();
+        Map<String, Object> sourceMetadata = new LinkedHashMap<>();
+        sourceMetadata.put("revision", sha256(Stream.of(roadmapLoad, registryLoad, backlogLoad,
+                backlogTerminalLoad, historyLoad, productLoad).map(FileLoad::digest).collect(Collectors.joining(":")) + ":" + archivedBuildCount));
+        sourceMetadata.put("reviewed_at", product.get("reviewed_at"));
+        sourceMetadata.put("reviewed_current_build", product.get("reviewed_current_build"));
+        sourceMetadata.put("freshness", freshness);
+        sourceMetadata.put("update_policy", "Read on every request. Source updates require a reviewed snapshot. Upstream and deployed-code freshness are UNKNOWN.");
+
         Map<String, Integer> backlogCounts = new LinkedHashMap<>();
         for (Map<String, Object> row : backlogItems) {
             String status = asString(row.get("status"));
@@ -192,25 +253,40 @@ public final class ProjectPlanReader {
         payload.put("backlog", backlogItems);
         payload.put("backlog_counts", backlogCounts);
         payload.put("completed_features", completedFeatures);
-        payload.put("build_history", builds);
-        payload.put("archived_build_count", loadArchivedBuilds().size());
+        payload.put("product_scope", "java_ui2");
+        payload.put("source_metadata", sourceMetadata);
+        payload.put("converted_lessons", lessons);
+        payload.put("excluded_backlog_count", excludedBacklogCount);
+        payload.put("current_product_build", productBuilds.isEmpty() ? null : productBuilds.get(0).get("build"));
+        payload.put("build_history", productBuilds);
+        payload.put("archived_build_count", archivedBuildCount);
         payload.put("metadata_warnings", metadataWarnings);
         return payload;
     }
 
     // --- File loading -------------------------------------------------------
 
-    private record FileLoad(Map<String, Object> value, boolean present) {
+    private record FileLoad(Map<String, Object> value, boolean present, String digest) {
     }
 
     private FileLoad loadObject(String relativePath) {
         Path path = projectDirectory.resolve(relativePath);
         try {
-            Map<String, Object> value = MAPPER.readValue(path.toFile(), new TypeReference<Map<String, Object>>() {
+            byte[] bytes = Files.readAllBytes(path);
+            Map<String, Object> value = MAPPER.readValue(bytes, new TypeReference<Map<String, Object>>() {
             });
-            return new FileLoad(value, true);
+            return new FileLoad(Objects.requireNonNull(value), true, sha256(new String(bytes, java.nio.charset.StandardCharsets.UTF_8)));
         } catch (IOException | RuntimeException e) {
-            return new FileLoad(Map.of(), false);
+            return new FileLoad(Map.of(), false, "UNAVAILABLE");
+        }
+    }
+
+    private static String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
         }
     }
 

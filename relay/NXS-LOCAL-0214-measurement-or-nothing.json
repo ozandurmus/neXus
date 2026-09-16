@@ -1,0 +1,162 @@
+{
+  "created_at": "2026-09-15T12:00:27Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A discovery run that fails records a reason class that names the failure, and the run summary no longer reads failure_reason_class:FAILED.",
+          "A FAILED job row carries a non-empty outcome, a non-empty terminal_reason and a finished_at.",
+          "No measurement column is populated from a value that is not a measurement, at either call site.",
+          "Named tests hold each of the three, and one of them fails if a derived length is reintroduced.",
+          "The worker and job-engine suites and the repository privacy gate pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (FROZEN), section 2: outcome, terminal_reason and finished_at are set once, on the single legal transition into a terminal state. Section 3 defines FAILED as a definite, non-ambiguous failure.",
+          "observed": "A Check Point discovery run failed on HOST-A on 2026-09-15. The job row said FAILED with outcome, terminal_reason and finished_at all empty; the run summary said failure_reason_class:FAILED, which is circular; and the step attempt carried matched_expectation NULL with output_bytes and output_lines both zero. The zeros were hardcoded literals, not measurements.",
+          "what_exists": "A previous attempt, pull request #364 on branch feature/a-failed-job-says-why, fixed two of the three defects well and replaced the third with a worse one. Read that diff before starting: take the parts named good, do not take the part named bad.\n\nGOOD, and worth reusing. The vendor failure value is carried into a closed set instead of being discarded:\n\n  case ManagementPlaneEnumerationResult.Failed failed -> EnumerationOutcome.failed(failureClass(failed.reason()));\n\n  private static String failureClass(String reason) {\n      return switch (reason) {\n          case \"unreachable\" -> \"UNREACHABLE\";\n          case \"refused\" -> \"REFUSED\";\n          default -> \"UNKNOWN_FAILURE\";\n      };\n  }\n\nand the reason now reaches the terminal write, and matched_expectation carries outcome.succeeded rather than null.\n\nBAD, and the reason this movement exists:\n\n  private static long measurementBytes(EnumerationOutcome outcome) {\n      return outcome.toString().getBytes(StandardCharsets.UTF_8).length;\n  }\n  private static long measurementLines(EnumerationOutcome outcome) {\n      return outcome.toString().lines().count();\n  }\n\noutput_bytes and output_lines are columns that say what the step SAW. These fill them with the length of a Java object's debug string. That is worse than the hardcoded zero it replaced: a zero is visibly wrong and invites the question, while a plausible number is read as a measurement and never questioned again.\n\nThe same hardcoded zeros exist at the other call site,\nui2/job-engine/src/main/java/.../executor/StepExecutor.java:263:\n\n  attemptRepository.writeOutcome(attemptId, leaseEpoch, outcome, errorClass, 0L, 0L, ...)\n\nThe repository signature is\nui2/job-engine/src/main/java/.../stepattempt/JobStepAttemptRepository.java:23."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/a-measurement-or-nothing"
+        },
+        "invariants": [
+          "C2 section 3: a terminal state is written once, under the claiming worker's lease epoch. Do not add a second write path.",
+          "No schema migration.",
+          "EXPECTATION_UNMET and MATCHED keep their current meaning."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "A job that reaches a terminal state records why, and the step attempt's measurement columns hold a measurement or nothing at all -- never a number derived from something else.",
+        "output_contract": [
+          "One pull request on feature/a-measurement-or-nothing.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "A previous attempt got two thirds right and replaced the third with a subtler defect. The judgement required is knowing when a number should not be produced at all, which is the part that was already failed once.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "AGENTS.md prefers an explicit UNKNOWN over an invented certainty. A derived length IS an invented certainty here, and the packet's own words for it are the acceptance criterion.",
+          "A reason class is a closed enumeration defined in source, never a string built at a call site, and it carries no vendor message, address, hostname or credential.",
+          "State in the pull request which resolution the measurement columns took and why. If they are left unmeasured, say what would have to change for them to be measured."
+        ],
+        "risks": [
+          "The measurement question is the whole point of this movement. Producing a number that looks like a measurement is the failure it exists to correct, and a second attempt at it would be the third.",
+          "Reading pull request #364 wholesale would reintroduce the defect. Take its reason chain; leave its measurement helpers."
+        ],
+        "scope": {
+          "in": [
+            "Carry the vendor failure value into a closed reason class, and persist the terminal triple -- outcome, terminal_reason, finished_at -- on the transition into a terminal state, as C2 section 2 requires.",
+            "Resolve output_bytes and output_lines honestly, at BOTH call sites. Either carry a real count from where the response actually arrives, or leave the columns explicitly unmeasured and say so in the source.",
+            "Targeted tests: a failed discovery writes a named reason class; a FAILED job row carries a non-empty terminal_reason and a finished_at; and a test that fails if a measurement column is filled from anything other than a measurement."
+          ],
+          "out": [
+            "Retaining or logging a raw vendor response. The reason is a safe class; a vendor message is never copied through.",
+            "Changing the job state machine or adding a second terminal write path.",
+            "Any schema migration. The columns exist.",
+            "Deriving a measurement from an object, a string, a record or a summary. If the count is not available, it is not available."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew --no-daemon --console=plain :worker:test :job-engine:test"
+            ],
+            "name": "worker_and_job_engine_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T12:00:27Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "Discovery failures now map vendor failure values to UNREACHABLE, REFUSED, or UNKNOWN_FAILURE without retaining vendor messages.",
+          "The existing fenced terminal transition now writes state, outcome, terminal_reason, and finished_at in one SQL statement.",
+          "Both affected executor paths persist output_bytes and output_lines as NULL because no genuine response measurement reaches them; matched_expectation is persisted separately.",
+          "Focused tests assert the named failure class, terminal triple, and absent measurements."
+        ],
+        "completed": [
+          "Implemented the bounded source and test diff; publication and automated validation remain blocked by host tooling."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "No change."
+        },
+        "integration": {
+          "branch": "feature/a-measurement-or-nothing",
+          "ci": "NOT RUN: no commit or pull request could be created.",
+          "head_sha": "d9d9ea1",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode remains in force; no merge command was run.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0214",
+          "movement_type": "VALIDATION",
+          "objective": "Use a worker with the existing Java runtime and writable Git metadata to run the focused suites and privacy gate, commit the preserved diff, push the lane, and open the pull request.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "The existing fenced transition remains the only terminal write path.",
+          "No schema migration was added.",
+          "MATCHED and EXPECTATION_UNMET retain their meanings.",
+          "No raw vendor response or vendor message is retained or logged."
+        ],
+        "recommended_reasoning": {
+          "reason": "No architecture or vendor-semantic decision remains; the next step is mechanical validation and publication.",
+          "tier": "standard validation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The Java changes have not compiled or run because the host could not locate its Java runtime.",
+          "Git publication is blocked because the worker sandbox cannot create the shared worktree index.lock."
+        ],
+        "validation": {
+          "affected": "NOT RUN: validation stopped at the existing-runtime failure as required.",
+          "diff_check": "PASS: git diff --check origin/main produced no findings.",
+          "full_regression": "NOT RUN: outside the dispatch validation plan and blocked by the missing runtime.",
+          "privacy": "NOT RUN: validation stopped at the existing-runtime failure as required.",
+          "real_environment": "NOT APPLICABLE: local validation only.",
+          "state_consistency": "NOT RUN: the build did not reach state update.",
+          "targeted": "BLOCKED: the mandated Gradle command exited before compilation because the host could not locate a Java runtime."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T12:09:04Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0214",
+  "movement": "NXS-LOCAL-0214",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T12:09:04Z"
+}

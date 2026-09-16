@@ -1,0 +1,181 @@
+{
+  "created_at": "2026-09-15T16:18:34Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "C9 role activates an exclusive readonly session and v1 DeviceRegistration payload is projected server-side.",
+          "Adversarial tests prove raw values absent and pseudonyms stable across sessions.",
+          "Unclassified fields omitted/refused; all other surfaces refused; validation/privacy gates truthfully reported."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN); C9 is the frozen successor scope on origin/main.",
+          "observed": "C9 merged in PR #392 authorizes v1 only: DeviceRegistrationController GET /devices and GET /devices/{deviceId}, exclusive replay session, role:replay_viewer activation, durable server-only HMAC key, activation-only audit, fail-closed unclassified fields/surfaces. No other controller/surface is in scope.",
+          "what_exists": "C9 §§3–11 are binding. C9 requires confirming types for excluded fields before wiring; unclassified fields remain excluded. Browser never selects projection."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/replay-viewer-v1"
+        },
+        "invariants": [
+          "No raw identity/free text/path/secret leaks in replay response.",
+          "Replay session cannot write or access out-of-scope routes.",
+          "No browser transform choice and no root bypass.",
+          "No new network/device path."
+        ],
+        "merge_gate": "Worker commits only; PO opens PR, reviews verification and merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement C9 v1 production replay-viewer exclusive session and server-side anonymized DeviceRegistration read surface.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE with route coverage, key custody, field classifications and validation outcome.",
+          "Clean worktree; no PR/merge/host/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "C9 is a new RBAC/session/privacy response boundary; gpt-5.6-sol high is minimal appropriate.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Read C9 fully and trace all callers/types before edit.",
+          "Projection runs server-side after E4, never browser-selectable. Session is exclusive readonly and initial routes only; root has no projection bypass. Unclassified fields excluded and non-v1 routes refuse.",
+          "Use durable per-installation HMAC key through existing server-side custody; never browser/API/log/repo metadata. Activation/deactivation only audit; real actor preserved.",
+          "Do not use actual production data/devices. Worker commits only; PO manages PR/merge."
+        ],
+        "risks": [
+          "Key custody and exclusive-session composition must preserve existing C3 behavior.",
+          "Missing real PostgreSQL carrier blocks integration validation, never skip."
+        ],
+        "scope": {
+          "in": [
+            "C9 §11 items 1–4 for v1 DeviceRegistration read routes: exact type confirmation, RoleToken/activation/exclusive session, server-side projection funnel and durable HMAC custody, adversarial no-raw-value and equality tests."
+          ],
+          "out": [
+            "Any non-DeviceRegistration controller, credentials/role-binding/audit screens, exports/downloads/search/cache, production data access, device/host access, k3s rollout, mockup-palace files, canonical state files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test integrationTest --tests '*Replay*'"
+            ],
+            "name": "replay_targeted"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "python3 -m pytest -q -p no:cacheprovider tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py && python3 scripts/repository_privacy_check.py"
+            ],
+            "name": "architecture_and_privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T16:18:34Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "13 scoped files committed as 6ee87af14c085856cccb6fb9e262e1c3ae28f478 on feature/replay-viewer-v1; implementation checkout: /tmp/nxs0233-publish.",
+          "V23 extends the role_bindings closed vocabulary, adds sessions.replay_viewer, and creates encrypted HMAC storage with audit redaction and SELECT/INSERT-only application grants.",
+          "Classifications: device_id and cluster_member_ref use the same device-domain HMAC label; hostname uses its device label; job.job_id uses a separate job-domain HMAC label. Classified evidence scalars and nulls are preserved; all unclassified keys are omitted or the response is refused.",
+          "Type confirmation: DeviceConfirmFacts.peerFollowOutcome and identityMismatchState are String; peerFollowReason is Optional<String>; JobRow.terminalReason is String. All remain excluded, with no new load-bearing semantic classification.",
+          "Mechanical contract/source divergence: detail hostname/model/software_version/ha_role are nested under facts, while the summary is flat; projection follows the actual controller payload.",
+          "Mechanical validation prerequisite: repaired the existing transitive com.jcraft:jsch:0.1.55 integration testRuntimeClasspath lock entry without introducing a dependency.",
+          "Sandbox denied the shared Git object-store writes. Commit/push used an isolated temporary checkout with the existing configured Git identity. The dispatch worktree was restored byte-for-byte to its clean validated baseline after successful push; both worktrees are clean.",
+          "The latest dispatch explicitly authorized opening the PR and reserved merging for the orchestrator, superseding the earlier packet no-PR closeout wording."
+        ],
+        "completed": [
+          "Implemented C9 v1 role:replay_viewer activation through the existing E1-E4 chain, without requiring role:viewer.",
+          "Implemented atomic ordinary-S1 supersession and exclusive replay-S2 creation with unchanged C3 session states, preserved CSRF and absolute deadline, and secure cookie rotation.",
+          "Implemented the single server-side response projection funnel for GET /devices and GET /devices/{deviceId}; projected detail labels resolve locally to opaque raw IDs.",
+          "Implemented exclusive replay route refusal for every other registered/unmapped surface and write, including root; explicit deactivation revokes the session and clears its cookie.",
+          "Implemented a durable per-installation, 256-bit HMAC key generated on first activation, encrypted using existing GroupReferenceCipher custody, retained server-side in replay_projection_key, with no v1 rotation capability.",
+          "Added adversarial serialization, cross-session equality, domain separation, opaque identity, route enumeration, browser-override, custody-failure and activation-failure checks plus a required real-PostgreSQL replay integration test.",
+          "Opened PR #393; merge was not executed."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "Unchanged; no deployment, host/device or production data effects.",
+          "ui": "Server API/session boundary only; frontend unchanged. Delivered code remains in PR #393 and /tmp/nxs0233-publish; original dispatch source restored to baseline."
+        },
+        "integration": {
+          "branch": "feature/replay-viewer-v1",
+          "ci": "regression-scope SUCCESS; po-scope-check SKIPPED; validate and full-regression IN_PROGRESS at closeout.",
+          "head_sha": "6ee87af14c085856cccb6fb9e262e1c3ae28f478",
+          "merge_commit": null,
+          "merge_decision": "No merge executed. Explicit --merge-mode orchestrator dispatch reserves merge for the orchestrator after its own verification.",
+          "merge_state": "OPEN",
+          "pr": 393,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/393"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0233 validation follow-up",
+          "movement_type": "VALIDATION",
+          "objective": "Orchestrator verifies PR #393 head using the isolated publish checkout or its own fetched checkout, supplies the already-approved real PostgreSQL 16 and prebuilt frontend carriers, runs required integration/full/privacy gates, then obtains human real-environment evidence before DONE. Orchestrator alone merges after its verification passes.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "C3 E1-E4 authorization behavior, expiry, CSRF/origin checks, root PERMITTED authorization decisions and existing session lifecycle vocabulary.",
+          "Real actor attribution in activation/deactivation audit rows; read-time authz decisions remain separate from mutation audit. Wrapped HMAC material is redacted by the existing audit mechanism.",
+          "No browser projection control or root presentation bypass; no frontend or non-DeviceRegistration controller changes.",
+          "No production data, host/device access, network-device path, credentials/role-binding/audit screen, exports/search/cache, deployment or canonical project-state changes."
+        ],
+        "recommended_reasoning": {
+          "reason": "Implementation boundary and C3 regression checks are complete; next work is carrier-backed validation. Escalate only if database custody/session evidence reveals a semantic or security conflict.",
+          "tier": "targeted validation"
+        },
+        "state_updates": [
+          "Canonical project-state files and AI_HANDOVER.md not modified under the explicit bounded worker dispatch.",
+          "SESSION_CLOSE report file: /tmp/nxs0233-session-close.json. Canonical durable relay: /Users/OzanDur/Codo/nexus/relay/NXS-LOCAL-0233-replay-viewer-v1.json."
+        ],
+        "unresolved_risks": [
+          "Real PostgreSQL 16 carrier is unavailable; V23 database atomicity, persistent key custody, grants and audit integration assertions are not yet validated. The integration test fails rather than skips.",
+          "Missing prebuilt frontend bundle prevents a truthful full-regression green result for the dispatch command.",
+          "Human real-environment validation is required before DONE. Outcome is PARTIAL, not production certification.",
+          "IMPORTANT: original dispatch HEAD remains baseline 2dafa730f2525c88f13c89af775d400a1464d3f7 because its shared Git object store is outside sandbox write permissions. Orchestrator must verify PR head 6ee87af14c085856cccb6fb9e262e1c3ae28f478 in /tmp/nxs0233-publish or fetch that head into its own authorized checkout, not validate the restored dispatch baseline.",
+          "CI validate/full-regression checks were still IN_PROGRESS at publication; no CI success or merge claimed."
+        ],
+        "validation": {
+          "affected": "PASS: 45 affected replay/gate/RBAC/session service tests and 14 ArchUnit architecture checks. Logs: /tmp/nxs0233-regression.log.",
+          "diff_check": "PASS: git diff --check origin/main before commit and after publication; staged diff check passed.",
+          "full_regression": "NOT GREEN: dispatch test integrationTest command encountered the missing prebuilt frontend /static/index.html and the existing integration JSch lock omission. Lock omission repaired; isolated integration rerun then failed at required real PostgreSQL carrier acquisition. No full-suite success claimed. Logs: /tmp/nxs0233-replay.log and /tmp/nxs0233-integration.log.",
+          "privacy": "PASS: repository privacy gate, zero findings. Final contract authority/design reference checks: 8 passed. Log: /tmp/nxs0233-privacy.log.",
+          "real_environment": "UNVERIFIED: no production or real-environment validation performed; no host/device/deployment action performed.",
+          "state_consistency": "Canonical state files intentionally untouched under dispatch scope; durable report published to canonical NXS-LOCAL-0233 relay. Both dispatch and publish worktrees clean.",
+          "targeted": "PASS: six ReplayViewerBoundaryTest checks; final affected service run contains 45 tests, zero failures/errors/skips. Required PostgreSQL replay integration test FAILED at carrier acquisition, zero skips: no real PostgreSQL 16 carrier is available. Database semantics remain UNVERIFIED."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T16:31:13Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0233",
+  "movement": "NXS-LOCAL-0233",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T16:31:13Z"
+}

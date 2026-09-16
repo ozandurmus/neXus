@@ -1,0 +1,174 @@
+{
+  "created_at": "2026-09-15T17:04:17Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract fixes isolation and data-flow boundaries plus human rollout/rollback checks.",
+          "Implementation successor has exact files and real-environment DoD.",
+          "Privacy/authority/diff pass; no manifests/host operations in this movement."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md (FROZEN); C8/C9 frozen scopes on origin/main; explicit Product Owner instruction authorizes this hosted replay-environment contract.",
+          "observed": "Product Owner wants a HOST-A test server so the agent can browse replay UI with a readonly user after replay RBAC exists. Production ui2 remains live; replay must be isolated by namespace, storage, credentials, DB and ingress.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-replay-host-a-contract"
+        },
+        "invariants": [
+          "No cross-namespace production data or credential access.",
+          "No raw production data in replay server.",
+          "No agent host command.",
+          "Replay viewer read-only and no device path."
+        ],
+        "merge_gate": "Worker commits only; PO opens/merges. FROZEN status is explicitly authorized by Product Owner.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Design and freeze the HOST-A isolated ui2-replay namespace contract for synthetic and future HMAC-anonymized replay packages.",
+        "output_contract": [
+          "Frozen contract commit and SESSION_CLOSE.",
+          "No host/data/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Namespace/data/RBAC isolation is a deployment security boundary; Claude Sonnet 5 high.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "Define distinct namespace, DB, secrets, PVC, service/ingress, labels, NetworkPolicy and image selection; no resource may reference production ui2 namespace storage/secrets/DB.",
+          "Synthetic data is first mode. Future production replay input is a privacy-gated HMAC-anonymized package only, never a direct production DB mount/connection.",
+          "Readonly replay viewer only; no device transports, collection, admin writes, export or raw values. Ingress exposure must be bounded and the human-run rollback fully specified.",
+          "Read C8/C9/B1-01C and existing HOST-A manifest conventions. User authorizes FROZEN status after review; worker commits only, PO PR/merge."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "One FROZEN deployment contract for an isolated HOST-A ui2-replay environment, plus exact manifest/rollout/rollback successor."
+          ],
+          "out": [
+            "Any HOST-A command/apply, production ui2 namespace change, production DB/Secret/PVC access, raw production data export, device access, implementation source/state files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py"
+            ],
+            "name": "authority"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T17:04:17Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "docs/design/UI2_0_C11_HOST_A_REPLAY_NAMESPACE_ISOLATION_CONTRACT.md (new, FROZEN)"
+        ],
+        "completed": [
+          "Froze docs/design/UI2_0_C11_HOST_A_REPLAY_NAMESPACE_ISOLATION_CONTRACT.md: distinct ui2-replay namespace, labels, image selection, database/Secret/PVC, Service, Ingress, and NetworkPolicy, isolated from production ui2.",
+          "Fixed the synthetic-first / future-HMAC-anonymized-package data-flow boundary, with the future package path forward-bounded but not designed or authorized here.",
+          "Fixed the readonly-viewer identity decision: reuse C8's embedded UnboundID fixture, seeded identity bound to role:replay_viewer instead of role:viewer.",
+          "Fixed the human-run rollout order and a fully specified, namespace-deletion-based rollback.",
+          "Named the exact implementation successor file set (deploy/ui2-replay/*, tests/test_ui2_replay_deployment_manifests.py) and its real-environment Definition of Done."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- no source file changed",
+          "ui": "none -- no UI module, template, or payload builder changed"
+        },
+        "integration": {
+          "branch": "feature/ui2-replay-host-a-contract",
+          "ci": "PENDING -- PR just opened, awaiting orchestrator CI verification",
+          "head_sha": "c6a543bec823e6e56b05b9bcce61313d619bd3a6",
+          "merge_commit": null,
+          "merge_decision": "PENDING -- merge-mode orchestrator; PO/orchestrator merges after its own verification passes",
+          "merge_state": "OPEN",
+          "pr": 397,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/397"
+        },
+        "next": {
+          "movement": "TBD (successor to NXS-LOCAL-0239)",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Build deploy/ui2-replay/ manifests and tests/test_ui2_replay_deployment_manifests.py per UI2_0_C11_HOST_A_REPLAY_NAMESPACE_ISOLATION_CONTRACT.md Section 14, gated on HOST-A reaching HOST_W1 and a separate Product Owner rollout authorization.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No manifest under deploy/ui2/ or deploy/ui2-replay/ was created or edited -- this movement is a design document only.",
+          "No HOST-A command was executed; no namespace, Secret, PVC, or NetworkPolicy was applied anywhere.",
+          "No production ui2 namespace, Secret, PVC, or database was read, connected to, or referenced by value in the new document.",
+          "No device access, no implementation source, and no project/*.json state file was touched.",
+          "C8's and C9's own frozen decisions (mockup-palace profile name, v1 seed scope, role:replay_viewer activation shape, field classification table) are cited and reused unchanged, never re-opened."
+        ],
+        "recommended_reasoning": {
+          "reason": "The successor is a deterministic manifest build inside an already-frozen contract, mirroring UI2_0_C_POSTGRESQL_NETWORKPOLICY_CONTRACT.md's own successor split between AUTOMATED_VALIDATED and REAL_ENV_VALIDATED; no new architecture decision is expected absent contradicting HOST-A evidence.",
+          "tier": "feature implementation / medium for the successor's manifest build; escalate only if HOST-A's real network/CNI evidence contradicts this contract's NetworkPolicy assumptions or a new security boundary decision is required"
+        },
+        "state_updates": [
+          "None -- this ARCHITECTURE movement adds one docs/design/*.md contract and touches no project/*.json, CURRENT_STATE.md, or roadmap/backlog file, consistent with the approved task's scope."
+        ],
+        "unresolved_risks": [
+          "U-1 (contract Section 15): whether ui2-replay and production ui2 will ever share one Kubernetes cluster is unresolved; the NetworkPolicy design is written to hold under either answer, but this is not proven, only argued from Kubernetes NetworkPolicy semantics.",
+          "U-2: HOST-A's network topology and external reachability of any future Ingress/Route is unknown to this movement; deferred to the human operator's own attestation before rollout.",
+          "HOST-A's HOST_R tier ceiling and shared-second-product-workload status (docs/design/HOST_REGISTER.md) mean the entire successor is blocked pending a Product Owner-attested HOST_W1 transition; this movement surfaces that finding but does not and cannot resolve it.",
+          "approved_task.json's baseline described existing deploy/ui2 manifests as carrying 'scheduler' labels; current deploy/ui2/ has no scheduler workload (service+worker only), and a NetworkPolicy for production ui2 was already frozen (UI2_0_C_POSTGRESQL_NETWORKPOLICY_CONTRACT.md, movement NXS-LOCAL-0235) but not yet implemented as a manifest file. This contract cites and reuses that frozen shape rather than re-deriving one, and adds no scheduler to any manifest set. Named here per the standing rule that a mechanical divergence between the brief and the code is reported, not treated as a blocker."
+        ],
+        "validation": {
+          "affected": "docs/design/UI2_0_C11_HOST_A_REPLAY_NAMESPACE_ISOLATION_CONTRACT.md only",
+          "diff_check": "PASS -- git diff --check origin/main, clean, no whitespace issues, run after staging the new file",
+          "full_regression": "Not run -- out of the approved validation_plan for this ARCHITECTURE/docs-only movement; no source, test, or manifest file changed.",
+          "privacy": "PASS -- python3 scripts/repository_privacy_check.py, 1498 files scanned, 0 findings",
+          "real_environment": "Not performed -- no HOST-A command, no manifest apply, no cluster access; this movement is a design freeze only, consistent with the approved task's 'local validation only' deployment_direction.",
+          "state_consistency": "N/A -- no project/*.json or CURRENT_STATE.md file was touched by this movement.",
+          "targeted": "PASS -- python3 -m pytest -q -p no:cacheprovider tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py (8 passed)"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T17:16:17Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0239",
+  "movement": "NXS-LOCAL-0239",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T17:16:17Z"
+}

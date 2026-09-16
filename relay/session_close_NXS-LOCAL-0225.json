@@ -1,0 +1,59 @@
+{
+  "completed": [
+    "backup_artefact.artefact_id is now artefact.ciphertextSha256() -- the real FileArtefactStore's own opaque content-address identity (C7 section 3.2's 'BRC sha256-of-ciphertext identity, kept as the value' pattern) -- instead of the storage-relative path ArtefactRef.value() produces.",
+    "The real producer path is resolved against the configured recovery-volume root and stored server-side only in recovery_volume_path, which BackupController never serializes (BackupArtefactSummary carries no path field).",
+    "Extended BackupJobExecutorEndToEndTest's happy-path test to assert against the real store-produced identifier: recorded artefact_id equals the real ciphertext digest, contains no path segment, and differs from recovery_volume_path.",
+    "Added BackupControllerTest proving the /backups and /devices/{id}/backups response bodies carry only the opaque id and never a recovery_volume_path field."
+  ],
+  "changed": [
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/backup/BackupJobExecutor.java",
+    "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/backup/BackupJobExecutorEndToEndTest.java",
+    "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/api/BackupControllerTest.java (new)"
+  ],
+  "preserved": [
+    "FileArtefactStore/ArtefactRef/ArtefactStore.ArtefactMetadata shapes unchanged.",
+    "BackupController.toSummaryBody's existing 6-field response shape unchanged.",
+    "BackupNoHttpRetrievalRouteTest's route-name grep unchanged and still passing.",
+    "V17 migration, BackupArtefactManifestRecord field order, Jooq repository SQL all unchanged."
+  ],
+  "validation": {
+    "targeted": "Ran the brief's literal `./ui2/gradlew ... test --tests '*Backup*'` (no module scoping) and it fails pre-existingly, unrelated to this change: capability-registry, ldap-adapter, platform-core, cli, job-engine have zero classes matching '*Backup*', and Gradle's default --tests behavior fails a module with 'No tests found for given includes' rather than skipping it. Re-ran scoped to the modules that actually own Backup-named tests -- `:persistence:test :worker:test :service:test --tests '*Backup*'` -- and got BUILD SUCCESSFUL: BackupJobExecutorEndToEndTest 5/5 passed, BackupControllerTest 2/2 passed, persistence's existing Backup* suite unaffected.",
+    "affected": "worker and service modules recompiled and their full Backup* suites passed (see targeted); persistence module's Backup* tests ran FROM-CACHE (unaffected by this change, persistence main sources untouched).",
+    "full_regression": "Not run -- out of the brief's validation_plan and blast radius is scoped to worker/service/persistence artefact-identity plumbing only.",
+    "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 1710 files scanned, 0 findings.",
+    "state_consistency": "Not applicable -- no project/*.json or CURRENT_STATE.md changes; this build did not touch scope/delivery-state/architecture/debt/sequencing.",
+    "diff_check": "git diff --check -- clean, exit 0.",
+    "real_environment": "Not applicable -- no device or host contact; JVM-local test doubles and a temp-directory-backed real FileArtefactStore only."
+  },
+  "unresolved_risks": [
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/artefact/BackupArtefactRetrieval.java (CLI retrieval, OR-2..OR-5) is explicitly out of scope for this movement (WORKER.md 'must not touch': retrieval/download/restore). It currently does `new ArtefactRef(artefactId)` at line 90, which only resolved to the correct file because artefact_id used to equal the storage-relative path. After this fix, artefact_id is the opaque ciphertext digest and no longer resolves to a file location by itself; the real per-artefact locator now lives only in recovery_volume_path, which BackupArtefactManifestRepository.RetrievalManifest does not currently expose to that caller. BackupArtefactRetrievalTest does not catch this because its FakeArtefactStore.retrieve() ignores the ArtefactRef argument entirely -- the break is silent under every existing automated test. A follow-up movement owning that file needs to thread recovery_volume_path (not artefact_id) through to retrieval. Not fixed here because the file is explicitly reserved out of scope for NXS-LOCAL-0225."
+  ],
+  "state_updates": [
+    "None -- this build did not change scope, delivery state, architecture, debt or sequencing; no project/*.json or CURRENT_STATE.md update required."
+  ],
+  "next": {
+    "movement": "NXS-LOCAL-0225",
+    "movement_type": "IMPLEMENTATION",
+    "status": "complete_with_followup",
+    "objective": "PO review and orchestrator verification of PR #386; a follow-up movement should fix BackupArtefactRetrieval.java's now-stale artefact_id-as-path assumption (see unresolved_risks) before any CLI backup-retrieve capability ships."
+  },
+  "recommended_reasoning": {
+    "tier": "strong implementation",
+    "reason": "Matches SESSION_START's own recommendation -- the identity boundary crosses storage/persistence/API and required tracing every caller before editing; no escalation beyond that was needed."
+  },
+  "continuation": "NEW_SESSION",
+  "integration": {
+    "branch": "feature/backup-artefact-opaque-id",
+    "head_sha": "6c3482362008a9e0799cf5899d072c017c3a791b",
+    "pr": 386,
+    "pr_url": "https://github.com/ozandurmus/neXus/pull/386",
+    "ci": "not triggered by this session (local validation only, per WORKER.md deployment_direction)",
+    "merge_state": "OPEN",
+    "merge_commit": null,
+    "merge_decision": "Not this session's decision -- merge-mode orchestrator: PR opened, SESSION_CLOSE published, orchestrator merges after its own verification passes."
+  },
+  "effects": {
+    "main_py": "none -- ui2 Java product line only, no main.py in scope.",
+    "ui": "none -- no templates/console.html, static/*.js, or payload builder touched; BackupController's response shape is unchanged (same fields, opaque value)."
+  }
+}

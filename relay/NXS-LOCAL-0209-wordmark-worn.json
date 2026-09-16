@@ -1,0 +1,160 @@
+{
+  "created_at": "2026-09-15T11:15:25Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "The login surface shows the tagline lockup and the top bar shows the wordmark without it.",
+          "The browser icon is the app mark.",
+          "Nothing renders the previous mark.",
+          "The frontend tests assert the new rendering and pass.",
+          "The repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md is not the authority here. The artwork was produced by movement NXS-LOCAL-0206 against the committed identity study and approved by the Product Owner in session on 2026-09-15; the assets and their provenance are recorded at docs/design/ui2_mockups/wordmark-option-d/README.md, merged to main in PR #366.",
+          "observed": "The application renders a wordmark that the Product Owner rejected twice. In their words, comparing it to the reference: not the slightest resemblance.",
+          "what_exists": "Six assets are on main at docs/design/ui2_mockups/wordmark-option-d/:\n\n  wordmark-tagline.svg               navy wordmark with A CLEARER TOMORROW\n  wordmark.svg                       navy wordmark, no tagline\n  app-mark.svg                       two-tone crossing X on a navy rounded square\n  wordmark-tagline-light-on-dark.svg white wordmark and tagline on navy\n  wordmark-light-on-dark.svg         white wordmark on navy\n  app-mark-light-on-dark.svg         navy tile with white perimeter, for dark surfaces\n\nEach is self-contained: letterforms are paths, with no text element, no font, no script, no embedded raster and no external reference. That property is why they render identically wherever they are used, and it must survive whatever this movement does to them.\n\nThe components that render the current mark are:\n\n  ui2/frontend/src/brand/NexusWordmark.tsx\n  ui2/frontend/src/brand/NexusMark.tsx\n\nBoth carry comments citing the same identity study and the same option D."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/the-application-wears-the-wordmark"
+        },
+        "invariants": [
+          "No font dependency is added.",
+          "The committed assets under docs/design/ui2_mockups/wordmark-option-d/ are not modified."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "UI",
+        "objective": "Put the approved option D artwork into the application, replacing the two brand components that render something else.",
+        "output_contract": [
+          "One pull request on feature/the-application-wears-the-wordmark.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "Approved assets into two named components and an icon. Bounded, with the placement decided in the packet.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "The assets keep their self-contained property. If the build inlines or transforms them, prove in the pull request that the rendered output still needs no font.",
+          "If a caller passes a size, a colour or a variant today, that interface keeps working. A brand component that forces every caller to change is a wider change than this movement.",
+          "Say in the pull request which asset went to which surface, so the Product Owner can check the placement rather than reading the diff."
+        ],
+        "risks": [
+          "Inlining an SVG through a build pipeline can silently drop attributes or rewrite identifiers. Check the rendered output, not the source file.",
+          "Two prior attempts at this brand were rejected for looking wrong. This movement does not judge the artwork; it places it. Any temptation to improve it is out of scope."
+        ],
+        "scope": {
+          "in": [
+            "Use the tagline lockup where the brand is the subject of the screen, which is the login surface.",
+            "Use the wordmark without the tagline where the brand is a label rather than a subject, which is the application top bar.",
+            "Use the app mark as the browser icon and anywhere a square brand tile is needed.",
+            "Use the light-on-dark variant of each wherever the surface behind it is dark.",
+            "Replace what NexusWordmark.tsx and NexusMark.tsx render, keeping whatever component interface their callers already depend on so that no caller has to change.",
+            "Update or add the frontend tests that assert what these components render."
+          ],
+          "out": [
+            "Redrawing, re-colouring, re-kerning or otherwise adjusting the artwork. It was approved as drawn. A change to the artwork is a new movement with the Product Owner looking at it.",
+            "Introducing a font, a web font, an icon library, or an external asset reference.",
+            "Changing any screen layout beyond what placing the correct asset requires.",
+            "Deleting the assets from docs/design/ui2_mockups/. They stay as the approved record of what was chosen."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T11:15:25Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "ui2/frontend/src/brand/NexusWordmark.tsx",
+          "ui2/frontend/src/brand/NexusMark.tsx",
+          "ui2/frontend/src/auth/LoginScreen.tsx",
+          "ui2/frontend/public/favicon.svg",
+          "ui2/frontend/tests/brand.test.tsx",
+          "ui2/frontend/tests/LoginScreen.test.tsx",
+          "ui2/frontend/tests/App.test.tsx"
+        ],
+        "completed": [
+          "Replaced the generated wordmark and mark rendering with direct references to approved option D SVG assets.",
+          "Selected the tagline lockup on the login surface and the non-tagline wordmark on application shell surfaces.",
+          "Replaced the browser favicon with the approved app mark and updated frontend assertions."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "Uncommitted option D artwork placement is present in the worker worktree."
+        },
+        "integration": {
+          "branch": "feature/the-application-wears-the-wordmark",
+          "ci": "NOT_RUN",
+          "head_sha": "NOT_CREATED",
+          "merge_commit": null,
+          "merge_decision": "No PR was opened because Git could not create the worktree index lock.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0209",
+          "movement_type": "VALIDATION",
+          "objective": "Run targeted frontend validation in a workspace with dependencies and writable Git worktree metadata, then commit, push, and open the pull request.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "The approved artwork under docs/design/ui2_mockups/wordmark-option-d/ is unchanged.",
+          "No font dependency, icon library, external asset, or SVG transformation pipeline was added.",
+          "Existing NexusWordmark height/color and NexusMark size call interfaces remain accepted."
+        ],
+        "recommended_reasoning": {
+          "reason": "The code change is bounded; the next work is environment-backed validation and Git publication.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Git metadata is outside the writable workspace roots, preventing creation of the worktree index lock and therefore the required commit, push, and PR.",
+          "Frontend tests and production build remain unverified because vitest is not installed."
+        ],
+        "validation": {
+          "affected": "NOT_RUN: the same missing frontend dependency prevents the affected frontend test run.",
+          "diff_check": "PASS: git diff --check origin/main completed before the attempted commit.",
+          "full_regression": "NOT_RUN: not authorized by the dispatch and frontend dependencies are unavailable.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py reported zero findings.",
+          "real_environment": "NOT_APPLICABLE: deployment direction is local validation only.",
+          "state_consistency": "NOT_APPLICABLE: no durable project-state file changed.",
+          "targeted": "BLOCKED: npm test -- --run tests/brand.test.tsx tests/LoginScreen.test.tsx tests/App.test.tsx could not start because vitest is not installed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T11:20:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0209",
+  "movement": "NXS-LOCAL-0209",
+  "next_actor": null,
+  "refs": [
+    "docs/design/ui2_mockups/wordmark-option-d/README.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T11:20:23Z"
+}

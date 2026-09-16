@@ -1,0 +1,167 @@
+{
+  "created_at": "2026-09-15T14:45:14Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Hook tests exercise the hook rather than Git ref errors with attached and detached source HEAD.",
+          "Successor index equals fresh render.",
+          "Targeted tests and privacy pass; report every full-suite failure honestly."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); authorizes a bounded design movement, not new transport behavior.",
+          "observed": "PR #384 GitHub run 34982180486 full-regression failed tests/test_successor_index.py::test_committed_index_matches_fresh_render and tests/test_orchestrator_install_hooks.py::test_installed_hook_denies_a_force_push. CI checkout uses detached HEAD; fixture obtains current_branch via rev-parse --abbrev-ref HEAD, giving HEAD, then push origin HEAD fails before the pre-push hook with not-a-full-refname. Targeted local successor index failure reproduced.",
+          "what_exists": "tests/test_orchestrator_install_hooks.py::_fixture_clone clones ROOT then checks out its current rev-parse --abbrev-ref HEAD result. test_installed_hook_denies_a_force_push uses that branch as push target. scripts/successor_index.py renders its INDEX; tests/test_successor_index.py demands exact equality. Reuse generator; preserve hook security enforcement."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/regression-detached-head"
+        },
+        "invariants": [
+          "Pre-push force-push/secret protections remain unchanged.",
+          "Generated successor index is deterministic and all named relations resolve.",
+          "No device/host access or migration."
+        ],
+        "merge_gate": "Worker is authorized to commit, push feature/regression-detached-head and open one PR; never merge. PO reviews and requires orchestrator verify.passed before integration.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Repair the two confirmed full-regression baseline defects: generated successor index drift and detached-HEAD hook test fixture.",
+        "output_contract": [
+          "One bounded PR and complete canonical relay SESSION_CLOSE; clean worktree; scratch outside repository.",
+          "Report targeted results and detached HEAD evidence, no fabricated full-suite success."
+        ],
+        "recommended_reasoning": {
+          "reason": "Two deterministic baseline repairs with known implementation; Claude Sonnet 5 medium, no architecture.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Trace fixture callers and reproduce detached HEAD failure in an isolated temporary repository. Fix fixture setup once for both attached/detached source checkouts; retain actual force-push rejection and ordinary-push success checks.",
+          "Regenerate exact INDEX using existing scripts/successor_index.py render; do not change generator semantics or historical contracts.",
+          "No security rule changes, no hook bypass, no skipped tests, no scope expansion. English artifacts.",
+          "Human names Claude primary and authorizes parallel work. Worker may commit/push named lane and open PR, never merge. Scratch outside repository, canonical state PO-owned."
+        ],
+        "risks": [
+          "Index path must be taken from generator, not guessed.",
+          "Detached fixture must preserve actual hook invocation."
+        ],
+        "scope": {
+          "in": [
+            "tests/test_orchestrator_install_hooks.py: deterministic named fixture branch independent of source HEAD attachment; add bounded detached-source coverage if needed.",
+            "docs/design/SUCCESSOR_INDEX.md or exact INDEX path defined in scripts/successor_index.py: generator-only refresh."
+          ],
+          "out": [
+            "Production hooks, orchestrator behavior, security/governance rules, test skipping, CI gate weakening.",
+            "All Audit, discovery, trust files reserved for 0221/0222; migrations, host/device operations and canonical project state."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_successor_index.py",
+              "tests/test_orchestrator_install_hooks.py"
+            ],
+            "name": "targeted_regression"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T14:45:14Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "tests/test_orchestrator_install_hooks.py",
+          "docs/design/DECISION_RECORD_SUCCESSOR_INDEX.md"
+        ],
+        "completed": [
+          "Fixed tests/test_orchestrator_install_hooks.py::_fixture_clone: derived its push branch from `rev-parse --abbrev-ref HEAD` on ROOT (this repository's own checkout), which returns the literal string \"HEAD\" when ROOT is a detached HEAD checkout (as CI's checkout commonly is); the fixture clone then attempted `git push origin HEAD` while itself detached, failing at the git level before the pre-push hook ever ran. Clone now checks out a deterministic named branch (gov-orch-7-fixture-base) independent of ROOT's HEAD attachment state.",
+          "Added test_fixture_clone_resolves_a_named_branch_from_a_detached_source_head, which builds a genuinely detached-HEAD bare source repository and asserts the clone still resolves to the named branch -- reproduces the original CI failure mode directly.",
+          "Regenerated docs/design/DECISION_RECORD_SUCCESSOR_INDEX.md via `python3 scripts/successor_index.py render` (generator untouched); it was missing two design records committed since the index was last regenerated."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/regression-detached-head",
+          "ci": "not yet observed by this session",
+          "head_sha": "77cc7f11a30f41bf98a7cabf888f795ea6d273fd",
+          "merge_commit": null,
+          "merge_decision": "Not merged by worker per --merge-mode orchestrator; orchestrator merges after its own verification passes.",
+          "merge_state": "OPEN",
+          "pr": 387,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/387"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0223",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "PR #387 open against main; awaiting orchestrator verify.passed under --merge-mode orchestrator (worker does not merge).",
+          "status": "complete"
+        },
+        "preserved": [
+          "Pre-push force-push and secret-push denial behavior (test_installed_hook_denies_a_force_push, test_installed_hook_allows_an_ordinary_fast_forward_push both still assert real hook invocation).",
+          "scripts/successor_index.py generator semantics -- INDEX content refreshed only, no logic change."
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic fixture/generator repair, no new architecture or vendor semantics; medium reasoning sufficed.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "First push attempt was denied by the pre-push privacy gate on gitignored runtime artifacts (data/.support_hmac.key, data/derived, logs/run_*.log) created as a side effect of running the full local pytest suite in this worktree -- unrelated to this task's file scope. Removed data/ and logs/ before re-pushing; gate then passed cleanly. Flagging in case this worktree accumulates similar runtime artifacts again before the next push."
+        ],
+        "validation": {
+          "affected": "n/a -- no non-test production code changed",
+          "diff_check": "git diff --check origin/main -- clean",
+          "full_regression": "python3 -m pytest -q -p no:cacheprovider -- 3630 passed, 25 skipped, 0 failed (788s)",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings",
+          "real_environment": "not applicable -- no network-device or host-runtime behavior changed; test-fixture and generated-doc repair only",
+          "state_consistency": "n/a -- no project/*.json or CURRENT_STATE.md touched",
+          "targeted": "python3 -m pytest -q -p no:cacheprovider tests/test_successor_index.py tests/test_orchestrator_install_hooks.py -- 7 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T15:03:08Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0223",
+  "movement": "NXS-LOCAL-0223",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T15:03:08Z"
+}

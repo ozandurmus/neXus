@@ -7,24 +7,21 @@ import com.securityexpert.nexus.ui2.platform.LdapOperatorBindPort;
 import com.securityexpert.nexus.ui2.platform.Mechanism;
 import com.securityexpert.nexus.ui2.platform.Result;
 
-/**
- * Wraps {@code C3}'s existing {@link LdapOperatorBindPort} behind the C3A
- * §2.1 {@link Mechanism} interface -- proving the registry shape it
- * describes ("adding ldap is wrapping the existing mechanism, never a line
- * of {@code C3} §2 changed") without altering one line of the bind logic
- * itself. Not wired into any running composition by this movement: no
- * directory host/CA/bind-DN configuration exists yet for this build, and
- * building that configuration is {@code C3}'s scope, not this contract's
- * (§1.2).
- */
+/** Existing registry mechanism; configured corporate admission remains disabled pending approval. */
 public final class LdapMechanism implements Mechanism {
 
     public static final String MECHANISM_ID = "ldap";
 
     private final LdapOperatorBindPort bindPort;
+    private final boolean admissionEnabled;
 
     public LdapMechanism(LdapOperatorBindPort bindPort) {
+        this(bindPort, true);
+    }
+
+    public LdapMechanism(LdapOperatorBindPort bindPort, boolean admissionEnabled) {
         this.bindPort = Objects.requireNonNull(bindPort, "bindPort");
+        this.admissionEnabled = admissionEnabled;
     }
 
     @Override
@@ -34,6 +31,10 @@ public final class LdapMechanism implements Mechanism {
 
     @Override
     public AttemptOutcome attempt(String identity, char[] credential) {
+        if (!admissionEnabled) {
+            if (credential != null) java.util.Arrays.fill(credential, '\0');
+            return AttemptOutcome.mechanismUnavailable("directory_posture_disabled");
+        }
         Result<LdapOperatorBindPort.OperatorBindOutcome> result = bindPort.bind(identity, credential);
         if (result instanceof Result.Err<LdapOperatorBindPort.OperatorBindOutcome> err) {
             if (LdapOperatorBindPort.FailureCodes.DIRECTORY_UNAVAILABLE.equals(err.code())) {
@@ -43,6 +44,7 @@ public final class LdapMechanism implements Mechanism {
         }
         LdapOperatorBindPort.OperatorBindOutcome outcome =
                 ((Result.Ok<LdapOperatorBindPort.OperatorBindOutcome>) result).value();
-        return AttemptOutcome.success(outcome.actorFingerprint());
+        if (outcome.observation() == null) return AttemptOutcome.mechanismUnavailable("directory_identity_not_proven");
+        return new AttemptOutcome.Success(outcome.actorFingerprint(), outcome.observation());
     }
 }

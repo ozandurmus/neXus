@@ -30,6 +30,7 @@ public final class GroupReferenceCipher {
     private static final int TAG_LENGTH_BITS = 128;
 
     private final SecretKeySpec key;
+    private String keyId;
 
     private GroupReferenceCipher(SecretKeySpec key) {
         this.key = key;
@@ -38,19 +39,59 @@ public final class GroupReferenceCipher {
     /** @param base64Key a base64-encoded 256-bit key, as read from a {@code _FILE} secret (never a default/literal). */
     public static GroupReferenceCipher fromBase64Key(String base64Key) {
         byte[] raw = Base64.getDecoder().decode(base64Key.strip());
-        if (raw.length != 32) {
-            throw new IllegalArgumentException("group reference encryption key must decode to 32 bytes (AES-256)");
+        try {
+            if (raw.length != 32) throw new IllegalArgumentException("group reference encryption key must decode to 32 bytes (AES-256)");
+            return new GroupReferenceCipher(new SecretKeySpec(raw, "AES"));
         }
-        return new GroupReferenceCipher(new SecretKeySpec(raw, "AES"));
+        finally { Arrays.fill(raw, (byte) 0); }
+    }
+
+    public static GroupReferenceCipher fromBase64Key(String base64Key, String keyId) {
+        if (keyId == null || keyId.isBlank()) throw new IllegalArgumentException("directory_key_id_missing");
+        GroupReferenceCipher result = fromBase64Key(base64Key);
+        result.keyId = keyId;
+        return result;
+    }
+
+    public String keyId() { return keyId; }
+
+    public byte[] encryptDirectory(String reference, String profile, DirectoryBindingKind kind) {
+        return encrypt(reference, context(profile, kind, keyId));
+    }
+
+    public String decryptDirectory(byte[] wire, String profile, DirectoryBindingKind kind, String storedKeyId) {
+        if (keyId == null || !keyId.equals(storedKeyId)) throw new IllegalArgumentException("directory_key_unavailable");
+        return decrypt(wire, context(profile, kind, storedKeyId));
+    }
+
+    private static byte[] context(String profile, DirectoryBindingKind kind, String keyId) {
+        if (profile == null || profile.isBlank() || kind == null || kind == DirectoryBindingKind.LEGACY
+                || keyId == null || keyId.isBlank()) throw new IllegalArgumentException("directory_context_missing");
+        // AAD binds type/namespace/key metadata. Old readers cannot decrypt principal ciphertext as a group.
+        java.nio.ByteBuffer context = java.nio.ByteBuffer.allocate(12 + profile.getBytes(StandardCharsets.UTF_8).length
+                + kind.name().length() + keyId.getBytes(StandardCharsets.UTF_8).length);
+        for (String value : new String[] { profile, kind.name(), keyId }) {
+            byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+            context.putInt(bytes.length).put(bytes);
+        }
+        return context.array();
     }
 
     public byte[] encrypt(String plaintextGroupReference) {
+        return encrypt(plaintextGroupReference, null);
+    }
+
+    private byte[] encrypt(String plaintextGroupReference, byte[] aad) {
         try {
             byte[] nonce = new byte[NONCE_LENGTH_BYTES];
             SecureRandom.getInstanceStrong().nextBytes(nonce);
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_LENGTH_BITS, nonce));
-            byte[] ciphertext = cipher.doFinal(plaintextGroupReference.getBytes(StandardCharsets.UTF_8));
+            if (aad != null) cipher.updateAAD(aad);
+            byte[] plaintext = plaintextGroupReference.getBytes(StandardCharsets.UTF_8);
+            byte[] ciphertext;
+            try { ciphertext = cipher.doFinal(plaintext); }
+            finally { Arrays.fill(plaintext, (byte) 0); }
             byte[] wire = new byte[nonce.length + ciphertext.length];
             System.arraycopy(nonce, 0, wire, 0, nonce.length);
             System.arraycopy(ciphertext, 0, wire, nonce.length, ciphertext.length);
@@ -60,7 +101,9 @@ public final class GroupReferenceCipher {
         }
     }
 
-    public String decrypt(byte[] wire) {
+    public String decrypt(byte[] wire) { return decrypt(wire, null); }
+
+    private String decrypt(byte[] wire, byte[] aad) {
         if (wire.length < NONCE_LENGTH_BYTES) {
             throw new IllegalArgumentException("encrypted group reference is too short to contain a nonce");
         }
@@ -69,7 +112,10 @@ public final class GroupReferenceCipher {
         try {
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_LENGTH_BITS, nonce));
-            return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
+            if (aad != null) cipher.updateAAD(aad);
+            byte[] plaintext = cipher.doFinal(ciphertext);
+            try { return new String(plaintext, StandardCharsets.UTF_8); }
+            finally { Arrays.fill(plaintext, (byte) 0); }
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("group reference decryption failed", e);
         }

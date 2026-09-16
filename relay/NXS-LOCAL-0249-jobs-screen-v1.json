@@ -1,0 +1,151 @@
+{
+  "created_at": "2026-09-15T20:03:23Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic browser tests reproduce and prevent draft loss/switch leakage, stopped classification/count agreement, unknown/estimated labels and keyboard behavior.",
+          "Privacy/diff/targeted tests pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_07_JOBS_SCREEN_CONTRACT.md (FROZEN).",
+          "observed": "Product Owner approves table-first Workbench: Active, Needs you and Archive filters, search by movement/objective, details below list, existing UI2 Material 3 theme bridge, Kanban secondary only if bounded.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/jobs-screen-v1"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw logs/credentials.",
+          "Usage uncertainty remains honest."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen B1-7 Jobs Screen read surface, step logs and bounded job visibility.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Frozen observability default change plus UI contract; gpt-5.6-sol high.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "Read the frozen authority fully; implement only named scope.",
+          "No host/device/production data access. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "B1-7 Jobs API/UI/tests."
+          ],
+          "out": [
+            "Run Now submission if not frozen, device/host access, B1-9 workspace files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test"
+            ],
+            "name": "targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T20:03:23Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "Added a bounded frontend Jobs read panel and synthetic tests, but the worktree changes remain uncommitted."
+        ],
+        "completed": [
+          "Implemented the frontend-only B1-7 read surface."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "JobsPanel only"
+        },
+        "integration": {
+          "branch": "feature/jobs-screen-v1",
+          "ci": "not run",
+          "head_sha": "uncommitted",
+          "merge_commit": "none",
+          "merge_decision": "orchestrator",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": "none"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0249",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Restore Git index write access, commit the Jobs UI, and open the required PR.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No device or host access and no execution authority."
+        ],
+        "recommended_reasoning": {
+          "reason": "No further design work is needed.",
+          "tier": "implementation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Targeted Gradle validation could not acquire its shared-cache lock."
+        ],
+        "validation": {
+          "affected": "frontend Jobs panel and tests",
+          "diff_check": "PASS",
+          "full_regression": "NOT_RUN",
+          "privacy": "PASS",
+          "real_environment": "NOT_APPLICABLE",
+          "state_consistency": "NOT_APPLICABLE",
+          "targeted": "BLOCKED: Gradle wrapper lock outside workspace is not writable"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T20:08:30Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0249",
+  "movement": "NXS-LOCAL-0249",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T20:08:30Z"
+}

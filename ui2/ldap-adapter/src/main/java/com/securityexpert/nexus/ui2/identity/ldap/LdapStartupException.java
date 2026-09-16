@@ -12,6 +12,6 @@ public final class LdapStartupException extends RuntimeException {
     }
 
     public LdapStartupException(String reason, Throwable cause) {
-        super("ldap operator-bind adapter failed to start: " + reason, cause);
+        super("ldap operator-bind adapter failed to start: " + reason);
     }
 }

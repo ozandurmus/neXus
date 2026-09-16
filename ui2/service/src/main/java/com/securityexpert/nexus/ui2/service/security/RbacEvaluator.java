@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.service.security;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import com.securityexpert.nexus.ui2.platform.DirectoryBindingKind;
 
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
@@ -25,6 +26,8 @@ public final class RbacEvaluator {
     public static final String REASON_ACTOR_NOT_IN_REQUIRED_GROUP = "actor_not_in_required_group";
     public static final String REASON_ROLE_TOKEN_UNBOUND = "role_token_unbound";
     public static final String REASON_ACTOR_GROUP_SET_STALE = "actor_group_set_stale";
+    public static final String REASON_DIRECTORY_BINDING_NOT_EVALUABLE = "directory_binding_not_evaluable";
+    public static final String REASON_ACTOR_NOT_IN_REQUIRED_BINDING = "actor_not_in_required_binding";
     public static final String AUTHORITY = "ui2_ldap";
     public static final String LOCAL_AUTHORITY = "ui2_local";
     public static final String ROOT_AUTHORITY = "ui2_root";
@@ -100,9 +103,18 @@ public final class RbacEvaluator {
         }
     }
 
+    private static Decision directoryNotEvaluable() {
+        return new Decision(AuthzOutcome.AUTHZ_NOT_EVALUATED, Optional.of(AUTHORITY),
+                Optional.of(REASON_DIRECTORY_BINDING_NOT_EVALUABLE), Optional.empty());
+    }
+
     public Decision evaluate(String actorFingerprint, Optional<RoleToken> requiredToken, Instant now) {
         Optional<String> localIdentityId = localIdentityResolver == null ? Optional.empty()
                 : localIdentityResolver.resolve(actorFingerprint).map(record -> record.localIdentityId());
+        Optional<ActorAuthzStateRecord> authzState = actorAuthzStateRepository.find(actorFingerprint);
+        if (localIdentityId.isPresent() && authzState.filter(state -> state.directoryProfileId() != null).isPresent()) {
+            return directoryNotEvaluable();
+        }
         if (localIdentityId.isPresent() && rootIdentityRepository != null
                 && rootIdentityRepository.rootLocalIdentityId().filter(localIdentityId.get()::equals).isPresent()) {
             return Decision.permittedRoot();
@@ -126,7 +138,6 @@ public final class RbacEvaluator {
             return Decision.notEvaluatedUnbound();
         }
 
-        Optional<ActorAuthzStateRecord> authzState = actorAuthzStateRepository.find(actorFingerprint);
         if (authzState.isEmpty() || !authzState.get().isFresh(now)) {
             // actor_group_set_stale: no fresh resolved group set to
             // evaluate against -- AUTHZ_NOT_EVALUATED, never DENIED, never
@@ -134,13 +145,35 @@ public final class RbacEvaluator {
             return Decision.notEvaluatedStale();
         }
 
-        var actorGroupReferences = authzState.get().groupReferences();
+        ActorAuthzStateRecord state = authzState.get();
+        if (!state.hasDirectoryProof()) return directoryNotEvaluable();
+        String principal;
+        try {
+            principal = groupReferenceCipher.decryptDirectory(state.principalReferenceEncrypted(), state.directoryProfileId(),
+                    DirectoryBindingKind.DIRECTORY_PRINCIPAL, state.principalReferenceKeyId());
+            if (principal.isBlank()) return directoryNotEvaluable();
+        } catch (RuntimeException e) { return directoryNotEvaluable(); }
+        boolean unevaluable = false;
+        String match = null;
         for (RoleBindingRecord binding : activeBindings) {
-            String plaintextGroupReference = groupReferenceCipher.decrypt(binding.groupReferenceEncrypted());
-            if (actorGroupReferences.contains(plaintextGroupReference)) {
-                return Decision.permitted(binding.bindingId());
+            if (!binding.isActive()) continue;
+            if (binding.bindingKind() == null || binding.bindingKind() == DirectoryBindingKind.LEGACY
+                    || !state.directoryProfileId().equals(binding.directoryProfileId())) {
+                unevaluable = true;
+                continue;
             }
+            try {
+                String reference = groupReferenceCipher.decryptDirectory(binding.groupReferenceEncrypted(), binding.directoryProfileId(),
+                        binding.bindingKind(), binding.groupReferenceKeyId());
+                boolean matches = binding.bindingKind() == DirectoryBindingKind.DIRECTORY_GROUP
+                        ? state.groupReferences().contains(reference) : principal.equals(reference);
+                if (reference.isBlank()) { unevaluable = true; continue; }
+                if (matches && (match == null || binding.bindingId().compareTo(match) < 0)) match = binding.bindingId();
+            } catch (RuntimeException e) { unevaluable = true; }
         }
-        return Decision.deniedNotInGroup();
+        if (match != null) return Decision.permitted(match);
+        if (unevaluable) return directoryNotEvaluable();
+        return new Decision(AuthzOutcome.DENIED, Optional.of(AUTHORITY),
+                Optional.of(REASON_ACTOR_NOT_IN_REQUIRED_BINDING), Optional.empty());
     }
 }

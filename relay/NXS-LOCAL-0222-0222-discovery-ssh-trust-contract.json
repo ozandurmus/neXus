@@ -1,0 +1,174 @@
+{
+  "created_at": "2026-09-15T14:43:53Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "One explicitly DRAFT contract traces the actual current flow and contradiction with exact source/contract references.",
+          "Contract states trust observation/verification/authorization/lifecycle, caller coverage, failure classes, required gates and real-environment DoD without inventing unresolved decisions.",
+          "Only named design document changed; required validation recorded truthfully."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); authorizes a bounded design movement, not new transport behavior.",
+          "observed": "Human explicitly requests dispatch now and names Claude the primary developer. Live authenticated discovery response has vendor check_point, state FAILED, outcome_summary {\"failure_reason_class:UNKNOWN_FAILURE\":1}, candidates []. Human reports UI2_CP_DISCOVERY_TRUST_DEFAULT_FINGERPRINT MISSING in the deployed worker. This proves a trust provisioning gap, not the exclusive failure cause.",
+          "what_exists": "DiscoveryJobExecutor.CP_TRUST_RULE_REF = \"cp_discovery_trust_default\"; Ui2WorkerMain resolves UI2_<UPPERCASE_TRUST_REF>_FINGERPRINT. SshExecTransport.fingerprintOf hashes SSH public key blob with SHA-256 into lowercase hex; HostKeyVerifier compares exactly. ManagementPlaneEnumerationAdapter collapses every non-Authenticated ConnectResult to Failed(\"management-plane session could not be authenticated\",0,NOT_OPENED), then executor maps it to UNKNOWN_FAILURE. Existing P0 queue item ui2_ssh_strict_host_key_trust_in_production has an older connect-on-mismatch description conflicting with fail-closed host-key law. Review that contradiction explicitly."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/discovery-ssh-trust-contract"
+        },
+        "invariants": [
+          "No Browser to device path.",
+          "Production SSH requires trusted host keys; no trust-on-first-use.",
+          "Opaque identifiers and fail-closed boundaries remain intact.",
+          "No agent host reach, credentials or device contact."
+        ],
+        "merge_gate": "Worker is authorized to commit and push feature/discovery-ssh-trust-contract and open one draft PR. Worker never merges or freezes. PO reviews verify results; human decides security-contract approval before implementation.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Draft the discovery-integrated management-endpoint-scoped SSH trust enrollment contract; do not implement or freeze it.",
+        "output_contract": [
+          "Draft PR plus complete SESSION_CLOSE in canonical relay; scratch outside worktree; final clean worktree.",
+          "Name changed files, source-traced findings, open decisions and explicit implementation successor. No claimed real-environment validation."
+        ],
+        "recommended_reasoning": {
+          "reason": "New persisted trust and credential-before-auth boundary require security design, not a mechanical UI patch. Claude Sonnet 5 high per explicit human provider directive.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "Read applicable existing frozen transport/discovery/security contracts fully, reached by targeted lookup. Reuse controlled application transport and existing trust verifier rather than a parallel diagnostic credential path.",
+          "Design management-endpoint/key-algorithm-scoped trust, bounded public host-key observation without transmitting credentials before trust approval, independent verification, explicitly authorized enrollment, key-change refusal and auditable trust lifecycle. Identify required network-command/security gates; do not assume new probes are approved.",
+          "Never connect authenticated on mismatch, accept-any or automatically trust first use. Explain distinction between key observation and trust verification, safe UI disclosure vs shareable artifacts, and why one global pin is inadequate.",
+          "Design safe structured failure propagation from existing ConnectResult variants; never persist raw errors/vendor responses or operational identity values in artifacts.",
+          "Mark unresolved authorization, storage, protocol negotiation, trust scope and vendor semantics UNKNOWN; draft only, no freezing. No migration number is assigned or permitted.",
+          "User directs Claude as primary. Use English engineering artifacts. Worker may commit, push named branch and open one draft PR, never merge. No canonical project state edits; return recommendations in SESSION_CLOSE. Scratch outside repository."
+        ],
+        "risks": [
+          "Missing pin explains a concrete gap but UNKNOWN_FAILURE may also mask later enumeration failures.",
+          "New trust storage and approval semantics require a frozen contract before implementation."
+        ],
+        "scope": {
+          "in": [
+            "One new DRAFT docs/design/UI2_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md.",
+            "Targeted source/test/contract audit of existing SSH trust, discovery, identity and credential paths; proposed bounded acceptance tests in the draft."
+          ],
+          "out": [
+            "All implementation files, migrations, runtime configuration, host/device commands, existing FROZEN document edits, governance edits, canonical queue/state files.",
+            "Parallel 0221 Audit implementation and 0220 discovery display files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py"
+            ],
+            "name": "authority_references"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T14:43:53Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "docs/design/UI2_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md (new file, DRAFT status)"
+        ],
+        "completed": [
+          "One explicitly DRAFT contract, docs/design/UI2_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md, tracing the discovery-run SSH host-key trust flow to source with exact file/line references.",
+          "Documented the one-global-pin-per-vendor scoping gap (DiscoveryJobExecutor.CP_TRUST_RULE_REF/PAN_TRUST_RULE_REF) and the two divergent trust-resolution paths (deployed Ui2WorkerMain vs standalone DiscoveryRunnerMain/PanDiscoveryRunnerMain).",
+          "Traced the observed live UNKNOWN_FAILURE symptom through ManagementPlaneEnumerationAdapter's ConnectResult collapse into DiscoveryJobExecutor.failureClass.",
+          "Reported, without resolving, the contradiction between P0 queue item ui2_ssh_strict_host_key_trust_in_production and the current fail-closed transport, distinguished explicitly from DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md EC-4..EC-10's separate business-identity-mismatch layer.",
+          "Proposed observation/verification/authorization/lifecycle vocabulary, management-endpoint scoping, caller coverage, failure-class taxonomy, required gates, bounded acceptance tests and a real-environment DoD -- all marked as proposals for a future FROZEN successor, not decisions.",
+          "Opened draft PR #385 on feature/discovery-ssh-trust-contract; did not merge (orchestrator merge mode)."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "None -- no runtime code touched.",
+          "ui": "None -- no UI module touched."
+        },
+        "integration": {
+          "branch": "feature/discovery-ssh-trust-contract",
+          "ci": "not observed by this session -- PR opened as draft, worker did not poll CI per merge-mode orchestrator instructions",
+          "head_sha": "ff721c9f05e6a45e7367ce8ddd51f15e8cb3ebd8",
+          "merge_commit": null,
+          "merge_decision": "Not merged by worker per --merge-mode orchestrator; orchestrator merges after its own verification.",
+          "merge_state": "OPEN",
+          "pr": 385,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/385"
+        },
+        "next": {
+          "movement": "successor to NXS-LOCAL-0222 (unassigned)",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Freeze a management-endpoint-scoped SSH trust enrollment contract resolving this draft's four Product Owner open items (queue-item contradiction, standalone-CLI disposition, authorization workflow/role, Check-Point-only vs both-vendors scope) before any implementation.",
+          "status": "planned"
+        },
+        "preserved": [
+          "SshExecTransport/HostKeyVerifier fail-closed behavior (StrictHostKeyChecking=yes, no-op HostKeyRepository.add) -- unchanged, confirmed correct against AGENTS.md Check Point law.",
+          "All existing FROZEN contracts unmodified.",
+          "project/QUEUE.md and all canonical project/*.json state files unmodified."
+        ],
+        "recommended_reasoning": {
+          "reason": "Freezing this successor is a security-boundary decision (new persisted trust, credential-before-auth ordering) requiring PO adjudication of the reported contradiction plus RBAC/storage design -- not a mechanical patch.",
+          "tier": "architecture and feature design"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The queue-item contradiction (project/QUEUE.md ui2_ssh_strict_host_key_trust_in_production vs the fail-closed transport) remains unadjudicated; this document reports it rather than resolving it.",
+          "UNKNOWN_FAILURE today can mean either a missing trust pin or a genuine host-key mismatch or an unrelated enumeration failure -- the current collapse in ManagementPlaneEnumerationAdapter/DiscoveryJobExecutor cannot distinguish them, so the missing-pin explanation is not proven exclusive."
+        ],
+        "validation": {
+          "affected": "Not applicable -- no source or runtime file changed, only a new DRAFT design document.",
+          "diff_check": "git diff --check --cached origin/main -- clean, no output.",
+          "full_regression": "Not run -- out of this movement's scope (docs-only DRAFT, ARCHITECTURE movement type; WORKER.md names only the two authority/cross-reference tests plus the privacy gate and diff-check).",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings, 1491 files scanned, 795 skipped.",
+          "real_environment": "None claimed. This is a DRAFT design document; no real Check Point or Palo Alto management server was contacted.",
+          "state_consistency": "Not applicable -- no project/*.json or CURRENT_STATE.md change.",
+          "targeted": "python3 -m pytest -q -p no:cacheprovider tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py -- 8 passed, 0 failed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T14:50:26Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0222",
+  "movement": "NXS-LOCAL-0222",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T14:50:26Z"
+}

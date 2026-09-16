@@ -1,0 +1,163 @@
+{
+  "created_at": "2026-09-15T11:18:30Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A pull request touching source or tests runs full-regression.",
+          "A pull request touching only documentation does not.",
+          "Neither the workflow header comment nor the protocol prose still describes the gate as dispatch-only.",
+          "The pull request body names the path expressions and walks at least two concrete examples.",
+          "The repository privacy gate passes.",
+          "tests/test_ci_workflow_fast_pr_regression.py asserts the current topology and passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md (FROZEN, merged 2026-09-15). It narrows the 2026-09-06 DEV.TEST.1 topology rather than reversing it, and fixes the two rules that bound the path expressions.",
+          "observed": "full-regression and po-scope-check both report skipping with duration zero on every pull request. PR #359 merged with all checks green while five tests were failing on main, and they stayed failing until a session ran the suite by hand days later. A previous attempt at this movement completed the workflow and prose change and reported three stale dispatch-only assertions in the CI test file that its own packet had placed out of scope; that exclusion was the packet's error and is corrected here.",
+          "what_exists": "gh pr checks 359, verbatim:\n\n  validate         pass       23s\n  full-regression  skipping   0\n  po-scope-check   skipping   0\n\nThe conditions live in .github/workflows/validation.yml. The regression job is gated on the event type:\n\n  full-regression:\n    if: github.event_name == 'workflow_dispatch'\n\nand the scope job on the event type and the branch name:\n\n  po-scope-check:\n    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'gov/po-')\n\nThe file's header comment records the 2026-09-06 reasoning at length, cites docs/AI_DEVELOPMENT_PROTOCOL.md under CI validation policy, and names workflow run 34020356372 as one-time proof that parallel execution works on GitHub-hosted infrastructure. That comment is now partly superseded and must be corrected rather than deleted wholesale: the cost reasoning it records still stands and is the reason this movement adds a condition instead of removing one."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/regression-gate-runs-on-core-with-tests"
+        },
+        "invariants": [
+          "workflow_dispatch continues to work as it does today.",
+          "The 2026-09-06 cost reasoning stays recorded. It is superseded in scope, not in substance."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "The regression gate runs on a pull request that touches anything the suite can break, and stays off for a documentation-only change.",
+        "output_contract": [
+          "One pull request on feature/regression-gate-runs-on-core.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "One workflow condition and two pieces of prose, against a record that already fixes the rules. The judgement is in which paths fall on which side, which the packet constrains.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "A path that no rule matches must RUN, not skip. A condition whose default is to skip reproduces the defect this movement exists to remove, in a form that is harder to notice.",
+          "A documentation-only exclusion excludes documentation. Excluding a directory because it mostly contains documentation would skip the gate for the source that also lives there.",
+          "Verify the condition by reasoning about concrete example paths in the pull request body: name at least one path that runs and one that does not, and for a directory holding both kinds, say which way it falls and why."
+        ],
+        "risks": [
+          "The condition is only testable by merging it and watching the next few pull requests. Write it so a wrong guess fails safe -- by running -- rather than by silently skipping.",
+          "Deleting the header comment instead of correcting it would erase the reason the gate is conditional, and the next session would read an unconditional gate as an oversight."
+        ],
+        "scope": {
+          "in": [
+            "Make full-regression run on a pull request whose changes touch source, tests, project state, workflows or deployment manifests, and not run on a pull request whose changes touch only documentation and records.",
+            "State the exact path expressions in the pull request body, and say for each why it is on the side it is on.",
+            "Correct the header comment in .github/workflows/validation.yml and the CI validation policy prose in docs/AI_DEVELOPMENT_PROTOCOL.md so that neither still describes the superseded topology. Keep the cost reasoning; it is why the gate is conditional rather than unconditional.",
+            "Report what po-scope-check's condition currently does and whether it is correct. Do not change it: 15C section 5 leaves that open and asks only for the finding.",
+            "Update tests/test_ci_workflow_fast_pr_regression.py, which asserts the superseded dispatch-only topology. Those assertions are the enforcement of the policy 15C replaced, so they move with it: assert what the gate does now, and do not simply delete the ones that no longer hold."
+          ],
+          "out": [
+            "Running the full suite on every pull request. 15C section 4 records that option and why it was rejected.",
+            "Splitting the suite into a fast and a slow half. 15C section 5 leaves that to its own record.",
+            "Changing po-scope-check's condition."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_ci_workflow_fast_pr_regression.py",
+              "-q"
+            ],
+            "name": "ci_workflow_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T11:18:30Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added regression-scope: only docs/** and *.md-only diffs skip; all unmatched paths run.",
+          "Updated validation workflow comments, canonical protocol policy, and CI topology assertions."
+        ],
+        "completed": [
+          "Implemented the conditional full-regression PR gate.",
+          "Opened PR #372 without merging."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/regression-gate-runs-on-core-with-tests",
+          "ci": "PR checks not inspected; orchestrator owns verification.",
+          "head_sha": "d76b7e6",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode: do not merge from this worker.",
+          "merge_state": "OPEN",
+          "pr": 372,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/372"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0210",
+          "movement_type": "VALIDATION",
+          "objective": "Verify representative documentation-only and core-change pull requests after the conditional gate lands.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "workflow_dispatch still runs full-regression.",
+          "The 2026-09-06 GitHub-hosted cost reasoning remains recorded.",
+          "po-scope-check condition is unchanged."
+        ],
+        "recommended_reasoning": {
+          "reason": "A bounded CI-behavior verification is next.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Changed-path execution needs real GitHub Actions evidence; diff failures and unmatched paths fail safe by running."
+        ],
+        "validation": {
+          "affected": "Not applicable; workflow/prose/test-only change.",
+          "diff_check": "git diff --check origin/main: PASS before commit.",
+          "full_regression": "Not run locally; the changed workflow schedules it on the opened PR.",
+          "privacy": "python3 scripts/repository_privacy_check.py: PASS (0 findings)",
+          "real_environment": "Pending GitHub Actions observation after orchestrator verification/merge.",
+          "state_consistency": "Not applicable; no project-state files changed.",
+          "targeted": "python3 -m pytest tests/test_ci_workflow_fast_pr_regression.py -q: 10 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T11:22:51Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0210",
+  "movement": "NXS-LOCAL-0210",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md",
+    "docs/AI_DEVELOPMENT_PROTOCOL.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T11:22:51Z"
+}

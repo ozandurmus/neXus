@@ -1,0 +1,172 @@
+{
+  "created_at": "2026-09-15T21:19:42Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract resolves local platform/lifecycle/persistence/MCP/plugin boundaries or explicitly defers unsupported clients.",
+          "Implementation sequence is independently testable and rollback safe.",
+          "Authority/privacy/diff gates pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); Companion C1/C2 contract slices on origin/main.",
+          "observed": "Workbench table-first Material 3 work is separately in progress. User provides a follow-up directive for independent reliable tracking with a supervised service, read-only MCP, private plugin and skill, no new execution authority.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-companion-mcp"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw transcripts or sensitive notifications.",
+          "Unknown/cost provenance semantics preserved.",
+          "Notification state separate from workflow authority."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement Workbench Companion C3: closed read-only stdio MCP server over the C2 snapshot.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "MCP protocol and closed read boundary; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Implement frozen C3 exactly: companion_status, companion_movements, companion_observations only; strict schemas/cursors/size bounds; snapshot read only.",
+          "No arbitrary paths/commands/raw logs or source refresh. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "Companion C3 MCP stdio server, strict three-tool registry and protocol tests."
+          ],
+          "out": [
+            "Plugin/skill/LaunchAgent/notifier, source scanning/writes, shell/network, host/device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_workbench_companion.py"
+            ],
+            "name": "companion"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T21:19:42Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/workbench_companion_mcp.py: stdlib-only read-only snapshot reader and closed MCP legacy handshake through 2025-11-25; startup configuration pins directory and metadata allowlists.",
+          "tests/test_workbench_companion.py: C3 protocol, closed registry, strict argument/cursor/size validation, redaction, freshness, cost provenance, byte preservation and concurrent replacement coverage.",
+          "Approved task baseline divergence: deployment manifests/NetworkPolicy text is unrelated and excluded by the frozen Companion contract; no deployment files were inspected or changed."
+        ],
+        "completed": [
+          "NXS-LOCAL-0253: frozen Companion C3 implemented and committed as d2a8a2f712f097300a7406040806ae712b5c3168; PR #407 opened and remote head verified.",
+          "Closed client-started stdio MCP server exposes companion_status, companion_movements and companion_observations only.",
+          "Strict tool schemas, request bounds, authenticated generation/tool/filter-bound cursors, wire-size pagination, fixed redacted errors and freshness/quality metadata are implemented.",
+          "Synthetic stdio, privacy boundary, byte-preservation and concurrent atomic-reader checks pass. Canonical relay re-read immediately before PR creation; no appended correction or decision was present."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED"
+        },
+        "integration": {
+          "branch": "feature/workbench-companion-mcp",
+          "ci": "At verification: validate IN_PROGRESS, regression-scope QUEUED, po-scope-check SKIPPED. No remote pass claimed.",
+          "head_sha": "d2a8a2f712f097300a7406040806ae712b5c3168",
+          "merge_commit": null,
+          "merge_decision": "--merge-mode orchestrator: worker opens PR and publishes SESSION_CLOSE only; no gh pr merge executed.",
+          "merge_state": "OPEN",
+          "pr": 407,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/407"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0253 orchestrator integration",
+          "movement_type": "VALIDATION",
+          "objective": "Orchestrator verifies PR #407 and merges only after its own checks pass. Worker stops after SESSION_CLOSE; subsequent C4/C5 work needs separate authorization.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "Existing C2 implementation and snapshot schema unchanged; only its pure shape/projection validator is reused, without constructing or locking its writer.",
+          "No source discovery/refresh/write, raw log/transcript export, subprocess/network operation on MCP paths, observer supervision, notification acknowledgment or workflow authority.",
+          "Null counters, four exact cost sources, requested versus observed model, UNKNOWN attempt attribution, source/evidence age and last-good observation quality remain distinct.",
+          "No plugin, skill, LaunchAgent, notifier, UI, device, deployment or production-data changes. Rollback disables only MCP registration and retains observer/state.",
+          "Ponytail kept the change to two files, reused C2 validation and added no dependency or portable supervisor abstraction."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded diff, automated evidence and integration checks; strong implementation reasoning is unnecessary unless a new boundary or protocol ambiguity emerges.",
+          "tier": "ordinary validation"
+        },
+        "state_updates": [
+          "Canonical local relay receives this SESSION_CLOSE; commit and open PR provide durable integration evidence.",
+          "Project JSON, QUEUE, CURRENT_STATE and AI_HANDOVER were not read or edited because WORKER.md explicitly limits this movement to C3 server/protocol tests. Product-state integration is handed to the orchestrator.",
+          "Reports and PR body moved to a task-specific temporary directory outside the product worktree; no untracked artifacts remain."
+        ],
+        "unresolved_risks": [
+          "Pinned-client compatibility, newer MCP protocol eras and C4/C5 packaging/lifecycle/notifier acceptance are deferred and not claimed as supported.",
+          "Remote CI was queued/in progress at handoff; orchestrator must verify its own gates before merge.",
+          "Remote push succeeded and PR head matches the worker commit. Sandbox denied shared Git config and remote-tracking metadata updates, so local upstream remains origin/main; no permission bypass attempted."
+        ],
+        "validation": {
+          "affected": "PASS: tests/test_contract_authority_status.py and tests/test_design_cross_references_resolve.py; 8 passed. Existing C2 tests remain green.",
+          "diff_check": "PASS: git diff --check, git diff --check origin/main and staged diff check; origin/main check rerun immediately before commit and after PR creation.",
+          "full_regression": "NOT RUN: bounded C3 scope; no UI/payload/device/deployment blast radius. Remote regression/validation remain with the orchestrator.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py; zero findings, no network or matched-value output.",
+          "real_environment": "UNVERIFIED: no pinned Codex/client installation, workstation lifecycle, notifier, shared-host or device acceptance. Synthetic subprocess stdio handshake is automated evidence only.",
+          "state_consistency": "Product state untouched under the explicit worker read/edit scope. Frozen contract authority checks passed; PR branch/head/base verified remotely and worktree clean.",
+          "targeted": "PASS: python3 -m pytest -q -p no:cacheprovider tests/test_workbench_companion.py; 70 passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T21:26:54Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0253",
+  "movement": "NXS-LOCAL-0253",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T21:26:54Z"
+}

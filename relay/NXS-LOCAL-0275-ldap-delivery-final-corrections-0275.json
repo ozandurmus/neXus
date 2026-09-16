@@ -1,0 +1,135 @@
+{
+  "created_at": "2026-09-16T10:14:15Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Configured own-user initial LDAP admission works under existing frozen exemption while corporate binding/revalidation remain gated.",
+          "Exact final diff is targeted and relevant privacy/routing/LDAP/auth/fixture checks are required; no full suite or misleadingfullpass.",
+          "Only named composition/test/CI correction files change, actual targeted/privacy/diff evidence returned. Real AD/TLS/V25DB remains UNVERIFIED."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3C_LDAP_TLS_AND_PRINCIPAL_BINDINGS_CONTRACT.md",
+          "observed": "PO-authorized integration baseline refs/remotes/po/ldap-delivery-0275 exact3ed6360306805c28e72b6a1ec7e90ae2f997df30 contains actual PR418 implementation, merged currentmain124d454, verified0272 privacy synchronization and reviewed0273 approved targetedCI amendment. This explicit scoped integration baseline replaces the default origin/main-only fresh build baseline for this correction; origin/main itself unchanged. No engineer fetch/merge prerequisite remains.",
+          "what_exists": "0274 did not implement because Git denied baseline import before supervisor recovered it. Hardcoded initial LDAP admission false still contradicts C3§4.4 'What is not gated'.0273 selector still omits the three0272 privacy files; its targeted job must test routing/privacy corrections and only relevant LDAP/auth/RBAC/fixture components. Human approved exact targeted/full-major successor rule, not any gate weakening."
+        },
+        "context_not_loaded": [
+          "Unrelated history/data/logs/credentials/Workbench."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "refs/remotes/po/ldap-delivery-0275",
+          "lane": "feature/ldap-delivery-final-corrections-0275"
+        },
+        "invariants": [
+          "C3§4.4 initial operator login is not D6 gated; actual corporate function remains jointly disabled.",
+          "No security/assertion/gate weakening; no full suite or remote actions. Parent integration only."
+        ],
+        "merge_gate": "Local commit only. No worker push/PR/merge. Parent independently reviews exact corrected baseline, targeted CI and merges418 only on valid required gates; real rollout separate.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Complete the two minimal reviewed LDAP delivery corrections on the already composed actual PR418 baseline, without repeating LDAP implementation or starting a full suite.",
+        "output_contract": [
+          "Local diff/commit, exact targeted gates, canonical close and missing evidence."
+        ],
+        "recommended_reasoning": {
+          "reason": "Small deterministic frozen-composition and closedCI-map corrections; no new architecture.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Codex gpt-5.6-terra medium, intention budgetUSD0.75 not a proved cap. Existing prepared source only; no fetch/import/reimplementation needed. Local commit only; no push/PR/merge/fulltests/install/host/device/corporate access.",
+          "Correct DirectoryAuthenticationConfiguration initial own-operator LdapMechanism admission to comply with explicit C3§4.4 exemption. Add minimal composition test: configured operatorbind permitted, profile absent no LDAP composition/calls, service-account revalidation still disabled zero secret reads/calls. Never enable corporate role binding or service account functions, change TLS/identity proof, invent a posture flag, vendor fallback or new transport.",
+          "Complete0273 closed targeted mapping with tests/conftest.py, tests/test_gov_po_3_ci_privacy_gate_baseline.py and tests/test_nexus_engineer_tool_gate.py. Add smallest selector assertion on exact final diff versus origin/main. Keep unmapped/selection failure BLOCKED, docs-only cheap, manual/major full path intact and NOT_RUN here.",
+          "TargetedCI must run routing tests and the affected two privacy modules under2workers using existing declared Python dependencies, plus relevant LDAP adapter/platform/persistence/login/auth/RBAC/composition/CLI architecture and changed provenance fixture tests. Existing fast safety/privacy gate remains. Do not run entire unfiltered Python or frontend test suite. Prefer existing Gradle filtered test tasks and npm targeted ProjectPlanPanel test; root frontendCi/build can prepare artifacts but must not execute unrelated frontend tests. No dependency additions or broad selector/framework expansion.",
+          "Preserve approved15C§7 rule exactly. Metadata/routing fixes only beside minimal initial-admission correction. Local targeted checks and honest close; parent integrates into418 after independent review. If sharedGit denies commit, leave validated diff and report; do not spend turns inventing object-store workarounds."
+        ],
+        "risks": [
+          "No new AD vendor semantics; ordinary-user identity-control support and TLS are real-environment acceptance, not inferred from synthetic tests."
+        ],
+        "scope": {
+          "in": [
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/DirectoryAuthenticationConfiguration.java",
+            "Minimal DirectoryAuthenticationConfigurationTest in ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/boot/",
+            "scripts/ci_regression_scope.py",
+            "tests/test_ci_regression_scope.py",
+            ".github/workflows/validation.yml targeted job only",
+            "tests/test_ci_workflow_fast_pr_regression.py corresponding assertions only"
+          ],
+          "out": [
+            "LDAP/product rewrite, revalidation/corporatebinding activation, vendor/identity/transport changes, migrations/dependencies, governance wording or roles/AGENTS, projectstate, Workbench/Companion, remoteGit, full suite, installs or host/device/corporate/deployment access"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-n",
+              "0",
+              "tests/test_ci_workflow_fast_pr_regression.py",
+              "tests/test_ci_regression_scope.py"
+            ],
+            "name": "ci_routing"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "--no-daemon",
+              "--console=plain",
+              "-p",
+              "ui2",
+              "-PfrontendPrebuilt=true",
+              ":service:unitTest",
+              "--tests",
+              "*DirectoryAuthenticationConfigurationTest"
+            ],
+            "name": "composition"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "--no-daemon",
+              "--console=plain",
+              "-p",
+              "ui2",
+              "-PfrontendPrebuilt=true",
+              ":ldap-adapter:unitTest"
+            ],
+            "name": "ldap_adapter"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T10:14:15Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0275",
+  "movement": "NXS-LOCAL-0275",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_C3C_LDAP_TLS_AND_PRINCIPAL_BINDINGS_CONTRACT.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-16T10:14:15Z"
+}

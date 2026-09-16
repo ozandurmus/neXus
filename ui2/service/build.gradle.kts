@@ -25,6 +25,7 @@ dependencies {
     // declares jOOQ as `implementation`, not `api`, so it is not otherwise
     // visible here.
     implementation(libs.jooq)
+    implementation(libs.jsch)
 
     // PO ASSISTANT DECISION 2026-09-14 on packaging / DIR-2: the worker
     // role's classes reach the boot jar's runtime classpath only -- no
