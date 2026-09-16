@@ -84,7 +84,19 @@ final class CpObjectDumpParser {
     /** Everything up to the matching ')', trimmed, with a single pair of surrounding quotes stripped. */
     private String readLeafValue() {
         int start = pos;
-        while (pos < text.length() && peek() != ')') {
+        boolean inQuotes = false;
+        boolean escaped = false;
+        while (pos < text.length()) {
+            char c = peek();
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (!inQuotes && c == ')') {
+                break;
+            }
             pos++;
         }
         String raw = text.substring(start, pos).trim();
