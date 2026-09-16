@@ -1,0 +1,13 @@
+{
+  "converted_lessons_heading": "Converted Python lessons — historical / derived",
+  "converted_lessons": [
+    {
+      "id": "lesson",
+      "title": "Historical identity lesson",
+      "source_id": "python-source",
+      "source_status": "done",
+      "java_application": "Verify opaque identity in Java",
+      "target": "java-debt"
+    }
+  ]
+}

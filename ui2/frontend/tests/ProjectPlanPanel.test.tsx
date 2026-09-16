@@ -4,6 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { ProjectPlanPanel } from "../src/screens/ProjectPlanPanel";
 import type { ProjectPlanView } from "../src/auth/adminApi";
+import provenanceFixture from "./fixtures/project-plan-provenance.json";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -61,7 +62,7 @@ const BASE_PLAN: ProjectPlanView = {
 };
 
 function renderWithPlan(plan: ProjectPlanView) {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, plan)));
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, plan))));
   return render(withTheme(<ProjectPlanPanel />));
 }
 
@@ -208,12 +209,12 @@ describe("Java product provenance", () => {
       current_product_build: "java-build",
       source_metadata: { revision: "snapshot-1", reviewed_at: "2026-09-15", reviewed_current_build: "java-build", freshness: "STALE", update_policy: "Reviewed read-only snapshot" },
       backlog: [{ ...BASE_PLAN.backlog[0], status: "automated_validated", classification: "java_debt" }],
-      converted_lessons: [{ id: "lesson", title: "Historical identity lesson", source_id: "python-source", source_status: "done", java_application: "Verify opaque identity in Java", target: "java-debt" }],
+      converted_lessons: provenanceFixture.converted_lessons,
     });
     await waitFor(() => expect(screen.getByText(/Source revision: snapshot-1/)).toBeInTheDocument());
     expect(screen.getByText(/Freshness: STALE/)).toBeInTheDocument();
     expect(screen.getByText(/Deployed software version: UNKNOWN/)).toBeInTheDocument();
-    expect(screen.getByText("Converted Python lessons — historical / derived")).toBeInTheDocument();
+    expect(screen.getByText(provenanceFixture.converted_lessons_heading)).toBeInTheDocument();
     expect(screen.getByText("Verify opaque identity in Java")).toBeInTheDocument();
     expect(screen.getByLabelText("Open backlog count")).toHaveTextContent("1");
     fireEvent.click(screen.getByRole("button", { name: "Refresh project plan" }));

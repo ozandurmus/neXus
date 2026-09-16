@@ -32,11 +32,11 @@ final class DiscoveryRunReport {
     static String render(ManagementPlaneEnumerationResult result) {
         if (result instanceof ManagementPlaneEnumerationResult.Refused refused) {
             return "outcome=REFUSED" + System.lineSeparator()
-                    + "reason=" + refused.reason() + System.lineSeparator();
+                    + "reason=AUTH_FAILED" + System.lineSeparator();
         }
         if (result instanceof ManagementPlaneEnumerationResult.Failed failed) {
             return "outcome=FAILED" + System.lineSeparator()
-                    + "reason=" + failed.reason() + System.lineSeparator()
+                    + "reason=" + failed.failureClass().map(Enum::name).orElse("NOT_EVALUABLE") + System.lineSeparator()
                     + "management_plane_request_count=" + failed.managementPlaneRequestCount() + System.lineSeparator()
                     + "disconnect_outcome=" + failed.disconnectOutcome() + System.lineSeparator();
         }

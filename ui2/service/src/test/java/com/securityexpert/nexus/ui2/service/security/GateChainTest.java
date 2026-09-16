@@ -151,9 +151,12 @@ class GateChainTest {
     }
 
     private static final class FakeActorAuthzStateRepository implements ActorAuthzStateRepository {
+        private final Set<String> groups;
+        FakeActorAuthzStateRepository() { this(Set.of()); }
+        FakeActorAuthzStateRepository(Set<String> groups) { this.groups = groups; }
         @Override
         public Optional<ActorAuthzStateRecord> find(String actorFingerprint) {
-            return Optional.of(new ActorAuthzStateRecord(actorFingerprint, Set.of(), NOW.minusSeconds(10),
+            return Optional.of(new ActorAuthzStateRecord(actorFingerprint, groups, NOW.minusSeconds(10),
                     NOW.plusSeconds(900)));
         }
 
@@ -257,6 +260,51 @@ class GateChainTest {
             FakeAuthzDecisionRepository decisions) {
         RbacEvaluator evaluator = new RbacEvaluator(bindings, new FakeActorAuthzStateRepository(), cipher());
         return new GateChain(sessions, new ActionRegistry(), evaluator, decisions);
+    }
+
+    @Test
+    void discoveryTrustPermitsSecurityAdminAndDeniesOnboardingOrViewerWithCsrfEnforced() {
+        var groupCipher = cipher();
+        FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
+        bindings.bindings.add(new RoleBindingRecord("fixture-security-binding",
+                com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN.token(),
+                groupCipher.encrypt("fixture-security-group"), "k1", "fixture-creator", NOW, Optional.empty(), Optional.empty()));
+        for (String group : List.of("fixture-security-group", "fixture-onboarding-group", "fixture-viewer-group")) {
+            FakeSessionRepository sessions = new FakeSessionRepository();
+            sessions.put(activeSession(SessionHasher.hash("fixture-role-cookie")));
+            var evaluator = new RbacEvaluator(bindings, new FakeActorAuthzStateRepository(Set.of(group)), groupCipher);
+            var chain = new GateChain(sessions, new ActionRegistry(), evaluator, new FakeAuthzDecisionRepository());
+            for (String action : List.of(ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL, ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL)) {
+                var outcome = chain.evaluate(new GateRequest("POST", Optional.of("fixture-role-cookie"), Optional.of("csrf-secret"),
+                        Optional.of("https://ui2.example.com"), action, Optional.empty()), NOW);
+                if (group.equals("fixture-security-group")) {
+                    assertTrue(outcome instanceof GateOutcome.Proceed, "security-admin should proceed: " + outcome);
+                    var noCsrf = chain.evaluate(new GateRequest("POST", Optional.of("fixture-role-cookie"), Optional.empty(),
+                            Optional.of("https://ui2.example.com"), action, Optional.empty()), NOW);
+                    assertTrue(noCsrf instanceof GateOutcome.Refused);
+                } else {
+                    assertTrue(outcome instanceof GateOutcome.Refused);
+                    assertEquals("E4", ((GateOutcome.Refused) outcome).gate());
+                    assertEquals("DENIED", ((GateOutcome.Refused) outcome).body().get("outcome"));
+                }
+            }
+        }
+    }
+
+    @Test
+    void discoveryTrustActionsRequireSecurityAdminAndRefuseWithoutApplicableAuthority() {
+        ActionRegistry registry = new ActionRegistry();
+        FakeSessionRepository sessions = new FakeSessionRepository();
+        sessions.put(activeSession(SessionHasher.hash("fixture-trust-cookie")));
+        for (String action : List.of(ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL, ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL)) {
+            assertEquals(Optional.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN),
+                    registry.find(action).orElseThrow().requiredRoleToken());
+            GateOutcome outcome = newChain(sessions, new FakeRoleBindingRepository(), new FakeAuthzDecisionRepository())
+                    .evaluate(new GateRequest("POST", Optional.of("fixture-trust-cookie"), Optional.of("csrf-secret"),
+                            Optional.of("https://ui2.example.com"), action, Optional.empty()), NOW);
+            assertTrue(outcome instanceof GateOutcome.Refused);
+            assertEquals("E4", ((GateOutcome.Refused) outcome).gate());
+        }
     }
 
     @Test

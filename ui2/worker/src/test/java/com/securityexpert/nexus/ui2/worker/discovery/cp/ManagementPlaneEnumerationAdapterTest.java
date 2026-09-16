@@ -58,6 +58,24 @@ class ManagementPlaneEnumerationAdapterTest {
         return new ManagementPlaneEnumerationRequest(HOST, PORT, CREDENTIAL_REF, TRUST_RULE_REF, Duration.ZERO, Optional.empty());
     }
 
+    @Test
+    void connectFailuresMapToClosedValuesWithoutExceptionDisclosure() {
+        var missing = new com.securityexpert.nexus.ui2.jobs.transport.ConnectResult.HostKeyRejected("TRUST_ENTRY_MISSING");
+        var mismatch = new com.securityexpert.nexus.ui2.jobs.transport.ConnectResult.HostKeyRejected("raw-sensitive-error");
+        var auth = new com.securityexpert.nexus.ui2.jobs.transport.ConnectResult.AuthenticationFailed("raw-sensitive-error");
+        var timeout = new com.securityexpert.nexus.ui2.jobs.transport.ConnectResult.TimedOut();
+        assertEquals(ManagementPlaneEnumerationResult.FailureClass.TRUST_ENTRY_MISSING, ManagementPlaneEnumerationAdapter.connectFailure(missing));
+        assertEquals(ManagementPlaneEnumerationResult.FailureClass.TRUST_MISMATCH, ManagementPlaneEnumerationAdapter.connectFailure(mismatch));
+        assertEquals(ManagementPlaneEnumerationResult.FailureClass.AUTH_FAILED, ManagementPlaneEnumerationAdapter.connectFailure(auth));
+        assertEquals(ManagementPlaneEnumerationResult.FailureClass.CONNECT_TIMEOUT, ManagementPlaneEnumerationAdapter.connectFailure(timeout));
+        for (var failure : ManagementPlaneEnumerationResult.FailureClass.values()) {
+            assertTrue(DiscoveryRunReport.render(new ManagementPlaneEnumerationResult.Failed(failure, 0,
+                    SessionDisconnectOutcome.NOT_OPENED)).contains(failure.name()));
+        }
+        assertFalse(DiscoveryRunReport.render(new ManagementPlaneEnumerationResult.Failed("raw-sensitive-error", 0,
+                SessionDisconnectOutcome.NOT_OPENED)).contains("raw-sensitive-error"));
+    }
+
     /** T-4 -- across a full run, exactly one distinct ConnectionTarget host is ever dialed. */
     @Test
     void acrossAFullRunExactlyOneDistinctHostIsEverDialed() {

@@ -36,6 +36,18 @@ class ProjectPlanReaderTest {
         }
     }
 
+    private static String fixtureText(String name) {
+        try {
+            URL url = ProjectPlanReaderTest.class.getResource("/fixtures/projectplan/" + name);
+            if (url == null) {
+                throw new IllegalStateException("missing test fixture: " + name);
+            }
+            return Files.readString(Path.of(url.toURI()));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> tracksOf(Map<String, Object> payload) {
         return (List<Map<String, Object>>) payload.get("tracks");
@@ -208,9 +220,7 @@ class ProjectPlanReaderTest {
         Files.writeString(directory.resolve("roadmap.json"), """
                 {"current_build":"java-build","now_next":{"now":{"build":"java-build"}}}
                 """);
-        Files.writeString(directory.resolve("feature_registry.json"), """
-                {"features":[{"id":"java","status":"automated_validated"},{"id":"python","status":"done"}]}
-                """);
+        Files.writeString(directory.resolve("feature_registry.json"), fixtureText("legacy-feature-registry.json"));
         Files.writeString(directory.resolve("backlog.json"), """
                 {"items":[{"id":"debt","status":"automated_validated"},{"id":"agent","status":"planned"},
                 {"id":"new-unclassified","status":"planned"}]}

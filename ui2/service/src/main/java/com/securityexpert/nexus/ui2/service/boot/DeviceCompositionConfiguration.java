@@ -289,6 +289,18 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
+    public com.securityexpert.nexus.ui2.persistence.discovery.ManagementEndpointSshTrustRepository managementEndpointSshTrustRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.discovery.JooqManagementEndpointSshTrustRepository(transactionBoundary);
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService managementEndpointSshTrustService(
+            com.securityexpert.nexus.ui2.persistence.discovery.ManagementEndpointSshTrustRepository repository) {
+        return new com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService(repository);
+    }
+
+    @Bean
     public DiscoveryRunRepository discoveryRunRepository(TransactionBoundary transactionBoundary) {
         return new JooqDiscoveryRunRepository(transactionBoundary);
     }

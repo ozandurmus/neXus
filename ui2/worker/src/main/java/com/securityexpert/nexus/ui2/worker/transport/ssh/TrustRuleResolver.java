@@ -14,4 +14,13 @@ import java.util.Optional;
 public interface TrustRuleResolver {
 
     Optional<String> resolveExpectedFingerprint(String trustRuleRef);
+
+    default Optional<String> resolveExpectedFingerprint(String ref, String host, int port, String algorithm) {
+        return resolveExpectedFingerprint(ref);
+    }
+
+    /** Empty means the existing enrolled-device policy; an empty list refuses discovery before credentials. */
+    default Optional<java.util.List<String>> authorizedAlgorithms(String ref, String host, int port) {
+        return Optional.empty();
+    }
 }

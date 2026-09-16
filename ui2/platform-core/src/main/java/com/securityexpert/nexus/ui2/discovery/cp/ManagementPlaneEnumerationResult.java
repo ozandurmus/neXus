@@ -10,6 +10,8 @@ import java.util.Map;
  */
 public sealed interface ManagementPlaneEnumerationResult {
 
+    enum FailureClass { TRUST_ENTRY_MISSING, TRUST_MISMATCH, AUTH_FAILED, CONNECT_TIMEOUT }
+
     /** T-5/SB-16: credential resolution failed before {@code connect()} was ever called (AC-5). */
     record Refused(String reason) implements ManagementPlaneEnumerationResult {
     }
@@ -43,6 +45,13 @@ public sealed interface ManagementPlaneEnumerationResult {
     record Failed(
             String reason,
             int managementPlaneRequestCount,
-            SessionDisconnectOutcome disconnectOutcome) implements ManagementPlaneEnumerationResult {
+            SessionDisconnectOutcome disconnectOutcome,
+            java.util.Optional<FailureClass> failureClass) implements ManagementPlaneEnumerationResult {
+        public Failed(String reason, int count, SessionDisconnectOutcome disconnect) {
+            this(reason, count, disconnect, java.util.Optional.empty());
+        }
+        public Failed(FailureClass failure, int count, SessionDisconnectOutcome disconnect) {
+            this(failure.name(), count, disconnect, java.util.Optional.of(failure));
+        }
     }
 }
