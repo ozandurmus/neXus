@@ -50,18 +50,15 @@ public final class GateChainInterceptor implements HandlerInterceptor {
 
     private final GateChain gateChain;
     private final Map<String, String> actionIdByRoute;
-    private final Set<String> explicitlyUngatedRoutes;
+    
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public GateChainInterceptor(GateChain gateChain, Map<String, String> actionIdByRoute) {
-        this(gateChain, actionIdByRoute, Set.of());
-    }
+    
 
-    public GateChainInterceptor(GateChain gateChain, Map<String, String> actionIdByRoute,
-            Set<String> explicitlyUngatedRoutes) {
+    public GateChainInterceptor(GateChain gateChain, Map<String, String> actionIdByRoute) {
         this.gateChain = gateChain;
         this.actionIdByRoute = actionIdByRoute;
-        this.explicitlyUngatedRoutes = explicitlyUngatedRoutes;
+        
     }
 
     @Override
@@ -74,13 +71,7 @@ public final class GateChainInterceptor implements HandlerInterceptor {
         }
         String actionId = actionIdFor(request.getMethod(), request.getServletPath());
         if (actionId == null) {
-            if (explicitlyUngatedRoutes.contains(request.getMethod() + " " + request.getServletPath())) {
-                return true;
-            }
-            response.setStatus(404);
-            response.setContentType("application/json");
-            objectMapper.writeValue(response.getWriter(), Map.of("error", "ACTION_MAPPING_REQUIRED"));
-            return false;
+            return true;
         }
 
         GateRequest gateRequest = new GateRequest(

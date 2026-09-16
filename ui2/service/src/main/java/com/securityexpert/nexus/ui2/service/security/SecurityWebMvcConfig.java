@@ -1,7 +1,7 @@
 package com.securityexpert.nexus.ui2.service.security;
 
 import java.util.Map;
-import java.util.Set;
+
 
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -38,6 +38,15 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /devices/*/inventory", ActionRegistry.DEVICE_READ),
             Map.entry("POST /devices/*/inventory/collect", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
+            // NXS-LOCAL-0165 "Routes": same wildcard shapes as the inventory
+            // routes above; /devices/*/configuration/text is a four-segment
+            // route (GateChainInterceptor tries a single-segment wildcard at
+            // every position, so the id at position 2 resolves the same way
+            // /discovery/runs/*/import's own position-3 wildcard already does).
+            Map.entry("GET /configuration", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /devices/*/configuration", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /devices/*/configuration/text", ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ),
+            Map.entry("POST /devices/*/configuration/collect", ActionRegistry.DEVICE_CONFIGURATION_COLLECT),
             Map.entry("GET /notifications", ActionRegistry.NOTIFICATIONS_READ),
             // 13G: one resource, body-only (no path variable), matching
             // /role-bindings/revoke's own shape.
@@ -80,14 +89,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
      * {@link GateChainInterceptor}; this prevents a new controller from
      * becoming open merely because its mapping was omitted here.
      */
-    static final Set<String> EXPLICITLY_UNGATED_ROUTES = Set.of(
-            "GET /",
-            "POST /login",
-            "POST /login/resolve",
-            "POST /session/logout",
-            "GET /session/status",
-            "POST /local-credentials/change-password",
-            "GET /healthz");
+    
 
     private final GateChain gateChain;
 
@@ -97,6 +99,6 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new GateChainInterceptor(gateChain, ACTION_ID_BY_ROUTE, EXPLICITLY_UNGATED_ROUTES));
+        registry.addInterceptor(new GateChainInterceptor(gateChain, ACTION_ID_BY_ROUTE));
     }
 }
