@@ -22,12 +22,14 @@
   var TOKEN = null;
   var POLL_TIMER = null;
   var SELECTED_MOVEMENT = null;
+  var DRAFTS = {};
 
   var COLUMNS = [
     { key: "awaiting_you", title: "Awaiting you" },
     { key: "running", title: "Running" },
     { key: "silent", title: "Silent / stuck" },
     { key: "integration", title: "Integration" },
+    { key: "attention", title: "Needs attention" },
     { key: "failed", title: "Failed" },
   ];
 
@@ -113,16 +115,21 @@
     return "idle " + fmtAge(seconds);
   }
 
+  function fmtUsageValue(value) {
+    return value === null || value === undefined ? "unknown" : String(value);
+  }
+
   function fmtTokens(usage) {
     if (!usage) return "no usage yet";
-    var pct = Math.round((usage.cache_hit_ratio || 0) * 100);
-    var parts = (usage.input_tokens || 0) + " in / " + (usage.cache_read_input_tokens || 0) +
-      " cache-read / " + (usage.output_tokens || 0) + " out (" + pct + "% cache)";
+    var pct = usage.cache_hit_ratio === null || usage.cache_hit_ratio === undefined ? "unknown" : Math.round(usage.cache_hit_ratio * 100) + "%";
+    var parts = fmtUsageValue(usage.input_tokens) + " in / " + fmtUsageValue(usage.cache_read_input_tokens) +
+      " cache-read / " + fmtUsageValue(usage.output_tokens) + " out (" + pct + " cache)";
     if (usage.cost_usd !== null && usage.cost_usd !== undefined) {
       parts += " -- $" + usage.cost_usd.toFixed(4);
-    } else if (usage.cost_source) {
-      parts += " -- cost " + usage.cost_source;
+    } else {
+      parts += " -- cost unknown";
     }
+    parts += " (source: " + (usage.cost_source || "unknown") + ")";
     return parts;
   }
 
@@ -135,14 +142,7 @@
   // -- board -------------------------------------------------------------
 
   function bucketBoard(board) {
-    var buckets = { awaiting_you: [], running: [], silent: [], integration: [], failed: [], archive: [] };
-    (board.awaiting_po || []).forEach(function (r) { buckets.awaiting_you.push(r); });
-    (board.open || []).forEach(function (r) {
-      if (r.health === "silent") buckets.silent.push(r);
-      else if (r.health === "failed") buckets.failed.push(r);
-      else if (r.stage === "integration") buckets.integration.push(r);
-      else buckets.running.push(r);
-    });
+    var buckets = { awaiting_you: board.awaiting_po || [], running: board.running || [], silent: board.silent || [], integration: board.integration || [], attention: board.attention || [], failed: board.failed || [], archive: [] };
     (board.closed || []).concat(board.archive || []).slice().sort(function (a, b) {
       return (b.ended_at || b.started_at || "").localeCompare(a.ended_at || a.started_at || "");
     }).forEach(function (r) { buckets.archive.push(r); });
@@ -173,7 +173,7 @@
     var costToday = s.cost_today === null || s.cost_today === undefined ? "-" : "$" + s.cost_today.toFixed(4);
     document.getElementById("summary-strip").textContent =
       (s.running || 0) + " running · " + (s.silent || 0) + " silent · " +
-      (s.awaiting_decision || 0) + " awaiting you · " + (s.failed || 0) + " failed · " +
+      (s.awaiting_decision || 0) + " awaiting you · " + (s.attention || 0) + " need attention · " + (s.failed || 0) + " failed · " +
       tokensToday + " tokens today · " + costToday + " today";
   }
 
@@ -217,7 +217,14 @@
     var provider = String(row.provider || "").toLowerCase();
     var providerClass = provider === "claude" || provider === "codex" ? provider : "neutral";
     card.className = "board-card provider-" + providerClass;
-    if (!row.archived) card.onclick = function () { openDetail(row.movement_id); };
+    if (!row.archived) {
+      card.tabIndex = 0;
+      card.setAttribute("role", "button");
+      card.onclick = function () { openDetail(row.movement_id); };
+      card.onkeydown = function (event) {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openDetail(row.movement_id); }
+      };
+    }
 
     var top = document.createElement("div");
     top.className = "card-top";
@@ -280,6 +287,7 @@
 
   function refreshDetail(movementId) {
     api("GET", "/api/movements/" + encodeURIComponent(movementId)).then(function (detail) {
+      if (movementId !== SELECTED_MOVEMENT) return;
       renderSummaryPane(detail);
       renderChangesPane(detail);
       renderEvidencePane(detail);
@@ -289,6 +297,7 @@
       document.getElementById("pane-summary").textContent = "error: " + err.message;
     });
     api("GET", "/api/movements/" + encodeURIComponent(movementId) + "/traffic").then(function (data) {
+      if (movementId !== SELECTED_MOVEMENT) return;
       renderTrafficPane(movementId, data.traffic || []);
     }).catch(function (err) {
       document.getElementById("pane-traffic").textContent = "error: " + err.message;
@@ -362,6 +371,8 @@
   }
 
   function renderTrafficPane(movementId, items) {
+    var oldDraft = document.getElementById("msg-text");
+    if (oldDraft && oldDraft.dataset.movementId) DRAFTS[oldDraft.dataset.movementId] = oldDraft.value;
     var html = "";
     items.forEach(function (item) {
       html += '<div class="entry entry-' + esc(item.direction) + '">' +
@@ -376,21 +387,25 @@
       html += "</div>";
     });
     html += '<div class="msg-box">' +
-      '<textarea id="msg-text" placeholder="Send a note to this movement..."></textarea>' +
+      '<textarea id="msg-text" data-movement-id="' + esc(movementId) + '" aria-label="Message for this movement" placeholder="Send a note to this movement..."></textarea>' +
       '<button id="msg-send">Send</button>' +
       '<div class="msg-state" id="msg-state"></div>' +
       '</div>';
     document.getElementById("pane-traffic").innerHTML = html || '<p class="muted">no traffic yet</p>';
     var sendBtn = document.getElementById("msg-send");
+    var textEl = document.getElementById("msg-text");
+    textEl.value = DRAFTS[movementId] || "";
+    textEl.addEventListener("input", function () { DRAFTS[movementId] = textEl.value; });
     if (sendBtn) {
       sendBtn.onclick = function () {
-        var text = document.getElementById("msg-text").value.trim();
+        var text = textEl.value.trim();
         if (!text) return;
         api("POST", "/api/movements/" + encodeURIComponent(movementId) + "/message", { text: text })
           .then(function (result) {
             document.getElementById("msg-state").textContent =
               "Saved -> queued for next resume" + (result.appended ? "" : " (not this movement's PO turn yet -- saved locally)");
-            document.getElementById("msg-text").value = "";
+            delete DRAFTS[movementId];
+            textEl.value = "";
             refresh();
           })
           .catch(function (err) {
@@ -445,6 +460,7 @@
 
   function renderLogPane(d) {
     api("GET", "/api/movements/" + encodeURIComponent(d.movement_id) + "/log?tail=200").then(function (log) {
+      if (d.movement_id !== SELECTED_MOVEMENT) return;
       var lines = (log.lines || []).join("\n") || "(no log yet)";
       document.getElementById("pane-log").innerHTML =
         '<div class="muted">last observed: ' + esc(d.last_activity || "unknown") + '</div>' +

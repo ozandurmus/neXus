@@ -141,6 +141,23 @@ ALL_HEALTH_VALUES = frozenset({
     HEALTH_AWAITING_PO, HEALTH_FAILED, HEALTH_DONE, HEALTH_HANDED_OVER,
 })
 
+
+def board_bucket(health: str, work_stage: str) -> str:
+    """One board classification for both membership and displayed counts."""
+    if health == HEALTH_DONE:
+        return "closed"
+    if health == HEALTH_AWAITING_PO:
+        return "awaiting_po"
+    if health == HEALTH_EXITED_WITHOUT_CLOSE:
+        return "attention"
+    if health == HEALTH_SILENT:
+        return "silent"
+    if health == HEALTH_FAILED:
+        return "failed"
+    if work_stage == STAGE_INTEGRATION:
+        return "integration"
+    return "running"
+
 #: A sentinel distinct from `None` -- `None` is itself a legitimate
 #: "clear stuck_after_seconds" value in principle, so a real "unset,
 #: leave the stored value alone" needs its own marker (section 3.3's
@@ -812,12 +829,14 @@ def gather_movements(
         for record in orch._list_state_records(state_dir)
     ]
     summaries.sort(key=lambda s: s["movement_id"])
-    running = [s for s in summaries if s["work_stage"] not in (STAGE_MERGED,) and s["process_status"] != "disconnected"]
+    buckets = [board_bucket(s["health"], s["work_stage"]) for s in summaries]
+    running = [bucket for bucket in buckets if bucket == "running"]
     awaiting = [s for s in summaries if s["pending_action"] is not None]
     recent = [s for s in summaries if s["work_stage"] == STAGE_MERGED]
     integration = [s for s in summaries if s["work_stage"] == STAGE_INTEGRATION]
-    silent = [s for s in summaries if s["health"] == HEALTH_SILENT]
-    failed = [s for s in summaries if s["health"] == HEALTH_FAILED]
+    silent = [bucket for bucket in buckets if bucket == "silent"]
+    failed = [bucket for bucket in buckets if bucket == "failed"]
+    attention = [bucket for bucket in buckets if bucket == "attention"]
 
     # Section 3.5's summary strip: tokens/cost for whatever usage activity
     # was last observed today (UTC) -- a real signal (`usage.last_event_at`,
@@ -839,7 +858,7 @@ def gather_movements(
     return {
         "summary": {
             "running": len(running), "awaiting_decision": len(awaiting), "in_integration": len(integration),
-            "silent": len(silent), "failed": len(failed),
+            "silent": len(silent), "failed": len(failed), "attention": len(attention),
             "tokens_today": tokens_today, "cost_today": round(cost_today, 6) if have_cost_today else None,
         },
         "movements": summaries,
@@ -977,19 +996,19 @@ def build_board(
     rows.sort(key=lambda r: r["movement_id"])
     archived = _relay_archive_rows(relay_dir, {row["movement_id"] for row in rows})
 
-    columns: dict[str, list[dict]] = {"open": [], "awaiting_po": [], "closed": []}
+    columns: dict[str, list[dict]] = {
+        "open": [], "awaiting_po": [], "closed": [], "running": [], "silent": [],
+        "integration": [], "attention": [], "failed": [],
+    }
     for row in rows:
-        if row["health"] == HEALTH_DONE:
-            columns["closed"].append(row)
-        elif row["health"] == HEALTH_AWAITING_PO:
-            columns["awaiting_po"].append(row)
-        else:
+        bucket = board_bucket(row["health"], row["stage"])
+        columns[bucket].append(row)
+        if bucket not in ("closed", "awaiting_po"):
             columns["open"].append(row)
 
     totals = {
         "open": len(columns["open"]), "awaiting_po": len(columns["awaiting_po"]), "closed": len(columns["closed"]),
-        "silent": sum(1 for r in rows if r["health"] == HEALTH_SILENT),
-        "failed": sum(1 for r in rows if r["health"] == HEALTH_FAILED),
+        **{bucket: len(columns[bucket]) for bucket in ("running", "silent", "integration", "attention", "failed")},
     }
     return {**columns, "archive": archived, "totals": totals}
 

@@ -36,6 +36,22 @@ def test_dashboard_assets_render_provider_classes_without_changing_provider_text
     assert "fmtModelEffort(row)" in js
 
 
+def test_dashboard_assets_preserve_per_movement_drafts_and_keyboard_activation():
+    js = (ROOT / "scripts" / "dashboard_assets" / "dashboard.js").read_text(encoding="utf-8")
+    assert "var DRAFTS = {};" in js
+    assert "DRAFTS[oldDraft.dataset.movementId] = oldDraft.value" in js
+    assert "textEl.value = DRAFTS[movementId] || \"\"" in js
+    assert 'card.setAttribute("role", "button")' in js
+    assert 'event.key === "Enter" || event.key === " "' in js
+
+
+def test_dashboard_assets_label_unknown_usage_and_use_server_board_buckets():
+    js = (ROOT / "scripts" / "dashboard_assets" / "dashboard.js").read_text(encoding="utf-8")
+    assert 'return value === null || value === undefined ? "unknown" : String(value)' in js
+    assert 'attention: board.attention || []' in js
+    assert 'source: " + (usage.cost_source || "unknown")' in js
+
+
 # ---------------------------------------------------------------------------
 # derive_process_status
 # ---------------------------------------------------------------------------
@@ -555,6 +571,22 @@ def test_build_board_groups_one_movement_per_health_into_the_right_columns(tmp_p
     assert board["totals"]["open"] == len(board["open"])
     assert board["totals"]["awaiting_po"] == 1
     assert board["totals"]["closed"] == 1
+
+
+def test_build_board_uses_one_bucket_for_stopped_and_handed_over_workers(tmp_path):
+    state_dir, relay_dir, repo_root = tmp_path / "state", tmp_path / "relay", tmp_path
+    stopped_relay = _make_relay_named(tmp_path, "stopped")
+    handed_relay = _make_relay_named(tmp_path, "handed")
+    stopped_id, handed_id = _relay_id_of(stopped_relay), _relay_id_of(handed_relay)
+    _save_minimal_record(state_dir, stopped_id, pid=None)
+    _save_minimal_record(state_dir, handed_id, pid=None, external_participant=True)
+
+    board = dash.build_board(state_dir, relay_dir, repo_root, retry_limit=2, stuck_after_seconds=900)
+
+    assert {row["movement_id"] for row in board["attention"]} == {stopped_id}
+    assert {row["movement_id"] for row in board["running"]} == {handed_id}
+    assert board["totals"]["attention"] == len(board["attention"])
+    assert board["totals"]["running"] == len(board["running"])
 
 
 def test_build_board_archives_a_closed_relay_without_a_state_record(tmp_path):

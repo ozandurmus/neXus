@@ -26,7 +26,7 @@ main#app { padding: 16px 24px; max-width: 1400px; margin: 0 auto; }
 #token-error { margin-top: 8px; }
 
 #board-columns { display: grid; grid-template-columns: repeat(6, minmax(176px, 1fr)); gap: 16px; overflow-x: auto; padding-bottom: 8px; }
-@media (max-width: 900px) { #board-columns { grid-template-columns: 1fr; overflow-x: visible; } }
+@media (max-width: 700px) { #board-columns { grid-template-columns: 1fr; overflow-x: visible; } }
 @media (min-width: 701px) and (max-width: 1250px) { #board-columns { grid-template-columns: repeat(3, minmax(176px, 1fr)); overflow-x: visible; } }
 
 .board-column { background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: 16px; padding: 8px; min-width: 0; }
@@ -36,6 +36,7 @@ main#app { padding: 16px 24px; max-width: 1400px; margin: 0 auto; }
 
 .board-card { background: var(--surface-container-high); border: 1px solid var(--outline-variant); border-left: 4px solid var(--provider-neutral); border-radius: 12px; padding: 8px 12px; cursor: pointer; }
 .board-card:hover { border-color: var(--primary); }
+.board-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .board-card.provider-claude { border-left-color: var(--provider-claude); }
 .board-card.provider-codex { border-left-color: var(--provider-codex); }
 .card-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
