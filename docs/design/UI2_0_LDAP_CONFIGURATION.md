@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT**
+**FROZEN**
 
 ## Context
 Currently, LDAP directory settings are configured statically via `application.properties`. As part of the UI2.0 initiative, the Product Owner has requested moving these settings to a DB-backed configuration menu, allowing administrators to dynamically configure LDAP connections without restarting the application.

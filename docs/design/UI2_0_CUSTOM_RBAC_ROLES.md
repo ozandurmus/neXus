@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT**
+**FROZEN**
 
 ## Context
 The platform currently utilizes a closed vocabulary `RoleToken` for Role-Based Access Control (RBAC) (e.g., hardcoded roles like `ADMIN`, `VIEWER`). The Product Owner has requested moving to a dynamic DB-backed role/permission system to support custom roles with granular permission mappings.
