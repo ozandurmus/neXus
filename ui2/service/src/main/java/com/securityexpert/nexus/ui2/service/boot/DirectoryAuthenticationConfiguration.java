@@ -8,6 +8,8 @@ import org.springframework.core.env.Environment;
 import com.securityexpert.nexus.ui2.identity.ldap.*;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.DirectoryProfileRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.JooqDirectoryProfileRepository;
+import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
 @Configuration
 public class DirectoryAuthenticationConfiguration {
