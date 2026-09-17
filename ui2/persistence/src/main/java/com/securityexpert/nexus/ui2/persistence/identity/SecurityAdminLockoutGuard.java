@@ -30,7 +30,7 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
  */
 public final class SecurityAdminLockoutGuard {
 
-    private static final String SECURITY_ADMIN_TOKEN = RoleToken.SECURITY_ADMIN.token();
+    private static final String SECURITY_ADMIN_TOKEN = RoleToken.SECURITY_ADMIN;
 
     private final RoleBindingRepository roleBindingRepository;
     private final LocalCredentialsRepository localCredentialsRepository;

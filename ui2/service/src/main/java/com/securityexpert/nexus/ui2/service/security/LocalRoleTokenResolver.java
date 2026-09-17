@@ -31,10 +31,10 @@ public final class LocalRoleTokenResolver {
         this.groupReferenceCipher = Objects.requireNonNull(groupReferenceCipher, "groupReferenceCipher");
     }
 
-    public List<RoleToken> resolve(String localIdentityId) {
-        List<RoleToken> resolved = new ArrayList<>();
-        for (RoleToken token : RoleToken.values()) {
-            for (RoleBindingRecord binding : roleBindingRepository.findActiveByToken(token.token())) {
+    public List<String> resolve(String localIdentityId) {
+        List<String> resolved = new ArrayList<>();
+        for (String token : RoleToken.values()) {
+            for (RoleBindingRecord binding : roleBindingRepository.findActiveByToken(token)) {
                 if (binding.bindingKind() == com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.LEGACY && localIdentityId.equals(groupReferenceCipher.decrypt(binding.groupReferenceEncrypted()))) {
                     resolved.add(token);
                     break;
@@ -45,8 +45,8 @@ public final class LocalRoleTokenResolver {
     }
 
     /** The matching direct binding, retained for E4's audit row. */
-    public Optional<RoleBindingRecord> resolveBinding(String localIdentityId, RoleToken token) {
-        return roleBindingRepository.findActiveByToken(token.token()).stream()
+    public Optional<RoleBindingRecord> resolveBinding(String localIdentityId, String token) {
+        return roleBindingRepository.findActiveByToken(token).stream()
                 .filter(binding -> binding.bindingKind() == com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.LEGACY)
                 .filter(binding -> localIdentityId.equals(groupReferenceCipher.decrypt(binding.groupReferenceEncrypted())))
                 .findFirst();

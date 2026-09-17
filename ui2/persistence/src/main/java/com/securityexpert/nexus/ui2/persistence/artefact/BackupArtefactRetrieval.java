@@ -99,7 +99,7 @@ public final class BackupArtefactRetrieval implements BackupArtefactRetrievalPor
     }
 
     private boolean hasActiveBackupAdminBinding(String actorFingerprint) {
-        List<RoleBindingRecord> activeBindings = roleBindingRepository.findActiveByToken(RoleToken.BACKUP_ADMIN.token());
+        List<RoleBindingRecord> activeBindings = roleBindingRepository.findActiveByToken(RoleToken.BACKUP_ADMIN);
         if (activeBindings.isEmpty()) {
             return false;
         }

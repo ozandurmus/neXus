@@ -50,6 +50,11 @@ public class RbacConfiguration {
     }
 
     @Bean
+    public com.securityexpert.nexus.ui2.persistence.identity.RbacRoleRepository rbacRoleRepository(TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.identity.JooqRbacRoleRepository(transactionBoundary);
+    }
+
+    @Bean
     public ActionRegistry actionRegistry() {
         return new ActionRegistry();
     }

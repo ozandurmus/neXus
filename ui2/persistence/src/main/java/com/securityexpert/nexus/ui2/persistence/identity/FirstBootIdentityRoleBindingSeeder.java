@@ -68,9 +68,9 @@ public final class FirstBootIdentityRoleBindingSeeder {
     }
 
     /** One identity, its initial password, and the role tokens bound to it at first boot. */
-    public record IdentitySpec(String localIdentityName, char[] initialPassword, List<RoleToken> roleTokens,
+    public record IdentitySpec(String localIdentityName, char[] initialPassword, List<String> roleTokens,
             boolean rootIdentity) {
-        public IdentitySpec(String localIdentityName, char[] initialPassword, List<RoleToken> roleTokens) {
+        public IdentitySpec(String localIdentityName, char[] initialPassword, List<String> roleTokens) {
             this(localIdentityName, initialPassword, roleTokens, false);
         }
     }
@@ -102,8 +102,8 @@ public final class FirstBootIdentityRoleBindingSeeder {
                             SecurityAdminBootstrapPort.BOOTSTRAP_ACTOR);
 
                     byte[] selfReferenceEncrypted = groupReferenceCipher.encrypt(localIdentityId);
-                    for (RoleToken roleToken : spec.roleTokens()) {
-                        roleBindingRepository.create(OpaqueId.random().value(), roleToken.token(),
+                    for (String roleToken : spec.roleTokens()) {
+                        roleBindingRepository.create(OpaqueId.random().value(), roleToken,
                                 selfReferenceEncrypted, groupReferenceKeyId, SecurityAdminBootstrapPort.BOOTSTRAP_ACTOR,
                                 ACTION_FIRST_BOOT_ROLE_BINDING_CREATE);
                     }

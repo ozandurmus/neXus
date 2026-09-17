@@ -68,10 +68,12 @@ public class FirstBootIdentitySeedingRunner implements ApplicationRunner {
     private static final Logger LOG = LoggerFactory.getLogger(FirstBootIdentitySeedingRunner.class);
 
     /** ROLE-1: every existing role token, together, is "full administrative capability." */
-    static final List<RoleToken> NEXUSADMIN_ROLE_TOKENS = List.of(RoleToken.values());
+    static final List<String> NEXUSADMIN_ROLE_TOKENS = List.of(RoleToken.values());
 
-    /** ROLE-3: read-only, and nothing else. */
-    static final List<RoleToken> CLAUDEADMIN_ROLE_TOKENS = List.of(RoleToken.VIEWER);
+    /**
+     * BOOT-3b/BOOT-5a: Claude/UI integration testing identity.
+     */
+    static final List<String> CLAUDEADMIN_ROLE_TOKENS = List.of(RoleToken.VIEWER);
 
     private final LocalCredentialsRepository repository;
     private final FirstBootIdentityRoleBindingSeeder seeder;

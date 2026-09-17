@@ -26,7 +26,7 @@ public final class RoleBindingSecurityAdminBootstrap implements SecurityAdminBoo
     @Override
     public String bootstrapFirstSecurityAdminBinding(byte[] groupReferenceEncrypted, String groupReferenceKeyId) {
         String bindingId = OpaqueId.random().value();
-        return roleBindingRepository.create(bindingId, RoleToken.SECURITY_ADMIN.token(),
+        return roleBindingRepository.create(bindingId, RoleToken.SECURITY_ADMIN,
                 groupReferenceEncrypted, groupReferenceKeyId, BOOTSTRAP_ACTOR, "bootstrap_security_admin_binding");
     }
 }

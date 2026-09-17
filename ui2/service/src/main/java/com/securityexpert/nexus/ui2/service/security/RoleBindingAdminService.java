@@ -103,7 +103,7 @@ public final class RoleBindingAdminService {
             Instant now) {
         if (sessions == null || locals == null || localIdentityId == null || !sessionAuthorized(actor, session, now)
                 || locals.resolve(actor).isEmpty() || java.util.Arrays.stream(RoleToken.values())
-                    .noneMatch(token -> token.token().equals(roleToken))) return new Outcome.NotEvaluated();
+                    .noneMatch(token -> token.equals(roleToken))) return new Outcome.NotEvaluated();
         try {
             return roleBindingRepository.directoryMutation(tx -> {
                 if (!authorized(tx, actor, session, now) || new LocalIdentityResolver(tx.locals()).resolve(actor).isEmpty()
@@ -124,7 +124,7 @@ public final class RoleBindingAdminService {
         if (selection == null || !selection.actor().equals(actor) || !selection.session().equals(session)
                 || !now.isBefore(selection.expiresAt()) || !selection.target().profileId().equals(profile)
                 || selection.target().kind() != kind || java.util.Arrays.stream(RoleToken.values())
-                    .noneMatch(token -> token.token().equals(roleToken))) return new Outcome.NotEvaluated();
+                    .noneMatch(token -> token.equals(roleToken))) return new Outcome.NotEvaluated();
         long started = System.nanoTime();
         try {
             return roleBindingRepository.directoryMutation(tx -> {
@@ -175,7 +175,7 @@ public final class RoleBindingAdminService {
                 Outcome nonSelf = nonSelf(tx, actor, target.get(), now);
                 if (nonSelf != null) return nonSelf;
                 SecurityAdminLockoutGuard guard = new SecurityAdminLockoutGuard(tx.bindings(), tx.locals(), groupReferenceCipher);
-                if (RoleToken.SECURITY_ADMIN.token().equals(row.roleToken()) && !guard.anyEnabledSecurityAdminRemainsIfBindingRevoked(bindingId)) {
+                if (RoleToken.SECURITY_ADMIN.equals(row.roleToken()) && !guard.anyEnabledSecurityAdminRemainsIfBindingRevoked(bindingId)) {
                     return new Outcome.LastSecurityAdminRefused();
                 }
                 java.util.concurrent.atomic.AtomicReference<Outcome> result = new java.util.concurrent.atomic.AtomicReference<>(new Outcome.NotEvaluated());
@@ -271,7 +271,7 @@ public final class RoleBindingAdminService {
             // independent of it -- revoking the last enabled
             // role:security_admin binding is refused even when the acting
             // admin is not the one losing access.
-            if (!isRoot(actingAdminActorFingerprint) && RoleToken.SECURITY_ADMIN.token().equals(binding.get().roleToken())
+            if (!isRoot(actingAdminActorFingerprint) && RoleToken.SECURITY_ADMIN.equals(binding.get().roleToken())
                     && !securityAdminLockoutGuard.anyEnabledSecurityAdminRemainsIfBindingRevoked(bindingId)) {
                 return new Outcome.LastSecurityAdminRefused();
             }

@@ -2,8 +2,6 @@ package com.securityexpert.nexus.ui2.service.security;
 
 import java.util.Optional;
 
-import com.securityexpert.nexus.ui2.platform.RoleToken;
-
 /**
  * A closed action-registry entry, standing in for {@code C4}'s eventual
  * registry (deferred, contract §2's "explicitly deferred" list: "the
@@ -18,5 +16,5 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
  * @param requiredRoleToken   {@code empty} means {@code NO_APPLICABLE_AUTHORITY}
  *                             (open to any authenticated session) at {@code E4}
  */
-public record ActionDescriptor(String actionId, boolean consoleSubmittable, Optional<RoleToken> requiredRoleToken) {
+public record ActionDescriptor(String actionId, boolean consoleSubmittable, Optional<String> requiredRoleToken) {
 }

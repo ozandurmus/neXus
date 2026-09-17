@@ -108,7 +108,7 @@ public final class RbacEvaluator {
                 Optional.of(REASON_DIRECTORY_BINDING_NOT_EVALUABLE), Optional.empty());
     }
 
-    public Decision evaluate(String actorFingerprint, Optional<RoleToken> requiredToken, Instant now) {
+    public Decision evaluate(String actorFingerprint, Optional<String> requiredToken, Instant now) {
         Optional<String> localIdentityId = localIdentityResolver == null ? Optional.empty()
                 : localIdentityResolver.resolve(actorFingerprint).map(record -> record.localIdentityId());
         Optional<ActorAuthzStateRecord> authzState = actorAuthzStateRepository.find(actorFingerprint);
@@ -128,7 +128,7 @@ public final class RbacEvaluator {
                     .map(binding -> Decision.permittedLocal(binding.bindingId()))
                     .orElseGet(Decision::deniedLocalUnbound);
         }
-        String token = requiredToken.get().token();
+        String token = requiredToken.get();
 
         List<RoleBindingRecord> activeBindings = roleBindingRepository.findActiveByToken(token);
         if (activeBindings.isEmpty()) {
