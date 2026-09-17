@@ -63,6 +63,18 @@ class PersistedManagementEndpointTrustResolverTest {
     }
 
     @Test
+    void missingDiscoveryTrustFallsBackToEnrolledDeviceTrust() {
+        Store store = new Store();
+        store.fingerprint = null;
+        var resolver = new PersistedManagementEndpointTrustResolver(store, ref -> Optional.of(FINGERPRINT));
+        var verifier = new HostKeyVerifier(resolver);
+        String ref = PersistedManagementEndpointTrustResolver.scopeRef(HOST, PORT);
+
+        assertTrue(verifier.isTrusted(ref, HOST, PORT, ALGORITHM, FINGERPRINT));
+        assertFalse(verifier.isTrusted(ref, HOST, PORT, ALGORITHM, "rotated-key"));
+    }
+
+    @Test
     void keyExchangeHookRejectsRotationAndUnauthorizedAlgorithmWithoutTofu() throws Exception {
         Store store = new Store();
         var transport = new SshExecTransport(ref -> { throw new AssertionError("credentials reached"); },

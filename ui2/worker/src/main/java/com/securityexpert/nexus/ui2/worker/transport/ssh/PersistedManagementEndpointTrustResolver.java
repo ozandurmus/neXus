@@ -35,8 +35,10 @@ public final class PersistedManagementEndpointTrustResolver implements TrustRule
             return enrolledDevices.resolveExpectedFingerprint(ref, host, port, algorithm);
         }
         try {
-            return ref.equals(scopeRef(host, port))
+            Optional<String> fingerprint = ref.equals(scopeRef(host, port))
                     ? repository.findActiveFingerprint(host, port, algorithm) : Optional.empty();
+            return fingerprint.isPresent() ? fingerprint
+                    : enrolledDevices.resolveExpectedFingerprint(ref, host, port, algorithm);
         } catch (RuntimeException e) {
             throw new IllegalStateException("CP_DISCOVERY_TRUST_NOT_EVALUABLE");
         }
@@ -48,8 +50,14 @@ public final class PersistedManagementEndpointTrustResolver implements TrustRule
             return enrolledDevices.authorizedAlgorithms(ref, host, port);
         }
         try {
-            return Optional.of(ref.equals(scopeRef(host, port))
-                    ? repository.findActiveAlgorithms(host, port) : List.of());
+            List<String> algorithms = ref.equals(scopeRef(host, port))
+                    ? repository.findActiveAlgorithms(host, port) : List.of();
+            if (!algorithms.isEmpty()) {
+                return Optional.of(algorithms);
+            }
+            Optional<List<String>> enrolledAlgorithms = enrolledDevices.authorizedAlgorithms(ref, host, port);
+            return enrolledAlgorithms.isPresent() || enrolledDevices.resolveExpectedFingerprint(ref).isPresent()
+                    ? enrolledAlgorithms : Optional.of(List.of());
         } catch (RuntimeException e) {
             throw new IllegalStateException("CP_DISCOVERY_TRUST_NOT_EVALUABLE");
         }
