@@ -84,9 +84,9 @@ export function TopAppBar() {
               </Typography>
               <Tooltip title={displayedRoles.join(", ")}>
                 <Typography variant="body2" sx={{ cursor: "default" }}>
-                  {displayedRoles.length > 2
-                    ? `${displayedRoles[0]} (+${displayedRoles.length - 1} roles)`
-                    : displayedRoles.join(", ")}
+                  {displayedRoles.length > 0
+                    ? displayedRoles[0].replace("role:", "").replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())
+                    : "No Role"}
                 </Typography>
               </Tooltip>
             </Box>
