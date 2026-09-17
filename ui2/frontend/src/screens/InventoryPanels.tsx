@@ -349,8 +349,13 @@ export function CollectNowButton({ deviceId, onCollected }: { readonly deviceId:
           if (cancelled) return;
           setJobState(result.job?.state ?? null);
           if (result.job !== null && isTerminalJobState(result.job.state)) {
-            setPhase("idle");
-            onCollected();
+            if (result.job.state === "FAILED" || result.job.state === "REJECTED") {
+              setError(`Collection failed (${result.job.state})`);
+              setPhase("error");
+            } else {
+              setPhase("idle");
+              onCollected();
+            }
           }
         })
         .catch(() => {

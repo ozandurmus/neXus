@@ -37,6 +37,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // ("*") is enough; no change to any single-segment route above.
             Map.entry("GET /devices/*/inventory", ActionRegistry.DEVICE_READ),
             Map.entry("POST /devices/*/inventory/collect", ActionRegistry.DEVICE_INVENTORY_COLLECT),
+            Map.entry("POST /devices/inventory/collect-all", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
             Map.entry("GET /notifications", ActionRegistry.NOTIFICATIONS_READ),
             // 13G: one resource, body-only (no path variable), matching

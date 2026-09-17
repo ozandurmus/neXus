@@ -25,7 +25,7 @@ has no enabled product path.
 ## Active build
 
 `NXS-LOCAL-0285` — `done`: Check Point SSH inventory worker finished, hybrid topology contract signed.
-`UI Updates` — `done`: deployed LDAP UI, Select All, Role Display to remote K3s cluster.
+`UI Updates` — `done`: deployed LDAP UI, Custom RBAC UI, Role Display, Bulk Collect fixes to remote K3s cluster.
 
 `NXS-LOCAL-0176` — `automated_validated`: expire a past-deadline session on
 read so it cannot block login. The newest merged movement, its predecessor
