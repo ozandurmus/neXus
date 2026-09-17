@@ -650,3 +650,16 @@ export interface AuditEventView {
 export function listAuditEvents(): Promise<{ events: AuditEventView[] }> {
   return call("/audit-log", "GET");
 }
+
+export interface JobEventView {
+  readonly job_id: string;
+  readonly job_type: string;
+  readonly target_device_id: string;
+  readonly state: string;
+  readonly terminal_reason?: string;
+  readonly submitted_at: string;
+}
+
+export function listJobs(): Promise<JobEventView[]> {
+  return call("/api/v2/jobs", "GET");
+}

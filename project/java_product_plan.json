@@ -98,6 +98,10 @@
     "backup_artefact_id_opaque_not_storage_path": "java_debt",
     "api_routes_without_security_mapping_refused_by_default": "java_debt",
     "ui_overview_operations_show_stale_or_empty_state": "java_debt",
+    "ui2_role_display": "java_feature",
+    "ui2_select_all": "java_feature",
+    "ui2_ldap_config": "java_feature",
+    "ui2_audit_logging": "java_feature",
     "ui2_service_cannot_bootstrap_an_empty_database": "java_debt",
     "job_failure_reason_is_never_recorded": "java_debt"
   },

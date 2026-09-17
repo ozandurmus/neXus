@@ -8,6 +8,7 @@ import { ProjectPlanPanel } from "./ProjectPlanPanel";
 
 import { CustomRolesPanel } from "./CustomRolesPanel";
 import { AuditLogPanel } from "./AuditLogPanel";
+import { JobLogsPanel } from "./JobLogsPanel";
 import { DirectorySettingsPanel } from "../components/settings/DirectorySettingsPanel";
 
 /** M3Administration with an empty registry. Enrollment is the one place a device enters the product. */
@@ -65,6 +66,10 @@ export function AdministrationScreen() {
           {
             label: "Audit Logs",
             panel: <AuditLogPanel />,
+          },
+          {
+            label: "Job Logs",
+            panel: <JobLogsPanel />,
           },
         ]}
       />
