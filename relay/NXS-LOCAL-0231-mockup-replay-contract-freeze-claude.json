@@ -1,0 +1,111 @@
+{
+  "created_at": "2026-09-15T16:01:35Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Both source drafts are incorporated via exact named commits and either frozen with cited decisions or explicitly blocked by a higher-authority conflict.",
+          "Frozen mockup contract limits current seed to real current Java schema/screens and defines isolated test carrier/readonly identity.",
+          "Frozen replay contract defines initial surface, session/RBAC/HMAC/audit/refusal/export/search/cache boundaries and an implementation order.",
+          "No implementation source changed; privacy/authority/diff gates pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); explicit Product Owner instruction in this session authorizes reviewing and freezing the two named drafts before implementation.",
+          "observed": "NXS-LOCAL-0228 produced PR #391 / commit 505a333 with docs/design/UI2_0_MOCKUP_PALACE_TEST_ENVIRONMENT.md (DRAFT, 7 UNKNOWNs). NXS-LOCAL-0229 produced PR #390 / commit 3f4e498fab3aff85963f44246d1dbae61ec54ff4 with docs/design/UI2_0_PRODUCTION_REPLAY_ROLE_ANONYMIZED_VIEW_DESIGN.md (DRAFT, 10 decisions). Product Owner explicitly directs: perform freeze review, then dispatch implementation. NXS-LOCAL-0230 was blocked before any modification because Codex sandbox could not write the shared Git object directory during required cherry-picks; this successor uses Claude for the same approved scope.",
+          "what_exists": "Both drafts were structurally/privacy validated. They are on separate feature branches and not merged. Cherry-pick exactly commits 505a333 and 3f4e498fab3aff85963f44246d1dbae61ec54ff4 onto this lane before reviewing; report conflicts rather than substituting content."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/mockup-replay-contract-freeze-claude"
+        },
+        "invariants": [
+          "No production data, device command, host access, or credential is accessed.",
+          "Browser never selects transform; response projection is server-side.",
+          "Mockup palace remains synthetic and cannot fallback to production.",
+          "Replay views fail closed on unknown/unclassified surface."
+        ],
+        "merge_gate": "Worker may commit/push/open one PR, never merge. Product Owner review is the freeze authorization supplied by this packet; PO then dispatches implementation based on exact frozen scope.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "PO-authorized review and freeze of the mockup-palace and production replay-role design drafts, resolving their explicit decisions before implementation.",
+        "output_contract": [
+          "One PR with FROZEN contract(s), every resolved decision and explicit remaining deferrals, plus SESSION_CLOSE.",
+          "No implementation files or state files; clean worktree."
+        ],
+        "recommended_reasoning": {
+          "reason": "Two new security/privacy and test-isolation contracts require cross-subsystem review. Codex gpt-6-astra high is proportionate; user directs minimum model/reasoning needed when moving from Claude. Codex attempt 0230 hit a confirmed worktree object-store permission limitation before any code; Claude is selected mechanically for the exact same packet.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "User has explicitly authorized freeze after review. Resolve each UNKNOWN with the safest minimal value supported by targeted source evidence; never claim an unseen surface is covered.",
+          "Mockup palace is synthetic only. Freeze a narrow first slice limited to Java capabilities/screens that exist now; no promise to port unavailable Python fields. Use existing test carrier and role:viewer; explicitly refuse live LDAP/production config/device transport.",
+          "Replay role is production-facing presentation only. Freeze an initial narrow surface, server-side post-authorization projection, exclusive session mode, no exports/downloads/search-by-raw/cache reuse until independently proven, no root bypass, durable HMAC pseudonym key held server-side, and activation-only audit unless contract evidence requires stricter. If any requirement conflicts with a FROZEN authority, report it and do not freeze that clause.",
+          "Do a field-by-field classification only for the frozen initial surface; all unclassified or later surfaces refuse. Do not infer vendor semantics. Raw values, paths, credentials, IDs and free text never reach replay responses.",
+          "Maintain English engineering artifacts. Worker may commit/push/open a PR; never merge. This packet is explicit PO authorization for FROZEN status only after every decision is source-cited and required validations pass."
+        ],
+        "risks": [
+          "A higher-authority conflict or unresolved field classification must block freeze rather than be guessed.",
+          "Cherry-pick conflict must be reported, not manually replaced."
+        ],
+        "scope": {
+          "in": [
+            "Cherry-pick the two named draft commits.",
+            "Targeted source/contract review sufficient to resolve their explicit UNKNOWNs into one or more FROZEN contracts, with decision records/amendments only where needed.",
+            "No implementation-source changes.",
+            "A concrete, ordered implementation successor packet recommendation for mockup palace then replay role."
+          ],
+          "out": [
+            "All ui2/ implementation, migrations, test container start, production/k3s/host actions, production data access, anonymization export execution, login/session changes, browser/device/credential access, canonical project state files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py"
+            ],
+            "name": "authority_references"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T16:01:35Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0231",
+  "movement": "NXS-LOCAL-0231",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-15T16:01:35Z"
+}

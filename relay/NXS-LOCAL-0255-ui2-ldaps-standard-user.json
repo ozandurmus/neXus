@@ -1,0 +1,176 @@
+{
+  "created_at": "2026-09-15T21:31:40Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract fixes isolation and data-flow boundaries plus human rollout/rollback checks.",
+          "Implementation successor has exact files and real-environment DoD.",
+          "Privacy/authority/diff pass; no manifests/host operations in this movement."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); C3C LDAP contract on origin/main.",
+          "observed": "Product Owner wants a HOST-A test server so the agent can browse replay UI with a readonly user after replay RBAC exists. Production ui2 remains live; replay must be isolated by namespace, storage, credentials, DB and ingress.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-ldaps-standard-user"
+        },
+        "invariants": [
+          "No cross-namespace production data or credential access.",
+          "No raw production data in replay server.",
+          "No agent host command.",
+          "Replay viewer read-only and no device path."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen C3C LDAP/LDAPS TLS trust, standard-user bind and individual-or-group principal RBAC bindings.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "TLS/auth/RBAC boundary; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Implement C3C only: verified CA, no trust-all/plain bind, transient user secret, individual/group binding server-side RBAC.",
+          "No live LDAP access. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "C3C standard-user LDAPS/StartTLS trust, transient bind, encrypted individual/group bindings, tests."
+          ],
+          "out": [
+            "Live corporate LDAP, deployment/Secret apply, host access, plaintext credential storage."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test --tests '*Ldap*'"
+            ],
+            "name": "ldap"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T21:31:40Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "Dispatch scope conflicts with acceptance criteria",
+      "text": "The approved objective, requirements and permitted scope authorize C3C LDAP TLS, transient standard-user bind and encrypted directory-principal/group RBAC implementation. The acceptance criteria instead require a frozen replay-isolation contract and an implementation successor; baseline.what_exists requires deployment selector/port inspection, excluded by WORKER.md. Please issue a corrected dispatch identifying the intended deliverable and matching acceptance criteria/read scope. No source changes, live access, deployment operations, commit or PR have been performed. WORKER.md requires stop on a scope/authority decision conflict.",
+      "timestamp": "2026-09-15T21:32:12Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_CORRECTION",
+      "seq": 3,
+      "subject": "C3C LDAP implementation scope",
+      "text": "Correction: authoritative deliverable is C3C LDAP/LDAPS implementation only: verified CA trust, LDAPS/StartTLS standard-user transient bind, encrypted individual-or-group directory principal RBAC bindings and synthetic tests. Remove all replay isolation, deployment selector/port, host and C11 acceptance criteria. No live directory connection or deployment operation. Acceptance: no credential persistence/TLS downgrade; individual/group bindings resolve through existing server-side RBAC; synthetic certificate/bind failures fail closed.",
+      "timestamp": "2026-09-15T21:41:46Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "Canonical relay SESSION_CLOSE only; no product source/configuration or project-state changes."
+        ],
+        "completed": [
+          "Read worker brief, approved task, frozen C3C contract and canonical relay; correction sequence 3 resolves stale replay/deployment acceptance criteria.",
+          "Inspected existing LDAP adapters and shared identity/RBAC caller path without editing source.",
+          "Ran the required LDAP command; it failed before tests due to sandbox denial of the existing Gradle wrapper lock.",
+          "Repository privacy and baseline diff checks passed; worktree is clean."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED"
+        },
+        "integration": {
+          "branch": "feature/ui2-ldaps-standard-user",
+          "ci": "NOT RUN",
+          "head_sha": "379351fa2310e21df14f927c3e81c4666ba0a0ae",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator-controlled merge. No implementation commit exists; no PR opened and no merge attempted.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0255",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Resume corrected C3C-only implementation after the orchestrator supplies a permitted working path for the existing Gradle runtime or explicitly authorizes bounded environment remediation.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Local/root authentication and existing LDAP/RBAC implementation unchanged.",
+          "No live LDAP access, deployment/Secret apply, host access, credential persistence, commit, push, pull request or merge."
+        ],
+        "recommended_reasoning": {
+          "reason": "C3C TLS/authentication/RBAC integration requires security reasoning; runtime permission remediation is routine and needs no escalation.",
+          "tier": "strong implementation"
+        },
+        "state_updates": [
+          "No durable product-state update: no delivery, architecture, debt or sequencing change made. No AI_HANDOVER edit because it is outside the worker read/touch scope."
+        ],
+        "unresolved_risks": [
+          "Required LDAP gate cannot execute with the current sandbox permissions. Supplied AGENTS.md Context/token discipline requires stopping on a runtime-command failure and prohibits environment configuration without an explicit same-chat request.",
+          "C3C implementation and all synthetic trust/bind/typed-binding acceptance tests remain outstanding; no readiness claim."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED; implementation not started.",
+          "diff_check": "PASS: git diff --check origin/main; git status --short empty.",
+          "full_regression": "NOT RUN; required targeted runtime command failed.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py; zero findings.",
+          "real_environment": "NOT RUN; live directory and deployment access excluded.",
+          "state_consistency": "NOT RUN; no project-state changes.",
+          "targeted": "BLOCKED: bash -lc ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test --tests *Ldap* failed before tests: FileNotFoundException for Gradle wrapper ZIP lock under /Users/OzanDur/.gradle (Operation not permitted)."
+        }
+      },
+      "seq": 4,
+      "timestamp": "2026-09-15T21:43:07Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0255",
+  "movement": "NXS-LOCAL-0255",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T21:43:07Z"
+}

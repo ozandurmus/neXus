@@ -1,0 +1,168 @@
+{
+  "created_at": "2026-09-15T19:38:25Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract resolves local platform/lifecycle/persistence/MCP/plugin boundaries or explicitly defers unsupported clients.",
+          "Implementation sequence is independently testable and rollback safe.",
+          "Authority/privacy/diff gates pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); Workbench Companion contract is frozen on origin/main.",
+          "observed": "Workbench table-first Material 3 work is separately in progress. User provides a follow-up directive for independent reliable tracking with a supervised service, read-only MCP, private plugin and skill, no new execution authority.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-companion-read-adapter"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw transcripts or sensitive notifications.",
+          "Unknown/cost provenance semantics preserved.",
+          "Notification state separate from workflow authority."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement Workbench Companion C1: bounded read-only adapter over local orchestrator, relay and existing usage-cache sources.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Local filesystem boundary and evidence semantics; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Implement C1 exactly per frozen companion contract §§2-3 and §9. Read only configured local roots, reject escapes/symlinks/oversize/malformed sources, preserve unknowns.",
+          "No status CLI, no usage collector, no dashboard wrapper, no raw logs. Worker commits only; PO PR/merge."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "C1 only: validated bounded local source adapter and synthetic tests; no observer, snapshot, MCP, plugin, skill, service lifecycle or notification."
+          ],
+          "out": [
+            "Any writes to canonical sources, raw logs, subprocess/network, service install, UI, host/device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_workbench_companion.py"
+            ],
+            "name": "companion_c1"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T19:38:25Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added scripts/workbench_companion.py and tests/test_workbench_companion.py only.",
+          "Descriptor-checked local reads enforce ownership, reject path/symlink escapes, special files and hard links, cap files at 2 MiB and scans at 1000 movements, reject duplicate/malformed JSON and detect source replacements.",
+          "Allowlisted projection preserves nullable counters, four cost sources, independently reported cost, requested/observed model distinction, event-based cache freshness, subscription classification and UNKNOWN attempt attribution.",
+          "Verified mechanical source details: verification is record.verify.passed; records are state-root/<movement>.json and caches are state-root/usage/<movement>.json. No wrapper, status command or usage collector is called."
+        ],
+        "completed": [
+          "Implemented C1 of the frozen Workbench Companion contract: SourceConfig and scan_sources provide bounded, read-only, in-memory local source projection.",
+          "Added 57 synthetic acceptance cases; opened PR #402 and left merge execution to the orchestrator."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/workbench-companion-read-adapter",
+          "ci": "Worker gates passed; GitHub CI and orchestrator verification pending.",
+          "head_sha": "97f10bfc499196bee83e2182d5a89436264e61f9",
+          "merge_commit": null,
+          "merge_decision": "User dispatch uses --merge-mode orchestrator; no gh pr merge executed. Orchestrator owns verification and merge.",
+          "merge_state": "OPEN",
+          "pr": 402,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/402"
+        },
+        "next": {
+          "movement": "Workbench Companion C2",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "After orchestrator verification/merge and a separate approved directive, implement the bounded observer-state slice in frozen contract section 9.",
+          "status": "planned"
+        },
+        "preserved": [
+          "Synthetic upstream file hashes remain unchanged on repeated scans; observation tests deny source writes, subprocess/network operations, dashboard/status wrappers and raw-log collection.",
+          "No observer, snapshot, MCP, plugin, skill, lifecycle, notification, UI, device, deployment or production changes; health/work_stage remain unavailable and SESSION_CLOSE never implies merged.",
+          "Canonical orchestrator records, usage producers, relay validation and dispatch-ledger authority are unchanged. The authorized relay SESSION_CLOSE is separate from adapter observation."
+        ],
+        "recommended_reasoning": {
+          "reason": "Next C2 introduces atomic persistence and reconciliation; retain elevated reasoning for that bounded filesystem/state boundary.",
+          "tier": "strong implementation"
+        },
+        "state_updates": [
+          "C1 deliverable committed and pushed on feature/workbench-companion-read-adapter; no project queue, canonical sources or rotating handover documents changed under the bounded worker scope.",
+          "Canonical relay re-read immediately before PR creation: no post-dispatch correction or decision entries were present.",
+          "gh pr create hit the GraphQL rate limit; equivalent GitHub REST creation succeeded and returned OPEN PR #402 with the exact committed head."
+        ],
+        "unresolved_risks": [
+          "Stable multi-file scans do not establish an upstream transaction; event-age evidence does not prove a worker or observer is alive.",
+          "Workstation lifecycle and client compatibility remain deferred to separately approved C2-C5 slices; missing earlier-attempt usage remains unknown."
+        ],
+        "validation": {
+          "affected": "PASS: tests/test_contract_authority_status.py and tests/test_design_cross_references_resolve.py; 8 passed.",
+          "diff_check": "PASS: git diff --check origin/main before commit and after push; worktree clean.",
+          "full_regression": "Not run: worker directive specifies C1 targeted, privacy and diff gates; no UI or network behavior changed.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py; zero findings on final committed content.",
+          "real_environment": "UNVERIFIED: synthetic local filesystem validation only; no service/client installation, remote-host, device or production validation.",
+          "state_consistency": "Frozen companion contract authority and design-reference gates pass; canonical project-state files were not changed within this C1-only dispatch.",
+          "targeted": "PASS: python3 -m pytest -q -p no:cacheprovider tests/test_workbench_companion.py; 57 passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T19:45:46Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0245",
+  "movement": "NXS-LOCAL-0245",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T19:45:46Z"
+}

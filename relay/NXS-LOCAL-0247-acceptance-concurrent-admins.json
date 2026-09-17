@@ -1,0 +1,146 @@
+{
+  "created_at": "2026-09-15T20:01:48Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic browser tests reproduce and prevent draft loss/switch leakage, stopped classification/count agreement, unknown/estimated labels and keyboard behavior.",
+          "Privacy/diff/targeted tests pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_10_ACCEPTANCE_CONCURRENT_ADMINS_CONTRACT.md (FROZEN).",
+          "observed": "Product Owner approves table-first Workbench: Active, Needs you and Archive filters, search by movement/objective, details below list, existing UI2 Material 3 theme bridge, Kanban secondary only if bounded.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/acceptance-concurrent-admins"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw logs/credentials.",
+          "Usage uncertainty remains honest."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen B1-10 concurrent-admin acceptance scenario.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Frozen bounded acceptance scenario.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Read the frozen contract fully and implement only its acceptance scenario.",
+          "No device, host or production access. Worker commits only; PO handles PR and merge."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "B1-10 integration/acceptance tests and minimum test harness support."
+          ],
+          "out": [
+            "Production behavior, Device Workspace UI, host/device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true integrationTest"
+            ],
+            "name": "targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T20:01:48Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "B1-10 carrier scope conflict",
+      "text": "The FROZEN B1-10 contract requires one test class to exercise POST /login and POST /login/resolve through the real HTTP surface. WORKER.md permits reading only B1-10 integration/acceptance tests and minimum harness support, while the permitted files expose only PostgreSQL fixtures and direct-SQL session tests; they do not expose the existing login/resolve wiring or an HTTP test harness. Please authorize the minimum named production API/harness files needed for that test, or explicitly authorize a database-only scenario with PA-7/HTTP behavior marked unproven.",
+      "timestamp": "2026-09-15T20:04:06Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner, 2026-09-15",
+      "marker": "RELAY_DECISION",
+      "scope": "B1-10 real HTTP acceptance harness",
+      "seq": 3,
+      "subject": "B1-10 HTTP harness scope",
+      "supersedes": "NXS-LOCAL-0247 RELAY_QUESTION seq 2 database-only fallback",
+      "text": "PO decision: implement the real HTTP scenario, not a database-only substitute. Permitted additional reads/changes: LoginController, LoginResolveController, session/auth composition wiring, SecurityWebMvcConfig, and the minimum existing HTTP test harness/configuration files required to exercise POST /login and POST /login/resolve against one service instance. No production behavior change unless a test seam is strictly required; report any such change. Keep scope to B1-10 concurrent isolation/correlation acceptance.",
+      "timestamp": "2026-09-15T20:06:11Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 4,
+      "subject": "B1-10 scope contradiction",
+      "text": "The FROZEN B1-10 contract specifies only a three-admin session/correlation HTTP scenario (PA-1 through PA-7). The dispatch acceptance criteria instead require unrelated Workbench draft-loss/switch-leakage, stopped classification/count, unknown/estimated labels, and keyboard behavior. These scopes cannot both govern this test-only movement. Please identify the authoritative acceptance criteria.",
+      "timestamp": "2026-09-15T20:08:32Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_CORRECTION",
+      "seq": 5,
+      "subject": "B1-10 authoritative acceptance criteria",
+      "text": "Correction: only UI2_0_B1_10_ACCEPTANCE_CONCURRENT_ADMINS_CONTRACT.md PA-1 through PA-7 govern this movement. Workbench draft/classification/cost/keyboard criteria are entirely out of scope and belong to NXS-LOCAL-0251. Implement the three-admin HTTP session/correlation scenario only.",
+      "timestamp": "2026-09-15T20:26:28Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 6,
+      "subject": "B1-10 cannot pass without production behavior change",
+      "text": "Verified the permitted real HTTP/session composition. The frozen PA-2 and PA-5 cannot pass against current behavior: LoginFlow/JooqSessionRepository do not supply correlation_run_id to the audited takeover transaction, so its two audit rows are NULL; and the available real session-status HTTP endpoint returns 401 {authenticated:false} for S1 rather than the required 401 SESSION_SUPERSEDED. A test-only harness cannot truthfully alter either behavior. Please authorize the minimal production implementation needed for PA-2/PA-5 (and confirm the intended E1 HTTP endpoint for PA-5), or revise the frozen scenario/acceptance target.",
+      "timestamp": "2026-09-15T20:29:00Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_NOTE",
+      "seq": 7,
+      "subject": "Archive superseded inactive attempt; acceptance remains outstanding",
+      "text": "User authorized Workbench pending-item cleanup on 2026-09-16. This inactive attempt was superseded by NXS-LOCAL-0260, whose BLOCKED close identifies missing takeover audit correlation. No implementation exists for that successor. Archive this attempt only; ui2_b1_10_acceptance_scenario_concurrent_admins stays planned in QUEUE. No DONE or acceptance claim. Preserve relay/worktree/usage.",
+      "timestamp": "2026-09-16T08:08:03Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0247",
+  "movement": "NXS-LOCAL-0247",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T08:08:03Z"
+}

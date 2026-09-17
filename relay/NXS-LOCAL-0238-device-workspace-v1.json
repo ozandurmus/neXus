@@ -1,0 +1,175 @@
+{
+  "created_at": "2026-09-15T16:59:34Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Manifest/test match frozen selectors and contract.",
+          "Static/privacy/diff validation passes; real cluster rollout explicitly deferred."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_09_DEVICE_WORKSPACE_CONTRACT.md (FROZEN).",
+          "observed": "NetworkPolicy contract merged PR #395. Implement exact contract §7 manifest and static tests; no cluster apply in this movement.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/device-workspace-v1"
+        },
+        "invariants": [
+          "No unauthorized pod reaches DB.",
+          "No host or cluster mutation.",
+          "Existing service/worker migration/readiness assumptions remain declarative until real-cluster gate."
+        ],
+        "merge_gate": "Worker commits only; PO manages PR/merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen B1-9 device workspace read surface and visible-but-refused RBAC behavior.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE.",
+          "No cluster access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded YAML/static test implementation; gpt-5.6-terra medium.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Read B1-9 fully; implement only its named read/UI scope.",
+          "No device/host access. Worker commits only; PO opens/merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "B1-9 device list/workspace API/UI/tests."
+          ],
+          "out": [
+            "Inventory collection producer, job submission, host/device access, replay projection files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test"
+            ],
+            "name": "targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T16:59:34Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "B1-9 declared action set and activation route",
+      "text": "FROZEN B1-9 §6 requires every declared action to appear in a non-empty, actor-invariant action_affordance map and requires GET affordance versus POST 403 agreement. The current ActionRegistry exposes no device-scoped action; the only device-adjacent action is DEVICE_REGISTER, which creates a device and is not a workspace action. Existing B1-9 evaluator explicitly records this gap. Please provide the authorized declared action IDs and owning activation route(s), or amend/defer AC-5/AC-6. Implementing an empty map or inventing an action would violate the frozen contract.",
+      "timestamp": "2026-09-15T17:00:58Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner, 2026-09-15",
+      "marker": "RELAY_DECISION",
+      "scope": "B1-9 AC-5/AC-6 action affordance set only",
+      "seq": 3,
+      "subject": "B1-9 workspace action set",
+      "supersedes": "NXS-LOCAL-0238 RELAY_QUESTION seq 2",
+      "text": "PO decision: implement the actor-invariant action_affordance set using existing device-scoped registry actions and routes: device_inventory_collect (POST /devices/{id}/inventory/collect), device_configuration_collect (POST /devices/{id}/configuration/collect), and device_backup_collect (POST /devices/{id}/backup/collect). Reuse their current GateChain outcomes; do not invent an action. Include all three keys for every workspace GET, with visible refusal/eligibility derived per existing contracts.",
+      "timestamp": "2026-09-15T17:21:14Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "Device GET routes now use DeviceWorkspaceReader and return only B1-9 list/workspace fields.",
+          "Workspace GET evaluates the three PO-authorized existing action IDs and records decisions through the existing RBAC evaluator.",
+          "Administration device registry renders opaque device IDs and the workspace relationship-only transport and affordance information."
+        ],
+        "completed": [
+          "Implemented the B1-9 closed device list/workspace read payload and PO-authorized action-affordance evaluation."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No main Python application file changed.",
+          "ui": "Administration device registry now uses the B1-9 opaque device/workspace read surface."
+        },
+        "integration": {
+          "branch": "feature/device-workspace-v1",
+          "ci": "NOT_RUN",
+          "head_sha": "b8704077906b6cad4b742d2d8bc4a472b4fcdd04",
+          "merge_commit": null,
+          "merge_decision": "Not requested: merge-mode orchestrator; PR could not be opened because no commit was possible.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0238",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Restore Git metadata write access, commit the existing B1-9 workspace changes, then run the required targeted test and open the PR.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No device, host, cluster, inventory-producer, replay-projection, or job-submission code was changed.",
+          "Address references, credential-reference values, and projection tables remain absent from the workspace payload."
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work is mechanical Git/validation recovery; no new architecture or vendor semantics are needed.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Uncommitted changes remain because sandbox denied Git temporary-index creation in /Users/OzanDur/Codo/nexus/.git/worktrees/NXS-LOCAL-0238; no PR can be opened.",
+          "Targeted Gradle validation remains unverified due sandbox/tool time limits."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: targeted Gradle test did not complete.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "NOT_RUN: bounded movement validation specifies targeted Gradle test only.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py (0 findings).",
+          "real_environment": "DEFERRED: no cluster, host, or device access was authorized or performed.",
+          "state_consistency": "NOT_APPLICABLE: no durable project-state update authorized for blocked, uncommitted work.",
+          "targeted": "BLOCKED: Gradle wrapper shared cache lock was denied by the sandbox; isolated-cache attempts exceeded the 30-second tool execution limit before compile/test completion."
+        }
+      },
+      "seq": 4,
+      "timestamp": "2026-09-15T17:30:13Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0238",
+  "movement": "NXS-LOCAL-0238",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T17:30:13Z"
+}

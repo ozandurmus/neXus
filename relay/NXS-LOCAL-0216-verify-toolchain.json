@@ -1,0 +1,152 @@
+{
+  "created_at": "2026-09-15T12:03:32Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A movement whose validation_plan runs Gradle passes verification on this machine.",
+          "A named test holds that the engineer and verifier environments resolve the same toolchain.",
+          "The orchestrator suite and the repository privacy gate pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN) fixes verify as the gate a movement passes before review. A gate that cannot start the toolchain its own packet names is not measuring the movement.",
+          "observed": "Movements NXS-LOCAL-0211 and NXS-LOCAL-0212 both failed verification on 2026-09-15 with the macOS stub message `Unable to locate a Java Runtime`, after PR #371 had made Java reachable for the engineer. NXS-LOCAL-0211 committed its work and opened PR #374, which proves the git half of #371 works; only the verifier is still blind to the toolchain.",
+          "what_exists": "scripts/orchestrator.py:1017 defines the helper:\n\n  def _add_engineer_toolchains(env: dict[str, str]) -> None:\n      \"\"\"Keep the dispatcher's installed Java and Node launchers reachable.\"\"\"\n\nand it is called exactly once, at scripts/orchestrator.py:1111, inside the engineer session's environment setup. The verification step builds its own environment and never calls it.\n\nOn this machine `java` on PATH is a symlink chain: ~/.local/bin/java -> ~/.local/jdk/Contents/Home/bin/java. The helper already resolves that correctly with Path.resolve(); the problem is only that verification does not use it. The macOS stub at /usr/bin/java is what answers instead, and its error message is the one observed."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/verify-can-run-the-toolchain"
+        },
+        "invariants": [
+          "Verification still runs each validation_plan step exactly as the packet declares it.",
+          "No sandbox or writable-root change."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "The verification step can run the toolchain the engineer can. Today the engineer reaches Java and the verifier does not, so a packet's Gradle validation fails after the work is correct.",
+        "output_contract": [
+          "One pull request on feature/verify-can-run-the-toolchain.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "One helper applied to a second call site, with the cause measured and the call site named.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "One helper, used by both paths. Two copies of this logic will diverge, and the divergence will look exactly like today's bug.",
+          "JAVA_HOME is set from the resolved launcher, not from a guessed layout, and not from /usr/libexec/java_home, which exits non-zero on this machine."
+        ],
+        "risks": [
+          "Copying the helper's body into the verify path instead of calling it would pass today and drift tomorrow."
+        ],
+        "scope": {
+          "in": [
+            "Apply the same toolchain resolution to the environment the verification step runs its validation_plan commands in.",
+            "A test that fails if the verifier's environment lacks what the engineer's has."
+          ],
+          "out": [
+            "Changing what verification does, which steps it runs, or the merge gate.",
+            "Changing the sandbox or its writable roots. PR #371 settled that and it works.",
+            "Installing a toolchain. This movement makes an installed one reachable."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator.py",
+              "-q"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T12:03:32Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/orchestrator.py",
+          "scripts/orchestrator_verify.py",
+          "tests/test_orchestrator.py"
+        ],
+        "completed": [
+          "Applied the existing resolved toolchain environment to validation-plan commands in both run and standalone verification paths.",
+          "Added a regression that verifies the engineer and verifier resolve identical PATH and JAVA_HOME values."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "modified",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/verify-can-run-the-toolchain",
+          "ci": "NOT_RUN",
+          "head_sha": "23dafb5",
+          "merge_commit": null,
+          "merge_decision": "ORCHESTRATOR_MERGE_MODE",
+          "merge_state": "NOT_OPENED",
+          "pr": 376,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/376"
+        },
+        "next": {
+          "movement": "n/a",
+          "movement_type": "VALIDATION",
+          "objective": "Orchestrator verification may proceed.",
+          "status": "done"
+        },
+        "preserved": [
+          "Validation-plan command sequence and merge gate.",
+          "Sandbox and writable-root configuration."
+        ],
+        "recommended_reasoning": {
+          "reason": "Implementation and targeted automated validation are complete.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "python3 -m pytest tests/test_orchestrator.py -q: 153 passed",
+          "diff_check": "git diff --check origin/main: PASS",
+          "full_regression": "NOT_RUN (outside approved validation plan)",
+          "privacy": "python3 scripts/repository_privacy_check.py: PASS (0 findings)",
+          "real_environment": "NOT_RUN (local validation movement)",
+          "state_consistency": "n/a",
+          "targeted": "python3 -m pytest tests/test_orchestrator.py -q: 153 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T12:11:30Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0216",
+  "movement": "NXS-LOCAL-0216",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T12:11:30Z"
+}

@@ -1,0 +1,176 @@
+{
+  "created_at": "2026-09-15T15:23:38Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Draft delineates exact server-side trust boundary and all visible data classes.",
+          "Draft lists unresolved product/security decisions and validation evidence required before freeze.",
+          "No implementation files changed."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN) authorizes bounded architecture work. docs/design/PRIVATE_REPLAY_ARCHITECTURE.md is FROZEN for Phase A only and explicitly does NOT authorize Phase B implementation.",
+          "observed": "User requests a production-only authorized replay role: when selected, real product data should appear anonymized. This is distinct from the synthetic mockup palace and introduces a new RBAC, data-classification, transformation, audit and presentation boundary.",
+          "what_exists": "PRIVATE_REPLAY_ARCHITECTURE.md Phase B outlines a possible LIVE_PRIVATE architecture but says it is deferred and not authorized. Existing UI2 roles, audit/redaction and data projections must be inventoried; no production data/session/runtime may be read during design."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/production-replay-role-design"
+        },
+        "invariants": [
+          "No production data is accessed during this movement.",
+          "No role or anonymization feature is implemented from this draft.",
+          "No raw identity, credential, path, vendor response or browser-to-device path."
+        ],
+        "merge_gate": "Worker may commit/push/open one draft PR, never merge/freeze. PO approval required before any implementation.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Design the production replay-role anonymized view boundary; do not implement it.",
+        "output_contract": [
+          "One DRAFT design PR and SESSION_CLOSE with field-boundary matrix and successor implementation sequence.",
+          "Clean worktree; no production data/host/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "New production RBAC and privacy boundary needs security architecture before code.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "Design a server-side, role-gated presentation projection; browser must never choose anonymization fields, paths or raw source access.",
+          "Define field-by-field classification, stable pseudonym/equality requirements, role activation/session semantics, audit events, refusal behavior, pagination/search/export restrictions, caching and cross-screen consistency.",
+          "Treat any unproven semantic as UNKNOWN. Do not assume a reversible anonymization method, production data access, or vendor identity semantics.",
+          "Reconcile explicitly with sensitive identity reporting, raw evidence, existing RBAC and Private Replay Phase B deferral. Draft only; no freeze or implementation.",
+          "Claude primary per user direction; worker may commit/push/open draft PR, never merge."
+        ],
+        "risks": [
+          "Existing Phase B language is deferred and must not be treated as implementation authority."
+        ],
+        "scope": {
+          "in": [
+            "One DRAFT design contract for an authorized production replay-view role and anonymized projections.",
+            "Targeted source/contract audit of UI2 RBAC, response projections, audit and session boundaries.",
+            "Explicit rollout/real-environment validation and implementation successor plan."
+          ],
+          "out": [
+            "All production role/API/UI/database implementation, migrations, test data, browser login, host/k3s operations, live collection or data export.",
+            "Mockup-palace work reserved for 0228; device/credential/transport changes; canonical state files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py"
+            ],
+            "name": "authority_references"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T15:23:38Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "docs/design/UI2_0_PRODUCTION_REPLAY_ROLE_ANONYMIZED_VIEW_DESIGN.md (new file, DRAFT status)"
+        ],
+        "completed": [
+          "Read PRIVATE_REPLAY_ARCHITECTURE.md (FROZEN, Phase A only) and the C3 identity/sessions/RBAC contract, treating both as evidence/precedent for a materially different problem (a live, production-facing anonymized role vs. offline export replay).",
+          "Read the 2026-09-14/15 PO decision-record successors (root-identity permit-always, session-policy/lockout/admin-visibility) and the B1-02A audit redaction contract to ground the audit/session-composition sections.",
+          "Cross-checked the closed RoleToken enum and the E1-E6 GateChain implementation against the contract text -- no drift found.",
+          "Located (by name only) every response-producing UI2 controller to build a surface-coverage inventory.",
+          "Wrote docs/design/UI2_0_PRODUCTION_REPLAY_ROLE_ANONYMIZED_VIEW_DESIGN.md (DRAFT): trust boundary, surface coverage, field-classification/pseudonym requirements, activation/audit/refusal composition, 10 unresolved decisions, 8 validation-evidence items, successor delivery sequence.",
+          "Ran all three validation commands and opened the draft PR."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- no application code changed",
+          "ui": "none -- no application code changed"
+        },
+        "integration": {
+          "branch": "feature/production-replay-role-design",
+          "ci": "not checked from this session -- orchestrator verifies before merge per --merge-mode orchestrator",
+          "head_sha": "3f4e498fab3aff85963f44246d1dbae61ec54ff4",
+          "merge_commit": null,
+          "merge_decision": "Worker opened the draft PR and stops here per WORKER.md's merge gate; PO approval required before any implementation, and this dispatch's --merge-mode orchestrator means the orchestrator, not this session, merges after its own verification.",
+          "merge_state": "OPEN",
+          "pr": 390,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/390"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0229 successor (not yet dispatched)",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Product Owner review of this draft's 10 unresolved decisions (section 12), followed by a C-series-style contract-freeze movement resolving them before any ui2/ implementation begins.",
+          "status": "planned"
+        },
+        "preserved": [
+          "PRIVATE_REPLAY_ARCHITECTURE.md's Phase B deferral -- not reopened, not treated as authority, not extended.",
+          "C3's closed RoleToken vocabulary, E1-E6 gate chain, and authz_decisions audit mechanism -- this draft composes downstream of E4, adds at most one future closed-vocabulary token, and introduces no parallel authorization mechanism.",
+          "The root identity's (nexusadmin, PO_DECISION_RECORD_2026_09_14J) unconditional PERMITTED authorization outcome -- left unresolved rather than assumed whether it also bypasses the presentation-layer anonymization."
+        ],
+        "recommended_reasoning": {
+          "reason": "The successor contract-freeze movement fixes a new RBAC/privacy boundary (root-identity interaction, pseudonym key lifecycle, audit granularity) -- new security-boundary decisions, per AGENTS.md's escalation criteria, not a lighter-tier deterministic fix.",
+          "tier": "architecture and feature design"
+        },
+        "state_updates": [
+          "None -- WORKER.md's scope excludes canonical state files (project/*.json, CURRENT_STATE.md) from this movement; no state_updates were made or are claimed."
+        ],
+        "unresolved_risks": [
+          "Root identity (nexusadmin) interaction with the anonymization presentation layer is explicitly unresolved (draft section 6, section 12 item 2) -- requires an explicit Product Owner ruling before contract freeze.",
+          "Pseudonym key lifecycle for a live, indefinite-duration role (vs. PRIVATE_REPLAY_ARCHITECTURE's one-shot export key) is unresolved (draft section 5, section 12 item 3).",
+          "Whether search/filter endpoints match against raw or projected values server-side is unknown and named as a concrete leak-oracle risk (draft section 9) requiring a targeted source read this movement did not perform.",
+          "Full inventory of existing download/export code paths and any response-caching layer is incomplete (draft sections 9-10, section 12 items 6-7) -- flagged as required validation evidence before freeze, not resolved by this draft."
+        ],
+        "validation": {
+          "affected": "not applicable -- no source/behavior changed, only a new design document added",
+          "diff_check": "git diff --check origin/main -- clean",
+          "full_regression": "not run -- out of scope for this ARCHITECTURE/design-only movement per WORKER.md's validation_commands list (authority_references, privacy_gate, diff_check only); no implementation code changed",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 1491 files scanned, 0 findings",
+          "real_environment": "not applicable -- no production/device/host access occurred or is authorized by this design-only movement; AGENTS.md's automated-vs-real-environment gate is deferred to the successor implementation movement (see section 13 item 8 of the draft)",
+          "state_consistency": "not applicable -- no project/*.json or CURRENT_STATE.md touched; this movement's scope excludes canonical state files per WORKER.md",
+          "targeted": "python3 -m pytest -q -p no:cacheprovider tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py -- 8 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T15:29:54Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0229",
+  "movement": "NXS-LOCAL-0229",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T15:29:54Z"
+}

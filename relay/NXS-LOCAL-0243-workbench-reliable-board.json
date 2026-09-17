@@ -1,0 +1,165 @@
+{
+  "created_at": "2026-09-15T18:18:28Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic browser tests reproduce and prevent draft loss/switch leakage, stopped classification/count agreement, unknown/estimated labels and keyboard behavior.",
+          "Privacy/diff/targeted tests pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_4* (FROZEN) and docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); Astra audit findings are recommendations only.",
+          "observed": "Astra workbench audit reproduced unsent composer drafts disappearing on refresh, exited_without_close misclassified as Running/count disagreement, null usage rendered zero and cost provenance hidden, plus layout/keyboard defects.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-reliable-board"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw logs/credentials.",
+          "Usage uncertainty remains honest."
+        ],
+        "merge_gate": "Worker commits only; PO manages PR/merge.",
+        "movement_type": "UI",
+        "objective": "Implement Workbench reliable board step 1: preserve drafts, unify stopped-worker classification/counts, honest usage labels, and accessibility/layout repairs.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE.",
+          "No host/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded dashboard reliability UI/backend repair; gpt-5.6-terra medium.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Preserve composer drafts per movement in page memory across refresh/switching without sending/displaying another movement text.",
+          "One shared classification drives board membership and counts; exited_without_close gets attention category and handed_over remains normal external participant.",
+          "Unknown is distinct from zero; display cost source/coverage without invoices. Implement keyboard/focus/grid/status/refresh-settings repairs.",
+          "Worker commits only; PO PR/merge."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "scripts/dashboard_assets/dashboard.js, dashboard.css, orchestrator_dashboard classification projection and focused synthetic browser/dashboard tests."
+          ],
+          "out": [
+            "Retention/history storage, automatic retries/model selection, execution controls, raw log retention, project state, device/host access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_orchestrator_dashboard.py",
+              "tests/test_dispatch_ledger.py"
+            ],
+            "name": "workbench_targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T18:18:28Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "scripts/dashboard_assets/dashboard.js",
+          "scripts/dashboard_assets/dashboard.css",
+          "scripts/orchestrator_dashboard.py",
+          "tests/test_orchestrator_dashboard.py"
+        ],
+        "completed": [
+          "Implemented reliable Workbench board step 1 in the scoped dashboard files.",
+          "Added per-movement in-memory composer drafts, stale-response guards, keyboard card activation, accessible focus styling, responsive grid correction, and honest unknown usage labels.",
+          "Added a shared board classification: exited_without_close is attention and handed_over remains running; board membership and displayed totals use it."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "scoped dashboard reliability repair only"
+        },
+        "integration": {
+          "branch": "feature/workbench-reliable-board",
+          "ci": "NOT_RUN",
+          "head_sha": "NOT_CREATED",
+          "merge_commit": null,
+          "merge_decision": "NOT_APPLICABLE",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0243",
+          "movement_type": "RELEASE_HANDOVER",
+          "objective": "Restore write access to /Users/OzanDur/Codo/nexus/.git/objects, then stage, commit, push, and open the PR; orchestrator retains merge authority.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No execution authority, raw logs, credentials, retention/history storage, retries, model selection, project state, device access, or host access changed.",
+          "Existing open/awaiting_po/closed board API fields remain available."
+        ],
+        "recommended_reasoning": {
+          "reason": "Git integration recovery only; implementation is complete and validated.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Git object database rejected staging with Operation not permitted, so no commit, push, or PR could be created. The scoped working-tree changes remain validated but uncommitted."
+        ],
+        "validation": {
+          "affected": "79 passed",
+          "diff_check": "PASS: git diff --check origin/main",
+          "full_regression": "NOT_RUN (not requested)",
+          "privacy": "PASS: repository privacy gate, 0 findings",
+          "real_environment": "NOT_RUN (local UI validation only)",
+          "state_consistency": "NOT_RUN (project state out of scope)",
+          "targeted": "79 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T18:22:29Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0243",
+  "movement": "NXS-LOCAL-0243",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T18:22:29Z"
+}

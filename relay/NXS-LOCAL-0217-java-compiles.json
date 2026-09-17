@@ -1,0 +1,152 @@
+{
+  "created_at": "2026-09-15T12:24:50Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "./gradlew build or the equivalent full compile succeeds across every Java module.",
+          "The pull request lists any revealed test failures without fixing them.",
+          "The repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (FROZEN) governs the job engine whose test tree no longer compiles; nothing in it changes here. This movement restores the ability to run the tests that guard it.",
+          "observed": "Measured 2026-09-15 on a clean detached checkout of origin/main: ./gradlew :job-engine:compileTestJava fails. No Java test in this module has run in CI, because the fast gate is Python and the regression job was skipped until today.",
+          "what_exists": "The record has nine components, ui2/persistence/src/main/java/.../device/DeviceRecord.java:15:\n\n  public record DeviceRecord(\n          String deviceId,\n          String role,\n          String vendorHint,\n          String registrationSource,\n          Instant createdAt,\n          boolean isTestTarget,\n          DeviceEnrollmentState enrollmentState,\n          boolean disabled,\n          String credentialReferenceId) {\n\nThe caller passes eight, ui2/job-engine/src/test/java/.../device/PersistenceDeviceEnrollmentReadPortTest.java:115:\n\n  private static DeviceRecord deviceWith(String deviceId, DeviceEnrollmentState state, boolean disabled) {\n      return new DeviceRecord(deviceId, \"vendor-hint-synthetic\", \"manual_registration\", Instant.now(), false,\n              state, disabled, \"cred-ref-synthetic\");\n  }\n\nrole is missing. The compiler reports: constructor DeviceRecord in record DeviceRecord cannot be applied to given types.\n\nThis is the NXS-LOCAL-0187 lesson repeating, and roles/PO.md section 5b already names it: a movement that makes a field required without taking its callers into scope leaves every test green and the product broken. The device-role movement was repaired for the enrolment caller; this test caller was not, and nothing caught it because the tests could not run."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/the-java-tests-compile"
+        },
+        "invariants": [
+          "No production source changes. This is a test-tree repair.",
+          "No test is deleted or disabled to make the build pass."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "VALIDATION",
+        "objective": "The Java test tree compiles again. It has not, on main, since the device role became a required component and one test caller was left behind.",
+        "output_contract": [
+          "One pull request on feature/the-java-tests-compile.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "A missing constructor argument, with the record and the caller both quoted. The care needed is in checking for other callers rather than stopping at the first error.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Compile the whole Java tree, not one module. A second caller elsewhere would reproduce this movement a week from now.",
+          "The pull request states how many callers were fixed and lists any test failures the newly-compiling tree reveals."
+        ],
+        "risks": [
+          "Disabling or deleting the offending test would make the build green and leave the enrolment path unguarded, which is the shape of the defect that caused this."
+        ],
+        "scope": {
+          "in": [
+            "Make the Java test tree compile. Fix every caller the compiler names, not only the first.",
+            "Run the full Java test suite once the tree compiles and report what it says. If tests fail for reasons unrelated to compilation, list them and fix none of them -- they are separate findings and separate movements.",
+            "Give the synthetic caller a role value that is a real member of whatever vocabulary role takes, not a placeholder string that merely compiles."
+          ],
+          "out": [
+            "Changing DeviceRecord, or anything about what role means.",
+            "Fixing test failures that appear once compilation succeeds. Report them; do not chase them.",
+            "Any change outside the Java test tree."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew --no-daemon --console=plain compileTestJava"
+            ],
+            "name": "java_test_compile"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T12:24:50Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "Added gateway as the missing DeviceRecord role argument in ui2/job-engine/src/test/java/com/securityexpert/nexus/ui2/jobs/device/PersistenceDeviceEnrollmentReadPortTest.java."
+        ],
+        "completed": [
+          "The Java test tree compiles across every Java module.",
+          "The repository privacy gate passes."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/the-java-tests-compile",
+          "ci": "not run; no commit or pull request could be created",
+          "head_sha": "UNKNOWN; source repair remains uncommitted",
+          "merge_commit": "NOT_APPLICABLE",
+          "merge_decision": "NOT_REQUESTED",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0217",
+          "movement_type": "RELEASE_HANDOVER",
+          "objective": "Restore Git object-store write access, commit the validated one-line test repair, and open the authorized PR without merging.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "DeviceRecord and role vocabulary were not changed.",
+          "The unrelated integration-test dependency-lock failure was not modified."
+        ],
+        "recommended_reasoning": {
+          "reason": "Filesystem authorization must be restored before the validated patch can be committed and proposed.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Full Java tests fail at :integration-tests:test because com.jcraft:jsch:0.1.55 is absent from the dependency lock state; this movement did not fix it.",
+          "The repaired test file remains uncommitted because Git cannot create a temporary file in the shared object store."
+        ],
+        "validation": {
+          "affected": "One Java test caller repaired; no production source changed.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "FAIL (unfixed, unrelated): :integration-tests:test cannot resolve com.jcraft:jsch:0.1.55 because it is not in the dependency lock state.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py reported 0 findings.",
+          "real_environment": "Not applicable: local validation-only movement.",
+          "state_consistency": "PASS: git diff --check origin/main.",
+          "targeted": "PASS: cd ui2 && GRADLE_USER_HOME=/private/tmp/nxs-local-0217-gradle ./gradlew --no-daemon --console=plain compileTestJava."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T12:29:01Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0217",
+  "movement": "NXS-LOCAL-0217",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "roles/PO.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T12:29:01Z"
+}

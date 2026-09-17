@@ -1,0 +1,155 @@
+{
+  "created_at": "2026-09-16T05:45:26Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic browser tests reproduce and prevent draft loss/switch leakage, stopped classification/count agreement, unknown/estimated labels and keyboard behavior.",
+          "Privacy/diff/targeted tests pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN).",
+          "observed": "Product Owner approves table-first Workbench: Active, Needs you and Archive filters, search by movement/objective, details below list, existing UI2 Material 3 theme bridge, Kanban secondary only if bounded.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-api-route-security-guard"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw logs/credentials.",
+          "Usage uncertainty remains honest."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Verify and enforce fail-closed security mapping for UI2 API routes without an explicit action mapping.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded API security regression guard; gpt-5.6-terra medium.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Trace every current controller route and ensure unmapped routes refuse by default; no inferred open access.",
+          "Add minimal regression guard. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "SecurityWebMvcConfig/GateChain route mapping verification and focused tests/guard."
+          ],
+          "out": [
+            "New API features, RBAC model redesign, host/device access, UI files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :service:test --tests '*Security*'"
+            ],
+            "name": "security"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T05:45:26Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "GateChainInterceptor now refuses an unmapped route with 404 ACTION_MAPPING_REQUIRED unless it is explicitly exempted.",
+          "SecurityWebMvcConfig defines the six current self-authenticated or health exceptions and removes four stale configuration route entries with no current controller route.",
+          "Focused interceptor regression tests cover refusal of an unmapped route and passage of an explicit exception."
+        ],
+        "completed": [
+          "Verified current controller annotations against the security route map and opened PR #412."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "No change."
+        },
+        "integration": {
+          "branch": "feature/ui2-api-route-security-guard",
+          "ci": "Not observed; orchestrator verification pending.",
+          "head_sha": "01e10c1",
+          "merge_commit": null,
+          "merge_decision": "Worker commits only; orchestrator merge mode.",
+          "merge_state": "OPEN",
+          "pr": 412,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/412"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0261",
+          "movement_type": "VALIDATION",
+          "objective": "Run the mandated focused Gradle security suite in an environment permitted to use the existing Gradle wrapper cache.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No new execution authority, RBAC model change, UI change, device access, raw log, or credential handling was introduced.",
+          "Login, login resolution, session logout/status, self-service password change, and health remain deliberate explicit non-RBAC routes."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded validation retry.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The mandated focused Gradle security suite remains unverified because the sandbox denied access to the existing wrapper lock.",
+          "The dispatch acceptance text mentions unrelated synthetic browser behaviors; no UI files were changed because they are outside the approved route-security scope."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: no separate affected-suite command was dispatched.",
+          "diff_check": "PASS: git diff --check and git diff --check origin/main.",
+          "full_regression": "UNVERIFIED: not dispatched for this bounded change.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py (0 findings).",
+          "real_environment": "NOT_APPLICABLE: local validation-only dispatch; no network-facing operation was performed.",
+          "state_consistency": "NOT_APPLICABLE: no durable project-state change was authorized for this bounded implementation.",
+          "targeted": "UNVERIFIED: the mandated focused Gradle security suite did not start because sandbox access to the existing Gradle wrapper lock was denied."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-16T05:50:55Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0261",
+  "movement": "NXS-LOCAL-0261",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T05:50:55Z"
+}

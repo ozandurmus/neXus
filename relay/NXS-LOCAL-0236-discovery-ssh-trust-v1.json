@@ -1,0 +1,176 @@
+{
+  "created_at": "2026-09-15T16:47:36Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "C10 v1 tests cover scope/missing/mismatch/failure propagation and authorization.",
+          "Migration number 0010 only; no unrelated sources.",
+          "Privacy/diff and targeted tests reported."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md (FROZEN); C10 is the frozen successor scope on origin/main.",
+          "observed": "C10 now authorizes implementation replacing global worker trust env pin. Live worker currently has no discovery trust pin and discovery fails UNKNOWN_FAILURE.",
+          "what_exists": "Cherry-pick exactly ff721c9 before review. Current HostKeyVerifier/SshExecTransport is fail-closed. Discovery failures collapse to UNKNOWN_FAILURE. User directs v1 decisions: Check Point only; endpoint+port+key-algorithm scoped trust; explicit security_admin enrollment; mismatch remains refusal; unified worker path, no standalone CLI trust path."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/discovery-ssh-trust-v1"
+        },
+        "invariants": [
+          "No global trust pin.",
+          "No raw identities/fingerprints/errors to browser/logs.",
+          "Fail closed on missing/mismatch trust.",
+          "No Palo Alto change."
+        ],
+        "merge_gate": "Worker commits only; PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen C10 Check Point discovery endpoint-scoped SSH trust enrollment and safe failure propagation.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE.",
+          "No host/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "C10 trust/RBAC/storage boundary; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Read C10 fully. Endpoint+port+algorithm scope, no trust-on-first-use, credential/command never precede authorized trust, mismatch refuses.",
+          "Verify existing C3 security_admin role before wiring. Worker commits only; PO PR/merge. No deployment or device access."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "C10 §9: migration 0010_management_endpoint_ssh_trust; per-endpoint CP trust resolver for worker/CLI; security_admin-gated explicit enrollment; structured safe trust/auth/timeout failure classes; tests."
+          ],
+          "out": [
+            "Palo Alto behavior, host/k3s rollout, manual Secret/env pin, device command changes, raw fingerprint/address UI disclosure, state files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test --tests '*Discovery*'"
+            ],
+            "name": "discovery_targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T16:47:36Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "C10 migration allocation conflicts with UI2 Flyway sequence",
+      "text": "C10 sections 6 and 9 and WORKER acceptance require migrations/postgres/0010_management_endpoint_ssh_trust.sql and migration number 0010 only. Implementation reality: FlywayMigrationRunner and MigrationStartupRunner load classpath:db/migration from ui2/service/src/main/resources/db/migration; that sequence already contains V10__local_identity_administration.sql and runs through V22. The allocated root migration is outside the existing UI2 migration path. Wiring another migration mechanism or choosing V23 would change the approved allocation/scope. Please adjudicate the migration allocation and authorize the UI2 Flyway successor version, or specify the intended approved loading mechanism for 0010. No implementation has been made. Also C10 section 4 asks for a queue update while WORKER prohibits state-file edits; that update is deferred to PO.",
+      "timestamp": "2026-09-15T16:49:34Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner, 2026-09-15",
+      "marker": "RELAY_DECISION",
+      "scope": "C10 migration allocation only",
+      "seq": 3,
+      "subject": "C10 Flyway allocation amendment",
+      "supersedes": "C10 sections 6/9 root 0010 allocation",
+      "text": "PO decision: C10 root migration allocation 0010 is superseded for UI2 implementation. Use the existing UI2 Flyway path ui2/service/src/main/resources/db/migration/ and allocate V24__management_endpoint_ssh_trust.sql. V23 remains reserved for NXS-LOCAL-0224 backup claim authorization. Update/add the bounded C10 amendment record in the implementation PR; do not create a second migration loader.",
+      "timestamp": "2026-09-15T17:21:02Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "No repository source, configuration, project state, or deployment changes. SESSION_CLOSE artifact: /private/tmp/NXS-LOCAL-0236-session-close.json."
+        ],
+        "completed": [
+          "Read worker, approved task, full frozen C10, and relay amendment seq 3; verified C3 defines role:security_admin.",
+          "Restored source content and original Git branch attachment after unsuccessful required cherry-pick; worktree clean."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED"
+        },
+        "integration": {
+          "branch": "feature/discovery-ssh-trust-v1",
+          "ci": "NOT_RUN: no commit or PR.",
+          "head_sha": "b8704077906b6cad4b742d2d8bc4a472b4fcdd04",
+          "merge_commit": null,
+          "merge_decision": "No merge performed; orchestrator remains sole merge executor.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0236",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Rerun with managed write access to shared Git objects and the named lane refs; implement C10 under relay seq 3, validate, open PR, publish SESSION_CLOSE, and leave merging to orchestrator.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Current SUPERSEDED predecessor document retained; ff721c9 produced an add/add conflict against origin/main.",
+          "No Palo Alto change, global pin, raw identity disclosure, device/host access, production-data access, push, PR, or merge."
+        ],
+        "recommended_reasoning": {
+          "reason": "Frozen C10 trust/RBAC/storage scope; concrete Git filesystem authority must first be restored.",
+          "tier": "strong implementation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "BLOCKER: managed sandbox denies writes to shared Git objects, refs/heads/feature/discovery-ssh-trust-v1.lock, and packed-refs.lock. Approval policy never prevents escalation. Implementation and acceptance criteria remain outstanding.",
+          "PO relay seq 3 supersedes root 0010 allocation with UI2 Flyway V24__management_endpoint_ssh_trust.sql; V23 reserved. Add bounded C10 amendment record during implementation."
+        ],
+        "validation": {
+          "affected": "NOT_RUN: no implementation changes.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "NOT_RUN: no implementation changes.",
+          "privacy": "PASS: 1498 files scanned, zero findings; no network access.",
+          "real_environment": "UNVERIFIED: local-validation-only dispatch; no device or deployment access.",
+          "state_consistency": "No state files changed; git status --short clean.",
+          "targeted": "NOT_RUN: Git delivery blocked before implementation."
+        }
+      },
+      "seq": 4,
+      "timestamp": "2026-09-15T17:24:39Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0236",
+  "movement": "NXS-LOCAL-0236",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T17:24:39Z"
+}

@@ -1,0 +1,185 @@
+{
+  "created_at": "2026-09-15T16:34:58Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract cites selectors/ports from current manifests and has no UNKNOWN load-bearing behavior.",
+          "Implementation successor includes manifest/test/real-cluster validation and rollback.",
+          "Authority/privacy/diff tests pass; no runtime files changed."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md (FROZEN); explicit Product Owner instruction in this session authorizes contract writing/freezing before implementation.",
+          "observed": "Queue item ui2_networkpolicy_in_cluster_db_reach identifies that ClusterIP prevents outside-cluster access but does not prevent arbitrary in-cluster pod TCP access to PostgreSQL. Product Owner asks for the next real contract to freeze.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-db-networkpolicy-contract"
+        },
+        "invariants": [
+          "No workload outside explicit UI2 actors reaches PostgreSQL.",
+          "Required migration/readiness behavior remains functional.",
+          "No secrets or endpoints disclosed."
+        ],
+        "merge_gate": "Worker commits/pushes only; PO opens/merges after review. FROZEN status authorized by this packet.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write and freeze the UI2 in-cluster PostgreSQL NetworkPolicy contract before implementation.",
+        "output_contract": [
+          "Frozen contract commit and SESSION_CLOSE with implementation successor.",
+          "No implementation/host access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Kubernetes network isolation is a production security boundary; gpt-5.6-sol high is required.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "Read B1-01C and current deploy/ui2 labels/services fully enough to bind exact selectors; no guessed label/key.",
+          "Freeze default-deny database ingress with allowlisted UI2 service/worker/scheduler/migration paths only, plus precisely required DNS/egress behavior based on current manifest evidence.",
+          "State rollout order, fail-closed validation, rollback and real-cluster DoD. No Secret mutation and no host action.",
+          "No new network device path. Worker commits only; PO owns PR/merge. Explicit user authorization permits FROZEN status after review."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "One FROZEN C-series deployment security contract for PostgreSQL ingress/egress NetworkPolicy plus exact implementation/validation successor."
+          ],
+          "out": [
+            "Manifests/code changes, cluster apply, host/k3s access, database data/secrets, device traffic, canonical project state."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py"
+            ],
+            "name": "authority_references"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T16:34:58Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_ACK",
+      "seq": 2,
+      "subject": "NXS-LOCAL-0235 accepted",
+      "text": "Contract-only freeze, local validation, PR creation under orchestrator dispatch, no worker merge. SESSION_START supplied by approved_task.json; CLI does not accept that marker. ACK mechanical requirements corrected to include next actor and subject.",
+      "timestamp": "2026-09-15T16:36:32Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added docs/design/UI2_0_C_POSTGRESQL_NETWORKPOLICY_CONTRACT.md: 269 lines; only tracked change relative to origin/main.",
+          "Explicit scoped successor amendment closes B1-01C section 13 NetworkPolicy deferral and extends its object set while preserving identical in-cluster-stage policy construction and Ingress/Route portability.",
+          "Mechanical dispatch divergence: current manifests contain service and worker, no scheduler or separate migration Job. Existing worker migration-file references use its existing pod permission; future scheduler/Job access remains deferred.",
+          "Reported relay CLI error: SESSION_START is not an appendable marker; approved_task.json already supplies the sole start report. RELAY_ACK initially needed --next and --subject, then succeeded at sequence 2. No tool error prevented closeout."
+        ],
+        "completed": [
+          "NXS-LOCAL-0235: wrote, reviewed and froze one C-series PostgreSQL NetworkPolicy contract under explicit Product Owner dispatch authorization.",
+          "Bound database/service/worker selectors and TCP 5432 to the current deploy/ui2 manifests; defined database-only ingress isolation and empty egress with existing actor DNS, migration and readiness preserved by policy construction.",
+          "Defined the separate implementation/validation successor, security preconditions, real-cluster matrix, rollout, restart and fail-closed rollback in contract sections 5-7.",
+          "Committed and pushed ce984224d3d223936eb5e58bc861406a026b9931; opened PR 395 under explicit orchestrator-mode instruction; verified PR branch, base, head and OPEN state.",
+          "Immediately before PR creation reread the canonical relay: no RELAY_CORRECTION or RELAY_DECISION after dispatch; only engineer ACK at sequence 2."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Unchanged; no Line-1 or application runtime change.",
+          "ui": "Unchanged; contract-only document, no UI modules, payloads or deployment manifests changed."
+        },
+        "integration": {
+          "branch": "feature/ui2-db-networkpolicy-contract",
+          "ci": "QUEUED: regression-scope and validate; po-scope-check SKIPPED. Local required gates PASS.",
+          "head_sha": "ce984224d3d223936eb5e58bc861406a026b9931",
+          "merge_commit": null,
+          "merge_decision": "Explicit user and worker orchestrator-mode instruction authorizes opening the PR, publishing SESSION_CLOSE and stopping; orchestrator alone verifies and merges. No gh pr merge executed.",
+          "merge_state": "OPEN",
+          "pr": 395,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/395"
+        },
+        "next": {
+          "movement": "UI2 PostgreSQL NetworkPolicy implementation and enforcement validation, contract section 7",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Under a separate approved movement, add deploy/ui2/46-database-networkpolicy.yaml, focused tests/test_ui2_deployment_manifests.py conformance coverage and the minimum deployment validation runbook/harness update; run repository gates, then separately authorized real-cluster migration/readiness, enforcement, restart and rollback checks before marking enforcement DONE.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No runtime manifests, application code, selectors, ports, schemas, migrations, Secrets, PVCs or database contents changed.",
+          "No cluster apply, host/k3s access, CNI mutation, device contact or new vendor/network-device command.",
+          "Canonical project state and AI_HANDOVER.md unchanged under the explicit one-contract scope and read restrictions; successor owns its authorized state/handover update.",
+          "No raw credentials or operational identities reported. Worktree clean; scratch/report files are outside the checkout.",
+          "No worker merge performed; orchestrator retains verification and merge authority."
+        ],
+        "recommended_reasoning": {
+          "reason": "Policy choices are frozen and the successor is a bounded implementation. Escalate to high only for an evidenced CNI/security-precondition conflict; this architecture movement required high, with the pre-selected tier exceeding that need.",
+          "tier": "feature implementation / medium; validation and testing / medium"
+        },
+        "state_updates": [
+          "One new frozen contract committed; canonical state updates prohibited for this dispatch.",
+          "Canonical relay engineer acknowledgment published at sequence 2; this report is the required SESSION_CLOSE.",
+          "External report artifact: /private/tmp/NXS-LOCAL-0235-session-close.json."
+        ],
+        "unresolved_risks": [
+          "GitHub CI is queued at closeout; orchestrator must verify it and its own gates before merging.",
+          "NetworkPolicy alone does not constrain trusted node-origin traffic or guarantee hostNetwork isolation. Successor requires owner trust/control attestations and independent pod-network enforcement checks; missing evidence blocks rollout.",
+          "Cold-start database deny-egress and actual actor migration/readiness need the separate real-cluster checks. Any unexpected DNS/egress dependency requires evidence and contract revision rather than a broad allow."
+        ],
+        "validation": {
+          "affected": "PASS: frozen-authority and design-reference gates include the new contract; reviewed staged diff against current manifest evidence.",
+          "diff_check": "PASS: git diff --check origin/main run before commit; no whitespace errors.",
+          "full_regression": "NOT RUN: contract-only movement prescribed authority/reference, privacy and diff gates; no runtime code or manifest change.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py; 1495 scanned, 795 skipped, zero findings; no network access or matched values printed.",
+          "real_environment": "UNVERIFIED: no cluster/runtime/device validation attempted. CNI enforcement, trust controls and deployed migration/readiness must be established by the separately authorized successor.",
+          "state_consistency": "Canonical project state unchanged as required by dispatch. Only the new contract is in the branch diff; git status --porcelain is empty.",
+          "targeted": "PASS: python3 -m pytest -q -p no:cacheprovider tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py; 8 passed in 0.63 seconds."
+        }
+      },
+      "seq": 3,
+      "timestamp": "2026-09-15T16:40:12Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0235",
+  "movement": "NXS-LOCAL-0235",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T16:40:12Z"
+}

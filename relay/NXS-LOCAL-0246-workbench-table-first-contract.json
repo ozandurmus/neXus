@@ -1,0 +1,136 @@
+{
+  "created_at": "2026-09-15T20:00:17Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic browser tests reproduce and prevent draft loss/switch leakage, stopped classification/count agreement, unknown/estimated labels and keyboard behavior.",
+          "Privacy/diff/targeted tests pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); GOV.ORCH.4 Kanban-default successor amendment required.",
+          "observed": "Product Owner approves table-first Workbench: Active, Needs you and Archive filters, search by movement/objective, details below list, existing UI2 Material 3 theme bridge, Kanban secondary only if bounded.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-table-first-contract"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw logs/credentials.",
+          "Usage uncertainty remains honest."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Freeze the table-first Material 3 Workbench navigation successor contract from the approved PO design direction.",
+        "output_contract": [
+          "Frozen contract and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Frozen observability default change plus UI contract; gpt-5.6-sol high.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "Amend GOV.ORCH.4 Kanban-default explicitly; one shared classification across list/secondary view.",
+          "Use UI2 M3 semantic palette, no framework rewrite. Preserve drafts/actions/details/honest metrics/archive limits.",
+          "User authorizes FROZEN after review; worker commits only."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "One FROZEN successor contract/amendment for Workbench table-first navigation and M3 presentation; exact implementation/test successor."
+          ],
+          "out": [
+            "Workbench code, retention architecture, execution permissions, host/device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py"
+            ],
+            "name": "authority"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T20:00:17Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "NXS-LOCAL-0246 scope and authority conflict",
+      "text": "Please correct this contract-only dispatch: (1) baseline.what_exists requires deployment manifest/NetworkPolicy inspection outside the WORKER read list and approved scope; (2) acceptance_criteria requires executable synthetic browser regression coverage while Workbench implementation is explicitly out of scope. Confirm those browser scenarios belong to the exact implementation/test successor rather than this contract-only delivery, and remove or separately dispatch the deployment requirement. Name the predecessor GOV.ORCH.4 contract and any UI2 M3 authority files permitted for targeted reading. Confirm whether the dispatch itself authorizes freezing after worker review, or whether PO review of the concrete draft is required before FROZEN. No repository artifacts were changed; no device, host, or deployment operations were performed.",
+      "timestamp": "2026-09-15T20:00:55Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_CORRECTION",
+      "seq": 3,
+      "subject": "Table-first contract scope and estimate direction",
+      "text": "Correction: deploy/ui2, NetworkPolicy and all host/deployment inspection are out of scope. Synthetic browser scenarios belong to the exact implementation/test successor, not this contract-only movement. Permitted reads: docs/design/GOV_ORCH_4_WORKBENCH_OBSERVABILITY_TOKENS_AND_STUCK_DETECTION.md and successor observability contracts, scripts/dashboard_assets generated theme bridge, ui2/frontend/src/theme/m3Theme.ts as visual-token reference, current Workbench source/tests, and the approved PO table-first direction. PO review of concrete draft is required before FROZEN. PO direction: where token counters and a model price exist, Workbench renders Estimated model-token cost as scope/effort measurement; Reported remains distinct; Unknown only means token/model evidence is absent, never unknown subscription billing.",
+      "timestamp": "2026-09-15T20:04:53Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 4,
+      "subject": "Review concrete GOV.ORCH.4-C draft before FROZEN",
+      "text": "Concrete draft is published in draft PR https://github.com/ozandurmus/neXus/pull/403 at revision 01863714f087d97b782bfd66033f2d5445114a85, document docs/design/GOV_ORCH_4C_TABLE_FIRST_MATERIAL_3_WORKBENCH_CONTRACT.md. Per correction seq 3, please review this revision and record approval to freeze or requested changes. Authority/cross-reference tests: 8 passed; privacy: PASS, 0 findings; diff checks: PASS. Synthetic browser coverage is specified for the implementation successor. No Workbench code, host/device or deployment changes. PR remains draft and unmerged; orchestrator merge mode preserved.",
+      "timestamp": "2026-09-15T20:09:42Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner, 2026-09-15",
+      "marker": "RELAY_DECISION",
+      "scope": "GOV_ORCH_4C revision 01863714 only",
+      "seq": 5,
+      "subject": "Freeze GOV.ORCH.4-C table-first Workbench contract",
+      "supersedes": "NXS-LOCAL-0246 RELAY_QUESTION seq 4 pending review",
+      "text": "PO review approves revision 01863714f087d97b782bfd66033f2d5445114a85. Freeze GOV_ORCH_4C_TABLE_FIRST_MATERIAL_3_WORKBENCH_CONTRACT.md exactly as reviewed. Table-first is default; Kanban secondary only; UI2 Material 3 theme bridge; estimated model-token cost when evidence exists; unknown only when token/model evidence is absent. Dispatch implementation after merge.",
+      "timestamp": "2026-09-15T20:22:24Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0246",
+  "movement": "NXS-LOCAL-0246",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-15T20:22:24Z"
+}

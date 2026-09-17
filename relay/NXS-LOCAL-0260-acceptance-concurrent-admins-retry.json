@@ -1,0 +1,158 @@
+{
+  "created_at": "2026-09-16T05:42:14Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic browser tests reproduce and prevent draft loss/switch leakage, stopped classification/count agreement, unknown/estimated labels and keyboard behavior.",
+          "Privacy/diff/targeted tests pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_10_ACCEPTANCE_CONCURRENT_ADMINS_CONTRACT.md (FROZEN).",
+          "observed": "Product Owner approves table-first Workbench: Active, Needs you and Archive filters, search by movement/objective, details below list, existing UI2 Material 3 theme bridge, Kanban secondary only if bounded.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/acceptance-concurrent-admins-retry"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw logs/credentials.",
+          "Usage uncertainty remains honest."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen B1-10 concurrent-admin real HTTP acceptance scenario after prior relay scope corrections.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Frozen real HTTP acceptance test; gpt-5.6-terra medium.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Use real HTTP login/resolve harness only; no database-only substitute. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "B1-10 PA-1 through PA-7 HTTP/integration harness and tests."
+          ],
+          "out": [
+            "Workbench UI, device collection, host/device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true integrationTest --tests '*Concurrent*'"
+            ],
+            "name": "targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T05:42:14Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "B1-10 PA-2 cannot pass within assigned scope",
+      "text": "JooqSessionRepository.takeover invokes AuditedTransactionBoundary.inTransaction(actor, action, work), never the correlationRunId overload. The database audit trigger therefore receives no app.correlation_run_id and PA-2's required non-null shared takeover correlation must fail. The frozen contract assigns this production behavior to B1-3, while this dispatch permits only B1-10 HTTP/integration harness and tests. Please decide whether to expand scope for the missing correlation propagation or revise/supersede the acceptance requirement.",
+      "timestamp": "2026-09-16T05:45:08Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "No repository files changed."
+        ],
+        "completed": [
+          "Inspected the permitted B1-10 HTTP/integration harness and the frozen acceptance contract; no source changes made because the stated PA-2 invariant cannot pass on the current implementation."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/acceptance-concurrent-admins-retry",
+          "ci": "NOT_RUN: blocked before implementation.",
+          "head_sha": "6365c75",
+          "merge_commit": null,
+          "merge_decision": "No PR opened; worker does not merge under orchestrator mode.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0260",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Obtain PO decision: expand scope to implement the missing correlation-run-id propagation, or revise B1-10 acceptance scope/contract.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No new execution authority, device access, raw logs, credentials, or production behavior were introduced."
+        ],
+        "recommended_reasoning": {
+          "reason": "The next step is a frozen-contract versus source-scope decision, not further test authorship.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "BLOCKED: PA-2 requires a non-null shared audit_log.correlation_run_id for the takeover transaction, but JooqSessionRepository.takeover uses AuditedTransactionBoundary's two-argument overload and never supplies correlationRunId. The existing code therefore writes NULL for both takeover audit rows. Making PA-2 pass requires a production session/audit-correlation implementation change outside this worker's harness/test-only scope."
+        ],
+        "validation": {
+          "affected": "NOT_RUN: no files changed.",
+          "diff_check": "NOT_RUN: no repository files changed.",
+          "full_regression": "NOT_RUN: not required by the assigned validation plan and no files changed.",
+          "privacy": "NOT_RUN: no files changed.",
+          "real_environment": "NOT_APPLICABLE: synthetic integration scenario only.",
+          "state_consistency": "NOT_RUN: no durable project state changed.",
+          "targeted": "NOT_RUN: no implementation was authorized after the blocking contract-to-source conflict was found."
+        }
+      },
+      "seq": 3,
+      "timestamp": "2026-09-16T05:45:13Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0260",
+  "movement": "NXS-LOCAL-0260",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T05:45:13Z"
+}

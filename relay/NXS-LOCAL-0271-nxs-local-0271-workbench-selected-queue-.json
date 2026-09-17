@@ -1,0 +1,170 @@
+{
+  "created_at": "2026-09-16T09:51:27Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Candidate states DRAFT and resolvesstorageowner/mutations/atomicclaim/reconciliation/concurrency/parentactivation boundaries without newframework/daemon.",
+          "Exacttask/movement/backlog references, default2/currentcap3, authorization and no duplicateexecution invariants traced toactualsource.",
+          "Implementationsequence and20synthetic/twojob+successor pilot defined without claiming tests executed.",
+          "Targetedauthority/crossreference/privacy/diff checks and draftPR/close report returned; unresolvedhumanchoicesexplicit."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md",
+          "observed": "User requests parallel third Workbench feature without blocking C10/LDAP delivery. Attachment explicitly DRAFT and declares newpersistentqueue/authenticatedwrites need frozen successor. PR417 nowMERGED124d454; currentMaterial3table-first Workbench source must be verified from actualcurrentmain, not stalecanonicalcheckout. Current authorized parallelceiling3; default2 retained.",
+          "what_exists": "Existing orchestrator run/start/status/verify withnativeattachedsupervision; current dashboard assets under scripts/dashboard_assets and authenticated bearerAPI. Existing project_queue.py controls backlog/roadmap; .state contains movementrecord/usage and local_relay._FileLock/_atomic_write. These mechanisms may be reused; no newdaemon/Companion or duplicatebacklog store. Draftbrief path /Users/OzanDur/.codex/attachments/bf6bba4b-13fa-4e28-b1c9-feaf670bec4c/pasted-text.txt."
+        },
+        "context_not_loaded": [
+          "Unrelatedhistory, data/logs/CAS/credential/support stores and livehosts."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-selected-queue-contract-0271"
+        },
+        "invariants": [
+          "DRAFT never authorizes execution/storage writes; parent/human alone freezes.",
+          "No arbitrary browsercommand orprompt; no self-selectedunapprovedscope; canonicalmodel/evidence notduplicated.",
+          "Native supervisor only completionbridge; parentreview/Gitauthority and separate417/418delivery retained."
+        ],
+        "merge_gate": "Worker commits/pushes/opens DRAFT PR, never merges or freezes. Parent reviews exactnewexecution/storage/governance boundary and humanexplicitfreeze approval required.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Prepare the bounded frozen-successor candidate for Workbench selected ordered queue/admission from the user's DRAFT brief; no queue execution/storage implementation before explicit freeze.",
+        "output_contract": [
+          "Short DRAFT candidate, exactdecisiontable/sourcepaths and canonicalSESSION_CLOSE; no secondjob/implementation."
+        ],
+        "recommended_reasoning": {
+          "reason": "Boundedarchitecture insideexistinglocking/orchestration patterns; medium suffices topropose decisions, escalate onlydemonstratedambiguity.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Codex gpt-5.6-sol medium, comparable intention budgetUSD0.60 from12 bounded architecture/decision-document turns at recordedUSD0.05 class estimate; no enforcementclaim.",
+          "Read user'sbrief completely and existing frozenorchestration/Workbench/projectQueue constraints. Verify actualWorkbench source/currentmain and identifyexactimplementationpaths. Resolve only selectedmembership/order/controlstate storageowner, atomicclaims/idempotency/fences, crash/uncertaindispatch reconciliation, ceilingaccounting, authenticatedtypedmutations and activeparentownership.",
+          "Produce ONE short DRAFT successor candidate with explicit decisiontable and humanfreeze items; nevermarkFROZEN, alter AGENTS/roles/governanceexistingrules, or silentlyauthorizewrites. Do not repeat UI/token/Companion projects.",
+          "Propose minimum reuse ofexistingstate lock/atomicwrite, canonicalmodelbackendadapter and existingorchestrator as soleexecution authority. Persistreferences only; no arbitraryprompts/argv, vendor data or secrets. SelectionnotnewGit/host/networkauthority.",
+          "Keep userorder stable while skippingblocked/dependent/conflictingitems; count existing relevant engineers/wrappers/reservations. Unknownindependenceor dispatch uncertainty staysblocked, neverautostale reclaim. Pauseadmission notkillworker; terminal/integration/release separated.",
+          "Define synthetic20task nonmodel-budget proofmatrix and smallrealpilot as laterimplementationacceptance; no executionpilot now. Queue persistence !=wakeclosedconversation; loopstate separately NOT_ATTACHED/UNKNOWN.",
+          "Commit/push/open DRAFT PR and canonicalclose. Parent shows exactcandidate beforefreeze; no implementationuntilfreeze. Workbench feature remains separatefrom417/418 merge."
+        ],
+        "risks": [
+          "New queue/admission authenticatedwrite/storage is a majorboundary requiringfrozen successor; directimplementation isprohibited untilapproved."
+        ],
+        "scope": {
+          "in": [
+            "Read user'spastedbrief; scripts/{orchestrator,orchestrator_dashboard,orchestrator_verify,local_relay,project_queue}.py and dashboard_assets; namedWorkbench/frozenorchestration/projectmodelcontracts and boundedrelatedtests.",
+            "Write only docs/design/WORKBENCH_SELECTED_WORK_QUEUE_CONTRACT.md (DRAFT) and minimal syntheticacceptance outline there."
+          ],
+          "out": [
+            "Productioncode/storage/API/newdaemon/Companion/plugin/accounting implementation, backlog/projectstatewrites, existingFROZEN/governance/roles changes, live/modelbudget executionpilot, C10/LDAP sources, host/device/container/deployment/credentials access, install/configure."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py"
+            ],
+            "name": "authority_refs"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T09:51:27Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Only docs/design/WORKBENCH_SELECTED_WORK_QUEUE_CONTRACT.md; committed and pushed to feature/workbench-selected-queue-contract-0271."
+        ],
+        "completed": [
+          "Prepared DRAFT selected ordered queue/admission successor candidate with source-traced storage, typed mutations, shared atomic claims, idempotency/fences, uncertain dispatch reconciliation, concurrency and active-parent boundaries.",
+          "Defined later 20-task synthetic proof matrix and separately authorized two-job plus successor pilot; neither executed.",
+          "Opened DRAFT PR https://github.com/ozandurmus/neXus/pull/419; remote branch confirmed at cb4a67c6c457c38049a292135f3e45591d089ce3. No merge or freeze performed.",
+          "Initial relay close attempt rejected missing continuation/integration/effects fields; report corrected to canonical schema and resubmitted."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED; DRAFT architecture only"
+        },
+        "integration": {
+          "branch": "feature/workbench-selected-queue-contract-0271",
+          "ci": "NOT_VERIFIED; local targeted checks passed",
+          "head_sha": "cb4a67c6c457c38049a292135f3e45591d089ce3",
+          "merge_commit": null,
+          "merge_decision": "BLOCKED_PENDING_ORCHESTRATOR_VERIFICATION_AND_INTEGRATION; worker never merges or freezes",
+          "merge_state": "OPEN",
+          "pr": 419,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/419"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0271 parent review",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Fetch pushed branch before orchestrator verification, review exact DRAFT PR419, show candidate for explicit human freeze and authorize named successor only afterward.",
+          "status": "planned"
+        },
+        "preserved": [
+          "Production code, storage/API behavior, UI, existing frozen governance/roles, backlog/project state, C10/LDAP, deployment/host/device/credentials and model-budget execution unchanged. No second worker dispatched."
+        ],
+        "recommended_reasoning": {
+          "reason": "Medium reasoning suffices for bounded successor review; escalate only demonstrated storage/security/authority ambiguity. Implementation and pilot remain blocked until freeze.",
+          "tier": "strong implementation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Explicit human freeze required for shared storage/root and CLI entrants, durability/locking, authenticated mutation/batch approval, default 2/cap 3 activity domain, parent transfer/uncertainty evidence, receipt retention and exact implementation movement/task/backlog mapping.",
+          "Source divergences: CLI DEFAULT_MAX_WORKERS is 3, not selected-batch default 2; _active_count covers live nonterminal engineer PIDs only; spawn precedes movement save; locking has unsupported-platform no-op fallback and atomic replace has no fsync. Current table-first source is present; deployed revision and parent wake/activation are not verified.",
+          "Git sandbox blocked shared objects and branch/remote-tracking refs. Commit created via commit-tree and worktree-local detached HEAD; remote push succeeded, local remote-tracking update failed. Orchestrator MUST fetch feature/workbench-selected-queue-contract-0271 into the shared repository before verification so detached HEAD objects are available. Until fetch, Git commands here require GIT_OBJECT_DIRECTORY=/private/tmp/NXS-LOCAL-0271-git-objects and GIT_ALTERNATE_OBJECT_DIRECTORIES=/Users/OzanDur/Codo/nexus/.git/objects. Temporary objects retained outside checkout.",
+          "Worker never merges; PR 419 remains DRAFT. PR417/418 delivery and integration/release outcomes remain separate."
+        ],
+        "validation": {
+          "affected": "Contract-only targeted gates passed; no implementation/browser acceptance claimed.",
+          "diff_check": "PASS: staged check and git diff --check origin/main before commit, plus post-commit origin/main check using temporary object environment.",
+          "full_regression": "NOT_RUN: document-only authorized scope.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py; 1518 scanned, 0 findings.",
+          "real_environment": "NOT_RUN: synthetic execution and live/model-budget pilot are later acceptance only; deployed browser revision UNVERIFIED.",
+          "state_consistency": "No project-state writes authorized or made. Only new document committed; git status --porcelain empty with temporary object environment. Remote branch SHA verified via ls-remote.",
+          "targeted": "PASS: python3 -m pytest -q -p no:cacheprovider tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py; 8 passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-16T09:56:28Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0271",
+  "movement": "NXS-LOCAL-0271",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md",
+    "docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T09:56:28Z"
+}

@@ -1,0 +1,154 @@
+{
+  "created_at": "2026-09-15T20:03:25Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic browser tests reproduce and prevent draft loss/switch leakage, stopped classification/count agreement, unknown/estimated labels and keyboard behavior.",
+          "Privacy/diff/targeted tests pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md (FROZEN); C11 is frozen on origin/main.",
+          "observed": "Product Owner approves table-first Workbench: Active, Needs you and Archive filters, search by movement/objective, details below list, existing UI2 Material 3 theme bridge, Kanban secondary only if bounded.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/host-a-replay-namespace"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw logs/credentials.",
+          "Usage uncertainty remains honest."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen C11 HOST-A ui2-replay isolated namespace manifests, static tests and human rollout/rollback runbook.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Frozen observability default change plus UI contract; gpt-5.6-sol high.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "Read the frozen authority fully; implement only named scope.",
+          "No host/device/production data access. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "C11 deploy manifests, static tests and runbook."
+          ],
+          "out": [
+            "HOST-A apply, production ui2 namespace, raw production data, device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test"
+            ],
+            "name": "targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T20:03:25Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "Added deploy/ui2-replay/ with synthetic-only service and database resources, isolated NetworkPolicies, ClusterIP Services, and Ingress.",
+          "Added tests/test_ui2_replay_deployment_manifests.py and HOST-A runbook instructions."
+        ],
+        "completed": [
+          "Implemented the frozen C11 manifest set, static conformance test, and human-only rollout/rollback runbook."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No Python application source changed.",
+          "ui": "No browser UI source changed."
+        },
+        "integration": {
+          "branch": "feature/host-a-replay-namespace",
+          "ci": "NOT_RUN",
+          "head_sha": "UNCOMMITTED",
+          "merge_commit": null,
+          "merge_decision": "No merge action: PR could not be opened after the Git object-database permission failure.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0250",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Restore repository-local Git write access, rerun the prescribed Gradle suite, commit, and open the orchestrator-owned PR.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No HOST-A, production namespace, device, or raw production data access occurred.",
+          "No new execution authority was added."
+        ],
+        "recommended_reasoning": {
+          "reason": "Restore repository-local Git write access and validate the frozen manifest implementation.",
+          "tier": "implementation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Git writes are denied: git add cannot create a temporary file in the shared object database.",
+          "C8 seed-loader and C9 replay-viewer role successors remain out of scope."
+        ],
+        "validation": {
+          "affected": "PASS: replay manifest conformance guard.",
+          "diff_check": "PASS: git diff --check and git diff --check origin/main.",
+          "full_regression": "UNVERIFIED: not prescribed for this scoped manifest movement.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py (0 findings).",
+          "real_environment": "NOT_RUN: C11 HOST_W1 preconditions and separate Product Owner rollout authorization are absent.",
+          "state_consistency": "NOT_RUN: no durable project-state update was authorized by the blocked integration.",
+          "targeted": "PASS: python3 -m pytest -q tests/test_ui2_replay_deployment_manifests.py (4 passed); prescribed Gradle suite UNVERIFIED because its wrapper could not create a user-level lock file (Operation not permitted)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T21:46:08Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0250",
+  "movement": "NXS-LOCAL-0250",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T21:46:08Z"
+}

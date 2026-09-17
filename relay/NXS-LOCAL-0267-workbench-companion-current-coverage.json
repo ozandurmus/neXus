@@ -1,0 +1,167 @@
+{
+  "created_at": "2026-09-16T06:47:37Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract resolves local platform/lifecycle/persistence/MCP/plugin boundaries or explicitly defers unsupported clients.",
+          "Implementation sequence is independently testable and rollback safe.",
+          "Authority/privacy/diff gates pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); Companion contract on origin/main.",
+          "observed": "Workbench table-first Material 3 work is separately in progress. User provides a follow-up directive for independent reliable tracking with a supervised service, read-only MCP, private plugin and skill, no new execution authority.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-companion-current-coverage"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw transcripts or sensitive notifications.",
+          "Unknown/cost provenance semantics preserved.",
+          "Notification state separate from workflow authority."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Fix Companion live health semantics: dynamically track current movement records, ignore unconfigured historical relay-only extras for current coverage, and keep historical quality visible separately.",
+        "output_contract": [
+          "Commit(s), installed-layout reproduction and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Critical live health/current-vs-history semantics; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Reproduce installed snapshot: 228 observations, partial historical inputs, no last_success. Current observer health must not require every historical relay-only row to be complete.",
+          "New state records must be discovered without manual config regeneration; historical gaps remain visible and never become fabricated success. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "Companion adapter/observer current movement selection, coverage/freshness semantics and focused end-to-end tests."
+          ],
+          "out": [
+            "Raw-source fallback, workflow writes, new MCP tools, host/device access."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_workbench_companion.py"
+            ],
+            "name": "companion"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T06:47:37Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/workbench_companion.py",
+          "tests/test_workbench_companion.py",
+          "Commit 94dd865fc9c75377e00e92999c3ffa9ad4c059e1 on feature/workbench-companion-current-coverage."
+        ],
+        "completed": [
+          "Updated the Companion observer to admit newly present C1-validated movement records without configuration regeneration.",
+          "Limited current coverage errors to identities with a present non-MISSING record while retaining relay-only historical quality in snapshot and MCP output.",
+          "Added an end-to-end reproduction for 228 observations, partial historical input, no prior last_success, recovery, and new-record discovery.",
+          "Opened PR 416 for orchestrator-controlled verification and merge."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED"
+        },
+        "integration": {
+          "branch": "feature/workbench-companion-current-coverage",
+          "ci": "PENDING_ORCHESTRATOR_VERIFICATION",
+          "head_sha": "94dd865fc9c75377e00e92999c3ffa9ad4c059e1",
+          "merge_commit": null,
+          "merge_decision": "NOT_MERGED: merge-mode orchestrator reserves merge execution until its independent checks pass.",
+          "merge_state": "OPEN",
+          "pr": 416,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/416"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0267 orchestrator verification",
+          "movement_type": "VALIDATION",
+          "objective": "Independently verify PR 416, including the installed workstation snapshot, and merge only if orchestrator gates pass.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No new execution or workflow authority.",
+          "Unknown and cost provenance semantics remain unchanged.",
+          "Historical gaps remain visible as per-source quality and never become fabricated source success.",
+          "No raw transcripts, sensitive notifications, new MCP tools, host actions, device actions, deployment changes, or production-data changes.",
+          "The frozen Companion contract continues to define local platform, lifecycle, persistence, MCP, plugin, and deferred-client boundaries; no contract edit was required."
+        ],
+        "recommended_reasoning": {
+          "reason": "The bounded implementation and synthetic regression are complete; the remaining step is independent verification of current-vs-history behavior and merge gating.",
+          "tier": "ordinary validation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Real installed workstation behavior is not certified by synthetic tests and remains for orchestrator/human verification.",
+          "The approved-task baseline contained unrelated deployment-manifest text; the frozen Companion contract excludes that scope, so no deployment work was performed."
+        ],
+        "validation": {
+          "affected": "PASS: the complete authorized Companion module, including observer, MCP, lifecycle artifact, and plugin checks, passed.",
+          "diff_check": "PASS: git diff --check origin/main immediately before commit; worktree diff remained clean afterward.",
+          "full_regression": "NOT_RUN: the dispatch validation plan scoped regression to tests/test_workbench_companion.py.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py; 0 findings.",
+          "real_environment": "UNVERIFIED: synthetic installed-layout reproduction passed; workstation-installed snapshot verification remains with the orchestrator/human gate.",
+          "state_consistency": "PASS: source/test commit pushed; PR 416 open; no project authority files were authorized or changed.",
+          "targeted": "PASS: python3 -m pytest -q -p no:cacheprovider tests/test_workbench_companion.py; 72 passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-16T06:56:27Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0267",
+  "movement": "NXS-LOCAL-0267",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T06:56:27Z"
+}

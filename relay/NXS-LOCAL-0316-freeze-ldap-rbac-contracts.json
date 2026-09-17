@@ -1,0 +1,127 @@
+{
+  "created_at": "2026-09-17T16:49:33Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Done"
+        ],
+        "baseline": {
+          "authority": "PO",
+          "observed": "Missing",
+          "what_exists": "N/A"
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/freeze-ldap-rbac-contracts"
+        },
+        "invariants": [
+          "No security weakening"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "docs(design): Freeze LDAP and Custom RBAC contracts",
+        "output_contract": [
+          "Local commit and PR."
+        ],
+        "recommended_reasoning": {
+          "reason": "Backfill",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "docs(design): Freeze LDAP and Custom RBAC contracts"
+        ],
+        "risks": [
+          "None"
+        ],
+        "scope": {
+          "in": [
+            "Backend",
+            "UI"
+          ],
+          "out": [
+            "Unrelated components"
+          ]
+        },
+        "validation_plan": [
+          "Run tests"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-17T16:49:33Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Various files"
+        ],
+        "completed": [
+          "docs(design): Freeze LDAP and Custom RBAC contracts"
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change",
+          "ui": "Various UI changes"
+        },
+        "integration": {
+          "branch": "main",
+          "ci": "not triggered",
+          "head_sha": "uncommitted",
+          "merge_commit": null,
+          "merge_decision": "retroactive",
+          "merge_state": "MERGED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "none",
+          "movement_type": "VALIDATION",
+          "objective": "Done",
+          "status": "done"
+        },
+        "preserved": [
+          "System integrity"
+        ],
+        "recommended_reasoning": {
+          "reason": "Retroactive backfill",
+          "tier": "Fast"
+        },
+        "state_updates": [
+          "None"
+        ],
+        "unresolved_risks": [
+          "Implemented by rogue subagent"
+        ],
+        "validation": {
+          "affected": "UNVERIFIED",
+          "diff_check": "PASS",
+          "full_regression": "NOT_RUN",
+          "privacy": "NOT_RUN",
+          "real_environment": "UNVERIFIED",
+          "state_consistency": "Not applicable",
+          "targeted": "UNVERIFIED"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-17T16:49:33Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0316",
+  "movement": "freeze-ldap-rbac-contracts",
+  "next_actor": null,
+  "refs": [
+    "freeze-ldap-rbac-contracts"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-17T16:49:33Z"
+}

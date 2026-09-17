@@ -1,0 +1,161 @@
+{
+  "created_at": "2026-09-15T17:58:09Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Integration runtime classpath resolves JSch lock.",
+          "Fixture external carrier path is covered and safely documented.",
+          "Privacy/diff/targeted tests reported honestly."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md (FROZEN) §5 test carrier.",
+          "observed": "Audit, mockup palace and replay verification currently stop before PostgreSQL because integration-tests/gradle.lockfile lacks existing com.jcraft:jsch:0.1.55. Ui2PostgresFixture already supports UI2_TEST_JDBC_URL first and Testcontainers fallback; no carrier runtime is presently available.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-postgres-carrier-gate"
+        },
+        "invariants": [
+          "No production DB/secret access.",
+          "No test skip or carrier bypass.",
+          "No host/container runtime action."
+        ],
+        "merge_gate": "Worker commits only; PO manages PR/merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Repair the UI2 PostgreSQL integration-test carrier gate: lock the existing JSch runtime dependency and prove external UI2_TEST_JDBC_URL carrier selection.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE.",
+          "No host/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded existing test-carrier repair; gpt-5.6-terra medium.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Do not add/upgrade dependencies. Lock only existing resolved JSch in integration-tests.",
+          "Preserve fail-closed carrier behavior: external UI2_TEST_JDBC_URL first, Testcontainers fallback, failure when neither. Do not skip tests or fake DB.",
+          "Add smallest test/documentation proving external carrier selection without exposing DSN/password. Worker commits only; PO PR/merge."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "integration-tests Gradle lock metadata for existing JSch only; focused Ui2PostgresFixture/carrier selection tests and documentation needed to make the external PostgreSQL-16 carrier reproducible."
+          ],
+          "out": [
+            "Production DB, HOST-A apply, new database runtime/bootstrap, Docker installation, application behavior, replay/mockup code, state files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :integration-tests:test --tests '*PostgresFixture*'"
+            ],
+            "name": "carrier_targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T17:58:09Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "ui2/integration-tests/gradle.lockfile",
+          "ui2/integration-tests/src/test/java/com/securityexpert/nexus/ui2/integration/support/Ui2PostgresFixture.java",
+          "ui2/integration-tests/src/test/java/com/securityexpert/nexus/ui2/integration/support/Ui2PostgresFixtureCarrierTest.java",
+          "ui2/integration-tests/README.md"
+        ],
+        "completed": [
+          "Added the existing com.jcraft:jsch:0.1.55 runtime lock entry.",
+          "Extracted the external carrier URL selection seam and added a focused no-container test.",
+          "Documented secure runner-only use of UI2_TEST_JDBC_URL."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/ui2-postgres-carrier-gate",
+          "ci": "NOT_RUN: no commit or PR could be created.",
+          "head_sha": "b870407",
+          "merge_commit": null,
+          "merge_decision": "Not submitted: worker staging/commit was blocked by filesystem permissions.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0240",
+          "movement_type": "VALIDATION",
+          "objective": "Run the prescribed Gradle validation and create the worker commit/PR from an environment allowed to write the Gradle cache and Git object database.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No production DB, secret, host, container, device, application, replay, or state action occurred.",
+          "External URL first, Testcontainers fallback, and fail-closed carrier behavior remain unchanged."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded environment-permission recovery and targeted validation.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Commit and PR are blocked because Git cannot write the common object database (Operation not permitted).",
+          "Integration runtime resolution remains unverified because Gradle could not write its wrapper lock."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: targeted test compilation/execution did not start.",
+          "diff_check": "PASS: git diff --check and git diff --check origin/main returned clean.",
+          "full_regression": "NOT RUN: not required by dispatch; targeted gate was blocked before startup.",
+          "privacy": "PASS: repository privacy check reported 0 findings and no network access.",
+          "real_environment": "NOT RUN: local validation only; no runtime/database action authorized.",
+          "state_consistency": "NOT RUN: state files are explicitly out of scope.",
+          "targeted": "UNVERIFIED: prescribed Gradle wrapper command failed before Gradle started because its wrapper lock could not be opened (Operation not permitted)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T18:02:46Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0240",
+  "movement": "NXS-LOCAL-0240",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T18:02:46Z"
+}

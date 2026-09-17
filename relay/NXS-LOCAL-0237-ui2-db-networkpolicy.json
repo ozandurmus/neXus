@@ -1,0 +1,162 @@
+{
+  "created_at": "2026-09-15T16:49:11Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Manifest/test match frozen selectors and contract.",
+          "Static/privacy/diff validation passes; real cluster rollout explicitly deferred."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md (FROZEN); PostgreSQL NetworkPolicy successor scope is frozen on origin/main.",
+          "observed": "NetworkPolicy contract merged PR #395. Implement exact contract §7 manifest and static tests; no cluster apply in this movement.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-db-networkpolicy"
+        },
+        "invariants": [
+          "No unauthorized pod reaches DB.",
+          "No host or cluster mutation.",
+          "Existing service/worker migration/readiness assumptions remain declarative until real-cluster gate."
+        ],
+        "merge_gate": "Worker commits only; PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen PostgreSQL NetworkPolicy contract for UI2 manifests and static enforcement validation.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE.",
+          "No cluster access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded YAML/static test implementation; gpt-5.6-terra medium.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Read frozen NetworkPolicy contract fully. Use exact existing labels/ports; default-deny DB ingress and allow only confirmed service/worker actors.",
+          "No guessed scheduler/migration selector and no broad DNS/egress exception. Worker commits only; PO manages PR/merge."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "deploy/ui2/46-database-networkpolicy.yaml and focused manifest conformance tests/runbook updates required by frozen contract."
+          ],
+          "out": [
+            "Cluster apply, Secret mutation, host/k3s access, DB/schema/application code, device traffic, project state."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_ui2_deployment_manifests.py"
+            ],
+            "name": "deployment_manifest_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T16:49:11Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "deploy/ui2/46-database-networkpolicy.yaml",
+          "tests/test_ui2_deployment_manifests.py",
+          "docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md"
+        ],
+        "completed": [
+          "Implemented the frozen PostgreSQL NetworkPolicy manifest and focused static conformance coverage.",
+          "Documented the separately authorized real-cluster validation gate."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No application code changed.",
+          "ui": "No UI change."
+        },
+        "integration": {
+          "branch": "feature/ui2-db-networkpolicy",
+          "ci": "NOT_RUN: local static gates pass; PR is not yet opened.",
+          "head_sha": "1bbf368",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode: open PR only; orchestrator verifies and merges.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0237 validation",
+          "movement_type": "VALIDATION",
+          "objective": "Obtain separate cluster authorization and execute the frozen contract section 6 synthetic enforcement matrix and rollback rehearsal.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No cluster, host, Secret, database, device, or network action occurred.",
+          "No scheduler or migration selector, broad DNS exception, workload, credential, schema, or project-state change was introduced."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded cluster validation against a frozen policy contract; escalate only for a CNI or security-precondition conflict.",
+          "tier": "medium"
+        },
+        "state_updates": [
+          "None: project state is explicitly out of scope."
+        ],
+        "unresolved_risks": [
+          "NetworkPolicy enforcement and cluster trust preconditions are unverified until the frozen contract section 6 matrix executes in an approved synthetic environment."
+        ],
+        "validation": {
+          "affected": "PASS: focused manifest conformance coverage includes exact policy selectors, port, policy types, and empty egress.",
+          "diff_check": "PASS: git diff --check and git diff --check origin/main.",
+          "full_regression": "NOT RUN: approved task specifies focused manifest validation only.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py (0 findings; no network access).",
+          "real_environment": "UNVERIFIED: CNI/trust/enforcement matrix, migration/readiness, restart, and rollback require separate cluster authorization.",
+          "state_consistency": "NOT RUN: project state is explicitly out of scope.",
+          "targeted": "PASS: python3 -m pytest -q -p no:cacheprovider tests/test_ui2_deployment_manifests.py (57 passed)"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T16:53:59Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0237",
+  "movement": "NXS-LOCAL-0237",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T16:53:59Z"
+}

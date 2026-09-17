@@ -1,0 +1,171 @@
+{
+  "created_at": "2026-09-15T15:23:16Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Draft names exact existing fixture inputs and proposed Java mapping, with field classifications.",
+          "Draft defines test carrier, local browsing endpoint/isolation, readonly identity and visual acceptance matrix.",
+          "All unresolved semantics are explicit UNKNOWN/open decisions."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md (FROZEN) §test-harness carrier; docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN) authorizes bounded architecture work.",
+          "observed": "User clarifies the desired source is the old Python UI mockup palace, not production anonymization: tests/fixtures/uitest/build_fixture.py and bundle are all-synthetic UI test data rendered by scripts/render_uitest.py. User wants an isolated Java UI2 test-container environment seeded with equivalent screen states and a readonly user for visual browsing.",
+          "what_exists": "Existing Python bundle includes unified.json, configuration_ui.json, crypto_ui.json, discovery_ui.json and state files; tests/test_con1_operator_console_read_only.py and scripts/render_uitest.py prove its existing use. UI2 uses PostgreSQL 16 through UI2_TEST_JDBC_URL or Testcontainers. UI2 B1-10 carrier says a missing carrier fails, never skips. `PRIVATE_REPLAY_ARCHITECTURE.md` is explicitly excluded: this task contains no anonymized production data."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-mockup-palace-design"
+        },
+        "invariants": [
+          "No production or anonymized data enters this environment.",
+          "No production replay role, device I/O, credentials or host operation.",
+          "Readonly fixture user has no write/collection authority."
+        ],
+        "merge_gate": "Worker may commit/push/open one draft PR, never merge or freeze. PO review required before implementation.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Design the Java UI2 mockup-palace test environment from the existing Python uitest fixture bundle; do not use Private Replay.",
+        "output_contract": [
+          "One DRAFT design PR and SESSION_CLOSE with exact successor implementation scope.",
+          "Clean worktree; no data/host/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Maps an existing synthetic fixture into a new Java test environment while preserving privacy and readonly boundaries.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "Treat all existing fixture fields as synthetic examples, not a data-export source. Do not read runtime/data/logs or production DB.",
+          "State whether mapping is direct, synthesized or unavailable; preserve unknown/failed/refused/empty semantics, never invent vendor truth.",
+          "Define a test-only readonly identity using existing roles, never an administrative test bypass. Define how local browsing endpoint is isolated from production settings and how it proves no device transports initialize.",
+          "Identify every needed frozen contract and every genuinely new decision. The document stays DRAFT and cannot authorize implementation.",
+          "Claude primary per user direction; worker may commit/push/open draft PR, never merge."
+        ],
+        "risks": [
+          "No frozen contract yet owns new test-only seed semantics; draft must surface rather than decide them."
+        ],
+        "scope": {
+          "in": [
+            "One DRAFT design doc for a Java UI2 synthetic mockup-palace test environment.",
+            "Inventory/mapping of existing Python fixture semantics to Java UI2 persisted/API/UI states, including gaps and fixture classifications.",
+            "A concrete follow-up implementation slice, test-container launch UX and readonly browsing acceptance plan."
+          ],
+          "out": [
+            "Any code, migration, test container launch, production/k3s config, production data, anonymization, replay role, Private Replay, device/credential/host access, canonical state files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py"
+            ],
+            "name": "authority_references"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T15:23:16Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "docs/design/UI2_0_MOCKUP_PALACE_TEST_ENVIRONMENT.md - new file, 424 lines, DRAFT status."
+        ],
+        "completed": [
+          "Read .nexus/WORKER.md and .nexus/approved_task.json and located the concrete files the brief's categories described (tests/fixtures/uitest/*, scripts/render_uitest.py, tests/test_con1_operator_console_read_only.py) plus the FROZEN contracts named as baseline authority (UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md) and its own cross-reference chain (UI2_0_BASELINE_CONTRACT.md, UI2_0_BASELINE_DIRECTORY.md, C1 section 3, C3 sections 4.1/5).",
+          "Wrote docs/design/UI2_0_MOCKUP_PALACE_TEST_ENVIRONMENT.md (DRAFT): full fixture-file inventory, per-field-group Java mapping classified DIRECT/SYNTHESIZED/SYNTHESIZED-ADJACENT/UNAVAILABLE, a growth rule, a test-carrier reuse plan, a seed-loader sketch with a structural no-device-transport proof requirement, a local browsing endpoint/isolation design with a DB-is-a-seed-instance guard, a role:viewer readonly identity, a visual acceptance matrix scoped to what is actually seedable today, an explicit UNKNOWN open-decisions list (7 items), and a 5-item follow-up implementation slice.",
+          "Committed, pushed feature/ui2-mockup-palace-design, and opened PR #391 (draft design only, not merged, per merge gate).",
+          "Re-read the canonical relay file immediately before opening the PR; only the original SESSION_START (seq 1) was present, no RELAY_CORRECTION/RELAY_DECISION to act on."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- no source change",
+          "ui": "none -- no source change; the document is a design proposal only"
+        },
+        "integration": {
+          "branch": "feature/ui2-mockup-palace-design",
+          "ci": "not yet observed by this session -- PR just opened",
+          "head_sha": "505a333",
+          "merge_commit": null,
+          "merge_decision": "Not merged by this session: dispatched under --merge-mode orchestrator, which merges after its own verification passes. Worker's own merge_gate additionally requires PO review before implementation may proceed on this draft.",
+          "merge_state": "OPEN",
+          "pr": 391,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/391"
+        },
+        "next": {
+          "movement": "PO review of PR #391, then the SS12 follow-up CONTRACT movement(s)",
+          "movement_type": "ARCHITECTURE",
+          "objective": "PO review of docs/design/UI2_0_MOCKUP_PALACE_TEST_ENVIRONMENT.md and its section-11 UNKNOWN items; if approved to proceed, open the section-12 follow-up CONTRACT movement(s): mockup-palace seed-loader contract, test-only identity fixture contract, local launch profile and connection-guard contract, each before any ui2/ implementation.",
+          "status": "complete_with_followup"
+        },
+        "preserved": [
+          "No ui2/ source, migration, or test-container config touched.",
+          "No production/anonymized data, device, credential, or host access of any kind.",
+          "No canonical state file (project/*.json, CURRENT_STATE.md) touched.",
+          "Private Replay role/architecture not used, extended, or depended on -- stated explicitly in the document's own Status section."
+        ],
+        "recommended_reasoning": {
+          "reason": "Per this session's own default (Fable low), escalated to medium because the follow-up CONTRACT movements fix a security-relevant authentication/isolation boundary (test-only LDAP fixture, DB-is-a-seed-instance guard), matching the medium-for-security-boundary-decisions carve-out already used for this build.",
+          "tier": "Fable 5.1, medium"
+        },
+        "state_updates": [
+          "None -- no project/*.json or CURRENT_STATE.md file was in scope or touched by this movement."
+        ],
+        "unresolved_risks": [
+          "No frozen contract yet owns the new test-only seed-loader, DB-is-a-seed-instance guard, or test-only identity semantics this draft proposes; the draft's own section 11 lists 7 explicit UNKNOWN items (seed-loader module location, guard mechanism, profile naming, LDAP-fixture shape, provenance_records mapping, product_version/ha_state vocabulary, XSS-payload device-name parity) that require PO review and their own CONTRACT movement before any implementation."
+        ],
+        "validation": {
+          "affected": "Only one new docs/design/*.md file added; no source or test files changed, so no other test module is affected.",
+          "diff_check": "git diff --check origin/main -- clean, no whitespace/diff issues.",
+          "full_regression": "Not run -- out of scope for a docs-only DRAFT design movement with no source change; WORKER.md's validation_plan names only the three commands run above.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 1491 files scanned, 0 findings.",
+          "real_environment": "Not applicable -- DRAFT design document, no device-facing or runtime behavior to validate against a real environment.",
+          "state_consistency": "No project/*.json or CURRENT_STATE.md touched; nothing to check for cross-authority convergence.",
+          "targeted": "python3 -m pytest -q -p no:cacheprovider tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py -- 8 passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T15:30:34Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0228",
+  "movement": "NXS-LOCAL-0228",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T15:30:34Z"
+}

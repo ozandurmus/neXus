@@ -1,0 +1,181 @@
+{
+  "created_at": "2026-09-15T14:28:25Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A FAILED discovery result displays its safe class; arbitrary response text or operational identities never render as diagnostic reasons.",
+          "Existing discovery/enrollment tests and new focused tests pass; frontend build and privacy/render gates pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14F_DISCOVERY_FROM_THE_UI_RUN_AND_CANDIDATE_SET.md (FROZEN)",
+          "observed": "Human reported a discovery run ending with 'Discovery did not complete.' Existing application start request returned HTTP 202 and follow-up GET requests returned HTTP 200. Vendor and the live failure class are not yet known. Do not diagnose them from this packet.",
+          "what_exists": "ui2/frontend/src/shell/AddDeviceDialog.tsx: polling sets discoveryPhase to failed when result.state === 'FAILED'; its failed view renders only 'Discovery did not complete.'. ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/DiscoveryController.java returns outcome_summary. JooqDiscoveryRunRepository.markFailed writes OutcomeSummaryJson.toJson(Map.of(\"failure_reason_class:\" + reasonClass, 1)). Existing safe classes in DiscoveryJobExecutor: UNREACHABLE, REFUSED, UNKNOWN_FAILURE, UNSUPPORTED_VENDOR, CANDIDATE_PERSIST_FAILED. Example synthetic shape: {\"state\":\"FAILED\",\"outcome_summary\":{\"failure_reason_class:REFUSED\":1},\"candidates\":[]}. adminApi.ts already types outcome_summary as a counter map. Baseline checks in clean origin/main checkout: 89 frontend tests passed, frontend build passed, privacy passed, Python/render checks 39 passed with one unavailable happy-dom alternative skipped; real Playwright render passed."
+        },
+        "context_not_loaded": [
+          "Unrelated history, runtime data and credential stores."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/discovery-failure-visible"
+        },
+        "invariants": [
+          "No Browser-to-device path or new credential boundary.",
+          "Identifiers stay opaque; only allowlisted safe diagnostic classes are shown.",
+          "The network access failure itself is not claimed fixed by this UI movement."
+        ],
+        "merge_gate": "The worker is authorized to commit, push this named branch and open one PR. The worker does not merge. PO review plus orchestrator verify.passed is required before any separate merge decision.",
+        "movement_type": "UI",
+        "objective": "Show the existing safe discovery failure class in the Add device dialog so an operator can diagnose a failed run.",
+        "output_contract": [
+          "One PR for feature/discovery-failure-visible; report URL, changed files and test evidence.",
+          "SESSION_CLOSE via the canonical relay with complete report, then exit. Reports/scratch belong outside the repository; finish with a clean worktree."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded frontend display fix over an existing API field; normal implementation reasoning is sufficient.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Use the existing outcome_summary response, with a closed allowlist of safe failure classes. Unknown, missing, malformed or multiple reason keys must yield an explicit generic UNKNOWN explanation without echoing arbitrary API keys or values.",
+          "Display the safe code and a short truthful English explanation alongside the failed state. REFUSED must not be described as definitely an authentication or trust failure because the current backend class does not distinguish them.",
+          "Add focused FAILED-state tests for known reason, absent/unknown reason and an untrusted payload that must not render. Preserve FINISHED candidate selection and existing enrollment behavior.",
+          "Do not contact HOST-A or a device; work only in the assigned worktree. Use English engineering artifacts. User directive in this session overrides the older Codex-default roster: Claude is the current primary developer.",
+          "Do not edit project queue/state or AI_HANDOVER in this parallel lane; provide state-update recommendations in SESSION_CLOSE for the PO."
+        ],
+        "risks": [
+          "A generic backend REFUSED class cannot establish its underlying cause."
+        ],
+        "scope": {
+          "in": [
+            "ui2/frontend/src/shell/AddDeviceDialog.tsx",
+            "ui2/frontend/tests/AddDeviceDialog.test.tsx"
+          ],
+          "out": [
+            "Backend, worker, network commands, transport trust settings, credentials, migrations, package manifests, shell navigation, canonical project state and host operations."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npm test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2/frontend && npm run build"
+            ],
+            "name": "frontend_build"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_architecture_convergence.py",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py",
+              "tests/test_cold_start_budget.py",
+              "tests/test_html_render_harness.py"
+            ],
+            "name": "render_and_authority"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T14:28:25Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/frontend/src/shell/AddDeviceDialog.tsx",
+          "ui2/frontend/tests/AddDeviceDialog.test.tsx"
+        ],
+        "completed": [
+          "Discovery FAILED view parses outcome_summary's failure_reason_class key against a closed allowlist (UNREACHABLE, REFUSED, UNKNOWN_FAILURE, UNSUPPORTED_VENDOR, CANDIDATE_PERSIST_FAILED) and renders the safe code plus a short truthful English explanation.",
+          "Absent, unknown, malformed, or ambiguous (more than one reason key) outcome summaries fall back to a generic UNKNOWN explanation -- no raw API key/value or operational identity is rendered.",
+          "REFUSED reads as a generic connection refusal, not asserted as specifically an authentication or trust failure, since the backend class does not yet distinguish them.",
+          "Added three focused FAILED-state tests: known REFUSED reason, absent/unknown reason, and an untrusted/multi-key payload that must not render.",
+          "Opened PR https://github.com/ozandurmus/neXus/pull/384 for feature/discovery-failure-visible."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "Add device dialog: FAILED discovery runs now show a safe failure-class chip and explanation instead of only 'Discovery did not complete.'"
+        },
+        "integration": {
+          "branch": "feature/discovery-failure-visible",
+          "ci": "not yet observed by this session",
+          "head_sha": "f77261a",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merges after its own verify.passed; this worker does not merge.",
+          "merge_state": "OPEN",
+          "pr": 384,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/384"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0220",
+          "movement_type": "UI",
+          "objective": "PO review and orchestrator merge verification of PR #384.",
+          "status": "in_progress"
+        },
+        "preserved": [
+          "FINISHED candidate table, selection rules, and import flow are unchanged.",
+          "Single-device enrollment flow and its tests are unchanged.",
+          "No backend, transport, credential, or identity semantics touched."
+        ],
+        "recommended_reasoning": {
+          "reason": "Remaining work is PO review and orchestrator-side merge verification, not further implementation reasoning.",
+          "tier": "main engineer"
+        },
+        "state_updates": [
+          "Movement NXS-LOCAL-0220 implementation complete, PR #384 open, pending PO review and orchestrator verify.passed before merge.",
+          "No roadmap/backlog scope change beyond marking this queue item's PR link once merged -- bounded UI movement inside the already-frozen PO_DECISION_RECORD_2026_09_14F contract."
+        ],
+        "unresolved_risks": [
+          "A generic backend REFUSED class still cannot establish its underlying cause (auth vs. trust); this remains a backend-side gap this UI movement does not close."
+        ],
+        "validation": {
+          "affected": "Same npm test run covers AddDeviceDialog.test.tsx in full (12 tests, both single-device and discovery-mode suites).",
+          "diff_check": "git diff --check origin/main -- ui2/frontend/src/shell/AddDeviceDialog.tsx ui2/frontend/tests/AddDeviceDialog.test.tsx: clean.",
+          "full_regression": "npm test full suite green (92/92); no other suites touched.",
+          "privacy": "python3 scripts/repository_privacy_check.py: 1492 files scanned, 0 findings, PASS.",
+          "real_environment": "Not applicable -- UI-only display fix over an existing, already-validated API contract; no network-device interaction changed.",
+          "state_consistency": "python3 -m pytest tests/test_architecture_convergence.py tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py tests/test_cold_start_budget.py tests/test_html_render_harness.py: 39 passed, 1 skipped (matches baseline).",
+          "targeted": "cd ui2/frontend && npm test: 92 passed (14 files), including the 3 new FAILED-state tests."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T14:31:42Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0220",
+  "movement": "NXS-LOCAL-0220",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14F_DISCOVERY_FROM_THE_UI_RUN_AND_CANDIDATE_SET.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T14:31:42Z"
+}

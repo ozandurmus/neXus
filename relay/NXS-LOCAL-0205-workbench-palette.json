@@ -1,0 +1,160 @@
+{
+  "created_at": "2026-09-15T10:40:55Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "The workbench and the product share one palette, and the workbench contains no colour literal that the product does not define.",
+          "A completed movement appears in the archive rather than disappearing.",
+          "The archive is collapsed on load.",
+          "The repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_4_WORKBENCH_OBSERVABILITY_TOKENS_AND_STUCK_DETECTION.md (FROZEN) -- the workbench surface this movement restyles, whose observability tokens and stuck detection are unchanged here.",
+          "observed": "The Product Owner has asked repeatedly for the workbench to match UI 2.0 and it still does not. Measured 2026-09-15: the dashboard stylesheet carries Material 3s default purple scheme; the product carries a blue one. They share no colour.",
+          "what_exists": "Workbench colours, counted out of scripts/dashboard_assets/dashboard.css:\n  #cac4d0  #c2c1ff  #5f5ca9  #e6e1e9  #9694a3  #b6c4ff  #79d6a4  #ffd38a  #ffb77a  #ffb4ab  #93000a  #604a1a\n\nThe products single source of truth is ui2/frontend/src/theme/m3Theme.ts:16, verbatim:\n\n  export const m3 = {\n    primary: \"#415f91\",\n    onPrimary: \"#ffffff\",\n    primaryContainer: \"#d6e3ff\",\n    onPrimaryContainer: \"#001b3e\",\n    secondaryContainer: \"#dae2f9\",\n    onSecondaryContainer: \"#131c2b\",\n    surface: \"#f9f9ff\",\n    surfaceDim: \"#d9d9e0\",\n    scLowest: \"#ffffff\",\n    scLow: \"#f3f3fa\",\n    sc: \"#eeedf4\",\n    scHigh: \"#e8e7ef\",\n    scHighest: \"#e2e2e9\",\n    onSurface: \"#191c20\",\n    onSurfaceVar: \"#44474e\",\n    outline: \"#74777f\",\n    outlineVar: \"#c4c6d0\",\n    error: \"#ba1a1a\",\n    errorContainer: \"#ffdad6\",\n    onErrorContainer: \"#410002\",\n    success: \"#3d6b3f\",\n    successContainer: \"#c0ecbe\",\n    onSuccessContainer: \"#00210a\",\n    warning: \"#7d5700\",\n    warningContainer: \"#ffdea6\",\n    onWarningContainer: \"#281900\",\n    ...\n  }\n\nThe state vocabulary that maps a state class to a tone is\nui2/frontend/src/shell/tone.ts: neutral, ok, mem, warn, attn, bad -- with the\nnote that red is reserved for real fault and is never used for an expected\ndifference.\n\nThe workbench files are scripts/dashboard_assets/index.html,\nscripts/dashboard_assets/dashboard.css and scripts/orchestrator_dashboard.py.\n\nOn archiving: a movement state file is deleted when its work is merged, so the\nworkbench shows only live work and the finished rows are gone. The Product\nOwner asked for them to be kept in a collapsed archive instead."
+        },
+        "context_not_loaded": [
+          "docs/history/**"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-looks-like-the-product"
+        },
+        "invariants": [
+          "No new dependency on a running product instance: the workbench must still open with the product stopped.",
+          "No phase or token GOV.ORCH.4 defines changes meaning."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "UI",
+        "objective": "The workbench looks nothing like the product it orchestrates, and it forgets everything it finishes. Give it the products own palette and an archive that keeps completed movements instead of losing them.",
+        "output_contract": [
+          "One pull request on feature/workbench-looks-like-the-product.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "One surface, its stylesheet and one new section; the palette is quoted and the state vocabulary named.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Do not duplicate the palette. Generate or import it from the products token file so a change there reaches the workbench.",
+          "The archive is collapsed by default. The live list stays the first thing on the page."
+        ],
+        "risks": [
+          "Retyping the palette into the stylesheet would satisfy the screenshot and reintroduce the drift this movement exists to remove."
+        ],
+        "scope": {
+          "in": [
+            "Restyle the workbench against the products palette. Take the values from ui2/frontend/src/theme/m3Theme.ts rather than retyping them: a second copy of a palette is a second source of truth and will drift.",
+            "Map each movement phase to the products own state vocabulary from tone.ts. Honour its rule: red means real failure, never an ordinary terminal state.",
+            "Add a collapsed archive section at the foot of the workbench listing completed and cancelled movements, so a finished movement leaves the live list without being lost.",
+            "The archive reads whatever record survives; if a completed movement leaves no record at all, say so in the pull request rather than inventing one."
+          ],
+          "out": [
+            "Changing what the workbench measures. GOV.ORCH.4s observability tokens, stuck detection and phase vocabulary are untouched.",
+            "Any change under ui2/. The palette is read from there and not modified.",
+            "The product wordmark. A separate movement carries it once the Product Owner has chosen a candidate."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/",
+              "-q",
+              "-k",
+              "dashboard"
+            ],
+            "name": "dashboard"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "repository_privacy_check_py"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T10:40:55Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "scripts/dashboard_assets/index.html",
+          "scripts/dashboard_assets/dashboard.css",
+          "scripts/dashboard_assets/dashboard.js",
+          "scripts/orchestrator_dashboard.py",
+          "tests/test_orchestrator_dashboard.py"
+        ],
+        "completed": [
+          "Implemented the product-token-backed workbench palette and collapsed terminal archive."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Dashboard serves product-derived palette tokens and terminal relay archive rows.",
+          "ui": "Collapsed Archive replaces the live Done column; expected terminal states remain non-red."
+        },
+        "integration": {
+          "branch": "feature/workbench-looks-like-the-product",
+          "ci": "not run",
+          "head_sha": "unchanged",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode; no merge attempted.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0205",
+          "movement_type": "VALIDATION",
+          "objective": "Restore linked Git worktree metadata write access, then commit the existing clean diff and open the pull request without merging.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "GOV.ORCH.4 observability tokens, stuck detection, and phase vocabulary",
+          "No dependency on a running product instance"
+        ],
+        "recommended_reasoning": {
+          "reason": "The implementation and focused validation are complete; only the host Git write boundary blocks handover.",
+          "tier": "lightweight"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Git cannot create the linked worktree index.lock due to Operation not permitted; no commit or pull request could be created."
+        ],
+        "validation": {
+          "affected": "PASS: dashboard focused suite",
+          "diff_check": "PASS: git diff --check origin/main",
+          "full_regression": "BLOCKED during collection: sandbox runtime directory is not writable",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py",
+          "real_environment": "NOT RUN: local UI movement",
+          "state_consistency": "NOT RUN: no durable state update is in scope; Git commit is blocked",
+          "targeted": "PASS: python3 -m pytest tests/test_orchestrator_dashboard.py -q (70 passed)"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T10:47:04Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0205",
+  "movement": "NXS-LOCAL-0205",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_ORCH_4_WORKBENCH_OBSERVABILITY_TOKENS_AND_STUCK_DETECTION.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T10:47:04Z"
+}

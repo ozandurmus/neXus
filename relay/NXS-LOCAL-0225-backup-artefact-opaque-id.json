@@ -1,0 +1,169 @@
+{
+  "created_at": "2026-09-15T14:53:54Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Real producer path persists opaque id while retaining server-only location as needed.",
+          "API payload excludes storage path and tests cover it end-to-end.",
+          "Focused validation and privacy reported honestly."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (FROZEN), backed by BK-12/BW-4 findings in docs/design/BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md (DRAFT audit only).",
+          "observed": "The 2026-09-15 backup audit reports BK-14/OR-1 NOT_IMPLEMENTED: FileArtefactStore.finish() produces a relative storage path, BackupJobExecutor persists it as artefact_id, and BackupController returns it over HTTP. User explicitly authorizes five concurrent workers.",
+          "what_exists": "C7 frozen contract defines backup_artefact.artefact_id as opaque application identity and separates it from recovery-volume location. Audit identifies FileArtefactStore.finish, BackupJobExecutor.recordManifest, BackupController.toSummaryBody and frontend fixtures as the path. No retrieval/download route is in scope."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/backup-artefact-opaque-id"
+        },
+        "invariants": [
+          "Presentation identity is not storage identity.",
+          "No HTTP/UI/error payload carries filesystem/recovery path.",
+          "No device or host contact; no retrieval/download/restore behavior."
+        ],
+        "merge_gate": "Worker is authorized to commit, push feature/backup-artefact-opaque-id and open one PR; never merge. PO review and orchestrator verification required.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the frozen BK-14/OR-1 opaque backup artefact presentation identity boundary.",
+        "output_contract": [
+          "One PR and SESSION_CLOSE with changed files, identity mapping and validation results.",
+          "Clean worktree; no device/host access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Opaque identity boundary crosses storage/persistence/API and must preserve privacy semantics; Claude Sonnet 5 high per user direction.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Read relevant frozen C7 identity/storage clauses and trace all artefact-id callers before edit.",
+          "Use a separate opaque application identity. Do not derive it from a storage path, normalize it, or expose a recovery location. The storage location stays server-side and must not reach API/UI/errors.",
+          "Preserve raw-evidence and no-byte/no-download boundaries. Do not add retrieval or export routes.",
+          "Tests must use the actual store-produced shape or equivalent boundary integration—not synthetic opaque-only fixtures that bypass the producer.",
+          "Claude primary by explicit user instruction. Worker may commit/push/open one PR, never merge; English artifacts; scratch outside repo; PO state ownership."
+        ],
+        "risks": [
+          "Caller coverage must prevent any remaining path leak.",
+          "Do not collide with 0224's V23 claim-authorization migration."
+        ],
+        "scope": {
+          "in": [
+            "Minimal artefact-store/manifest/presentation identity mapping required to ensure storage path never becomes API artefact_id.",
+            "Focused service/worker/frontend or integration tests proving real store-produced identifier is opaque and no server-side path reaches payload."
+          ],
+          "out": [
+            "Migration V23 reserved for 0224; no migration number is assigned here.",
+            "Backup claim authorization/reason/allowlist files reserved for 0224; discovery, audit screen, regression, retrieval/download/restore, device commands, host operations, state files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test --tests '*Backup*'"
+            ],
+            "name": "backup_identity_targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T14:53:54Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/backup/BackupJobExecutor.java",
+          "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/backup/BackupJobExecutorEndToEndTest.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/api/BackupControllerTest.java (new)"
+        ],
+        "completed": [
+          "backup_artefact.artefact_id is now artefact.ciphertextSha256() -- the real FileArtefactStore's own opaque content-address identity (C7 section 3.2's 'BRC sha256-of-ciphertext identity, kept as the value' pattern) -- instead of the storage-relative path ArtefactRef.value() produces.",
+          "The real producer path is resolved against the configured recovery-volume root and stored server-side only in recovery_volume_path, which BackupController never serializes (BackupArtefactSummary carries no path field).",
+          "Extended BackupJobExecutorEndToEndTest's happy-path test to assert against the real store-produced identifier: recorded artefact_id equals the real ciphertext digest, contains no path segment, and differs from recovery_volume_path.",
+          "Added BackupControllerTest proving the /backups and /devices/{id}/backups response bodies carry only the opaque id and never a recovery_volume_path field."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- ui2 Java product line only, no main.py in scope.",
+          "ui": "none -- no templates/console.html, static/*.js, or payload builder touched; BackupController's response shape is unchanged (same fields, opaque value)."
+        },
+        "integration": {
+          "branch": "feature/backup-artefact-opaque-id",
+          "ci": "not triggered by this session (local validation only, per WORKER.md deployment_direction)",
+          "head_sha": "6c3482362008a9e0799cf5899d072c017c3a791b",
+          "merge_commit": null,
+          "merge_decision": "Not this session's decision -- merge-mode orchestrator: PR opened, SESSION_CLOSE published, orchestrator merges after its own verification passes.",
+          "merge_state": "OPEN",
+          "pr": 386,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/386"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0225",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "PO review and orchestrator verification of PR #386; a follow-up movement should fix BackupArtefactRetrieval.java's now-stale artefact_id-as-path assumption (see unresolved_risks) before any CLI backup-retrieve capability ships.",
+          "status": "complete_with_followup"
+        },
+        "preserved": [
+          "FileArtefactStore/ArtefactRef/ArtefactStore.ArtefactMetadata shapes unchanged.",
+          "BackupController.toSummaryBody's existing 6-field response shape unchanged.",
+          "BackupNoHttpRetrievalRouteTest's route-name grep unchanged and still passing.",
+          "V17 migration, BackupArtefactManifestRecord field order, Jooq repository SQL all unchanged."
+        ],
+        "recommended_reasoning": {
+          "reason": "Matches SESSION_START's own recommendation -- the identity boundary crosses storage/persistence/API and required tracing every caller before editing; no escalation beyond that was needed.",
+          "tier": "strong implementation"
+        },
+        "state_updates": [
+          "None -- this build did not change scope, delivery state, architecture, debt or sequencing; no project/*.json or CURRENT_STATE.md update required."
+        ],
+        "unresolved_risks": [
+          "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/artefact/BackupArtefactRetrieval.java (CLI retrieval, OR-2..OR-5) is explicitly out of scope for this movement (WORKER.md 'must not touch': retrieval/download/restore). It currently does `new ArtefactRef(artefactId)` at line 90, which only resolved to the correct file because artefact_id used to equal the storage-relative path. After this fix, artefact_id is the opaque ciphertext digest and no longer resolves to a file location by itself; the real per-artefact locator now lives only in recovery_volume_path, which BackupArtefactManifestRepository.RetrievalManifest does not currently expose to that caller. BackupArtefactRetrievalTest does not catch this because its FakeArtefactStore.retrieve() ignores the ArtefactRef argument entirely -- the break is silent under every existing automated test. A follow-up movement owning that file needs to thread recovery_volume_path (not artefact_id) through to retrieval. Not fixed here because the file is explicitly reserved out of scope for NXS-LOCAL-0225."
+        ],
+        "validation": {
+          "affected": "worker and service modules recompiled and their full Backup* suites passed (see targeted); persistence module's Backup* tests ran FROM-CACHE (unaffected by this change, persistence main sources untouched).",
+          "diff_check": "git diff --check -- clean, exit 0.",
+          "full_regression": "Not run -- out of the brief's validation_plan and blast radius is scoped to worker/service/persistence artefact-identity plumbing only.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 1710 files scanned, 0 findings.",
+          "real_environment": "Not applicable -- no device or host contact; JVM-local test doubles and a temp-directory-backed real FileArtefactStore only.",
+          "state_consistency": "Not applicable -- no project/*.json or CURRENT_STATE.md changes; this build did not touch scope/delivery-state/architecture/debt/sequencing.",
+          "targeted": "Ran the brief's literal `./ui2/gradlew ... test --tests '*Backup*'` (no module scoping) and it fails pre-existingly, unrelated to this change: capability-registry, ldap-adapter, platform-core, cli, job-engine have zero classes matching '*Backup*', and Gradle's default --tests behavior fails a module with 'No tests found for given includes' rather than skipping it. Re-ran scoped to the modules that actually own Backup-named tests -- `:persistence:test :worker:test :service:test --tests '*Backup*'` -- and got BUILD SUCCESSFUL: BackupJobExecutorEndToEndTest 5/5 passed, BackupControllerTest 2/2 passed, persistence's existing Backup* suite unaffected."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T15:02:31Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0225",
+  "movement": "NXS-LOCAL-0225",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T15:02:31Z"
+}

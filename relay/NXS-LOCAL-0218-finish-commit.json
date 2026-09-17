@@ -1,0 +1,155 @@
+{
+  "created_at": "2026-09-15T12:31:25Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A dispatched worker commits, pushes and opens its own pull request without the Product Owner finishing it.",
+          "The writable roots contain the object store and nothing broader.",
+          "A named test holds it.",
+          "The orchestrator suite and the repository privacy gate pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN) fixes the worktree-per-movement dispatch model. PR #371 removed the first half of the reason that model could not complete; this movement removes the second.",
+          "observed": "Movement NXS-LOCAL-0217 ran after #371 and #376 merged. Its compile step passed, its privacy gate passed, and it still could not commit. Its own closing words: Restore Git object-store write access, then commit and open the PR.",
+          "what_exists": "A commit writes two places. The index and its lock live in the worktree's own directory, which #371 already opens:\n\n  git -C <worktree> rev-parse --git-dir\n  <main repo>/.git/worktrees/NXS-LOCAL-0217\n\nThe objects it writes do not. They go to the shared store under the main repository's .git/objects, which no writable root covers.\n\nscripts/orchestrator.py:1017 defines _add_engineer_toolchains and the git directory is added around scripts/orchestrator.py:1111, per #371. The object store is a sibling of .git/worktrees, not a child of it, so deriving it from the worktree git directory means walking to the common directory rather than composing a path."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/a-worker-can-finish-its-commit"
+        },
+        "invariants": [
+          "The sandbox stays workspace-write.",
+          "No engineer gains write access to refs, to config, or to another movement's worktree state."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it. If it opens its own pull request, that is itself the acceptance evidence.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "A dispatched worker can complete a commit. PR #371 opened its worktree's index directory; a commit also writes objects, and that store is elsewhere.",
+        "output_contract": [
+          "One pull request on feature/a-worker-can-finish-its-commit.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "One derived path added to an existing list, with the boundary already reasoned and the wrong broader answer named.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Grant the object store and nothing adjacent to it. Objects are content-addressed and effectively append-only, which is why this grant is defensible where a grant of refs would not be. Say that reasoning in the pull request so the next reader knows where the line is.",
+          "Derive, do not compose. A repository can be configured with a relocated object directory or with alternates."
+        ],
+        "risks": [
+          "Reaching for .git wholesale would make every movement able to move another lane's refs. The narrower grant is the whole point of doing this as its own movement rather than widening #371 after the fact."
+        ],
+        "scope": {
+          "in": [
+            "Add the repository's shared object store to the sandbox writable roots for a dispatched engineer, derived from git rather than composed from a parent path.",
+            "Derive it the way git itself names it. git rev-parse --git-common-dir gives the shared directory; the object store is what git reports beneath it, and an alternates or a relocated objects directory must not break the derivation.",
+            "A test that fails if the writable roots omit the object store for a linked worktree."
+          ],
+          "out": [
+            "Granting the whole shared .git directory. Refs, config and other worktrees' state live there, and one movement must not be able to touch another's.",
+            "Moving to a permissive sandbox mode.",
+            "Changing the merge gate, the relay protocol or the dispatch model."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator.py",
+              "-q"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T12:31:25Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "Added Git-derived object-store writable root via git rev-parse --git-path=objects.",
+          "Extended the named Codex spawn test for the object-store root."
+        ],
+        "completed": [
+          "Committed and pushed 358ae76 to feature/a-worker-can-finish-its-commit."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Dispatched Codex engineers receive only the Git-reported object store in addition to existing narrow roots.",
+          "ui": "No UI changes."
+        },
+        "integration": {
+          "branch": "feature/a-worker-can-finish-its-commit",
+          "ci": "Not started; PR creation blocked by GitHub GraphQL API rate limit.",
+          "head_sha": "358ae76",
+          "merge_commit": null,
+          "merge_decision": "Do not merge; orchestrator merge mode.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0218",
+          "movement_type": "VALIDATION",
+          "objective": "Create the pull request after GitHub API capacity returns, then run orchestrator verification.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "workspace-write sandbox",
+          "shared Git refs, config, and other worktree state remain outside writable roots"
+        ],
+        "recommended_reasoning": {
+          "reason": "PR creation retry and orchestrator verification",
+          "tier": "light"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "GitHub GraphQL API rate limit blocked gh pr create; the pushed branch is ready for PR creation."
+        ],
+        "validation": {
+          "affected": "Covered by the targeted orchestrator suite.",
+          "diff_check": "git diff --check origin/main: PASS before commit",
+          "full_regression": "Not run; dispatch validation plan specifies the targeted suite.",
+          "privacy": "python3 scripts/repository_privacy_check.py: PASS",
+          "real_environment": "Not applicable; local orchestrator dispatch behavior only.",
+          "state_consistency": "Not applicable; no project-state artifact changed.",
+          "targeted": "python3 -m pytest tests/test_orchestrator.py -q: 153 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T12:37:53Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0218",
+  "movement": "NXS-LOCAL-0218",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md",
+    "docs/reference/PROVIDER_OPERATING_NOTES.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T12:37:53Z"
+}

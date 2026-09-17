@@ -1,0 +1,162 @@
+{
+  "created_at": "2026-09-15T11:35:40Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "No HTTP response carries a value from which the storage path, the vendor or the device identifier can be read.",
+          "A named test asserts the response value and fails if a path-shaped value returns.",
+          "The server can still resolve an identifier it issued back to its artefact.",
+          "The service and frontend suites and the repository privacy gate pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14H_BACKUP_STEP_SCOPE_PILOT_DEVICE_AND_THE_ASYNCHRONOUS_TRUTH.md (FROZEN) BK-14, with 14I OR-1 carrying the same boundary from the retrieval side.",
+          "observed": "The backup-line audit of 2026-09-15 recorded BK-14 and OR-1 as NOT_IMPLEMENTED, with the note that the API omits recovery_volume_path and then returns the same path through another field. Its existing test searches route names only and never inspects a response value, so it passes.",
+          "what_exists": "The store's own comment says what the reference is, at\nui2/persistence/src/main/java/.../artefact/FileArtefactStore.java:66:\n\n  private Path pathFor(ArtefactRef ref) {\n      // ref.value() is \"<vendor>/<device_id>/<sha256hex>\" -- see FileArtefactHandle.finish().\n      return root.resolve(ref.value());\n  }\n\nThat value reaches the browser at\nui2/service/src/main/java/.../api/BackupController.java:107:\n\n  body.put(\"artefact_id\", summary.artefactId());\n\nThe same file's own javadoc, lines 29 to 33, states the rule it breaks:\n\n   * and {@code GET /backups} (WORKER.md \"Service and screen\"). 14H BK-14 /\n   * 14I OR-1: no field here is ever an artefact byte, a store path or a\n   * decrypt affordance -- {@link #toSummaryBody} carries only a digest\n   * prefix, never the full digest's own storage-path implication and never\n   * {@code recovery_volume_path}.\n\nSo the contradiction is inside one file: the class comment forbids returning a store path and the method returns one. The value also carries the vendor and the device identifier as path segments.\n\nArtefactRef is a single-field record,\nui2/persistence/src/main/java/.../artefact/ArtefactRef.java:12:\n\n  public record ArtefactRef(String value) {\n\nThe frontend covers this through InventoryPanels.test.tsx using synthetic opaque identifiers, so it never exercises the real store-produced value."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links.",
+          "The retrieval-audit defect recorded as OR-3 and BK-12, which is a separate movement on different files."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/an-artefact-id-is-not-a-path"
+        },
+        "invariants": [
+          "No new route, and no change to what restore can do.",
+          "No artefact byte and no decrypt affordance reaches an HTTP response.",
+          "The digest prefix behaviour the class comment describes is unchanged."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "The artefact identifier a browser receives stops being the server's storage path. Presentation identity and storage identity become two different values.",
+        "output_contract": [
+          "One pull request on feature/an-artefact-id-is-not-a-path.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "One value's identity across a store, a controller and two test layers, inside frozen contracts that already state the rule.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "The identifier must be opaque to the receiver and resolvable by the server. State in the pull request how it is derived and why that derivation cannot be reversed into a path by someone holding only the identifier.",
+          "AGENTS.md identity law applies: the new identifier is opaque and must not be parsed, split, truncated or compared for structure by any consumer.",
+          "The class comment in BackupController is the contract this movement restores. Leave it as the assertion it is, and make the code match it."
+        ],
+        "risks": [
+          "A hash of the path is still derived from the path. If the identifier is a digest, say what stops it being used as an oracle against guessed device identifiers.",
+          "A test that asserts the identifier is not equal to the path would pass for any wrong value. Assert the property -- that it reveals no segment -- rather than an inequality."
+        ],
+        "scope": {
+          "in": [
+            "Give the browser an opaque identifier that does not reveal the storage layout, the vendor or the device identifier, and that the server can resolve back to the artefact.",
+            "Keep the storage path as an internal concern of the store. The manifest may keep whatever it needs; what changes is what leaves the process over HTTP.",
+            "A test that inspects the response VALUE, not the route name. The existing test passes today precisely because it only searches route names, and that is the reason this shipped.",
+            "A frontend fixture that carries a realistic identifier of the new shape rather than an invented opaque string, so the frontend test would notice a regression."
+          ],
+          "out": [
+            "Adding a download, retrieval or decrypt route. BK-13 keeps restore unavailable and no submission surface reaches a restore executor; this movement does not open one.",
+            "Changing how or where artefacts are stored, encrypted or digested.",
+            "Changing the manifest schema beyond what an opaque presentation identifier requires.",
+            "Renaming the artefact_id field. Callers depend on the name; the value changes, not the key."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew --no-daemon --console=plain :service:test :persistence:test"
+            ],
+            "name": "service_and_persistence_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T11:35:40Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "Added a random UUID presentation_id column and migration; it is generated independently of the storage reference.",
+          "Changed backup list summaries to return presentation_id as artefact_id and added a repository resolver from presentation ID to the internal reference.",
+          "Added a response-value test that rejects path, vendor, and device segments; updated the frontend fixture to a UUID-shaped identifier."
+        ],
+        "completed": [
+          "Prepared the scoped implementation; publication is blocked before commit and pull-request creation."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "NOT_TOUCHED",
+          "ui": "Frontend fixture only; no runtime UI behavior changed."
+        },
+        "integration": {
+          "branch": "feature/an-artefact-id-is-not-a-path",
+          "ci": "NOT_RUN",
+          "head_sha": "origin/main",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode; no pull request was created because the Git index is write-denied.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0212",
+          "movement_type": "VALIDATION",
+          "objective": "Restore Git-index access and existing test runtimes, validate the prepared diff, then open the pull request without merging.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No HTTP retrieval, download, decrypt, or restore route was added.",
+          "Storage layout, encryption, digests, and digest-prefix behavior are unchanged.",
+          "The artefact_id response key is unchanged."
+        ],
+        "recommended_reasoning": {
+          "reason": "Validation and publication are blocked by environment access, not unresolved implementation semantics.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The sandbox denies writes to the Git index, preventing commit, push, and pull-request creation.",
+          "The mandated service/persistence and frontend suites remain unexecuted because their existing runtimes are unavailable."
+        ],
+        "validation": {
+          "affected": "BLOCKED: frontend Vitest could not start because the vitest binary is not installed.",
+          "diff_check": "PASS",
+          "full_regression": "NOT_RUN: scope requires targeted service, persistence, frontend, and privacy validation only.",
+          "privacy": "PASS: repository_privacy_check.py found zero findings.",
+          "real_environment": "NOT_APPLICABLE: no network-facing behavior changed.",
+          "state_consistency": "NOT_RUN: no durable project-state files were changed.",
+          "targeted": "BLOCKED: service and persistence Gradle tests could not start because no Java Runtime is available."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T11:40:08Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0212",
+  "movement": "NXS-LOCAL-0212",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14H_BACKUP_STEP_SCOPE_PILOT_DEVICE_AND_THE_ASYNCHRONOUS_TRUTH.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_14I_ARTEFACT_LOCATION_OPERATOR_RETRIEVAL_DEVIATION_AND_MANAGEMENT_SERVERS.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T11:40:08Z"
+}

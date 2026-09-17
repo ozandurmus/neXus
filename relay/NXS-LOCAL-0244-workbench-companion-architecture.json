@@ -1,0 +1,148 @@
+{
+  "created_at": "2026-09-15T18:28:48Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract resolves local platform/lifecycle/persistence/MCP/plugin boundaries or explicitly defers unsupported clients.",
+          "Implementation sequence is independently testable and rollback safe.",
+          "Authority/privacy/diff gates pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); GOV.ORCH.4/13 govern companion semantics.",
+          "observed": "Workbench table-first Material 3 work is separately in progress. User provides a follow-up directive for independent reliable tracking with a supervised service, read-only MCP, private plugin and skill, no new execution authority.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-companion-architecture"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw transcripts or sensitive notifications.",
+          "Unknown/cost provenance semantics preserved.",
+          "Notification state separate from workflow authority."
+        ],
+        "merge_gate": "Worker commits only; PO manages PR/merge; FROZEN status requires PO review.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Design the private neXus Workbench Companion: supervised local tracking service, read-only MCP, private plugin and skill, without duplicating Workbench UI/orchestrator authority.",
+        "output_contract": [
+          "Architecture contract and SESSION_CLOSE.",
+          "No host install/deployment."
+        ],
+        "recommended_reasoning": {
+          "reason": "Service lifecycle, durable observation and MCP/plugin security boundary; gpt-6-astra high.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "Use existing orchestrator dashboard/usage/ledger/relay as authority; companion has no competing state machine.",
+          "Design smallest OS-service lifecycle, local-only first, least privilege, restart/sleep/source-loss semantics, uninstall preserving history.",
+          "MCP is read-only safe summaries only; no shell, retry, merge, deployment, approval or raw log access. Plugin packaging differs by Codex/Claude unless verified; skill guides inspection only, never monitoring.",
+          "Define synthetic acceptance tests and implementation slices; coordinate with table-first UI and do not modify its files. Worker commits only; PO PR/merge."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "Architecture decision and FROZEN contract for companion lifecycle, minimal derived observation persistence, restart reconciliation, notifications, read-only MCP, private plugin/skill packaging, platform support and uninstall."
+          ],
+          "out": [
+            "Workbench UI implementation, orchestrator/relay state authority rewrite, host install/startup config, shared/remote host deployment, raw log storage, automatic actions, Git/deployment authority."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_contract_authority_status.py",
+              "tests/test_design_cross_references_resolve.py"
+            ],
+            "name": "authority"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T18:28:48Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "Companion scope conflicts with deployment baseline",
+      "text": "Dispatch seq 1 report.baseline.what_exists requires inspecting deploy/ui2 selectors and ports and defining additive NetworkPolicy. WORKER.md permits reading only companion architecture and two named tests, and the approved objective and scope are local-only companion architecture with no host install/deployment. Please issue a RELAY_CORRECTION removing the deployment/NetworkPolicy requirement if it is unrelated, or explicitly revise the scope and read allowlist if it is intended. No implementation, contract freeze, commit, push, PR, merge, host installation or deployment has occurred. FROZEN status remains subject to the stated PO review gate.",
+      "timestamp": "2026-09-15T18:30:15Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_CORRECTION",
+      "seq": 3,
+      "subject": "Companion v1 is local-only",
+      "text": "Correction: deployment, deploy/ui2 selectors, ports, NetworkPolicy, host installation and all shared/remote host concerns are out of scope for this architecture movement. Design v1 as a local supervised companion service on the PO workstation, consuming existing local orchestrator/relay state only. Define future remote-host requirements as explicit deferred constraints, not current dependencies. Permitted reads are companion source candidates (orchestrator_dashboard.py, orchestrator.py, orchestrator_usage.py, dispatch_ledger.py, relay semantics), GOV.ORCH.4/4-A/4-B/13, and named authority tests.",
+      "timestamp": "2026-09-15T18:45:06Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_ACK",
+      "seq": 4,
+      "subject": "Companion architecture resumed under correction 3",
+      "text": "SESSION_START seq 1 accepted as corrected by seq 3: local workstation architecture only. Reviewing GOV.ORCH.4/4-A/4-B/13 and permitted source candidates. One proposed contract, no runtime or UI edits. Existing helpers have write and raw-log side effects; design will use bounded read-only projections. FROZEN publication remains subject to the explicit PO review gate.",
+      "timestamp": "2026-09-15T18:47:33Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 5,
+      "subject": "PO review required before companion freeze",
+      "text": "The reviewable contract is docs/design/WORKBENCH_COMPANION_CONTRACT.md at c438b805fa96bf155ac1d2781758356634befc6e, draft PR https://github.com/ozandurmus/neXus/pull/401. WORKER.md Git merge gate and approved SESSION_START seq 1 require PO review before FROZEN status, but the acceptance criterion requests a frozen contract and no freeze decision is recorded. Please review this revision and record a revision-specific RELAY_DECISION approving freeze or identify changes. The contract remains DRAFT and the movement closes PARTIAL; tests and orchestrator merge mode cannot supply this decision. No runtime implementation, host installation, deployment or PR merge occurred.",
+      "timestamp": "2026-09-15T19:06:23Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner, 2026-09-15",
+      "marker": "RELAY_DECISION",
+      "scope": "WORKBENCH_COMPANION_CONTRACT.md revision c438b805 only",
+      "seq": 6,
+      "subject": "Freeze Workbench Companion contract revision c438b805",
+      "supersedes": "NXS-LOCAL-0244 relay question seq 5 pending freeze review",
+      "text": "PO review approved revision c438b805fa96bf155ac1d2781758356634befc6e. Freeze docs/design/WORKBENCH_COMPANION_CONTRACT.md exactly as reviewed. V1 is local macOS observer, bounded derived snapshot, read-only three-tool MCP, private Codex package and finite inspection skill. No host install, remote transport, raw logs, execution authority, automatic actions or Claude compatibility claim. Dispatch C1 read-adapter implementation after merge.",
+      "timestamp": "2026-09-15T19:10:06Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0244",
+  "movement": "NXS-LOCAL-0244",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-15T19:10:06Z"
+}

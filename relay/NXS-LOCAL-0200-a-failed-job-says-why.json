@@ -1,0 +1,175 @@
+{
+  "created_at": "2026-09-15T10:21:43Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A discovery run that fails against an unreachable or refusing endpoint records a reason class that names the failure, and outcome_summary no longer reads failure_reason_class:FAILED.",
+          "A job row in FAILED carries a non-empty outcome, a non-empty terminal_reason and a finished_at.",
+          "A step attempt row carries output_bytes and output_lines that came from the step, and matched_expectation is a boolean rather than NULL wherever the expectation was evaluated.",
+          "Named tests hold each of the three joins above and fail if a constant is reintroduced.",
+          "The full suite and the repository privacy gate pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (FROZEN) -- the jobs table row in section 2 requires `outcome`, `terminal_reason`, `finished_at` to be `set once, on the single legal transition into a terminal state`, and section 3s state table defines FAILED as `a definite, non-ambiguous failure ... where the worker can prove no operational-write steps outcome is ambiguous`.",
+          "environment": "The product now runs on HOST-A under k3s. This movement is repository work only: no host access, no cluster access, no device contact.",
+          "observed": "Standing the product up on HOST-A on 2026-09-15, a Check Point discovery run failed. Finding out why required querying PostgreSQL by hand, and the answer was not there either.",
+          "what_exists": "Observed rows, redacted:\n\n  discovery_run: vendor=check_point state=FAILED\n    outcome_summary = { \"failure_reason_class:FAILED\": 1 }\n\n  jobs: job_type=cp_discovery_enumerate state=FAILED\n    outcome         = (empty)\n    terminal_reason = (empty)\n    finished_at     = (empty)\n    lease_worker_id = worker-<uuid>   (the worker did lease and run it)\n\n  job_step_attempt: step_kind=DISCOVERY_ENUMERATE_READ\n    outcome             = EXPECTATION_UNMET\n    matched_expectation = NULL\n    output_bytes        = 0\n    output_lines        = 0\n\nThe three defects, quoted from source:\n\n1. ui2/worker/src/main/java/.../discovery/DiscoveryJobExecutor.java:159 and :174\n     case ManagementPlaneEnumerationResult.Failed failed -> EnumerationOutcome.failed(\"FAILED\");\n     case PanoramaEnumerationResult.Failed failed -> EnumerationOutcome.failed(\"FAILED\");\n   The vendor result carries a Failed value, it is bound to `failed`, and it is\n   discarded in favour of the literal string \"FAILED\". That literal is what\n   reaches outcome_summary, which is why the summary is circular.\n\n2. ui2/worker/src/main/java/.../discovery/DiscoveryJobExecutor.java:126\n     return new JobOutcome.Failed(outcome.failureReasonClass);\n   The reason is produced and returned, and jobs.terminal_reason is still empty\n   in the observed row. The chain breaks between this return and the terminal\n   write.\n\n3. ui2/worker/src/main/java/.../discovery/DiscoveryJobExecutor.java:117\n     attemptRepository.writeOutcome(attemptId, leaseEpoch,\n         outcome.succeeded ? \"MATCHED\" : \"EXPECTATION_UNMET\", null, 0L, 0L, fingerprintOf(outcome));\n   and ui2/job-engine/src/main/java/.../executor/StepExecutor.java:263\n     attemptRepository.writeOutcome(attemptId, leaseEpoch, outcome, errorClass, 0L, 0L, ...)\n   matched_expectation, output_bytes and output_lines are constants. The zeros\n   are not a measurement of a device response; they are literals, and they read\n   as measurements to anyone inspecting the row.\n\nThe repository signature the writes go through:\n  ui2/job-engine/src/main/java/.../stepattempt/JobStepAttemptRepository.java:23\n    boolean writeOutcome(String attemptId, long leaseEpoch, String outcome,\n                         String errorClass, long outputBytes, long outputLines, ...)"
+        },
+        "context_not_loaded": [
+          "The audit screen and Jobs screen contracts (B1-7, B1-8). They consume these fields and are out of scope here.",
+          "docs/history/** beyond what project/build_history.json links."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/a-failed-job-says-why"
+        },
+        "invariants": [
+          "AGENTS.md raw-evidence law: parse to safe classes and discard the raw response; never persist a raw vendor response to make debugging easier.",
+          "AGENTS.md UNKNOWN / fail-closed law: where a failure genuinely cannot be classified, record an explicit unknown class rather than inventing a specific one.",
+          "C2 section 3: a terminal state is written once, under the claiming workers lease epoch. Do not add a second write path.",
+          "No schema migration in this movement."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it. Merge is the Product Owner assistants, after verify.passed and a read of the diff.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "A job that reaches a terminal state records why. C2 requires outcome, terminal_reason and finished_at to be set on the single legal transition into a terminal state; today a FAILED job leaves all three empty, the discovery failure reason class is the literal string FAILED, and every step attempt records constants where its measurements belong.",
+        "output_contract": [
+          "One pull request on feature/a-failed-job-says-why.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded work inside a frozen contract, with the defective lines already located and quoted. No new architecture and no vendor semantics to establish.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Read docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md section 2 and section 3 before changing a terminal write.",
+          "A reason class is a closed enumeration defined in source, not a string built at the call site. A caller that cannot classify a failure records the class it can prove and nothing more.",
+          "No vendor message, device output, address, hostname or credential enters a reason class, a terminal_reason, or a test fixture.",
+          "Do not change the meaning of EXPECTATION_UNMET or MATCHED; this movement makes their companions honest, not their vocabulary different."
+        ],
+        "risks": [
+          "The reason value may be the easiest place for a vendor error string to leak into the database. The closed-enumeration requirement exists for that reason and is not negotiable.",
+          "The terminal write is fenced by lease epoch. A change that writes the reason on a second, unfenced path would break C2 section 3s single-write rule while appearing to work."
+        ],
+        "scope": {
+          "in": [
+            "Carry the vendor failure value in DiscoveryJobExecutor.enumerateCheckPoint and enumeratePaloAlto into the reason class instead of discarding it for the literal \"FAILED\". The classes must be a closed, named set (for example REFUSED, UNSUPPORTED_VENDOR, and whatever the vendor result actually distinguishes) -- never free text, never a vendor message copied through.",
+            "Persist the terminal triple on the transition into a terminal state, so that a FAILED job carries outcome, terminal_reason and finished_at as C2 section 2 requires. Find where JobOutcome.Failed is consumed and why its reason does not reach the row.",
+            "Record the step attempts measurements instead of constants: matched_expectation, output_bytes and output_lines must reflect what the step actually saw, at both call sites named in what_exists.",
+            "Targeted tests: a failed discovery writes a named reason class, not \"FAILED\"; a FAILED job row carries a non-empty terminal_reason and a finished_at; a step attempt records a byte count that is not a hardcoded zero."
+          ],
+          "out": [
+            "Any new logging framework, log screen, or diagnostics surface. Those are separate movements; this one only makes the existing fields tell the truth.",
+            "Retaining or logging a raw vendor response. AGENTS.md raw-evidence law: the reason is a safe class, a counter or a relationship -- never the device output, never a vendor error string copied verbatim.",
+            "Changing the job state machine, the lease/fencing model, or any transition in C2 section 3.",
+            "The audit screen (B1-8) and the Jobs screen (B1-7).",
+            "Any schema migration. The columns already exist; this movement fills them."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew --no-daemon --console=plain :worker:test :job-engine:test"
+            ],
+            "name": "cd_587"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew --no-daemon --console=plain :service:test"
+            ],
+            "name": "cd_563"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "repository_privacy_check_py"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T10:21:43Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Job lease and attempt persistence ports plus jOOQ implementations.",
+          "DiscoveryJobExecutor and StepExecutor metadata writes.",
+          "Focused worker and job-engine regression tests."
+        ],
+        "completed": [
+          "Persisted outcome, terminal_reason, and finished_at in the existing fenced terminal transition.",
+          "Mapped discovery failures to closed safe classes.",
+          "Recorded expectation and measured output metadata at both scoped call sites.",
+          "Opened PR #364 without merging."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/a-failed-job-says-why",
+          "ci": "Not checked; local Gradle validation is blocked by missing Java runtime.",
+          "head_sha": "886a4e4",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode; worker did not merge.",
+          "merge_state": "OPEN",
+          "pr": 364,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/364"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0200",
+          "movement_type": "VALIDATION",
+          "objective": "Run the prescribed Gradle validation and verify PR #364.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "C2 state machine, lease epoch fencing, and single terminal transition path.",
+          "No schema migration, raw-response persistence, UI change, or device contact."
+        ],
+        "recommended_reasoning": {
+          "reason": "Only bounded validation remains; the implementation is complete.",
+          "tier": "light"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Run the prescribed Gradle suites once the approved Java runtime is available."
+        ],
+        "validation": {
+          "affected": "BLOCKED: :service:test could not start because the host Java runtime is unavailable.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "Not run; the required Java runtime is unavailable.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py.",
+          "real_environment": "Not applicable: repository-only implementation; no device or host environment contacted.",
+          "state_consistency": "PASS: scoped repository checks and clean worktree after commit.",
+          "targeted": "BLOCKED: :worker:test :job-engine:test could not start because the host Java runtime is unavailable."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T10:29:34Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0200",
+  "movement": "NXS-LOCAL-0200",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T10:29:34Z"
+}

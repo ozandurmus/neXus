@@ -947,25 +947,36 @@ def _relay_archive_rows(relay_dir: Path, active_ids: set[str]) -> list[dict]:
         except (OSError, orch.OrchestratorError):
             continue
         movement_id = relay.get("id") or relay.get("movement")
+        if not isinstance(movement_id, str) or movement_id in active_ids:
+            continue
         entries = relay.get("entries") or []
         close = next((entry for entry in reversed(entries) if entry.get("marker") == "SESSION_CLOSE"), None)
-        if not isinstance(movement_id, str) or movement_id in active_ids or not close:
-            continue
-        outcome = str(close.get("outcome", "")).lower()
-        if relay.get("status") != "CLOSED" and outcome not in {"done", "cancelled"}:
-            continue
         start = next((entry for entry in entries if entry.get("marker") == "SESSION_START"), {})
         report = start.get("report") if isinstance(start, dict) else {}
+        last_entry = entries[-1] if entries else {}
+        ended_at = (close or {}).get("timestamp") or last_entry.get("timestamp")
+
+        outcome = (close.get("outcome") if close else None) or relay.get("status")
+        outcome_lower = str(outcome or "").lower()
+        if outcome_lower in {"done", "automated_validated"}:
+            health = HEALTH_DONE
+        elif outcome_lower in {"failed", "blocked"}:
+            health = HEALTH_FAILED
+        elif relay.get("status") == "CLOSED":
+            health = HEALTH_DONE
+        else:
+            health = HEALTH_FAILED
+
         rows.append({
             "movement_id": movement_id,
             "objective": (report or {}).get("objective", ""),
-            "health": HEALTH_DONE,
+            "health": health,
             "stage": "archived",
             "process_status": "disconnected",
-            "ended_at": close.get("timestamp"),
+            "ended_at": ended_at,
             "archived": True,
             "relay_status": relay.get("status"),
-            "terminal_outcome": close.get("outcome"),
+            "terminal_outcome": outcome,
         })
     return rows
 

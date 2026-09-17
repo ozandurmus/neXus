@@ -1,0 +1,168 @@
+{
+  "created_at": "2026-09-15T16:16:43Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "C8 v1 launch is reproducible on existing carrier and serves loopback synthetic data.",
+          "Readonly viewer browses current device surface; tests cover marker refusal, no transport reachability and readonly refusal.",
+          "Generated data only; privacy and targeted gates truthfully reported."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md (FROZEN); C8 is the frozen successor scope on origin/main.",
+          "observed": "C8 is merged and authorizes its implementation sequence. v1 excludes cp_inventory_projection and device_inventory_run seeding.",
+          "what_exists": "C8 §§3–9 fix existing Testcontainers/UI2_TEST_JDBC_URL carrier, semantic-only Python fixture reference, synthetic viewer and loopback test environment."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/mockup-palace-v1"
+        },
+        "invariants": [
+          "Synthetic environment cannot reach production/device/LDAP.",
+          "Marker failure is fail-closed.",
+          "viewer cannot submit jobs/intents.",
+          "No unavailable payload semantics seeded."
+        ],
+        "merge_gate": "Worker commits only; PO opens PR, reviews verification and merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement C8 v1 mockup-palace synthetic Java UI2 test environment and readonly local browsing path.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE with launch path, viewer behavior, tests and carrier limitations.",
+          "Clean worktree; no PR/merge/host/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "C8 spans test fixture, local auth, profile boundary and transport isolation; gpt-5.6-sol high is proportionate.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Read C8 fully and trace all named source/test callers.",
+          "Reuse the existing PostgreSQL carrier only; all seed data fabricated.",
+          "Marker is test-only; standard startup fails closed when absent. Profile binds 127.0.0.1 and proves no device transport reachable. Viewer uses actual role:viewer path only.",
+          "No standard product Flyway migration, PR, merge, host/device/credential access."
+        ],
+        "risks": [
+          "Real PostgreSQL carrier may be unavailable; do not skip or bootstrap runtime.",
+          "CLI dependency direction must preserve architecture rules."
+        ],
+        "scope": {
+          "in": [
+            "C8 §9 items 1–4: CLI seed command/dependency, test-only marker/guard, mockup-palace loopback profile, embedded UnboundID viewer, scoped seed and visual acceptance tests."
+          ],
+          "out": [
+            "Production/k3s manifests, standard migrations, production data/credentials/devices/LDAP, replay role, unavailable seed surfaces, Python fixture copying, project state."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test integrationTest --tests '*MockupPalace*'"
+            ],
+            "name": "mockup_targeted"
+          },
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "python3 -m pytest -q -p no:cacheprovider tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py && python3 scripts/repository_privacy_check.py"
+            ],
+            "name": "architecture_and_privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T16:16:43Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "No repository changes retained. The external, unvalidated patch adds the guarded CLI seed and persistence dependency, test-only marker migration, loopback Spring wiring, embedded UnboundID viewer, single-use browsing launch, current-device HTML walk and acceptance/architecture checks.",
+          "Launch path after applying and validating the patch: ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :integration-tests:mockupPalace. It reuses Ui2PostgresFixture and prints a one-time loopback URL locally.",
+          "Mechanical divergence: job_steps has only identity/index columns, not a state column; seeded parent jobs are pre-COMPLETED. Device facts are devices.observed_hostname/observed_model/observed_software_version/observed_ha_role."
+        ],
+        "completed": [
+          "Read frozen C8 fully and traced device facts, CLI, carrier, LDAP, RBAC and startup callers.",
+          "Prepared an implementation patch outside the repository: /private/tmp/NXS-LOCAL-0232-mockup-palace-v1.patch (16 files).",
+          "Verified the preserved patch applies cleanly with git apply --check --whitespace=error; restored only session-made changes and confirmed a clean worktree."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "Unchanged.",
+          "ui": "No retained UI change; unvalidated synthetic browsing code is preserved in the external patch."
+        },
+        "integration": {
+          "branch": "feature/mockup-palace-v1",
+          "ci": "NOT RUN; no commit or PR",
+          "head_sha": "2dafa730f2525c88f13c89af775d400a1464d3f7",
+          "merge_commit": null,
+          "merge_decision": "Latest user instruction authorizes PR opening and reserves merging for orchestrator, superseding the dispatch packet no-PR clauses. Git staging was denied, so neither PR nor merge was attempted.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0232",
+          "movement_type": "VALIDATION",
+          "objective": "Resume with write access to the existing Gradle and Git stores; apply the preserved patch, compile, resolve any lock/test failures, execute targeted architecture/privacy and browser acceptance, commit and open the PR. Orchestrator alone merges.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Production/k3s manifests, standard migrations, project state, Python fixtures, credentials, live devices and corporate LDAP were untouched.",
+          "No network-device, deployment or production data operation was performed; no commit, push, PR or merge occurred.",
+          "Only generated test values are present in the patch; deferred cp_inventory_projection and device_inventory_run seeding remain excluded."
+        ],
+        "recommended_reasoning": {
+          "reason": "Resume must validate uncompiled changes spanning profile isolation, directory authentication, marker guards and dependency direction; use routine validation after those boundaries pass.",
+          "tier": "strong implementation"
+        },
+        "state_updates": [
+          "None: project state is out of scope. SESSION_CLOSE is recorded in the canonical relay; implementation preserved only as an external patch."
+        ],
+        "unresolved_risks": [
+          "Sandbox also rejected git add: unable to create temporary file / failed to insert into Git object database (Operation not permitted). Shared object store resolves to /Users/OzanDur/Codo/nexus/.git/objects, outside writable roots.",
+          "The preserved patch is uncompiled; dependency-lock changes and browser acceptance still require validation. It must not be treated as implemented or accepted delivery.",
+          "The draft test-only browser projects current device DTOs and completed jobs. Audit rows are seeded through existing triggers and asserted by the unexecuted test; no unavailable product audit-screen semantics were added."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: Java compilation, marker startup refusal, readonly refusal and bytecode transport reachability checks were written but could not execute.",
+          "diff_check": "PASS: git diff --check origin/main; preserved patch also passed git apply --check --whitespace=error; final git status --short was empty.",
+          "full_regression": "NOT RUN: Gradle was unavailable under sandbox permissions; dispatch scoped validation to targeted gates.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py reported 0 findings with the implementation present. No network access or matched values printed.",
+          "real_environment": "UNVERIFIED: PostgreSQL carrier, reproducible launch and browser visual/console acceptance were not exercised because Gradle failed before running tests.",
+          "state_consistency": "PASS: the two prescribed pytest contract/reference files passed, 8 tests. Project state unchanged per dispatch.",
+          "targeted": "UNVERIFIED: prescribed Gradle command exited 1 before compilation. FileNotFoundException opening /Users/OzanDur/.gradle/wrapper/dists/gradle-8.14.3-bin/cv11ve7ro1n3o1j4so8xd9n66/gradle-8.14.3-bin.zip.lck: Operation not permitted. No runtime bootstrap or reconfiguration attempted."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T16:27:14Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0232",
+  "movement": "NXS-LOCAL-0232",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T16:27:14Z"
+}

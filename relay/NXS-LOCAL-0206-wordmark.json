@@ -1,0 +1,158 @@
+{
+  "created_at": "2026-09-15T10:45:13Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "The wordmark, placed beside the reference panel, is recognisably the same mark.",
+          "The app mark is still legible as a two-tone X at 32 pixels.",
+          "Every SVG renders correctly with no font installed.",
+          "The preview page shows all variants at three sizes.",
+          "The repository privacy gate passes."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (FROZEN) is not the authority here; this movement is authorised by the Product Owner directly and constrained by AGENTS.md alone. The design reference is the committed identity study named below, and the Product Owner has rejected two prior attempts at it.",
+          "environment": "Repository work only. No cluster, no host, no device.",
+          "observed": "Two attempts have failed. Movement NXS-LOCAL-0182 was rejected on sight. The Product Owner assistant then drew SVG candidates by hand and the Product Owner rejected those too, in their words: not the slightest resemblance.",
+          "what_exists": "The reference is committed at docs/design/ui2_mockups/logo-identity-explorations.png -- a six-panel concept sheet. Option D, bottom-left, is the chosen direction.\n\nWhat option D actually is, read off the sheet:\n  - The word reads as ONE word: n-e-X-u-s, letters tightly kerned and touching,\n    not three tokens with gaps.\n  - The X is a true X: two diagonal strokes that CROSS. The stroke running one\n    way is teal, the stroke running the other is blue, and the blue sits over\n    the teal at the crossing.\n  - The X is oversized against the lowercase letters: its arms rise above the\n    x-height and drop below the baseline, and it visually locks into the e and\n    the u rather than floating between them.\n  - A heavy geometric sans, very dark navy.\n  - Beneath, in wide-tracked capitals: A CLEARER TOMORROW.\n  - An app mark: a dark navy rounded square carrying the two-tone X alone.\n\nWhat the application ships today, and why it was rejected\n(ui2/frontend/src/brand/NexusWordmark.tsx, ui2/frontend/src/brand/NexusMark.tsx):\nthe word renders as `ne X us` with visible gaps, the X is an ordinary letter at\nordinary size in one flat colour, nothing crosses or overlaps, and the tagline\nis absent.\n\nWhat the assistants hand-drawn attempt got wrong, so it is not repeated: the two\nstrokes were parallelograms placed side by side instead of crossing, which read\nas a Y rather than an X, and ne and us sat far apart from the mark.\n\nThe products palette, for the navy: ui2/frontend/src/theme/m3Theme.ts."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "The application shell and its screens; this movement does not touch them."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/wordmark-drawn-properly"
+        },
+        "invariants": [
+          "Nothing under ui2/frontend/src/ changes in this movement.",
+          "No binary asset other than SVG, and no external asset reference."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it. The Product Owner chooses a variant before anything is wired into the application.",
+        "movement_type": "UI",
+        "objective": "Draw the neXus wordmark and app mark as real artwork, faithful to option D of the identity study. Deliver the assets and a preview for the Product Owner to choose from. Do not wire anything into the application.",
+        "output_contract": [
+          "One pull request on feature/wordmark-drawn-properly carrying the SVG assets and the preview page.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "Visual design judgement against a reference that two lighter attempts failed to match. The work is interpretation, not implementation.",
+          "tier": "architecture and feature design"
+        },
+        "requirements": [
+          "The X must cross. Two strokes that meet without crossing are the failure of the last attempt and are the single thing to get right.",
+          "The word must read as one word. If the kerning makes it look like separate tokens, it is wrong.",
+          "Every asset must render identically without any font installed, which is why the letters are paths.",
+          "State in the pull request how each value was obtained -- sampled, measured, or chosen -- and never present a guess as a measurement."
+        ],
+        "risks": [
+          "The reference is a raster concept sheet, so exact vector geometry has to be reconstructed by eye and measurement. Say which parts were measured and which were judged.",
+          "Two attempts have already been rejected for looking nothing like the reference. Producing something merely competent but different is the failure mode here, not producing something ugly."
+        ],
+        "scope": {
+          "in": [
+            "Sample the actual colours from the reference PNG rather than estimating them, and state the sampled values in the pull request.",
+            "Produce the wordmark as SVG with the letterforms as PATHS, not as a text element bound to a font that will not exist on every machine.",
+            "Produce at minimum: wordmark with tagline, wordmark without tagline, the app mark alone, and a light-on-dark variant of each.",
+            "Produce a static preview page showing every variant at large, medium and small sizes, including the app mark at 32 pixels, so the Product Owner can judge before anything is wired in.",
+            "Commit the assets under a clearly named directory and say in the pull request which file is which."
+          ],
+          "out": [
+            "Editing NexusWordmark.tsx, NexusMark.tsx or any application screen. The Product Owner chooses first; wiring is a later movement.",
+            "Inventing a different concept. Options A, B, C, E and F exist on the sheet and were not chosen; this movement draws D.",
+            "Adding a font dependency or a web font to the application."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T10:45:13Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added eight files under docs/design/ui2_mockups/wordmark-option-d/ on PR head 80c4dda881e1ce116b6a25f429185cba34303fc5."
+        ],
+        "completed": [
+          "Delivered six outlined option D SVG variants and static three-size preview in PR #366.",
+          "Sampled source PNG RGB channels and documented measured bounds versus judged geometry.",
+          "Verified crossing two-tone app marks at 32 px."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Unchanged.",
+          "ui": "Standalone SVG artwork and preview only; shipped UI unchanged."
+        },
+        "integration": {
+          "branch": "feature/wordmark-drawn-properly",
+          "ci": "validate IN_PROGRESS; po-scope-check and full-regression SKIPPED at last observation.",
+          "head_sha": "80c4dda881e1ce116b6a25f429185cba34303fc5",
+          "merge_commit": null,
+          "merge_decision": "Do not merge as worker; orchestrator merges after its verification.",
+          "merge_state": "OPEN",
+          "pr": 366,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/366"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0206",
+          "movement_type": "VALIDATION",
+          "objective": "Orchestrator verifies PR #366 and handles merge. Product Owner chooses artwork before any subsequent wiring movement.",
+          "status": "complete_with_followup"
+        },
+        "preserved": [
+          "No ui2/frontend/src changes, application wiring, font dependencies, binary additions, or external SVG references.",
+          "No merge executed; orchestrator owns merge verification."
+        ],
+        "recommended_reasoning": {
+          "reason": "Product Owner visual comparison against the chosen identity study; application implementation is not part of this movement.",
+          "tier": "architecture and feature design"
+        },
+        "state_updates": [
+          "Artwork README records DRAFT / Product Owner selection pending and provenance. No broader state or handover files read or modified under worker read/scope restrictions."
+        ],
+        "unresolved_risks": [
+          "Reference raster has split-center color segmentation; explicit approved blue-over-teal continuous crossing directive takes precedence in this reconstruction.",
+          "Tagline font and curves are visual approximations, not recovered source vectors.",
+          "Sandbox denied parent Git index writes. Commit/push used /tmp/nxs0206-delivery; original dispatched worktree remains clean at its original base, not the delivered PR head.",
+          "GitHub validation in progress when handed to orchestrator."
+        ],
+        "validation": {
+          "affected": "PASS: static preview contains all variants at three sizes, both app marks at 32 px; reference comparison included. Browser automation unavailable.",
+          "diff_check": "PASS: git diff --check origin/main before commit in delivery checkout.",
+          "full_regression": "Not run: standalone artwork only; no application code or payload changes.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py; zero findings.",
+          "real_environment": "No network/device environment involved. Product Owner visual selection pending.",
+          "state_consistency": "Original worktree clean at original base; temporary delivery checkout clean. No project-state edits permitted by narrow dispatch.",
+          "targeted": "PASS: six SVGs rasterized through AppKit at three sizes and visually inspected; structural asset check passes."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T10:52:44Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0206",
+  "movement": "NXS-LOCAL-0206",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T10:52:44Z"
+}

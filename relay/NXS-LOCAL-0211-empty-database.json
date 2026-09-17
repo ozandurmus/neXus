@@ -1,0 +1,162 @@
+{
+  "created_at": "2026-09-15T11:34:05Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A service started against an empty schema applies its migrations and reaches a serving state without external intervention.",
+          "A named test covers the empty-schema start and fails if the ordering regresses.",
+          "The service test suite and the repository privacy gate pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (FROZEN) makes Flyway the sole migration authority over one schema and separates the migrate and application roles. This movement changes when migrations run relative to the rest of start-up; it does not change what they are, who owns them, or which role applies them.",
+          "observed": "Measured on HOST-A on 2026-09-15, bringing the product up on a genuinely empty database for the first time. The pod crash-looped. Flyway had applied nothing: flyway_schema_history did not exist and psql reported no relations at all. The environment was opened by applying the migrations once from outside, with the same engine at the same version against the same SQL -- a way to open a first environment, not a fix.",
+          "what_exists": "The service log, at the point of failure:\n\n  Error creating bean with name 'deviceCapabilityRegistry' ... Factory method\n  'deviceCapabilityRegistry' threw exception with message: SQL [select * from\n  gate_registry where vendor = ? and platform_role_scope = ? and shell_context\n  = ? and transport_kind = ? and canonical_command_key = ?];\n  ERROR: relation \"gate_registry\" does not exist\n\nThere is no Flyway line anywhere in the log before it.\n\nThe runner that applies migrations, at\nui2/service/src/main/java/.../boot/MigrationStartupRunner.java:34:\n\n  @Component\n  @Order(0)\n  public class MigrationStartupRunner implements ApplicationRunner {\n\nAn ApplicationRunner runs after the context has fully refreshed.\n\nThe bean that reads the schema, at\nui2/service/src/main/java/.../boot/DeviceCompositionConfiguration.java:140:\n\n  @Bean\n  public CapabilityRegistry deviceCapabilityRegistry(GateRegistryPort gateRegistryPort)\n\nand it is reached during refresh, through discoveryController -> discoveryRunService -> jobAdmissionService -> deviceCapabilityRegistry.\n\nSo on an empty schema the bean fails, the context never finishes, the runner never runs, Flyway never applies anything, and the pod restarts into the same order forever. It was invisible until now because every previous deployment met a database that had been migrated long before.\n\nui2/service/src/main/java/.../boot/Ui2Application.java:41 excludes\nDataSourceAutoConfiguration and JooqAutoConfiguration deliberately, so Spring\nBoot's own Flyway ordering does not apply and is not available to lean on.\n\nMigrationStartupRunner's own javadoc records that it is @Order(0) ahead of\nFirstBootIdentitySeedingRunner's @Order(1), because local_credentials must\nexist before seeding. Whatever this movement does must keep that relative\norder."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/the-product-starts-on-an-empty-database"
+        },
+        "invariants": [
+          "Migrations run before first-boot identity seeding.",
+          "A missing or unreadable secret file still stops start-up, per C1 section 6. This movement does not soften any start-up failure; it removes one ordering defect."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "The service starts against an empty database. Today it cannot: a bean reads a table while the context is still being built, and the runner that applies the migrations only runs once the context is finished.",
+        "output_contract": [
+          "One pull request on feature/the-product-starts-on-an-empty-database.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "Spring start-up ordering with two deliberate auto-configuration exclusions, where the obvious fixes are the wrong ones and the requirement is that the fix generalise beyond the one bean that happened to fail.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Flyway stays the sole migration authority and keeps running as the migrate role. The question here is when, not who.",
+          "The fix must hold for any bean that reads the schema during refresh, not only for deviceCapabilityRegistry. A fix that unblocks this one bean leaves the next one to be found in production.",
+          "State in the pull request how the ordering is now guaranteed, and what would break it again."
+        ],
+        "risks": [
+          "The quick fix is to make the offending bean lazy. That moves the failure to the first request instead of removing it, and leaves every other schema-reading bean unprotected.",
+          "An ordering guaranteed only by declaration order in one class is not a guarantee. Say what enforces it."
+        ],
+        "scope": {
+          "in": [
+            "Make the migrations run before any bean reads the schema, so that a first start against an empty database completes.",
+            "Keep migration ordering ahead of first-boot identity seeding, which the current javadoc records as the reason for @Order(0).",
+            "A test that starts the application against an empty schema and fails if start-up depends on the schema already existing. This is the test whose absence let the defect ship.",
+            "Correct MigrationStartupRunner's javadoc if its stated ordering rationale stops being accurate."
+          ],
+          "out": [
+            "Changing any migration file, or what the migrations do.",
+            "Changing which role applies migrations. C1 separates ui2_migrate from ui2_app and that separation stands.",
+            "Making the failure non-fatal by catching it, retrying, or letting the bean tolerate a missing table. A bean that tolerates a missing schema hides the next schema defect too.",
+            "Reinstating DataSourceAutoConfiguration or JooqAutoConfiguration. Ui2Application excludes them deliberately."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "cd ui2 && ./gradlew --no-daemon --console=plain :service:test"
+            ],
+            "name": "service_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T11:34:05Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "MigrationStartupRunner now implements PriorityOrdered BeanFactoryPostProcessor at Ordered.HIGHEST_PRECEDENCE and retains fail-closed Flyway execution with migrate-role secret files.",
+          "Ui2Application registers MigrationStartupRunner through a static @Bean factory method so it is available during bean-factory post-processing.",
+          "MigrationStartupRunnerTest starts an empty-schema application context and proves migration precedes a schema-reading application bean."
+        ],
+        "completed": [
+          "Moved Flyway migration execution into Spring's bean-factory post-processing phase so migrations complete before ordinary application beans are created.",
+          "Preserved migration-before-first-boot-seeding ordering through distinct Spring lifecycle phases.",
+          "Added emptySchemaIsMigratedBeforeApplicationBeansAreCreated as the startup-order regression test.",
+          "Opened pull request 374 without merging it."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/the-product-starts-on-an-empty-database",
+          "ci": "Pull request opened; orchestrator verification pending.",
+          "head_sha": "716242295f2386b770e82642c4931a3b091b9d22",
+          "merge_commit": null,
+          "merge_decision": "Merge mode is orchestrator; the worker did not run gh pr merge.",
+          "merge_state": "OPEN",
+          "pr": 374,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/374"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0211 orchestrator verification and merge",
+          "movement_type": "VALIDATION",
+          "objective": "Run orchestrator verification for pull request 374 and merge only if its gates pass.",
+          "status": "in_progress"
+        },
+        "preserved": [
+          "Flyway remains the sole migration authority and still uses the ui2_migrate credential path.",
+          "FirstBootIdentitySeedingRunner remains an ApplicationRunner and therefore runs after migrations.",
+          "Missing, unreadable, or empty migration secret files remain fatal.",
+          "DataSourceAutoConfiguration and JooqAutoConfiguration remain excluded; no migration SQL changed."
+        ],
+        "recommended_reasoning": {
+          "reason": "The implementation is narrow and locally validated; the remaining work is deterministic orchestrator verification and merge handling.",
+          "tier": "standard validation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The ordering guarantee assumes schema-reading application components remain ordinary beans; a future schema-reading BeanDefinitionRegistryPostProcessor would execute earlier and must not be introduced."
+        ],
+        "validation": {
+          "affected": "PASS: full :service:test suite (BUILD SUCCESSFUL).",
+          "diff_check": "PASS: git diff --check origin/main immediately before commit in the clean temporary Git clone.",
+          "full_regression": "Not run; the dispatch required the affected service suite rather than the repository-wide suite.",
+          "privacy": "PASS: repository_privacy_check.py scanned 1595 files with 0 findings.",
+          "real_environment": "Not run; deployment direction was local validation only and the dispatch supplied no real-environment validation gate.",
+          "state_consistency": "Not applicable: the worker scope changed no durable project-state artifact.",
+          "targeted": "PASS: :service:test --tests com.securityexpert.nexus.ui2.service.boot.MigrationStartupRunnerTest."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T11:42:54Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0211",
+  "movement": "NXS-LOCAL-0211",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T11:42:54Z"
+}

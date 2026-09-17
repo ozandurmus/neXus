@@ -1,0 +1,176 @@
+{
+  "created_at": "2026-09-16T10:09:11Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Configured initial own-user LDAP login is not unconditionally refused by D6; absence of profile remains no-call.",
+          "Corporate binding/service-account revalidation remain disabled with zero secret reads/calls. Existing identity/TLS/RBAC assertions preserved.",
+          "Minimal composition and relevant tests only; local commit and exact targeted evidence returned; liveTLS/AD and migration remain UNVERIFIED."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3C_LDAP_TLS_AND_PRINCIPAL_BINDINGS_CONTRACT.md",
+          "observed": "LDAP PR418 head655b15e completed implementation. Main124d454 lacks LDAP implementation. Parent found DirectoryAuthenticationConfiguration.ldapMechanism hardcodes admissionEnabled false, so configured LDAP operator login always DIRECTORY_UNAVAILABLE. C3C retains C3§4.4, whose explicit 'What is not gated' states initial own-operator group resolution, first actor_authz_state write and initial session admission function normally regardless ofD6. Therefore this is an implementation contradiction, not missing corporate approval for initial login.",
+          "what_exists": "Use exact existing LDAP source fromPR418 as integration baseline; fetch/import PR418 locally before editing. Parent mechanically integrated0272 separately, not relevant here. Existing optional server-owned profile, verified PEM/JKS/PKCS12 TLS, own-password binding, role enforcement and disabled service-account configuration must remain. No repeated LDAP implementation."
+        },
+        "context_not_loaded": [
+          "Unrelated history, data, credentials, raw logs, Workbench."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ldap-initial-admission-0274"
+        },
+        "invariants": [
+          "Initial operator bind is not D6-gated; corporate binding persistence and service-account revalidation stay jointly gated.",
+          "No TLS/identity/credential or assertion weakening. Parent owns integration."
+        ],
+        "merge_gate": "Local commit only, no remote actions. Parent reviews smallest composition correction and integrates into418 only after exact relevant gates; no full regression or live claims.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Correct LDAP initial operator-login composition erroneously gated by DIRECTORY-POSTURE, preserving the actually gated corporate role-binding and service-account functions.",
+        "output_contract": [
+          "Local commit, targeted results and canonical SESSION_CLOSE; no LDAP merge/live assertion."
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic composition correction inside existing frozen initial-admission exemption, not new security semantics.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Codex gpt-5.6-terra medium; intention budgetUSD0.60, not a proved spend cap. Local commit only, no push/PR/merge/full suite/install/host/device/corporate access.",
+          "First locally fetch/import exactPR418 head655b15e into the original0274 worktree as the authorized existing implementation baseline; do not rewrite LDAP. If Git sandbox prevents import, report immediately with no alternate clone or workaround; parent can mechanically import before one supported continuation.",
+          "Read C3§4.4 exact initial-admission exemption and C3C retained constraints. Trace configuration, MechanismRegistry and login flow. Smallest correction makes configured initial own-user LDAP admission function normally per existing contract. Never enable service-account reads/calls, corporate role_binding persistence or revalidation. Do not create a new security identity, approval flag, transport path, vendor matching/control fallback or contract.",
+          "Add bounded composition regression proving profile-absent no LDAP calls, configured initial operator bind enabled, and existing DIRECTORY-POSTURE-disabled revalidation/service-account zero reads/calls. Preserve opaque identity proof, throttles, TLS verification, secret clearing, local/root and RBAC behavior.",
+          "Run only relevant LDAP adapter, service auth/configuration/login and architecture/privacy/diff tests. Existing Java21 and ignored frontend module reuse only. If a load-bearing change outside the named composition is required, stop with precise evidence."
+        ],
+        "risks": [
+          "Real AD identity-control support, certificate trust and ordinary-user rights remain human real-environment acceptance."
+        ],
+        "scope": {
+          "in": [
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/DirectoryAuthenticationConfiguration.java",
+            "Minimal new/existing DirectoryAuthenticationConfigurationTest under ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/boot/",
+            "Read-only existing PR418 LDAP/profile/trust/mechanism/login/revalidation code and frozen C3/C3C"
+          ],
+          "out": [
+            "LDAP adapter rewrite/vendor semantics, role-binding/revalidation gate activation, migrations, dependency changes, CI/workflow/governance/state, Workbench/Companion, remoteGit, full tests, installations, host/device/corporate/deployment access"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "--no-daemon",
+              "--console=plain",
+              "-p",
+              "ui2",
+              "-PfrontendPrebuilt=true",
+              ":service:unitTest",
+              "--tests",
+              "*DirectoryAuthenticationConfigurationTest"
+            ],
+            "name": "composition"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "--no-daemon",
+              "--console=plain",
+              "-p",
+              "ui2",
+              "-PfrontendPrebuilt=true",
+              ":ldap-adapter:unitTest"
+            ],
+            "name": "ldap_adapter"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T10:09:11Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "None: required authorized PR418 baseline import failed before source inspection or modification."
+        ],
+        "completed": [
+          "Reported the Git sandbox blocker without an alternate clone or workaround."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED"
+        },
+        "integration": {
+          "branch": "feature/ldap-initial-admission-0274",
+          "ci": "NOT_RUN",
+          "head_sha": "UNAVAILABLE",
+          "merge_commit": "NONE",
+          "merge_decision": "NOT_APPLICABLE",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": "NONE"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0274",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Import exact PR418 head655b15e into the original 0274 worktree, then apply the bounded composition correction.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No LDAP source, tests, dependencies, governance, or state files changed.",
+          "Corporate binding/service-account revalidation remained untouched."
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic existing-contract composition correction after baseline import.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Git sandbox blocked creation of refs/heads/local/pr418 during the required authorized import.",
+          "Live TLS/AD acceptance and migration remain UNVERIFIED."
+        ],
+        "validation": {
+          "affected": "No code was changed.",
+          "diff_check": "UNVERIFIED: no diff exists and the mandated pre-commit diff check was not reached.",
+          "full_regression": "NOT_RUN: out of scope.",
+          "privacy": "NOT_RUN: no code change after required baseline import failed.",
+          "real_environment": "UNVERIFIED: out of scope; live TLS/AD remains human acceptance.",
+          "state_consistency": "NOT_RUN: no state change.",
+          "targeted": "NOT_RUN: DirectoryAuthenticationConfigurationTest and ldap-adapter unitTest require the authorized PR418 baseline."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-16T10:11:49Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0274",
+  "movement": "NXS-LOCAL-0274",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C3C_LDAP_TLS_AND_PRINCIPAL_BINDINGS_CONTRACT.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T10:11:49Z"
+}

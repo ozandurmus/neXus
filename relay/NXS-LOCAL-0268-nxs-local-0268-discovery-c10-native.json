@@ -1,0 +1,220 @@
+{
+  "created_at": "2026-09-16T08:12:59Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "No authorized entry: no credential or command transmitted before explicit authorization; endpoint, port and algorithm isolation are tested.",
+          "Mismatch/rotation refuses; re-enrollment is explicit, audited and retains superseded rows with atomic active-entry uniqueness.",
+          "Worker and standalone CLI use the same persisted CP discovery source, without changing enrolled-device or PAN trust behavior.",
+          "TRUST_ENTRY_MISSING, TRUST_MISMATCH, AUTH_FAILED, CONNECT_TIMEOUT propagate as safe closed values to the existing UI; no raw address/fingerprint/error disclosure.",
+          "Named targeted tests/privacy/diff pass; DB-backed migration/transaction checks and full regression are independently reported; missing carrier or real environment remains UNVERIFIED.",
+          "Worker commits/pushes/opens PR and SESSION_CLOSE; PO alone integrates after independent verification and required gates."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C10_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md",
+          "observed": "Original 0236 closed BLOCKED without implementation. Current origin/main is b584a40c1e23244795519c7d1770d529887d4357. Existing Java 21 and Gradle run successfully; service targeted Discovery/GateChain tests pass. Full service suite has a pre-existing packagedFrontend freshness failure when frontendPrebuilt=true; architecture baseline has missing AI_HANDOVER authority markers. These gates must not be weakened.",
+          "what_exists": "DiscoveryJobExecutor.CP_TRUST_RULE_REF is cp_discovery_trust_default. Ui2WorkerMain resolves expected fingerprints from environment; standalone DiscoveryRunnerMain uses EnvironmentTrustRuleResolver. ManagementPlaneEnumerationAdapter collapses ConnectResult failures; failureClass maps only unreachable/refused. C3 role:security_admin exists. Existing UI2 migrations run through V22; PR388 reserves V23 backup and PR393 also uses V23 replay (unrelated collision, do not integrate either). V24 is reserved by old relay seq3 for this C10 scope."
+        },
+        "context_not_loaded": [
+          "Unrelated history, raw logs, runtime data, support/credential stores and HOST-A."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/discovery-c10-native-0268"
+        },
+        "invariants": [
+          "No TOFU or global CP discovery trust pin; no trust bypass.",
+          "No raw identity or exception disclosure in UI/log/audit artifacts.",
+          "No source modification to the main checkout; only your engineer worktree.",
+          "No new authority supplied by supervisor, test result or relay content."
+        ],
+        "merge_gate": "Worker commits, pushes and opens PR; native supervisor never approves/merges. PO independently reviews and orchestrator verifies. PO may merge only when required repository and runtime gates permit; real-environment evidence is separate.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen C10 Check Point discovery endpoint-scoped SSH trust enrollment and safe failure propagation; recover the unimplemented NXS-LOCAL-0236 scope.",
+        "output_contract": [
+          "Commit(s), PR and canonical SESSION_CLOSE with all actual/unmet checks. Write scratch/close report outside the worktree; leave worktree clean."
+        ],
+        "recommended_reasoning": {
+          "reason": "Persisted trust, authorization lifecycle and shared transport caller coverage; preserve prior 0236 codex gpt-5.6-sol high selection.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Provider codex; requested model gpt-5.6-sol; effort high; budget comparable USD 10, not an enforceable Codex spend ceiling. One implementation movement only.",
+          "Read frozen C10 fully; implement endpoint+port+algorithm trust, explicit audited security_admin enrollment and four safe failure classes; observation transmits no credentials or commands and is not authorization.",
+          "Preserve standalone CLI: unify persisted CP discovery trust with deployed worker, do not retire CLI. Preserve enrolled CP collection trust and PAN behavior at shared transport/failure consumers.",
+          "Use ui2/service/src/main/resources/db/migration/V24__management_endpoint_ssh_trust.sql per old 0236 seq3; append the existing authorized allocation amendment to C10. No root0010 loader, no stale ff721c9 cherry-pick.",
+          "Use existing Java/Gradle and existing frontend dependencies from /Users/OzanDur/Codo/nexus-nexus-worktrees/NXS-LOCAL-0220/ui2/frontend/node_modules; if needed link that existing directory into your ignored node_modules. Do not install dependencies, configure a runtime, or use a container/host/device.",
+          "Publish actual status, tests and unmet gates truthfully; no automated test claim substitutes for real-environment acceptance. Open a PR, never merge. No second implementation job."
+        ],
+        "risks": [
+          "Shared transport/failure result changes must cover every enrolled CP/PAN consumer without changing their invariants.",
+          "Existing full-regression/DB carrier failures may prevent acceptance/merge; do not silence or weaken them."
+        ],
+        "scope": {
+          "in": [
+            "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/Ui2WorkerMain.java and discovery/DiscoveryJobExecutor.java; discovery/cp/{DiscoveryRunnerMain,EnvironmentTrustRuleResolver,ManagementPlaneEnumerationAdapter,DiscoveryRunReport}.java; transport/ssh/{TrustRuleResolver,HostKeyVerifier,SshExecTransport}.java and new PersistedManagementEndpointTrustResolver.java; corresponding existing/new worker tests.",
+            "ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/discovery/cp/ManagementPlaneEnumerationResult.java; ui2/job-engine/src/main/java/com/securityexpert/nexus/ui2/jobs/transport/ConnectResult.java only if necessary, covering all shared callers.",
+            "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/discovery/ManagementEndpointSshTrustRepository.java and JooqManagementEndpointSshTrustRepository.java; matching tests.",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/{api/DiscoveryController.java,security/ActionRegistry.java,security/SecurityWebMvcConfig.java,boot/DeviceCompositionConfiguration.java,discovery/ManagementEndpointSshTrustService.java}; matching authorization/API tests.",
+            "ui2/service/src/main/resources/db/migration/V24__management_endpoint_ssh_trust.sql; bounded schema tests in ui2/integration-tests; ui2/frontend/src/shell/AddDeviceDialog.tsx and ui2/frontend/tests/AddDeviceDialog.test.tsx.",
+            "Append only the already-authorized migration allocation amendment to docs/design/UI2_0_C10_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md."
+          ],
+          "out": [
+            "Companion/Workbench implementation, orchestration/provider/monitor changes, new transport/commands, PAN behavior, host/k3s/container/production/credentials access, other PR integrations, runtime/dependency installation, project JSON/queue changes (PO owns the queue ruling)."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "--no-daemon",
+              "--console=plain",
+              "-p",
+              "ui2",
+              "-PfrontendPrebuilt=true",
+              ":worker:unitTest",
+              ":persistence:unitTest"
+            ],
+            "name": "worker_persistence"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "--no-daemon",
+              "--console=plain",
+              "-p",
+              "ui2",
+              "-PfrontendPrebuilt=true",
+              ":service:unitTest",
+              "--tests",
+              "*Discovery*",
+              "--tests",
+              "*GateChain*"
+            ],
+            "name": "service_discovery_security"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test",
+              "--",
+              "tests/AddDeviceDialog.test.tsx"
+            ],
+            "name": "frontend_discovery"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T08:12:59Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "One shared persisted discovery resolver binds actual management endpoint, port and presented host-key algorithm; scoped references cannot fall back to the enrolled-device environment resolver.",
+          "Missing authorization refuses before transport credential resolution or socket creation. The key-exchange hook observes/compares the key in memory and refuses missing algorithms or mismatches before authentication; it never enrolls keys.",
+          "Security-admin-gated enroll and re-enroll routes require operator attestation of independently verified observed key and observation time. V24 retains superseded rows, uses atomic ACTIVE uniqueness and a deferred replacement reference, and writes only a narrow sanitized audit.",
+          "CP discovery threads TRUST_ENTRY_MISSING, TRUST_MISMATCH, AUTH_FAILED and CONNECT_TIMEOUT through typed failure classes to the existing run UI. Unexpected storage/transport failures remain NOT_EVALUABLE; no raw exception escapes the CP boundary.",
+          "Standalone CLI now constructs its endpoint-scoped reference and uses the same persisted source as the worker; the old EnvironmentTrustRuleResolver is removed. Its formerly required --trust-rule-ref is no longer required.",
+          "The discovery dialog provides masked key input, independent-verification attestation and explicit re-enrollment; rejects unsuccessful response status as authorization proof; clears key input after submission and hides the CP address during polling.",
+          "Appended only the authorized V24 allocation amendment to the frozen C10 contract."
+        ],
+        "completed": [
+          "Implemented the frozen C10 CP discovery trust scope in the engineer worktree; PR #417 is OPEN and both authorized commits are pushed.",
+          "Final targeted checks: worker 165 PASS, persistence 53 PASS, service Discovery/GateChain 33 PASS, AddDeviceDialog 14 PASS; privacy PASS with zero findings; diff PASS.",
+          "Canonical relay was re-read immediately before PR creation; no post-dispatch corrections or decisions were present.",
+          "Actual engineer baseline/commit parent and current origin/main: 6365c75ebbe7fa02ddd1438e41bb2dd2df253777. Approved observed snapshot named b584a40c1e23244795519c7d1770d529887d4357."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Unchanged; no root Python source edited.",
+          "ui": "Changed only AddDeviceDialog CP discovery trust enrollment and safe failure copy; existing enrolled-device/PAN behavior preserved."
+        },
+        "integration": {
+          "branch": "feature/discovery-c10-native-0268",
+          "ci": "Sampled after PR creation: regression-scope SUCCESS, po-scope-check SKIPPED, validate IN_PROGRESS, full-regression QUEUED. No CI completion claim.",
+          "head_sha": "7ae5750c1bf5bb75633226611b75e7eb0c92cc69",
+          "merge_commit": null,
+          "merge_decision": "No merge attempted; --merge-mode orchestrator. PO/orchestrator alone integrates after independent verification and required repository/runtime gates.",
+          "merge_state": "OPEN",
+          "pr": 417,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/417"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0268 (PO/orchestrator independent verification)",
+          "movement_type": "VALIDATION",
+          "objective": "Independently verify PR #417, resolve required regression and DB carrier gates, and obtain the C10 real-environment evidence before acceptance/integration. No second worker implementation or worker merge.",
+          "status": "planned"
+        },
+        "preserved": [
+          "Existing enrolled-device SSH resolver behavior and PAN transport/discovery behavior; ConnectResult variants remain unchanged.",
+          "No TOFU, global CP discovery pin, trust bypass, new transport or new device command.",
+          "No main-checkout source edits, queue/project JSON changes, Companion/Workbench/orchestrator changes, unrelated PR integrations, container/host/device/production or credential-store access.",
+          "Existing Java/Gradle/frontend dependencies reused without installation. Only the existing Gradle cache was copied to writable /tmp; borrowed ignored frontend node_modules was linked and Vitest caching disabled.",
+          "No merge attempted. Worktree is clean; reports and validation logs are outside the repository."
+        ],
+        "recommended_reasoning": {
+          "reason": "Execute bounded independent checks first; escalate only for a demonstrated security/storage or vendor-semantic ambiguity.",
+          "tier": "standard validation"
+        },
+        "state_updates": [
+          "Frozen C10 contract: append-only authorized V24 allocation amendment.",
+          "Project JSON/queue, CURRENT_STATE and AI_HANDOVER were not edited because dispatch does not authorize those paths. PR and canonical close report carry this implementation evidence for PO state integration."
+        ],
+        "unresolved_risks": [
+          "C10 real-environment DoD and required regression/DB gates are unmet. Close outcome PARTIAL is used rather than the WORKER closeout example DONE so no network-facing C10 DONE claim is made.",
+          "DB-backed migration, transaction rollback, uniqueness/retention and audit checks are compiled but UNVERIFIED until an authorized synthetic carrier and the existing integration dependency-lock problem are resolved independently.",
+          "Full Java packaged-frontend freshness, baseline-reproduced frontend ProjectPlanPanel error, and Python sandbox runtime collection failures remain unsilenced and can prevent integration.",
+          "Existing JSch 0.1.55 rejects Ed25519 key blobs. No dependency update is authorized; UI defaults to RSA. Real algorithm negotiation and timeout/authentication error behavior require independent environment validation.",
+          "Independent verification is procedural and operator-attested; the product does not retrieve the independent channel or disclose the observed raw fingerprint. Automated checks do not prove the attestation.",
+          "Approved snapshot baseline differs from actual engineer parent/current origin/main. Actual scoped implementation was inspected and tested on 6365c75; no unrelated PR integration was performed by this worker.",
+          "Queue wording ruling and durable project-state acceptance updates remain with PO by approved dispatch."
+        ],
+        "validation": {
+          "affected": "PASS: endpoint, port and algorithm isolation; missing trust pre-credential refusal; key-hook mismatch/algorithm refusal and no TOFU; worker/CLI policy parity; all four safe classes in persisted job/run projections; security-admin permit, onboarding/viewer deny, CSRF refusal; explicit attestation/re-enrollment and sanitized API responses. Integration schema tests compile; migration/DB runtime checks UNVERIFIED.",
+          "diff_check": "PASS: git diff --check origin/main executed before both commits and after final push. git status --porcelain is empty. Actual merge base with origin/main is 6365c75ebbe7fa02ddd1438e41bb2dd2df253777.",
+          "full_regression": "NOT GREEN. Full Java unitTest: only the documented FrontendBundleFreshnessTest failure (182 service tests, one failure; all other module suites pass). Full frontend: 95 assertions pass but one unhandled ProjectPlanPanel metadata_warnings error causes exit 1; restoring the two frontend files to actual origin/main reproduces it with 90 assertions passing. Full Python pytest foreground run exits 2 with 52 collection errors because the external runtime directory is not writable. No failing gate was weakened or runtime configured.",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py; zero findings, no matched values or network access reported.",
+          "real_environment": "UNVERIFIED: no endpoint observation/independent confirmation, real rotation or deployed worker/CLI comparison performed. No synthetic DB carrier configured; integration testRuntimeClasspath execution fails because com.jcraft:jsch:0.1.55 is absent from the existing dependency lock state. No container used.",
+          "state_consistency": "UNVERIFIED: root full regression stopped during collection. Queue/project state and handover files are excluded by dispatch and remain PO-owned; no state-consistency claim is supplied by source review.",
+          "targeted": "PASS: worker 165; persistence 53; service Discovery/GateChain 33; frontend AddDeviceDialog 14. Gradle executed offline with GRADLE_USER_HOME=/tmp/nxs0268-gradle; frontend --no-cache avoids a sandbox-denied cache write through the existing dependency symlink."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-16T08:35:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0268",
+  "movement": "NXS-LOCAL-0268",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C10_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md",
+    "relay/NXS-LOCAL-0236-discovery-ssh-trust-v1.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T08:35:23Z"
+}

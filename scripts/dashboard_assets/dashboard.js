@@ -142,6 +142,8 @@
   // First matching contract evidence; health remains a separate enum.
   function classify(row) {
     if (row.phase === "cancelled" || String(row.terminal_outcome || "").toLowerCase() === "cancelled") return "Stopped";
+    var outcome = String(row.terminal_outcome || "").toLowerCase();
+    if (row.health === "failed" || outcome === "failed" || outcome === "blocked") return "Failed";
     if (row.health === "done" || row.phase === "done" || row.relay_status === "CLOSED" || row.closed || row.archived) return "Done";
     var health = { failed: "Failed", awaiting_po: "Awaiting you", exited_without_close: "Exited without close",
       silent: "Silent", handed_over: "Handed over" };
@@ -169,8 +171,8 @@
   }
 
   function member(row, filter) {
-    var terminal = row.classification === "Stopped" || row.classification === "Done";
-    if (filter === "archive") return terminal;
+    var terminal = row.classification === "Stopped" || row.classification === "Done" || row.classification === "Failed";
+    if (filter === "archive") return row.archived || terminal;
     if (filter === "needs") return ["Failed", "Awaiting you", "Exited without close", "Silent"].indexOf(row.classification) !== -1;
     return !terminal;
   }

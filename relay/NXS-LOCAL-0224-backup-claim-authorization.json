@@ -1,0 +1,178 @@
+{
+  "created_at": "2026-09-15T14:51:36Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "V23 persists only the minimum required authorization/reason evidence and migration compatibility is explicit.",
+          "Worker claim refuses stale/missing authorization before transport; tests cover role removal, allowlist removal, and legacy/malformed rows.",
+          "Existing accepted backup path remains covered; required validations reported truthfully."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (FROZEN), backed by BK-12/BW-4 findings in docs/design/BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md (DRAFT audit only).",
+          "observed": "The audit reports BK-12 and BW-4 NOT_IMPLEMENTED: admission validates backup_admin role, reason, credential and allowlist but jobs persistence retains neither reason nor authorization state; WorkerClaimLoop/BackupJobExecutor re-check only enrollment/disabled state. User explicitly prioritizes remaining Tier-1 backup work and authorizes parallel development.",
+          "what_exists": "BackupCollectService.requestCollect(deviceId, actorFingerprint, reason, clientNonce) performs admission checks. Job admission/persistence and worker claim path must be traced. Existing migrations end at V22; V23 is reserved exclusively for this movement. Backup contract §6.1 defines backup_admin + mandatory reason; no raw device response or credential may be persisted."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/backup-claim-authorization"
+        },
+        "invariants": [
+          "Class-1 backup cannot execute from stale admission authorization.",
+          "No raw vendor response, secret, or sensitive identity reaches browser/artifact.",
+          "No device transport runs after claim-time refusal.",
+          "Automated validation does not replace required pilot real-environment gate."
+        ],
+        "merge_gate": "Worker is authorized to commit, push feature/backup-claim-authorization and open one PR; never merge. PO review, orchestrator verify, and required real-environment evidence precede DONE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the frozen BK-12/BW-4 execution-time authorization join for queued Check Point backup collection.",
+        "output_contract": [
+          "One PR and canonical SESSION_CLOSE with changed paths, V23 decision, tests and pilot validation gap.",
+          "Clean worktree; no host/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "A persisted authorization boundary and migration require careful, bounded implementation; Claude Sonnet 5 high per user's primary-developer instruction.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Read the complete applicable frozen C7 backup clauses and trace every caller before editing.",
+          "At execution/claim time, re-evaluate current backup_admin authorization and pilot allowlist using controlled existing repositories/services. A removed allowlist membership, missing role, or absent/malformed persisted reason must refuse before transport. Preserve a safe reason/audit record without emitting its raw content in APIs/logs.",
+          "Use migration V23 only. No second migration, no migration-number renumbering, no newly invented network command or credential path.",
+          "Keep claims async-safe and fail closed; old queued rows without required evidence must refuse, not infer authorization.",
+          "User directs Claude as primary and permits parallel work. Worker may commit/push/open one PR, never merge; English artifacts; scratch outside repo; PO owns state files."
+        ],
+        "risks": [
+          "This crosses service-worker persistence and requires migration compatibility.",
+          "Pilot execution remains a separate real-environment gate."
+        ],
+        "scope": {
+          "in": [
+            "Service job admission/persistence and worker claim/execution data path needed to carry immutable request reason and authorization evidence.",
+            "One migration V23 only, named for backup claim authorization.",
+            "Focused service/worker/integration tests proving role/allowlist/reason checks are re-evaluated before device transport."
+          ],
+          "out": [
+            "Any new device command, credentials, browser-to-device path, restore/retrieval, audit screen files (0221), discovery/trust (0222), regression work (0223), canonical project state files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test --tests '*Backup*'"
+            ],
+            "name": "backup_targeted"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T14:51:36Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/service/src/main/resources/db/migration/V23__backup_claim_authorization.sql (new)",
+          "ui2/persistence/.../artefact/BackupJobAuthorizationRecord.java, BackupJobAuthorizationRepository.java, JooqBackupJobAuthorizationRepository.java (new)",
+          "ui2/service/.../device/backup/BackupCollectService.java (new constructor param, evidence write on admission)",
+          "ui2/service/.../boot/DeviceCompositionConfiguration.java (new bean wiring)",
+          "ui2/service/src/test/.../BackupCollectServiceTest.java (new fake repository, new test)",
+          "ui2/worker/.../backup/BackupJobExecutor.java (claim-time authorization re-check, new constructor params)",
+          "ui2/worker/.../Ui2WorkerMain.java (new composition wiring, independent pilot-allowlist env read)",
+          "ui2/worker/src/test/.../BackupJobExecutorFakes.java (two new fakes)",
+          "ui2/worker/src/test/.../BackupJobExecutorEndToEndTest.java, BackupJobExecutorWorkerDiesTest.java (updated constructor calls)",
+          "ui2/worker/src/test/.../BackupJobExecutorClaimAuthorizationTest.java (new)"
+        ],
+        "completed": [
+          "V23 migration adds backup_job_authorization (job_id, device_id, actor_fingerprint, reason, recorded_at), additive-only, explicit no-backfill migration-compatibility note.",
+          "BackupCollectService records the admitted job's actor and reason to backup_job_authorization once every existing admission-time gate (role via GateChain E4, reason length, pilot allowlist, distinct backup credential) passes.",
+          "BackupJobExecutor re-checks persisted evidence, role:backup_admin binding liveness, and current pilot-allowlist membership at claim time, before the existing device-enrollment check and before any device transport; refuses CLAIMED->REJECTED on any failure.",
+          "New BackupJobExecutorClaimAuthorizationTest covers role removal, allowlist removal, a missing (legacy) evidence row, a malformed reason in evidence, a blank actor_fingerprint in evidence, and the valid-evidence pass-through case.",
+          "New BackupCollectServiceTest.recordsImmutableAuthorizationEvidenceOnAdmission proves the evidence row is written and readable back."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "N/A -- this repository's backend is the ui2 Java/Gradle module tree, not a main.py entry point.",
+          "ui": "None -- no templates/index.html, console.html, static/*.js, static/style.css, or payload-builder file was touched; no HTML render harness re-run required."
+        },
+        "integration": {
+          "branch": "feature/backup-claim-authorization",
+          "ci": "not yet observed by this session (PR just opened)",
+          "head_sha": "12e53b9f6435b831c3d9b5c2110267b4a1d6d9c5",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merges after its own verification passes, per this dispatch's --merge-mode orchestrator; this session did not run gh pr merge.",
+          "merge_state": "OPEN",
+          "pr": 388,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/388"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0224-follow-up",
+          "movement_type": "VALIDATION",
+          "objective": "Real-environment pilot validation of the BK-12/BW-4 claim-time authorization re-check against a live Check Point gateway (role revoke and allowlist removal scenarios), per AGENTS.md's automated-validation-is-not-real-environment-validation gate.",
+          "status": "in_progress"
+        },
+        "preserved": [
+          "JobAdmissionService/JobAdmissionRepository (generic job-engine admission path shared by every capability) untouched -- evidence persistence is a backup-capability-specific side table, not a generic job schema change.",
+          "Existing accepted-backup path (BackupCollectServiceTest's original 7 tests, BackupJobExecutorEndToEndTest's 5 tests, BackupJobExecutorWorkerDiesTest's 1 test) all still pass, wired to permissive fakes for the new checks.",
+          "No new device command, credential path, browser-to-device path, restore/retrieval, audit-screen, discovery/trust, or regression-scope file touched (0221/0222/0223 out-of-scope list honored)."
+        ],
+        "recommended_reasoning": {
+          "reason": "Matches the SESSION_START's own pre-selected tier; the implementation crossed service-worker persistence and required tracing RoleBindingRepository/RbacEvaluator/JobAdmissionService before deciding where the new evidence table and re-check belonged -- no escalation beyond what was pre-selected was needed.",
+          "tier": "strong implementation"
+        },
+        "state_updates": [
+          "None -- project/*.json, CURRENT_STATE.md, and other canonical project-state files were not touched, per WORKER.md's explicit 'files you must not touch' list and the standing rule that PO owns state files."
+        ],
+        "unresolved_risks": [
+          "The evidence INSERT (BackupCollectService -> BackupJobAuthorizationRepository.record) is a second, separate DB call after JobAdmissionService.submit()'s own commit -- no shared transaction is exposed across the backup-specific service and the generic job-engine admission path, and widening that shared path was out of this movement's named scope. This leaves a narrow window where a REQUESTED job could theoretically be claimed before its evidence row commits. Fail-closed design keeps this safe: BackupJobExecutor treats a missing row as a refusal in every case, so the only possible failure mode is a legitimately authorized job being refused and needing a retry -- never execution without evidence. Flagged for PO awareness.",
+          "Claim-time role re-check is 'role:backup_admin has any active binding at all' (RoleBindingRepository.hasAnyActiveBinding), not a full per-actor group-membership RBAC re-evaluation -- that would require RbacEvaluator's LDAP-backed machinery (GroupReferenceCipher, ActorAuthzStateRepository, LocalRoleTokenResolver), which lives in the service module and is not (and architecturally should not become) a worker dependency (13D DS-1/DS-2: service and worker are separate deployable units). The coarse check still correctly refuses the acceptance criterion's own 'role removal' scenario (role_binding_revoke leaving zero active bindings for backup_admin)."
+        ],
+        "validation": {
+          "affected": "Also directly re-ran architecture-tests' NoHardcodedBootstrapVerifierOrPasswordTest (walks every db/migration file) to confirm V23 doesn't trip it: PASS. Confirmed compileJava/compileTestJava succeed across every module.",
+          "diff_check": "PASS -- git diff --check origin/main clean.",
+          "full_regression": "Not run (targeted backup suite matches this movement's own blast radius per WORKER.md; the brief's validation_plan names only the targeted/privacy/diff_check trio). Modules with zero Backup-named tests fail the --tests filter with Gradle's own 'No tests found for given includes' (capability-registry, ldap-adapter, job-engine, cli, platform-core, architecture-tests), and integration-tests fails on a pre-existing 'com.jcraft:jsch:0.1.55 not part of the dependency lock state' resolution error -- both pre-existing/environmental, unrelated to this diff, confirmed by reproducing the same failures on an unrelated single-test invocation.",
+          "privacy": "PASS -- python3 scripts/repository_privacy_check.py: 1655 files scanned, 0 findings.",
+          "real_environment": "NOT PERFORMED -- pilot real-environment validation (a live role_binding_revoke or pilot-allowlist change landing between a live admission and a live worker claim, against a real Check Point gateway) remains a separate required gate per AGENTS.md; this session made no host/device access.",
+          "state_consistency": "N/A -- this movement touches no project/*.json or CURRENT_STATE.md (PO-owned per WORKER.md/AGENTS.md; this session made no state-file edits).",
+          "targeted": "PASS -- './ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true test --tests \"*Backup*\"' run verbatim. service 9/9, worker 17/17, persistence 9/9 Backup-scoped tests green (new: 6 in BackupJobExecutorClaimAuthorizationTest, 1 in BackupCollectServiceTest)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T15:08:15Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0224",
+  "movement": "NXS-LOCAL-0224",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T15:08:15Z"
+}

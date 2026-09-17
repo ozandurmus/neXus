@@ -1,0 +1,157 @@
+{
+  "created_at": "2026-09-16T05:47:30Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Synthetic browser tests reproduce and prevent draft loss/switch leakage, stopped classification/count agreement, unknown/estimated labels and keyboard behavior.",
+          "Privacy/diff/targeted tests pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (FROZEN); backup audit identifies OR-3 as Tier-1.",
+          "observed": "Product Owner approves table-first Workbench: Active, Needs you and Archive filters, search by movement/objective, details below list, existing UI2 Material 3 theme bridge, Kanban secondary only if bounded.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/backup-retrieval-audit-failclosed"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw logs/credentials.",
+          "Usage uncertainty remains honest."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement frozen C7 backup artefact retrieval audit fail-closed behavior and persistent safe reason evidence.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Tier-1 audit/data-release ordering; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Audit persistence must succeed before plaintext is released; audit failure refuses with safe code and leaves no output.",
+          "No raw paths/bytes/credentials in responses/logs. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "BackupArtefactRetrieval/audit persistence ordering and focused tests."
+          ],
+          "out": [
+            "Restore execution, device commands, host access, UI export/download features, raw artefact bytes in metadata."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :persistence:test --tests '*BackupArtefactRetrieval*'"
+            ],
+            "name": "backup"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T05:47:30Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "BackupArtefactRetrievalTest now proves an audit persistence failure prevents the artefact store from being asked to decrypt.",
+          "BackupArtefactRetrievalTest now proves successful persistence records the typed backup_artefact_retrieved action."
+        ],
+        "completed": [
+          "Added focused regression evidence for fail-closed backup artefact retrieval audit ordering.",
+          "Committed and pushed 3bce2ba0eff8f962de939e786cdbf6f8b888a2e3.",
+          "Opened pull request 413 without merging it."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED"
+        },
+        "integration": {
+          "branch": "feature/backup-retrieval-audit-failclosed",
+          "ci": "UNKNOWN at close; orchestrator verification pending.",
+          "head_sha": "3bce2ba0eff8f962de939e786cdbf6f8b888a2e3",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator controls merge after its verification passes; worker did not merge.",
+          "merge_state": "OPEN",
+          "pr": 413,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/413"
+        },
+        "next": {
+          "movement": "Verify PR 413 and merge only after the targeted persistence test passes.",
+          "movement_type": "VALIDATION",
+          "objective": "Run the targeted BackupArtefactRetrieval Gradle test, confirm the clean worktree and privacy gate, then make the orchestrator-owned merge decision.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No production code or execution authority changed.",
+          "No restore path, device command, host access, UI behavior, raw artefact bytes, credentials, or operational identities changed or surfaced.",
+          "The existing origin/main production ordering remains audit persistence before decryption and destination output."
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work is a bounded targeted test and orchestrator merge gate with no new semantics.",
+          "tier": "standard validation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The orchestrator must run the targeted BackupArtefactRetrieval Gradle test before merge.",
+          "The SESSION_START browser acceptance text is unrelated to the authorized BackupArtefactRetrieval backend scope and remains unimplemented and unvalidated by this movement."
+        ],
+        "validation": {
+          "affected": "NOT_RUN: the authorized change is confined to the focused test and the targeted Gradle invocation could not start.",
+          "diff_check": "PASS: git diff --check origin/main passed immediately before commit.",
+          "full_regression": "NOT_RUN: outside the dispatch validation plan.",
+          "privacy": "PASS: repository privacy gate scanned 1515 files and reported 0 findings.",
+          "real_environment": "NOT_APPLICABLE: local test-only change; no device, host, deployment, or production data access.",
+          "state_consistency": "NOT_APPLICABLE: no project state or production behavior changed.",
+          "targeted": "UNVERIFIED: Gradle could not start because the managed sandbox denied its user-home lock file; no test code ran."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-16T05:52:05Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0262",
+  "movement": "NXS-LOCAL-0262",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T05:52:05Z"
+}

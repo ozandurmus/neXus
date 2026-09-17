@@ -1,0 +1,169 @@
+{
+  "created_at": "2026-09-15T15:17:18Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Combined branch preserves opaque backup artefact identity and uses server-only locator for retrieval.",
+          "A test fails if artefact_id is incorrectly used as locator.",
+          "Targeted module tests/privacy/diff reported truthfully."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (FROZEN), backed by BK-12/BW-4 findings in docs/design/BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md (DRAFT audit only).",
+          "observed": "NXS-LOCAL-0225 commit 6c3482362008a9e0799cf5899d072c017c3a791b makes backup_artefact.artefact_id opaque. Its SESSION_CLOSE correctly identifies BackupArtefactRetrieval.java line 90 constructing ArtefactRef from artefactId, an old path assumption hidden by a fake store. Do not merge PR #386 alone.",
+          "what_exists": "0225 must be integrated into this lane with `git cherry-pick 6c3482362008a9e0799cf5899d072c017c3a791b` before implementation. BackupArtefactManifestRepository.RetrievalManifest currently does not expose recovery_volume_path. BackupArtefactRetrieval must use a server-only locator, never return it through HTTP/UI."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/backup-opaque-id-retrieval-locator"
+        },
+        "invariants": [
+          "No HTTP/UI response carries storage path.",
+          "Opaque artefact_id is never a locator.",
+          "Retrieval retains its audit behavior and no raw bytes leak.",
+          "No migration/device/host operation."
+        ],
+        "merge_gate": "Worker may commit/push/open one PR but never merge. PR #386 is not merged independently; PO reviews combined successor and requires orchestrator verify.passed.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Complete the BK-14 opaque artefact identity change by preserving server-only storage locator for CLI retrieval; integrate the dependent 0225 commit safely.",
+        "output_contract": [
+          "One combined successor PR and SESSION_CLOSE explaining dependency closure.",
+          "Clean worktree; no host/device access."
+        ],
+        "recommended_reasoning": {
+          "reason": "Narrow caller correction after known opaque-id change; Claude Sonnet 5 medium under explicit user primary directive.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Cherry-pick the named 0225 commit first; abort and report any conflict, do not duplicate/reinvent its change.",
+          "Thread server-only recovery_volume_path into the retrieval operation. artefact_id remains opaque/presentation-safe and must never be treated as a filesystem path.",
+          "Strengthen the fake or add a real store test so wrong ArtefactRef would fail. Do not expose locator in API/UI/logs.",
+          "C7 frozen authority governs; preserve retrieval audit/fail-closed semantics. No device/host contact. Claude primary per user directive; worker may commit/push/open PR, never merge."
+        ],
+        "risks": [
+          "Cherry-pick conflict blocks work and must be reported.",
+          "Storage locator must stay private."
+        ],
+        "scope": {
+          "in": [
+            "Cherry-pick exactly 6c3482362008a9e0799cf5899d072c017c3a791b onto this origin/main-based lane.",
+            "Minimal persistence retrieval-manifest mapping and BackupArtefactRetrieval/test changes required to use server-only recovery locator instead of public artefact_id.",
+            "Tests using a real FileArtefactStore where differing opaque identity and locator prove retrieval resolves correctly."
+          ],
+          "out": [
+            "New migrations; changes to 0224 claim authorization; HTTP/UI APIs; download routes; device commands; host operations; unrelated audit/discovery/regression files; canonical state files."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :persistence:test :worker:test :service:test --tests '*Backup*'"
+            ],
+            "name": "backup_retrieval_modules"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T15:17:18Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/artefact/BackupArtefactManifestRepository.java",
+          "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/artefact/JooqBackupArtefactManifestRepository.java",
+          "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/artefact/BackupArtefactRetrieval.java",
+          "ui2/persistence/src/test/java/com/securityexpert/nexus/ui2/persistence/artefact/BackupArtefactRetrievalTest.java",
+          "(cherry-picked) ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/api/BackupControllerTest.java",
+          "(cherry-picked) ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/backup/BackupJobExecutor.java",
+          "(cherry-picked) ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/backup/BackupJobExecutorEndToEndTest.java"
+        ],
+        "completed": [
+          "Cherry-picked 6c3482362008a9e0799cf5899d072c017c3a791b (BK-14/OR-1, opaque backup_artefact.artefact_id) cleanly onto this lane, no conflicts.",
+          "Fixed the caller its own SESSION_CLOSE had flagged: BackupArtefactRetrieval.retrieve() was still constructing ArtefactRef from the now-opaque artefactId instead of a storage locator.",
+          "RetrievalManifest now carries recoveryVolumePath (existing recovery_volume_path column, no new migration); BackupArtefactRetrieval resolves the store through that server-only locator.",
+          "Added a real-FileArtefactStore regression test with a deliberately different opaque id and locator, proving retrieval resolves correctly and would fail if artefactId were used as the locator again.",
+          "Opened PR #389; did not merge."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/backup-opaque-id-retrieval-locator",
+          "ci": "not observed by this session",
+          "head_sha": "04f8433b7a2da9e9e7deff2d96d3459bf2f5bb80",
+          "merge_commit": null,
+          "merge_decision": "Worker committed/pushed/opened PR only, per merge_gate; orchestrator merges after its own verification passes.",
+          "merge_state": "OPEN",
+          "pr": 389,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/389"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0226",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "PO review of the combined successor and orchestrator verify.passed required before merge; PR #386 must not be merged independently.",
+          "status": "complete_with_followup"
+        },
+        "preserved": [
+          "No HTTP/UI response carries storage path -- BackupController/API code untouched.",
+          "Retrieval audit-before-decrypt ordering and audit row content unchanged.",
+          "No migration, device, or host operation -- recovery_volume_path column already existed from the cherry-picked commit's own migration."
+        ],
+        "recommended_reasoning": {
+          "reason": "Narrow caller correction after known opaque-id change; no new architecture or security-boundary work.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "Not run beyond the named Backup-tagged modules per WORKER.md scope.",
+          "diff_check": "PASS - git diff --check clean",
+          "full_regression": "Not run - out of scope for this dispatch.",
+          "privacy": "PASS - python3 scripts/repository_privacy_check.py - 0 findings",
+          "real_environment": "Not performed - local validation only per dispatch.",
+          "state_consistency": "Not applicable - no project/*.json or CURRENT_STATE.md changes in scope.",
+          "targeted": "PASS - ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :persistence:test :worker:test :service:test --tests '*Backup*' - BUILD SUCCESSFUL"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T15:21:30Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0226",
+  "movement": "NXS-LOCAL-0226",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T15:21:30Z"
+}

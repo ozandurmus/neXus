@@ -1,0 +1,69 @@
+{
+  "created_at": "2026-09-17T16:49:23Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Done"
+        ],
+        "baseline": {
+          "authority": "PO",
+          "observed": "Missing",
+          "what_exists": "N/A"
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/revert-deviceworkspace-slider"
+        },
+        "invariants": [
+          "No security weakening"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Revert Device Workspace to Slider/Info Menu layout",
+        "output_contract": [
+          "Local commit and PR."
+        ],
+        "recommended_reasoning": {
+          "reason": "Backfill",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Revert Device Workspace to Slider/Info Menu layout"
+        ],
+        "risks": [
+          "None"
+        ],
+        "scope": {
+          "in": [
+            "Backend",
+            "UI"
+          ],
+          "out": [
+            "Unrelated components"
+          ]
+        },
+        "validation_plan": [
+          "Run tests"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-17T16:49:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0307",
+  "movement": "revert-deviceworkspace-slider",
+  "next_actor": "engineer",
+  "refs": [
+    "revert-deviceworkspace-slider"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-17T16:49:23Z"
+}

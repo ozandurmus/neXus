@@ -1,0 +1,166 @@
+{
+  "created_at": "2026-09-15T10:59:59Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A dispatched worker can commit and push from its own worktree.",
+          "A packet's Gradle validation step runs rather than reporting that no Java runtime exists.",
+          "The writable roots contain the worktree's git directory and nothing broader.",
+          "PROVIDER_OPERATING_NOTES states the measured cause.",
+          "The full suite and the repository privacy gate pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN) fixes the worktree-per-movement dispatch model and the sandbox the engineer runs under. This movement corrects that sandbox so the model it fixes can actually complete.",
+          "observed": "Four of six movements dispatched on 2026-09-15 finished their work and were recorded failed, every one for the same two reasons, in the engineers' own words: the sandbox denied creation of the external worktree Git index.lock, and Gradle could not start because no Java runtime was available (with vitest likewise unavailable). PROVIDER_OPERATING_NOTES records the first as something that happens frequently. It happens every time, and the cause is measurable.",
+          "what_exists": "Measured in a live dispatch worktree.\n\n  $ cat <worktree>/.git\n  gitdir: <main repo>/.git/worktrees/NXS-LOCAL-0204\n\n  $ git -C <worktree> rev-parse --git-dir\n  <main repo>/.git/worktrees/NXS-LOCAL-0204\n\nA linked worktree keeps its .git as a FILE pointing into the MAIN repository. The index, and therefore index.lock, live under the main repository, not under the worktree.\n\nThe sandbox the adapter builds is described in its own module docstring at scripts/orchestrator_providers.py:16:\n\n  codex exec --cd <dir> --json -m <model>\n    -c sandbox_workspace_write.network_access=true --sandbox workspace-write\n    --add-dir <dir> -o <file> -\n\nand for a resume, -c sandbox_workspace_write.writable_roots=[...].\n\nThe writable root is the worktree. The path git must write to is outside it. That is the whole defect, and it is deterministic rather than intermittent.\n\nOn the toolchain: a Java 21 runtime is present on the dispatching machine and was used by hand to run the service test suite for movement NXS-LOCAL-0204. JAVA_HOME is unset in the environment, and /usr/libexec/java_home exits non-zero."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond what project/build_history.json links."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/a-worker-can-commit-and-test"
+        },
+        "invariants": [
+          "The sandbox stays workspace-write. No move to a permissive mode.",
+          "The engineer gains no write access to the main checkout's working tree, only to the git directory belonging to its own worktree."
+        ],
+        "merge_gate": "The worker opens the pull request and does not merge it. If it still cannot commit, it says so plainly and leaves the work in the worktree.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "A dispatched worker cannot commit its own work, and cannot run the Java or frontend tests its packet asks for. Both are the dispatcher's own environment plumbing, and both now have a measured cause.",
+        "output_contract": [
+          "One pull request on feature/a-worker-can-commit-and-test.",
+          "A SESSION CLOSE on the relay as one NEXUS_SESSION_PACKET."
+        ],
+        "recommended_reasoning": {
+          "reason": "The cause is measured and quoted, and the fix is one derived path plus a toolchain reference. The judgement required is restraint about sandbox width, which this packet states.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Derive the git directory rather than composing it. A worktree may be moved, and the .git file is the authority for where its real directory is.",
+          "Do not reach for a broader sandbox mode. A dispatched engineer runs unattended, and the reason the sandbox is narrow is that nobody is reading its output as it goes.",
+          "If making the toolchain reachable requires installing something on the dispatching machine, say so plainly in the pull request rather than doing it silently."
+        ],
+        "risks": [
+          "The tempting fix is a permissive sandbox, which would give an unattended process write access to the whole machine. That is a larger hole than the bug it closes.",
+          "Granting the whole main .git directory rather than the single worktree subdirectory would let one movement corrupt another lane's state."
+        ],
+        "scope": {
+          "in": [
+            "Add the worktree's real git directory, the path that git rev-parse --git-dir resolves to, to the sandbox writable roots, on both the fresh-dispatch and the resume argv paths. Derive it; do not compose it from a parent path and a name.",
+            "Make the Java toolchain reachable by the dispatched engineer so that a packet's Gradle validation step can run, and the frontend test runner likewise. State in the pull request how each is made reachable and whether anything had to be installed.",
+            "Correct docs/reference/PROVIDER_OPERATING_NOTES.md. The index.lock failure is not frequent-and-mysterious; it is structural, and it now has a cause and a fix. Rewrite that bullet to say what was measured.",
+            "A test that fails if the writable roots omit the git directory for a linked worktree."
+          ],
+          "out": [
+            "Widening the sandbox beyond what the defect requires. The fix is one additional writable path derived from the worktree, not a looser sandbox mode and not a disabled sandbox.",
+            "Changing the merge gate, the relay protocol, or the dispatch model.",
+            "Any change under ui2/ or tests/ other than the new test this movement adds."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/",
+              "-q",
+              "-k",
+              "orchestrator or provider"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-15T10:59:59Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Codex fresh and resume dispatches receive the worktree Git directory derived with git rev-parse --git-dir.",
+          "The dispatched environment exports JAVA_HOME from the existing Java launcher and retains resolved Java and Node bin directories on PATH.",
+          "Provider notes identify the linked-worktree Git-directory cause."
+        ],
+        "completed": [
+          "Implementation and targeted validation completed; no toolchains were installed."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Modified scripts/orchestrator.py only.",
+          "ui": "No UI changes."
+        },
+        "integration": {
+          "branch": "feature/a-worker-can-commit-and-test",
+          "ci": "NOT_RUN",
+          "head_sha": "UNCOMMITTED",
+          "merge_commit": "NONE",
+          "merge_decision": "orchestrator",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": "NOT_AVAILABLE"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0207",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Commit, push, and open the PR for the completed narrow dispatch sandbox fix.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "sandbox workspace-write",
+          "No access to the main checkout working tree",
+          "No merge, relay, or dispatch-model change"
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work is a constrained commit and PR handoff after sandbox verification.",
+          "tier": "main engineer"
+        },
+        "state_updates": [
+          "None: the movement could not be committed or integrated."
+        ],
+        "unresolved_risks": [
+          "The requested filtered suite is collection-blocked because unrelated modules attempt to write outside this sandbox.",
+          "The current worker sandbox still lacks the Git directory that this change will grant to future dispatches."
+        ],
+        "validation": {
+          "affected": "scripts/orchestrator.py; tests/test_orchestrator.py; docs/reference/PROVIDER_OPERATING_NOTES.md",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "BLOCKED: pytest tests/ -q -k orchestrator or provider fails at collection because unrelated runtime probes write outside the worker sandbox.",
+          "privacy": "PASS: repository privacy gate found 0 findings.",
+          "real_environment": "NOT_RUN: no network-facing behavior.",
+          "state_consistency": "NOT_RUN: no durable project state changed.",
+          "targeted": "PASS: pytest tests/test_orchestrator.py -q -k 'spawn_engineer or codex_spawn' (8 passed); pytest tests/test_orchestrator_providers.py -q (42 passed)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-15T11:06:38Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0207",
+  "movement": "NXS-LOCAL-0207",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md",
+    "docs/reference/PROVIDER_OPERATING_NOTES.md",
+    "AGENTS.md",
+    "roles/WORKER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-15T11:06:38Z"
+}

@@ -1,0 +1,164 @@
+{
+  "created_at": "2026-09-16T05:35:59Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Frozen contract resolves local platform/lifecycle/persistence/MCP/plugin boundaries or explicitly defers unsupported clients.",
+          "Implementation sequence is independently testable and rollback safe.",
+          "Authority/privacy/diff gates pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN); Companion C1-C5 contract on origin/main.",
+          "observed": "Workbench table-first Material 3 work is separately in progress. User provides a follow-up directive for independent reliable tracking with a supervised service, read-only MCP, private plugin and skill, no new execution authority.",
+          "what_exists": "Existing deploy/ui2 manifests define database/service/worker/scheduler labels and no NetworkPolicy. Contract must inspect actual selectors/ports and define additive policy without breaking DNS, migrations, readiness or test/development paths."
+        },
+        "context_not_loaded": [
+          "Unrelated history, logs, runtime objects, credential stores and HOST-A data."
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/workbench-companion-integration-repair"
+        },
+        "invariants": [
+          "No new execution authority.",
+          "No raw transcripts or sensitive notifications.",
+          "Unknown/cost provenance semantics preserved.",
+          "Notification state separate from workflow authority."
+        ],
+        "merge_gate": "Worker commits only; PO merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Repair Workbench Companion integration: reconcile C2 live-adapter CLI, C5 release wrapper and all companion tests into one installable flow.",
+        "output_contract": [
+          "Commit(s) and SESSION_CLOSE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Critical Companion integration repair; gpt-5.6-sol high.",
+          "tier": "strong implementation"
+        },
+        "requirements": [
+          "Run full companion suite first; fix every C2/C5 integration failure. One config schema and one observer entrypoint; wrapper must import package correctly.",
+          "Preserve C1 bounded adapter and C3 three-tool MCP. No install side effects. Worker commits only; PO merges."
+        ],
+        "risks": [
+          "A newly named device command or vendor semantic must remain out of scope absent a command gate."
+        ],
+        "scope": {
+          "in": [
+            "scripts/workbench_companion.py, bin/nexus-workbench-observer, scripts/workbench_companion_launchagent.py, tests/test_workbench_companion.py and only required plugin MCP path fixes."
+          ],
+          "out": [
+            "Actual install/load, host/device access, new MCP tools, raw sources/network."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "-p",
+              "no:cacheprovider",
+              "tests/test_workbench_companion.py"
+            ],
+            "name": "companion"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy"
+          },
+          {
+            "argv": [
+              "git",
+              "diff",
+              "--check"
+            ],
+            "name": "diff"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-16T05:35:59Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Restored C1 source projection in scripts/workbench_companion.py and added the safe C1-to-C2 live adapter CLI.",
+          "Added bin/nexus-workbench-observer and routed the private plugin MCP mapping through the versioned release entrypoint.",
+          "Combined all Companion tests and covered configuration, wrapper importability, MCP dispatch, and LaunchAgent argv."
+        ],
+        "completed": [
+          "Reconciled the C1 bounded adapter and C2 observer behind one strict runtime configuration.",
+          "Added one release entrypoint for the observer and read-only MCP process.",
+          "Restored C1 acceptance coverage and added C1/C2/C5 integration checks."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/workbench-companion-integration-repair",
+          "ci": "Orchestrator verification pending.",
+          "head_sha": "dba1646",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator/PO controlled; worker did not merge.",
+          "merge_state": "OPEN",
+          "pr": 414,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/414"
+        },
+        "next": {
+          "movement": "Orchestrator verification and merge",
+          "movement_type": "VALIDATION",
+          "objective": "Run orchestrator verification for PR 414 and merge only after its gates pass.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No new execution authority or MCP tools.",
+          "No raw transcripts, source writes, sensitive notifications, installation, service load, host access, or device access.",
+          "Unknown values, requested and observed models, cost provenance, attempt attribution, and notification/workflow separation."
+        ],
+        "recommended_reasoning": {
+          "reason": "The bounded implementation is complete; only independent verification and orchestrator-controlled merge remain.",
+          "tier": "ordinary validation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Synthetic validation does not certify macOS LaunchAgent installation or pinned Codex client plugin discovery.",
+          "Linux, Windows, WSL, Claude clients, hosted clients, remote executors, and shared accounts remain unsupported or deferred."
+        ],
+        "validation": {
+          "affected": "PASS: release wrapper observer help and stdio MCP dispatch from an unrelated working directory; C1 projection persisted through C2 Observer.",
+          "diff_check": "PASS: git diff --check and git diff --check origin/main.",
+          "full_regression": "Not required by the bounded dispatch; the complete named Companion suite passed.",
+          "privacy": "PASS: repository privacy gate scanned 1515 files with 0 findings and no network access.",
+          "real_environment": "UNVERIFIED: actual macOS install/load, notifications, and pinned-client handshake remain deferred by the frozen contract.",
+          "state_consistency": "No project-state files changed; dispatch scope was limited to Companion implementation, tests, wrapper, and required plugin MCP path fix.",
+          "targeted": "PASS: 132 tests in tests/test_workbench_companion.py."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-16T05:52:26Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0259",
+  "movement": "NXS-LOCAL-0259",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-16T05:52:26Z"
+}
