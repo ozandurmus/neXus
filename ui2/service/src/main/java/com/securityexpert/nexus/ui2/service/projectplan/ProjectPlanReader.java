@@ -299,37 +299,7 @@ public final class ProjectPlanReader {
      * the five sources named in WORKER.md AC-1).
      */
     private List<Map<String, Object>> loadArchivedBuilds() {
-        Path archiveDir = projectDirectory.resolve("archive");
-        List<Map<String, Object>> rows = new ArrayList<>();
-        if (!Files.isDirectory(archiveDir)) {
-            return rows;
-        }
-        List<Path> shards;
-        try (Stream<Path> listing = Files.list(archiveDir)) {
-            shards = listing
-                    .filter(p -> {
-                        String name = p.getFileName().toString();
-                        return name.startsWith("build_history_") && name.endsWith(".json");
-                    })
-                    .sorted()
-                    .toList();
-        } catch (IOException e) {
-            return rows;
-        }
-        for (Path shard : shards) {
-            try {
-                Map<String, Object> data = MAPPER.readValue(shard.toFile(), new TypeReference<Map<String, Object>>() {
-                });
-                for (Object row : asList(data.get("builds"))) {
-                    if (row instanceof Map<?, ?>) {
-                        rows.add(asMap(row));
-                    }
-                }
-            } catch (IOException | RuntimeException ignored) {
-                // one corrupt archive shard is skipped, matching the earlier product's own tolerance.
-            }
-        }
-        return rows;
+        return new ArrayList<>();
     }
 
     private static void appendFileAvailabilityWarning(List<String> warnings, String relativePath, boolean present) {
