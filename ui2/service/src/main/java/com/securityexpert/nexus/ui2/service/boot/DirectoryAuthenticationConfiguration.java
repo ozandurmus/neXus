@@ -14,6 +14,11 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 @Configuration
 public class DirectoryAuthenticationConfiguration {
     @Bean
+    public DirectoryProfileRepository directoryProfileRepository(TransactionBoundary transactionBoundary) {
+        return new JooqDirectoryProfileRepository(transactionBoundary);
+    }
+
+    @Bean
     public DirectoryProfile directoryProfile(DirectoryProfileRepository repo) {
         return repo.findActiveProfile().map(record -> {
             try {
