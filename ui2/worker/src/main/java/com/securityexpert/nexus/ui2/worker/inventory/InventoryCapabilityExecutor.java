@@ -33,6 +33,7 @@ import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpAddrParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpRouteParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsidCompositeOutputSplitter;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsxStatParser;
+import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoSystemInfoParser;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoHaStateParser;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoInterfaceParseResult;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoInterfaceParser;
@@ -203,7 +204,8 @@ public final class InventoryCapabilityExecutor {
         Map<String, String> headers = Map.of("X-PAN-KEY", apiKey.get());
 
         String identityOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_SYSTEM_INFO, headers);
-        String serial = firstMatch(SERIAL_TAG, identityOutput).orElse("");
+        PaloAltoSystemInfoParser.SystemInfo sysInfo = PaloAltoSystemInfoParser.parse(identityOutput);
+        String serial = sysInfo.serial();
         PresentedIdentity presented = new PresentedIdentity(serial, Optional.empty());
         IdentityMismatchEvaluator.Decision decision =
                 IdentityMismatchEvaluator.evaluate(recordedIdentity, presented, strictRefuseEnabled);
