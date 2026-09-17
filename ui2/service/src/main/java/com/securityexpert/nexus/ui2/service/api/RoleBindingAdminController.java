@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.List;
 import com.securityexpert.nexus.ui2.platform.DirectoryBindingKind;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpStatus;
@@ -26,8 +28,13 @@ import com.securityexpert.nexus.ui2.service.security.RoleBindingAdminService;
 @RestController
 public final class RoleBindingAdminController {
 
-    public record CreateRequest(String roleToken, String selectionHandle, String directoryProfileId,
-            DirectoryBindingKind bindingKind, String localIdentityId, String groupReference, String groupReferenceKeyId) {
+    public record CreateRequest(@JsonProperty("role_token") String roleToken,
+            @JsonProperty("selection_handle") String selectionHandle,
+            @JsonProperty("directory_profile_id") String directoryProfileId,
+            @JsonProperty("binding_kind") DirectoryBindingKind bindingKind,
+            @JsonProperty("local_identity_id") String localIdentityId,
+            @JsonProperty("group_reference") String groupReference,
+            @JsonProperty("group_reference_key_id") String groupReferenceKeyId) {
         public CreateRequest(String roleToken, String groupReference, String groupReferenceKeyId) {
             this(roleToken, null, null, null, null, groupReference, groupReferenceKeyId);
         }

@@ -1,0 +1,129 @@
+{
+  "created_at": "2026-09-17T16:47:12Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Assigning role:security_admin to a local user no longer results in AUTHZ_NOT_EVALUATED"
+        ],
+        "baseline": {
+          "authority": "Product Owner",
+          "observed": "Local user with role:security_admin gets AUTHZ_NOT_EVALUATED",
+          "what_exists": "Bug in RbacEvaluator or role bindings"
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/fix-authz-not-evaluated"
+        },
+        "invariants": [
+          "No security weakening"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Fix the AUTHZ_NOT_EVALUATED bug when a local user is assigned role:security_admin.",
+        "output_contract": [
+          "Local commit and PR."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bug fix for AUTHZ_NOT_EVALUATED",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Investigate why findActiveByToken('role:security_admin') fails or why RbacEvaluator returns AUTHZ_NOT_EVALUATED for a local user. Fix the code so the role evaluates properly."
+        ],
+        "risks": [
+          "Auth bypass"
+        ],
+        "scope": {
+          "in": [
+            "Backend",
+            "RBAC"
+          ],
+          "out": [
+            "Unrelated components"
+          ]
+        },
+        "validation_plan": [
+          "Run Backend tests"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-17T16:47:12Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "RoleBindingAdminController.CreateRequest now maps the frontend snake_case role-binding fields to its Java record components.",
+          "Added a focused Jackson deserialization test for role_token and local_identity_id."
+        ],
+        "completed": [
+          "Fixed the request-contract mismatch that supplied null roleToken and localIdentityId to createLocal and returned AUTHZ_NOT_EVALUATED."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "Local role assignment now reaches the existing security-admin authorization and binding path with the selected token and identity id."
+        },
+        "integration": {
+          "branch": "feature/fix-authz-not-evaluated",
+          "ci": "not triggered",
+          "head_sha": "uncommitted",
+          "merge_commit": null,
+          "merge_decision": "PO controlled",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0292-validation",
+          "movement_type": "VALIDATION",
+          "objective": "Run RoleBindingAdminControllerTest in a Gradle-capable environment, then review and commit the bounded fix.",
+          "status": "planned"
+        },
+        "preserved": [
+          "RbacEvaluator local-binding evaluation, role-binding persistence, and first-boot seeding remain unchanged.",
+          "Authorization continues to fail closed for malformed or unauthorized requests."
+        ],
+        "recommended_reasoning": {
+          "reason": "Targeted JVM validation only.",
+          "tier": "Fast/normal"
+        },
+        "state_updates": [
+          "None authorized; pre-existing unrelated worktree changes were preserved."
+        ],
+        "unresolved_risks": [
+          "The targeted Gradle test could not start because the sandbox denied creation of the Gradle wrapper user-cache lock."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: focused JVM test could not start under the sandbox Gradle cache-lock restriction.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "NOT_RUN: bounded backend request-mapping change.",
+          "privacy": "NOT_RUN: no sensitive data path or artifact was introduced.",
+          "real_environment": "UNVERIFIED: local validation only; no production data or device accessed.",
+          "state_consistency": "Not applicable: no project-state update was authorized.",
+          "targeted": "UNVERIFIED: Gradle wrapper failed before test discovery because its user-cache lock could not be opened: Operation not permitted."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-17T16:50:37Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0292",
+  "movement": "fix-authz-not-evaluated",
+  "next_actor": null,
+  "refs": [
+    "fix-authz-not-evaluated"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-17T16:50:37Z"
+}
