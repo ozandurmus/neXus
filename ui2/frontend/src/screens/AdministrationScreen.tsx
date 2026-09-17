@@ -7,7 +7,7 @@ import { DeviceManagementPane } from "./DeviceRegistryPanel";
 import { ProjectPlanPanel } from "./ProjectPlanPanel";
 
 import { CustomRolesPanel } from "./CustomRolesPanel";
-import { AuditLogPanel } from "./AuditLogPanel";
+import { AuditLogsPanel } from "./AuditLogsPanel";
 import { JobLogsPanel } from "./JobLogsPanel";
 import { DirectorySettingsPanel } from "../components/settings/DirectorySettingsPanel";
 
@@ -65,7 +65,7 @@ export function AdministrationScreen() {
           },
           {
             label: "Audit Logs",
-            panel: <AuditLogPanel />,
+            panel: <AuditLogsPanel />,
           },
           {
             label: "Job Logs",

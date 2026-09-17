@@ -6,6 +6,15 @@ regenerate. Open a row's linked document only when you need that build's detail.
 
 | Build | Status | Dates | Title | Summary | Docs |
 | --- | --- | --- | --- | --- | --- |
+| `NXS-LOCAL-0309` | done | 2026-09-17 | Check Point Command Gate (cp_failover_command_gate_batch) | Wrote Command Gate document for cphaprob commands. | — |
+| `NXS-LOCAL-0308` | in_progress | 2026-09-17 | API Router Fail-Closed (api_routes_without_security_mapping_refused_by_default) | Default deny for unmapped API routes in GateChainInterceptor. | — |
+| `NXS-LOCAL-0307` | in_progress | 2026-09-17 | Audit Logs UI (ui2_b1_08_audit_logs_screen) | React frontend for Administration screen to display paginated audit logs. | — |
+| `NXS-LOCAL-0306` | done | 2026-09-17 | Device Workspace UI (B1-09) | Implemented DeviceWorkspaceScreen.tsx according to frozen UI2_0_B1_09_DEVICE_WORKSPACE_CONTRACT.md, integrating with API and fixing route fallbacks. | — |
+| `NXS-LOCAL-0305` | done | 2026-09-17 | PAN HA Serial Normalization | Ported Python PAN HA serial parsing to Java PaloAltoHaStateParser, implementing whitespace and leading-zero stripping to prevent false identity mismatch. | — |
+| `NXS-LOCAL-0304` | done | 2026-09-17 | Backup API Security Enhancements | Changed backup artefact IDs to opaque UUIDs to prevent path traversal. Enforced fail-closed behavior on download if audit log write fails. | — |
+| `NXS-LOCAL-0303` | done | 2026-09-17 | 10-parallel SSH workers & Job Logs Screen | Increased worker concurrency to 10 for bulk collect. Added Job Logs UI to Administration to show terminal reasons like connect_failed: timeout. | — |
+| `NXS-LOCAL-0302` | done | 2026-09-17 | Custom RBAC Roles | Migrated from static RoleToken enum to database-backed rbac_roles and rbac_permissions schema. Updated RbacEvaluator to enforce DB-backed roles. | — |
+| `NXS-LOCAL-0301` | done | 2026-09-17 | LDAP Dynamic Reloading | Refactored DirectoryAuthenticationConfiguration to fetch active DirectoryProfile dynamically from the database on every bind and revalidate call, instead of static loading at startup. | — |
 | `NXS-LOCAL-0242` | in_progress | 2026-09-15 | Java Project Plan reconciliation with explicit source provenance | Java roadmap, delivery debt and converted lessons now have separate projections. Java and frontend validation remain pending. | [agreement](docs/design/UI2_PROJECT_PLAN_RECONCILIATION.md) |
 | `NXS-LOCAL-0176` | automated_validated | 2026-09-14 | Expire a past-deadline session on read so it never blocks a login | Merged expiry-on-read for stale sessions. | — |
 | `NXS-LOCAL-0175` | automated_validated | 2026-09-14 | Check Point gateway backup: gate, capability, executor, retrieval, service routes | Merged pilot-gated Check Point gateway backup. | — |

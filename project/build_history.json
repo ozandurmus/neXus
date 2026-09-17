@@ -3,6 +3,94 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0309",
+      "status": "done",
+      "title": "Check Point Command Gate (cp_failover_command_gate_batch)",
+      "summary": "Wrote Command Gate document for cphaprob commands.",
+      "started": "2026-09-17",
+      "completed": "2026-09-17",
+      "movement": "ARCHITECTURE",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0308",
+      "status": "in_progress",
+      "title": "API Router Fail-Closed (api_routes_without_security_mapping_refused_by_default)",
+      "summary": "Default deny for unmapped API routes in GateChainInterceptor.",
+      "started": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0307",
+      "status": "in_progress",
+      "title": "Audit Logs UI (ui2_b1_08_audit_logs_screen)",
+      "summary": "React frontend for Administration screen to display paginated audit logs.",
+      "started": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0306",
+      "status": "done",
+      "title": "Device Workspace UI (B1-09)",
+      "summary": "Implemented DeviceWorkspaceScreen.tsx according to frozen UI2_0_B1_09_DEVICE_WORKSPACE_CONTRACT.md, integrating with API and fixing route fallbacks.",
+      "started": "2026-09-17",
+      "completed": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0305",
+      "status": "done",
+      "title": "PAN HA Serial Normalization",
+      "summary": "Ported Python PAN HA serial parsing to Java PaloAltoHaStateParser, implementing whitespace and leading-zero stripping to prevent false identity mismatch.",
+      "started": "2026-09-17",
+      "completed": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0304",
+      "status": "done",
+      "title": "Backup API Security Enhancements",
+      "summary": "Changed backup artefact IDs to opaque UUIDs to prevent path traversal. Enforced fail-closed behavior on download if audit log write fails.",
+      "started": "2026-09-17",
+      "completed": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0303",
+      "status": "done",
+      "title": "10-parallel SSH workers & Job Logs Screen",
+      "summary": "Increased worker concurrency to 10 for bulk collect. Added Job Logs UI to Administration to show terminal reasons like connect_failed: timeout.",
+      "started": "2026-09-17",
+      "completed": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0302",
+      "status": "done",
+      "title": "Custom RBAC Roles",
+      "summary": "Migrated from static RoleToken enum to database-backed rbac_roles and rbac_permissions schema. Updated RbacEvaluator to enforce DB-backed roles.",
+      "started": "2026-09-17",
+      "completed": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0301",
+      "status": "done",
+      "title": "LDAP Dynamic Reloading",
+      "summary": "Refactored DirectoryAuthenticationConfiguration to fetch active DirectoryProfile dynamically from the database on every bind and revalidate call, instead of static loading at startup.",
+      "started": "2026-09-17",
+      "completed": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0242",
       "status": "in_progress",
       "title": "Java Project Plan reconciliation with explicit source provenance",
