@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfigurationCapabilityIds;
