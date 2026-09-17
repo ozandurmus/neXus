@@ -36,17 +36,17 @@ public class DirectoryAuthenticationConfiguration {
         }).orElse(null);
     }
     
-    @Bean public DirectoryTrustPolicy directoryTrustPolicy(DirectoryProfile profile, ActorAuthzStateRepository actors) {
+    @Bean public DirectoryTrustPolicy directoryTrustPolicy(@org.springframework.lang.Nullable DirectoryProfile profile, ActorAuthzStateRepository actors) {
         if (profile == null) return null;
         return new DirectoryTrustPolicy(profile, actors::expireDirectory);
     }
     
-    @Bean public LdapMechanism ldapMechanism(DirectoryProfile profile, DirectoryTrustPolicy trust) {
+    @Bean public LdapMechanism ldapMechanism(@org.springframework.lang.Nullable DirectoryProfile profile, @org.springframework.lang.Nullable DirectoryTrustPolicy trust) {
         if (profile == null || trust == null) return null;
         return new LdapMechanism(UnboundIdOperatorBindAdapter.create(profile, trust));
     }
     
-    @Bean public UnboundIdRevalidationAdapter ldapRevalidationAdapter(DirectoryProfile profile, DirectoryTrustPolicy trust) {
+    @Bean public UnboundIdRevalidationAdapter ldapRevalidationAdapter(@org.springframework.lang.Nullable DirectoryProfile profile, @org.springframework.lang.Nullable DirectoryTrustPolicy trust) {
         if (profile == null || trust == null) return null;
         return new UnboundIdRevalidationAdapter(false, profile, trust, null, null);
     }
