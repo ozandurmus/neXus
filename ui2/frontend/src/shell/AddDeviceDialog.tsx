@@ -27,6 +27,7 @@ import {
   getDiscoveryRun,
   importDiscoveryCandidates,
   listCredentials,
+  requestInventoryCollect,
   startDiscoveryRun,
   type ApiError,
   type CredentialView,
@@ -79,7 +80,7 @@ export function AddDeviceDialogTrigger() {
   );
 }
 
-type Phase = "form" | "submitting" | "polling" | "terminal";
+type Phase = "form" | "submitting" | "confirming" | "collecting" | "terminal";
 type DiscoveryPhase = "form" | "starting" | "polling" | "failed" | "candidates" | "importing" | "done";
 
 function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
@@ -94,6 +95,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
   const [validationReason, setValidationReason] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [detail, setDetail] = useState<DeviceDetail | null>(null);
 
   const [trustFormOpen, setTrustFormOpen] = useState(false);
@@ -142,16 +144,34 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
   // in flight; cleared on unmount, dialog close (which unmounts this
   // component) or reaching a terminal state.
   useEffect(() => {
-    if (phase !== "polling" || !deviceId) return undefined;
+    if ((phase !== "confirming" && phase !== "collecting") || !deviceId || !activeJobId) return undefined;
     let cancelled = false;
+    let requestingInventory = false;
 
     const tick = () => {
       getDevice(deviceId)
         .then((result) => {
           if (cancelled) return;
           setDetail(result);
-          const jobTerminal = result.job !== null && isTerminalJobState(result.job.state);
-          if (result.enrollment_state === "ENROLLED" || jobTerminal) {
+          if (result.job?.job_id !== activeJobId || !isTerminalJobState(result.job.state) || requestingInventory) {
+            return;
+          }
+          if (phase === "confirming" && result.enrollment_state === "ENROLLED" && result.job.state === "COMPLETED") {
+            requestingInventory = true;
+            requestInventoryCollect(deviceId)
+              .then(({ job_id }) => {
+                if (cancelled) return;
+                setActiveJobId(job_id);
+                setPhase("collecting");
+              })
+              .catch((err) => {
+                if (cancelled) return;
+                setSubmitError(describeApiError(err));
+                setPhase("terminal");
+              });
+            return;
+          }
+          if (phase === "collecting" || result.job.outcome !== "SUCCESS") {
             setPhase("terminal");
           }
         })
@@ -166,7 +186,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, [phase, deviceId]);
+  }, [phase, deviceId, activeJobId]);
 
   // 14F section 3: poll GET /discovery/runs/{run_id} until FINISHED/FAILED.
   useEffect(() => {
@@ -238,7 +258,8 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
       try {
         const result = await addDeviceSingle(address, role, vendor, credentialId);
         setDeviceId(result.device_id);
-        setPhase("polling");
+        setActiveJobId(result.job_id);
+        setPhase("confirming");
       } catch (err) {
         const apiErr = err as ApiError;
         if (apiErr.status === 422) {
@@ -345,7 +366,8 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
 
   const dialogBusy =
     trustBusy || phase === "submitting" ||
-    phase === "polling" ||
+    phase === "confirming" ||
+    phase === "collecting" ||
     discoveryPhase === "starting" ||
     discoveryPhase === "polling" ||
     discoveryPhase === "importing";
@@ -462,10 +484,12 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
           </Stack>
         )}
 
-        {mode === "single" && (phase === "submitting" || phase === "polling") && (
+        {mode === "single" && (phase === "submitting" || phase === "confirming" || phase === "collecting") && (
           <Stack spacing={1.5} alignItems="center" sx={{ py: 2 }}>
             <Typography variant="body1">
-              {phase === "submitting" ? "Connecting…" : jobPhaseLabel(detail?.job?.state ?? "REQUESTED")}
+              {phase === "submitting" ? "Starting credential check…"
+                : phase === "confirming" ? `Checking credentials: ${jobPhaseLabel(detail?.job?.state ?? "REQUESTED")}`
+                  : `Collecting inventory: ${jobPhaseLabel(detail?.job?.state ?? "REQUESTED")}`}
             </Typography>
             <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
               {address}
@@ -490,7 +514,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
             {success && peerMessage && <Typography variant="body2">{peerMessage}</Typography>}
             {!success && (
               <Typography variant="body2" color="error">
-                {detail.job?.terminal_reason ?? "Enrollment did not complete."}
+                {submitError ?? detail.job?.terminal_reason ?? "Enrollment did not complete."}
               </Typography>
             )}
           </Stack>

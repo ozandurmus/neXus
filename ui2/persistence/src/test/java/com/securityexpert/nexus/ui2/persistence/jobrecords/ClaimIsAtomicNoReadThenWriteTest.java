@@ -52,10 +52,13 @@ class ClaimIsAtomicNoReadThenWriteTest {
         assertEquals(1, updateStatementCount, "the claim statement must be exactly one UPDATE jobs statement");
         assertEquals(1, forUpdateCount, "exactly one FOR UPDATE SKIP LOCKED row-locking clause");
         assertEquals(1, returningCount, "the claim statement must carry exactly one RETURNING clause");
-        assertEquals(1, selectCount, "the one SELECT must be the correlated subquery, not a separate statement");
+        assertEquals(3, selectCount,
+                "the claim must include its lock, candidate, and active-inventory count in one statement");
         assertTrue(sql.contains("FOR UPDATE SKIP LOCKED"), "must use FOR UPDATE SKIP LOCKED (C2 §4.1)");
-        assertTrue(sql.indexOf("SELECT") > sql.indexOf("WHERE job_id = ("),
-                "the SELECT must be nested inside the UPDATE's WHERE clause, not precede it as a separate statement");
+        assertTrue(sql.contains("pg_advisory_xact_lock(294611)"),
+                "the global inventory limit must serialize concurrent claims");
+        assertTrue(sql.contains("state IN ('CLAIMED', 'EXECUTING')") && sql.contains(") < 5)"),
+                "at most five active inventory jobs may be claimed globally");
     }
 
     @Test

@@ -1,7 +1,6 @@
 package com.securityexpert.nexus.ui2.service.security;
 
 import java.util.Optional;
-import java.util.Set;
 
 import com.securityexpert.nexus.ui2.platform.RoleToken;
 
@@ -16,23 +15,8 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
  *
  * @param consoleSubmittable {@code false} means {@code ActionClass} 1: {@code E3}
  *                            refuses it unconditionally, every role (C3 §6.1)
- * @param requiredRoleTokens  an empty set means {@code NO_APPLICABLE_AUTHORITY}
+ * @param requiredRoleToken   {@code empty} means {@code NO_APPLICABLE_AUTHORITY}
  *                             (open to any authenticated session) at {@code E4}
  */
-public record ActionDescriptor(String actionId, boolean consoleSubmittable,
-        Set<RoleToken> requiredRoleTokens) {
-
-    public ActionDescriptor {
-        requiredRoleTokens = Set.copyOf(requiredRoleTokens);
-    }
-
-    /** Compatibility constructor for actions that require at most one role. */
-    public ActionDescriptor(String actionId, boolean consoleSubmittable, Optional<RoleToken> requiredRoleToken) {
-        this(actionId, consoleSubmittable, requiredRoleToken.map(Set::of).orElseGet(Set::of));
-    }
-
-    /** Compatibility view for single-role actions; multi-role actions return empty. */
-    public Optional<RoleToken> requiredRoleToken() {
-        return requiredRoleTokens.size() == 1 ? requiredRoleTokens.stream().findFirst() : Optional.empty();
-    }
+public record ActionDescriptor(String actionId, boolean consoleSubmittable, Optional<RoleToken> requiredRoleToken) {
 }

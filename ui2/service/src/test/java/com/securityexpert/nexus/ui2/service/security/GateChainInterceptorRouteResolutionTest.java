@@ -56,14 +56,6 @@ class GateChainInterceptorSecurityTest {
     }
 
     @Test
-    void auditLogRouteResolvesToItsDedicatedAction() throws Exception {
-        var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
-        var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
-        method.setAccessible(true);
-        assertEquals(ActionRegistry.AUDIT_LOG_READ, method.invoke(interceptor, "GET", "/audit-log"));
-    }
-
-    @Test
     void theOriginalLastSegmentRouteStillResolvesOnItsFirstWildcardAttempt() throws Exception {
         assertEquals("device_read", actionIdFor("GET", "/devices/device-1"));
     }

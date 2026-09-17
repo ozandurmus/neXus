@@ -26,6 +26,9 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 public final class JooqJobLeaseDao implements JobLeaseDao {
 
     static final String CLAIM_SQL = """
+            WITH inventory_claim_lock AS (
+                SELECT pg_advisory_xact_lock(294611)
+            )
             UPDATE jobs
             SET state = 'CLAIMED',
                 lease_worker_id = {0},
@@ -33,9 +36,13 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
                 lease_expires_at = now() + ({1} || ' seconds')::interval,
                 last_heartbeat_at = now()
             WHERE job_id = (
-                SELECT job_id FROM jobs
+                SELECT job_id FROM jobs, inventory_claim_lock
                 WHERE state = 'REQUESTED'
                   AND capability_id = ANY(string_to_array({2}, ','))
+                  AND (capability_id <> ALL(ARRAY['cp_inventory_collect', 'pan_inventory_collect'])
+                    OR (SELECT count(*) FROM jobs
+                        WHERE state IN ('CLAIMED', 'EXECUTING')
+                          AND capability_id = ANY(ARRAY['cp_inventory_collect', 'pan_inventory_collect'])) < 5)
                 ORDER BY submitted_at
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1

@@ -17,15 +17,6 @@ export interface ApiError {
   readonly body: Record<string, unknown>;
 }
 
-export interface AuditEvent {
-  readonly id: number;
-  readonly occurred_at: string;
-  readonly actor: string;
-  readonly action: string;
-  readonly outcome: string;
-  readonly target: string;
-}
-
 async function csrfToken(): Promise<string | undefined> {
   try {
     const response = await fetch("/session/status", { credentials: "include" });
@@ -69,10 +60,6 @@ async function callText(path: string): Promise<string> {
 
 export function listLocalIdentities(): Promise<{ identities: LocalIdentityView[] }> {
   return call("/local-identities", "GET");
-}
-
-export function listAuditEvents(): Promise<{ events: AuditEvent[] }> {
-  return call("/audit-log", "GET");
 }
 
 export interface BackupArtefact {

@@ -2,7 +2,6 @@ package com.securityexpert.nexus.ui2.service.security;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.securityexpert.nexus.ui2.platform.RoleToken;
@@ -87,8 +86,6 @@ public final class ActionRegistry {
      * not simulated now).
      */
     public static final String PROJECT_PLAN_READ = "project_plan_read";
-    /** NXS-LOCAL-0283: global audit-log summary, restricted to security or compliance administration. */
-    public static final String AUDIT_LOG_READ = "audit_log_read";
 
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
@@ -144,8 +141,6 @@ public final class ActionRegistry {
         register(new ActionDescriptor(DEVICE_BACKUP_READ, true, Optional.empty()));
         // WORKER.md: same open-to-any-authenticated-session gate as DEVICE_READ.
         register(new ActionDescriptor(PROJECT_PLAN_READ, true, Optional.empty()));
-        register(new ActionDescriptor(AUDIT_LOG_READ, true,
-                Set.of(RoleToken.SECURITY_ADMIN, RoleToken.COMPLIANCE_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

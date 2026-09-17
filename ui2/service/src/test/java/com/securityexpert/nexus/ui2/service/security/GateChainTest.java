@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import com.securityexpert.nexus.ui2.platform.Argon2PasswordHasher;
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
-import com.securityexpert.nexus.ui2.platform.RoleToken;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.AuthzDecisionRepository;
@@ -317,32 +316,6 @@ class GateChainTest {
                             Optional.of("https://ui2.example.com"), action, Optional.empty()), NOW);
             assertTrue(outcome instanceof GateOutcome.Refused);
             assertEquals("E4", ((GateOutcome.Refused) outcome).gate());
-        }
-    }
-
-    @Test
-    void auditLogReadPermitsEitherSecurityOrComplianceAdmin() {
-        var groupCipher = cipher();
-        FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
-        bindings.bindings.add(new RoleBindingRecord("fixture-security-binding", RoleToken.SECURITY_ADMIN.token(),
-                groupCipher.encryptDirectory("fixture-security-group", "synthetic",
-                        com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP),
-                "k1", "fixture-creator", NOW, Optional.empty(), Optional.empty(),
-                com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP, "synthetic"));
-        bindings.bindings.add(new RoleBindingRecord("fixture-compliance-binding", RoleToken.COMPLIANCE_ADMIN.token(),
-                groupCipher.encryptDirectory("fixture-compliance-group", "synthetic",
-                        com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP),
-                "k1", "fixture-creator", NOW, Optional.empty(), Optional.empty(),
-                com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP, "synthetic"));
-
-        for (String group : List.of("fixture-security-group", "fixture-compliance-group")) {
-            FakeSessionRepository sessions = new FakeSessionRepository();
-            sessions.put(activeSession(SessionHasher.hash("fixture-audit-cookie-" + group)));
-            var evaluator = new RbacEvaluator(bindings, new FakeActorAuthzStateRepository(Set.of(group), groupCipher), groupCipher);
-            var chain = new GateChain(sessions, new ActionRegistry(), evaluator, new FakeAuthzDecisionRepository());
-            GateOutcome outcome = chain.evaluate(new GateRequest("GET", Optional.of("fixture-audit-cookie-" + group),
-                    Optional.empty(), Optional.empty(), ActionRegistry.AUDIT_LOG_READ, Optional.empty()), NOW);
-            assertTrue(outcome instanceof GateOutcome.Proceed, group + " should read the audit log: " + outcome);
         }
     }
 

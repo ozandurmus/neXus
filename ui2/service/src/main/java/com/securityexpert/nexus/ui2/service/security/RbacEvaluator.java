@@ -3,7 +3,6 @@ package com.securityexpert.nexus.ui2.service.security;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import com.securityexpert.nexus.ui2.platform.DirectoryBindingKind;
 
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
@@ -176,20 +175,5 @@ public final class RbacEvaluator {
         if (unevaluable) return directoryNotEvaluable();
         return new Decision(AuthzOutcome.DENIED, Optional.of(AUTHORITY),
                 Optional.of(REASON_ACTOR_NOT_IN_REQUIRED_BINDING), Optional.empty());
-    }
-
-    /** Permits an actor holding any one of the explicitly listed role tokens. */
-    public Decision evaluate(String actorFingerprint, Set<RoleToken> requiredTokens, Instant now) {
-        if (requiredTokens.isEmpty()) {
-            return evaluate(actorFingerprint, Optional.empty(), now);
-        }
-        List<Decision> decisions = requiredTokens.stream()
-                .sorted(java.util.Comparator.comparing(RoleToken::token))
-                .map(token -> evaluate(actorFingerprint, Optional.of(token), now))
-                .toList();
-        return decisions.stream().filter(decision -> decision.outcome().proceeds()).findFirst()
-                .orElseGet(() -> decisions.stream()
-                        .filter(decision -> decision.outcome() == AuthzOutcome.AUTHZ_NOT_EVALUATED)
-                        .findFirst().orElse(decisions.get(0)));
     }
 }

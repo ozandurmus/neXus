@@ -71,8 +71,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /backups", ActionRegistry.DEVICE_BACKUP_READ),
             // WORKER.md (movement NXS-LOCAL-0174): body-only, no path variable,
             // same shape as /notifications' own route.
-            Map.entry("GET /project-plan", ActionRegistry.PROJECT_PLAN_READ),
-            Map.entry("GET /audit-log", ActionRegistry.AUDIT_LOG_READ));
+            Map.entry("GET /project-plan", ActionRegistry.PROJECT_PLAN_READ));
 
     /**
      * Routes whose endpoint performs its own deliberately non-RBAC security

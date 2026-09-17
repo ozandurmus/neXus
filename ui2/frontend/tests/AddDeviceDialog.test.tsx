@@ -70,6 +70,7 @@ describe("AddDeviceDialog", () => {
       "/credentials": CREDENTIALS_ROUTE,
       "/session/status": { body: { csrf_token: "test-csrf" } },
       "/devices/add-single": { body: { device_id: "dev-1", job_id: "job-1", enrollment_state: "DRAFT" } },
+      "/devices/dev-1/inventory/collect": { status: 202, body: { job_id: "job-2" } },
       "/devices/dev-1": [
         {
           body: {
@@ -99,6 +100,34 @@ describe("AddDeviceDialog", () => {
             job: { job_id: "job-1", state: "COMPLETED", outcome: "SUCCESS", terminal_reason: null },
           },
         },
+        {
+          body: {
+            device_id: "dev-1",
+            vendor_hint: "check_point",
+            enrollment_state: "ENROLLED",
+            disabled: false,
+            facts: { hostname: "fw-edge-1", model: "Quantum", software_version: "R81.20", ha_role: "active" },
+            peer_follow_outcome: "CORROBORATED",
+            peer_follow_reason: null,
+            identity_mismatch_state: "NONE",
+            cluster_member_ref: null,
+            job: { job_id: "job-2", state: "EXECUTING", outcome: null, terminal_reason: null },
+          },
+        },
+        {
+          body: {
+            device_id: "dev-1",
+            vendor_hint: "check_point",
+            enrollment_state: "ENROLLED",
+            disabled: false,
+            facts: { hostname: "fw-edge-1", model: "Quantum", software_version: "R81.20", ha_role: "active" },
+            peer_follow_outcome: "CORROBORATED",
+            peer_follow_reason: null,
+            identity_mismatch_state: "NONE",
+            cluster_member_ref: null,
+            job: { job_id: "job-2", state: "COMPLETED", outcome: "SUCCESS", terminal_reason: null },
+          },
+        },
       ],
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -120,6 +149,10 @@ describe("AddDeviceDialog", () => {
     expect(addCall).toBeDefined();
     const body = JSON.parse(addCall![1].body as string);
     expect(body.role).toBe("gateway");
+    expect(fetchMock.mock.calls.some(([input]) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      return url.split("?")[0] === "/devices/dev-1/inventory/collect";
+    })).toBe(true);
   }, 10000);
 
   it("shows the 422 reason_code inline and never opens a polling loop", async () => {
