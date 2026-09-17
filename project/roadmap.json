@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0309",
+  "current_build": "NXS-LOCAL-0312",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,11 +150,10 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0309",
-      "title": "Check Point Command Gate (cp_failover_command_gate_batch)",
-      "status": "done",
-      "started": "2026-09-17",
-      "completed": "2026-09-17"
+      "build": "NXS-LOCAL-0312",
+      "title": "Mockup Build (Preview Synthetic Data Wiring)",
+      "status": "in_progress",
+      "started": "2026-09-17"
     },
     "next": {
       "build": "M12",

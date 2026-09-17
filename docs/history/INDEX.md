@@ -6,6 +6,9 @@ regenerate. Open a row's linked document only when you need that build's detail.
 
 | Build | Status | Dates | Title | Summary | Docs |
 | --- | --- | --- | --- | --- | --- |
+| `NXS-LOCAL-0312` | in_progress | 2026-09-17 | Mockup Build (Preview Synthetic Data Wiring) | Wire the synthetic data (mockup build) into the preview screens for PO design review, isolated from product data. | — |
+| `NXS-LOCAL-0311` | in_progress | 2026-09-17 | Private Replay Slice 2 (Offline Typed Exporter) | Phase A exporter: offline typed exporter, package validator, extending support_bundle primitives with synthetic inputs. | — |
+| `NXS-LOCAL-0310` | in_progress | 2026-09-17 | Palo Alto Inventory & Discovery Implementation | Implement Java capability parsers and API clients for PAN Discovery/Inventory, adhering to the FROZEN PAN_DISCOVERY_CONTRACT.md. | — |
 | `NXS-LOCAL-0309` | done | 2026-09-17 | Check Point Command Gate (cp_failover_command_gate_batch) | Wrote Command Gate document for cphaprob commands. | — |
 | `NXS-LOCAL-0308` | in_progress | 2026-09-17 | API Router Fail-Closed (api_routes_without_security_mapping_refused_by_default) | Default deny for unmapped API routes in GateChainInterceptor. | — |
 | `NXS-LOCAL-0307` | in_progress | 2026-09-17 | Audit Logs UI (ui2_b1_08_audit_logs_screen) | React frontend for Administration screen to display paginated audit logs. | — |

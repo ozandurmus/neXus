@@ -3,6 +3,11 @@ import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
 
 import { m3 } from "../theme/m3Theme";
 import { ADMIN_DEVICES } from "./previewData";
@@ -30,6 +35,7 @@ export function AdministrationPreview() {
             ))}
           </Stack>
         </Card>
+        
         <Stack spacing={2}>
           <Card sx={{ bgcolor: m3.scLow, borderRadius: "16px", p: 2.5, boxShadow: "none" }}>
             <Typography variant="h4" sx={{ mb: 0.5 }}>Enrollment</Typography>
@@ -38,6 +44,11 @@ export function AdministrationPreview() {
           <Card sx={{ bgcolor: m3.scLow, borderRadius: "16px", p: 2.5, boxShadow: "none" }}>
             <Typography variant="h4" sx={{ mb: 0.5 }}>Collection scope</Typography>
             <Typography variant="body2">Backup creation stays off until a device enters the pilot allowlist.</Typography>
+          </Card>
+          <Card sx={{ bgcolor: m3.scLow, borderRadius: "16px", p: 2.5, boxShadow: "none" }}>
+            <Typography variant="h4" sx={{ mb: 0.5 }}>LDAP Settings</Typography>
+            <Typography variant="body2">Active Profile: Corporate AD</Typography>
+            <Typography variant="body2">Status: Connected</Typography>
           </Card>
         </Stack>
       </Box>

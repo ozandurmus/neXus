@@ -53,8 +53,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /roles", ActionRegistry.RBAC_ROLE_WRITE),
             Map.entry("PUT /roles/*", ActionRegistry.RBAC_ROLE_WRITE),
             Map.entry("DELETE /roles/*", ActionRegistry.RBAC_ROLE_WRITE),
-            Map.entry("GET /config/ldap", ActionRegistry.LDAP_CONFIG_READ),
-            Map.entry("POST /config/ldap", ActionRegistry.LDAP_CONFIG_WRITE),
+            Map.entry("GET /api/v2/config/ldap", ActionRegistry.LDAP_CONFIG_READ),
+            Map.entry("PUT /api/v2/config/ldap", ActionRegistry.LDAP_CONFIG_WRITE),
             Map.entry("GET /audit-logs", ActionRegistry.AUDIT_LOG_READ),
             Map.entry("GET /api/v2/jobs", ActionRegistry.JOB_LOG_READ),
             // 13G: one resource, body-only (no path variable), matching

@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/config/ldap")
+@RequestMapping("/api/v2/config/ldap")
 public class DirectorySettingsController {
     private final DirectoryProfileRepository repository;
 
@@ -20,7 +20,7 @@ public class DirectorySettingsController {
         return repository.findActiveProfile().orElse(null);
     }
 
-    @PostMapping
+    @PutMapping
     public DirectoryProfileRecord saveProfile(@RequestBody DirectoryProfileRecord record) {
         return repository.save(record);
     }

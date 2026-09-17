@@ -15,7 +15,7 @@ export function DirectorySettingsPanel() {
     const [message, setMessage] = useState<{ text: string, type: "success" | "error" } | null>(null);
 
     useEffect(() => {
-        fetch('/config/ldap').then(async r => {
+        fetch('/api/v2/config/ldap').then(async r => {
             const text = await r.text();
             if (text) {
                 setProfile(JSON.parse(text));
@@ -44,8 +44,8 @@ export function DirectorySettingsPanel() {
         setSaving(true);
         setMessage(null);
         try {
-            const res = await fetch('/config/ldap', {
-                method: 'POST',
+            const res = await fetch('/api/v2/config/ldap', {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(profile)
             });

@@ -3,6 +3,33 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0312",
+      "status": "in_progress",
+      "title": "Mockup Build (Preview Synthetic Data Wiring)",
+      "summary": "Wire the synthetic data (mockup build) into the preview screens for PO design review, isolated from product data.",
+      "started": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0311",
+      "status": "in_progress",
+      "title": "Private Replay Slice 2 (Offline Typed Exporter)",
+      "summary": "Phase A exporter: offline typed exporter, package validator, extending support_bundle primitives with synthetic inputs.",
+      "started": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0310",
+      "status": "in_progress",
+      "title": "Palo Alto Inventory & Discovery Implementation",
+      "summary": "Implement Java capability parsers and API clients for PAN Discovery/Inventory, adhering to the FROZEN PAN_DISCOVERY_CONTRACT.md.",
+      "started": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0309",
       "status": "done",
       "title": "Check Point Command Gate (cp_failover_command_gate_batch)",

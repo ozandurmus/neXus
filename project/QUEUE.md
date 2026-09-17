@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0310 · Track: PCP.x · Generated: 2026-09-17T16:06:50Z
+Build: NXS-LOCAL-0312 · Track: PCP.x · Generated: 2026-09-17T16:12:33Z
 
 ## Now
-- NXS-LOCAL-0310 — Palo Alto Inventory & Discovery Implementation (in_progress)
+- NXS-LOCAL-0312 — Mockup Build (Preview Synthetic Data Wiring) (in_progress)
 ## Next
 - M12 — M12 -- per-device / per-capability schedules (D5 producer) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -108,8 +108,8 @@ Build: NXS-LOCAL-0310 · Track: PCP.x · Generated: 2026-09-17T16:06:50Z
 - po_cp_backup_async_semantics — CP R81.20 backup is asynchronous, contradicting the blocking-backup assu
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
+- NXS-LOCAL-0312 (in_progress)
+- NXS-LOCAL-0311 (in_progress)
 - NXS-LOCAL-0310 (in_progress)
 - NXS-LOCAL-0309 (done)
 - NXS-LOCAL-0308 (in_progress)
-- NXS-LOCAL-0307 (in_progress)
-- NXS-LOCAL-0306 (done)
