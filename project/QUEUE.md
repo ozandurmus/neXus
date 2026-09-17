@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0242 · Track: PCP.x · Generated: 2026-09-15T18:16:47Z
+Build: NXS-LOCAL-0176 · Track: PCP.x · Generated: 2026-09-17T06:33:10Z
 
 ## Now
-- NXS-LOCAL-0242 — Java Project Plan reconciliation with explicit source provenance (in_progress)
+- NXS-LOCAL-0176 — Expire a past-deadline session on read so it never blocks a login (automated_validated)
 ## Next
 - M12 — M12 -- per-device / per-capability schedules (D5 producer) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -33,6 +33,7 @@ Build: NXS-LOCAL-0242 · Track: PCP.x · Generated: 2026-09-15T18:16:47Z
 - P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP l (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
 - P1/planned pan_collection_contract_from_measurement — Write the Palo Alto collection contract from the PAN_COLLE (target: docs/design/PAN_COLLECTION_MEASUREMENT_B)
 - P1/planned relay_id_reuse_when_record_uncommitted — local_relay _next_id reissues an id whose JSON was never c (target: GOV.ORCH successor or scripts/local_rela)
+- P1/planned ui2_audit_logging — Audit logging for device and user management (target: ui2)
 - P1/planned ui2_auth_placement_second_authenticated_surface — UI2 AUTH-PLACEMENT: where session and RBAC enforcement liv (target: PO_DECISION_RECORD_2026_09_13D section 3)
 - P1/planned ui2_b1_08_audit_logs_screen — UI2 B1-8 -- audit & logs screen (every mutation since B1-2 (target: workflow §5 B1-8)
 - P1/planned ui2_b1_09_device_workspace_first_read_screen — UI2 B1-9 -- device workspace: first read screen; RBAC visi (target: workflow §5 B1-9)
@@ -40,6 +41,7 @@ Build: NXS-LOCAL-0242 · Track: PCP.x · Generated: 2026-09-15T18:16:47Z
 - P1/planned ui2_b1_11_acceptance_scenario_worker_loss — UI2 B1-11 -- acceptance scenario B: worker killed mid-step (target: workflow §5 B1-11)
 - P1/planned ui2_database_roles_and_data_ownership — UI2 database roles: least-privilege runtime roles per serv (target: PO_DECISION_RECORD_2026_09_13D section 3)
 - P1/planned ui2_device_session_one_per_device — UI2 transport rule: one SSH session per device per run, a (target: PO rule 2026-09-12; CP discovery already)
+- P1/planned ui2_ldap_config — LDAP Configuration Screen (target: ui2)
 - P1/planned ui2_networkpolicy_in_cluster_db_reach — NetworkPolicy restricting in-cluster reach to PostgreSQL (target: UI2_0_B1_01C successor)
 - P1/planned ui2_pan_transport_no_credentials_in_url — UI2 Palo Alto transport: no credential ever appears in a U (target: PAN_DISCOVERY_CONTRACT.md T-1/T-5; the P)
 - P1/planned ui2_reproducible_in_cluster_image_build — UI2 reproducible in-cluster image build and release assura (target: UI2_0_B1_01C in-cluster OCI build; 13D B)
@@ -54,9 +56,11 @@ Build: NXS-LOCAL-0242 · Track: PCP.x · Generated: 2026-09-15T18:16:47Z
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
 - P2/planned project_plan_crypto_placeholder_sentinel_lost
 - P2/planned ui2_password_policy_configurable
+- P2/planned ui2_role_display
 - P3/planned cp_cphaprob_peer_observation_corroboration
 - P3/planned device_role_vocabulary_declared_twice
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race
+- P3/planned ui2_select_all
 - P3/planned waf_fortiweb_capability_scope_and_measurement
 - P3/planned workbench_borrow_from_agent_orchestration_tools
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
@@ -105,8 +109,8 @@ Build: NXS-LOCAL-0242 · Track: PCP.x · Generated: 2026-09-15T18:16:47Z
 - po_cp_backup_async_semantics — CP R81.20 backup is asynchronous, contradicting the blocking-backup assu
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
-- NXS-LOCAL-0242 (in_progress)
 - NXS-LOCAL-0176 (automated_validated)
 - NXS-LOCAL-0175 (automated_validated)
 - NXS-LOCAL-0178 (automated_validated)
 - NXS-LOCAL-0174 (automated_validated)
+- NXS-LOCAL-0170 (automated_validated)

@@ -13,9 +13,7 @@ device, and run the enrollment confirm. Inventory collection persists the
 inventory and exposes its cluster view. Configuration collection exposes an
 index view and stores encrypted artefacts. Check Point gateway backup is gated
 to the pilot allowlist. The Administration screen reads the project-plan
-payload from the repository’s project data. The Java-only projection separates
-feature delivery, release debt and converted historical lessons, with source
-revision and freshness metadata; its validation remains pending.
+payload from the repository’s project data.
 
 Discovery command gates are approved; the repository records vendor measurement
 findings for inventory and configuration. Field bindings, live discovery,
@@ -26,12 +24,13 @@ has no enabled product path.
 
 ## Active build
 
-`NXS-LOCAL-0242` — `in_progress`: reconcile the Java Project Plan and
-historical provenance. Implementation is present; Java/frontend checks are
-UNVERIFIED because the local test commands could not start. See
-[reconciliation record](docs/design/UI2_PROJECT_PLAN_RECONCILIATION.md).
-`project/java_product_plan.json` owns the Java product selection; historical
-tracks and outcomes remain intact in the original project authorities.
+`NXS-LOCAL-0285` — `done`: Check Point SSH inventory worker finished, hybrid topology contract signed.
+`UI Updates` — `done`: deployed LDAP UI, Select All, Role Display to remote K3s cluster.
+
+`NXS-LOCAL-0176` — `automated_validated`: expire a past-deadline session on
+read so it cannot block login. The newest merged movement, its predecessor
+records, and the current roadmap pointer are in `project/QUEUE.md` and
+`project/build_history.json`.
 
 ## Open Product Owner decisions
 

@@ -477,6 +477,42 @@
       "priority": "P0",
       "target": "jobs.outcome/terminal_reason/finished_at; blocks ui2_b1_07 and ui2_b1_08 being useful",
       "note": ""
+    },
+    {
+      "id": "ui2_role_display",
+      "category": "UX",
+      "title": "Connected user and role display",
+      "status": "planned",
+      "priority": "P2",
+      "target": "ui2",
+      "note": ""
+    },
+    {
+      "id": "ui2_select_all",
+      "category": "UX",
+      "title": "Select All checkbox in discovery candidate table",
+      "status": "planned",
+      "priority": "P3",
+      "target": "ui2",
+      "note": ""
+    },
+    {
+      "id": "ui2_ldap_config",
+      "category": "Identity",
+      "title": "LDAP Configuration Screen",
+      "status": "planned",
+      "priority": "P1",
+      "target": "ui2",
+      "note": ""
+    },
+    {
+      "id": "ui2_audit_logging",
+      "category": "Governance",
+      "title": "Audit logging for device and user management",
+      "status": "planned",
+      "priority": "P1",
+      "target": "ui2",
+      "note": ""
     }
   ]
 }
