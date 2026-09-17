@@ -207,7 +207,7 @@ export function InventoryScreen() {
         actions={
           <>
             <M3Button emphasis="outlined" icon="download">Export inventory</M3Button>
-            <M3Button emphasis="outlined" icon="refresh" disabled={bulkBusy} onClick={handleBulkCollect}>
+            <M3Button emphasis="outlined" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
               {bulkBusy ? "Starting..." : "Bulk Collect"}
             </M3Button>
             <M3Button emphasis="filled" icon="plus" href="?screen=administration">Add device</M3Button>
