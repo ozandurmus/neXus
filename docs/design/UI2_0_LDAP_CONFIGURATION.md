@@ -1,51 +1,47 @@
-# UI 2.0 LDAP Configuration
+# LDAP Configuration Menu Architecture
 
-**Status**: DRAFT
+## Status
 
-## 1. Overview
-This document outlines the architectural design for the LDAP Configuration Menu in UI 2.0. The goal is to move from static `application.properties` based LDAP configuration to a dynamic, database-backed configuration system that can be managed via the UI.
+**DRAFT**
 
-## 2. Requirements
-- Store LDAP connection settings (URL, bind DN, credentials, search base, etc.) in the database.
-- Provide a secure UI menu for administrators to configure LDAP settings.
-- Support runtime updates of the LDAP connection without restarting the application.
-- Securely store credentials (e.g., encrypted in the database).
+## Context
+Currently, LDAP directory settings are configured statically via `application.properties`. As part of the UI2.0 initiative, the Product Owner has requested moving these settings to a DB-backed configuration menu, allowing administrators to dynamically configure LDAP connections without restarting the application.
 
-## 3. Architecture
+## Goals
+1. Provide a persistence model for storing LDAP connection parameters dynamically in the database.
+2. Ensure secure storage of sensitive LDAP information (e.g., bind credentials).
+3. Provide a unified backend API for the UI to read, write, and test LDAP configurations.
 
-### 3.1 Database Schema
-Create a new table `ldap_configuration`:
-- `id` (Primary Key)
-- `url` (String)
-- `bind_dn` (String)
-- `bind_password` (Encrypted String)
-- `user_search_base` (String)
-- `user_search_filter` (String)
-- `group_search_base` (String)
-- `group_search_filter` (String)
-- `enabled` (Boolean)
-- `created_at` (Timestamp)
-- `updated_at` (Timestamp)
+## Architecture
 
-### 3.2 Backend Implementation
-- **Entity & Repository**: Create `LdapConfiguration` entity and `LdapConfigurationRepository`.
-- **Encryption Service**: Use a symmetric encryption utility to encrypt and decrypt the `bind_password` before saving/reading from the DB.
-- **Service Layer**: `LdapConfigurationService` to handle CRUD operations and trigger context refresh.
-- **Security Configuration**: 
-  - Implement a custom `AuthenticationProvider` or dynamic `LdapContextSource` that reads from the database.
-  - Listen for configuration changes to re-initialize the `LdapContextSource` at runtime.
+### 1. Data Model
+A new entity, `LdapConfiguration`, will be introduced to persist connection settings.
 
-### 3.3 Frontend Implementation
-- **React Components**:
-  - `LdapConfigForm`: Form for updating LDAP settings. Includes fields for URL, Bind DN, Password, Search Bases, and Filters.
-  - **Test Connection**: A button to test the LDAP connection with the provided settings before saving.
-- **State Management**: Redux/Context to manage configuration state.
+```sql
+CREATE TABLE ldap_configurations (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    url VARCHAR(512) NOT NULL,
+    base_dn VARCHAR(255) NOT NULL,
+    bind_dn VARCHAR(255),
+    bind_password_encrypted VARCHAR(1024),
+    user_search_base VARCHAR(255) NOT NULL,
+    user_search_filter VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
+```
 
-## 4. Security Considerations
-- The LDAP bind password must NEVER be sent back to the frontend in plain text. Send a placeholder (e.g., `********`) and only update it if the user provides a new value.
-- Ensure the API endpoints for managing LDAP settings are restricted to users with the `ADMIN` role or equivalent custom permission.
+### 2. Encryption of Bind Password
+Sensitive fields, specifically `bind_password_encrypted`, must be encrypted at rest using the application's existing cryptographic envelope configuration. The raw password will never be sent back to the frontend on reads; the API will return a masked placeholder (e.g., `********`).
 
-## 5. Migration Strategy
-- Provide a Flyway/Liquibase script to create the new table.
-- Implement a startup task to migrate existing `application.properties` LDAP settings to the database if the table is empty.
+### 3. Service Layer and Connection Testing
+A new `LdapConfigurationService` will manage CRUD operations for `LdapConfiguration`. It will include a `testConnection()` method that attempts a bind operation using the provided or saved credentials before marking a configuration as active.
 
+### 4. Dynamic Authentication Provider
+The authentication manager will be updated to query the database-backed `LdapConfiguration` instead of relying on the static Spring `Environment`. A cache (e.g., caffeine or Hazelcast) should be used to store parsed LDAP contexts to avoid database round-trips on every login attempt. Cache invalidation will be triggered upon any update to the configuration.
+
+## Migration Path
+1. Schema migration via Flyway to create `ldap_configurations`.
+2. One-time boot migration script to copy existing valid `application.properties` LDAP settings into the database.
+3. Update the frontend to include the new "LDAP Settings" administration panel.

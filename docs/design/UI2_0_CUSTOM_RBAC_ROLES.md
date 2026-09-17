@@ -1,59 +1,64 @@
-# UI 2.0 Custom RBAC Roles
+# Custom RBAC Roles Architecture
 
-**Status**: DRAFT
+## Status
 
-## 1. Overview
-This document outlines the architectural design for moving from a closed vocabulary `RoleToken` system to a dynamic, database-backed Custom Role-Based Access Control (RBAC) system in UI 2.0.
+**DRAFT**
 
-## 2. Requirements
-- Replace hardcoded roles (e.g., `ROLE_ADMIN`, `ROLE_USER`) with dynamic roles stored in the database.
-- Introduce granular permissions (privileges) that can be assigned to custom roles.
-- Allow administrators to create, update, and delete custom roles via the UI.
-- Assign users to one or more roles.
-- Enforce permissions at the API and UI levels.
+## Context
+The platform currently utilizes a closed vocabulary `RoleToken` for Role-Based Access Control (RBAC) (e.g., hardcoded roles like `ADMIN`, `VIEWER`). The Product Owner has requested moving to a dynamic DB-backed role/permission system to support custom roles with granular permission mappings.
 
-## 3. Architecture
+## Goals
+1. Transition from statically defined `RoleToken` enums to dynamically managed Role entities in the database.
+2. Introduce a granular Permissions model that maps to specific system actions.
+3. Expose APIs to allow administrators to create, update, and delete custom roles, and assign users to them.
 
-### 3.1 Database Schema
-Create new tables:
-- `permissions`:
-  - `id` (Primary Key)
-  - `name` (String, e.g., `READ_USERS`, `WRITE_SETTINGS`)
-  - `description` (String)
-- `roles`:
-  - `id` (Primary Key)
-  - `name` (String, unique)
-  - `description` (String)
-  - `is_system` (Boolean - to prevent deletion of default roles like Admin)
-- `role_permissions` (Join Table):
-  - `role_id` (Foreign Key)
-  - `permission_id` (Foreign Key)
-- `user_roles` (Join Table):
-  - `user_id` (Foreign Key)
-  - `role_id` (Foreign Key)
+## Architecture
 
-### 3.2 Backend Implementation
-- **Entities & Repositories**: Create entities for `Role` and `Permission`.
-- **Spring Security Integration**:
-  - Implement a custom `UserDetailsService` that loads a user's roles and their associated permissions.
-  - Map permissions to Spring Security `GrantedAuthority` (e.g., `AUTHORITY_READ_USERS`).
-- **Annotations**: Use `@PreAuthorize("hasAuthority('...')")` on controller methods instead of `@PreAuthorize("hasRole('...')")`.
-- **Service Layer**: `RoleService` for CRUD operations on roles, ensuring `is_system` roles cannot be modified or deleted improperly.
+### 1. Data Model
+Introduce `roles`, `permissions`, `role_permissions`, and map users to roles.
 
-### 3.3 Frontend Implementation
-- **React Components**:
-  - `RoleManagementView`: A data grid listing all roles.
-  - `RoleEditor`: A form to edit a role's details and a checklist/transfer list to assign permissions.
-- **UI Authorization**:
-  - Implement a `usePermissions` hook to check if the current user has specific permissions.
-  - Use an `Authorized` wrapper component to conditionally render UI elements (menus, buttons) based on permissions.
+```sql
+CREATE TABLE permissions (
+    id UUID PRIMARY KEY,
+    key VARCHAR(255) UNIQUE NOT NULL, -- e.g., 'devices:read', 'devices:write'
+    description TEXT
+);
 
-## 4. Migration Strategy
-- **Database Migration**: Flyway/Liquibase scripts to create the new tables.
-- **Data Seeding**: Insert base permissions and default roles (Admin, User).
-- **Data Migration**: Map existing user `RoleToken`s to the new `user_roles` relationships during a migration phase.
+CREATE TABLE roles (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    description TEXT,
+    is_system BOOLEAN DEFAULT FALSE, -- Predefined roles cannot be deleted
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
 
-## 5. Security Considerations
-- Ensure that the endpoint to modify roles/permissions is strictly guarded by a high-level permission (e.g., `MANAGE_ROLES`).
-- Prevent modification of the user's own roles to avoid privilege escalation.
+CREATE TABLE role_permissions (
+    role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+    permission_id UUID REFERENCES permissions(id) ON DELETE CASCADE,
+    PRIMARY KEY (role_id, permission_id)
+);
 
+CREATE TABLE user_roles (
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, role_id)
+);
+```
+
+### 2. Migration of RoleToken
+Existing `RoleToken` values will be migrated into `roles` with `is_system = TRUE`. A bootstrap script will populate the `permissions` table with the known capabilities of the system and associate them with the system roles to maintain backward compatibility for existing users.
+
+### 3. API Changes
+- `GET /api/v1/roles`: List all roles.
+- `POST /api/v1/roles`: Create a custom role.
+- `PUT /api/v1/roles/{id}`: Update permissions for a custom role.
+- `DELETE /api/v1/roles/{id}`: Delete a custom role (blocked if `is_system=TRUE`).
+
+### 4. Enforcement
+The authorization interceptors (Spring Security `@PreAuthorize` or custom HandlerInterceptors) will be updated to check against the new `permissions` table instead of relying directly on role names (e.g., `hasAuthority('devices:write')` instead of `hasRole('ADMIN')`).
+
+## Deployment / Rollout Strategy
+1. **Phase 1**: Database schema updates and population of default roles/permissions.
+2. **Phase 2**: Migrate internal authorization logic to check permissions instead of hardcoded roles.
+3. **Phase 3**: Expose the UI for administrators to create custom roles and assign them to users.
