@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0312 · Track: PCP.x · Generated: 2026-09-17T16:12:33Z
+Build: NXS-LOCAL-0313 · Track: PCP.x · Generated: 2026-09-17T17:03:53Z
 
 ## Now
-- NXS-LOCAL-0312 — Mockup Build (Preview Synthetic Data Wiring) (in_progress)
+- NXS-LOCAL-0313 — Device Workspace UI Revert (Slider and Info Menu) (in_progress)
 ## Next
 - M12 — M12 -- per-device / per-capability schedules (D5 producer) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -13,6 +13,7 @@ Build: NXS-LOCAL-0312 · Track: PCP.x · Generated: 2026-09-17T16:12:33Z
 - P0/planned backup_retrieval_audit_fail_closed_and_reason_persists — Backup retrieval must be fail-closed on its audit row, and (target: BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09)
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason a (target: jobs.outcome/terminal_reason/finished_at)
+- P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices ( (target: )
 - P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner vs DeviceComposit)
 - P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect, warn with the (target: ui2 worker HostKeyVerifier / TrustRuleRe)
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
@@ -108,8 +109,8 @@ Build: NXS-LOCAL-0312 · Track: PCP.x · Generated: 2026-09-17T16:12:33Z
 - po_cp_backup_async_semantics — CP R81.20 backup is asynchronous, contradicting the blocking-backup assu
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
-- NXS-LOCAL-0312 (in_progress)
-- NXS-LOCAL-0311 (in_progress)
-- NXS-LOCAL-0310 (in_progress)
+- NXS-LOCAL-0313 (done)
+- NXS-LOCAL-0312 (done)
+- NXS-LOCAL-0311 (done)
+- NXS-LOCAL-0310 (done)
 - NXS-LOCAL-0309 (done)
-- NXS-LOCAL-0308 (in_progress)

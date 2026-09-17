@@ -3,8 +3,17 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0313",
+      "status": "done",
+      "title": "Device Workspace UI Revert (Slider and Info Menu)",
+      "summary": "Revert/fix DeviceWorkspaceScreen.tsx to feature the task slider layout and info menu requested by the PO.",
+      "started": "2026-09-17",
+      "movement": "UI",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0312",
-      "status": "in_progress",
+      "status": "done",
       "title": "Mockup Build (Preview Synthetic Data Wiring)",
       "summary": "Wire the synthetic data (mockup build) into the preview screens for PO design review, isolated from product data.",
       "started": "2026-09-17",
@@ -13,7 +22,7 @@
     },
     {
       "build": "NXS-LOCAL-0311",
-      "status": "in_progress",
+      "status": "done",
       "title": "Private Replay Slice 2 (Offline Typed Exporter)",
       "summary": "Phase A exporter: offline typed exporter, package validator, extending support_bundle primitives with synthetic inputs.",
       "started": "2026-09-17",
@@ -22,7 +31,7 @@
     },
     {
       "build": "NXS-LOCAL-0310",
-      "status": "in_progress",
+      "status": "done",
       "title": "Palo Alto Inventory & Discovery Implementation",
       "summary": "Implement Java capability parsers and API clients for PAN Discovery/Inventory, adhering to the FROZEN PAN_DISCOVERY_CONTRACT.md.",
       "started": "2026-09-17",
@@ -41,7 +50,7 @@
     },
     {
       "build": "NXS-LOCAL-0308",
-      "status": "in_progress",
+      "status": "done",
       "title": "API Router Fail-Closed (api_routes_without_security_mapping_refused_by_default)",
       "summary": "Default deny for unmapped API routes in GateChainInterceptor.",
       "started": "2026-09-17",
@@ -50,7 +59,7 @@
     },
     {
       "build": "NXS-LOCAL-0307",
-      "status": "in_progress",
+      "status": "done",
       "title": "Audit Logs UI (ui2_b1_08_audit_logs_screen)",
       "summary": "React frontend for Administration screen to display paginated audit logs.",
       "started": "2026-09-17",
@@ -119,7 +128,7 @@
     },
     {
       "build": "NXS-LOCAL-0242",
-      "status": "in_progress",
+      "status": "done",
       "title": "Java Project Plan reconciliation with explicit source provenance",
       "summary": "Java roadmap, delivery debt and converted lessons now have separate projections. Java and frontend validation remain pending.",
       "started": "2026-09-15",
@@ -300,7 +309,7 @@
     },
     {
       "build": "ui2_b1_01_skeleton_ci_docker",
-      "status": "in_progress",
+      "status": "done",
       "title": "UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze)",
       "summary": "The worker added the DRAFT B1-1 contract for ui2 module boundaries, dependency direction, reproducible builds, isolated CI, Docker, Testcontainers/Flyway, and 15 runnable checks.",
       "started": "2026-09-10",
@@ -330,7 +339,7 @@
     },
     {
       "build": "ui2_b0_baseline_directory",
-      "status": "in_progress",
+      "status": "done",
       "title": "UI2 B0 -- baseline directory (DRAFT, for Product Owner freeze)",
       "summary": "New docs/design/UI2_0_BASELINE_DIRECTORY.md: a single index cataloguing owner document/section/version for the six B0-8 baseline concerns -- product objects and navigation (adopts NAVIGATION_INFORMATION_ARCHITECTURE.md's frozen D-NAV princi",
       "started": "2026-09-09",
@@ -345,7 +354,7 @@
     },
     {
       "build": "ui2_b0_extraction_tooling",
-      "status": "in_progress",
+      "status": "done",
       "title": "UI2 B0/B0-9 -- extraction tooling (Line-1 Python): Private Replay tokenizer over an evidence/capture directory, C6-layout fixture set, shape-preserving encoding",
       "summary": "New scripts/ui2_extract_fixtures.py implements docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md section 3: reads every *.json file under a capture directory, tokenizes it through one utils.support_bundle.Tokenizer session (cross-outpu",
       "started": "2026-09-09",
@@ -360,7 +369,7 @@
     },
     {
       "build": "ui2_b0_c7_backup_artefact_restore_engine_contract",
-      "status": "in_progress",
+      "status": "done",
       "title": "UI2 B0/C7 -- backup, artefact and restore engine contract (DRAFT, for Product Owner freeze)",
       "summary": "New docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md: the backup profile model restated field-for-field against C1/C2/C4's real schema (BackupRun/StepResult are C2 jobs/job_step_attempt rows, not new tables; an APPROVED profi",
       "started": "2026-09-09",
@@ -375,7 +384,7 @@
     },
     {
       "build": "ui2_b0_c5_amendments_bundle",
-      "status": "in_progress",
+      "status": "done",
       "title": "UI2 B0/C5 -- amendments bundle (DRAFT, for Product Owner freeze)",
       "summary": "New docs/design/UI2_0_C5_AMENDMENTS_BUNDLE.md stating, and applying, every textual amendment C1-C4 already require of documents outside themselves: the CON.0 separate-shell text (cited, not edited -- the file is FROZEN and outside this move",
       "started": "2026-09-09",
@@ -390,7 +399,7 @@
     },
     {
       "build": "ui2_b0_c6_capability_extraction_contract",
-      "status": "in_progress",
+      "status": "done",
       "title": "UI2 B0/C6 -- capability extraction contract (DRAFT, for Product Owner freeze)",
       "summary": "New docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md: the extraction procedure as an ordered checklist against C4's exact registry schema, with a mandatory existing-produces_facts pre-check (worked negative example: OP.0 HA readiness",
       "started": "2026-09-09",
@@ -405,7 +414,7 @@
     },
     {
       "build": "ui2_b0_c3_identity_sessions_rbac_contract",
-      "status": "in_progress",
+      "status": "done",
       "title": "UI2 B0/C3 -- identity, sessions and RBAC contract (DRAFT, for Product Owner freeze)",
       "summary": "New docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md: LDAP bind (UnboundID, no local password storage), a structurally-enforced single-active-session rule with takeover/refuse, role tokens -> bindings -> AD group references (encrypte",
       "started": "2026-09-09",
@@ -420,7 +429,7 @@
     },
     {
       "build": "ui2_b0_c4_capability_registry_gate_resolution_contract",
-      "status": "in_progress",
+      "status": "done",
       "title": "UI2 B0/C4 -- capability registry & command-gate resolution contract (DRAFT, for Product Owner freeze)",
       "summary": "New docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md: the runtime capability registry schema (transport, closed 8-member step-kind set, KNOWN/UNKNOWN/NOT_APPLICABLE field states, shared-fact reuse) as the target of workf",
       "started": "2026-09-09",
@@ -435,7 +444,7 @@
     },
     {
       "build": "ui2_b0_c2_job_execution_contract",
-      "status": "in_progress",
+      "status": "done",
       "title": "UI2 B0/C2 -- job execution contract (DRAFT, for Product Owner freeze)",
       "summary": "New docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md: job record, a nine-state closed state machine with OUTCOME_UNKNOWN as terminal-until-reconciled, Postgres lease/heartbeat/fencing-token claiming, step-attempt-before-contact with per-actio",
       "started": "2026-09-09",
@@ -552,7 +561,7 @@
     },
     {
       "build": "op1_failover_plan_compiler_contract_draft",
-      "status": "in_progress",
+      "status": "done",
       "title": "OP.1 -- failover plan compiler and dry-run: contract draft (DRAFT -- awaiting Product Owner freeze)",
       "summary": "Produces docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (DRAFT -- awaiting Product Owner freeze): a write-free FailoverPlan/DryRunReport contract for classic Check Point ClusterXL only, compiled purely from already-collected",
       "started": "2026-09-08",
@@ -578,7 +587,7 @@
     },
     {
       "build": "cp_remote_collection_done_marker_diagnostics",
-      "status": "in_progress",
+      "status": "done",
       "title": "CP remote collection - DONE-marker-loss diagnostic hardening",
       "summary": "A real run hit RuntimeError('CP remote collection ended without DONE marker') with exit_status=0.",
       "started": "2026-09-03",
@@ -589,7 +598,7 @@
     },
     {
       "build": "op0b_0_official_vendor_semantics_confirmation_pass2",
-      "status": "in_progress",
+      "status": "done",
       "title": "OP.0b.0 - official vendor semantics confirmation, pass 2 (Source Pack 2, documentation-only)",
       "summary": "Third session against OP.0b.0's blocking rows, working from an independent source-pack hypothesis this task's prompt supplied and required independently re-verifying.",
       "started": "2026-09-03",
@@ -603,7 +612,7 @@
     },
     {
       "build": "op0b_0_official_vendor_semantics_confirmation_pass1",
-      "status": "in_progress",
+      "status": "done",
       "title": "OP.0b.0 - official vendor semantics confirmation, pass 1 (documentation-only)",
       "summary": "Second session against the OP.0b.0 draft's D-V1-D-V7/D-V9 blocking rows: a page-fetch tool returned EGRESS_BLOCKED against every official Check Point/Palo Alto documentation host (identical failure class to session 1's CONNECT 403), but a s",
       "started": "2026-09-03",
@@ -617,7 +626,7 @@
     },
     {
       "build": "op0b_0_vendor_failover_preflight_evidence_surface_contract_draft",
-      "status": "in_progress",
+      "status": "done",
       "title": "OP.0b.0 - Vendor failover preflight evidence surface contract (DRAFT -- DO NOT FREEZE)",
       "summary": "Structurally complete evidence-surface contract for the ~16-command HA preflight battery (command table, configuration/runtime field trace, bug/gap register) built from repository source, recorded real-environment findings and vendor-doc se",
       "started": "2026-09-02",
@@ -631,7 +640,7 @@
     },
     {
       "build": "RB.3b-impl-step7",
-      "status": "in_progress",
+      "status": "done",
       "started": "2026-08-31",
       "completed": "2026-08-31",
       "title": "RB.3b implementation step 7 - project metadata / state sync",
@@ -645,7 +654,7 @@
     },
     {
       "build": "RB.3b-impl-step6",
-      "status": "in_progress",
+      "status": "done",
       "started": "2026-08-31",
       "completed": "2026-08-31",
       "title": "RB.3b implementation step 6 - main.py wiring",
@@ -659,7 +668,7 @@
     },
     {
       "build": "RB.3b-impl-step5",
-      "status": "in_progress",
+      "status": "done",
       "started": "2026-08-31",
       "completed": "2026-08-31",
       "title": "RB.3b implementation step 5 + C6 - CP Gaia backup device core",
@@ -673,7 +682,7 @@
     },
     {
       "build": "RB.3b-impl-steps-2-4",
-      "status": "in_progress",
+      "status": "done",
       "started": "2026-08-31",
       "completed": "2026-08-31",
       "title": "RB.3b implementation steps 2-4 - operational-write ledger + CP backup offline gates",
@@ -702,7 +711,7 @@
     },
     {
       "build": "inventory_exclusions_management_ui_backend",
-      "status": "in_progress",
+      "status": "done",
       "started": "2026-08-30",
       "title": "Inventory exclusions write-path backend logic (no UI, no auth wiring yet -- deliberate partial scope)",
       "track": "0.6.x / DEPLOY.1A-adjacent",

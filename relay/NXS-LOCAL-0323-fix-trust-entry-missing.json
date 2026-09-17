@@ -56,15 +56,74 @@
       },
       "seq": 1,
       "timestamp": "2026-09-17T16:58:50Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "Single-device enrollment now presents the same security-admin trust action as management-server discovery.",
+          "Added a regression test for trust authorization availability before direct enrollment."
+        ],
+        "completed": [
+          "Exposed the existing explicit SSH trust authorization flow in the direct Check Point device-enrollment form.",
+          "Reused the persisted, endpoint-scoped authorization endpoint; no trust-on-first-use behavior was added."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change",
+          "ui": "The direct Check Point enrollment form now includes SSH trust authorization."
+        },
+        "integration": {
+          "branch": "main",
+          "ci": "not triggered",
+          "head_sha": "ea96862064a37b82d5c4a26dfd67e8cb88921548",
+          "merge_commit": null,
+          "merge_decision": "PO controlled; no push or PR created.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "real-environment-ssh-trust-validation",
+          "movement_type": "VALIDATION",
+          "objective": "Authorize the independently verified SSH host key, then retry direct enrollment or collection against the target device.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "Strict SSH host-key verification, explicit independent verification, and audited persistence."
+        ],
+        "recommended_reasoning": {
+          "reason": "Narrow real-environment validation",
+          "tier": "Fast/normal"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "A security administrator must independently verify and authorize the endpoint key before the next device connection; automatic trust would violate the frozen contract.",
+          "Live device confirmation remains unverified."
+        ],
+        "validation": {
+          "affected": "PASS: ui2/frontend npm run build",
+          "diff_check": "PASS",
+          "full_regression": "PASS: ui2/frontend npm test (99 tests)",
+          "privacy": "BLOCKED: pre-existing logs runtime directory",
+          "real_environment": "UNVERIFIED",
+          "state_consistency": "Not applicable",
+          "targeted": "PASS: ui2/frontend/tests/AddDeviceDialog.test.tsx (15 tests)"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-17T17:03:56Z"
     }
   ],
   "id": "NXS-LOCAL-0323",
   "movement": "fix-trust-entry-missing",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "fix-trust-entry-missing"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-17T16:58:50Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-17T17:03:56Z"
 }

@@ -504,6 +504,15 @@
       "priority": "P1",
       "target": "ui2",
       "note": ""
+    },
+    {
+      "id": "ui2_microservices_deployment_split",
+      "category": "Architecture",
+      "title": "Split K3s deployment into true independent microservices (ui2-frontend, ui2-service, ui2-worker) without full rollout",
+      "status": "planned",
+      "priority": "P0",
+      "target": "",
+      "note": ""
     }
   ]
 }
