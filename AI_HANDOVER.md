@@ -6,12 +6,12 @@ Wordmark SVGs bundled locally, CP discovery profile sourced, SSH TOFU active, AD
 Authority: `docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md`.
 
 # Recent session changes
-- NXS-LOCAL-0326: Dispatched to Codex, PR #428 merged. Check Point MDS discovery shell commands wrapped in `bash -l -c '...'` to properly source Gaia profile and `$MDSVERUTIL`. Error swallowing removed in discovery job executor.
-- NXS-LOCAL-0327: Dispatched to Codex, PR #429 merged. Implemented device deletion API (`POST /devices/{id}/delete`, gated by `role:onboarding_admin`) and UI controls with confirmation dialog in Device Management and Device Workspace screens. 13-table cascaded transactional deletion ensures database referential integrity.
+- NXS-LOCAL-0330: Dispatched to Codex. Hardened Check Point discovery parser against preambles and empty queries, redirected mdsenv output with `>/dev/null 2>&1`, filtered login banners from domain enumeration, and integrated System.Logger in worker discovery adapters.
+- NXS-LOCAL-0329: Dispatched to Codex. Fixed device deletion SQL cascade schema mismatches (`target_device_id`, `job_id`, `reconciliation_ref` nullification), un-gated `/error` route in `SecurityWebMvcConfig` to prevent 403 `ACTION_MAPPING_REQUIRED` mask on backend exceptions, and improved inline error handling in `DeviceRegistryPanel`.
 - NXS-LOCAL-0328: Bundled static wordmark and mark SVGs in frontend assets, eliminating `ACTION_MAPPING_REQUIRED`. Persisted dashboard bearer token in `.nexus/dashboard_token`.
-- Built AD Group to Role mapping backend API and `CustomRolesPanel.tsx` UI table/dialog.
-- Built 5 Product Planes permissions model (`Devices`, `Config`, `Compliance`, `Operations`, `Admin`) and filtered `NavigationRail.tsx`.
-- Deployed latest `main` container image to K3s cluster (`HOST_A`). `ui2-service` and `ui2-worker` rolled out and running.
+- NXS-LOCAL-0327: Device Deletion API and UI action foundation.
+- NXS-LOCAL-0326: Check Point MDS discovery shell commands wrapped in `bash -l -c '...'`.
+- Deployed latest `main` container image (`sha256:16527766c9d5a7e189819ff65d11945cf19c6326fba1610ea13b396debefa642`) to K3s cluster (`HOST_A`). `ui2-service` and `ui2-worker` rolled out and running.
 
 # Exact next action
 - PO test of Check Point Discovery and Device Deletion on live UI (`https://ui2.nexus.local`).
