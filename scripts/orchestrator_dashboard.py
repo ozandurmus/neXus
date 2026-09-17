@@ -764,10 +764,15 @@ def build_movement_summary(
     pr_info = gh_pr_info(row.get("branch"), worktree_path)
 
     relay_status, next_actor, pending_action = row.get("relay_status"), None, None
+    terminal_outcome, terminal_at = None, None
     try:
         relay_file = orch._resolve_relay_file(relay_dir, row["movement_id"])
         relay_obj = orch._load_relay(relay_file)
         next_actor = relay_obj.get("next_actor")
+        close = next((entry for entry in reversed(relay_obj.get("entries") or [])
+                      if entry.get("marker") == "SESSION_CLOSE"), None)
+        if close:
+            terminal_outcome, terminal_at = close.get("outcome"), close.get("timestamp")
         pending_action = build_pending_action_card(
             movement_id=row["movement_id"], relay_file=relay_file, relay_obj=relay_obj,
             worktree_path=worktree_path, state_dir=state_dir,
@@ -791,6 +796,8 @@ def build_movement_summary(
         "process_status": derive_process_status(row),
         "work_stage": stage,
         "next_actor": next_actor,
+        "terminal_outcome": terminal_outcome,
+        "terminal_at": terminal_at,
         "open_pr": pr_info,
         "pending_action": pending_action,
         "outbox_pending": len(load_outbox(state_dir, row["movement_id"])),
@@ -895,7 +902,7 @@ def _board_row(record: dict, summary: dict, state_dir: Path) -> dict:
     objective = ((approved_task or {}).get("report") or {}).get("objective") or ""
     started_at = record.get("started_at")
     started_epoch = _parse_iso(started_at)
-    ended_at = None
+    ended_at = summary.get("terminal_at") if summary.get("relay_status") == "CLOSED" else None
     if summary.get("phase") in orch.TERMINAL_PHASES:
         ended_at = _record_mtime_iso(state_dir, summary["movement_id"])
     ended_epoch = _parse_iso(ended_at)
@@ -906,7 +913,11 @@ def _board_row(record: dict, summary: dict, state_dir: Path) -> dict:
     verify = record.get("verify") or {}
     return {
         "movement_id": summary["movement_id"],
-        "objective": objective[:120],
+        "objective": objective,
+        "phase": summary.get("phase"),
+        "relay_status": summary.get("relay_status"),
+        "terminal_outcome": summary.get("terminal_outcome"),
+        "last_activity": summary.get("last_activity"),
         "provider": summary.get("provider"),
         "model_requested": summary.get("model_requested"),
         "effort_requested": summary.get("effort_requested"),
@@ -954,6 +965,8 @@ def _relay_archive_rows(relay_dir: Path, active_ids: set[str]) -> list[dict]:
             "process_status": "disconnected",
             "ended_at": close.get("timestamp"),
             "archived": True,
+            "relay_status": relay.get("status"),
+            "terminal_outcome": close.get("outcome"),
         })
     return rows
 
