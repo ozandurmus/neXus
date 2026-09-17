@@ -135,7 +135,7 @@ public class LocalAuthenticationConfiguration {
 
     @Bean
     public LoginFlow loginFlow(SessionRepository sessionRepository, RoleBindingRepository bindings, GroupReferenceCipher cipher) {
-        return new LoginFlow(sessionRepository, IDLE_TIMEOUT, ABSOLUTE_LIFETIME, bindings, cipher, false);
+        return new LoginFlow(sessionRepository, IDLE_TIMEOUT, ABSOLUTE_LIFETIME, bindings, cipher);
     }
 
     @Bean

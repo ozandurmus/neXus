@@ -239,7 +239,7 @@ class DirectoryBindingsTest {
 
     @Test void verifiedLoginConflictCarriesOnlyEncryptedProofAndNeverExtendsItsObservation() {
         Fixture f = new Fixture(); f.states.clear(); f.sessionRows.clear();
-        LoginFlow flow = new LoginFlow(f.sessions, Duration.ofMinutes(5), Duration.ofHours(10), f.bindings, f.cipher, true);
+        LoginFlow flow = new LoginFlow(f.sessions, Duration.ofMinutes(5), Duration.ofHours(10), f.bindings, f.cipher);
         var observation = new DirectoryObservation(PROFILE, PRINCIPAL, Set.of("opaque-group"), NOW, NOW.plusSeconds(300), f::publish);
         var success = new AttemptOutcome.Success(ACTOR, observation);
         assertInstanceOf(LoginFlow.LoginResult.NewSession.class, flow.login(success, NOW));
@@ -254,8 +254,10 @@ class DirectoryBindingsTest {
         var other = new AttemptOutcome.Success(ACTOR, new DirectoryObservation(PROFILE, "different-proven-principal", Set.of(), NOW, NOW.plusSeconds(300), f::publish));
         assertInstanceOf(LoginFlow.LoginResult.DirectoryUnavailable.class, flow.login(other, NOW.plusSeconds(50)));
         assertInstanceOf(LoginFlow.LoginResult.DirectoryUnavailable.class, flow.login(success, NOW.plusSeconds(300)));
-        assertInstanceOf(LoginFlow.LoginResult.DirectoryUnavailable.class,
-                new LoginFlow(f.sessions, Duration.ofMinutes(5), Duration.ofHours(10), f.bindings, f.cipher, false).login(success, NOW));
+        f.states.clear(); f.sessionRows.clear();
+        assertInstanceOf(LoginFlow.LoginResult.NewSession.class,
+                new LoginFlow(f.sessions, Duration.ofMinutes(5), Duration.ofHours(10), f.bindings, f.cipher).login(success, NOW));
+        assertEquals(NOW.plusSeconds(300), f.states.get(ACTOR).validUntil());
     }
 
     @Test void approvedRevalidationRefreshesBothKindsButDisabledFailedAndAmbiguousProofDoNot() {

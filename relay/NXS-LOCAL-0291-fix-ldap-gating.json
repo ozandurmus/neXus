@@ -1,0 +1,131 @@
+{
+  "created_at": "2026-09-17T16:38:02Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "LDAP login no longer erroneously gated by DIRECTORY-POSTURE"
+        ],
+        "baseline": {
+          "authority": "Product Owner",
+          "observed": "NXS-LOCAL-0274 failed, DIRECTORY-POSTURE blocks login",
+          "what_exists": "Bug in login flow"
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/fix-ldap-gating"
+        },
+        "invariants": [
+          "No security weakening"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Correct LDAP initial operator-login composition erroneously gated by DIRECTORY-POSTURE, preserving the actually gated constraints",
+        "output_contract": [
+          "Local commit and PR."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bug fix for NXS-LOCAL-0274",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Correct LDAP initial operator-login composition erroneously gated by DIRECTORY-POSTURE, preserving the actually gated constraints"
+        ],
+        "risks": [
+          "Auth bypass"
+        ],
+        "scope": {
+          "in": [
+            "Backend",
+            "LDAP"
+          ],
+          "out": [
+            "Unrelated components"
+          ]
+        },
+        "validation_plan": [
+          "Run Backend tests"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-17T16:38:02Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "LoginFlow no longer accepts or checks directoryPostureEnabled for a successful LDAP bind.",
+          "LocalAuthenticationConfiguration composes LoginFlow without DIRECTORY-POSTURE.",
+          "DirectoryBindingsTest proves the default posture-disabled composition accepts a valid LDAP observation."
+        ],
+        "completed": [
+          "Removed DIRECTORY-POSTURE from LDAP initial operator-login composition.",
+          "Preserved dependency, proof-freshness, publication, compatibility, local-identity, and conflict safeguards."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "No visible UI change; a valid LDAP initial login can establish an operator session while DIRECTORY-POSTURE remains disabled."
+        },
+        "integration": {
+          "branch": "feature/fix-ldap-gating",
+          "ci": "not triggered; targeted Gradle test blocked by sandbox socket restriction",
+          "head_sha": "uncommitted",
+          "merge_commit": null,
+          "merge_decision": "blocked pending targeted JVM test",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0291-validation",
+          "movement_type": "VALIDATION",
+          "objective": "Run DirectoryBindingsTest in a Gradle-capable CI or development environment, then review/commit this bounded fix.",
+          "status": "planned"
+        },
+        "preserved": [
+          "DIRECTORY-POSTURE remains present in directory revalidation and directory role-binding administration paths.",
+          "Invalid, expired, unpublished, incompatible, or dependency-unavailable LDAP proof remains DIRECTORY_UNAVAILABLE."
+        ],
+        "recommended_reasoning": {
+          "reason": "Targeted regression execution only.",
+          "tier": "Fast/normal"
+        },
+        "state_updates": [
+          "None authorized; pre-existing unrelated worktree changes were preserved."
+        ],
+        "unresolved_risks": [
+          "The targeted JVM test requires execution in an environment that permits Gradle file-lock coordination."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: Gradle wrapper could not write its user cache lock; direct Gradle failed because this sandbox denies the FileLockContentionHandler socket.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "NOT_RUN: bounded backend change; targeted Gradle execution was environment-blocked.",
+          "privacy": "NOT_RUN: no new sensitive data path or artifact was introduced.",
+          "real_environment": "UNVERIFIED: local validation only; no LDAP server contacted.",
+          "state_consistency": "Not applicable: no project-state change was authorized.",
+          "targeted": "UNVERIFIED: DirectoryBindingsTest could not start under the sandbox Gradle restriction."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-17T16:40:54Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0291",
+  "movement": "fix-ldap-gating",
+  "next_actor": null,
+  "refs": [
+    "fix-ldap-gating"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-17T16:40:54Z"
+}

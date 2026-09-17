@@ -35,14 +35,12 @@ public final class LoginFlow {
 
     private RoleBindingRepository bindings;
     private GroupReferenceCipher cipher;
-    private boolean directoryPostureEnabled;
 
     public LoginFlow(SessionRepository sessions, Duration idle, Duration absolute,
-            RoleBindingRepository bindings, GroupReferenceCipher cipher, boolean directoryPostureEnabled) {
+            RoleBindingRepository bindings, GroupReferenceCipher cipher) {
         this(sessions, idle, absolute);
         this.bindings = bindings;
         this.cipher = cipher;
-        this.directoryPostureEnabled = directoryPostureEnabled;
     }
 
     /** In-memory conflict-token registry: opaque, short-lived, never persisted (C3 §3.4). */
@@ -76,7 +74,7 @@ public final class LoginFlow {
      */
     public LoginResult login(AttemptOutcome.Success success, Instant now) {
         if (success.directoryObservation() == null) return login(success.resolvedActorFingerprint(), now);
-        if (!directoryPostureEnabled || bindings == null || cipher == null) return new LoginResult.DirectoryUnavailable();
+        if (bindings == null || cipher == null) return new LoginResult.DirectoryUnavailable();
         DirectoryObservation proof = success.directoryObservation();
         if (now.isBefore(proof.resolvedAt()) || !now.isBefore(proof.validUntil())) return new LoginResult.DirectoryUnavailable();
         PendingDirectory directory = new PendingDirectory(new ActorAuthzStateRecord(success.resolvedActorFingerprint(),
