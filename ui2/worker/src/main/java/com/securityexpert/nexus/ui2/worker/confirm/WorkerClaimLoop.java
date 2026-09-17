@@ -137,9 +137,11 @@ public final class WorkerClaimLoop {
 
         if (BackupCapabilityIds.isBackupCapability(job.capabilityId())) {
             // BK-11: the distinct backup credential, never device.credentialReferenceId() (the collection credential).
+            String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
+                    hostOf(endpoint.addressRef()), portOf(endpoint.addressRef()));
             BackupRequest backupRequest = new BackupRequest(
                     new ConnectionTarget(endpoint.endpointId(), hostOf(endpoint.addressRef()), portOf(endpoint.addressRef())),
-                    backupCredentialRef, checkPointTrustRuleRef);
+                    backupCredentialRef, trustRuleRef);
             backupJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), backupRequest);
             return true;
         }
@@ -156,8 +158,10 @@ public final class WorkerClaimLoop {
     private InventoryRequest buildInventoryRequest(String capabilityId, String endpointId, String addressRef,
             String credentialRef) {
         if (InventoryCapabilityIds.CP_INVENTORY_COLLECT.equals(capabilityId)) {
+            String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
+                    hostOf(addressRef), portOf(addressRef));
             return InventoryRequest.checkPoint(new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef)),
-                    credentialRef, checkPointTrustRuleRef);
+                    credentialRef, trustRuleRef);
         }
         if (InventoryCapabilityIds.PAN_INVENTORY_COLLECT.equals(capabilityId)) {
             return InventoryRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
@@ -169,8 +173,10 @@ public final class WorkerClaimLoop {
     private ConfigurationRequest buildConfigurationRequest(String capabilityId, String endpointId, String addressRef,
             String credentialRef) {
         if (ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT.equals(capabilityId)) {
+            String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
+                    hostOf(addressRef), portOf(addressRef));
             return ConfigurationRequest.checkPoint(new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef)),
-                    credentialRef, checkPointTrustRuleRef);
+                    credentialRef, trustRuleRef);
         }
         if (ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT.equals(capabilityId)) {
             return ConfigurationRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
@@ -180,14 +186,25 @@ public final class WorkerClaimLoop {
     }
 
     private PeerFollowResolver.ConfirmRequestFactory peerRequestFactoryFor(String capabilityId, String credentialRef) {
+        if (ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT.equals(capabilityId)) {
+            return managementAddress -> {
+                String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
+                        managementAddress, DEFAULT_SSH_PORT);
+                return ConfirmRequest.checkPoint(
+                        new ConnectionTarget(UUID.randomUUID().toString(), managementAddress, DEFAULT_SSH_PORT),
+                        credentialRef, trustRuleRef);
+            };
+        }
         return managementAddress -> buildRequest(capabilityId, "peer", managementAddress, credentialRef);
     }
 
     private ConfirmRequest buildRequest(String capabilityId, String endpointId, String addressRef,
             String credentialRef) {
         if (ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT.equals(capabilityId)) {
+            String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
+                    hostOf(addressRef), portOf(addressRef));
             return ConfirmRequest.checkPoint(new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef)),
-                    credentialRef, checkPointTrustRuleRef);
+                    credentialRef, trustRuleRef);
         }
         if (ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO.equals(capabilityId)) {
             return ConfirmRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);

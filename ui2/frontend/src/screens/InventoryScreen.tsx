@@ -8,7 +8,7 @@ import { Icon } from "../shell/Icon";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { listDevices, type ApiError, type DeviceSummary } from "../auth/adminApi";
+import { requestBulkInventoryCollect, listDevices, type ApiError, type DeviceSummary } from "../auth/adminApi";
 import { enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { DeviceInventoryPanels } from "./InventoryPanels";
 
@@ -177,12 +177,27 @@ export function InventoryScreen() {
     describeApiError,
   );
   const [selectedDevice, setSelectedDevice] = useState<DeviceSummary | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number, admitted: number, refused: number } | null>(null);
 
   const devices = data;
   const total = devices?.length ?? 0;
   const checkPointCount = devices?.filter((d) => d.vendor_hint === "check_point").length ?? 0;
   const paloAltoCount = devices?.filter((d) => d.vendor_hint === "palo_alto").length ?? 0;
   const draftCount = devices?.filter((d) => d.enrollment_state === "DRAFT").length ?? 0;
+
+  const handleBulkCollect = async () => {
+    setBulkBusy(true);
+    setBulkResult(null);
+    try {
+      const result = await requestBulkInventoryCollect();
+      setBulkResult(result);
+    } catch (err) {
+      console.error("Bulk collect failed:", err);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   return (
     <ScreenRoot>
@@ -192,10 +207,21 @@ export function InventoryScreen() {
         actions={
           <>
             <M3Button emphasis="outlined" icon="download">Export inventory</M3Button>
+            <M3Button emphasis="outlined" icon="refresh" disabled={bulkBusy} onClick={handleBulkCollect}>
+              {bulkBusy ? "Starting..." : "Bulk Collect"}
+            </M3Button>
             <M3Button emphasis="filled" icon="plus" href="?screen=administration">Add device</M3Button>
           </>
         }
       />
+      {bulkResult && (
+        <Box sx={{ px: 3, pb: 2 }}>
+          <Typography variant="body2" sx={{ color: m3.primary }}>
+            Bulk collect admitted {bulkResult.admitted} of {bulkResult.enrolled_devices} enrolled devices.
+            {bulkResult.refused > 0 && ` (${bulkResult.refused} refused.)`}
+          </Typography>
+        </Box>
+      )}
       <ListDetail
         list={
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
