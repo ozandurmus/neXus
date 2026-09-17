@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-/** AC-4: {@code show high-availability state}'s role and mode, and the {@code enabled=no} standalone case. */
 class PaloAltoHaStateParserTest {
 
     @Test
@@ -17,6 +16,8 @@ class PaloAltoHaStateParserTest {
 
         assertEquals("ACTIVE", state.role());
         assertEquals("Active-Passive", state.clusterMode().orElseThrow());
+        assertTrue(state.localSerial().isEmpty());
+        assertTrue(state.peerSerial().isEmpty());
     }
 
     @Test
@@ -35,5 +36,25 @@ class PaloAltoHaStateParserTest {
         assertEquals(PaloAltoHaStateParser.UNKNOWN, PaloAltoHaStateParser.parse(null).role());
         assertEquals(PaloAltoHaStateParser.UNKNOWN,
                 PaloAltoHaStateParser.parse("<response status=\"success\"><result/></response>").role());
+    }
+
+    @Test
+    void parsesSerialsWithNormalization() {
+        String body = "<response status=\"success\"><result><enabled>yes</enabled><group><mode>Active-Passive</mode>"
+                + "<local-info><state>active</state><serial-num> 00123456 </serial-num></local-info>"
+                + "<peer-info><serial-num>0123456</serial-num></peer-info></group></result></response>";
+
+        PaloAltoHaStateParser.HaState state = PaloAltoHaStateParser.parse(body);
+
+        assertEquals("123456", state.localSerial().orElseThrow());
+        assertEquals("123456", state.peerSerial().orElseThrow());
+    }
+    
+    @Test
+    void normalizesZeroesCorrectly() {
+        assertEquals("0", PaloAltoHaStateParser.normalizeSerial("0000"));
+        assertEquals("1", PaloAltoHaStateParser.normalizeSerial("0001"));
+        assertEquals("123", PaloAltoHaStateParser.normalizeSerial("0123"));
+        assertEquals("123", PaloAltoHaStateParser.normalizeSerial("  0123  "));
     }
 }
