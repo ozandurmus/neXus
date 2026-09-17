@@ -49,10 +49,22 @@ public final class RoleBindingAdminController {
         this.roleBindingAdminService = roleBindingAdminService;
     }
 
+    @org.springframework.web.bind.annotation.GetMapping("/role-bindings")
+    public List<RoleBindingAdminService.RoleBindingView> list() {
+        return roleBindingAdminService.listActiveBindings();
+    }
+
     @PostMapping("/role-bindings")
     public ResponseEntity<Map<String, Object>> create(@RequestBody CreateRequest request,
             HttpServletRequest servletRequest) {
         String actorFingerprint = (String) servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
+        if (request.bindingKind() == DirectoryBindingKind.DIRECTORY_GROUP && request.selectionHandle() == null && request.groupReference() != null) {
+            String profileId = request.directoryProfileId() != null ? request.directoryProfileId() : "default";
+            RoleBindingAdminService.Outcome outcome = roleBindingAdminService.createDirectoryGroupDirect(actorFingerprint,
+                    (String) servletRequest.getAttribute(GateChainInterceptor.SESSION_ID_ATTRIBUTE),
+                    request.roleToken(), profileId, request.groupReference(), Instant.now());
+            return respond(outcome);
+        }
         if (request.bindingKind() == null || request.bindingKind() == DirectoryBindingKind.LEGACY) {
             // Existing local UI submits its known local id in the old field; server proves that namespace.
             // It cannot submit a directory reference through this compatibility branch.

@@ -7,6 +7,7 @@ import { Icon, type IconName } from "./Icon";
 import type { ScreenId } from "./types";
 import { NexusMark } from "../brand/NexusMark";
 import { NexusWordmark } from "../brand/NexusWordmark";
+import { useSession } from "../auth/SessionContext";
 
 /**
  * The M3 navigation from the design canvas's `M3Components` artboard: a
@@ -29,45 +30,63 @@ export interface RailDestination {
   readonly label: string;
   readonly icon: IconName;
   readonly screen: ScreenId;
+  readonly requiredPlane?: string;
 }
 
 export const DESTINATIONS: readonly RailDestination[] = [
   { id: "overview", label: "Overview", icon: "grid", screen: "overview" },
-  { id: "devices", label: "Devices", icon: "devices", screen: "inventory" },
-  { id: "config", label: "Config", icon: "config", screen: "configuration" },
-  { id: "compliance", label: "Compliance", icon: "compliance", screen: "compliance" },
-  { id: "operations", label: "Operations", icon: "operations", screen: "operations" },
-  { id: "admin", label: "Admin", icon: "admin", screen: "administration" },
+  { id: "devices", label: "Devices", icon: "devices", screen: "inventory", requiredPlane: "Devices" },
+  { id: "config", label: "Config", icon: "config", screen: "configuration", requiredPlane: "Config" },
+  { id: "compliance", label: "Compliance", icon: "compliance", screen: "compliance", requiredPlane: "Compliance" },
+  { id: "operations", label: "Operations", icon: "operations", screen: "operations", requiredPlane: "Operations" },
+  { id: "admin", label: "Admin", icon: "admin", screen: "administration", requiredPlane: "Admin" },
 ];
 
 export interface DrawerLeaf {
   readonly label: string;
   readonly screen?: ScreenId;
+  readonly requiredPlane?: string;
 }
 export interface DrawerGroup {
   readonly header: string;
   readonly screen?: ScreenId;
+  readonly requiredPlane?: string;
   readonly leaves: readonly DrawerLeaf[];
 }
 
 export const DRAWER_GROUPS: readonly DrawerGroup[] = [
   {
     header: "Devices",
-    leaves: [{ label: "Inventory", screen: "inventory" }, { label: "Discovery" }],
+    requiredPlane: "Devices",
+    leaves: [
+      { label: "Inventory", screen: "inventory", requiredPlane: "Devices" },
+      { label: "Discovery", requiredPlane: "Devices" },
+    ],
   },
   {
     header: "Planes",
-    leaves: [{ label: "Configuration", screen: "configuration" }, { label: "Compliance", screen: "compliance" }],
+    leaves: [
+      { label: "Configuration", screen: "configuration", requiredPlane: "Config" },
+      { label: "Compliance", screen: "compliance", requiredPlane: "Compliance" },
+    ],
   },
   {
     header: "Operations",
     screen: "operations",
-    leaves: [{ label: "HA & readiness" }, { label: "Jobs" }],
+    requiredPlane: "Operations",
+    leaves: [
+      { label: "HA & readiness", requiredPlane: "Operations" },
+      { label: "Jobs", requiredPlane: "Operations" },
+    ],
   },
   {
     header: "Administration",
     screen: "administration",
-    leaves: [{ label: "Device management" }, { label: "Inventory exclusions" }],
+    requiredPlane: "Admin",
+    leaves: [
+      { label: "Device management", requiredPlane: "Admin" },
+      { label: "Inventory exclusions", requiredPlane: "Admin" },
+    ],
   },
 ];
 
@@ -77,6 +96,21 @@ function href(screen: ScreenId | undefined): string | undefined {
 
 export function NavigationRail({ active }: { readonly active: ScreenId }) {
   const [expanded, setExpanded] = useState(false);
+  const session = useSession();
+  const permissions = session?.permissions;
+
+  const allowedDestinations = permissions && permissions.length > 0
+    ? DESTINATIONS.filter((d) => !d.requiredPlane || permissions.includes(d.requiredPlane))
+    : DESTINATIONS;
+
+  const allowedDrawerGroups = permissions && permissions.length > 0
+    ? DRAWER_GROUPS.filter((g) => !g.requiredPlane || permissions.includes(g.requiredPlane))
+        .map((g) => ({
+          ...g,
+          leaves: g.leaves.filter((l) => !l.requiredPlane || permissions.includes(l.requiredPlane)),
+        }))
+        .filter((g) => g.screen || g.leaves.length > 0)
+    : DRAWER_GROUPS;
 
   if (!expanded) {
     return (
@@ -105,7 +139,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
         >
           <Icon name="menu" size={24} />
         </IconButton>
-        {DESTINATIONS.map((d) => {
+        {allowedDestinations.map((d) => {
           const on = d.screen === active;
           return (
             <Box
@@ -148,7 +182,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
 
       <DrawerItem label="Overview" on={active === "overview"} navHref="?screen=overview" />
 
-      {DRAWER_GROUPS.map((g) => (
+      {allowedDrawerGroups.map((g) => (
         <Box key={g.header}>
           {g.screen ? (
             <DrawerItem label={g.header} on={active === g.screen} navHref={href(g.screen)} />

@@ -40,6 +40,15 @@ public final class JooqRoleBindingRepository implements RoleBindingRepository {
     }
 
     @Override
+    public List<RoleBindingRecord> findAllActive() {
+        return transactionBoundary.inTransaction(dsl -> {
+            Result<Record> rows = dsl.fetch("select " + COLUMNS
+                    + " from role_bindings where revoked_at is null order by created_at desc");
+            return rows.stream().map(JooqRoleBindingRepository::toRecord).toList();
+        });
+    }
+
+    @Override
     public Optional<RoleBindingRecord> find(String bindingId) {
         return transactionBoundary.inTransaction(dsl -> {
             Result<Record> rows = dsl.fetch("select " + COLUMNS + " from role_bindings where binding_id = {0}",

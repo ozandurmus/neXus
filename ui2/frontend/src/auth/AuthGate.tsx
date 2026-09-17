@@ -15,6 +15,7 @@ interface SessionStatus {
   readonly authenticated: boolean;
   readonly displayName: string | null;
   readonly roleTokens: readonly string[];
+  readonly permissions: readonly string[];
   readonly mustChangePassword: boolean;
 }
 
@@ -22,6 +23,7 @@ const UNAUTHENTICATED_STATUS: SessionStatus = {
   authenticated: false,
   displayName: null,
   roleTokens: [],
+  permissions: [],
   mustChangePassword: false,
 };
 
@@ -34,6 +36,7 @@ async function checkSession(): Promise<SessionStatus> {
       authenticated: true,
       displayName: typeof body.display_name === "string" ? body.display_name : null,
       roleTokens: Array.isArray(body.role_tokens) ? body.role_tokens : [],
+      permissions: Array.isArray(body.permissions) ? body.permissions : [],
       mustChangePassword: body.must_change_password === true,
     };
   } catch {
@@ -93,7 +96,12 @@ export function AuthGate({ children }: { readonly children: ReactNode }) {
   if (state === "authenticated") {
     return (
       <SessionContext.Provider
-        value={{ displayName: session.displayName ?? "", roleTokens: session.roleTokens, onSignOut: handleSignOut }}
+        value={{
+          displayName: session.displayName ?? "",
+          roleTokens: session.roleTokens,
+          permissions: session.permissions,
+          onSignOut: handleSignOut,
+        }}
       >
         {children}
       </SessionContext.Provider>

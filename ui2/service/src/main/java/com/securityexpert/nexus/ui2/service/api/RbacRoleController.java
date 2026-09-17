@@ -33,22 +33,23 @@ public class RbacRoleController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createRole(@RequestBody Map<String, String> payload) {
-        // In a real implementation this would check E4 Gate and validate ActionRegistry permissions, 
-        // but for now we implement the basic CRUD.
+    public ResponseEntity<?> createRole(@RequestBody Map<String, Object> payload) {
+        List<String> permissions = payload.get("permissions") instanceof List<?> list
+                ? list.stream().map(Object::toString).toList() : List.of();
         RbacRoleRecord record = new RbacRoleRecord(
                 UUID.randomUUID(),
-                payload.get("name"),
-                payload.get("token_string"),
-                payload.get("description"),
-                false
+                String.valueOf(payload.get("name")),
+                String.valueOf(payload.get("token_string")),
+                payload.get("description") != null ? String.valueOf(payload.get("description")) : "",
+                false,
+                permissions
         );
         roleRepository.insert(record);
         return ResponseEntity.ok(Map.of("id", record.id().toString()));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateRole(@PathVariable UUID id, @RequestBody Map<String, String> payload) {
+    public ResponseEntity<?> updateRole(@PathVariable UUID id, @RequestBody Map<String, Object> payload) {
         var existing = roleRepository.findById(id);
         if (existing.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -56,12 +57,15 @@ public class RbacRoleController {
         if (existing.get().isSystem()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Cannot modify system roles"));
         }
+        List<String> permissions = payload.get("permissions") instanceof List<?> list
+                ? list.stream().map(Object::toString).toList() : existing.get().permissions();
         RbacRoleRecord updated = new RbacRoleRecord(
                 id,
-                payload.get("name"),
-                payload.get("token_string"),
-                payload.get("description"),
-                false
+                String.valueOf(payload.get("name")),
+                String.valueOf(payload.get("token_string")),
+                payload.get("description") != null ? String.valueOf(payload.get("description")) : "",
+                false,
+                permissions
         );
         roleRepository.update(updated);
         return ResponseEntity.ok().build();

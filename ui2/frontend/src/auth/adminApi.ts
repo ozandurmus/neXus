@@ -103,6 +103,33 @@ export function enableLocalIdentity(localIdentityId: string): Promise<LocalIdent
   return call("/local-identities/enable", "POST", { local_identity_id: localIdentityId });
 }
 
+export interface RoleBindingView {
+  readonly binding_id: string;
+  readonly role_token: string;
+  readonly binding_kind: string;
+  readonly directory_profile_id: string;
+  readonly group_reference: string;
+  readonly created_at: string;
+  readonly created_by_actor_fingerprint: string;
+}
+
+export function listRoleBindings(): Promise<RoleBindingView[]> {
+  return call("/role-bindings", "GET");
+}
+
+export function createDirectoryRoleBinding(params: {
+  roleToken: string;
+  groupReference: string;
+  directoryProfileId?: string;
+}): Promise<{ binding_id: string }> {
+  return call("/role-bindings", "POST", {
+    role_token: params.roleToken,
+    binding_kind: "DIRECTORY_GROUP",
+    group_reference: params.groupReference,
+    directory_profile_id: params.directoryProfileId || "default",
+  });
+}
+
 /** LIA-3.4: this calls the existing role-bindings resource -- never re-implemented here. */
 export function createRoleBinding(
   roleToken: string,

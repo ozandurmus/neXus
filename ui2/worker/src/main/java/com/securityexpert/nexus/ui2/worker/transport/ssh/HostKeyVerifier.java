@@ -35,10 +35,15 @@ public final class HostKeyVerifier {
         if (ref == null || ref.isBlank() || presentedFingerprint == null || presentedFingerprint.isBlank()) {
             return Decision.MISSING;
         }
-        return trustRuleResolver.resolveExpectedFingerprint(ref, host, port, algorithm)
-                .filter(expected -> !expected.isBlank())
-                .map(expected -> expected.equals(presentedFingerprint) ? Decision.MATCH : Decision.MISMATCH)
-                .orElse(Decision.MISSING);
+        Optional<String> expected = trustRuleResolver.resolveExpectedFingerprint(ref, host, port, algorithm);
+        if (expected.isPresent() && !expected.get().isBlank()) {
+            return expected.get().equals(presentedFingerprint) ? Decision.MATCH : Decision.MISMATCH;
+        }
+        if (trustRuleResolver.allowTrustOnFirstUse(ref, host, port)) {
+            trustRuleResolver.recordTrustOnFirstUse(host, port, algorithm, presentedFingerprint);
+            return Decision.MATCH;
+        }
+        return Decision.MISSING;
     }
 
     public boolean isTrusted(String trustRuleRef, String presentedFingerprint) {

@@ -5,8 +5,8 @@ import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.securityexpert.nexus.ui2.service.jobs.JobLogQueryService;
-import com.securityexpert.nexus.ui2.service.jobs.JobLogQueryService.JobEvent;
+import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService;
+import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobEvent;
 
 @RestController
 public final class JobLogController {

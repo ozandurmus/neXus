@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import MenuItem from "@mui/material/MenuItem";
@@ -272,7 +272,20 @@ function AssignRoleDialog({
   readonly onDone: () => void;
 }) {
   const [roleToken, setRoleToken] = useState("");
+  const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; token_string?: string; tokenString?: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/roles")
+      .then((r) => r.ok ? r.json() : [])
+      .then((roles) => {
+        if (Array.isArray(roles) && roles.length > 0) {
+          setAvailableRoles(roles);
+          setRoleToken(roles[0].token_string || roles[0].tokenString || "");
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <Dialog open onClose={onClose}>
@@ -280,12 +293,14 @@ function AssignRoleDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1, minWidth: 320 }}>
           <TextField select label="Role token" value={roleToken} onChange={(e) => setRoleToken(e.target.value)} autoFocus>
-            <MenuItem value="role:security_admin">Security Admin</MenuItem>
-            <MenuItem value="role:compliance_admin">Compliance Admin</MenuItem>
-            <MenuItem value="role:backup_admin">Backup Admin</MenuItem>
-            <MenuItem value="role:onboarding_admin">Onboarding Admin</MenuItem>
-            <MenuItem value="role:operator">Operator</MenuItem>
-            <MenuItem value="role:viewer">Viewer</MenuItem>
+            {availableRoles.map((r) => {
+              const token = r.token_string || r.tokenString || r.name;
+              return (
+                <MenuItem key={r.id} value={token}>
+                  {r.name}
+                </MenuItem>
+              );
+            })}
           </TextField>
           {error && <Typography color="error">{error}</Typography>}
         </Stack>

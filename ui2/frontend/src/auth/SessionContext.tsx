@@ -13,6 +13,7 @@ import { createContext, useContext } from "react";
 export interface SessionInfo {
   readonly displayName: string;
   readonly roleTokens: readonly string[];
+  readonly permissions: readonly string[];
   readonly onSignOut: () => void;
 }
 

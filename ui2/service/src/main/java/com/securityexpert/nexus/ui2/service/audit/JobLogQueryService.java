@@ -1,4 +1,4 @@
-package com.securityexpert.nexus.ui2.service.jobs;
+package com.securityexpert.nexus.ui2.service.audit;
 
 import java.sql.Timestamp;
 import java.time.Instant;

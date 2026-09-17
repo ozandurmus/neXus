@@ -7,7 +7,7 @@ import { M3Button, StatusChip } from "./M3Widgets";
 import { useSession } from "../auth/SessionContext";
 import { NexusWordmark } from "../brand/NexusWordmark";
 import { useFetchOnMount } from "./useFetchOnMount";
-import { listNotifications } from "../auth/adminApi";
+import { listNotifications, getProjectPlan } from "../auth/adminApi";
 
 /**
  * The minimal notification badge NXS-LOCAL-0165 adds (WORKER.md
@@ -27,6 +27,21 @@ function NotificationBadge() {
     return null;
   }
   return <StatusChip tone="warn" label={String(unread)} dense />;
+}
+
+function BuildBadge() {
+  const { data } = useFetchOnMount(
+    () => getProjectPlan().then((plan) => plan.current_product_build ?? "NXS-LOCAL-0313"),
+    () => "",
+  );
+  const buildTag = data || "NXS-LOCAL-0313";
+  return (
+    <Tooltip title={`neXus Active Build: ${buildTag}`}>
+      <Box sx={{ display: "inline-flex" }}>
+        <StatusChip tone="neutral" label={buildTag} dense />
+      </Box>
+    </Tooltip>
+  );
 }
 
 /**
@@ -49,16 +64,16 @@ export function TopAppBar() {
   let displayedRoles: string[] = [];
   if (session) {
     const roleOrder = [
-      "role:security_admin",
-      "role:compliance_admin",
-      "role:backup_admin",
-      "role:onboarding_admin",
-      "role:operator",
-      "role:viewer",
+      "security_admin",
+      "compliance_admin",
+      "backup_admin",
+      "onboarding_admin",
+      "operator",
+      "viewer",
     ];
     displayedRoles = [...session.roleTokens].sort((a, b) => {
-      const indexA = roleOrder.indexOf(a);
-      const indexB = roleOrder.indexOf(b);
+      const indexA = roleOrder.findIndex(r => a.endsWith(r));
+      const indexB = roleOrder.findIndex(r => b.endsWith(r));
       return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
     });
   }
@@ -72,6 +87,7 @@ export function TopAppBar() {
         Search devices, settings, evidence
       </Box>
       <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2, color: m3.onSurfaceVar }}>
+        <BuildBadge />
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <Icon name="bell" size={20} />
           {session ? <NotificationBadge /> : null}

@@ -63,15 +63,25 @@ class PersistedManagementEndpointTrustResolverTest {
     }
 
     @Test
-    void missingDiscoveryTrustFallsBackToEnrolledDeviceTrust() {
-        Store store = new Store();
+    void missingDiscoveryTrustAllowsTofuWhenEnabledAndAutoEnrolls() {
+        boolean[] enrolled = {false};
+        Store store = new Store() {
+            @Override
+            public boolean enroll(String a, int p, String k, String f, String actor, Instant at, boolean re) {
+                enrolled[0] = true;
+                this.fingerprint = f;
+                return true;
+            }
+        };
         store.fingerprint = null;
-        var resolver = new PersistedManagementEndpointTrustResolver(store, ref -> Optional.of(FINGERPRINT));
+        var resolver = new PersistedManagementEndpointTrustResolver(store, ref -> Optional.empty(), true);
         var verifier = new HostKeyVerifier(resolver);
         String ref = PersistedManagementEndpointTrustResolver.scopeRef(HOST, PORT);
 
+        assertTrue(resolver.authorizedAlgorithms(ref, HOST, PORT).isEmpty());
         assertTrue(verifier.isTrusted(ref, HOST, PORT, ALGORITHM, FINGERPRINT));
-        assertFalse(verifier.isTrusted(ref, HOST, PORT, ALGORITHM, "rotated-key"));
+        assertTrue(enrolled[0]);
+        assertEquals(Optional.of(List.of(ALGORITHM)), resolver.authorizedAlgorithms(ref, HOST, PORT));
     }
 
     @Test

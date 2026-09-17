@@ -1,5 +1,5 @@
-const WORDMARK = new URL("../../../../docs/design/ui2_mockups/wordmark-option-d/wordmark.svg", import.meta.url).href;
-const WORDMARK_TAGLINE = new URL("../../../../docs/design/ui2_mockups/wordmark-option-d/wordmark-tagline.svg", import.meta.url).href;
+import wordmarkSvg from "../assets/wordmark.svg";
+import wordmarkTaglineSvg from "../assets/wordmark-tagline.svg";
 
 export function NexusWordmark({
   height = 40,
@@ -12,7 +12,7 @@ export function NexusWordmark({
 }) {
   return (
     <img
-      src={tagline ? WORDMARK_TAGLINE : WORDMARK}
+      src={tagline ? wordmarkTaglineSvg : wordmarkSvg}
       alt={tagline ? "neXus — A CLEARER TOMORROW" : "neXus"}
       height={height}
       style={{ width: "auto", color }}

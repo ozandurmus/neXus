@@ -23,4 +23,11 @@ public interface TrustRuleResolver {
     default Optional<java.util.List<String>> authorizedAlgorithms(String ref, String host, int port) {
         return Optional.empty();
     }
+
+    default boolean allowTrustOnFirstUse(String ref, String host, int port) {
+        return false;
+    }
+
+    default void recordTrustOnFirstUse(String host, int port, String algorithm, String fingerprint) {
+    }
 }

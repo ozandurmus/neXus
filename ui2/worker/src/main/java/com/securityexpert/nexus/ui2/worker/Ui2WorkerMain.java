@@ -118,9 +118,10 @@ public final class Ui2WorkerMain {
         TrustRuleResolver enrolledDeviceTrustRuleResolver = trustRuleRef -> Optional.ofNullable(
                 System.getenv("UI2_" + trustRuleRef.toUpperCase(java.util.Locale.ROOT).replace('.', '_')
                         + "_FINGERPRINT"));
+        boolean allowTofu = !"false".equalsIgnoreCase(System.getenv("UI2_SSH_ALLOW_TOFU"));
         TrustRuleResolver trustRuleResolver = new com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver(
                 new com.securityexpert.nexus.ui2.persistence.discovery.JooqManagementEndpointSshTrustRepository(transactionBoundary),
-                enrolledDeviceTrustRuleResolver);
+                enrolledDeviceTrustRuleResolver, allowTofu);
         StoreBackedSshCredentialResolver sshCredentialResolver =
                 new StoreBackedSshCredentialResolver(resolverComponents.credentialReferenceRepository(),
                         resolverComponents.credentialRepository(), resolverComponents.cipher());

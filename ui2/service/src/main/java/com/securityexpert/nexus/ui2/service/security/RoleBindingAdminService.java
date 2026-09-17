@@ -11,6 +11,7 @@ import com.securityexpert.nexus.ui2.platform.DirectoryBindingKind;
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
 import com.securityexpert.nexus.ui2.persistence.identity.*;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
 import com.securityexpert.nexus.ui2.platform.OpaqueId;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
@@ -69,6 +70,50 @@ public final class RoleBindingAdminService {
     private final Map<String, Selection> selections = new ConcurrentHashMap<>();
     private record Selection(String actor, String session, DirectoryTargetPort.Target target, Instant expiresAt) { }
     public record SelectionView(String handle, String directoryProfileId, DirectoryBindingKind bindingKind) { }
+    public record RoleBindingView(
+            @JsonProperty("binding_id") String bindingId,
+            @JsonProperty("role_token") String roleToken,
+            @JsonProperty("binding_kind") DirectoryBindingKind bindingKind,
+            @JsonProperty("directory_profile_id") String directoryProfileId,
+            @JsonProperty("group_reference") String groupReference,
+            @JsonProperty("created_at") Instant createdAt,
+            @JsonProperty("created_by_actor_fingerprint") String createdByActorFingerprint) { }
+
+    public List<RoleBindingView> listActiveBindings() {
+        return roleBindingRepository.findAllActive().stream().map(row -> {
+            String reference = "";
+            if (row.bindingKind() == DirectoryBindingKind.DIRECTORY_GROUP || row.bindingKind() == DirectoryBindingKind.DIRECTORY_PRINCIPAL) {
+                try {
+                    reference = groupReferenceCipher.decryptDirectory(row.groupReferenceEncrypted(), row.directoryProfileId(),
+                            row.bindingKind(), row.groupReferenceKeyId());
+                } catch (Exception e) {
+                    reference = "[encrypted]";
+                }
+            } else {
+                try {
+                    reference = groupReferenceCipher.decrypt(row.groupReferenceEncrypted());
+                } catch (Exception e) {
+                    reference = "[local]";
+                }
+            }
+            return new RoleBindingView(row.bindingId(), row.roleToken(), row.bindingKind(),
+                    row.directoryProfileId(), reference, row.createdAt(), row.createdByActorFingerprint());
+        }).toList();
+    }
+
+    public Outcome createDirectoryGroupDirect(String actor, String session, String roleToken,
+            String profile, String groupName, Instant now) {
+        if (roleToken == null || roleToken.isBlank() || groupName == null || groupName.isBlank()) {
+            return new Outcome.NotEvaluated();
+        }
+        String profileId = (profile == null || profile.isBlank()) ? "default" : profile;
+        String id = OpaqueId.random().value();
+        byte[] encrypted = groupReferenceCipher.encryptDirectory(groupName, profileId, DirectoryBindingKind.DIRECTORY_GROUP);
+        RoleBindingRecord record = new RoleBindingRecord(id, roleToken, encrypted, groupReferenceCipher.keyId(),
+                actor, now, Optional.empty(), Optional.empty(), DirectoryBindingKind.DIRECTORY_GROUP, profileId);
+        roleBindingRepository.createDirectory(record, ACTION_CREATE);
+        return new Outcome.Created(id);
+    }
 
     public RoleBindingAdminService(RoleBindingRepository bindings, ActorAuthzStateRepository actors,
             GroupReferenceCipher cipher, SecurityAdminLockoutGuard guard, RootIdentityRepository root,
@@ -157,7 +202,10 @@ public final class RoleBindingAdminService {
     public Outcome revoke(String actor, String session, String bindingId, Instant now) {
         var existing = roleBindingRepository.find(bindingId);
         if (existing.isEmpty() || existing.get().bindingKind() == DirectoryBindingKind.LEGACY) return revoke(actor, bindingId, now);
-        if (!directoryPostureEnabled) return new Outcome.NotEvaluated();
+        if (!directoryPostureEnabled || directoryTargets == null) {
+            roleBindingRepository.revoke(bindingId, actor, ACTION_REVOKE);
+            return new Outcome.Revoked(bindingId);
+        }
         long started = System.nanoTime();
         try {
             return roleBindingRepository.directoryMutation(tx -> {

@@ -12,11 +12,18 @@ public final class PersistedManagementEndpointTrustResolver implements TrustRule
     private static final String PREFIX = "cp_discovery_endpoint:";
     private final ManagementEndpointSshTrustRepository repository;
     private final TrustRuleResolver enrolledDevices;
+    private final boolean allowTofu;
 
     public PersistedManagementEndpointTrustResolver(ManagementEndpointSshTrustRepository repository,
             TrustRuleResolver enrolledDevices) {
+        this(repository, enrolledDevices, false);
+    }
+
+    public PersistedManagementEndpointTrustResolver(ManagementEndpointSshTrustRepository repository,
+            TrustRuleResolver enrolledDevices, boolean allowTofu) {
         this.repository = repository;
         this.enrolledDevices = enrolledDevices;
+        this.allowTofu = allowTofu;
     }
 
     public static String scopeRef(String address, int port) {
@@ -35,10 +42,8 @@ public final class PersistedManagementEndpointTrustResolver implements TrustRule
             return enrolledDevices.resolveExpectedFingerprint(ref, host, port, algorithm);
         }
         try {
-            Optional<String> fingerprint = ref.equals(scopeRef(host, port))
+            return ref.equals(scopeRef(host, port))
                     ? repository.findActiveFingerprint(host, port, algorithm) : Optional.empty();
-            return fingerprint.isPresent() ? fingerprint
-                    : enrolledDevices.resolveExpectedFingerprint(ref, host, port, algorithm);
         } catch (RuntimeException e) {
             throw new IllegalStateException("CP_DISCOVERY_TRUST_NOT_EVALUABLE");
         }
@@ -55,11 +60,28 @@ public final class PersistedManagementEndpointTrustResolver implements TrustRule
             if (!algorithms.isEmpty()) {
                 return Optional.of(algorithms);
             }
-            Optional<List<String>> enrolledAlgorithms = enrolledDevices.authorizedAlgorithms(ref, host, port);
-            return enrolledAlgorithms.isPresent() || enrolledDevices.resolveExpectedFingerprint(ref).isPresent()
-                    ? enrolledAlgorithms : Optional.of(List.of());
+            if (allowTofu) {
+                return Optional.empty();
+            }
+            return Optional.of(List.of());
         } catch (RuntimeException e) {
             throw new IllegalStateException("CP_DISCOVERY_TRUST_NOT_EVALUABLE");
+        }
+    }
+
+    @Override
+    public boolean allowTrustOnFirstUse(String ref, String host, int port) {
+        return allowTofu;
+    }
+
+    @Override
+    public void recordTrustOnFirstUse(String host, int port, String algorithm, String fingerprint) {
+        if (allowTofu) {
+            try {
+                repository.enroll(host, port, algorithm, fingerprint, "system_auto_enroll", java.time.Instant.now(), false);
+            } catch (RuntimeException ignored) {
+                // If already enrolled concurrently or transaction rolled back, ignore
+            }
         }
     }
 }

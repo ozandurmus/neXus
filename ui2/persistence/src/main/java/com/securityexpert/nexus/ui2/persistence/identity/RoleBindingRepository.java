@@ -13,6 +13,10 @@ public interface RoleBindingRepository {
 
     List<RoleBindingRecord> findActiveByToken(String roleToken);
 
+    default List<RoleBindingRecord> findAllActive() {
+        return List.of();
+    }
+
     Optional<RoleBindingRecord> find(String bindingId);
 
     boolean hasAnyActiveBinding(String roleToken);
