@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0313",
+  "current_build": "NXS-LOCAL-0328",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,9 +150,9 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0313",
-      "title": "Device Workspace UI Revert (Slider and Info Menu)",
-      "status": "in_progress",
+      "build": "NXS-LOCAL-0328",
+      "title": "UI2 K3s Remediation Roadmap & Orchestrator Protocol Enforcement",
+      "status": "done",
       "started": "2026-09-17"
     },
     "next": {

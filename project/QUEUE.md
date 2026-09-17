@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0313 · Track: PCP.x · Generated: 2026-09-17T21:20:38Z
+Build: NXS-LOCAL-0328 · Track: PCP.x · Generated: 2026-09-17T22:19:29Z
 
 ## Now
-- NXS-LOCAL-0313 — Device Workspace UI Revert (Slider and Info Menu) (in_progress)
+- NXS-LOCAL-0328 — UI2 K3s Remediation Roadmap & Orchestrator Protocol Enforcement (done)
 ## Next
 - M12 — M12 -- per-device / per-capability schedules (D5 producer) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
