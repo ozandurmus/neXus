@@ -532,6 +532,13 @@ describe("AddDeviceDialog discovery mode", () => {
 describe("C10 SSH trust enrollment", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("makes SSH trust authorization available before direct Check Point enrollment", async () => {
+    vi.stubGlobal("fetch", routedFetch({ "/credentials": CREDENTIALS_ROUTE }));
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndFillAddress("fixture-gateway");
+    expect(screen.getByRole("button", { name: "SSH trust authorization" })).toBeInTheDocument();
+  });
+
   it("requires explicit independent verification, sends the gated action, and displays only MATCH", async () => {
     const fetchMock = routedFetch({
       "/credentials": CREDENTIALS_ROUTE,

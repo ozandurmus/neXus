@@ -402,6 +402,29 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
     </>
   );
 
+  const sshTrustAuthorization = vendor === "check_point" && <>
+    <Button onClick={() => setTrustFormOpen(!trustFormOpen)} disabled={trustBusy}>SSH trust authorization</Button>
+    {trustFormOpen && <Stack spacing={1}>
+      <Typography variant="body2">Security administrator only. Independently verify the observed key through an out-of-band source before authorization. Observation alone does not authorize trust.</Typography>
+      <TextField label="SSH host-key algorithm" select value={trustAlgorithm} disabled={trustBusy}
+        onChange={(e) => setTrustAlgorithm(e.target.value)}>
+        {["ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521"].map((algorithm) =>
+          <MenuItem key={algorithm} value={algorithm}>{algorithm}</MenuItem>)}
+      </TextField>
+      <TextField label="Independently verified SHA-256 key (lowercase hex)" type="password" autoComplete="off"
+        value={trustFingerprint} disabled={trustBusy} onChange={(e) => setTrustFingerprint(e.target.value)} />
+      <TextField label="Key observed at" type="datetime-local" InputLabelProps={{ shrink: true }}
+        value={trustObservedAt} disabled={trustBusy} onChange={(e) => setTrustObservedAt(e.target.value)} />
+      <label><Checkbox checked={trustVerified} disabled={trustBusy} onChange={(e) => setTrustVerified(e.target.checked)} />I independently verified the observed key</label>
+      <label><Checkbox checked={trustReEnroll} disabled={trustBusy} onChange={(e) => setTrustReEnroll(e.target.checked)} />Explicitly re-enroll and supersede the existing authorization</label>
+      <Button onClick={authorizeSshTrust} disabled={trustBusy || !address.trim() || !trustVerified
+        || !/^[0-9a-f]{64}$/.test(trustFingerprint) || !trustObservedAt}>
+        {trustReEnroll ? "Re-enroll SSH trust" : "Authorize SSH trust"}
+      </Button>
+      {trustRelationship && <Typography role="status">SSH trust: {trustRelationship}</Typography>}
+    </Stack>}
+  </>;
+
   return (
     <Dialog open onClose={dialogBusy ? undefined : onClose} PaperProps={{ sx: { borderRadius: "28px", width: mode === "discovery" && discoveryPhase !== "form" ? 640 : 460 } }}>
       <DialogContent sx={{ p: 3, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -468,6 +491,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
               <MenuItem value="palo_alto">Palo Alto</MenuItem>
             </TextField>
             {credentialSelectorFragment}
+            {sshTrustAuthorization}
             {validationReason && (
               <Typography variant="body2" color="error">
                 Validation failed: {validationReason}
@@ -545,28 +569,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
               <MenuItem value="palo_alto">Palo Alto (Panorama)</MenuItem>
             </TextField>
             {credentialSelectorFragment}
-            {vendor === "check_point" && <>
-              <Button onClick={() => setTrustFormOpen(!trustFormOpen)} disabled={trustBusy}>SSH trust authorization</Button>
-              {trustFormOpen && <Stack spacing={1}>
-                <Typography variant="body2">Security administrator only. Independently verify the observed key through an out-of-band source before authorization. Observation alone does not authorize trust.</Typography>
-                <TextField label="SSH host-key algorithm" select value={trustAlgorithm} disabled={trustBusy}
-                  onChange={(e) => setTrustAlgorithm(e.target.value)}>
-                  {["ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521"].map((algorithm) =>
-                    <MenuItem key={algorithm} value={algorithm}>{algorithm}</MenuItem>)}
-                </TextField>
-                <TextField label="Independently verified SHA-256 key (lowercase hex)" type="password" autoComplete="off"
-                  value={trustFingerprint} disabled={trustBusy} onChange={(e) => setTrustFingerprint(e.target.value)} />
-                <TextField label="Key observed at" type="datetime-local" InputLabelProps={{ shrink: true }}
-                  value={trustObservedAt} disabled={trustBusy} onChange={(e) => setTrustObservedAt(e.target.value)} />
-                <label><Checkbox checked={trustVerified} disabled={trustBusy} onChange={(e) => setTrustVerified(e.target.checked)} />I independently verified the observed key</label>
-                <label><Checkbox checked={trustReEnroll} disabled={trustBusy} onChange={(e) => setTrustReEnroll(e.target.checked)} />Explicitly re-enroll and supersede the existing authorization</label>
-                <Button onClick={authorizeSshTrust} disabled={trustBusy || !address.trim() || !trustVerified
-                  || !/^[0-9a-f]{64}$/.test(trustFingerprint) || !trustObservedAt}>
-                  {trustReEnroll ? "Re-enroll SSH trust" : "Authorize SSH trust"}
-                </Button>
-                {trustRelationship && <Typography role="status">SSH trust: {trustRelationship}</Typography>}
-              </Stack>}
-            </>}
+            {sshTrustAuthorization}
             {validationReason && (
               <Typography variant="body2" color="error">
                 Validation failed: {validationReason}

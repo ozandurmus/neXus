@@ -1,0 +1,70 @@
+{
+  "created_at": "2026-09-17T16:58:50Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Device discovery and collection succeeds without TRUST_ENTRY_MISSING",
+          "SSH Host Key trust is properly established"
+        ],
+        "baseline": {
+          "authority": "Product Owner",
+          "observed": "Adding a device fails with connect_failed: host_key_rejected: TRUST_ENTRY_MISSING",
+          "what_exists": "SSH trust is missing or failing to be recorded during discovery"
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/fix-trust-entry-missing"
+        },
+        "invariants": [
+          "No security weakening (do not disable strict host key checking globally)"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Fix the TRUST_ENTRY_MISSING error when adding/discovering a device. Ensure the host key is properly fetched and stored in DeviceTrustRepository during the discovery phase.",
+        "output_contract": [
+          "Local commit and PR."
+        ],
+        "recommended_reasoning": {
+          "reason": "Fixing critical discovery path",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Fix the TRUST_ENTRY_MISSING error on device discovery and collection."
+        ],
+        "risks": [
+          "SSH security downgrade"
+        ],
+        "scope": {
+          "in": [
+            "Backend",
+            "Worker"
+          ],
+          "out": [
+            "Unrelated components"
+          ]
+        },
+        "validation_plan": [
+          "Run Backend tests"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-17T16:58:50Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0323",
+  "movement": "fix-trust-entry-missing",
+  "next_actor": "engineer",
+  "refs": [
+    "fix-trust-entry-missing"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-17T16:58:50Z"
+}
