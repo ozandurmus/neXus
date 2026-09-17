@@ -4,7 +4,30 @@ export const DirectorySettingsPanel: React.FC = () => {
     const [profile, setProfile] = useState<any>(null);
 
     useEffect(() => {
-        fetch('/config/ldap').then(r => r.json()).then(setProfile).catch(() => {});
+        fetch('/config/ldap').then(async r => {
+            const text = await r.text();
+            if (text) {
+                setProfile(JSON.parse(text));
+            } else {
+                // Default empty profile
+                setProfile({
+                    id: crypto.randomUUID(),
+                    profileName: 'Default LDAP',
+                    host: '',
+                    port: 389,
+                    transport: 'LDAPS',
+                    trustFormat: 'PEM',
+                    trustMaterialPem: '',
+                    storePinEncrypted: '',
+                    bindDnTemplate: '',
+                    groupSearchBaseDn: '',
+                    accessGroupReference: '',
+                    isActive: true
+                });
+            }
+        }).catch(err => {
+            console.error(err);
+        });
     }, []);
 
     const handleSave = () => {
