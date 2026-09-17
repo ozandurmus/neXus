@@ -681,7 +681,7 @@ export interface AuditEventView {
 }
 
 export function listAuditEvents(): Promise<{ events: AuditEventView[] }> {
-  return call("/audit-log", "GET");
+  return call("/audit-logs", "GET");
 }
 
 export interface JobEventView {

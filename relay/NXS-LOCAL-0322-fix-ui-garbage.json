@@ -1,0 +1,132 @@
+{
+  "created_at": "2026-09-17T16:51:27Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "LDAP settings is not just 10 empty boxes",
+          "Custom RBAC screen is not read-only"
+        ],
+        "baseline": {
+          "authority": "Product Owner",
+          "observed": "Garbage UI implemented by subagents",
+          "what_exists": "Terrible UI for DirectorySettingsPanel and CustomRolesPanel"
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/fix-ui-garbage"
+        },
+        "invariants": [
+          "No security weakening"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Refactor DirectorySettingsPanel to a proper form instead of empty boxes. Refactor CustomRolesPanel so it is not read-only and users can select permissions.",
+        "output_contract": [
+          "Local commit and PR."
+        ],
+        "recommended_reasoning": {
+          "reason": "Fixing PO reported UI garbage",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Refactor DirectorySettingsPanel and CustomRolesPanel frontend React code to be usable and functional."
+        ],
+        "risks": [
+          "UI breakage"
+        ],
+        "scope": {
+          "in": [
+            "UI"
+          ],
+          "out": [
+            "Backend"
+          ]
+        },
+        "validation_plan": [
+          "Run UI tests"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-17T16:51:27Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "ui2/frontend/src/components/settings/DirectorySettingsPanel.tsx",
+          "ui2/frontend/src/screens/CustomRolesPanel.tsx",
+          "ui2/frontend/src/auth/adminApi.ts",
+          "ui2/frontend/tests/CustomRolesPanel.test.tsx"
+        ],
+        "completed": [
+          "Replaced the LDAP empty-field layout with a sectioned Material 3 form, explicit LDAP/LDAPS selection, validation, and save feedback.",
+          "Added a custom-role creation dialog with selectable permission checkboxes and wired it to the existing role create endpoint.",
+          "Corrected the shared audit-log client route to /audit-logs, which matches the gated controller route."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change",
+          "ui": "LDAP, custom-role creation, and audit-log client routing updated."
+        },
+        "integration": {
+          "branch": "main",
+          "ci": "not triggered",
+          "head_sha": "698a87f9a915a87af115531c92cd8d9387a5441d",
+          "merge_commit": null,
+          "merge_decision": "PO controlled; no commit, push, or PR created.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "custom-rbac-permission-persistence",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Freeze and implement permission persistence and evaluation for custom RBAC roles.",
+          "status": "planned"
+        },
+        "preserved": [
+          "Existing LDAP API and role API contracts",
+          "Audit-log gate mapping and authorization"
+        ],
+        "recommended_reasoning": {
+          "reason": "Permission storage and authorization semantics require a frozen security contract.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The current role backend accepts the permission selection but has no frozen persistence/evaluation contract for rbac_role_permissions; selected permissions must not be interpreted as effective authorization until that separate backend movement ships.",
+          "HTML render harness Playwright smoke test is blocked by the host sandbox Mach-port permission denial, unrelated to this React UI change."
+        ],
+        "validation": {
+          "affected": "PASS: ui2/frontend npm run build",
+          "diff_check": "PASS: git diff --check origin/main",
+          "full_regression": "NOT_RUN: frontend suite only",
+          "privacy": "UNVERIFIED: repository gate reported one existing logs runtime-directory finding outside changed paths",
+          "real_environment": "UNVERIFIED: local validation only",
+          "state_consistency": "Not applicable",
+          "targeted": "PASS: ui2/frontend npm test (98 tests); CustomRolesPanel selection regression included"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-17T16:57:59Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0322",
+  "movement": "fix-ui-garbage",
+  "next_actor": null,
+  "refs": [
+    "fix-ui-garbage"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-17T16:57:59Z"
+}
