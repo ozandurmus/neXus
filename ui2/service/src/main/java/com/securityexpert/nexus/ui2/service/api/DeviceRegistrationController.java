@@ -23,7 +23,9 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
 import com.securityexpert.nexus.ui2.service.device.DeviceAddSingleService;
+import com.securityexpert.nexus.ui2.service.device.DeviceDeletionService;
 import com.securityexpert.nexus.ui2.service.device.DeviceQueryService;
+import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
 /**
@@ -45,11 +47,14 @@ public final class DeviceRegistrationController {
     }
 
     private final DeviceAddSingleService deviceAddSingleService;
+    private final DeviceDeletionService deviceDeletionService;
     private final DeviceQueryService deviceQueryService;
 
     public DeviceRegistrationController(DeviceAddSingleService deviceAddSingleService,
+            DeviceDeletionService deviceDeletionService,
             DeviceQueryService deviceQueryService) {
         this.deviceAddSingleService = deviceAddSingleService;
+        this.deviceDeletionService = deviceDeletionService;
         this.deviceQueryService = deviceQueryService;
     }
 
@@ -81,6 +86,15 @@ public final class DeviceRegistrationController {
                 yield ResponseEntity.status(HttpStatus.CONFLICT).body(body);
             }
         };
+    }
+
+    @PostMapping("/devices/{deviceId}/delete")
+    public ResponseEntity<Map<String, Object>> deleteDevice(@PathVariable String deviceId,
+            HttpServletRequest servletRequest) {
+        if (!deviceDeletionService.deleteDevice(deviceId, actingUser(servletRequest), ActionRegistry.DEVICE_DELETE)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "NOT_FOUND"));
+        }
+        return ResponseEntity.ok(Map.of("deleted", true, "device_id", deviceId));
     }
 
     @GetMapping("/devices/{deviceId}")
