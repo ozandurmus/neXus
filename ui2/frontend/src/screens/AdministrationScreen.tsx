@@ -7,6 +7,8 @@ import { DeviceManagementPane } from "./DeviceRegistryPanel";
 import { ProjectPlanPanel } from "./ProjectPlanPanel";
 
 import { CustomRolesPanel } from "./CustomRolesPanel";
+import { AuditLogPanel } from "./AuditLogPanel";
+import { DirectorySettingsPanel } from "../components/settings/DirectorySettingsPanel";
 
 /** M3Administration with an empty registry. Enrollment is the one place a device enters the product. */
 export function AdministrationScreen() {
@@ -55,6 +57,14 @@ export function AdministrationScreen() {
           {
             label: "Roles & Permissions",
             panel: <CustomRolesPanel />,
+          },
+          {
+            label: "LDAP Settings",
+            panel: <DirectorySettingsPanel />,
+          },
+          {
+            label: "Audit Logs",
+            panel: <AuditLogPanel />,
           },
         ]}
       />

@@ -40,6 +40,13 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /devices/inventory/collect-all", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
             Map.entry("GET /notifications", ActionRegistry.NOTIFICATIONS_READ),
+            Map.entry("GET /roles", ActionRegistry.RBAC_ROLE_READ),
+            Map.entry("POST /roles", ActionRegistry.RBAC_ROLE_WRITE),
+            Map.entry("PUT /roles/*", ActionRegistry.RBAC_ROLE_WRITE),
+            Map.entry("DELETE /roles/*", ActionRegistry.RBAC_ROLE_WRITE),
+            Map.entry("GET /config/ldap", ActionRegistry.LDAP_CONFIG_READ),
+            Map.entry("POST /config/ldap", ActionRegistry.LDAP_CONFIG_WRITE),
+            Map.entry("GET /audit-logs", ActionRegistry.AUDIT_LOG_READ),
             // 13G: one resource, body-only (no path variable), matching
             // /role-bindings/revoke's own shape.
             Map.entry("POST /local-identities", ActionRegistry.LOCAL_IDENTITY_CREATE),
