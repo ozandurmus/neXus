@@ -636,6 +636,14 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
                 </TableRow>
               </TableHead>
               <TableBody>
+                {rootCandidates.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={discoveryPhase === "done" ? 5 : 4} align="center" sx={{ py: 4, color: m3.onSurfaceVar }}>
+                      No candidates found.
+                    </TableCell>
+                  </TableRow>
+                )}
+
                 {rootCandidates.map((root) => (
                   <CandidateRows
                     key={root.candidate_id}
