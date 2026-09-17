@@ -1,52 +1,59 @@
 # UI 2.0 Custom RBAC Roles
 
-**Status:** FROZEN
+**Status**: DRAFT
 
-## 1. Introduction
-The Product Owner requested transitioning from the current closed, enum-based `RoleToken` vocabulary to a dynamic, database-backed custom RBAC (Role-Based Access Control) system. This design outlines the necessary schema and logic changes.
+## 1. Overview
+This document outlines the architectural design for moving from a closed vocabulary `RoleToken` system to a dynamic, database-backed Custom Role-Based Access Control (RBAC) system in UI 2.0.
 
-## 2. Current Architecture
-- **`RoleToken.java`:** Defines a hardcoded set of roles (`VIEWER`, `OPERATOR`, `ONBOARDING_ADMIN`, etc.).
-- **`RbacEvaluator.java`:** Evaluates an actor's access against a required `RoleToken` utilizing `RoleBindingRecord`.
+## 2. Requirements
+- Replace hardcoded roles (e.g., `ROLE_ADMIN`, `ROLE_USER`) with dynamic roles stored in the database.
+- Introduce granular permissions (privileges) that can be assigned to custom roles.
+- Allow administrators to create, update, and delete custom roles via the UI.
+- Assign users to one or more roles.
+- Enforce permissions at the API and UI levels.
 
-## 3. Proposed Architecture
+## 3. Architecture
 
 ### 3.1 Database Schema
-We will introduce tables to represent dynamic roles and their granular permissions.
-
-- **`rbac_roles`**
-  - `id` (Primary Key, UUID)
-  - `name` (String, unique, e.g., "Custom Security Admin")
-  - `token_string` (String, unique, e.g., "role:custom_security_admin")
+Create new tables:
+- `permissions`:
+  - `id` (Primary Key)
+  - `name` (String, e.g., `READ_USERS`, `WRITE_SETTINGS`)
   - `description` (String)
-  - `is_system` (Boolean, true for default legacy roles to prevent deletion)
+- `roles`:
+  - `id` (Primary Key)
+  - `name` (String, unique)
+  - `description` (String)
+  - `is_system` (Boolean - to prevent deletion of default roles like Admin)
+- `role_permissions` (Join Table):
+  - `role_id` (Foreign Key)
+  - `permission_id` (Foreign Key)
+- `user_roles` (Join Table):
+  - `user_id` (Foreign Key)
+  - `role_id` (Foreign Key)
 
-- **`rbac_permissions`**
-  - `id` (Primary Key, UUID)
-  - `action` (String, e.g., "view:reports", "edit:users")
-  
-- **`rbac_role_permissions`** (Join Table)
-  - `role_id` (UUID)
-  - `permission_id` (UUID)
+### 3.2 Backend Implementation
+- **Entities & Repositories**: Create entities for `Role` and `Permission`.
+- **Spring Security Integration**:
+  - Implement a custom `UserDetailsService` that loads a user's roles and their associated permissions.
+  - Map permissions to Spring Security `GrantedAuthority` (e.g., `AUTHORITY_READ_USERS`).
+- **Annotations**: Use `@PreAuthorize("hasAuthority('...')")` on controller methods instead of `@PreAuthorize("hasRole('...')")`.
+- **Service Layer**: `RoleService` for CRUD operations on roles, ensuring `is_system` roles cannot be modified or deleted improperly.
 
-### 3.2 Backend Changes
-- **Replace Enum:** The `RoleToken` enum will be replaced by a `Role` entity model. Methods expecting `RoleToken` will be refactored to accept a String token or a `Role` object.
-- **Dynamic Evaluation:** `RbacEvaluator.evaluate()` will be modified to resolve the requested token dynamically against the `rbac_roles` table rather than the closed enum values. It will check if the user's bound roles map to the required context.
-- **Role Binding Updates:** `RoleBindingRecord` and `RoleBindingRepository` will need to link to the new `rbac_roles` table (e.g., via `role_id` or `token_string`).
-- **Granular Permissions (Optional Phase 2):** In the future, evaluation could transition from checking role presence to checking specific permission presence.
-
-### 3.3 UI Implementation
-- A Roles & Permissions management view.
-- Ability to create a custom role, assign a name, and potentially select from a list of granular permissions.
-- Ability to bind these new custom roles to existing LDAP groups or Local Identities.
+### 3.3 Frontend Implementation
+- **React Components**:
+  - `RoleManagementView`: A data grid listing all roles.
+  - `RoleEditor`: A form to edit a role's details and a checklist/transfer list to assign permissions.
+- **UI Authorization**:
+  - Implement a `usePermissions` hook to check if the current user has specific permissions.
+  - Use an `Authorized` wrapper component to conditionally render UI elements (menus, buttons) based on permissions.
 
 ## 4. Migration Strategy
-- A database migration script will insert the existing `RoleToken` values (`VIEWER`, `OPERATOR`, etc.) into the `rbac_roles` table with `is_system = true`.
-- Existing `RoleBindingRecord` entries will continue to function since the `token_string` will match the newly migrated rows.
+- **Database Migration**: Flyway/Liquibase scripts to create the new tables.
+- **Data Seeding**: Insert base permissions and default roles (Admin, User).
+- **Data Migration**: Map existing user `RoleToken`s to the new `user_roles` relationships during a migration phase.
 
-## 5. Resolved Questions
-- **Permission Granularity:** Custom roles will be composed of granular permissions matching the ActionRegistry vocabulary.
-- **Hierarchy:** Custom roles will NOT support hierarchy to keep evaluation flat.
+## 5. Security Considerations
+- Ensure that the endpoint to modify roles/permissions is strictly guarded by a high-level permission (e.g., `MANAGE_ROLES`).
+- Prevent modification of the user's own roles to avoid privilege escalation.
 
-## 6. Alignment with AGENTS.md
-- **Safe Evaluation:** Unresolvable states or evaluation failures must safely fail-closed (DENIED / AUTHZ_NOT_EVALUATED), maintaining the existing `RbacEvaluator` guarantees.

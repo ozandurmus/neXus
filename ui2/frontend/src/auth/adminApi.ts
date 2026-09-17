@@ -262,6 +262,39 @@ export function listDevices(): Promise<{ devices: DeviceSummary[] }> {
   return call("/devices", "GET");
 }
 
+export interface TransportEntry {
+  readonly endpoint_id: string;
+  readonly transport_kind: string;
+}
+
+export interface TransportSummary {
+  readonly presence: "PRESENT" | "MISSING";
+  readonly transports: TransportEntry[];
+}
+
+export interface ActionAffordance {
+  readonly outcome: "PERMITTED" | "NO_APPLICABLE_AUTHORITY" | "DENIED" | "AUTHZ_NOT_EVALUATED";
+  readonly authority: string | null;
+  readonly reason_code: string | null;
+}
+
+export interface DeviceWorkspaceView {
+  readonly device_id: string;
+  readonly vendor_hint: string;
+  readonly registration_source: string;
+  readonly created_at: string;
+  readonly is_test_target: boolean;
+  readonly credential_configured: boolean;
+  readonly enrollment_state: "DRAFT" | "ENROLLED" | "UNREACHABLE" | "DEGRADED" | "NOT_EVALUABLE";
+  readonly disabled: boolean;
+  readonly transport: TransportSummary;
+  readonly action_affordance: Record<string, ActionAffordance>;
+}
+
+export function getDeviceWorkspace(deviceId: string): Promise<DeviceWorkspaceView> {
+  return call(`/devices/${encodeURIComponent(deviceId)}`, "GET");
+}
+
 /**
  * Inventory read model (NXS-LOCAL-0160): the READ CONTRACT shared with
  * NXS-LOCAL-0159's persistence layer. `collected_at` is `null` until a

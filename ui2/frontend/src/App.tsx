@@ -61,7 +61,27 @@ export function screenFromSearch(search: string): { readonly screen: ScreenId; r
   return { screen: "overview", preview: false };
 }
 
+import { DeviceWorkspaceScreen } from "./screens/DeviceWorkspaceScreen";
+
 export function App({ search = typeof window === "undefined" ? "" : window.location.search }: { readonly search?: string }) {
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/devices/")) {
+    const parts = window.location.pathname.split("/");
+    if (parts.length === 3 && parts[2]) {
+      return (
+        <ThemeProvider theme={m3Theme}>
+          <CssBaseline />
+          <Box sx={{ display: "flex", minHeight: "100vh" }}>
+            <NavigationRail active="inventory" />
+            <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+              <TopAppBar />
+              <DeviceWorkspaceScreen deviceId={parts[2]} />
+            </Box>
+          </Box>
+        </ThemeProvider>
+      );
+    }
+  }
+
   const { screen, preview } = screenFromSearch(search);
   const Product = PRODUCT_SCREENS[screen];
   const Preview = PREVIEW_SCREENS[screen];
