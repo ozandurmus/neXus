@@ -24,40 +24,23 @@
   <div id="token-panel" class="hidden">
     <p>Paste the token printed by <code>orchestrator.py dashboard</code> (the
       <code>#t=...</code> part of the URL it printed):</p>
-    <label for="token-input">Dashboard token</label>
     <input id="token-input" type="text" placeholder="token" autocomplete="off">
     <button id="token-save">Use this token</button>
     <div id="token-error" class="muted"></div>
   </div>
 
   <div id="board-wrap" class="hidden">
-    <nav id="movement-filters" aria-label="Movement filters">
-      <button data-filter="active" aria-pressed="true">Active</button>
-      <button data-filter="needs" aria-pressed="false">Needs you</button>
-      <button data-filter="archive" aria-pressed="false">Archive</button>
-    </nav>
-    <label for="movement-search">Search movement ID or objective</label>
-    <input id="movement-search" type="search">
-    <p id="row-count" class="muted"></p>
-    <div id="table-wrap" tabindex="0" role="region" aria-label="Movement table">
-      <table id="movement-table">
-        <caption>Loaded movements</caption>
-        <thead><tr><th scope="col">Movement / objective</th><th scope="col">Classification / health</th>
-          <th scope="col">Provider / model / effort</th><th scope="col">Process / stage</th>
-          <th scope="col">Duration / idle evidence</th><th scope="col">Usage / cost</th>
-          <th scope="col">PR / verification</th></tr></thead>
-        <tbody id="movement-rows"></tbody>
-      </table>
-    </div>
-    <p id="empty-state" class="muted"></p>
-    <button id="archive-limit" class="hidden">Show all</button>
+    <div id="board-columns"></div>
+    <details id="archive">
+      <summary>Archive</summary>
+      <div id="archive-cards"></div>
+    </details>
 
     <section id="detail-panel" class="hidden">
       <div id="detail-header">
-        <button id="detail-close" aria-label="Close movement details">Close</button>
+        <button id="detail-close">&times;</button>
         <h2 id="detail-title"></h2>
       </div>
-      <p id="detail-note" class="muted"></p>
       <div id="detail-sections">
         <details class="detail-section" data-section="summary" open>
           <summary>Summary</summary>
@@ -65,16 +48,7 @@
         </details>
         <details class="detail-section" data-section="traffic">
           <summary>Traffic</summary>
-          <div class="detail-body" id="pane-traffic">
-            <div id="traffic-entries"></div>
-            <div class="msg-box" id="msg-box">
-              <label for="msg-text">Message to selected movement</label>
-              <textarea id="msg-text" placeholder="Send a note to this movement..."></textarea>
-              <p class="muted">Unsent drafts stay in this page only; closing or reloading the page discards them.</p>
-              <button id="msg-send">Send</button>
-              <div class="msg-state" id="msg-state" role="status"></div>
-            </div>
-          </div>
+          <div class="detail-body" id="pane-traffic"></div>
         </details>
         <details class="detail-section" data-section="changes">
           <summary>Changes</summary>
