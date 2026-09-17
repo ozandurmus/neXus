@@ -7,7 +7,8 @@ import { ScreenHeader, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { getDeviceWorkspace, type DeviceWorkspaceView, type ActionAffordanceView, type TransportSummary, type ApiError } from "../auth/adminApi";
+import { getDeviceWorkspace, type DeviceWorkspaceView, type ActionAffordance, type TransportSummary, type ApiError } from "../auth/adminApi";
+import { enrollmentStateLabel } from "../shell/deviceCopy";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -20,14 +21,6 @@ function vendorLabel(vendorHint: string): string {
   return vendorHint === "check_point" ? "Check Point" : vendorHint === "palo_alto" ? "Palo Alto" : vendorHint;
 }
 
-function enrollmentStateLabel(state: string): string {
-  if (state === "DRAFT") return "Draft";
-  if (state === "ENROLLED") return "Enrolled";
-  if (state === "UNREACHABLE") return "Unreachable";
-  if (state === "DEGRADED") return "Degraded";
-  return "Not evaluable";
-}
-
 function enrollmentStateCopy(state: string): string {
   if (state === "DRAFT") return "Registered. Not confirmed reachable. Never collected from.";
   if (state === "ENROLLED") return "A past authorized confirmation succeeded.";
@@ -36,15 +29,15 @@ function enrollmentStateCopy(state: string): string {
   return "The recorded enrollment state is not recognized. No action on this device is treated as eligible.";
 }
 
-function AffordanceAction({ actionId, affordance }: { actionId: string; affordance: ActionAffordanceView }) {
+function AffordanceAction({ actionId, affordance }: { actionId: string; affordance: ActionAffordance }) {
   const isRefused = affordance.outcome !== "PERMITTED";
 
   const getReasonMessage = () => {
     if (affordance.outcome === "DENIED") return "You may not.";
-    if (affordance.reasonCode === "role_token_unbound") return "This capability has no binding.";
-    if (affordance.reasonCode === "actor_group_set_stale") return "Your group set is stale.";
-    if (affordance.reasonCode === "actor_not_in_required_group") return "You are not in the required group.";
-    return affordance.reasonCode ? affordance.reasonCode : "Action refused.";
+    if (affordance.reason_code === "role_token_unbound") return "This capability has no binding.";
+    if (affordance.reason_code === "actor_group_set_stale") return "Your group set is stale.";
+    if (affordance.reason_code === "actor_not_in_required_group") return "You are not in the required group.";
+    return affordance.reason_code ? affordance.reason_code : "Action refused.";
   };
 
   const handleAction = async () => {
@@ -78,10 +71,10 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
     <ScreenRoot>
       <ScreenHeader
         title="Device Workspace"
-        subtitle={device ? device.deviceId : "Loading..."}
+        subtitle={device ? device.device_id : "Loading..."}
         actions={<M3Button emphasis="outlined" href="?screen=inventory">Back to Inventory</M3Button>}
       />
-      <Box sx={{ p: 3, display: "flex", flexDirection: "column", gap: 3 }}>
+      <Box sx={{ p: 3, display: "flex", flexDirection: "column", gap: 3, maxWidth: 800 }}>
         {error && (
           <EmptyPanel title="Workspace unavailable" body={error}>
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -95,12 +88,12 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
             <Box sx={{ bgcolor: m3.scHigh, p: 2, borderRadius: 2 }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "medium" }}>Identity</Typography>
               <Stack spacing={1}>
-                <Typography variant="body2"><strong>Device ID:</strong> {device.deviceId}</Typography>
-                <Typography variant="body2"><strong>Vendor:</strong> {vendorLabel(device.vendorHint)} <em>(hint)</em></Typography>
-                <Typography variant="body2"><strong>Registered:</strong> {new Date(device.createdAt).toLocaleString()}</Typography>
-                <Typography variant="body2"><strong>Source:</strong> {device.registrationSource}</Typography>
-                <Typography variant="body2"><strong>Test Target:</strong> {device.isTestTarget ? "Yes" : "No"}</Typography>
-                <Typography variant="body2"><strong>Credential:</strong> {device.credentialConfigured ? "Configured" : "Not configured"}</Typography>
+                <Typography variant="body2"><strong>Device ID:</strong> {device.device_id}</Typography>
+                <Typography variant="body2"><strong>Vendor:</strong> {vendorLabel(device.vendor_hint)} <em>(hint)</em></Typography>
+                <Typography variant="body2"><strong>Registered:</strong> {new Date(device.created_at).toLocaleString()}</Typography>
+                <Typography variant="body2"><strong>Source:</strong> {device.registration_source}</Typography>
+                <Typography variant="body2"><strong>Test Target:</strong> {device.is_test_target ? "Yes" : "No"}</Typography>
+                <Typography variant="body2"><strong>Credential:</strong> {device.credential_configured ? "Configured" : "Not configured"}</Typography>
               </Stack>
             </Box>
 
@@ -111,8 +104,8 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
                 {device.transport.transports.length > 0 && (
                   <Box sx={{ pl: 2 }}>
                     {device.transport.transports.map((t) => (
-                      <Typography key={t.endpointId} variant="body2">
-                        {t.transportKind} ({t.endpointId})
+                      <Typography key={t.endpoint_id} variant="body2">
+                        {t.transport_kind} ({t.endpoint_id})
                       </Typography>
                     ))}
                   </Box>
@@ -127,20 +120,20 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "medium" }}>Enrollment State</Typography>
               <Stack spacing={1.5}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <StatusChip tone="neutral" label={enrollmentStateLabel(device.enrollmentState)} />
-                  {device.disabled && <StatusChip tone="error" label="Disabled" />}
+                  <StatusChip tone="neutral" label={enrollmentStateLabel(device.enrollment_state)} />
+                  {device.disabled && <StatusChip tone="bad" label="Disabled" />}
                 </Box>
-                <Typography variant="body2">{enrollmentStateCopy(device.enrollmentState)}</Typography>
+                <Typography variant="body2">{enrollmentStateCopy(device.enrollment_state)}</Typography>
               </Stack>
             </Box>
 
             <Box sx={{ bgcolor: m3.scHigh, p: 2, borderRadius: 2 }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "medium" }}>Actions & Affordances</Typography>
               <Stack spacing={1.5}>
-                {Object.entries(device.actionAffordance).map(([actionId, affordance]) => (
+                {Object.entries(device.action_affordance).map(([actionId, affordance]) => (
                   <AffordanceAction key={actionId} actionId={actionId} affordance={affordance} />
                 ))}
-                {Object.keys(device.actionAffordance).length === 0 && (
+                {Object.keys(device.action_affordance).length === 0 && (
                   <Typography variant="body2" color="text.secondary">No actions available.</Typography>
                 )}
               </Stack>

@@ -63,10 +63,10 @@ export function screenFromSearch(search: string): { readonly screen: ScreenId; r
 
 import { DeviceWorkspaceScreen } from "./screens/DeviceWorkspaceScreen";
 
-export function App({ search = typeof window === "undefined" ? "" : window.location.search }: { readonly search?: string }) {
-  if (typeof window !== "undefined" && window.location.pathname.startsWith("/devices/")) {
-    const parts = window.location.pathname.split("/");
-    if (parts.length === 3 && parts[2]) {
+export function App({ search = typeof window === "undefined" ? "" : window.location.search, pathname = typeof window === "undefined" ? "" : window.location.pathname }: { readonly search?: string, readonly pathname?: string }) {
+  if (pathname.startsWith("/devices/")) {
+    const deviceId = pathname.substring("/devices/".length);
+    if (deviceId !== "") {
       return (
         <ThemeProvider theme={m3Theme}>
           <CssBaseline />
@@ -74,7 +74,7 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
             <NavigationRail active="inventory" />
             <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
               <TopAppBar />
-              <DeviceWorkspaceScreen deviceId={parts[2]} />
+              <DeviceWorkspaceScreen deviceId={deviceId} />
             </Box>
           </Box>
         </ThemeProvider>
