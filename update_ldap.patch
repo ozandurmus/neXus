@@ -1,0 +1,18 @@
+--- docs/design/UI2_0_LDAP_CONFIGURATION.md
++++ docs/design/UI2_0_LDAP_CONFIGURATION.md
+@@ -38,10 +38,10 @@
+ 
+-## 4. Open Questions / UNKNOWNs
+-- **Trust Material Handling:** Does the user upload the trust material file (e.g., truststore/certificate) via the UI, or do they only provide an absolute path to a file already residing on the server?
+-- **Multiple Profiles:** Does the system need to actively authenticate against *multiple* LDAP profiles simultaneously, or just one active profile at a time?
+-- **Bootstrapping:** How does the initial administrative user log in if the LDAP configuration is entirely DB-backed and the database is initially empty? (Assume local fallback authority).
++## 4. Resolved Questions
++- **Trust Material Handling:** The user inputs the trust material (e.g. PEM certificate) directly via the UI, which is stored securely in the database (`trust_material_pem` column).
++- **Multiple Profiles:** The system will support exactly one active directory profile at a time for this phase.
++- **Bootstrapping:** The initial administrative user (`nexusadmin`) logs in via the existing local fallback authority (LocalMechanism) to configure the LDAP integration.
+ 
+ ## 5. Alignment with AGENTS.md
+-- **Evidence over assumptions:** Explicit UNKNOWNs are stated above regarding trust material handling.
++- **Evidence over assumptions:** All previous UNKNOWNs have been resolved by the Product Owner.
+ - **Language:** English by default.
+ - **No secrets in browser:** Explicitly declared in section 3.1.

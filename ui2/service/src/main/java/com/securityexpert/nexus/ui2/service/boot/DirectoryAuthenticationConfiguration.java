@@ -1,40 +1,46 @@
 package com.securityexpert.nexus.ui2.service.boot;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.env.Environment;
 import com.securityexpert.nexus.ui2.identity.ldap.*;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.DirectoryProfileRepository;
 
-/** Optional server-owned LDAP profile. No profile means no LDAP loader/calls.
- * Corporate DIRECTORY-POSTURE/admission remain disabled pending recorded joint approval.
- */
 @Configuration
-@ConditionalOnProperty(name = "ui2.ldap.profile-id")
 public class DirectoryAuthenticationConfiguration {
-    @Bean public DirectoryProfile directoryProfile(Environment env) {
-        try {
-            String pin = env.getProperty("ui2.ldap.store-pin-file");
-            return new DirectoryProfile(env.getRequiredProperty("ui2.ldap.profile-id"),
-                    env.getRequiredProperty("ui2.ldap.host"), Integer.parseInt(env.getRequiredProperty("ui2.ldap.port")),
-                    DirectoryProfile.Transport.valueOf(env.getRequiredProperty("ui2.ldap.transport")),
-                    Path.of(env.getRequiredProperty("ui2.ldap.trust-material-file")),
-                    DirectoryProfile.Format.valueOf(env.getRequiredProperty("ui2.ldap.trust-format")),
-                    pin == null ? null : Path.of(pin), env.getRequiredProperty("ui2.ldap.bind-dn-template"),
-                    env.getRequiredProperty("ui2.ldap.group-search-base-dn"), env.getRequiredProperty("ui2.ldap.access-group-reference"));
-        } catch (RuntimeException e) { throw new LdapStartupException("directory_profile_invalid"); }
+    @Bean
+    public DirectoryProfile directoryProfile(DirectoryProfileRepository repo) {
+        return repo.findActiveProfile().map(record -> {
+            try {
+                Path trustPath = Files.createTempFile("ldap-trust", ".pem");
+                if (record.trustMaterialPem() != null) {
+                    Files.writeString(trustPath, record.trustMaterialPem());
+                }
+                return new DirectoryProfile(record.id().toString(), record.host(), record.port(),
+                        DirectoryProfile.Transport.valueOf(record.transport()),
+                        trustPath, DirectoryProfile.Format.valueOf(record.trustFormat()),
+                        null, record.bindDnTemplate(), record.groupSearchBaseDn(), record.accessGroupReference());
+            } catch (Exception e) {
+                throw new LdapStartupException("directory_profile_invalid");
+            }
+        }).orElse(null);
     }
+    
     @Bean public DirectoryTrustPolicy directoryTrustPolicy(DirectoryProfile profile, ActorAuthzStateRepository actors) {
+        if (profile == null) return null;
         return new DirectoryTrustPolicy(profile, actors::expireDirectory);
     }
+    
     @Bean public LdapMechanism ldapMechanism(DirectoryProfile profile, DirectoryTrustPolicy trust) {
-        // C3 §4.4: initial operator admission is not the gated service-account function.
+        if (profile == null || trust == null) return null;
         return new LdapMechanism(UnboundIdOperatorBindAdapter.create(profile, trust));
     }
+    
     @Bean public UnboundIdRevalidationAdapter ldapRevalidationAdapter(DirectoryProfile profile, DirectoryTrustPolicy trust) {
-        // No service-account path is resolved/read while corporate posture is disabled.
+        if (profile == null || trust == null) return null;
         return new UnboundIdRevalidationAdapter(false, profile, trust, null, null);
     }
 }

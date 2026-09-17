@@ -1,0 +1,55 @@
+{
+  "movement": "cp-inventory-hybrid",
+  "refs": [
+    "cp-inventory-hybrid"
+  ],
+  "report": {
+    "acceptance_criteria": [
+      "Topology fetched via mgmt_cli and routing via SSH."
+    ],
+    "baseline": {
+      "authority": "docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md (FROZEN)",
+      "observed": "Missing CP inventory",
+      "what_exists": "Only empty placeholders exist."
+    },
+    "context_not_loaded": [
+      "Unrelated history"
+    ],
+    "deployment_direction": "local validation only",
+    "git": {
+      "base": "origin/main",
+      "lane": "feature/cp-inventory-hybrid"
+    },
+    "invariants": [
+      "No security weakening"
+    ],
+    "merge_gate": "PO opens/merges.",
+    "movement_type": "IMPLEMENTATION",
+    "objective": "Implement Check Point Inventory Collection using mgmt_cli for topology and SSH for routing based on UI2_0_INVENTORY_TOPOLOGY_CONTRACT.md",
+    "output_contract": [
+      "Local commit and PR."
+    ],
+    "recommended_reasoning": {
+      "reason": "Java implementation",
+      "tier": "main engineer"
+    },
+    "requirements": [
+      "Implement Check Point Inventory Collection using mgmt_cli for topology and SSH for routing based on UI2_0_INVENTORY_TOPOLOGY_CONTRACT.md"
+    ],
+    "risks": [
+      "Parsing errors"
+    ],
+    "scope": {
+      "in": [
+        "UI",
+        "Backend"
+      ],
+      "out": [
+        "Unrelated components"
+      ]
+    },
+    "validation_plan": [
+      "Run UI tests"
+    ]
+  }
+}

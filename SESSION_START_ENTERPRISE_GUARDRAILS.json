@@ -1,0 +1,40 @@
+{
+  "protocol_version": 2,
+  "message_type": "SESSION_START",
+  "refs": ["enterprise-guardrails"],
+  "movement": "enterprise-guardrails",
+  "report": {
+    "movement_type": "IMPLEMENTATION",
+    "baseline": {
+      "authority": "docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md",
+      "observed": "No global limit on jobs, no preflight auth check, and missing live job UI on add device.",
+      "what_exists": "Unbounded concurrent jobs allowed. Add device modal closes instantly."
+    },
+    "git": {
+      "base": "origin/main",
+      "lane": "feature/enterprise-guardrails"
+    },
+    "objective": "Implement Max-5 concurrency limit for Inventory jobs, Preflight Auth check, and a live progress UI during device addition.",
+    "requirements": [
+      "Add backend logic to throttle INVENTORY_COLLECT jobs to 5 concurrent executions globally.",
+      "Introduce a PREFLIGHT (Auth-check) job that verifies credentials (fast fail) before INVENTORY_COLLECT is allowed.",
+      "Modify AddDeviceDialog.tsx so it stays open and displays live progress logs of the PREFLIGHT and INVENTORY jobs."
+    ],
+    "scope": {
+      "in": ["UI", "Backend/JobEngine"],
+      "out": ["Unrelated components"]
+    },
+    "invariants": ["No security weakening"],
+    "risks": ["Job engine deadlock"],
+    "context_not_loaded": ["Unrelated history"],
+    "validation_plan": ["Run Java tests, test frontend UI components."],
+    "acceptance_criteria": ["Implemented correctly and tested."],
+    "merge_gate": "PO opens/merges.",
+    "deployment_direction": "local validation only",
+    "recommended_reasoning": {
+      "reason": "Backend synchronization and advanced UI state management.",
+      "tier": "main engineer"
+    },
+    "output_contract": ["Local commit and PR."]
+  }
+}

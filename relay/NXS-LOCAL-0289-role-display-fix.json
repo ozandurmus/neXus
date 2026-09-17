@@ -1,0 +1,126 @@
+{
+  "created_at": "2026-09-17T07:08:13Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Implemented correctly and tested."
+        ],
+        "baseline": {
+          "authority": "docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md (FROZEN)",
+          "observed": "TopAppBar roles text is too long and overflows.",
+          "what_exists": "TopAppBar.tsx renders comma-separated roles."
+        },
+        "context_not_loaded": [
+          "Backend"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/role-display-fix"
+        },
+        "invariants": [
+          "No security weakening"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make the user role display in TopAppBar compact.",
+        "output_contract": [
+          "Local commit and PR."
+        ],
+        "recommended_reasoning": {
+          "reason": "UI styling",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Modify TopAppBar.tsx to show a short label like 'nexusadmin (6 roles)' if there are more than 2 roles.",
+          "Add a Tooltip showing the full comma-separated list on hover."
+        ],
+        "risks": [
+          "UI breakage"
+        ],
+        "scope": {
+          "in": [
+            "UI"
+          ],
+          "out": [
+            "Backend"
+          ]
+        },
+        "validation_plan": [
+          "Run UI tests"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-17T07:08:13Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "No tracked or untracked repository files changed."
+        ],
+        "completed": [
+          "No repository changes retained; UI test command could not start."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged; candidate compact-role UI diff was reverted because required validation could not start."
+        },
+        "integration": {
+          "branch": "feature/role-display-fix",
+          "ci": "NOT RUN: vitest executable unavailable.",
+          "head_sha": "cb45c5cad6c4f3b5d91f11f4891fc04d2e591352",
+          "merge_commit": null,
+          "merge_decision": "No PR opened; orchestrator merge mode respected.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0289",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Restore the existing UI test executable, then rerun the approved role-display implementation.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "TopAppBar role rendering and all Backend paths remain unchanged.",
+          "No security behavior changed."
+        ],
+        "recommended_reasoning": {
+          "reason": "Focused UI implementation and validation after dependency restoration.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Acceptance criteria remain unmet until the existing UI test dependencies are restored."
+        ],
+        "validation": {
+          "affected": "NOT RUN: required UI test executable unavailable.",
+          "diff_check": "PASS: git diff --check origin/main returned clean.",
+          "full_regression": "NOT RUN: validation stopped at the required UI test command.",
+          "privacy": "NOT RUN: no code change retained.",
+          "real_environment": "NOT APPLICABLE: local UI-only movement.",
+          "state_consistency": "NOT RUN: no project state changed.",
+          "targeted": "BLOCKED: npm test -- --runInBand could not start: sh: vitest: command not found."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-17T07:11:13Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0289",
+  "movement": "role-display-fix",
+  "next_actor": null,
+  "refs": [
+    "role-display-fix"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-17T07:11:13Z"
+}

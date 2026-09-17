@@ -1,0 +1,41 @@
+{
+  "protocol_version": 2,
+  "message_type": "SESSION_START",
+  "refs": ["inventory-auto"],
+  "movement": "inventory-auto",
+  "report": {
+    "movement_type": "IMPLEMENTATION",
+    "baseline": {
+      "authority": "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md",
+      "observed": "Devices remain in DRAFT and bulk collect is missing.",
+      "what_exists": "DeviceRegistrationService registers a draft."
+    },
+    "git": {
+      "base": "origin/main",
+      "lane": "feature/inventory-auto"
+    },
+    "objective": "1. Auto-trigger an initial collect job on device registration and transition to ENROLLED on success. 2. Add a POST /devices/inventory/collect-all route and a 'Bulk Collect' UI button.",
+    "requirements": [
+      "Modify backend to trigger inventory/confirm on Device Add.",
+      "Transition DRAFT to ENROLLED automatically on collect success.",
+      "Add POST /devices/inventory/collect-all API.",
+      "Add a 'Bulk Collect' button in UI for enrolled devices."
+    ],
+    "scope": {
+      "in": ["UI", "Backend"],
+      "out": ["Unrelated components"]
+    },
+    "invariants": ["No security weakening"],
+    "risks": ["Job failure handling"],
+    "context_not_loaded": ["Unrelated history"],
+    "validation_plan": ["Run Java tests"],
+    "acceptance_criteria": ["Implemented correctly and tested."],
+    "merge_gate": "PO opens/merges.",
+    "deployment_direction": "local validation only",
+    "recommended_reasoning": {
+      "reason": "Backend and UI wiring",
+      "tier": "main engineer"
+    },
+    "output_contract": ["Local commit and PR."]
+  }
+}

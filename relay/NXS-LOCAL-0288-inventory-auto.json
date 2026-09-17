@@ -1,0 +1,131 @@
+{
+  "created_at": "2026-09-17T07:08:13Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Implemented correctly and tested."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md",
+          "observed": "Devices remain in DRAFT and bulk collect is missing.",
+          "what_exists": "DeviceRegistrationService registers a draft."
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/inventory-auto"
+        },
+        "invariants": [
+          "No security weakening"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "1. Auto-trigger an initial collect job on device registration and transition to ENROLLED on success. 2. Add a POST /devices/inventory/collect-all route and a 'Bulk Collect' UI button.",
+        "output_contract": [
+          "Local commit and PR."
+        ],
+        "recommended_reasoning": {
+          "reason": "Backend and UI wiring",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Modify backend to trigger inventory/confirm on Device Add.",
+          "Transition DRAFT to ENROLLED automatically on collect success.",
+          "Add POST /devices/inventory/collect-all API.",
+          "Add a 'Bulk Collect' button in UI for enrolled devices."
+        ],
+        "risks": [
+          "Job failure handling"
+        ],
+        "scope": {
+          "in": [
+            "UI",
+            "Backend"
+          ],
+          "out": [
+            "Unrelated components"
+          ]
+        },
+        "validation_plan": [
+          "Run Java tests"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-17T07:08:13Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added secured POST /devices/inventory/collect-all with count-only results.",
+          "Added the Bulk Collect UI control and focused Java/frontend tests."
+        ],
+        "completed": [
+          "Opened PR #426 with bulk inventory collection and its UI control.",
+          "Confirmed the existing registration-confirm-success path already performs DRAFT to ENROLLED."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "Bulk Collect control added to the UI2 Inventory screen."
+        },
+        "integration": {
+          "branch": "feature/inventory-auto",
+          "ci": "UNVERIFIED: not inspected.",
+          "head_sha": "604d2b0",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode: PR opened; merge intentionally not executed by worker.",
+          "merge_state": "OPEN",
+          "pr": 426,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/426"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0288",
+          "movement_type": "VALIDATION",
+          "objective": "Run the unavailable Java and frontend checks before merge.",
+          "status": "in_progress"
+        },
+        "preserved": [
+          "Existing add-device enrollment-confirm admission and atomic DRAFT to ENROLLED success transition.",
+          "Existing onboarding-admin authorization for inventory collection."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded validation rerun.",
+          "tier": "low"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Run Java and frontend tests where the Gradle cache and frontend dependencies are available."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: full affected-module tests were not runnable in this sandbox.",
+          "diff_check": "PASSED: git diff --check origin/main.",
+          "full_regression": "UNVERIFIED: not run; no test runtime was available.",
+          "privacy": "UNVERIFIED: local privacy gate not run.",
+          "real_environment": "NOT_APPLICABLE: local validation only; no device or deployment access used.",
+          "state_consistency": "NOT_APPLICABLE: no project-state artifact changed.",
+          "targeted": "UNVERIFIED: Java and frontend targeted tests could not start because of local environment dependencies."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-17T07:14:52Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0288",
+  "movement": "inventory-auto",
+  "next_actor": null,
+  "refs": [
+    "inventory-auto"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-17T07:14:52Z"
+}

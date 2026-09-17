@@ -1,0 +1,2 @@
+preflight: report.git.base is not origin/main at the fetched HEAD (got 'origin/feature/ssh-tofu-and-ldap-config')
+preflight: --provider/--model/--effort must all be given explicitly on the command line

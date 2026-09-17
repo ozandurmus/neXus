@@ -1,0 +1,14 @@
+@@ -46,9 +46,9 @@
+ 
+-## 5. Open Questions / UNKNOWNs
+-- **Permission Granularity:** Will custom roles be composed of granular permissions (e.g., `read:audit_logs`), or do they simply act as new custom role tags that application code must explicitly check?
+-- **Hierarchy:** Do custom roles support hierarchy/inheritance (as implied by legacy comments "No token implies another by hierarchy")?
++## 5. Resolved Questions
++- **Permission Granularity:** Custom roles will be composed of granular permissions (e.g., `action:device_register`, `action:audit_read`) matching the existing ActionRegistry vocabulary.
++- **Hierarchy:** Custom roles will NOT support hierarchy/inheritance to keep evaluation flat and predictable.
+ 
+ ## 6. Alignment with AGENTS.md
+-- **Safe Evaluation:** `UNKNOWN` states or evaluation failures must safely fail-closed (DENIED / AUTHZ_NOT_EVALUATED), maintaining the existing `RbacEvaluator` guarantees.
++- **Safe Evaluation:** Unresolvable states or evaluation failures must safely fail-closed (DENIED / AUTHZ_NOT_EVALUATED), maintaining the existing `RbacEvaluator` guarantees.
+ 
+ 

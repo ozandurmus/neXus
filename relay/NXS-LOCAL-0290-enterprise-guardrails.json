@@ -1,0 +1,151 @@
+{
+  "created_at": "2026-09-17T07:37:33Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Implemented correctly and tested."
+        ],
+        "baseline": {
+          "authority": "docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md",
+          "observed": "No global limit on jobs, no preflight auth check, and missing live job UI on add device.",
+          "what_exists": "Unbounded concurrent jobs allowed. Add device modal closes instantly."
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/enterprise-guardrails"
+        },
+        "invariants": [
+          "No security weakening"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement Max-5 concurrency limit for Inventory jobs, Preflight Auth check, and a live progress UI during device addition.",
+        "output_contract": [
+          "Local commit and PR."
+        ],
+        "recommended_reasoning": {
+          "reason": "Backend synchronization and advanced UI state management.",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Add backend logic to throttle INVENTORY_COLLECT jobs to 5 concurrent executions globally.",
+          "Introduce a PREFLIGHT (Auth-check) job that verifies credentials (fast fail) before INVENTORY_COLLECT is allowed.",
+          "Modify AddDeviceDialog.tsx so it stays open and displays live progress logs of the PREFLIGHT and INVENTORY jobs."
+        ],
+        "risks": [
+          "Job engine deadlock"
+        ],
+        "scope": {
+          "in": [
+            "UI",
+            "Backend/JobEngine"
+          ],
+          "out": [
+            "Unrelated components"
+          ]
+        },
+        "validation_plan": [
+          "Run Java tests, test frontend UI components."
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-17T07:37:33Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "PREFLIGHT and inventory contract conflict",
+      "text": "Existing add-single admits the security-gated DEVICE_CONFIRM capability and the dialog remains open while polling it. The requested separate PREFLIGHT auth job plus automatic INVENTORY_COLLECT requires a new capability, new device-contact semantics, and a new admission dependency; neither is supplied by this dispatch. Please provide the frozen contract or authorize an explicit minimal mapping before implementation.",
+      "timestamp": "2026-09-17T07:38:59Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner",
+      "marker": "RELAY_DECISION",
+      "scope": "Backend/UI",
+      "seq": 3,
+      "subject": "PREFLIGHT logic",
+      "supersedes": "none",
+      "text": "You are correct. Do not create a new PREFLIGHT capability. Use the existing DEVICE_CONFIRM job as the auth-check. Update the UI dialog to poll for DEVICE_CONFIRM, and upon success, automatically request INVENTORY_COLLECT and continue polling. Implement the max-5 concurrency limit for INVENTORY_COLLECT.",
+      "timestamp": "2026-09-17T07:42:26Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "AddDeviceDialog now polls DEVICE_CONFIRM, submits inventory only after COMPLETED enrollment, and polls that returned job id.",
+          "The atomic claim SQL serializes claims and refuses additional inventory claims while five inventory jobs are CLAIMED or EXECUTING.",
+          "Updated the dialog test and atomic-claim SQL guard test."
+        ],
+        "completed": [
+          "Implemented the DEVICE_CONFIRM-to-INVENTORY_COLLECT UI sequence and the global five-active-inventory claim guard in the worktree."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "worktree-only changes; no deployed UI effect"
+        },
+        "integration": {
+          "branch": "feature/enterprise-guardrails",
+          "ci": "NOT_RUN: no commit or PR could be created.",
+          "head_sha": "cb45c5cad6c4f3b5d91f11f4891fc04d2e591352",
+          "merge_commit": null,
+          "merge_decision": "BLOCKED: orchestrator-mode PR creation requires a committed and pushed branch.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0290",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Restore Git object-store write access, commit the preserved worktree diff, run the targeted frontend and persistence tests, then open the orchestrator-mode PR.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No new PREFLIGHT capability was created; DEVICE_CONFIRM remains the only DRAFT-device auth check.",
+          "The existing inventory admission endpoint and enrollment gate remain unchanged.",
+          "The claim path remains one UPDATE statement with FOR UPDATE SKIP LOCKED and RETURNING."
+        ],
+        "recommended_reasoning": {
+          "reason": "Resume with targeted validation and release handover after the host-level write boundary is restored.",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Git object-store writes are sandbox-blocked, so the worktree changes could not be staged, committed, pushed, or opened as a PR.",
+          "Automated validation remains unverified until an environment with frontend dependencies and writable Gradle cache runs the targeted suites."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: blocked before Java and frontend test execution.",
+          "diff_check": "PASS: git diff --check origin/main completed before the commit attempt.",
+          "full_regression": "UNVERIFIED: not run; targeted validation was blocked.",
+          "privacy": "UNVERIFIED: not run; no sensitive values were added by source inspection.",
+          "real_environment": "NOT RUN: local validation-only dispatch.",
+          "state_consistency": "UNVERIFIED: no project-state update was authorized for this worker movement.",
+          "targeted": "UNVERIFIED: frontend dependencies are absent (vitest: command not found); Gradle wrapper cannot create its sandbox-blocked ~/.gradle lock file."
+        }
+      },
+      "seq": 4,
+      "timestamp": "2026-09-17T07:49:28Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0290",
+  "movement": "enterprise-guardrails",
+  "next_actor": null,
+  "refs": [
+    "enterprise-guardrails"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-17T07:49:28Z"
+}

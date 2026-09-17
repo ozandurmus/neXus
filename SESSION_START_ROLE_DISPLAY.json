@@ -1,0 +1,39 @@
+{
+  "protocol_version": 2,
+  "message_type": "SESSION_START",
+  "refs": ["role-display-fix"],
+  "movement": "role-display-fix",
+  "report": {
+    "movement_type": "IMPLEMENTATION",
+    "baseline": {
+      "authority": "docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md (FROZEN)",
+      "observed": "TopAppBar roles text is too long and overflows.",
+      "what_exists": "TopAppBar.tsx renders comma-separated roles."
+    },
+    "git": {
+      "base": "origin/main",
+      "lane": "feature/role-display-fix"
+    },
+    "objective": "Make the user role display in TopAppBar compact.",
+    "requirements": [
+      "Modify TopAppBar.tsx to show a short label like 'nexusadmin (6 roles)' if there are more than 2 roles.",
+      "Add a Tooltip showing the full comma-separated list on hover."
+    ],
+    "scope": {
+      "in": ["UI"],
+      "out": ["Backend"]
+    },
+    "invariants": ["No security weakening"],
+    "risks": ["UI breakage"],
+    "context_not_loaded": ["Backend"],
+    "validation_plan": ["Run UI tests"],
+    "acceptance_criteria": ["Implemented correctly and tested."],
+    "merge_gate": "PO opens/merges.",
+    "deployment_direction": "local validation only",
+    "recommended_reasoning": {
+      "reason": "UI styling",
+      "tier": "main engineer"
+    },
+    "output_contract": ["Local commit and PR."]
+  }
+}

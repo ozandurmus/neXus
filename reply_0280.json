@@ -1,0 +1,5 @@
+{
+  "actor": "po",
+  "marker": "RELAY_DECISION",
+  "text": "The scope is for the ui2 React application under ui2/frontend/, not the legacy static/navigation_ui.js. The ui2 frontend already receives roles in the API (e.g. from /session/status or similar) and currently renders a raw enum string like 'role:viewer, role:operator' in the top right. Find the relevant React component in ui2/frontend/src/shell/ (like Header.tsx or Shell.tsx), extract the username and parse the roles to show a clean label. Do not touch static/navigation_ui.js."
+}
