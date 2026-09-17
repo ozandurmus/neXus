@@ -105,7 +105,7 @@ public final class InventoryJobExecutor {
 
         if (!(result instanceof InventoryResult.Completed completed)) {
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED);
+                    ACTION_FAILED, describeFailure(result));
             return new JobOutcome.Failed(describeFailure(result));
         }
 
@@ -115,7 +115,7 @@ public final class InventoryJobExecutor {
             deviceInventoryRepository.recordRun(run, ACTOR, ACTION_COMPLETED);
         } catch (RuntimeException recordFailed) {
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED);
+                    ACTION_FAILED, "inventory_run_write_failed: " + recordFailed.getMessage());
             return new JobOutcome.Failed("inventory_run_write_failed: " + recordFailed.getMessage());
         }
 

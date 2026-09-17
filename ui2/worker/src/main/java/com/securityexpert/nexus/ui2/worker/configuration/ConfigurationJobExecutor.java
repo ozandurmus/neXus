@@ -130,7 +130,7 @@ public final class ConfigurationJobExecutor {
 
         if (!(result instanceof ConfigurationResult.Completed completed)) {
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED);
+                    ACTION_FAILED, describeFailure(result));
             return new JobOutcome.Failed(describeFailure(result));
         }
 
@@ -170,7 +170,7 @@ public final class ConfigurationJobExecutor {
                 deviceConfigurationRepository.recordRun(run, data.artefact(), ACTOR, ACTION_COMPLETED);
             } catch (RuntimeException recordFailed) {
                 leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                        ACTION_FAILED);
+                        ACTION_FAILED, "configuration_run_write_failed: " + recordFailed.getMessage());
                 return new JobOutcome.Failed("configuration_run_write_failed: " + recordFailed.getMessage());
             }
             recordBackupArtefactManifest(data.artefact(), targetDeviceId, vendor, confirmFacts);

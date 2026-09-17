@@ -217,12 +217,14 @@ public final class Ui2WorkerMain {
                 discoveryRunRepository, checkPointDiscoveryAdapter, paloAltoDiscoveryAdapter);
 
         JobRecordDao jobRecordDao = new JooqJobRecordDao(transactionBoundary);
-        WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
-                confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
-                backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofSeconds(60), checkPointTrustRuleRef,
-                paloAltoTrustRuleRef, backupCredentialRef);
-
-        claimLoop.runUntilInterrupted(Duration.ofSeconds(2));
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
+        for (int i = 0; i < 10; i++) {
+            WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
+                    confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
+                    backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofSeconds(60), checkPointTrustRuleRef,
+                    paloAltoTrustRuleRef, backupCredentialRef);
+            executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));
+        }
     }
 
     private static String requireEnv(String name) {

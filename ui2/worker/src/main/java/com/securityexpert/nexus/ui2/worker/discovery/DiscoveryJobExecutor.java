@@ -124,7 +124,7 @@ public final class DiscoveryJobExecutor {
             discoveryRunRepository.markFinished(runId, outcome.outcomeSummary, ACTOR, ACTION_COMPLETED);
         } catch (RuntimeException persistFailed) {
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED);
+                    ACTION_FAILED, "discovery_candidates_write_failed: " + persistFailed.getMessage());
             discoveryRunRepository.markFailed(runId, "CANDIDATE_PERSIST_FAILED", ACTOR, ACTION_FAILED);
             return new JobOutcome.Failed("discovery_candidates_write_failed: " + persistFailed.getMessage());
         }

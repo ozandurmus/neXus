@@ -92,6 +92,7 @@ public final class ActionRegistry {
     public static final String LDAP_CONFIG_READ = "ldap_config_read";
     public static final String LDAP_CONFIG_WRITE = "ldap_config_write";
     public static final String AUDIT_LOG_READ = "audit_log_read";
+    public static final String JOB_LOG_READ = "job_log_read";
 
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
@@ -152,6 +153,7 @@ public final class ActionRegistry {
         register(new ActionDescriptor(LDAP_CONFIG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(LDAP_CONFIG_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(AUDIT_LOG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(JOB_LOG_READ, true, Optional.empty()));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

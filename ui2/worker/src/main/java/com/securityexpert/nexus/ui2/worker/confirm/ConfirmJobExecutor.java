@@ -101,7 +101,7 @@ public final class ConfirmJobExecutor {
 
         if (!(primaryResult instanceof ConfirmResult.Completed completed)) {
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED);
+                    ACTION_FAILED, describeFailure(primaryResult));
             return new JobOutcome.Failed(describeFailure(primaryResult));
         }
 
@@ -130,7 +130,7 @@ public final class ConfirmJobExecutor {
         boolean written = deviceRepository.recordConfirmSuccess(targetDeviceId, facts, ACTOR, ACTION_COMPLETED);
         if (!written) {
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED);
+                    ACTION_FAILED, "device_confirm_write_conflict");
             return new JobOutcome.Failed("device_confirm_write_conflict");
         }
 

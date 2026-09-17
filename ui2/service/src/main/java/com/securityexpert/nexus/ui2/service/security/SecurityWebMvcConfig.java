@@ -47,6 +47,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /config/ldap", ActionRegistry.LDAP_CONFIG_READ),
             Map.entry("POST /config/ldap", ActionRegistry.LDAP_CONFIG_WRITE),
             Map.entry("GET /audit-logs", ActionRegistry.AUDIT_LOG_READ),
+            Map.entry("GET /api/v2/jobs", ActionRegistry.JOB_LOG_READ),
             // 13G: one resource, body-only (no path variable), matching
             // /role-bindings/revoke's own shape.
             Map.entry("POST /local-identities", ActionRegistry.LOCAL_IDENTITY_CREATE),

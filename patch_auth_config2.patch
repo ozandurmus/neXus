@@ -1,0 +1,15 @@
+--- ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/DirectoryAuthenticationConfiguration.java
++++ ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/DirectoryAuthenticationConfiguration.java
+@@ -6,6 +6,7 @@
+ import org.springframework.context.annotation.Configuration;
+ import org.springframework.core.env.Environment;
+ import com.securityexpert.nexus.ui2.identity.ldap.*;
++import java.util.Optional;
+ import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository;
+ import com.securityexpert.nexus.ui2.persistence.identity.DirectoryProfileRepository;
+ import com.securityexpert.nexus.ui2.persistence.identity.JooqDirectoryProfileRepository;
+@@ -37,17 +38,20 @@
+     }
+     
+     @Bean public DirectoryTrustPolicy directoryTrustPolicy(DirectoryProfile profile, ActorAuthzStateRepository actors) {
++        // We don't change this, we just change the parameters. Wait, the patch is hard to write correctly for just one line.

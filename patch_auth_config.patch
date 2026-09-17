@@ -1,0 +1,12 @@
+--- ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/DirectoryAuthenticationConfiguration.java
++++ ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/DirectoryAuthenticationConfiguration.java
+@@ -13,6 +13,11 @@
+ @Configuration
+ public class DirectoryAuthenticationConfiguration {
++    @Bean
++    public DirectoryProfileRepository directoryProfileRepository(TransactionBoundary transactionBoundary) {
++        return new JooqDirectoryProfileRepository(transactionBoundary);
++    }
++
+     @Bean
+     public DirectoryProfile directoryProfile(DirectoryProfileRepository repo) {

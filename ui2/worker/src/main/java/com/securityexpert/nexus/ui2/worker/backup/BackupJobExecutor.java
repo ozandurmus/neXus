@@ -131,7 +131,7 @@ public final class BackupJobExecutor {
             return handleCleanupFailed(jobId, leaseEpoch, targetDeviceId, cleanupFailed, confirmFacts);
         }
 
-        leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, ACTION_FAILED);
+        leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, ACTION_FAILED, describeFailure(result));
         return new JobOutcome.Failed(describeFailure(result));
     }
 
@@ -142,7 +142,8 @@ public final class BackupJobExecutor {
         if (!recorded) {
             // AC-3 / C7 section 3.3: an unresolvable Check Point software version refuses the store with zero rows.
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED);
+                    ACTION_FAILED, "backup_artefact_version_unresolvable: an unresolvable Check Point "
+                    + "software version refuses the store with zero rows (C7 section 3.3)");
             return new JobOutcome.Failed("backup_artefact_version_unresolvable: an unresolvable Check Point "
                     + "software version refuses the store with zero rows (C7 section 3.3)");
         }
@@ -166,7 +167,7 @@ public final class BackupJobExecutor {
 
         eligibilityRepository.markIneligible(deviceId, cleanupFailed.reason(), ACTOR, ACTION_INELIGIBILITY_MARKED);
 
-        leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, ACTION_FAILED);
+        leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, ACTION_FAILED, "cleanup_failed: " + cleanupFailed.reason());
         return new JobOutcome.Failed("cleanup_failed: " + cleanupFailed.reason());
     }
 
