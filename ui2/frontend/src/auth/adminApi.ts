@@ -635,3 +635,16 @@ export interface ProjectPlanView {
 export function getProjectPlan(): Promise<ProjectPlanView> {
   return call("/project-plan", "GET");
 }
+
+export interface AuditEventView {
+  readonly id: string;
+  readonly occurred_at: string;
+  readonly actor: string;
+  readonly action: string;
+  readonly target: string;
+  readonly outcome: string;
+}
+
+export function listAuditEvents(): Promise<{ events: AuditEventView[] }> {
+  return call("/audit-log", "GET");
+}
