@@ -74,19 +74,29 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
         subtitle={device ? device.device_id : "Loading..."}
         actions={<M3Button emphasis="outlined" href="?screen=inventory">Back to Inventory</M3Button>}
       />
-      <Box sx={{ p: 3, display: "flex", flexDirection: "column", gap: 3, maxWidth: 800 }}>
-        {error && (
+      
+      {error && (
+        <Box sx={{ p: 3 }}>
           <EmptyPanel title="Workspace unavailable" body={error}>
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>
             </Box>
           </EmptyPanel>
-        )}
-        {!error && !device && <Typography>Loading device details...</Typography>}
-        {device && (
-          <>
-            <Box sx={{ bgcolor: m3.scHigh, p: 2, borderRadius: 2 }}>
-              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "medium" }}>Identity</Typography>
+        </Box>
+      )}
+      
+      {!error && !device && (
+        <Box sx={{ p: 3 }}>
+          <Typography>Loading device details...</Typography>
+        </Box>
+      )}
+      
+      {device && (
+        <Box sx={{ display: "flex", flexGrow: 1, overflow: "hidden" }}>
+          {/* Info Sidebar */}
+          <Box sx={{ width: 350, flexShrink: 0, borderRight: "1px solid", borderColor: "divider", overflowY: "auto", p: 3, bgcolor: m3.scLowest, display: "flex", flexDirection: "column", gap: 4 }}>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, textTransform: 'uppercase' }}>Identity</Typography>
               <Stack spacing={1}>
                 <Typography variant="body2"><strong>Device ID:</strong> {device.device_id}</Typography>
                 <Typography variant="body2"><strong>Vendor:</strong> {vendorLabel(device.vendor_hint)} <em>(hint)</em></Typography>
@@ -97,27 +107,8 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
               </Stack>
             </Box>
 
-            <Box sx={{ bgcolor: m3.scHigh, p: 2, borderRadius: 2 }}>
-              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "medium" }}>Transport Summary</Typography>
-              <Stack spacing={1}>
-                <Typography variant="body2"><strong>Transport:</strong> {device.transport.presence}</Typography>
-                {device.transport.transports.length > 0 && (
-                  <Box sx={{ pl: 2 }}>
-                    {device.transport.transports.map((t) => (
-                      <Typography key={t.endpoint_id} variant="body2">
-                        {t.transport_kind} ({t.endpoint_id})
-                      </Typography>
-                    ))}
-                  </Box>
-                )}
-                <Typography variant="body2" color="text.secondary">
-                  The management address is held by the service and is not displayed.
-                </Typography>
-              </Stack>
-            </Box>
-
-            <Box sx={{ bgcolor: m3.scHigh, p: 2, borderRadius: 2 }}>
-              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "medium" }}>Enrollment State</Typography>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, textTransform: 'uppercase' }}>Enrollment State</Typography>
               <Stack spacing={1.5}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <StatusChip tone="neutral" label={enrollmentStateLabel(device.enrollment_state)} />
@@ -127,27 +118,47 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
               </Stack>
             </Box>
 
-            <Box sx={{ bgcolor: m3.scHigh, p: 2, borderRadius: 2 }}>
-              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "medium" }}>Actions & Affordances</Typography>
-              <Stack spacing={1.5}>
-                {Object.entries(device.action_affordance).map(([actionId, affordance]) => (
-                  <AffordanceAction key={actionId} actionId={actionId} affordance={affordance} />
-                ))}
-                {Object.keys(device.action_affordance).length === 0 && (
-                  <Typography variant="body2" color="text.secondary">No actions available.</Typography>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, textTransform: 'uppercase' }}>Transport Summary</Typography>
+              <Stack spacing={1}>
+                <Typography variant="body2"><strong>Transport:</strong> {device.transport.presence}</Typography>
+                {device.transport.transports.length > 0 && (
+                  <Box sx={{ pl: 1 }}>
+                    {device.transport.transports.map((t) => (
+                      <Typography key={t.endpoint_id} variant="body2">
+                        • {t.transport_kind} ({t.endpoint_id})
+                      </Typography>
+                    ))}
+                  </Box>
                 )}
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  The management address is held by the service and is not displayed.
+                </Typography>
               </Stack>
             </Box>
 
-            <Box sx={{ bgcolor: m3.scHigh, p: 2, borderRadius: 2 }}>
-              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "medium" }}>Collected Data</Typography>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, textTransform: 'uppercase' }}>Collected Data</Typography>
               <Typography variant="body2" color="text.secondary">
                 Collection is not yet direction-ed for this device's vendor (PO Gate 2026-09-12).
               </Typography>
             </Box>
-          </>
-        )}
-      </Box>
+          </Box>
+
+          {/* Task Slider / Action Area */}
+          <Box sx={{ flexGrow: 1, overflowY: "auto", p: 4, display: "flex", flexDirection: "column", gap: 3, bgcolor: m3.scHigh }}>
+            <Typography variant="h6" sx={{ fontWeight: "medium" }}>Tasks & Affordances</Typography>
+            <Stack spacing={2} sx={{ maxWidth: 800 }}>
+              {Object.entries(device.action_affordance).map(([actionId, affordance]) => (
+                <AffordanceAction key={actionId} actionId={actionId} affordance={affordance} />
+              ))}
+              {Object.keys(device.action_affordance).length === 0 && (
+                <Typography variant="body1" color="text.secondary">No actions available for this device.</Typography>
+              )}
+            </Stack>
+          </Box>
+        </Box>
+      )}
     </ScreenRoot>
   );
 }
