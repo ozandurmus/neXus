@@ -100,11 +100,18 @@ class BackupJobExecutorWorkerDiesTest {
                 new BackupJobExecutorFakes.FakeBackupArtefactManifestRepository();
         BackupJobExecutorFakes.FakeBackupEndpointEligibilityRepository eligibilityRepository =
                 new BackupJobExecutorFakes.FakeBackupEndpointEligibilityRepository();
+        BackupJobExecutorFakes.FakeBackupJobAuthorizationRepository authorizationRepository =
+                new BackupJobExecutorFakes.FakeBackupJobAuthorizationRepository();
+        authorizationRepository.record(JOB_ID, DEVICE_ID, "actor-fingerprint-1", "operator requested a backup",
+                "backup_job_authorization_recorded");
+        BackupJobExecutorFakes.FakeRoleBindingRepository roleBindingRepository =
+                new BackupJobExecutorFakes.FakeRoleBindingRepository();
 
         BackupCapabilityExecutor capabilityExecutor = new BackupCapabilityExecutor(new CrashingDeviceTransport(),
                 new UnusedArtefactStore(), 1L, Duration.ofMillis(5), Duration.ofSeconds(5));
         BackupJobExecutor executor = new BackupJobExecutor(leaseRepo, attemptRepo, devicePort, deviceRepository,
-                capabilityExecutor, manifestRepository, eligibilityRepository, testFingerprint(),
+                capabilityExecutor, manifestRepository, eligibilityRepository, authorizationRepository,
+                roleBindingRepository, java.util.Set.of(DEVICE_ID), testFingerprint(),
                 System.getProperty("java.io.tmpdir"));
         BackupRequest request = new BackupRequest(new ConnectionTarget("ep-4", "gw-d-host", 22),
                 Optional.of("cred-backup-1"), "trust-1");

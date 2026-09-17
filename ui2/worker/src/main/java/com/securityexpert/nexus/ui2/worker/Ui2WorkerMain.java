@@ -20,9 +20,11 @@ import com.securityexpert.nexus.ui2.persistence.discovery.JooqDiscoveryRunReposi
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRepository;
 import com.securityexpert.nexus.ui2.persistence.artefact.BackupEndpointEligibilityRepository;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupJobAuthorizationRepository;
 import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupArtefactManifestRepository;
 import com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupEndpointEligibilityRepository;
+import com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupJobAuthorizationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.DeviceConfigurationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.JooqConfigurationNotificationRepository;
@@ -33,6 +35,8 @@ import com.securityexpert.nexus.ui2.persistence.gates.JooqGateRegistryDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
+import com.securityexpert.nexus.ui2.persistence.identity.JooqRoleBindingRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobStepAttemptDao;
 import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
 import com.securityexpert.nexus.ui2.platform.HostnameFingerprint;
@@ -202,11 +206,22 @@ public final class Ui2WorkerMain {
                 Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_RUN_DEADLINE_SECONDS", "1800")));
         BackupEndpointEligibilityRepository backupEndpointEligibilityRepository =
                 new JooqBackupEndpointEligibilityRepository(transactionBoundary);
+        // NXS-LOCAL-0224 (BK-12/BW-4): the worker's own claim-time re-check
+        // against the evidence BackupCollectService (service module) wrote
+        // to backup_job_authorization (V23) -- the same pilot-allowlist env
+        // var admission reads, and the same role_bindings table GateChain's
+        // RbacEvaluator reads, re-read here independently rather than
+        // trusting the admission decision to still hold at claim time.
+        BackupJobAuthorizationRepository backupJobAuthorizationRepository =
+                new JooqBackupJobAuthorizationRepository(transactionBoundary);
+        RoleBindingRepository roleBindingRepository = new JooqRoleBindingRepository(transactionBoundary);
+        java.util.Set<String> backupPilotAllowlist = parseCsvEnv("UI2_BACKUP_PILOT_DEVICE_IDS");
         BackupCapabilityExecutor backupCapabilityExecutor = new BackupCapabilityExecutor(compositeTransport,
                 artefactStore, backupFreeSpaceThresholdBytes, backupPollInterval, backupRunDeadline);
         BackupJobExecutor backupJobExecutor = new BackupJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, backupCapabilityExecutor, backupArtefactManifestRepository,
-                backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString());
+                backupEndpointEligibilityRepository, backupJobAuthorizationRepository, roleBindingRepository,
+                backupPilotAllowlist, hostnameFingerprint, artefactStoreRoot.toString());
 
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
         ManagementPlaneEnumerationAdapter checkPointDiscoveryAdapter =
@@ -231,5 +246,18 @@ public final class Ui2WorkerMain {
             throw new IllegalStateException(name + " is not set");
         }
         return value;
+    }
+
+    /** Mirrors {@code service.boot.DeviceCompositionConfiguration#parseCsvEnv} -- same env var, read independently here (BK-1). */
+    private static java.util.Set<String> parseCsvEnv(String name) {
+        String raw = System.getenv().getOrDefault(name, "");
+        java.util.Set<String> values = new java.util.LinkedHashSet<>();
+        for (String value : raw.split(",")) {
+            String trimmed = value.strip();
+            if (!trimmed.isEmpty()) {
+                values.add(trimmed);
+            }
+        }
+        return values;
     }
 }

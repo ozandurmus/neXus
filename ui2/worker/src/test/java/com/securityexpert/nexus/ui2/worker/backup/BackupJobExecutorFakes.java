@@ -18,12 +18,16 @@ import com.securityexpert.nexus.ui2.jobs.stepattempt.StepAttempt;
 import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRecord;
 import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRepository;
 import com.securityexpert.nexus.ui2.persistence.artefact.BackupEndpointEligibilityRepository;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupJobAuthorizationRecord;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupJobAuthorizationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceDraft;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
+import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord;
+import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
 import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
 
 /** No-database test doubles for {@link BackupJobExecutor}, mirroring {@code worker.configuration.ConfigurationJobExecutorFakes}. */
@@ -247,6 +251,52 @@ final class BackupJobExecutorFakes {
         @Override
         public void clear(String deviceId, String actorFingerprint, String actionId) {
             ineligible.remove(deviceId);
+        }
+    }
+
+    /** NXS-LOCAL-0224: the persisted admission-time evidence {@link BackupJobExecutor} re-checks at claim time. */
+    static final class FakeBackupJobAuthorizationRepository implements BackupJobAuthorizationRepository {
+        final Map<String, BackupJobAuthorizationRecord> byJobId = new HashMap<>();
+
+        @Override
+        public void record(String jobId, String deviceId, String actorFingerprint, String reason, String actionId) {
+            byJobId.put(jobId, new BackupJobAuthorizationRecord(jobId, deviceId, actorFingerprint, reason));
+        }
+
+        @Override
+        public Optional<BackupJobAuthorizationRecord> find(String jobId) {
+            return Optional.ofNullable(byJobId.get(jobId));
+        }
+    }
+
+    /** NXS-LOCAL-0224: only {@link #hasAnyActiveBinding} is exercised by {@link BackupJobExecutor}'s own claim-time re-check. */
+    static final class FakeRoleBindingRepository implements RoleBindingRepository {
+        boolean backupAdminBound = true;
+
+        @Override
+        public List<RoleBindingRecord> findActiveByToken(String roleToken) {
+            throw new UnsupportedOperationException("not exercised by these tests");
+        }
+
+        @Override
+        public Optional<RoleBindingRecord> find(String bindingId) {
+            throw new UnsupportedOperationException("not exercised by these tests");
+        }
+
+        @Override
+        public boolean hasAnyActiveBinding(String roleToken) {
+            return backupAdminBound;
+        }
+
+        @Override
+        public String create(String bindingId, String roleToken, byte[] groupReferenceEncrypted,
+                String groupReferenceKeyId, String createdByActorFingerprint, String actionId) {
+            throw new UnsupportedOperationException("not exercised by these tests");
+        }
+
+        @Override
+        public void revoke(String bindingId, String revokedByActorFingerprint, String actionId) {
+            throw new UnsupportedOperationException("not exercised by these tests");
         }
     }
 }

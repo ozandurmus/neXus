@@ -9,6 +9,7 @@ import java.util.Set;
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
 import com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupJobAuthorizationRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
@@ -23,7 +24,11 @@ import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
  * refused until the Product Owner names a device -- WORKER.md: "empty means
  * every backup is refused"), and BK-11's distinct-credential precondition,
  * checked here too so a doomed job never reaches {@code REQUESTED} in the
- * first place.
+ * first place. NXS-LOCAL-0224 (BK-12/BW-4): once every check above passes,
+ * the actor and reason it verified are recorded to {@code
+ * backup_job_authorization} (migration V23) so the worker's own claim-time
+ * re-check has immutable evidence to read back, rather than trusting a
+ * possibly stale admission decision.
  */
 public final class BackupCollectService {
 
@@ -39,24 +44,31 @@ public final class BackupCollectService {
     }
 
     private static final int MIN_REASON_LENGTH = 8;
+    /** BK-12/BW-4: the {@code backup_job_authorization} action id a fresh admission's evidence row is recorded under. */
+    private static final String ACTION_AUTHORIZATION_RECORDED = "backup_job_authorization_recorded";
 
     private final DeviceRepository deviceRepository;
     private final JobAdmissionService jobAdmissionService;
     private final Set<String> pilotAllowlist;
     private final boolean backupCredentialConfigured;
+    private final BackupJobAuthorizationRepository authorizationRepository;
     private final Clock clock;
 
     public BackupCollectService(DeviceRepository deviceRepository, JobAdmissionService jobAdmissionService,
-            Set<String> pilotAllowlist, boolean backupCredentialConfigured) {
-        this(deviceRepository, jobAdmissionService, pilotAllowlist, backupCredentialConfigured, Clock.systemUTC());
+            Set<String> pilotAllowlist, boolean backupCredentialConfigured,
+            BackupJobAuthorizationRepository authorizationRepository) {
+        this(deviceRepository, jobAdmissionService, pilotAllowlist, backupCredentialConfigured,
+                authorizationRepository, Clock.systemUTC());
     }
 
     BackupCollectService(DeviceRepository deviceRepository, JobAdmissionService jobAdmissionService,
-            Set<String> pilotAllowlist, boolean backupCredentialConfigured, Clock clock) {
+            Set<String> pilotAllowlist, boolean backupCredentialConfigured,
+            BackupJobAuthorizationRepository authorizationRepository, Clock clock) {
         this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
         this.jobAdmissionService = Objects.requireNonNull(jobAdmissionService, "jobAdmissionService");
         this.pilotAllowlist = Set.copyOf(Objects.requireNonNull(pilotAllowlist, "pilotAllowlist"));
         this.backupCredentialConfigured = backupCredentialConfigured;
+        this.authorizationRepository = Objects.requireNonNull(authorizationRepository, "authorizationRepository");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -101,7 +113,15 @@ public final class BackupCollectService {
         AdmissionResult admission = jobAdmissionService.submit(BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, deviceId,
                 idempotencyKey, actorFingerprint, ActionRegistry.DEVICE_BACKUP_COLLECT);
         return switch (admission) {
-            case AdmissionResult.Admitted admitted -> new Outcome.Admitted(admitted.jobId());
+            case AdmissionResult.Admitted admitted -> {
+                // BK-12/BW-4: the immutable evidence of what this admission verified --
+                // written once, for the worker's own claim-time re-check to read back.
+                // A deduplicated retry (below) reuses the original job and its original
+                // evidence row; it never overwrites it with a second request's reason.
+                authorizationRepository.record(admitted.jobId(), deviceId, actorFingerprint, reason,
+                        ACTION_AUTHORIZATION_RECORDED);
+                yield new Outcome.Admitted(admitted.jobId());
+            }
             case AdmissionResult.Deduplicated deduplicated -> new Outcome.Admitted(deduplicated.jobId());
             case AdmissionResult.Refused refused -> new Outcome.AdmissionRefused(refused.code(), refused.reason());
         };
