@@ -70,14 +70,23 @@ public final class GateChainInterceptor implements HandlerInterceptor {
         // Static resources are selected by Spring's resource handler, not a
         // controller. They carry no product action and must not need RBAC.
         if (handler instanceof ResourceHttpRequestHandler) {
+            if (request.getServletPath().startsWith("/api/")) {
+                response.setStatus(403);
+                response.setContentType("application/json");
+                objectMapper.writeValue(response.getWriter(), Map.of("error", "ACTION_MAPPING_REQUIRED"));
+                return false;
+            }
             return true;
         }
-        String actionId = actionIdFor(request.getMethod(), request.getServletPath());
+        String path = (request.getServletPath().length() > 1 && request.getServletPath().endsWith("/"))
+                ? request.getServletPath().substring(0, request.getServletPath().length() - 1)
+                : request.getServletPath();
+        String actionId = actionIdFor(request.getMethod(), path);
         if (actionId == null) {
-            if (explicitlyUngatedRoutes.contains(request.getMethod() + " " + request.getServletPath())) {
+            if (explicitlyUngatedRoutes.contains(request.getMethod() + " " + path)) {
                 return true;
             }
-            response.setStatus(404);
+            response.setStatus(403);
             response.setContentType("application/json");
             objectMapper.writeValue(response.getWriter(), Map.of("error", "ACTION_MAPPING_REQUIRED"));
             return false;

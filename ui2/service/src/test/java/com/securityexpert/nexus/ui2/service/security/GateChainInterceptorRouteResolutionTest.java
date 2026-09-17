@@ -98,7 +98,7 @@ class GateChainInterceptorSecurityTest {
         Mockito.when(response.getWriter()).thenReturn(new PrintWriter(body));
 
         assertFalse(interceptor.preHandle(request, response, null));
-        Mockito.verify(response).setStatus(404);
+        Mockito.verify(response).setStatus(403);
         assertTrue(body.toString().contains("ACTION_MAPPING_REQUIRED"));
     }
 
@@ -112,6 +112,65 @@ class GateChainInterceptorSecurityTest {
         Mockito.when(request.getServletPath()).thenReturn("/login");
 
         assertTrue(interceptor.preHandle(request, response, null));
+    }
+
+    @Test
+    void authLoginIsExplicitlyUngated() throws Exception {
+        GateChainInterceptor interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE,
+                SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES);
+        HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+        Mockito.when(request.getMethod()).thenReturn("POST");
+        Mockito.when(request.getServletPath()).thenReturn("/auth/login");
+
+        assertTrue(interceptor.preHandle(request, response, null));
+    }
+
+    @Test
+    void unmappedApiRouteIsStrictlyDeniedWith403ByDefault() throws Exception {
+        GateChainInterceptor interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE,
+                SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES);
+        HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+        StringWriter body = new StringWriter();
+        Mockito.when(request.getMethod()).thenReturn("POST");
+        Mockito.when(request.getServletPath()).thenReturn("/custom/unmapped-endpoint");
+        Mockito.when(response.getWriter()).thenReturn(new PrintWriter(body));
+
+        assertFalse(interceptor.preHandle(request, response, null));
+        Mockito.verify(response).setStatus(403);
+        assertTrue(body.toString().contains("ACTION_MAPPING_REQUIRED"));
+    }
+
+    @Test
+    void unmappedRouteUnderApiPrefixIsRefusedEvenWhenHandledByResourceHandler() throws Exception {
+        GateChainInterceptor interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE,
+                SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES);
+        HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+        StringWriter body = new StringWriter();
+        Mockito.when(request.getMethod()).thenReturn("GET");
+        Mockito.when(request.getServletPath()).thenReturn("/api/unmapped-api-endpoint");
+        Mockito.when(response.getWriter()).thenReturn(new PrintWriter(body));
+
+        assertFalse(interceptor.preHandle(request, response, new ResourceHttpRequestHandler()));
+        Mockito.verify(response).setStatus(403);
+        assertTrue(body.toString().contains("ACTION_MAPPING_REQUIRED"));
+    }
+
+    @Test
+    void configurationRoutesResolveToExpectedActions() throws Exception {
+        var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
+        var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
+        method.setAccessible(true);
+        assertEquals(ActionRegistry.DEVICE_READ,
+                method.invoke(interceptor, "GET", "/configuration"));
+        assertEquals(ActionRegistry.DEVICE_READ,
+                method.invoke(interceptor, "GET", "/devices/dev-123/configuration"));
+        assertEquals(ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ,
+                method.invoke(interceptor, "GET", "/devices/dev-123/configuration/text"));
+        assertEquals(ActionRegistry.DEVICE_CONFIGURATION_COLLECT,
+                method.invoke(interceptor, "POST", "/devices/dev-123/configuration/collect"));
     }
 
     @Test

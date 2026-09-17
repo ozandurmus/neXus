@@ -1176,6 +1176,15 @@
       "priority": "1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "api_routes_without_security_mapping_refused_by_default",
+      "category": "security",
+      "title": "UNVERIFIED claim: custom API routes with no security mapping should be refused by default",
+      "status": "done",
+      "priority": "P1",
+      "target": "verify against ui2 service gate chain before scoping",
+      "note": ""
     }
   ]
 }

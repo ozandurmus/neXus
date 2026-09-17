@@ -443,15 +443,6 @@
       "note": ""
     },
     {
-      "id": "api_routes_without_security_mapping_refused_by_default",
-      "category": "security",
-      "title": "UNVERIFIED claim: custom API routes with no security mapping should be refused by default",
-      "status": "planned",
-      "priority": "P1",
-      "target": "verify against ui2 service gate chain before scoping",
-      "note": ""
-    },
-    {
       "id": "ui_overview_operations_show_stale_or_empty_state",
       "category": "UI 2.0 (Java product line)",
       "title": "UNVERIFIED claim: Overview and Operations render empty state while devices and jobs exist",

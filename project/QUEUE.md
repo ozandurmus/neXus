@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0309 · Track: PCP.x · Generated: 2026-09-17T15:59:28Z
+Build: NXS-LOCAL-0310 · Track: PCP.x · Generated: 2026-09-17T16:06:50Z
 
 ## Now
-- NXS-LOCAL-0309 — Check Point Command Gate (cp_failover_command_gate_batch) (done)
+- NXS-LOCAL-0310 — Palo Alto Inventory & Discovery Implementation (in_progress)
 ## Next
 - M12 — M12 -- per-device / per-capability schedules (D5 producer) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -20,7 +20,6 @@ Build: NXS-LOCAL-0309 · Track: PCP.x · Generated: 2026-09-17T15:59:28Z
 - P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, sing (target: workflow §5 B1-3)
 - P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, s (target: workflow §5 B1-4)
 - P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
-- P1/planned api_routes_without_security_mapping_refused_by_default — UNVERIFIED claim: custom API routes with no security mappi (target: verify against ui2 service gate chain be)
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
@@ -109,8 +108,8 @@ Build: NXS-LOCAL-0309 · Track: PCP.x · Generated: 2026-09-17T15:59:28Z
 - po_cp_backup_async_semantics — CP R81.20 backup is asynchronous, contradicting the blocking-backup assu
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
+- NXS-LOCAL-0310 (in_progress)
 - NXS-LOCAL-0309 (done)
 - NXS-LOCAL-0308 (in_progress)
 - NXS-LOCAL-0307 (in_progress)
 - NXS-LOCAL-0306 (done)
-- NXS-LOCAL-0305 (done)

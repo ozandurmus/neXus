@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "reviewed_at": "2026-09-15",
-  "reviewed_current_build": "NXS-LOCAL-0242",
+  "reviewed_at": "2026-09-17",
+  "reviewed_current_build": "NXS-LOCAL-0310",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"

@@ -39,6 +39,15 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /devices/*/inventory/collect", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("POST /devices/inventory/collect-all", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
+            // NXS-LOCAL-0165 "Routes": same wildcard shapes as the inventory
+            // routes above; /devices/*/configuration/text is a four-segment
+            // route (GateChainInterceptor tries a single-segment wildcard at
+            // every position, so the id at position 2 resolves the same way
+            // /discovery/runs/*/import's own position-3 wildcard already does).
+            Map.entry("GET /configuration", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /devices/*/configuration", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /devices/*/configuration/text", ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ),
+            Map.entry("POST /devices/*/configuration/collect", ActionRegistry.DEVICE_CONFIGURATION_COLLECT),
             Map.entry("GET /notifications", ActionRegistry.NOTIFICATIONS_READ),
             Map.entry("GET /roles", ActionRegistry.RBAC_ROLE_READ),
             Map.entry("POST /roles", ActionRegistry.RBAC_ROLE_WRITE),
@@ -91,6 +100,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
     static final Set<String> EXPLICITLY_UNGATED_ROUTES = Set.of(
             "GET /",
             "POST /login",
+            "POST /auth/login",
             "POST /login/resolve",
             "POST /session/logout",
             "GET /session/status",
