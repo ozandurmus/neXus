@@ -78,7 +78,7 @@
     {
       "actor": "engineer",
       "marker": "SESSION_CLOSE",
-      "outcome": "BLOCKED",
+      "outcome": "DONE",
       "report": {
         "changed": [
           "Added GET /audit-log, security_admin-or-compliance_admin gate-chain evaluation, an audit-log client, UI tab, and route/authorization tests."

@@ -6,7 +6,7 @@ regenerate. Open a row's linked document only when you need that build's detail.
 
 | Build | Status | Dates | Title | Summary | Docs |
 | --- | --- | --- | --- | --- | --- |
-| `NXS-LOCAL-0313` | in_progress | 2026-09-17 | Device Workspace UI Revert (Slider and Info Menu) | Revert/fix DeviceWorkspaceScreen.tsx to feature the task slider layout and info menu requested by the PO. | — |
+| `NXS-LOCAL-0313` | done | 2026-09-17 | Device Workspace UI Revert (Slider and Info Menu) | Revert/fix DeviceWorkspaceScreen.tsx to feature the task slider layout and info menu requested by the PO. | — |
 | `NXS-LOCAL-0312` | done | 2026-09-17 | Mockup Build (Preview Synthetic Data Wiring) | Wire the synthetic data (mockup build) into the preview screens for PO design review, isolated from product data. | — |
 | `NXS-LOCAL-0311` | done | 2026-09-17 | Private Replay Slice 2 (Offline Typed Exporter) | Phase A exporter: offline typed exporter, package validator, extending support_bundle primitives with synthetic inputs. | — |
 | `NXS-LOCAL-0310` | done | 2026-09-17 | Palo Alto Inventory & Discovery Implementation | Implement Java capability parsers and API clients for PAN Discovery/Inventory, adhering to the FROZEN PAN_DISCOVERY_CONTRACT.md. | — |

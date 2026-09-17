@@ -1,3 +1,5 @@
+# NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
+
 # Snapshot
 UI2 is updated with Enterprise Guardrails (max 5 inventory jobs, PREFLIGHT via DEVICE_CONFIRM), Audit Log UI, Bulk Collect API, and Role Display Fix.
 All NXS-LOCAL-0283, 0288, 0289, 0290 are fully merged to main.

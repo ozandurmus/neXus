@@ -945,7 +945,11 @@ def _relay_archive_rows(relay_dir: Path, active_ids: set[str]) -> list[dict]:
         try:
             relay = orch._load_relay(path)
         except (OSError, orch.OrchestratorError):
-            continue
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    relay = json.load(f)
+            except Exception:
+                continue
         movement_id = relay.get("id") or relay.get("movement")
         if not isinstance(movement_id, str) or movement_id in active_ids:
             continue

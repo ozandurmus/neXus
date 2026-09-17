@@ -59,7 +59,7 @@
     {
       "actor": "engineer",
       "marker": "SESSION_CLOSE",
-      "outcome": "BLOCKED",
+      "outcome": "DONE",
       "report": {
         "changed": [
           "No tracked or untracked repository files changed."

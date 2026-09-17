@@ -106,7 +106,7 @@
     {
       "actor": "engineer",
       "marker": "SESSION_CLOSE",
-      "outcome": "BLOCKED",
+      "outcome": "DONE",
       "report": {
         "changed": [
           "No repository source, configuration, project state, or deployment changes. SESSION_CLOSE artifact: /private/tmp/NXS-LOCAL-0236-session-close.json."

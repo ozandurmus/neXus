@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "reviewed_at": "2026-09-17",
-  "reviewed_current_build": "NXS-LOCAL-0310",
+  "reviewed_current_build": "NXS-LOCAL-0313",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -103,7 +103,8 @@
     "ui2_ldap_config": "java_feature",
     "ui2_audit_logging": "java_feature",
     "ui2_service_cannot_bootstrap_an_empty_database": "java_debt",
-    "job_failure_reason_is_never_recorded": "java_debt"
+    "job_failure_reason_is_never_recorded": "java_debt",
+    "ui2_microservices_deployment_split": "java_debt"
   },
   "converted_lessons": [
     {

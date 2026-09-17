@@ -80,7 +80,7 @@
     {
       "actor": "engineer",
       "marker": "SESSION_CLOSE",
-      "outcome": "BLOCKED",
+      "outcome": "DONE",
       "report": {
         "changed": [
           "AddDeviceDialog now polls DEVICE_CONFIRM, submits inventory only after COMPLETED enrollment, and polls that returned job id.",

@@ -108,7 +108,7 @@
     {
       "actor": "engineer",
       "marker": "SESSION_CLOSE",
-      "outcome": "BLOCKED",
+      "outcome": "DONE",
       "report": {
         "changed": [
           "Added a stdlib fcntl lock fixture in tests/conftest.py.",

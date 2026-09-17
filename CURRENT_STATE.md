@@ -24,6 +24,7 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0313` — `done`: Device Workspace UI Revert.
 `NXS-LOCAL-0285` — `done`: Check Point SSH inventory worker finished, hybrid topology contract signed.
 `UI Updates` — `done`: deployed LDAP UI, Custom RBAC UI, Role Display, Bulk Collect fixes to remote K3s cluster.
 

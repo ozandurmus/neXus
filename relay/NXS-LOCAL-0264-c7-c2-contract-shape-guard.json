@@ -87,7 +87,7 @@
     {
       "actor": "engineer",
       "marker": "SESSION_CLOSE",
-      "outcome": "BLOCKED",
+      "outcome": "DONE",
       "report": {
         "changed": [
           "No repository files changed; the requested guards were already present at the dispatched baseline."

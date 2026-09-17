@@ -171,8 +171,9 @@
   }
 
   function member(row, filter) {
+    if (row.archived || row.closed) return filter === "archive";
     var terminal = row.classification === "Stopped" || row.classification === "Done" || row.classification === "Failed";
-    if (filter === "archive") return row.archived || terminal;
+    if (filter === "archive") return terminal;
     if (filter === "needs") return ["Failed", "Awaiting you", "Exited without close", "Silent"].indexOf(row.classification) !== -1;
     return !terminal;
   }

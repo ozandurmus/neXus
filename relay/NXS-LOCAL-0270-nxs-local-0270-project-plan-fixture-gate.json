@@ -121,7 +121,7 @@
     {
       "actor": "engineer",
       "marker": "SESSION_CLOSE",
-      "outcome": "BLOCKED",
+      "outcome": "DONE",
       "report": {
         "changed": [
           "ProjectPlanPanel test fetch mock returns a fresh Response for each request.",

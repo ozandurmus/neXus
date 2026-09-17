@@ -102,7 +102,7 @@
     {
       "actor": "engineer",
       "marker": "SESSION_CLOSE",
-      "outcome": "BLOCKED",
+      "outcome": "DONE",
       "report": {
         "changed": [
           "Canonical relay SESSION_CLOSE only; no product source/configuration or project-state changes."

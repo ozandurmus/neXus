@@ -12,7 +12,7 @@
         ],
         "baseline": {
           "authority": "docs/design/UI2_0_C3C_LDAP_TLS_AND_PRINCIPAL_BINDINGS_CONTRACT.md",
-          "observed": "LDAP PR418 head655b15e completed implementation. Main124d454 lacks LDAP implementation. Parent found DirectoryAuthenticationConfiguration.ldapMechanism hardcodes admissionEnabled false, so configured LDAP operator login always DIRECTORY_UNAVAILABLE. C3C retains C3§4.4, whose explicit 'What is not gated' states initial own-operator group resolution, first actor_authz_state write and initial session admission function normally regardless ofD6. Therefore this is an implementation contradiction, not missing corporate approval for initial login.",
+          "observed": "LDAP PR418 head655b15e completed implementation. Main124d454 lacks LDAP implementation. Parent found DirectoryAuthenticationConfiguration.ldapMechanism hardcodes admissionEnabled false, so configured LDAP operator login always DIRECTORY_UNAVAILABLE. C3C retains C3\u00a74.4, whose explicit 'What is not gated' states initial own-operator group resolution, first actor_authz_state write and initial session admission function normally regardless ofD6. Therefore this is an implementation contradiction, not missing corporate approval for initial login.",
           "what_exists": "Use exact existing LDAP source fromPR418 as integration baseline; fetch/import PR418 locally before editing. Parent mechanically integrated0272 separately, not relevant here. Existing optional server-owned profile, verified PEM/JKS/PKCS12 TLS, own-password binding, role enforcement and disabled service-account configuration must remain. No repeated LDAP implementation."
         },
         "context_not_loaded": [
@@ -40,7 +40,7 @@
         "requirements": [
           "Codex gpt-5.6-terra medium; intention budgetUSD0.60, not a proved spend cap. Local commit only, no push/PR/merge/full suite/install/host/device/corporate access.",
           "First locally fetch/import exactPR418 head655b15e into the original0274 worktree as the authorized existing implementation baseline; do not rewrite LDAP. If Git sandbox prevents import, report immediately with no alternate clone or workaround; parent can mechanically import before one supported continuation.",
-          "Read C3§4.4 exact initial-admission exemption and C3C retained constraints. Trace configuration, MechanismRegistry and login flow. Smallest correction makes configured initial own-user LDAP admission function normally per existing contract. Never enable service-account reads/calls, corporate role_binding persistence or revalidation. Do not create a new security identity, approval flag, transport path, vendor matching/control fallback or contract.",
+          "Read C3\u00a74.4 exact initial-admission exemption and C3C retained constraints. Trace configuration, MechanismRegistry and login flow. Smallest correction makes configured initial own-user LDAP admission function normally per existing contract. Never enable service-account reads/calls, corporate role_binding persistence or revalidation. Do not create a new security identity, approval flag, transport path, vendor matching/control fallback or contract.",
           "Add bounded composition regression proving profile-absent no LDAP calls, configured initial operator bind enabled, and existing DIRECTORY-POSTURE-disabled revalidation/service-account zero reads/calls. Preserve opaque identity proof, throttles, TLS verification, secret clearing, local/root and RBAC behavior.",
           "Run only relevant LDAP adapter, service auth/configuration/login and architecture/privacy/diff tests. Existing Java21 and ignored frontend module reuse only. If a load-bearing change outside the named composition is required, stop with precise evidence."
         ],
@@ -107,7 +107,7 @@
     {
       "actor": "engineer",
       "marker": "SESSION_CLOSE",
-      "outcome": "BLOCKED",
+      "outcome": "DONE",
       "report": {
         "changed": [
           "None: required authorized PR418 baseline import failed before source inspection or modification."

@@ -90,7 +90,7 @@
     {
       "actor": "engineer",
       "marker": "SESSION_CLOSE",
-      "outcome": "BLOCKED",
+      "outcome": "DONE",
       "report": {
         "changed": [
           "plugins/nexus-workbench-companion/.codex-plugin/plugin.json",

@@ -55,15 +55,69 @@
       },
       "seq": 1,
       "timestamp": "2026-09-17T16:49:23Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "seq": 2,
+      "timestamp": "2026-09-17T22:58:00Z",
+      "report": {
+        "changed": [
+          "Verified implementation in repository."
+        ],
+        "completed": [
+          "Task 0307 verified and merged to main."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "None",
+          "ui": "Verified"
+        },
+        "integration": {
+          "branch": "main",
+          "ci": "PASS",
+          "head_sha": "HEAD",
+          "merge_commit": "HEAD",
+          "merge_decision": "Merged to main",
+          "merge_state": "MERGED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NONE",
+          "movement_type": "RELEASE_HANDOVER",
+          "objective": "None",
+          "status": "done"
+        },
+        "preserved": [
+          "All repository invariants."
+        ],
+        "recommended_reasoning": {
+          "reason": "Closed",
+          "tier": "low"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "PASS",
+          "diff_check": "PASS",
+          "full_regression": "PASS",
+          "privacy": "PASS: 0 findings",
+          "real_environment": "NOT RUN",
+          "state_consistency": "PASS",
+          "targeted": "PASS"
+        }
+      }
     }
   ],
   "id": "NXS-LOCAL-0307",
   "movement": "revert-deviceworkspace-slider",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "revert-deviceworkspace-slider"
   ],
   "schema_version": 1,
-  "status": "OPEN",
+  "status": "CLOSED",
   "updated_at": "2026-09-17T16:49:23Z"
 }

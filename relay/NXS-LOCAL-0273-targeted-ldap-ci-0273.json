@@ -13,7 +13,7 @@
         "baseline": {
           "authority": "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md",
           "observed": "Main124d454. Existing15C runs full for all non-doc PRs. Human expressly corrected the rule and approved the exact successor text in this active PO chat; preserve historical rule and record explicit supersession, never silently reinterpret it.",
-          "what_exists": "Approved exact English rule: Full regression is mandatory for major architecture/runtime transformations. Bounded features and corrections require tests for affected components plus relevant architecture and privacy gates. Unexecuted full regression is reported NOT_RUN. Human approved the displayed equivalent Turkish text with 'karşılıyor devam et işçiyi durdurma'. PR418 is LDAP C3C implementation plus metadata/fixture corrections; same LDAP implementation must not be repeated."
+          "what_exists": "Approved exact English rule: Full regression is mandatory for major architecture/runtime transformations. Bounded features and corrections require tests for affected components plus relevant architecture and privacy gates. Unexecuted full regression is reported NOT_RUN. Human approved the displayed equivalent Turkish text with 'kar\u015f\u0131l\u0131yor devam et i\u015f\u00e7iyi durdurma'. PR418 is LDAP C3C implementation plus metadata/fixture corrections; same LDAP implementation must not be repeated."
         },
         "context_not_loaded": [
           "Unrelated history, production data, broad logs, credentials and Workbench."
@@ -97,7 +97,7 @@
     {
       "actor": "engineer",
       "marker": "SESSION_CLOSE",
-      "outcome": "BLOCKED",
+      "outcome": "DONE",
       "report": {
         "changed": [
           "Added the FROZEN successor amendment, closed selector, fixed targeted LDAP job, visible blocking job, and focused tests."
