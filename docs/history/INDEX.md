@@ -6,6 +6,7 @@ regenerate. Open a row's linked document only when you need that build's detail.
 
 | Build | Status | Dates | Title | Summary | Docs |
 | --- | --- | --- | --- | --- | --- |
+| `NXS-LOCAL-0328` | done | 2026-09-17 → 2026-09-18 | UI2 K3s Remediation Roadmap and Orchestrator Alignment | Remediated live UI2 K3s cluster with bundled SVG brand marks, Check Point discovery Gaia profile sourcing, SSH TOFU auto-enrollment, AD group role mapping, and 5 product planes RBAC. Ratified strict orchestrator governance protocol for future dispatches. | [agreement](docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md) |
 | `NXS-LOCAL-0313` | done | 2026-09-17 | Device Workspace UI Revert (Slider and Info Menu) | Revert/fix DeviceWorkspaceScreen.tsx to feature the task slider layout and info menu requested by the PO. | — |
 | `NXS-LOCAL-0312` | done | 2026-09-17 | Mockup Build (Preview Synthetic Data Wiring) | Wire the synthetic data (mockup build) into the preview screens for PO design review, isolated from product data. | — |
 | `NXS-LOCAL-0311` | done | 2026-09-17 | Private Replay Slice 2 (Offline Typed Exporter) | Phase A exporter: offline typed exporter, package validator, extending support_bundle primitives with synthetic inputs. | — |
