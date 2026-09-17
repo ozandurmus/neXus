@@ -336,7 +336,7 @@ class FirstBootIdentitySeedingRunnerTest {
                 new com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver(fixture.localCredentials),
                 new com.securityexpert.nexus.ui2.service.security.LocalRoleTokenResolver(fixture.roleBindings, fixture.cipher), null);
 
-        for (RoleToken token : RoleToken.values()) {
+        for (String token : java.util.List.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN, com.securityexpert.nexus.ui2.platform.RoleToken.OPERATOR, com.securityexpert.nexus.ui2.platform.RoleToken.ONBOARDING_ADMIN, com.securityexpert.nexus.ui2.platform.RoleToken.BACKUP_ADMIN, com.securityexpert.nexus.ui2.platform.RoleToken.COMPLIANCE_ADMIN, com.securityexpert.nexus.ui2.platform.RoleToken.VIEWER)) {
             RbacEvaluator.Decision decision = evaluator.evaluate(nexusadminActor, Optional.of(token), now);
             assertEquals(AuthzOutcome.PERMITTED, decision.outcome(),
                     "AC-1: nexusadmin must resolve full administrative capability -- " + token + " was refused");
@@ -345,7 +345,7 @@ class FirstBootIdentitySeedingRunnerTest {
         RbacEvaluator.Decision claudeadminViewer = evaluator.evaluate(claudeadminActor, Optional.of(RoleToken.VIEWER), now);
         assertEquals(AuthzOutcome.PERMITTED, claudeadminViewer.outcome(), "AC-2: claudeadmin must resolve role:viewer");
 
-        for (RoleToken mutatingToken : List.of(RoleToken.OPERATOR, RoleToken.ONBOARDING_ADMIN, RoleToken.BACKUP_ADMIN,
+        for (String mutatingToken : List.of(RoleToken.OPERATOR, RoleToken.ONBOARDING_ADMIN, RoleToken.BACKUP_ADMIN,
                 RoleToken.COMPLIANCE_ADMIN, RoleToken.SECURITY_ADMIN)) {
             RbacEvaluator.Decision decision = evaluator.evaluate(claudeadminActor, Optional.of(mutatingToken), now);
             assertFalse(decision.outcome().proceeds(),

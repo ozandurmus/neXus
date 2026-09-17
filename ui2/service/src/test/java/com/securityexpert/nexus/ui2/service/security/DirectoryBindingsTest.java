@@ -13,7 +13,7 @@ import com.securityexpert.nexus.ui2.persistence.identity.*;
 class DirectoryBindingsTest {
     static final Instant NOW = Instant.parse("2026-09-15T12:00:00Z");
     static final String PROFILE = "synthetic-profile", PRINCIPAL = "opaque-principal", ACTOR = "synthetic-actor";
-    static final String ADMIN = RoleToken.SECURITY_ADMIN.token(), BACKUP = RoleToken.BACKUP_ADMIN.token();
+    static final String ADMIN = RoleToken.SECURITY_ADMIN, BACKUP = RoleToken.BACKUP_ADMIN;
 
     @FunctionalInterface interface Calls { Object call(Method method, Object[] args) throws Throwable; }
     static <T> T port(Class<T> type, Calls calls) {

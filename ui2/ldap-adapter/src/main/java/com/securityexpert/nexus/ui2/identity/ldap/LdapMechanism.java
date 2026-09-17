@@ -37,7 +37,8 @@ public final class LdapMechanism implements Mechanism {
         }
         Result<LdapOperatorBindPort.OperatorBindOutcome> result = bindPort.bind(identity, credential);
         if (result instanceof Result.Err<LdapOperatorBindPort.OperatorBindOutcome> err) {
-            if (LdapOperatorBindPort.FailureCodes.DIRECTORY_UNAVAILABLE.equals(err.code())) {
+            if (LdapOperatorBindPort.FailureCodes.DIRECTORY_UNAVAILABLE.equals(err.code())
+                    || "directory_profile_invalid".equals(err.code())) {
                 return AttemptOutcome.mechanismUnavailable(err.code());
             }
             return AttemptOutcome.refused(err.code());

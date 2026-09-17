@@ -276,7 +276,7 @@ class GateChainTest {
         var groupCipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
         bindings.bindings.add(new RoleBindingRecord("fixture-security-binding",
-                com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN.token(),
+                com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN,
                 groupCipher.encryptDirectory("fixture-security-group", "synthetic",
                     com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP),
                 "k1", "fixture-creator", NOW, Optional.empty(), Optional.empty(),

@@ -192,7 +192,7 @@ class RoleBindingAdminServiceTest {
         RoleBindingAdminService service = new RoleBindingAdminService(bindings, authzState, cipher,
                 new SecurityAdminLockoutGuard(bindings, new FakeLocalCredentialsRepository(), cipher));
 
-        RoleBindingAdminService.Outcome outcome = service.create(adminActor, RoleToken.SECURITY_ADMIN.token(),
+        RoleBindingAdminService.Outcome outcome = service.create(adminActor, RoleToken.SECURITY_ADMIN,
                 group, "key-1", now);
 
         assertTrue(outcome instanceof RoleBindingAdminService.Outcome.SelfGrantRefused);
@@ -211,7 +211,7 @@ class RoleBindingAdminServiceTest {
         RoleBindingAdminService service = new RoleBindingAdminService(bindings, authzState, cipher,
                 new SecurityAdminLockoutGuard(bindings, new FakeLocalCredentialsRepository(), cipher));
 
-        RoleBindingAdminService.Outcome outcome = service.create(adminActor, RoleToken.BACKUP_ADMIN.token(),
+        RoleBindingAdminService.Outcome outcome = service.create(adminActor, RoleToken.BACKUP_ADMIN,
                 "cn=backup-admins,dc=example,dc=com", "key-1", now);
 
         assertTrue(outcome instanceof RoleBindingAdminService.Outcome.Created);
@@ -235,7 +235,7 @@ class RoleBindingAdminServiceTest {
         String onlyAdminIdentityId = "identity-only-admin";
         localCredentials.put(onlyAdminIdentityId, true);
         byte[] encrypted = cipher.encrypt(onlyAdminIdentityId);
-        bindings.bindings.add(new RoleBindingRecord("binding-1", RoleToken.SECURITY_ADMIN.token(), encrypted, "key-1",
+        bindings.bindings.add(new RoleBindingRecord("binding-1", RoleToken.SECURITY_ADMIN, encrypted, "key-1",
                 "system:bootstrap", now, Optional.empty(), Optional.empty()));
 
         RoleBindingAdminService service = new RoleBindingAdminService(bindings, authzState, cipher,
@@ -261,9 +261,9 @@ class RoleBindingAdminServiceTest {
         String secondAdminId = "identity-admin-2";
         localCredentials.put(firstAdminId, true);
         localCredentials.put(secondAdminId, true);
-        bindings.bindings.add(new RoleBindingRecord("binding-1", RoleToken.SECURITY_ADMIN.token(),
+        bindings.bindings.add(new RoleBindingRecord("binding-1", RoleToken.SECURITY_ADMIN,
                 cipher.encrypt(firstAdminId), "key-1", "system:bootstrap", now, Optional.empty(), Optional.empty()));
-        bindings.bindings.add(new RoleBindingRecord("binding-2", RoleToken.SECURITY_ADMIN.token(),
+        bindings.bindings.add(new RoleBindingRecord("binding-2", RoleToken.SECURITY_ADMIN,
                 cipher.encrypt(secondAdminId), "key-1", "admin1", now, Optional.empty(), Optional.empty()));
 
         RoleBindingAdminService service = new RoleBindingAdminService(bindings, authzState, cipher,

@@ -164,7 +164,7 @@ class RbacEvaluatorTest {
     void staleActorAuthzStateIsAuthzNotEvaluatedNeverDenied() {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
-        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
+        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN, cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
 
         FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         Instant now = Instant.now();
@@ -183,7 +183,7 @@ class RbacEvaluatorTest {
     void boundButNotAMemberIsDeniedWithActorNotInRequiredGroup() {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
-        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
+        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN, cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
 
         FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         Instant now = Instant.now();
@@ -200,7 +200,7 @@ class RbacEvaluatorTest {
     void boundAndAMemberIsPermittedWithTheMatchingBindingId() {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
-        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
+        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN, cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
 
         FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         Instant now = Instant.now();
@@ -222,8 +222,8 @@ class RbacEvaluatorTest {
         // play must never evaluate PERMITTED for that token.
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
-        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN.token(), cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
-        bindings.addDirectory("b2", RoleToken.COMPLIANCE_ADMIN.token(), cipher.encryptDirectory("cn=compliance,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
+        bindings.addDirectory("b1", RoleToken.BACKUP_ADMIN, cipher.encryptDirectory("cn=backup-admins,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
+        bindings.addDirectory("b2", RoleToken.COMPLIANCE_ADMIN, cipher.encryptDirectory("cn=compliance,dc=example,dc=com", "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
 
         FakeActorAuthzStateRepository authzState = new FakeActorAuthzStateRepository(cipher);
         Instant now = Instant.now();
@@ -231,7 +231,7 @@ class RbacEvaluatorTest {
 
         RbacEvaluator evaluator = new RbacEvaluator(bindings, authzState, cipher);
 
-        for (RoleToken token : List.of(RoleToken.BACKUP_ADMIN, RoleToken.COMPLIANCE_ADMIN)) {
+        for (String token : List.of(RoleToken.BACKUP_ADMIN, RoleToken.COMPLIANCE_ADMIN)) {
             var decision = evaluator.evaluate("unmapped-actor", Optional.of(token), now);
             assertEquals(AuthzOutcome.DENIED, decision.outcome(),
                     "an unmapped identity must never evaluate PERMITTED for " + token);
@@ -242,7 +242,7 @@ class RbacEvaluatorTest {
     void localBindingPermitsWithoutActorAuthzStateAndLocalMissingBindingIsDenied() {
         GroupReferenceCipher cipher = cipher();
         FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
-        bindings.addActive("local-security-admin", RoleToken.SECURITY_ADMIN.token(), cipher.encrypt("local-admin-id"));
+        bindings.addActive("local-security-admin", RoleToken.SECURITY_ADMIN, cipher.encrypt("local-admin-id"));
         RbacEvaluator evaluator = new RbacEvaluator(bindings, new FakeActorAuthzStateRepository(), cipher,
                 new LocalIdentityResolver(localIdentity("local-admin-id", "admin")), new LocalRoleTokenResolver(bindings, cipher),
                 rootIdentity("some-other-id"));
