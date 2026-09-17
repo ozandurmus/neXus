@@ -77,7 +77,7 @@ USER 0
 RUN mkdir -p /app /app/tmp /app/home
 
 COPY --from=build /build/service-boot.jar /app/service.jar
-COPY project/roadmap.json project/feature_registry.json project/backlog.json project/build_history.json /app/project/
+COPY project/roadmap.json project/feature_registry.json project/backlog.json project/build_history.json project/java_product_plan.json /app/project/
 COPY project/archive/backlog_terminal.json project/archive/build_history_*.json /app/project/archive/
 
 ENV UI2_PROJECT_PLAN_DIRECTORY=/app/project

@@ -45,6 +45,24 @@ function NotificationBadge() {
  */
 export function TopAppBar() {
   const session = useSession();
+
+  let displayedRoles: string[] = [];
+  if (session) {
+    const roleOrder = [
+      "role:security_admin",
+      "role:compliance_admin",
+      "role:backup_admin",
+      "role:onboarding_admin",
+      "role:operator",
+      "role:viewer",
+    ];
+    displayedRoles = [...session.roleTokens].sort((a, b) => {
+      const indexA = roleOrder.indexOf(a);
+      const indexB = roleOrder.indexOf(b);
+      return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
+    });
+  }
+
   return (
     <Box sx={{ height: 64, flex: "none", display: "flex", alignItems: "center", gap: 2, px: 3, pl: 1 }}>
       <NexusWordmark height={28} color={m3.onSurface} />
@@ -64,11 +82,11 @@ export function TopAppBar() {
               <Typography variant="body1" sx={{ fontWeight: 500, color: m3.onSurface }}>
                 {session.displayName}
               </Typography>
-              <Tooltip title={session.roleTokens.join(", ")}>
+              <Tooltip title={displayedRoles.join(", ")}>
                 <Typography variant="body2" sx={{ cursor: "default" }}>
-                  {session.roleTokens.length > 2
-                    ? `${session.roleTokens[0]} (+${session.roleTokens.length - 1} roles)`
-                    : session.roleTokens.join(", ")}
+                  {displayedRoles.length > 2
+                    ? `${displayedRoles[0]} (+${displayedRoles.length - 1} roles)`
+                    : displayedRoles.join(", ")}
                 </Typography>
               </Tooltip>
             </Box>

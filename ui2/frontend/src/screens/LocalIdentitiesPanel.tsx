@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import MenuItem from "@mui/material/MenuItem";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
@@ -279,7 +280,14 @@ function AssignRoleDialog({
       <DialogTitle>Assign role</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1, minWidth: 320 }}>
-          <TextField label="Role token" value={roleToken} onChange={(e) => setRoleToken(e.target.value)} autoFocus />
+          <TextField select label="Role token" value={roleToken} onChange={(e) => setRoleToken(e.target.value)} autoFocus>
+            <MenuItem value="role:security_admin">Security Admin</MenuItem>
+            <MenuItem value="role:compliance_admin">Compliance Admin</MenuItem>
+            <MenuItem value="role:backup_admin">Backup Admin</MenuItem>
+            <MenuItem value="role:onboarding_admin">Onboarding Admin</MenuItem>
+            <MenuItem value="role:operator">Operator</MenuItem>
+            <MenuItem value="role:viewer">Viewer</MenuItem>
+          </TextField>
           <TextField
             label="Group reference key id"
             value={groupReferenceKeyId}
