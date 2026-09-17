@@ -75,8 +75,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
             Timestamp now = Timestamp.from(Instant.now());
             dsl.execute("insert into devices(device_id, role, vendor_hint, registration_source, created_at, "
                     + "is_test_target, enrollment_state, disabled, credential_reference_id, "
-                    + "cluster_member_ref, virtual_system_ref, discovery_match_key, identity_mismatch_state) "
-                    + "values ({0}, {1}, {2}, {3}, {4}, {5}, 'DRAFT', false, {6}, {7}, {8}, {9}, 'NONE')",
+                    + "cluster_member_ref, virtual_system_ref, discovery_match_key, identity_mismatch_state, peer_follow_outcome) "
+                    + "values ({0}, {1}, {2}, {3}, {4}, {5}, 'DRAFT', false, {6}, {7}, {8}, {9}, 'NONE', 'NONE')",
                     draft.deviceId(), draft.role(), draft.vendorHint(), draft.registrationSource(), now, draft.isTestTarget(),
                     draft.credentialReferenceId(), draft.clusterMemberRef().orElse(null),
                     draft.virtualSystemRef().orElse(null), draft.discoveryMatchKey().orElse(null));
