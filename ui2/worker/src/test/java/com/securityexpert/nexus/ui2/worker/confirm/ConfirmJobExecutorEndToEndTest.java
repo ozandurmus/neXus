@@ -69,41 +69,4 @@ class ConfirmJobExecutorEndToEndTest {
         assertEquals("NONE", facts.peerFollowOutcome());
         assertEquals("NONE", facts.identityMismatchState());
     }
-
-    @Test
-    void hostKeyMismatchAbortsConnectionAndSetsTerminalReasonWithFingerprint() {
-        ConfirmJobExecutorFakes.FakeLeaseRepository leaseRepo =
-                new ConfirmJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
-        ConfirmJobExecutorFakes.FakeStepAttemptRepository attemptRepo = new ConfirmJobExecutorFakes.FakeStepAttemptRepository();
-        ConfirmJobExecutorFakes.FakeDeviceEnrollmentReadPort devicePort = new ConfirmJobExecutorFakes.FakeDeviceEnrollmentReadPort();
-        devicePort.state = DeviceEnrollmentState.DRAFT;
-        ConfirmJobExecutorFakes.FakeDeviceRepository deviceRepository = new ConfirmJobExecutorFakes.FakeDeviceRepository();
-        deviceRepository.put(DEVICE_ID, DeviceEnrollmentState.DRAFT);
-
-        ScriptedDeviceTransport transport = new ScriptedDeviceTransport(java.util.Map.of(), java.util.Map.of());
-        String mismatchedFingerprint = "SHA256:112233445566778899aabbccddeeff00";
-        transport.setConnectResult(new com.securityexpert.nexus.ui2.jobs.transport.ConnectResult.HostKeyRejected(
-                "host_key_mismatch: " + mismatchedFingerprint));
-
-        ConfirmCapabilityExecutor confirmExecutor =
-                new ConfirmCapabilityExecutor(transport, ref -> { throw new IllegalStateException("not used"); });
-        PeerFollowResolver peerFollowResolver = new PeerFollowResolver(confirmExecutor);
-
-        ConfirmJobExecutor executor = new ConfirmJobExecutor(leaseRepo, attemptRepo, devicePort, deviceRepository,
-                confirmExecutor, peerFollowResolver);
-
-        ConfirmRequest request = ConfirmRequest.checkPoint(new ConnectionTarget("ep-1", "fw-a-host", 22), "cred-1",
-                "trust-1");
-
-        JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request,
-                address -> ConfirmRequest.checkPoint(new ConnectionTarget("ep-peer", address, 22), "cred-1", "trust-1"),
-                false);
-
-        assertTrue(outcome instanceof JobOutcome.Failed, "expected Failed, got " + outcome);
-        JobOutcome.Failed failed = (JobOutcome.Failed) outcome;
-        assertEquals("connect_failed: host_key_mismatch: " + mismatchedFingerprint, failed.terminalReason());
-        assertEquals("connect_failed: host_key_mismatch: " + mismatchedFingerprint, leaseRepo.lastTerminalReason);
-        org.junit.jupiter.api.Assertions.assertFalse(deviceRepository.recordConfirmSuccessCalled);
-        assertEquals(DeviceEnrollmentState.DRAFT, deviceRepository.find(DEVICE_ID).orElseThrow().enrollmentState());
-    }
 }

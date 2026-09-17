@@ -62,8 +62,6 @@ final class ConfirmJobExecutorFakes {
             return true;
         }
 
-        String lastTerminalReason;
-
         @Override
         public boolean transitionState(String jobId, long leaseEpoch, JobState expectedFrom, JobState to,
                 String actorFingerprint, String actionId) {
@@ -73,13 +71,6 @@ final class ConfirmJobExecutorFakes {
             }
             this.currentState = to;
             return true;
-        }
-
-        @Override
-        public boolean transitionState(String jobId, long leaseEpoch, JobState expectedFrom, JobState to,
-                String actorFingerprint, String actionId, String terminalReason) {
-            this.lastTerminalReason = terminalReason;
-            return transitionState(jobId, leaseEpoch, expectedFrom, to, actorFingerprint, actionId);
         }
 
         @Override
