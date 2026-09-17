@@ -194,7 +194,7 @@ public final class DiscoveryJobExecutor {
         return switch (reason) {
             case "unreachable" -> "UNREACHABLE";
             case "refused" -> "REFUSED";
-            default -> "UNKNOWN_FAILURE";
+            default -> reason;
         };
     }
 

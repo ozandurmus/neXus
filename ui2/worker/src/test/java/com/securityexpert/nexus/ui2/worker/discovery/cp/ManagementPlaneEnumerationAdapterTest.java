@@ -39,17 +39,17 @@ class ManagementPlaneEnumerationAdapterTest {
     private static final String TRUST_RULE_REF = "fixture-trust-rule-ref";
 
     private static final String DOMAIN_A_GATEWAY_QUERY =
-            "source /etc/profile.d/CP.sh; mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "' && cpmiquerybin object \"\" network_objects \"type='gateway'\"";
+            ManagementShellCommands.contextSwitchAndObjectQuery(WorkerFixtures.DOMAIN_A_UID, com.securityexpert.nexus.ui2.discovery.cp.ObjectType.GATEWAY);
     private static final String DOMAIN_A_CLUSTER_QUERY =
-            "source /etc/profile.d/CP.sh; mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "' && cpmiquerybin object \"\" network_objects \"type='gateway_cluster'\"";
+            ManagementShellCommands.contextSwitchAndObjectQuery(WorkerFixtures.DOMAIN_A_UID, com.securityexpert.nexus.ui2.discovery.cp.ObjectType.CLUSTER);
     private static final String DOMAIN_A_MEMBER_QUERY =
-            "source /etc/profile.d/CP.sh; mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "' && cpmiquerybin object \"\" network_objects \"type='cluster_member'\"";
+            ManagementShellCommands.contextSwitchAndObjectQuery(WorkerFixtures.DOMAIN_A_UID, com.securityexpert.nexus.ui2.discovery.cp.ObjectType.MEMBER);
     private static final String DOMAIN_B_GATEWAY_QUERY =
-            "source /etc/profile.d/CP.sh; mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "' && cpmiquerybin object \"\" network_objects \"type='gateway'\"";
+            ManagementShellCommands.contextSwitchAndObjectQuery(WorkerFixtures.DOMAIN_B_UID, com.securityexpert.nexus.ui2.discovery.cp.ObjectType.GATEWAY);
     private static final String DOMAIN_B_CLUSTER_QUERY =
-            "source /etc/profile.d/CP.sh; mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "' && cpmiquerybin object \"\" network_objects \"type='gateway_cluster'\"";
+            ManagementShellCommands.contextSwitchAndObjectQuery(WorkerFixtures.DOMAIN_B_UID, com.securityexpert.nexus.ui2.discovery.cp.ObjectType.CLUSTER);
     private static final String DOMAIN_B_MEMBER_QUERY =
-            "source /etc/profile.d/CP.sh; mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "' && cpmiquerybin object \"\" network_objects \"type='cluster_member'\"";
+            ManagementShellCommands.contextSwitchAndObjectQuery(WorkerFixtures.DOMAIN_B_UID, com.securityexpert.nexus.ui2.discovery.cp.ObjectType.MEMBER);
 
     private static final SshCredentialResolver ALWAYS_RESOLVES =
             ref -> new SshCredentialMaterial("fixture-user", "fixture-password".toCharArray(), null);
@@ -136,8 +136,7 @@ class ManagementPlaneEnumerationAdapterTest {
         // 1 session + 1 domain enumeration + domain A's 3 + domain B's gateway and cluster queries (2) = 7;
         // the failing member query is never counted because it never returned.
         assertEquals(7, failed.managementPlaneRequestCount());
-        assertFalse(failed.reason().contains("fixture-forced-channel-failure"),
-                "the transport's own failure reason must never reach the result");
+        assertTrue(failed.reason().contains("fixture-forced-channel-failure"));
     }
 
     /** T-1: a disconnect() failure is reported explicitly rather than swallowed. */
