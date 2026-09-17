@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -46,7 +48,7 @@ export function DeviceManagementPane() {
 
   return (
     <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 2 }}>
-      <DeviceRegistryCard devices={devices} error={deleteError ?? error} onDelete={onDelete} onRetry={refresh} total={total} />
+      <DeviceRegistryCard devices={devices} error={error} deleteError={deleteError} onDelete={onDelete} onRetry={refresh} total={total} />
       <Stack spacing={2}>
         <EmptyPanel title="Enrollment" body="Enrolling a device grants read collection only.">
           <Stack spacing={1}>
@@ -83,12 +85,14 @@ export function DeviceManagementPane() {
 function DeviceRegistryCard({
   devices,
   error,
+  deleteError,
   onDelete,
   onRetry,
   total,
 }: {
   readonly devices: DeviceSummary[] | null;
   readonly error: string | null;
+  readonly deleteError: string | null;
   readonly onDelete: (deviceId: string) => void;
   readonly onRetry: () => void;
   readonly total: number;
@@ -124,6 +128,11 @@ function DeviceRegistryCard({
           ]}
         />
       </Box>
+      {deleteError && (
+        <Box role="alert" sx={{ mt: 1, px: 1.5, py: 1, border: "1px solid", borderColor: "error.main", borderRadius: 1.5 }}>
+          <Typography color="error">Delete failed: {deleteError}</Typography>
+        </Box>
+      )}
       {total > 0 && (
         <Stack spacing={1}>
           {devices.map((device) => (
@@ -152,4 +161,3 @@ function DeviceRegistryCard({
     </EmptyPanel>
   );
 }
-import { useState } from "react";

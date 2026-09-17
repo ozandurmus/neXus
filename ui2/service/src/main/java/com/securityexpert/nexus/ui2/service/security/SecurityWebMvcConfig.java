@@ -106,6 +106,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             "POST /login/resolve",
             "POST /session/logout",
             "GET /session/status",
+            "GET /error",
+            "POST /error",
             "POST /local-credentials/change-password",
             "GET /healthz");
 
