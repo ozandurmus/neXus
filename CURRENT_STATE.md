@@ -24,6 +24,8 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0330` — `automated_validated`: Check Point Discovery Parser Hardening, Domain Banner Filtering, and Diagnostic Logging.
+`NXS-LOCAL-0329` — `automated_validated`: Fix Device Deletion SQL Schema and Spring Error Route Un-gating.
 `NXS-LOCAL-0328` — `done`: UI2 K3s Remediation Roadmap & Orchestrator Protocol Enforcement (FROZEN: `docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md`).
 `NXS-LOCAL-0313` — `done`: Device Workspace UI Revert.
 `NXS-LOCAL-0285` — `done`: Check Point SSH inventory worker finished, hybrid topology contract signed.

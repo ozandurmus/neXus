@@ -1,0 +1,155 @@
+{
+  "created_at": "2026-09-17T22:38:45Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "JooqDeviceRepository.deleteDevice uses target_device_id and correct FK cascade sequence without throwing column or FK constraint errors",
+          "SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES includes GET /error and POST /error so internal exceptions are not masked as ACTION_MAPPING_REQUIRED 403 errors",
+          "DeviceRegistryPanel.tsx displays delete error notifications without collapsing the device list view into an unrecoverable empty state",
+          "All service tests (:service:test), persistence tests (:persistence:test), and frontend CI (:frontendCi) pass",
+          "Privacy gate (python3 scripts/repository_privacy_check.py) passes with zero findings"
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md",
+          "observed": "Attempting to delete a device triggers HTTP 500 in JooqDeviceRepository due to 'column device_id does not exist' on jobs table. The unhandled exception is dispatched to /error which is rejected with 403 ACTION_MAPPING_REQUIRED by GateChainInterceptor because /error is not in EXPLICITLY_UNGATED_ROUTES.",
+          "what_exists": "JooqDeviceRepository.deleteDevice currently queries 'from jobs where device_id = ?' and references job_steps incorrectly instead of 'target_device_id' and 'job_step_attempt.job_id'. Jobs table also has reciprocal FK reconciliation_ref to job_reconciliation requiring reconciliation_ref = null first. SecurityWebMvcConfig lacks /error in EXPLICITLY_UNGATED_ROUTES."
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/device-deletion-sql-cascade-fix"
+        },
+        "invariants": [
+          "Strict role-based action gating (DEVICE_DELETE requires role:onboarding_admin)",
+          "Zero role string literals in frontend (NoRoleConditionalRenderingInFrontendTest)",
+          "Transactional cascaded deletion to ensure referential integrity",
+          "Fail-closed security: unmapped routes remain rejected except for explicitly ungated error endpoints"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Fix SQL schema column names and FK cascade order in JooqDeviceRepository.deleteDevice, and ungate /error route in SecurityWebMvcConfig to prevent ACTION_MAPPING_REQUIRED masking on backend exceptions.",
+        "output_contract": [
+          "Local commit on branch."
+        ],
+        "recommended_reasoning": {
+          "reason": "Fixing SQL cascade schema mismatch and Spring error route gating",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "In JooqDeviceRepository.java deleteDevice: 1) update jobs set reconciliation_ref = null where target_device_id = {0}; 2) delete from job_step_attempt where job_id in (select job_id from jobs where target_device_id = {0}); 3) delete from job_steps where job_id in (select job_id from jobs where target_device_id = {0}); 4) delete from job_reconciliation where job_id in (select job_id from jobs where target_device_id = {0}); 5) delete from device_configuration_run where device_id = {0}; 6) delete from device_inventory_run where device_id = {0}; 7) delete from configuration_artefact where device_id = {0}; 8) delete from cp_inventory_projection where device_id = {0}; 9) delete from configuration_notification where device_id = {0}; 10) delete from backup_artefact where device_id = {0}; 11) delete from backup_endpoint_ineligibility where device_id = {0}; 12) delete from jobs where target_device_id = {0}; 13) delete from endpoints where device_id = {0}; 14) delete from devices where device_id = {0}.",
+          "In SecurityWebMvcConfig.java: add 'GET /error' and 'POST /error' to EXPLICITLY_UNGATED_ROUTES.",
+          "In DeviceRegistryPanel.tsx: handle delete error gracefully so that delete error does not overwrite the device registry list view with an empty error panel.",
+          "Run ./ui2/gradlew -p ui2 :persistence:test :service:test :frontendCi to verify all tests pass."
+        ],
+        "risks": [
+          "Foreign key constraint ordering issues if statement sequence does not match relational dependencies."
+        ],
+        "scope": {
+          "in": [
+            "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/JooqDeviceRepository.java",
+            "ui2/persistence/src/test/java/com/securityexpert/nexus/ui2/persistence/device/JooqDeviceRepositoryTest.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/SecurityWebMvcConfig.java",
+            "ui2/frontend/src/screens/DeviceRegistryPanel.tsx"
+          ],
+          "out": [
+            "ui2/worker/src/...",
+            "Unrelated screens"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew -p ui2 :persistence:test :service:test :frontendCi"
+            ],
+            "name": "persistence_service_and_frontend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-17T22:38:45Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "deleteDevice now clears the reciprocal reconciliation reference and deletes dependent job records using target_device_id in FK-safe order.",
+          "GET /error and POST /error are explicitly ungated; all other unmapped routes remain fail-closed.",
+          "Delete failures render as an inline alert while the device registry remains visible."
+        ],
+        "completed": [
+          "Implemented and committed c4a1001."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "changed: delete failure is an inline alert"
+        },
+        "integration": {
+          "branch": "feature/device-deletion-sql-cascade-fix",
+          "ci": "local validation passed",
+          "head_sha": "c4a1001",
+          "merge_commit": "not merged",
+          "merge_decision": "orchestrator",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0329",
+          "movement_type": "VALIDATION",
+          "objective": "Orchestrator merge-gate verification.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "DEVICE_DELETE remains role-gated.",
+          "Unmapped routes remain fail-closed except GET and POST /error."
+        ],
+        "recommended_reasoning": {
+          "reason": "Merge-gate verification only.",
+          "tier": "low"
+        },
+        "state_updates": [
+          "None; implementation is represented by commit c4a1001."
+        ],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "persistence, service, frontend",
+          "diff_check": "PASS: git diff --check origin/main",
+          "full_regression": "NOT_RUN: scoped validation command completed successfully",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py reported zero findings",
+          "real_environment": "NOT_RUN: local validation only",
+          "state_consistency": "PASS: git diff --check origin/main",
+          "targeted": "PASS: ./ui2/gradlew -p ui2 :persistence:test :service:test :frontendCi"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-17T22:43:26Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0329",
+  "movement": "NXS-LOCAL-0329",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-17T22:43:26Z"
+}

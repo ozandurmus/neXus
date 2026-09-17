@@ -3,6 +3,28 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0330",
+      "status": "automated_validated",
+      "title": "Check Point Discovery Parser Hardening, Domain Banner Filtering, and Diagnostic Logging",
+      "summary": "Redirected mdsenv output in contextSwitchAndObjectQuery to avoid polluting cpmiquerybin dump stream. Hardened CpObjectDumpParser against preambles/banners, filtered login banners from domain enumeration, and integrated System.Logger in worker discovery.",
+      "started": "2026-09-18",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md"
+      }
+    },
+    {
+      "build": "NXS-LOCAL-0329",
+      "status": "automated_validated",
+      "title": "Fix Device Deletion SQL Schema and Spring Error Route Un-gating",
+      "summary": "Corrected JooqDeviceRepository.deleteDevice column names (target_device_id, job_id) and FK cascade order with reconciliation_ref cleanup. Added GET/POST /error to EXPLICITLY_UNGATED_ROUTES to prevent ACTION_MAPPING_REQUIRED 403 masks.",
+      "started": "2026-09-18",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md"
+      }
+    },
+    {
       "build": "NXS-LOCAL-0328",
       "status": "done",
       "title": "UI2 K3s Remediation Roadmap and Orchestrator Alignment",

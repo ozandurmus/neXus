@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0328 · Track: PCP.x · Generated: 2026-09-17T22:19:29Z
+Build: NXS-LOCAL-0330 · Track: PCP.x · Generated: 2026-09-17T22:53:01Z
 
 ## Now
-- NXS-LOCAL-0328 — UI2 K3s Remediation Roadmap & Orchestrator Protocol Enforcement (done)
+- NXS-LOCAL-0330 — Check Point Discovery Parser Hardening, Domain Banner Filtering, and Diagnostic Logging (automated_validated)
 ## Next
 - M12 — M12 -- per-device / per-capability schedules (D5 producer) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -109,8 +109,8 @@ Build: NXS-LOCAL-0328 · Track: PCP.x · Generated: 2026-09-17T22:19:29Z
 - po_cp_backup_async_semantics — CP R81.20 backup is asynchronous, contradicting the blocking-backup assu
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
+- NXS-LOCAL-0330 (automated_validated)
+- NXS-LOCAL-0329 (automated_validated)
 - NXS-LOCAL-0328 (done)
 - NXS-LOCAL-0313 (done)
 - NXS-LOCAL-0312 (done)
-- NXS-LOCAL-0311 (done)
-- NXS-LOCAL-0310 (done)

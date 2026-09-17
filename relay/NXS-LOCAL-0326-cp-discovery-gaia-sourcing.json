@@ -1,0 +1,163 @@
+{
+  "created_at": "2026-09-17T22:12:50Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Check Point MDS discovery shell commands in ManagementShellCommands.java execute within a login bash environment (e.g. bash -l -c 'source /etc/profile.d/CP.sh; $MDSVERUTIL AllCMAs' and bash -l -c 'source /etc/profile.d/CP.sh; mdsenv <domain> && cpmiquerybin ...') so that $MDSVERUTIL and MDS environment variables are reliably populated in non-interactive SSH exec channels",
+          "CLOSED_COMMAND_PREFIXES in ManagementShellCommands.java includes the updated command prefixes",
+          "ManagementPlaneEnumerationAdapter.java does not swallow the underlying exception or stderr when execRead fails, preserving the failure reason in ManagementPlaneEnumerationResult.Failed",
+          "DiscoveryJobExecutor.java does not unconditionally overwrite descriptive failure reasons with UNKNOWN_FAILURE",
+          "All unit tests in :worker:test pass, including ManagementPlaneEnumerationAdapterTest and ManagementShellCommandsTest"
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md",
+          "observed": "Check Point discovery enumerate job 7a487c9e-979e-4563-b9e5-0f0d8d7942c6 failed with UNKNOWN_FAILURE because non-interactive SSH does not export $MDSVERUTIL without login shell environment, and ManagementPlaneEnumerationAdapter catches the query exception, discarding details and defaulting to UNKNOWN_FAILURE.",
+          "what_exists": "ManagementShellCommands.domainList() currently returns 'source /etc/profile.d/CP.sh; $MDSVERUTIL AllCMAs'. In Gaia, non-interactive SSH sessions do not load /etc/profile or MDSVERUTIL unless executed through a bash login shell ('bash -l -c'). When execRead fails, ManagementPlaneEnumerationAdapter returns a generic Failed without failureClass or detailed message, causing DiscoveryJobExecutor to fall back to UNKNOWN_FAILURE."
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/cp-discovery-gaia-sourcing"
+        },
+        "invariants": [
+          "Command gate compliance: all commands issued must match CLOSED_COMMAND_PREFIXES",
+          "Preserve opaque identity handling and fail-closed error reporting",
+          "No plain text secrets logged or committed"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Ensure Check Point MDS discovery shell commands run with Gaia login bash environment ('bash -l -c') so that $MDSVERUTIL is exported, and ensure ManagementPlaneEnumerationAdapter preserves error causes instead of masking them as UNKNOWN_FAILURE.",
+        "output_contract": [
+          "Local commit on branch."
+        ],
+        "recommended_reasoning": {
+          "reason": "Fixing Check Point discovery Gaia command execution and error diagnostics",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Update ManagementShellCommands.java: domainList() and contextSwitchAndObjectQuery() should wrap commands in 'bash -l -c \"...\"' (or equivalent robust sourcing) so that $MDSVERUTIL is evaluated under Gaia bash login environment. Ensure CLOSED_COMMAND_PREFIXES matches.",
+          "Update ManagementPlaneEnumerationAdapter.java: execRead should preserve the underlying error (e.g. exitStatus and output/stderr) in ManagementPlaneQueryFailedException, and enumerate should pass the descriptive failure or FailureClass into ManagementPlaneEnumerationResult.Failed.",
+          "Update DiscoveryJobExecutor.java: ensure failureClass() does not collapse informative reasons into UNKNOWN_FAILURE.",
+          "Update all existing tests in ManagementPlaneEnumerationAdapterTest and ManagementShellCommandsTest to match the updated command strings.",
+          "Run ./ui2/gradlew -p ui2 :worker:test to ensure all 173+ tests pass."
+        ],
+        "risks": [
+          "Breaking mock command matching in unit tests if CLOSED_COMMAND_PREFIXES is not updated consistently."
+        ],
+        "scope": {
+          "in": [
+            "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/cp/ManagementShellCommands.java",
+            "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/cp/ManagementPlaneEnumerationAdapter.java",
+            "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/DiscoveryJobExecutor.java",
+            "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/cp/ManagementShellCommandsTest.java",
+            "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/cp/ManagementPlaneEnumerationAdapterTest.java",
+            "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/DiscoveryJobExecutorTest.java"
+          ],
+          "out": [
+            "Frontend",
+            "Service layer",
+            "Persistence layer",
+            "Palo Alto discovery"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew -p ui2 :worker:test"
+            ],
+            "name": "worker_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-17T22:12:50Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ManagementShellCommands closed command prefixes and command construction.",
+          "ManagementPlaneEnumerationAdapter failure propagation.",
+          "DiscoveryJobExecutor failure-reason fallback.",
+          "Check Point command and adapter unit tests."
+        ],
+        "completed": [
+          "Wrapped Check Point MDS domain and object-query commands in bash -l -c so the Gaia login environment supplies MDSVERUTIL and MDS variables.",
+          "Preserved management command failure messages through ManagementPlaneEnumerationResult.Failed and DiscoveryJobExecutor.",
+          "Opened pull request #428; no merge was performed."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/cp-discovery-gaia-sourcing",
+          "ci": "UNVERIFIED: local worker tests did not start due to the restricted Gradle lock path.",
+          "head_sha": "c7ce729",
+          "merge_commit": null,
+          "merge_decision": "orchestrator merge mode; no merge performed by engineer",
+          "merge_state": "OPEN",
+          "pr": 428,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/428"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0326",
+          "movement_type": "VALIDATION",
+          "objective": "Run the worker test suite in a writable Gradle environment before merge.",
+          "status": "in_progress"
+        },
+        "preserved": [
+          "Closed command-set enforcement.",
+          "Opaque identity handling and no secret logging.",
+          "Frontend, service, persistence, and Palo Alto discovery scope."
+        ],
+        "recommended_reasoning": {
+          "reason": "Validation rerun only.",
+          "tier": "low"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Run :worker:test in a writable Gradle environment before merge."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: :worker:test could not start because the Gradle wrapper lock was denied before compilation.",
+          "diff_check": "PASS: git diff --check origin/main completed without findings before commit.",
+          "full_regression": "NOT_RUN: outside the dispatched validation plan.",
+          "privacy": "PASS: repository privacy check reported zero findings.",
+          "real_environment": "NOT_RUN: local validation only.",
+          "state_consistency": "NOT_APPLICABLE: no project-state changes were in scope.",
+          "targeted": "UNVERIFIED: :worker:test could not start because the Gradle wrapper lock was denied before compilation."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-17T22:17:49Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0326",
+  "movement": "NXS-LOCAL-0326",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-17T22:17:49Z"
+}
