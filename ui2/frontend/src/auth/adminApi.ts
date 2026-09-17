@@ -106,13 +106,11 @@ export function enableLocalIdentity(localIdentityId: string): Promise<LocalIdent
 /** LIA-3.4: this calls the existing role-bindings resource -- never re-implemented here. */
 export function createRoleBinding(
   roleToken: string,
-  groupReference: string,
-  groupReferenceKeyId: string,
+  localIdentityId: string,
 ): Promise<{ binding_id: string }> {
   return call("/role-bindings", "POST", {
-    roleToken,
-    groupReference,
-    groupReferenceKeyId,
+    role_token: roleToken,
+    local_identity_id: localIdentityId,
   });
 }
 

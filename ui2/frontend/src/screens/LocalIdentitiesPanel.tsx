@@ -272,7 +272,6 @@ function AssignRoleDialog({
   readonly onDone: () => void;
 }) {
   const [roleToken, setRoleToken] = useState("");
-  const [groupReferenceKeyId, setGroupReferenceKeyId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   return (
@@ -288,11 +287,6 @@ function AssignRoleDialog({
             <MenuItem value="role:operator">Operator</MenuItem>
             <MenuItem value="role:viewer">Viewer</MenuItem>
           </TextField>
-          <TextField
-            label="Group reference key id"
-            value={groupReferenceKeyId}
-            onChange={(e) => setGroupReferenceKeyId(e.target.value)}
-          />
           {error && <Typography color="error">{error}</Typography>}
         </Stack>
       </DialogContent>
@@ -301,7 +295,7 @@ function AssignRoleDialog({
         <Button
           variant="contained"
           onClick={() =>
-            createRoleBinding(roleToken, localIdentityId, groupReferenceKeyId)
+            createRoleBinding(roleToken, localIdentityId)
               .then(() => {
                 onDone();
                 onClose();
