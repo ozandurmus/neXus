@@ -280,7 +280,9 @@ public final class BackupCapabilityExecutor {
     private static String describeConnect(ConnectResult result) {
         return switch (result) {
             case ConnectResult.AuthenticationFailed failed -> "authentication_failed: " + failed.reason();
-            case ConnectResult.HostKeyRejected rejected -> "host_key_rejected: " + rejected.reason();
+            case ConnectResult.HostKeyRejected rejected -> rejected.reason().startsWith("host_key_mismatch:")
+                    ? rejected.reason()
+                    : "host_key_rejected: " + rejected.reason();
             case ConnectResult.TimedOut ignored -> "timed_out";
             case ConnectResult.Authenticated ignored -> "authenticated";
         };

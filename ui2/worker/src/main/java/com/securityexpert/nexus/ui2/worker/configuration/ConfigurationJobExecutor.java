@@ -209,12 +209,12 @@ public final class ConfigurationJobExecutor {
         Optional<String> softwareVersion = confirmFacts.flatMap(DeviceConfirmFacts::observedSoftwareVersion);
         String hostnameSource = confirmFacts.flatMap(DeviceConfirmFacts::observedHostname).orElse(deviceId);
         try {
-            BackupArtefactManifestRecord manifest = new BackupArtefactManifestRecord(artefact.artefactRef(), deviceId,
+            BackupArtefactManifestRecord manifest = new BackupArtefactManifestRecord(UUID.randomUUID().toString(), deviceId,
                     virtualSystemRef, ArtefactClass.CONFIGURATION, vendor, softwareVersion,
                     hostnameFingerprint.of(hostnameSource), artefact.plaintextSha256(), artefact.plaintextBytes(),
                     artefact.ciphertextSha256(), artefact.ciphertextBytes(), artefact.keyId(),
                     artefact.wrappedDataKey(), ArtefactValidation.reachedWithoutRestore(CONFIGURATION_VALIDATION_LEVEL),
-                    CONFIGURATION_RETENTION_TIER, Optional.empty(), recoveryVolumePath, Optional.empty());
+                    CONFIGURATION_RETENTION_TIER, Optional.empty(), artefact.artefactRef(), Optional.empty());
             backupArtefactManifestRepository.record(manifest, ACTOR, ACTION_MANIFEST_RECORDED);
         } catch (IllegalStateException versionUnresolvable) {
             // C7 section 3.3's refusal -- see method Javadoc.

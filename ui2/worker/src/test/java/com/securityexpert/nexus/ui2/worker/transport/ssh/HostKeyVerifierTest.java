@@ -44,4 +44,33 @@ class HostKeyVerifierTest {
         assertFalse(verifier.isTrusted("trust-1", "aa:bb:cc"), "fingerprint comparison must be exact, never "
                 + "case-insensitive or partial");
     }
+
+    @Test
+    void blankOrNullInputsAreRejected() {
+        HostKeyVerifier verifier = new HostKeyVerifier(trustRuleRef -> Optional.of("aa:bb:cc"));
+        assertFalse(verifier.isTrusted(null, "aa:bb:cc"));
+        assertFalse(verifier.isTrusted("", "aa:bb:cc"));
+        assertFalse(verifier.isTrusted("   ", "aa:bb:cc"));
+        assertFalse(verifier.isTrusted("trust-1", null));
+        assertFalse(verifier.isTrusted("trust-1", ""));
+        assertFalse(verifier.isTrusted("trust-1", "   "));
+        org.junit.jupiter.api.Assertions.assertEquals(HostKeyVerifier.Decision.MISSING,
+                verifier.verify("trust-1", "host", 22, "ssh-rsa", ""));
+    }
+
+    @Test
+    void blankExpectedFingerprintNeverMatches() {
+        HostKeyVerifier verifier = new HostKeyVerifier(trustRuleRef -> Optional.of(""));
+        assertFalse(verifier.isTrusted("trust-1", ""));
+        assertFalse(verifier.isTrusted("trust-1", "aa:bb:cc"));
+        org.junit.jupiter.api.Assertions.assertEquals(HostKeyVerifier.Decision.MISSING,
+                verifier.verify("trust-1", "host", 22, "ssh-rsa", ""));
+    }
+
+    @Test
+    void verifyReturnsMismatchOnFingerprintDifference() {
+        HostKeyVerifier verifier = new HostKeyVerifier(trustRuleRef -> Optional.of("expected-fp"));
+        org.junit.jupiter.api.Assertions.assertEquals(HostKeyVerifier.Decision.MISMATCH,
+                verifier.verify("trust-1", "host", 22, "ssh-rsa", "different-fp"));
+    }
 }

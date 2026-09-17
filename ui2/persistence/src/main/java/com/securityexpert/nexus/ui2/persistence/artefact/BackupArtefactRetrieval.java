@@ -18,6 +18,8 @@ import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
 import com.securityexpert.nexus.ui2.platform.BackupArtefactRetrievalPort;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
 /**
  * The one {@link BackupArtefactRetrievalPort} implementation (14I OR-1..
@@ -43,6 +45,7 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
  */
 public final class BackupArtefactRetrieval implements BackupArtefactRetrievalPort {
 
+    private static final Logger log = Logger.getLogger(BackupArtefactRetrieval.class.getName());
     private static final int MIN_REASON_LENGTH = 8;
 
     private final ArtefactStore artefactStore;
@@ -83,11 +86,12 @@ public final class BackupArtefactRetrieval implements BackupArtefactRetrievalPor
             retrievalRepository.record(UUID.randomUUID().toString(), artefactId, reason, destinationPath,
                     actorFingerprint, "backup_artefact_retrieved");
         } catch (RuntimeException e) {
+            log.log(Level.SEVERE, "Failed to write audit log for retrieval of " + artefactId, e);
             return new RetrieveResult.AuditRefused();
         }
 
         Path destination = Path.of(destinationPath);
-        try (InputStream decrypted = artefactStore.retrieve(new ArtefactRef(artefactId), manifest.get().wrappedDataKey(),
+        try (InputStream decrypted = artefactStore.retrieve(new ArtefactRef(manifest.get().recoveryVolumePath()), manifest.get().wrappedDataKey(),
                 false);
                 OutputStream out = Files.newOutputStream(destination)) {
             decrypted.transferTo(out);

@@ -38,7 +38,7 @@ class DirectorySchemaTest {
         byte[] key = new byte[32]; new java.security.SecureRandom().nextBytes(key);
         var cipher = GroupReferenceCipher.fromBase64Key(Base64.getEncoder().encodeToString(key), "synthetic-key");
         String reference = "opaque-synthetic-principal";
-        var record = new RoleBindingRecord("synthetic-binding", RoleToken.BACKUP_ADMIN.token(),
+        var record = new RoleBindingRecord("synthetic-binding", RoleToken.BACKUP_ADMIN,
                 cipher.encryptDirectory(reference, "synthetic-profile", DirectoryBindingKind.DIRECTORY_PRINCIPAL), cipher.keyId(),
                 "synthetic-actor", Instant.EPOCH, Optional.empty(), Optional.empty(), DirectoryBindingKind.DIRECTORY_PRINCIPAL, "synthetic-profile");
         assertEquals(record.bindingId(), repository.directoryMutation(tx -> tx.bindings().createDirectory(record, "role_binding_create")));

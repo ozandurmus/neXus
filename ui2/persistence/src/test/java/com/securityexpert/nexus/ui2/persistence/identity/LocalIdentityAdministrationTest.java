@@ -293,7 +293,7 @@ class LocalIdentityAdministrationTest {
         Fixture fx = fixture();
         LocalIdentityAdministrationPort.LocalIdentityView onlyAdmin =
                 fx.administration.create("system:bootstrap", "nexusadmin", "p1".toCharArray());
-        fx.bindings.create("binding-1", RoleToken.SECURITY_ADMIN.token(),
+        fx.bindings.create("binding-1", RoleToken.SECURITY_ADMIN,
                 fx.cipher.encrypt(onlyAdmin.localIdentityId()), "key-1", "system:bootstrap", "role_binding_create");
 
         LocalIdentityAdministrationPort.MutationResult result =
@@ -312,9 +312,9 @@ class LocalIdentityAdministrationTest {
                 fx.administration.create("system:bootstrap", "nexusadmin", "p1".toCharArray());
         LocalIdentityAdministrationPort.LocalIdentityView second =
                 fx.administration.create("system:bootstrap", "claudeadmin", "p2".toCharArray());
-        fx.bindings.create("binding-1", RoleToken.SECURITY_ADMIN.token(), fx.cipher.encrypt(first.localIdentityId()),
+        fx.bindings.create("binding-1", RoleToken.SECURITY_ADMIN, fx.cipher.encrypt(first.localIdentityId()),
                 "key-1", "system:bootstrap", "role_binding_create");
-        fx.bindings.create("binding-2", RoleToken.SECURITY_ADMIN.token(), fx.cipher.encrypt(second.localIdentityId()),
+        fx.bindings.create("binding-2", RoleToken.SECURITY_ADMIN, fx.cipher.encrypt(second.localIdentityId()),
                 "key-1", "admin1", "role_binding_create");
         String firstActorFingerprint = LocalPrincipalFingerprint.forLocalIdentity(first.localIdentityId());
         fx.sessions.putActive("session-1", firstActorFingerprint);

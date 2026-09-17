@@ -82,7 +82,7 @@ class PersistedManagementEndpointTrustResolverTest {
         assertEquals("TRUST_ENTRY_MISSING", failure[0]);
         store.fingerprint = "0".repeat(64);
         assertEquals(HostKeyRepository.NOT_INCLUDED, hook.check(HOST, KEY));
-        assertEquals("TRUST_MISMATCH", failure[0]);
+        assertEquals("host_key_mismatch: " + FINGERPRINT, failure[0]);
         assertFalse(trusted[0]);
         store.fingerprint = null;
         hook.add(new com.jcraft.jsch.HostKey(HOST, KEY), null);

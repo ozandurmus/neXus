@@ -18,7 +18,7 @@ public final class HostKeyVerifier {
     private final TrustRuleResolver trustRuleResolver;
 
     public HostKeyVerifier(TrustRuleResolver trustRuleResolver) {
-        this.trustRuleResolver = trustRuleResolver;
+        this.trustRuleResolver = java.util.Objects.requireNonNull(trustRuleResolver, "trustRuleResolver");
     }
 
     /**
@@ -32,13 +32,20 @@ public final class HostKeyVerifier {
     }
 
     public Decision verify(String ref, String host, int port, String algorithm, String presentedFingerprint) {
+        if (ref == null || ref.isBlank() || presentedFingerprint == null || presentedFingerprint.isBlank()) {
+            return Decision.MISSING;
+        }
         return trustRuleResolver.resolveExpectedFingerprint(ref, host, port, algorithm)
+                .filter(expected -> !expected.isBlank())
                 .map(expected -> expected.equals(presentedFingerprint) ? Decision.MATCH : Decision.MISMATCH)
                 .orElse(Decision.MISSING);
     }
 
     public boolean isTrusted(String trustRuleRef, String presentedFingerprint) {
+        if (trustRuleRef == null || trustRuleRef.isBlank() || presentedFingerprint == null || presentedFingerprint.isBlank()) {
+            return false;
+        }
         Optional<String> expected = trustRuleResolver.resolveExpectedFingerprint(trustRuleRef);
-        return expected.isPresent() && expected.get().equals(presentedFingerprint);
+        return expected.isPresent() && !expected.get().isBlank() && expected.get().equals(presentedFingerprint);
     }
 }

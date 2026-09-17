@@ -4,6 +4,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.securityexpert.nexus.ui2.jobs.JobState;
 import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentReadPort;
@@ -188,12 +189,12 @@ public final class BackupJobExecutor {
         Optional<String> softwareVersion = confirmFacts.flatMap(DeviceConfirmFacts::observedSoftwareVersion);
         String hostnameSource = confirmFacts.flatMap(DeviceConfirmFacts::observedHostname).orElse(deviceId);
         try {
-            BackupArtefactManifestRecord manifest = new BackupArtefactManifestRecord(artefact.ref().value(), deviceId,
+            BackupArtefactManifestRecord manifest = new BackupArtefactManifestRecord(UUID.randomUUID().toString(), deviceId,
                     virtualSystemRef, ArtefactClass.BACKUP, VENDOR, softwareVersion, hostnameFingerprint.of(hostnameSource),
                     artefact.plaintextSha256(), artefact.plaintextBytes(), artefact.ciphertextSha256(),
                     artefact.ciphertextBytes(), artefact.keyId(), artefact.wrappedDataKey(),
                     ArtefactValidation.reachedWithoutRestore(BACKUP_VALIDATION_LEVEL), BACKUP_RETENTION_TIER,
-                    Optional.empty(), recoveryVolumePath, Optional.of(deviationState));
+                    Optional.empty(), artefact.ref().value(), Optional.of(deviationState));
             manifestRepository.record(manifest, ACTOR, ACTION_MANIFEST_RECORDED);
             return true;
         } catch (IllegalStateException versionUnresolvable) {

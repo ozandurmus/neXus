@@ -34,6 +34,7 @@ final class ScriptedDeviceTransport implements DeviceTransport {
     private final Map<String, String> hostBySessionId = new HashMap<>();
     private final List<ConnectionTarget> connectedTargets = new ArrayList<>();
     private boolean credentialUnresolvable;
+    private ConnectResult connectResultOverride;
 
     ScriptedDeviceTransport(Map<String, String> identityOutputByHost, Map<String, String> haPeerOutputByHost) {
         this.identityOutputByHost = identityOutputByHost;
@@ -44,6 +45,10 @@ final class ScriptedDeviceTransport implements DeviceTransport {
         this.credentialUnresolvable = true;
     }
 
+    void setConnectResult(ConnectResult result) {
+        this.connectResultOverride = result;
+    }
+
     List<ConnectionTarget> connectedTargets() {
         return connectedTargets;
     }
@@ -52,6 +57,9 @@ final class ScriptedDeviceTransport implements DeviceTransport {
     public ConnectResult connect(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
         if (credentialUnresolvable) {
             throw new IllegalStateException("ssh credential reference not resolvable: " + spec.credentialRef());
+        }
+        if (connectResultOverride != null) {
+            return connectResultOverride;
         }
         connectedTargets.add(target);
         String sessionId = UUID.randomUUID().toString();

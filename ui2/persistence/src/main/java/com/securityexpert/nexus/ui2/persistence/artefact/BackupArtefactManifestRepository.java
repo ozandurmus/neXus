@@ -39,7 +39,7 @@ public interface BackupArtefactManifestRepository {
     record PlaintextDigestSummary(String artefactId, String plaintextSha256) {
     }
 
-    record RetrievalManifest(String artefactId, byte[] wrappedDataKey) {
+    record RetrievalManifest(String artefactId, String recoveryVolumePath, byte[] wrappedDataKey) {
     }
 
     record BackupArtefactSummary(String artefactId, String deviceId, Instant createdAt, long plaintextBytes,

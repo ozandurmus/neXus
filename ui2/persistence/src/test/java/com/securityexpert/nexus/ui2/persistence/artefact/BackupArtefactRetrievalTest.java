@@ -61,7 +61,7 @@ class BackupArtefactRetrievalTest {
     }
 
     private static final class FakeManifestRepository implements BackupArtefactManifestRepository {
-        Optional<RetrievalManifest> manifest = Optional.of(new RetrievalManifest(ARTEFACT_ID, WRAPPED_KEY));
+        Optional<RetrievalManifest> manifest = Optional.of(new RetrievalManifest(ARTEFACT_ID, "dummy/path", WRAPPED_KEY));
 
         @Override
         public void record(BackupArtefactManifestRecord manifest, String actorFingerprint, String actionId) {
@@ -113,7 +113,7 @@ class BackupArtefactRetrievalTest {
 
         @Override
         public List<RoleBindingRecord> findActiveByToken(String roleToken) {
-            return RoleToken.BACKUP_ADMIN.token().equals(roleToken) ? activeBackupAdminBindings : List.of();
+            return RoleToken.BACKUP_ADMIN.equals(roleToken) ? activeBackupAdminBindings : List.of();
         }
 
         @Override
@@ -178,7 +178,7 @@ class BackupArtefactRetrievalTest {
         void grantBackupAdmin() {
             byte[] encrypted = cipher.encrypt("cn=backup-admins,dc=example,dc=com");
             roleBindingRepository.activeBackupAdminBindings = List.of(new RoleBindingRecord("binding-1",
-                    RoleToken.BACKUP_ADMIN.token(), encrypted, "key-1", "security-admin-1", Instant.now(),
+                    RoleToken.BACKUP_ADMIN, encrypted, "key-1", "security-admin-1", Instant.now(),
                     Optional.empty(), Optional.empty()));
             actorAuthzStateRepository.state = Optional.of(new ActorAuthzStateRecord(ACTOR,
                     Set.of("cn=backup-admins,dc=example,dc=com"), Instant.now(), Instant.now().plusSeconds(3600)));

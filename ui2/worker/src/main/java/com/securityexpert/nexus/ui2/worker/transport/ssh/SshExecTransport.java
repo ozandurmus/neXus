@@ -51,6 +51,8 @@ import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
  */
 public final class SshExecTransport implements DeviceTransport {
 
+    private static final System.Logger LOG = System.getLogger(SshExecTransport.class.getName());
+
     private final SshCredentialResolver credentialResolver;
     private final TrustRuleResolver trustRuleResolver;
 
@@ -61,6 +63,11 @@ public final class SshExecTransport implements DeviceTransport {
 
     @Override
     public ConnectResult connect(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
+        if (spec.trustRuleRef() == null || spec.trustRuleRef().isBlank()) {
+            LOG.log(System.Logger.Level.WARNING, "SSH connection aborted for {0}:{1}: trust rule ref is missing",
+                    target.host(), target.port());
+            return new ConnectResult.HostKeyRejected("TRUST_ENTRY_MISSING");
+        }
         var algorithms = trustRuleResolver.authorizedAlgorithms(spec.trustRuleRef(), target.host(), target.port());
         if (algorithms.isPresent() && algorithms.get().isEmpty()) {
             return new ConnectResult.HostKeyRejected("TRUST_ENTRY_MISSING");
@@ -88,6 +95,14 @@ public final class SshExecTransport implements DeviceTransport {
             SshTransportSession wrapped = new SshTransportSession(UUID.randomUUID().toString(), session);
             return new ConnectResult.Authenticated(wrapped);
         } catch (JSchException e) {
+            if (session != null) {
+                session.disconnect();
+            }
+            if (trustFailure[0] != null) {
+                LOG.log(System.Logger.Level.WARNING, "SSH connection aborted for {0}:{1}: {2}",
+                        target.host(), target.port(), trustFailure[0]);
+                return new ConnectResult.HostKeyRejected(trustFailure[0]);
+            }
             if (algorithms.isPresent()) {
                 return discoveryFailure(e, trustFailure[0], trusted[0]);
             }
@@ -236,8 +251,13 @@ public final class SshExecTransport implements DeviceTransport {
                     trustFailure[0] = switch (decision) {
                         case MATCH -> null;
                         case MISSING -> "TRUST_ENTRY_MISSING";
-                        case MISMATCH -> "TRUST_MISMATCH";
+                        case MISMATCH -> "host_key_mismatch: " + presented;
                     };
+                    if (decision == HostKeyVerifier.Decision.MISMATCH) {
+                        LOG.log(System.Logger.Level.WARNING,
+                                "SSH host key mismatch for {0}:{1}: presented fingerprint {2}",
+                                target.host(), target.port(), presented);
+                    }
                     return trusted[0] ? OK : NOT_INCLUDED;
                 } catch (JSchException e) {
                     trustFailure[0] = "TRUST_ENTRY_MISSING";
