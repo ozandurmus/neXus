@@ -367,6 +367,10 @@ export function requestInventoryCollect(deviceId: string, nonce?: string): Promi
   return call(`/devices/${encodeURIComponent(deviceId)}/inventory/collect`, "POST", nonce ? { nonce } : {});
 }
 
+export function requestInventoryCollectAll(): Promise<{ enrolled_devices: number; admitted: number; refused: number }> {
+  return call("/devices/inventory/collect-all", "POST", {});
+}
+
 /**
  * Discovery from the UI (14F section 3): the management-server toggle's own
  * three routes. `outcome_summary` is counts-only (PR-3); a candidate row's

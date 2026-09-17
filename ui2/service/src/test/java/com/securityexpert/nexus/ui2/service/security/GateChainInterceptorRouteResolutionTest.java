@@ -76,6 +76,15 @@ class GateChainInterceptorSecurityTest {
     }
 
     @Test
+    void theBulkCollectRouteUsesTheInventoryCollectAction() throws Exception {
+        var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
+        var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
+        method.setAccessible(true);
+        assertEquals(ActionRegistry.DEVICE_INVENTORY_COLLECT,
+                method.invoke(interceptor, "POST", "/devices/inventory/collect-all"));
+    }
+
+    @Test
     void aClusterMemberRefInTheMiddleOfThePathResolvesViaTheInteriorWildcard() throws Exception {
         assertEquals("device_read", actionIdFor("GET", "/clusters/cluster-1/inventory"));
     }

@@ -11,6 +11,7 @@ import com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
+import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 
 /**
@@ -33,6 +34,10 @@ public final class InventoryCollectService {
 
         record AdmissionRefused(String code, String reason) implements Outcome {
         }
+    }
+
+    /** Counts only, so a bulk request does not return a fleet's opaque device identifiers. */
+    public record BulkOutcome(int enrolledDevices, int admitted, int refused) {
     }
 
     private static final Map<String, String> CAPABILITY_BY_VENDOR = Map.of(
@@ -90,6 +95,22 @@ public final class InventoryCollectService {
             case AdmissionResult.Deduplicated deduplicated -> new Outcome.Admitted(deduplicated.jobId());
             case AdmissionResult.Refused refused -> new Outcome.AdmissionRefused(refused.code(), refused.reason());
         };
+    }
+
+    /** Admits one read-only inventory job per currently enrolled device. */
+    public BulkOutcome requestCollectAll(String actorFingerprint) {
+        int enrolledDevices = 0;
+        int admitted = 0;
+        for (var device : deviceRepository.listAll()) {
+            if (device.enrollmentState() != DeviceEnrollmentState.ENROLLED) {
+                continue;
+            }
+            enrolledDevices++;
+            if (requestCollect(device.deviceId(), actorFingerprint, Optional.empty()) instanceof Outcome.Admitted) {
+                admitted++;
+            }
+        }
+        return new BulkOutcome(enrolledDevices, admitted, enrolledDevices - admitted);
     }
 
     private String minuteBucket() {

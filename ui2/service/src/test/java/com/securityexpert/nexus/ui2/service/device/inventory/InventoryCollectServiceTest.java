@@ -41,6 +41,7 @@ class InventoryCollectServiceTest {
 
     private static final class FakeDeviceRepository implements DeviceRepository {
         final Map<String, DeviceRecord> byId = new HashMap<>();
+        List<DeviceSummaryRecord> summaries = List.of();
 
         @Override
         public Optional<DeviceRecord> find(String deviceId) {
@@ -91,7 +92,7 @@ class InventoryCollectServiceTest {
 
         @Override
         public List<DeviceSummaryRecord> listAll() {
-            throw new UnsupportedOperationException("not used by this test");
+            return summaries;
         }
     }
 
@@ -231,5 +232,24 @@ class InventoryCollectServiceTest {
 
         assertTrue(outcome instanceof InventoryCollectService.Outcome.AdmissionRefused, "expected AdmissionRefused, got " + outcome);
         assertEquals("DEVICE_NOT_ELIGIBLE", ((InventoryCollectService.Outcome.AdmissionRefused) outcome).code());
+    }
+
+    @Test
+    void collectAllAdmitsOnlyEnrolledDevices() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("enrolled", enrolledDevice("enrolled", "check_point"));
+        devices.byId.put("draft", new DeviceRecord("draft", "gateway", "check_point", "manual_registration", Instant.now(),
+                false, DeviceEnrollmentState.DRAFT, false, "cred-ref-1"));
+        devices.summaries = List.of(
+                new DeviceSummaryRecord("enrolled", "gateway", "check_point", DeviceEnrollmentState.ENROLLED,
+                        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()),
+                new DeviceSummaryRecord("draft", "gateway", "check_point", DeviceEnrollmentState.DRAFT,
+                        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
+
+        InventoryCollectService.BulkOutcome outcome = serviceFor(devices).requestCollectAll("actor");
+
+        assertEquals(1, outcome.enrolledDevices());
+        assertEquals(1, outcome.admitted());
+        assertEquals(0, outcome.refused());
     }
 }
