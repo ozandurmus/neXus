@@ -6,23 +6,22 @@ Wordmark SVGs bundled locally, CP discovery profile sourced, SSH TOFU active, AD
 Authority: `docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md`.
 
 # Recent session changes
-- NXS-LOCAL-0328: Bundled static wordmark and mark SVGs in frontend assets, eliminating `ACTION_MAPPING_REQUIRED`.
-- Added `source /etc/profile.d/CP.sh;` in `ManagementShellCommands.java` for Check Point discovery Gaia environment.
-- Added SSH TOFU auto-enrollment in worker for discovered endpoints, resolving `TRUST_ENTRY_MISSING`.
+- NXS-LOCAL-0326: Dispatched to Codex, PR #428 merged. Check Point MDS discovery shell commands wrapped in `bash -l -c '...'` to properly source Gaia profile and `$MDSVERUTIL`. Error swallowing removed in discovery job executor.
+- NXS-LOCAL-0327: Dispatched to Codex, PR #429 merged. Implemented device deletion API (`POST /devices/{id}/delete`, gated by `role:onboarding_admin`) and UI controls with confirmation dialog in Device Management and Device Workspace screens. 13-table cascaded transactional deletion ensures database referential integrity.
+- NXS-LOCAL-0328: Bundled static wordmark and mark SVGs in frontend assets, eliminating `ACTION_MAPPING_REQUIRED`. Persisted dashboard bearer token in `.nexus/dashboard_token`.
 - Built AD Group to Role mapping backend API and `CustomRolesPanel.tsx` UI table/dialog.
 - Built 5 Product Planes permissions model (`Devices`, `Config`, `Compliance`, `Operations`, `Admin`) and filtered `NavigationRail.tsx`.
-- TopAppBar displays active build badge from `getProjectPlan()`.
-- Ratified strict Orchestrator / Relay protocol enforcement for future agent dispatches.
+- Deployed latest `main` container image to K3s cluster (`HOST_A`). `ui2-service` and `ui2-worker` rolled out and running.
 
 # Exact next action
-- Await PO live testing feedback across all UI2 screens.
-- When new builds are requested, strictly follow the Orchestrator / Relay prompt protocol without in-session monolithic coding.
+- PO test of Check Point Discovery and Device Deletion on live UI (`https://ui2.nexus.local`).
+- Follow strict Orchestrator / Relay protocol for any further tasks.
 
 # Test delta
-- `:architecture-tests:test` passed (`NoRoleConditionalRenderingInFrontendTest` green).
-- `:worker:test` (173 tests) and `:service:test` passed.
-- `scripts/repository_privacy_check.py` passed with 0 findings.
-- Live verification on K3s HOST_A: SVG HTTP 200, discovery Gaia sourcing active, AD role binding create/revoke validated in DB.
+- `python3 -m pytest tests/test_architecture_convergence.py` passed (23/23).
+- `python3 scripts/repository_privacy_check.py` passed (0 findings).
+- `./ui2/gradlew -p ui2 :service:test :frontendCi` passed.
+- `scripts/orchestrator.py verify` for NXS-LOCAL-0326 and NXS-LOCAL-0327 passed.
 
 # Risks
 - None.

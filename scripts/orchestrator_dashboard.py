@@ -1361,13 +1361,34 @@ def make_handler_class(*, token: str, relay_dir: Path, state_dir: Path, repo_roo
 # ---------------------------------------------------------------------------
 
 def run_dashboard(*, port: int, relay_dir: Path, state_dir: Path, repo_root: Path, retry_limit: int) -> None:
-    token = secrets.token_urlsafe(32)
+    token_file = repo_root / ".nexus" / "dashboard_token"
+    token = None
+    if token_file.is_file():
+        try:
+            token = token_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            token = None
+    if not token:
+        token = secrets.token_urlsafe(32)
+        try:
+            token_file.parent.mkdir(parents=True, exist_ok=True)
+            token_file.write_text(token, encoding="utf-8")
+        except OSError:
+            pass
+
+    url_file = repo_root / ".nexus" / "dashboard_url"
+    url = f"http://127.0.0.1:{port}/#t={token}"
+    try:
+        url_file.write_text(url, encoding="utf-8")
+    except OSError:
+        pass
+
     handler_cls = make_handler_class(
         token=token, relay_dir=relay_dir, state_dir=state_dir, repo_root=repo_root,
         retry_limit=retry_limit, port=port,
     )
     httpd = ThreadingHTTPServer(("127.0.0.1", port), handler_cls)
-    print(f"neXus dashboard listening -- open http://127.0.0.1:{port}/#t={token}")
+    print(f"neXus dashboard listening -- open {url}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
