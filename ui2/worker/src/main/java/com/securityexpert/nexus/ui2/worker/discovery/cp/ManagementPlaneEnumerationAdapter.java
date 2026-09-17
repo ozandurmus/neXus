@@ -58,6 +58,7 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.SshCredentialResolver;
  */
 public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneEnumeration {
 
+    private static final System.Logger LOGGER = System.getLogger(ManagementPlaneEnumerationAdapter.class.getName());
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration EXEC_TIMEOUT = Duration.ofSeconds(30);
 
@@ -91,6 +92,8 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         try {
             connectResult = transport.connect(target, spec, CONNECT_TIMEOUT);
         } catch (RuntimeException e) {
+            LOGGER.log(System.Logger.Level.WARNING, "Check Point management connection failed: {0}",
+                    e.getClass().getSimpleName());
             return new ManagementPlaneEnumerationResult.Failed("NOT_EVALUABLE", 0, SessionDisconnectOutcome.NOT_OPENED);
         }
         if (connectResult instanceof ConnectResult.AuthenticationFailed failure
@@ -130,6 +133,8 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         int managementPlaneRequestCount = 1 + counter.count();
 
         if (caught != null) {
+            LOGGER.log(System.Logger.Level.WARNING, "Check Point management enumeration failed: {0}",
+                    caught.getClass().getSimpleName());
             String failureReason = caught.getMessage();
             return new ManagementPlaneEnumerationResult.Failed(
                     failureReason == null ? caught.getClass().getSimpleName() : failureReason,
@@ -175,10 +180,11 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         List<String> domains = new ArrayList<>();
         for (String line : response.split("\n")) {
             String trimmed = line.trim();
-            if (!trimmed.isEmpty()) {
+            if (trimmed.matches("[A-Za-z0-9_.-]+")) {
                 domains.add(trimmed);
             }
         }
+        LOGGER.log(System.Logger.Level.INFO, "Enumerated {0} valid Check Point domains", domains.size());
         return domains;
     }
 
@@ -192,6 +198,7 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
     private List<RawCandidateInput> queryObjects(TransportSession session, String domain, ObjectType objectType,
             RequestCounter counter, Map<ObjectType, ParseCounts> parseCounts) {
         String command = ManagementShellCommands.contextSwitchAndObjectQuery(domain, objectType);
+        LOGGER.log(System.Logger.Level.DEBUG, "Executing Check Point object query for type {0}", objectType);
         String response = execRead(session, command);
         counter.increment();
         List<Map<String, Object>> objects = CpObjectDumpParser.parseObjects(response);
@@ -263,8 +270,12 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
             return completed.output();
         }
         if (result instanceof ExecResult.Completed completed) {
+            LOGGER.log(System.Logger.Level.WARNING, "Check Point management command exited with status {0}",
+                    completed.exitStatus());
             throw new IllegalStateException("management command exited with status " + completed.exitStatus());
         }
+        LOGGER.log(System.Logger.Level.WARNING, "Check Point management command failed: {0}",
+                result.getClass().getSimpleName());
         throw new IllegalStateException("management command failed: " + result);
     }
 

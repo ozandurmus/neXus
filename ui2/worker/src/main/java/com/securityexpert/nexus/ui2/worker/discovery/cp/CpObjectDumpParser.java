@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.discovery.cp;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,16 +35,20 @@ final class CpObjectDumpParser {
     static List<Map<String, Object>> parseObjects(String text) {
         CpObjectDumpParser parser = new CpObjectDumpParser(text);
         List<Map<String, Object>> objects = new ArrayList<>();
-        parser.skipWhitespace();
+        parser.skipToObjectStart();
+        if (parser.pos == parser.text.length()) {
+            return Collections.emptyList();
+        }
         while (parser.pos < parser.text.length()) {
             objects.add(parser.parseObject());
-            parser.skipWhitespace();
+            parser.skipToObjectStart();
         }
         return objects;
     }
 
     private Map<String, Object> parseObject() {
         expect('(');
+        skipWhitespace();
         // The object's own name, right after '('. Never carried into the field
         // map or any candidate row -- fields are read only by role, through
         // ManagementApiFieldBinding, and AC-8/T-7 forbid retaining a raw name.
@@ -116,6 +121,12 @@ final class CpObjectDumpParser {
 
     private void skipWhitespace() {
         while (pos < text.length() && Character.isWhitespace(text.charAt(pos))) {
+            pos++;
+        }
+    }
+
+    private void skipToObjectStart() {
+        while (pos < text.length() && text.charAt(pos) != '(') {
             pos++;
         }
     }
