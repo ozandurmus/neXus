@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.discovery.cp.ManagementPlaneEnumerationRequest;
 import com.securityexpert.nexus.ui2.discovery.cp.ManagementPlaneEnumerationResult;
+import com.securityexpert.nexus.ui2.discovery.cp.ObjectType;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.SshCredentialMaterial;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.SshCredentialResolver;
 
@@ -20,6 +21,14 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.SshCredentialResolver;
  * full fixture discovery, not a hand-picked sample.
  */
 class ManagementShellCommandsClosedSetTest {
+
+    @Test
+    void managementCommandsUseTheGaiaLoginShell() {
+        assertTrue(ManagementShellCommands.domainList()
+                .startsWith("bash -l -c 'source /etc/profile.d/CP.sh; $MDSVERUTIL"));
+        assertTrue(ManagementShellCommands.contextSwitchAndObjectQuery("fixture-domain", ObjectType.GATEWAY)
+                .startsWith("bash -l -c 'source /etc/profile.d/CP.sh; mdsenv "));
+    }
 
     @Test
     void everyCommandIssuedByAFullRunIsAMemberOfTheClosedSet() {

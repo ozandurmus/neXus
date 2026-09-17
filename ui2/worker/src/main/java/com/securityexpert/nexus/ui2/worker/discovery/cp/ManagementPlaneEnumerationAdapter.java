@@ -130,8 +130,10 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         int managementPlaneRequestCount = 1 + counter.count();
 
         if (caught != null) {
+            String failureReason = caught.getMessage();
             return new ManagementPlaneEnumerationResult.Failed(
-                    "management-plane enumeration did not complete", managementPlaneRequestCount, disconnectOutcome);
+                    failureReason == null ? caught.getClass().getSimpleName() : failureReason,
+                    managementPlaneRequestCount, disconnectOutcome);
         }
         return new ManagementPlaneEnumerationResult.Completed(
                 attachChannelStates(candidates, channelStates), channelStates, managementPlaneRequestCount,
@@ -260,7 +262,10 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         if (result instanceof ExecResult.Completed completed && completed.exitStatus() == 0) {
             return completed.output();
         }
-        throw new ManagementPlaneQueryFailedException();
+        if (result instanceof ExecResult.Completed completed) {
+            throw new IllegalStateException("management command exited with status " + completed.exitStatus());
+        }
+        throw new IllegalStateException("management command failed: " + result);
     }
 
     private static boolean isBlank(String value) {
