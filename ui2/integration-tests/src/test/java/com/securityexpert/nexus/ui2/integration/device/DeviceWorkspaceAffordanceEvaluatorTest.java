@@ -97,7 +97,7 @@ class DeviceWorkspaceAffordanceEvaluatorTest {
         // A binding exists for the required token, but this actor's
         // resolved group set does not contain the bound group -- DENIED,
         // never AUTHZ_NOT_EVALUATED, never a silent permit.
-        roleBindingRepository.create(DeviceWorkspaceTestRows.opaqueId("binding"), RoleToken.ONBOARDING_ADMIN.token(),
+        roleBindingRepository.create(DeviceWorkspaceTestRows.opaqueId("binding"), RoleToken.ONBOARDING_ADMIN,
                 cipher.encrypt("cn=onboarding-admins,dc=harness"), "harness-key", "harness-admin",
                 "harness.seed.binding");
         actorAuthzStateRepository.upsert(actor, java.util.Set.of("cn=some-other-group,dc=harness"), now,
@@ -139,7 +139,7 @@ class DeviceWorkspaceAffordanceEvaluatorTest {
         // security_admin has no binding for role:onboarding_admin -- refused
         // the same way as the no-role actor, never granted by adjacency
         // (ActionRegistry javadoc, C3 §4.1 separation of duties).
-        roleBindingRepository.create(DeviceWorkspaceTestRows.opaqueId("binding"), RoleToken.SECURITY_ADMIN.token(),
+        roleBindingRepository.create(DeviceWorkspaceTestRows.opaqueId("binding"), RoleToken.SECURITY_ADMIN,
                 cipher.encrypt("cn=security-admins,dc=harness"), "harness-key", "harness-admin",
                 "harness.seed.binding");
         actorAuthzStateRepository.upsert(securityAdminActor, java.util.Set.of("cn=security-admins,dc=harness"), now,

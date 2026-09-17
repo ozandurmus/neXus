@@ -376,7 +376,7 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
                     now.plus(15, ChronoUnit.MINUTES));
             // role:operator is bound to a real group -- the unmapped
             // identity's resolved group set does not contain it.
-            roleBindingRepository.create(OpaqueId.random().value(), RoleToken.OPERATOR.token(),
+            roleBindingRepository.create(OpaqueId.random().value(), RoleToken.OPERATOR,
                     cipher.encrypt("cn=role-operator-group,ou=groups,dc=example,dc=com"), "test-key",
                     "actor-rbac-setup", "harness.rbac.setup");
 
@@ -434,7 +434,7 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
             Instant now = Instant.now();
             actorAuthzStateRepository.upsert(outcome.actorFingerprint(), outcome.groupReferences(), now,
                     now.plus(15, ChronoUnit.MINUTES));
-            roleBindingRepository.create(OpaqueId.random().value(), RoleToken.BACKUP_ADMIN.token(),
+            roleBindingRepository.create(OpaqueId.random().value(), RoleToken.BACKUP_ADMIN,
                     cipher.encrypt("cn=group-required-for-backup-admin,ou=groups,dc=example,dc=com"), "test-key",
                     "actor-rbac-setup", "harness.rbac.setup");
 
@@ -489,13 +489,13 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
             RoleBindingAdminService service = new RoleBindingAdminService(roleBindingRepository,
                     actorAuthzStateRepository, cipher, securityAdminLockoutGuard);
             RoleBindingAdminService.Outcome result = service.create(outcome.actorFingerprint(),
-                    RoleToken.SECURITY_ADMIN.token(), "cn=group-admin-already-holds,ou=groups,dc=example,dc=com",
+                    RoleToken.SECURITY_ADMIN, "cn=group-admin-already-holds,ou=groups,dc=example,dc=com",
                     "test-key", now);
 
             assertTrue(result instanceof RoleBindingAdminService.Outcome.SelfGrantRefused,
                     "an admin whose own real, directory-resolved group set already contains the group being "
                             + "bound must be refused SELF_GRANT_REFUSED");
-            assertFalse(roleBindingRepository.hasAnyActiveBinding(RoleToken.SECURITY_ADMIN.token()),
+            assertFalse(roleBindingRepository.hasAnyActiveBinding(RoleToken.SECURITY_ADMIN),
                     "no role_bindings row may exist after a refused self-grant");
         }
     }

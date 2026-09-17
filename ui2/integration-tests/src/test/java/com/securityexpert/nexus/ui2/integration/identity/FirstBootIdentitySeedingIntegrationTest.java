@@ -118,13 +118,13 @@ class FirstBootIdentitySeedingIntegrationTest {
             // alone: every one of the 6 tokens resolves to nexusadmin, and
             // role:viewer resolves to both nexusadmin (part of "full") and
             // claudeadmin, and no other token resolves to claudeadmin at all.
-            for (RoleToken token : RoleToken.values()) {
-                List<String> boundIdentityIds = roleBindingRepository.findActiveByToken(token.token()).stream()
+            for (String token : RoleToken.values()) {
+                List<String> boundIdentityIds = roleBindingRepository.findActiveByToken(token).stream()
                         .map(binding -> cipher.decrypt(binding.groupReferenceEncrypted()))
                         .toList();
                 assertTrue(boundIdentityIds.contains(nexusadminId),
                         "AC-1: nexusadmin must hold " + token + " for full administrative capability");
-                if (token == RoleToken.VIEWER) {
+                if (RoleToken.VIEWER.equals(token)) {
                     assertTrue(boundIdentityIds.contains(claudeadminId), "AC-2: claudeadmin must hold role:viewer");
                     assertEquals(2, boundIdentityIds.size());
                 } else {
