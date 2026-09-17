@@ -50,6 +50,7 @@ import com.securityexpert.nexus.ui2.platform.WorkerActor;
  */
 public final class DiscoveryJobExecutor {
 
+    private static final System.Logger LOGGER = System.getLogger(DiscoveryJobExecutor.class.getName());
     private static final String ACTOR = WorkerActor.RESERVED_ACTOR_FINGERPRINT;
     private static final String ACTION_CLAIM_TO_EXECUTING = "job_discovery_claim_to_executing";
     private static final String ACTION_CLAIM_TIME_RUN_CHECK = "job_discovery_claim_time_run_check";
@@ -81,6 +82,7 @@ public final class DiscoveryJobExecutor {
     }
 
     public JobOutcome execute(String jobId, long leaseEpoch, String runId) {
+        LOGGER.log(System.Logger.Level.DEBUG, "Executing discovery job");
         Optional<DiscoveryRun> run = discoveryRunRepository.findRun(runId);
         if (run.isEmpty() || run.get().state() != DiscoveryRunState.REQUESTED) {
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.CLAIMED, JobState.REJECTED, ACTOR,
@@ -113,6 +115,7 @@ public final class DiscoveryJobExecutor {
         }
 
         if (!outcome.succeeded) {
+            LOGGER.log(System.Logger.Level.WARNING, "Discovery enumeration failed: {0}", outcome.failureReasonClass);
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
                     ACTION_FAILED, outcome.failureReasonClass);
             discoveryRunRepository.markFailed(runId, outcome.failureReasonClass, ACTOR, ACTION_FAILED);
@@ -123,6 +126,8 @@ public final class DiscoveryJobExecutor {
             discoveryRunRepository.replaceCandidates(runId, outcome.candidates, ACTOR, ACTION_COMPLETED);
             discoveryRunRepository.markFinished(runId, outcome.outcomeSummary, ACTOR, ACTION_COMPLETED);
         } catch (RuntimeException persistFailed) {
+            LOGGER.log(System.Logger.Level.WARNING, "Discovery candidate persistence failed: {0}",
+                    persistFailed.getClass().getSimpleName());
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
                     ACTION_FAILED, "discovery_candidates_write_failed: " + persistFailed.getMessage());
             discoveryRunRepository.markFailed(runId, "CANDIDATE_PERSIST_FAILED", ACTOR, ACTION_FAILED);

@@ -114,6 +114,21 @@ class ManagementPlaneEnumerationAdapterTest {
         assertEquals(2, transport.commandsIssued().stream().filter("netstat -an"::equals).count());
     }
 
+    @Test
+    void domainEnumerationIgnoresBannerAndEmptyLines() {
+        Function<String, ExecResult> handler = command -> command.equals(ManagementShellCommands.domainList())
+                ? new ExecResult.Completed("login banner\n\n" + WorkerFixtures.DOMAIN_A_UID + "\nnotice: ignored\n"
+                        + WorkerFixtures.DOMAIN_B_UID + "\n", 0)
+                : happyPathHandler().apply(command);
+        FakeDeviceTransport transport = new FakeDeviceTransport(handler);
+        ManagementPlaneEnumerationAdapter adapter = new ManagementPlaneEnumerationAdapter(transport, ALWAYS_RESOLVES, d -> { });
+
+        ManagementPlaneEnumerationResult.Completed result =
+                assertInstanceOf(ManagementPlaneEnumerationResult.Completed.class, adapter.run(request()));
+
+        assertEquals(6, result.candidates().size());
+    }
+
     /** AC-1: disconnect() is still called, and reported, when a per-domain query throws mid-run. */
     @Test
     void disconnectIsStillCalledWhenAPerDomainQueryFails() {

@@ -20,6 +20,14 @@ import org.junit.jupiter.api.Test;
 class CpObjectDumpParserTest {
 
     @Test
+    void ignoresPreambleAndReturnsNoObjectsWhenNoDumpStarts() {
+        assertTrue(CpObjectDumpParser.parseObjects("login banner\nmdsenv changed context\n").isEmpty());
+
+        List<Map<String, Object>> objects = CpObjectDumpParser.parseObjects("banner\n(\n fixture-name\n :name (fixture-name)\n)\n");
+        assertEquals("fixture-name", objects.get(0).get("name"));
+    }
+
+    @Test
     void missingKeyIsAbsentAndEmptyValueIsPresentButEmpty() {
         String text = "(fixture-name-1\n"
                 + "\t:name (fixture-name-1)\n"
