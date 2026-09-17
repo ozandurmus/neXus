@@ -7,7 +7,7 @@ import { ScreenHeader, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { getDeviceWorkspace, type DeviceWorkspaceView, type ActionAffordance, type TransportSummary, type ApiError } from "../auth/adminApi";
+import { deleteDevice, getDeviceWorkspace, type DeviceWorkspaceView, type ActionAffordance, type TransportSummary, type ApiError } from "../auth/adminApi";
 import { enrollmentStateLabel } from "../shell/deviceCopy";
 
 function describeApiError(err: unknown): string {
@@ -66,13 +66,24 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
     () => getDeviceWorkspace(deviceId),
     describeApiError,
   );
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const onDelete = async () => {
+    if (!window.confirm("Delete this device and all of its collected records? This cannot be undone.")) return;
+    try {
+      await deleteDevice(deviceId);
+      window.location.assign("?screen=inventory");
+    } catch (err) {
+      setDeleteError(describeApiError(err));
+    }
+  };
 
   return (
     <ScreenRoot>
       <ScreenHeader
         title="Device Workspace"
         subtitle={device ? device.device_id : "Loading..."}
-        actions={<M3Button emphasis="outlined" href="?screen=inventory">Back to Inventory</M3Button>}
+        actions={<><M3Button emphasis="outlined" onClick={onDelete}>Delete Device</M3Button><M3Button emphasis="outlined" href="?screen=inventory">Back to Inventory</M3Button></>}
       />
       <Box sx={{ p: 3, display: "flex", flexDirection: "column", gap: 3, maxWidth: 800 }}>
         {error && (
@@ -82,6 +93,7 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
             </Box>
           </EmptyPanel>
         )}
+        {deleteError && <Typography color="error">Delete failed: {deleteError}</Typography>}
         {!error && !device && <Typography>Loading device details...</Typography>}
         {device && (
           <>

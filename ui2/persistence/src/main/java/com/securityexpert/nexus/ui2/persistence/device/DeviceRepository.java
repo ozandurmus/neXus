@@ -50,6 +50,11 @@ public interface DeviceRepository {
     /** Contract §3 {@code DRAFT -> deleted}: withdrawal before confirmation. */
     boolean withdrawDraft(String deviceId, String actorFingerprint, String actionId);
 
+    /** Deletes a device and every device-owned record in one audited transaction. */
+    default boolean deleteDevice(String deviceId, String actorFingerprint, String actionId) {
+        return false;
+    }
+
     /** Contract §3 {@code any -> disabled}: a separate boolean column, not a state. */
     boolean setDisabled(String deviceId, boolean disabled, String actorFingerprint, String actionId);
 

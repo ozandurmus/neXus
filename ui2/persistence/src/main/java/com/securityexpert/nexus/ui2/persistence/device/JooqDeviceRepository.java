@@ -104,6 +104,25 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public boolean deleteDevice(String deviceId, String actorFingerprint, String actionId) {
+        return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
+            dsl.execute("delete from job_step_attempt where job_step_id in (select job_step_id from job_steps where job_id in (select job_id from jobs where device_id = {0}))", deviceId);
+            dsl.execute("delete from job_steps where job_id in (select job_id from jobs where device_id = {0})", deviceId);
+            dsl.execute("delete from job_reconciliation where job_id in (select job_id from jobs where device_id = {0})", deviceId);
+            dsl.execute("delete from configuration_artefact where device_id = {0}", deviceId);
+            dsl.execute("delete from cp_inventory_projection where device_id = {0}", deviceId);
+            dsl.execute("delete from device_configuration_run where device_id = {0}", deviceId);
+            dsl.execute("delete from device_inventory_run where device_id = {0}", deviceId);
+            dsl.execute("delete from configuration_notification where device_id = {0}", deviceId);
+            dsl.execute("delete from backup_artefact where device_id = {0}", deviceId);
+            dsl.execute("delete from backup_endpoint_ineligibility where device_id = {0}", deviceId);
+            dsl.execute("delete from jobs where device_id = {0}", deviceId);
+            dsl.execute("delete from endpoints where device_id = {0}", deviceId);
+            return dsl.execute("delete from devices where device_id = {0}", deviceId) == 1;
+        });
+    }
+
+    @Override
     public boolean setDisabled(String deviceId, boolean disabled, String actorFingerprint, String actionId) {
         int updated = auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> dsl.execute(
                 "update devices set disabled = {0} where device_id = {1} and disabled <> {0}", disabled, deviceId));

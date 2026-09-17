@@ -5,7 +5,7 @@ import Typography from "@mui/material/Typography";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { CapabilityMenu, M3Button, StatusChip, ToggleRow } from "../shell/M3Widgets";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { listDevices, type ApiError, type DeviceSummary } from "../auth/adminApi";
+import { deleteDevice, listDevices, type ApiError, type DeviceSummary } from "../auth/adminApi";
 import { enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 
 function describeApiError(err: unknown): string {
@@ -26,6 +26,18 @@ export function DeviceManagementPane() {
     () => listDevices().then((result) => result.devices ?? []),
     describeApiError,
   );
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const onDelete = async (deviceId: string) => {
+    if (!window.confirm("Delete this device and all of its collected records? This cannot be undone.")) return;
+    try {
+      await deleteDevice(deviceId);
+      setDeleteError(null);
+      refresh();
+    } catch (err) {
+      setDeleteError(describeApiError(err));
+    }
+  };
 
   const total = devices?.length ?? 0;
   const enrolledCount = devices?.filter((d) => d.enrollment_state === "ENROLLED").length ?? 0;
@@ -34,7 +46,7 @@ export function DeviceManagementPane() {
 
   return (
     <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 2 }}>
-      <DeviceRegistryCard devices={devices} error={error} onRetry={refresh} total={total} />
+      <DeviceRegistryCard devices={devices} error={deleteError ?? error} onDelete={onDelete} onRetry={refresh} total={total} />
       <Stack spacing={2}>
         <EmptyPanel title="Enrollment" body="Enrolling a device grants read collection only.">
           <Stack spacing={1}>
@@ -71,11 +83,13 @@ export function DeviceManagementPane() {
 function DeviceRegistryCard({
   devices,
   error,
+  onDelete,
   onRetry,
   total,
 }: {
   readonly devices: DeviceSummary[] | null;
   readonly error: string | null;
+  readonly onDelete: (deviceId: string) => void;
   readonly onRetry: () => void;
   readonly total: number;
 }) {
@@ -130,6 +144,7 @@ function DeviceRegistryCard({
                 {device.hostname ?? device.device_id}
               </Typography>
               <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />
+              <M3Button emphasis="outlined" onClick={() => onDelete(device.device_id)}>Delete</M3Button>
             </Box>
           ))}
         </Stack>
@@ -137,3 +152,4 @@ function DeviceRegistryCard({
     </EmptyPanel>
   );
 }
+import { useState } from "react";

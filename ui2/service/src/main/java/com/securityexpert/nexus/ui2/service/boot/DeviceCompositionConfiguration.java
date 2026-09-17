@@ -49,6 +49,7 @@ import com.securityexpert.nexus.ui2.persistence.gates.JooqGateRegistryDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
 import com.securityexpert.nexus.ui2.service.device.DeviceAddSingleService;
+import com.securityexpert.nexus.ui2.service.device.DeviceDeletionService;
 import com.securityexpert.nexus.ui2.service.device.DeviceQueryService;
 import com.securityexpert.nexus.ui2.service.device.DeviceRegistrationService;
 import com.securityexpert.nexus.ui2.service.device.backup.BackupCollectService;
@@ -328,6 +329,11 @@ public class DeviceCompositionConfiguration {
     public DeviceAddSingleService deviceAddSingleService(TransactionBoundary transactionBoundary,
             DeviceRegistrationService deviceRegistrationService, JobAdmissionService jobAdmissionService) {
         return new DeviceAddSingleService(transactionBoundary, deviceRegistrationService, jobAdmissionService);
+    }
+
+    @Bean
+    public DeviceDeletionService deviceDeletionService(DeviceRepository deviceRepository) {
+        return new DeviceDeletionService(deviceRepository);
     }
 
     @Bean
