@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { M3Card, M3Button } from "../shell/M3Widgets";
+import { Card } from "@mui/material";
+import { M3Button } from "../shell/M3Widgets";
 
 export function CustomRolesPanel() {
   const [roles, setRoles] = useState<any[]>([]);
@@ -20,7 +21,7 @@ export function CustomRolesPanel() {
 
       <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
         {roles.map(role => (
-          <M3Card key={role.id}>
+          <Card key={role.id}>
             <div style={{ padding: "16px" }}>
               <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem" }}>{role.name}</h3>
               <p style={{ margin: "0 0 16px 0", fontSize: "0.875rem", color: "var(--md-sys-color-on-surface-variant)" }}>
@@ -41,7 +42,7 @@ export function CustomRolesPanel() {
                 )}
               </div>
             </div>
-          </M3Card>
+          </Card>
         ))}
         {roles.length === 0 && (
           <div style={{ padding: "32px", textAlign: "center", gridColumn: "1 / -1", color: "var(--md-sys-color-on-surface-variant)" }}>
