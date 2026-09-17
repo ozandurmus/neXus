@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0313 · Track: PCP.x · Generated: 2026-09-17T17:03:53Z
+Build: NXS-LOCAL-0313 · Track: PCP.x · Generated: 2026-09-17T21:20:38Z
 
 ## Now
 - NXS-LOCAL-0313 — Device Workspace UI Revert (Slider and Info Menu) (in_progress)
@@ -109,8 +109,8 @@ Build: NXS-LOCAL-0313 · Track: PCP.x · Generated: 2026-09-17T17:03:53Z
 - po_cp_backup_async_semantics — CP R81.20 backup is asynchronous, contradicting the blocking-backup assu
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
+- NXS-LOCAL-0328 (done)
 - NXS-LOCAL-0313 (done)
 - NXS-LOCAL-0312 (done)
 - NXS-LOCAL-0311 (done)
 - NXS-LOCAL-0310 (done)
-- NXS-LOCAL-0309 (done)

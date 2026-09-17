@@ -24,9 +24,9 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0328` — `done`: UI2 K3s Remediation Roadmap & Orchestrator Protocol Enforcement (FROZEN: `docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md`).
 `NXS-LOCAL-0313` — `done`: Device Workspace UI Revert.
 `NXS-LOCAL-0285` — `done`: Check Point SSH inventory worker finished, hybrid topology contract signed.
-`UI Updates` — `done`: deployed LDAP UI, Custom RBAC UI, Role Display, Bulk Collect fixes to remote K3s cluster.
 
 `NXS-LOCAL-0176` — `automated_validated`: expire a past-deadline session on
 read so it cannot block login. The newest merged movement, its predecessor

@@ -1,22 +1,28 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
 # Snapshot
-UI2 is updated with Enterprise Guardrails (max 5 inventory jobs, PREFLIGHT via DEVICE_CONFIRM), Audit Log UI, Bulk Collect API, and Role Display Fix.
-All NXS-LOCAL-0283, 0288, 0289, 0290 are fully merged to main.
+UI2 is live on K3s HOST_A (ui2.nexus.local) under NXS-LOCAL-0328.
+Wordmark SVGs bundled locally, CP discovery profile sourced, SSH TOFU active, AD Group Role mapping live, 5 Product Planes RBAC active, and build badge displayed.
+Authority: `docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md`.
 
 # Recent session changes
-- Merged NXS-LOCAL-0288 (Inventory Auto Trigger + Bulk Collect) and fixed missing `collect-all` backend API route.
-- Merged NXS-LOCAL-0289 (Role Display UI fix).
-- Merged NXS-LOCAL-0283 (Audit Logs API & Screen).
-- Merged NXS-LOCAL-0290 (Enterprise Guardrails, Job Concurrency, and Live Job UI).
-- K3s deployment script (`run_build.sh`) patched on remote host to track `main` instead of the old feature branch, and triggered.
-- Fixed UI bug where `InventoryPanels.tsx` swallowed `FAILED` or `REJECTED` job states silently without displaying an error to the user.
+- NXS-LOCAL-0328: Bundled static wordmark and mark SVGs in frontend assets, eliminating `ACTION_MAPPING_REQUIRED`.
+- Added `source /etc/profile.d/CP.sh;` in `ManagementShellCommands.java` for Check Point discovery Gaia environment.
+- Added SSH TOFU auto-enrollment in worker for discovered endpoints, resolving `TRUST_ENTRY_MISSING`.
+- Built AD Group to Role mapping backend API and `CustomRolesPanel.tsx` UI table/dialog.
+- Built 5 Product Planes permissions model (`Devices`, `Config`, `Compliance`, `Operations`, `Admin`) and filtered `NavigationRail.tsx`.
+- TopAppBar displays active build badge from `getProjectPlan()`.
+- Ratified strict Orchestrator / Relay protocol enforcement for future agent dispatches.
 
 # Exact next action
-- Validate Check Point SSH connectivity within the K3s cluster. Currently, the devices return `EXPECTATION_UNMET` due to SSH timeouts or credential issues since the physical host is unresponsive in the remote network. The UI will now correctly display this failure instead of spinning indefinitely.
+- Await PO live testing feedback across all UI2 screens.
+- When new builds are requested, strictly follow the Orchestrator / Relay prompt protocol without in-session monolithic coding.
 
 # Test delta
-- `InventoryCollectServiceTest`, `AuditLogQueryServiceTest`, `ClaimIsAtomicNoReadThenWriteTest` (for lease), `GateChainTest` updated and passing.
+- `:architecture-tests:test` passed (`NoRoleConditionalRenderingInFrontendTest` green).
+- `:worker:test` (173 tests) and `:service:test` passed.
+- `scripts/repository_privacy_check.py` passed with 0 findings.
+- Live verification on K3s HOST_A: SVG HTTP 200, discovery Gaia sourcing active, AD role binding create/revoke validated in DB.
 
 # Risks
-- None currently.
+- None.
