@@ -131,7 +131,7 @@ public final class GateChain {
         }
 
         // E4: the four D7 outcomes.
-        RbacEvaluator.Decision decision = rbacEvaluator.evaluate(actorFingerprint, action.requiredRoleToken(), now);
+        RbacEvaluator.Decision decision = rbacEvaluator.evaluate(actorFingerprint, action.requiredRoleTokens(), now);
         long decisionId = authzDecisionRepository.insert(sessionId, actorFingerprint, action.actionId(),
                 request.targetRef(), decision.outcome(), decision.authority(), decision.reasonCode(),
                 decision.bindingId());

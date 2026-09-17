@@ -1,6 +1,5 @@
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import Tooltip from "@mui/material/Tooltip";
 import { m3 } from "../theme/m3Theme";
 import { Icon } from "./Icon";
 import { M3Button, StatusChip } from "./M3Widgets";
@@ -64,13 +63,7 @@ export function TopAppBar() {
               <Typography variant="body1" sx={{ fontWeight: 500, color: m3.onSurface }}>
                 {session.displayName}
               </Typography>
-              <Tooltip title={session.roleTokens.join(", ")}>
-                <Typography variant="body2" sx={{ cursor: "default" }}>
-                  {session.roleTokens.length > 2
-                    ? `${session.roleTokens[0]} (+${session.roleTokens.length - 1} roles)`
-                    : session.roleTokens.join(", ")}
-                </Typography>
-              </Tooltip>
+              <Typography variant="body2">{session.roleTokens.join(", ")}</Typography>
             </Box>
             <M3Button emphasis="text" onClick={session.onSignOut}>
               Sign out

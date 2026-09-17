@@ -37,7 +37,6 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // ("*") is enough; no change to any single-segment route above.
             Map.entry("GET /devices/*/inventory", ActionRegistry.DEVICE_READ),
             Map.entry("POST /devices/*/inventory/collect", ActionRegistry.DEVICE_INVENTORY_COLLECT),
-            Map.entry("POST /devices/inventory/collect-all", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
             Map.entry("GET /notifications", ActionRegistry.NOTIFICATIONS_READ),
             // 13G: one resource, body-only (no path variable), matching
@@ -72,7 +71,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /backups", ActionRegistry.DEVICE_BACKUP_READ),
             // WORKER.md (movement NXS-LOCAL-0174): body-only, no path variable,
             // same shape as /notifications' own route.
-            Map.entry("GET /project-plan", ActionRegistry.PROJECT_PLAN_READ));
+            Map.entry("GET /project-plan", ActionRegistry.PROJECT_PLAN_READ),
+            Map.entry("GET /audit-log", ActionRegistry.AUDIT_LOG_READ));
 
     /**
      * Routes whose endpoint performs its own deliberately non-RBAC security

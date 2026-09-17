@@ -5,6 +5,7 @@ import { CredentialsPanel } from "./CredentialsPanel";
 import { LocalIdentitiesPanel } from "./LocalIdentitiesPanel";
 import { DeviceManagementPane } from "./DeviceRegistryPanel";
 import { ProjectPlanPanel } from "./ProjectPlanPanel";
+import { AuditLogPanel } from "./AuditLogPanel";
 
 /** M3Administration with an empty registry. Enrollment is the one place a device enters the product. */
 export function AdministrationScreen() {
@@ -49,6 +50,10 @@ export function AdministrationScreen() {
           {
             label: "Local identities",
             panel: <LocalIdentitiesPanel />,
+          },
+          {
+            label: "Audit log",
+            panel: <AuditLogPanel />,
           },
         ]}
       />

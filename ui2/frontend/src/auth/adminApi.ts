@@ -17,6 +17,15 @@ export interface ApiError {
   readonly body: Record<string, unknown>;
 }
 
+export interface AuditEvent {
+  readonly id: number;
+  readonly occurred_at: string;
+  readonly actor: string;
+  readonly action: string;
+  readonly outcome: string;
+  readonly target: string;
+}
+
 async function csrfToken(): Promise<string | undefined> {
   try {
     const response = await fetch("/session/status", { credentials: "include" });
@@ -60,6 +69,10 @@ async function callText(path: string): Promise<string> {
 
 export function listLocalIdentities(): Promise<{ identities: LocalIdentityView[] }> {
   return call("/local-identities", "GET");
+}
+
+export function listAuditEvents(): Promise<{ events: AuditEvent[] }> {
+  return call("/audit-log", "GET");
 }
 
 export interface BackupArtefact {
@@ -365,10 +378,6 @@ export function getClusterInventory(clusterMemberRef: string): Promise<ClusterIn
 
 export function requestInventoryCollect(deviceId: string, nonce?: string): Promise<{ job_id: string }> {
   return call(`/devices/${encodeURIComponent(deviceId)}/inventory/collect`, "POST", nonce ? { nonce } : {});
-}
-
-export function requestInventoryCollectAll(): Promise<{ enrolled_devices: number; admitted: number; refused: number }> {
-  return call("/devices/inventory/collect-all", "POST", {});
 }
 
 /**

@@ -8,7 +8,7 @@ import { Icon } from "../shell/Icon";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { listDevices, requestInventoryCollectAll, type ApiError, type DeviceSummary } from "../auth/adminApi";
+import { listDevices, type ApiError, type DeviceSummary } from "../auth/adminApi";
 import { enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { DeviceInventoryPanels } from "./InventoryPanels";
 
@@ -177,28 +177,12 @@ export function InventoryScreen() {
     describeApiError,
   );
   const [selectedDevice, setSelectedDevice] = useState<DeviceSummary | null>(null);
-  const [bulkCollecting, setBulkCollecting] = useState(false);
-  const [bulkError, setBulkError] = useState<string | null>(null);
 
   const devices = data;
   const total = devices?.length ?? 0;
   const checkPointCount = devices?.filter((d) => d.vendor_hint === "check_point").length ?? 0;
   const paloAltoCount = devices?.filter((d) => d.vendor_hint === "palo_alto").length ?? 0;
   const draftCount = devices?.filter((d) => d.enrollment_state === "DRAFT").length ?? 0;
-  const enrolledCount = devices?.filter((d) => d.enrollment_state === "ENROLLED").length ?? 0;
-
-  const collectAll = async () => {
-    setBulkError(null);
-    setBulkCollecting(true);
-    try {
-      await requestInventoryCollectAll();
-      refresh();
-    } catch (err) {
-      setBulkError(describeApiError(err));
-    } finally {
-      setBulkCollecting(false);
-    }
-  };
 
   return (
     <ScreenRoot>
@@ -208,14 +192,10 @@ export function InventoryScreen() {
         actions={
           <>
             <M3Button emphasis="outlined" icon="download">Export inventory</M3Button>
-            <M3Button emphasis="tonal" icon="download" onClick={collectAll} disabled={enrolledCount === 0 || bulkCollecting}>
-              {bulkCollecting ? "Collecting…" : "Bulk Collect"}
-            </M3Button>
             <M3Button emphasis="filled" icon="plus" href="?screen=administration">Add device</M3Button>
           </>
         }
       />
-      {bulkError && <Typography variant="body2" color="error">Bulk collection unavailable: {bulkError}</Typography>}
       <ListDetail
         list={
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>

@@ -74,6 +74,7 @@ const TABS = [
   { label: "Inventory exclusions", marker: "No device excluded" },
   { label: "Credentials", marker: "No credential stored" },
   { label: "Project plan", marker: "Declared roadmap completion" },
+  { label: "Audit log", marker: "No audit events" },
 ];
 
 describe("AdministrationScreen tabs", () => {
@@ -84,7 +85,7 @@ describe("AdministrationScreen tabs", () => {
   it("renders each tab's own panel, and no other tab's panel, tab by tab", async () => {
     vi.stubGlobal(
       "fetch",
-      routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN, "/credentials": { body: { credentials: [] } } }),
+      routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN, "/credentials": { body: { credentials: [] } }, "/audit-log": { body: { events: [] } } }),
     );
     render(withTheme(<AdministrationScreen />));
     const tablist = screen.getByRole("tablist", { name: "Administration sections" });

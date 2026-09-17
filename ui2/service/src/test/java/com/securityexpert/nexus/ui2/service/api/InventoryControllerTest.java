@@ -269,24 +269,6 @@ class InventoryControllerTest {
         assertEquals("ADMISSION_REFUSED", response.getBody().get("error"));
     }
 
-    @Test
-    void collectAllReturnsAcceptedCounts() {
-        FakeDeviceRepository devices = new FakeDeviceRepository();
-        devices.byId.put("device-1", device("device-1"));
-        devices.summaries = List.of(new DeviceSummaryRecord("device-1", "gateway", "check_point",
-                DeviceEnrollmentState.ENROLLED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                Optional.empty()));
-        MockHttpServletRequest servletRequest = new MockHttpServletRequest();
-        servletRequest.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1");
-
-        ResponseEntity<Map<String, Object>> response = controllerWithRealCollectService(devices).collectAll(servletRequest);
-
-        assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
-        assertEquals(1, response.getBody().get("enrolled_devices"));
-        assertEquals(1, response.getBody().get("admitted"));
-        assertEquals(0, response.getBody().get("refused"));
-    }
-
     /** Satisfies {@link InventoryController}'s constructor for the GET-only tests below, which never invoke it. */
     private static InventoryCollectService unusedCollectService() {
         com.securityexpert.nexus.ui2.capability.CapabilityRegistry emptyRegistry =

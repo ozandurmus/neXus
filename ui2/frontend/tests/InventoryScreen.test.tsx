@@ -145,27 +145,4 @@ describe("InventoryScreen device list", () => {
     await waitFor(() => expect(screen.getByText("Inventory unavailable")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
-
-  it("submits bulk collection only when an enrolled device exists", async () => {
-    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input) === "/devices") {
-        return Promise.resolve(jsonResponse(200, { devices: [{
-          device_id: "dev-1", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "fw-edge-1",
-          model: null, software_version: null, ha_role: null, cluster_member_ref: null,
-        }] }));
-      }
-      if (String(input) === "/devices/inventory/collect-all" && init?.method === "POST") {
-        return Promise.resolve(jsonResponse(202, { enrolled_devices: 1, admitted: 1, refused: 0 }));
-      }
-      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    render(withTheme(<InventoryScreen />));
-
-    const bulkCollect = await screen.findByRole("button", { name: "Bulk Collect" });
-    fireEvent.click(bulkCollect);
-
-    await waitFor(() => expect(fetchMock.mock.calls.some((call) =>
-      String(call[0]) === "/devices/inventory/collect-all" && call[1]?.method === "POST")).toBe(true));
-  });
 });

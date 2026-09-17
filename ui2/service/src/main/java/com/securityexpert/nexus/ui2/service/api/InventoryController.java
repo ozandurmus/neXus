@@ -125,16 +125,6 @@ public final class InventoryController {
         };
     }
 
-    @PostMapping("/devices/inventory/collect-all")
-    public ResponseEntity<Map<String, Object>> collectAll(HttpServletRequest servletRequest) {
-        InventoryCollectService.BulkOutcome outcome = inventoryCollectService.requestCollectAll(actingUser(servletRequest));
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("enrolled_devices", outcome.enrolledDevices());
-        body.put("admitted", outcome.admitted());
-        body.put("refused", outcome.refused());
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(body);
-    }
-
     private static String actingUser(HttpServletRequest servletRequest) {
         return (String) servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
     }
