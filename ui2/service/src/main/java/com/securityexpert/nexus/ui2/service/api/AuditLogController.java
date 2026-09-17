@@ -20,7 +20,7 @@ public final class AuditLogController {
         this.auditLogQueryService = auditLogQueryService;
     }
 
-    @GetMapping("/audit-log")
+    @GetMapping("/audit-logs")
     public ResponseEntity<Map<String, List<AuditLogQueryService.AuditEvent>>> recent() {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(Map.of("events", auditLogQueryService.recent()));

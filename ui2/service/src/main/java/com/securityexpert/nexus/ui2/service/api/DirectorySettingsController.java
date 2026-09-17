@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/v2/config/ldap")
+@RequestMapping("/config/ldap")
 public class DirectorySettingsController {
     private final DirectoryProfileRepository repository;
 

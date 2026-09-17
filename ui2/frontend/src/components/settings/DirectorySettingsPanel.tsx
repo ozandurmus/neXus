@@ -4,11 +4,11 @@ export const DirectorySettingsPanel: React.FC = () => {
     const [profile, setProfile] = useState<any>(null);
 
     useEffect(() => {
-        fetch('/api/v2/config/ldap').then(r => r.json()).then(setProfile).catch(() => {});
+        fetch('/config/ldap').then(r => r.json()).then(setProfile).catch(() => {});
     }, []);
 
     const handleSave = () => {
-        fetch('/api/v2/config/ldap', {
+        fetch('/config/ldap', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(profile)

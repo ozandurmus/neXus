@@ -6,7 +6,7 @@ export function CustomRolesPanel() {
   const [roles, setRoles] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch("/api/v2/roles")
+    fetch("/roles")
       .then(res => res.json())
       .then(data => setRoles(data))
       .catch(err => console.error("Failed to load roles", err));

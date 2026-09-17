@@ -18,7 +18,7 @@ import com.securityexpert.nexus.ui2.persistence.identity.RbacRoleRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.RbacRoleRepository;
 
 @RestController
-@RequestMapping("/api/v2/roles")
+@RequestMapping("/roles")
 public class RbacRoleController {
 
     private final RbacRoleRepository roleRepository;
