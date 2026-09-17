@@ -928,6 +928,7 @@ def _board_row(record: dict, summary: dict, state_dir: Path) -> dict:
 
 
 def _relay_archive_rows(relay_dir: Path, active_ids: set[str]) -> list[dict]:
+    return []
     """Terminal relays outlive their deleted process-state records."""
     rows = []
     for path in relay_dir.glob("*.json"):
