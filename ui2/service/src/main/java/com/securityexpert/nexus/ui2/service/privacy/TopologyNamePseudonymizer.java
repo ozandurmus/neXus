@@ -42,11 +42,32 @@ public class TopologyNamePseudonymizer {
         this.secretKey = Objects.requireNonNull(secretKey, "secretKey").clone();
     }
 
+    private final Map<String, String> reverseClusterCache = new ConcurrentHashMap<>();
+
     public String maskClusterName(String rawClusterName) {
         if (rawClusterName == null || rawClusterName.isBlank()) {
             return rawClusterName;
         }
-        return clusterCache.computeIfAbsent(rawClusterName.trim(), this::computeClusterName);
+        String masked = clusterCache.computeIfAbsent(rawClusterName.trim(), this::computeClusterName);
+        reverseClusterCache.put(masked, rawClusterName.trim());
+        return masked;
+    }
+
+    public String resolveClusterName(String pseudonym, java.util.function.Supplier<List<String>> candidateSupplier) {
+        if (pseudonym == null || pseudonym.isBlank()) {
+            return null;
+        }
+        String resolved = reverseClusterCache.get(pseudonym.trim());
+        if (resolved != null) {
+            return resolved;
+        }
+        if (candidateSupplier != null) {
+            for (String candidate : candidateSupplier.get()) {
+                maskClusterName(candidate);
+            }
+            return reverseClusterCache.get(pseudonym.trim());
+        }
+        return null;
     }
 
     public String maskDeviceName(String rawDeviceName, String clusterMemberRef) {

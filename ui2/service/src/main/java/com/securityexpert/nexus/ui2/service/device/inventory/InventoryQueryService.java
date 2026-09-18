@@ -44,12 +44,20 @@ public final class InventoryQueryService {
     private final DeviceRepository deviceRepository;
     private final JobRecordDao jobRecordDao;
     private final DeviceInventoryRepository deviceInventoryRepository;
+    private final com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer topologyNamePseudonymizer;
 
     public InventoryQueryService(DeviceRepository deviceRepository, JobRecordDao jobRecordDao,
             DeviceInventoryRepository deviceInventoryRepository) {
+        this(deviceRepository, jobRecordDao, deviceInventoryRepository, null);
+    }
+
+    public InventoryQueryService(DeviceRepository deviceRepository, JobRecordDao jobRecordDao,
+            DeviceInventoryRepository deviceInventoryRepository,
+            com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer topologyNamePseudonymizer) {
         this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
         this.jobRecordDao = Objects.requireNonNull(jobRecordDao, "jobRecordDao");
         this.deviceInventoryRepository = Objects.requireNonNull(deviceInventoryRepository, "deviceInventoryRepository");
+        this.topologyNamePseudonymizer = topologyNamePseudonymizer;
     }
 
     /** 404 when {@code deviceId} is unknown; 200 with {@code collected_at} null and empty contexts when it has no run yet. */
@@ -71,6 +79,19 @@ public final class InventoryQueryService {
     /** 404 when no device carries {@code clusterMemberRef} (WORKER.md "Routes"). */
     public ClusterInventoryOutcome clusterInventory(String clusterMemberRef) {
         List<DeviceSummaryRecord> members = deviceRepository.findMembersByClusterRef(clusterMemberRef);
+        String queryRef = clusterMemberRef;
+        if (members.isEmpty() && topologyNamePseudonymizer != null) {
+            String resolved = topologyNamePseudonymizer.resolveClusterName(clusterMemberRef, () ->
+                    deviceRepository.listAll().stream()
+                            .map(s -> s.clusterMemberRef().orElse(null))
+                            .filter(Objects::nonNull)
+                            .distinct()
+                            .toList());
+            if (resolved != null) {
+                queryRef = resolved;
+                members = deviceRepository.findMembersByClusterRef(queryRef);
+            }
+        }
         if (members.isEmpty()) {
             return new ClusterInventoryOutcome.NotFound();
         }

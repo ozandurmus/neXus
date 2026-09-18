@@ -348,8 +348,9 @@ public class DeviceCompositionConfiguration {
 
     @Bean
     public InventoryQueryService inventoryQueryService(DeviceRepository deviceRepository, JobRecordDao jobRecordDao,
-            DeviceInventoryRepository deviceInventoryRepository) {
-        return new InventoryQueryService(deviceRepository, jobRecordDao, deviceInventoryRepository);
+            DeviceInventoryRepository deviceInventoryRepository,
+            com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer topologyNamePseudonymizer) {
+        return new InventoryQueryService(deviceRepository, jobRecordDao, deviceInventoryRepository, topologyNamePseudonymizer);
     }
 
     @Bean
