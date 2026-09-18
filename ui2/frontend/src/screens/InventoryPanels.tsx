@@ -46,10 +46,27 @@ function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
   const code = typeof apiErr.body?.code === "string" ? (apiErr.body.code as string) : undefined;
   const reason = typeof apiErr.body?.reason === "string" ? (apiErr.body.reason as string) : undefined;
+  const reasonCode = typeof apiErr.body?.reason_code === "string" ? (apiErr.body.reason_code as string) : undefined;
   if (code === "DEVICE_NOT_ELIGIBLE" && reason && reason.includes("DRAFT")) {
     return "Device is pending enrollment confirmation. Inventory can be collected once enrolled.";
   }
   if (code && reason) return `${code}: ${reason}`;
+  if (apiErr.body?.error === "VALIDATION_FAILED") {
+    if (reasonCode === "DEVICE_NOT_DRAFT") {
+      return "Device is already confirmed and enrolled (please refresh).";
+    }
+    if (reasonCode === "address_ref_invalid") {
+      return "Invalid IP address or hostname. Check for whitespace or unsupported characters.";
+    }
+    if (reasonCode === "credential_reference_not_found") {
+      return "Selected credential was not found.";
+    }
+    if (reasonCode === "DEVICE_NOT_FOUND") {
+      return "Device not found.";
+    }
+    if (reasonCode) return `Validation failed: ${reasonCode}`;
+  }
+  if (reasonCode) return reasonCode;
   const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
   if (serverError) return serverError;
   return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
@@ -1082,7 +1099,13 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
   const [phase, setPhase] = useState<"idle" | "submitting" | "polling" | "error">("idle");
   const [jobState, setJobState] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const isDraft = enrollmentState === "DRAFT";
+  const [overrideEnrolled, setOverrideEnrolled] = useState(false);
+  const isDraft = !overrideEnrolled && enrollmentState === "DRAFT";
+
+  useEffect(() => {
+    setOverrideEnrolled(false);
+    setError(null);
+  }, [deviceId]);
 
   // Check the latest job state on mount so that past failures are immediately visible and not hanging
   useEffect(() => {
@@ -1090,6 +1113,9 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
     getDevice(deviceId)
       .then((result) => {
         if (cancelled) return;
+        if (result.enrollment_state === "ENROLLED") {
+          setOverrideEnrolled(true);
+        }
         if (result.job) {
           setJobState(result.job.state);
           if (!isTerminalJobState(result.job.state)) {
@@ -1116,6 +1142,9 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
       getDevice(deviceId)
         .then((result) => {
           if (cancelled) return;
+          if (result.enrollment_state === "ENROLLED") {
+            setOverrideEnrolled(true);
+          }
           setJobState(result.job?.state ?? null);
           if (result.job !== null && isTerminalJobState(result.job.state)) {
             if (result.job.state === "FAILED" || result.job.state === "REJECTED") {
@@ -1125,6 +1154,7 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
             } else {
               setPhase("idle");
               setError(null);
+              setOverrideEnrolled(true);
               onCollected();
             }
           }
@@ -1153,6 +1183,14 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
       }
       setPhase("polling");
     } catch (err) {
+      const apiErr = err as Partial<ApiError>;
+      if (isDraft && apiErr.body?.error === "VALIDATION_FAILED" && apiErr.body?.reason_code === "DEVICE_NOT_DRAFT") {
+        setOverrideEnrolled(true);
+        setPhase("idle");
+        setError(null);
+        onCollected();
+        return;
+      }
       setError(describeApiError(err));
       setPhase("error");
     }
@@ -1200,7 +1238,13 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
  * device.device_id}`) on every selection change so `useFetchOnMount`'s own
  * mount effect re-runs -- it never re-triggers on a changed fetcher alone.
  */
-export function DeviceInventoryPanels({ device }: { readonly device: DeviceSummary }) {
+export function DeviceInventoryPanels({
+  device,
+  onDeviceStateChange,
+}: {
+  readonly device: DeviceSummary;
+  readonly onDeviceStateChange?: () => void;
+}) {
   const isCluster = device.cluster_member_ref !== null;
   const deviceInventoryFetch = useFetchOnMount<DeviceInventory>(
     () => getDeviceInventory(device.device_id),
@@ -1217,6 +1261,7 @@ export function DeviceInventoryPanels({ device }: { readonly device: DeviceSumma
   const refresh = () => {
     deviceInventoryFetch.refresh();
     if (isCluster) clusterInventoryFetch.refresh();
+    onDeviceStateChange?.();
   };
 
   if (error) {

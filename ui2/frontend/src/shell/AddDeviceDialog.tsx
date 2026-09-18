@@ -54,10 +54,38 @@ const VENDOR_LABEL: Record<Vendor, string> = {
   palo_alto: "Palo Alto",
 };
 
+function formatValidationReason(reason: string): string {
+  switch (reason) {
+    case "address_ref_invalid":
+      return `${reason} (Invalid IP address or hostname. Check for whitespace or unsupported characters)`;
+    case "credential_reference_not_found":
+      return `${reason} (Please select a valid credential from the list)`;
+    case "vendor_hint_invalid":
+      return `${reason} (Selected vendor is invalid)`;
+    case "role_invalid":
+      return `${reason} (Selected role is invalid)`;
+    case "unsupported_transport_kind":
+      return `${reason} (Transport kind is not supported)`;
+    case "DEVICE_NOT_DRAFT":
+      return `${reason} (This device is already enrolled and active in the system)`;
+    case "DEVICE_NOT_FOUND":
+      return `${reason} (Device not found)`;
+    case "ADDRESS_UNRESOLVABLE":
+      return `${reason} (Address could not be resolved)`;
+    default:
+      return reason;
+  }
+}
+
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
   const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
+  const reasonCode = typeof apiErr.body?.reason_code === "string" ? (apiErr.body.reason_code as string) : undefined;
   if (serverError === "ACTION_REFUSED") return "You do not have permission to create credentials.";
+  if (serverError === "VALIDATION_FAILED" && reasonCode) {
+    return `Validation failed: ${formatValidationReason(reasonCode)}`;
+  }
+  if (reasonCode) return `Validation failed: ${formatValidationReason(reasonCode)}`;
   if (serverError) return serverError;
   return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
 }
@@ -254,10 +282,11 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
   const handleSubmit = async () => {
     setSubmitError(null);
     setValidationReason(null);
+    const trimmedAddress = address.trim();
     if (mode === "single") {
       setPhase("submitting");
       try {
-        const result = await addDeviceSingle(address, role, vendor, credentialId);
+        const result = await addDeviceSingle(trimmedAddress, role, vendor, credentialId);
         setDeviceId(result.device_id);
         setActiveJobId(result.job_id);
         setPhase("confirming");
@@ -278,7 +307,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
 
     setDiscoveryPhase("starting");
     try {
-      const result = await startDiscoveryRun(address, vendor, credentialId);
+      const result = await startDiscoveryRun(trimmedAddress, vendor, credentialId);
       setRunId(result.run_id);
       setImportCredentialId(credentialId);
       setDiscoveryPhase("polling");
@@ -521,7 +550,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
             {sshTrustAuthorization}
             {validationReason && (
               <Typography variant="body2" color="error">
-                Validation failed: {validationReason}
+                Validation failed: {formatValidationReason(validationReason)}
               </Typography>
             )}
             {submitError && (
@@ -599,7 +628,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
             {sshTrustAuthorization}
             {validationReason && (
               <Typography variant="body2" color="error">
-                Validation failed: {validationReason}
+                Validation failed: {formatValidationReason(validationReason)}
               </Typography>
             )}
             {submitError && (

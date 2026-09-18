@@ -96,7 +96,8 @@ public final class DeviceRegistrationService {
         if (!IMPLEMENTED_TRANSPORTS.contains(transportKind)) {
             return new Outcome.ValidationFailed(REASON_UNSUPPORTED_TRANSPORT);
         }
-        if (addressRef == null || addressRef.isBlank() || containsWhitespace(addressRef)) {
+        String effectiveAddress = addressRef != null ? addressRef.trim() : null;
+        if (effectiveAddress == null || effectiveAddress.isBlank() || containsWhitespace(effectiveAddress)) {
             return new Outcome.ValidationFailed(REASON_ADDRESS_REF_INVALID);
         }
         if (credentialReferenceId == null || !credentialReferenceRepository.exists(credentialReferenceId)) {
@@ -109,7 +110,7 @@ public final class DeviceRegistrationService {
         String endpointId = OpaqueId.random().value();
 
         DeviceDraft draft = new DeviceDraft(deviceId, role, vendorHint, registrationSource, isTestTarget,
-                credentialReferenceId, endpointId, transportKind, addressRef, clusterMemberRef, virtualSystemRef,
+                credentialReferenceId, endpointId, transportKind, effectiveAddress, clusterMemberRef, virtualSystemRef,
                 discoveryMatchKey);
         deviceRepository.registerDraft(draft, registeringActorFingerprint, actionId);
         return new Outcome.Registered(deviceId, endpointId);

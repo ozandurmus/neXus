@@ -16,6 +16,23 @@ import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar } from "./Inve
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
+  const reasonCode = typeof apiErr.body?.reason_code === "string" ? (apiErr.body.reason_code as string) : undefined;
+  if (apiErr.body?.error === "VALIDATION_FAILED") {
+    if (reasonCode === "DEVICE_NOT_DRAFT") {
+      return "Device is already confirmed and enrolled (please refresh).";
+    }
+    if (reasonCode === "address_ref_invalid") {
+      return "Invalid IP address or hostname. Check for whitespace or unsupported characters.";
+    }
+    if (reasonCode === "credential_reference_not_found") {
+      return "Selected credential was not found.";
+    }
+    if (reasonCode === "DEVICE_NOT_FOUND") {
+      return "Device not found.";
+    }
+    if (reasonCode) return `Validation failed: ${reasonCode}`;
+  }
+  if (reasonCode) return reasonCode;
   const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
   if (serverError) return serverError;
   return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
@@ -406,6 +423,21 @@ export function InventoryScreen() {
     return () => clearInterval(interval);
   }, [devices, refresh]);
 
+  // Sync selectedDevice with updated devices list from refresh
+  useEffect(() => {
+    if (selectedDevice && devices) {
+      const updated = devices.find((d) => d.device_id === selectedDevice.device_id);
+      if (
+        updated &&
+        (updated.enrollment_state !== selectedDevice.enrollment_state ||
+          updated.latest_job_state !== selectedDevice.latest_job_state ||
+          updated.latest_job_terminal_reason !== selectedDevice.latest_job_terminal_reason)
+      ) {
+        setSelectedDevice(updated);
+      }
+    }
+  }, [devices, selectedDevice]);
+
   const filteredDevices = (devices ?? []).filter((device) => {
     if (filterMode === "cluster" && !device.cluster_member_ref) return false;
     if (filterMode === "check_point" && device.vendor_hint !== "check_point") return false;
@@ -650,7 +682,11 @@ export function InventoryScreen() {
                 onCacheUpdate={(ref, inv) => clusterCacheRef.current.set(ref, inv)}
               />
             ) : selectedDevice ? (
-              <DeviceInventoryPanels key={selectedDevice.device_id} device={selectedDevice} />
+              <DeviceInventoryPanels
+                key={selectedDevice.device_id}
+                device={selectedDevice}
+                onDeviceStateChange={refresh}
+              />
             ) : (
               <M3Tabs
                 ariaLabel="Device detail"

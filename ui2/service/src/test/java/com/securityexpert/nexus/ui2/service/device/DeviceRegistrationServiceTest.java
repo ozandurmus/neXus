@@ -239,4 +239,35 @@ class DeviceRegistrationServiceTest {
                 ((DeviceRegistrationService.Outcome.ValidationFailed) outcome).reasonCode());
         assertTrue(devices.registered.isEmpty());
     }
+
+    @Test
+    void leadingAndTrailingWhitespaceInAddressRefIsTrimmed() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        FakeCredentialReferenceRepository credentials = new FakeCredentialReferenceRepository();
+        credentials.addExisting("cred-ref-1");
+        DeviceRegistrationService service = new DeviceRegistrationService(devices, credentials);
+
+        DeviceRegistrationService.Outcome outcome = service.register("actor-onboarding-1", "gateway",
+                "vendor-hint-synthetic", "ssh_exec", "  " + SYNTHETIC_ADDRESS_REF + "  \n", "cred-ref-1", false);
+
+        assertTrue(outcome instanceof DeviceRegistrationService.Outcome.Registered);
+        assertEquals(1, devices.registered.size());
+        assertEquals(SYNTHETIC_ADDRESS_REF, devices.registered.get(0).addressRef());
+    }
+
+    @Test
+    void internalWhitespaceInAddressRefIsRefused() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        FakeCredentialReferenceRepository credentials = new FakeCredentialReferenceRepository();
+        credentials.addExisting("cred-ref-1");
+        DeviceRegistrationService service = new DeviceRegistrationService(devices, credentials);
+
+        DeviceRegistrationService.Outcome outcome = service.register("actor-onboarding-1", "gateway",
+                "vendor-hint-synthetic", "ssh_exec", "10.0. 0.1", "cred-ref-1", false);
+
+        assertTrue(outcome instanceof DeviceRegistrationService.Outcome.ValidationFailed);
+        assertEquals(DeviceRegistrationService.REASON_ADDRESS_REF_INVALID,
+                ((DeviceRegistrationService.Outcome.ValidationFailed) outcome).reasonCode());
+        assertTrue(devices.registered.isEmpty());
+    }
 }
