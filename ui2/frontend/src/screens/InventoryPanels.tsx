@@ -614,14 +614,17 @@ function ContextTabs({
   readonly onSelectContext?: (contextName: string) => void;
   readonly render: (contextName: string) => React.ReactNode;
 }) {
+  const [internalContext, setInternalContext] = useState<string | null>(null);
+
   if (contexts.length <= 1 && !activeContext) {
     return <>{render(contexts[0]?.context ?? "physical")}</>;
   }
-  const currentIndex = activeContext
+  const effectiveContext = activeContext !== undefined ? activeContext : internalContext;
+  const currentIndex = effectiveContext
     ? Math.max(
         0,
         contexts.findIndex((c) => {
-          const act = activeContext.toLowerCase();
+          const act = effectiveContext.toLowerCase();
           return (
             c.context.toLowerCase() === act ||
             (c.vsName && c.vsName.toLowerCase() === act) ||
@@ -637,8 +640,12 @@ function ContextTabs({
       value={currentIndex}
       onChange={(next) => {
         const target = contexts[next];
-        if (target && onSelectContext) {
-          onSelectContext(target.context);
+        if (target) {
+          if (onSelectContext) {
+            onSelectContext(target.context);
+          } else {
+            setInternalContext(target.context);
+          }
         }
       }}
       tabs={contexts.map((c) => ({ label: c.label ?? c.context, panel: render(c.context) }))}
