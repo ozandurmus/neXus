@@ -20,8 +20,11 @@ import java.util.regex.Pattern;
  */
 public final class CheckPointVsxStatParser {
 
-    /** One {@code Virtual Devices Status} row: the VSID and its kept type letter. */
-    public record VsxDevice(String vsid, String type) {
+    /** One {@code Virtual Devices Status} row: the VSID, kept type letter, and virtual system name. */
+    public record VsxDevice(String vsid, String type, String name) {
+        public VsxDevice(String vsid, String type) {
+            this(vsid, type, "");
+        }
     }
 
     /** {@code vsx} false and {@link #devices()} empty when CF-4's non-VSX text is present. */
@@ -29,7 +32,8 @@ public final class CheckPointVsxStatParser {
     }
 
     private static final Pattern NOT_SUPPORTED = Pattern.compile("(?i)VSX is not supported on this platform");
-    private static final Pattern DEVICE_ROW = Pattern.compile("(?i)^\\s*\\|?\\s*(\\d+)\\s*(?:\\|\\s*|\\s+)([SBRW]|VS|VR|VW|VB)\\b");
+    private static final Pattern DEVICE_ROW = Pattern.compile(
+            "(?i)^\\s*\\|?\\s*(\\d+)\\s*(?:\\|\\s*|\\s+)([SBRW]|VS|VR|VW|VB)(?:\\s+VS0)?(?:(?:\\s*\\|\\s*|\\s+)([^|\\s]+))?");
 
     private CheckPointVsxStatParser() {
     }
@@ -42,7 +46,10 @@ public final class CheckPointVsxStatParser {
         for (String rawLine : output.split("\\R")) {
             Matcher row = DEVICE_ROW.matcher(rawLine.trim());
             if (row.find()) {
-                devices.add(new VsxDevice(row.group(1), row.group(2)));
+                String vsid = row.group(1);
+                String type = row.group(2);
+                String name = row.group(3) != null ? row.group(3).trim() : "";
+                devices.add(new VsxDevice(vsid, type, name));
             }
         }
         return new VsxStatResult(true, devices);

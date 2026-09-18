@@ -48,7 +48,8 @@ public final class LoginController {
     public ResponseEntity<Map<String, Object>> login(@RequestBody LoginRequest request,
             HttpServletResponse response, jakarta.servlet.http.HttpServletRequest servletRequest) {
         try {
-            Optional<Mechanism> mechanism = mechanismRegistry.find(request.mechanismId());
+            String mechId = request.mechanismId() != null && !request.mechanismId().isBlank() ? request.mechanismId() : "local";
+            Optional<Mechanism> mechanism = mechanismRegistry.find(mechId);
             if (mechanism.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBody("UNKNOWN_MECHANISM"));
             }

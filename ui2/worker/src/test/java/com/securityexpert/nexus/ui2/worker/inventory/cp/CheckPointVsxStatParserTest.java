@@ -20,7 +20,7 @@ class CheckPointVsxStatParserTest {
         VsxStatResult result = CheckPointVsxStatParser.parse(Fixtures.read("cp/vsx_stat_v.txt"));
 
         assertTrue(result.vsx());
-        assertEquals(List.of(new VsxDevice("0", "S"), new VsxDevice("2", "S"), new VsxDevice("5", "S")),
+        assertEquals(List.of(new VsxDevice("0", "S", "VS0"), new VsxDevice("2", "S", "vs-finance"), new VsxDevice("5", "S", "vs-hr")),
                 result.devices());
         assertEquals(List.of("0", "2", "5"), CheckPointVsxStatParser.parseVsids(Fixtures.read("cp/vsx_stat_v.txt")));
     }

@@ -67,13 +67,22 @@ public final class InventoryController {
         Optional<InventoryRun> run = found.run();
         Optional<JobRow> job = run.flatMap(inventoryQueryService::jobFor);
 
+        List<String> deviceVsList = found.virtualSystems()
+                .map(s -> java.util.Arrays.stream(s.split(",\\s*")).filter(v -> !v.isBlank()).distinct().sorted().toList())
+                .orElse(List.of());
+        Map<String, String> vsNamesByContext = run.map(r -> resolveVsNames(
+                r.contexts().stream().map(InventoryContext::context).toList(),
+                deviceVsList))
+                .orElse(Map.of());
+
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("device_id", found.deviceId());
         body.put("collected_at", run.map(r -> TIMESTAMP.format(r.collectedAt())).orElse(null));
         body.put("job", job.map(InventoryController::toJobBody).orElse(null));
+        body.put("virtual_systems", found.virtualSystems().orElse(null));
         Map<String, InventoryHaFact> haByContext = run.map(InventoryController::haFactsByContext).orElse(Map.of());
         body.put("contexts", run.map(r -> r.contexts().stream()
-                .map(context -> toContextBody(context, haByContext.get(context.context())))
+                .map(context -> toContextBody(context, haByContext.get(context.context()), vsNamesByContext.get(context.context())))
                 .toList())
                 .orElse(List.of()));
         return ResponseEntity.ok(body);
@@ -88,10 +97,6 @@ public final class InventoryController {
         InventoryQueryService.ClusterInventoryOutcome.Found found =
                 (InventoryQueryService.ClusterInventoryOutcome.Found) outcome;
 
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("cluster_member_ref", found.clusterMemberRef());
-        body.put("members", found.members().stream().map(InventoryController::toMemberBody).toList());
-        body.put("contexts", found.contexts().stream().map(InventoryController::toMergedContextBody).toList());
         List<String> clusterVsList = found.members().stream()
                 .map(m -> m.virtualSystems().orElse(""))
                 .filter(s -> !s.isBlank())
@@ -99,6 +104,17 @@ public final class InventoryController {
                 .distinct()
                 .sorted()
                 .toList();
+
+        Map<String, String> vsNamesByContext = resolveVsNames(
+                found.contexts().stream().map(ClusterInventoryMerger.MergedContext::context).toList(),
+                clusterVsList);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("cluster_member_ref", found.clusterMemberRef());
+        body.put("members", found.members().stream().map(InventoryController::toMemberBody).toList());
+        body.put("contexts", found.contexts().stream()
+                .map(ctx -> toMergedContextBody(ctx, vsNamesByContext.get(ctx.context())))
+                .toList());
         body.put("virtual_systems", clusterVsList);
         return ResponseEntity.ok(body);
     }
@@ -210,10 +226,17 @@ public final class InventoryController {
         return byContext;
     }
 
-    /** {@code ha}: null when this run recorded no HA fact for this context (a non-HA standalone read, or an older run). */
     private static Map<String, Object> toContextBody(InventoryContext context, InventoryHaFact haFact) {
+        return toContextBody(context, haFact, null);
+    }
+
+    /** {@code ha}: null when this run recorded no HA fact for this context (a non-HA standalone read, or an older run). */
+    private static Map<String, Object> toContextBody(InventoryContext context, InventoryHaFact haFact, String vsName) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("context", context.context());
+        if (vsName != null && !vsName.isBlank()) {
+            body.put("vs_name", vsName);
+        }
         body.put("interfaces", context.interfaces().stream().map(InventoryController::toInterfaceBody).toList());
         body.put("routes", context.routes().stream().map(InventoryController::toRouteBody).toList());
         body.put("ha", haFact == null ? null : toHaBody(haFact));
@@ -271,10 +294,54 @@ public final class InventoryController {
     }
 
     private static Map<String, Object> toMergedContextBody(ClusterInventoryMerger.MergedContext context) {
+        return toMergedContextBody(context, null);
+    }
+
+    private static Map<String, Object> toMergedContextBody(ClusterInventoryMerger.MergedContext context, String vsName) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("context", context.context());
+        if (vsName != null && !vsName.isBlank()) {
+            body.put("vs_name", vsName);
+        }
         body.put("interfaces", context.interfaces().stream().map(InventoryController::toMergedInterfaceBody).toList());
         body.put("routes", context.routes().stream().map(InventoryController::toMergedRouteBody).toList());
         return body;
+    }
+
+    static Map<String, String> resolveVsNames(List<String> contexts, List<String> vsList) {
+        Map<String, String> result = new LinkedHashMap<>();
+        if (vsList == null || vsList.isEmpty()) {
+            return result;
+        }
+        for (String ctx : contexts) {
+            if ("physical".equalsIgnoreCase(ctx) || "0".equals(ctx)) {
+                continue;
+            }
+            for (String vs : vsList) {
+                if (ctx.equalsIgnoreCase(vs)) {
+                    result.put(ctx, vs);
+                    break;
+                }
+            }
+        }
+        List<String> numericContexts = contexts.stream()
+                .filter(c -> !"physical".equalsIgnoreCase(c) && !"0".equals(c) && !result.containsKey(c))
+                .sorted(java.util.Comparator.comparingInt(c -> {
+                    try {
+                        return Integer.parseInt(c);
+                    } catch (NumberFormatException e) {
+                        return Integer.MAX_VALUE;
+                    }
+                }))
+                .toList();
+
+        List<String> unmappedVs = vsList.stream()
+                .filter(vs -> !result.containsValue(vs))
+                .toList();
+
+        for (int i = 0; i < numericContexts.size() && i < unmappedVs.size(); i++) {
+            result.put(numericContexts.get(i), unmappedVs.get(i));
+        }
+        return result;
     }
 }

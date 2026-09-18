@@ -36,10 +36,16 @@ public final class MechanismRegistry {
     }
 
     public Optional<Mechanism> find(String mechanismId) {
+        if (mechanismId == null) {
+            return Optional.empty();
+        }
         return Optional.ofNullable(mechanisms.get(mechanismId));
     }
 
     public boolean isRegistered(String mechanismId) {
+        if (mechanismId == null) {
+            return false;
+        }
         return mechanisms.containsKey(mechanismId);
     }
 }

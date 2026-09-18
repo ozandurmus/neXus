@@ -367,6 +367,7 @@ export interface InventoryRoute {
 
 export interface InventoryContext {
   readonly context: string;
+  readonly vs_name?: string | null;
   readonly interfaces: InventoryInterface[];
   readonly routes: InventoryRoute[];
   readonly ha: InventoryHa | null;
@@ -377,6 +378,7 @@ export interface DeviceInventory {
   readonly collected_at: string | null;
   readonly job: JobView | null;
   readonly contexts: InventoryContext[];
+  readonly virtual_systems?: readonly string[] | string | null;
 }
 
 export interface ClusterMember {
@@ -418,6 +420,7 @@ export interface ClusterRoute {
 
 export interface ClusterContext {
   readonly context: string;
+  readonly vs_name?: string | null;
   readonly interfaces: ClusterInterface[];
   readonly routes: ClusterRoute[];
 }

@@ -36,6 +36,16 @@ import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 /** WORKER.md AC-1: "Both GET routes return exactly the shared contract shapes (tests with fakes)... POST collect... returns 202 {job_id}." */
 class InventoryControllerTest {
 
+    @Test
+    void resolvesVirtualSystemNamesForNumericContexts() {
+        Map<String, String> mapped = InventoryController.resolveVsNames(
+                List.of("physical", "2", "3"),
+                List.of("GarantiPosAA", "GarantiWebAA"));
+        assertEquals("GarantiPosAA", mapped.get("2"));
+        assertEquals("GarantiWebAA", mapped.get("3"));
+        assertEquals(null, mapped.get("physical"));
+    }
+
     private static final class FakeDeviceRepository implements DeviceRepository {
         final Map<String, DeviceRecord> byId = new HashMap<>();
         List<DeviceSummaryRecord> summaries = List.of();

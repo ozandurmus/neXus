@@ -24,7 +24,10 @@ import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
 public final class InventoryQueryService {
 
     public sealed interface DeviceInventoryOutcome {
-        record Found(String deviceId, Optional<InventoryRun> run) implements DeviceInventoryOutcome {
+        record Found(String deviceId, Optional<InventoryRun> run, Optional<String> virtualSystems) implements DeviceInventoryOutcome {
+            public Found(String deviceId, Optional<InventoryRun> run) {
+                this(deviceId, run, Optional.empty());
+            }
         }
 
         record NotFound() implements DeviceInventoryOutcome {
@@ -65,7 +68,11 @@ public final class InventoryQueryService {
         if (deviceRepository.find(deviceId).isEmpty()) {
             return new DeviceInventoryOutcome.NotFound();
         }
-        return new DeviceInventoryOutcome.Found(deviceId, deviceInventoryRepository.findLatestRun(deviceId));
+        Optional<String> virtualSystems = deviceRepository.listAll().stream()
+                .filter(d -> d.deviceId().equals(deviceId))
+                .findFirst()
+                .flatMap(DeviceSummaryRecord::virtualSystems);
+        return new DeviceInventoryOutcome.Found(deviceId, deviceInventoryRepository.findLatestRun(deviceId), virtualSystems);
     }
 
     /** The job that produced a device's latest run, if any. */

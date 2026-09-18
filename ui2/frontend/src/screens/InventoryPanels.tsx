@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
@@ -609,7 +609,7 @@ function ContextTabs({
   onSelectContext,
   render,
 }: {
-  readonly contexts: readonly { context: string; label?: string }[];
+  readonly contexts: readonly { context: string; label?: string; vsName?: string; originalContext?: any }[];
   readonly activeContext?: string | null;
   readonly onSelectContext?: (contextName: string) => void;
   readonly render: (contextName: string) => React.ReactNode;
@@ -618,7 +618,17 @@ function ContextTabs({
     return <>{render(contexts[0]?.context ?? "physical")}</>;
   }
   const currentIndex = activeContext
-    ? Math.max(0, contexts.findIndex((c) => c.context.toLowerCase() === activeContext.toLowerCase()))
+    ? Math.max(
+        0,
+        contexts.findIndex((c) => {
+          const act = activeContext.toLowerCase();
+          return (
+            c.context.toLowerCase() === act ||
+            (c.vsName && c.vsName.toLowerCase() === act) ||
+            (c.originalContext?.context && c.originalContext.context.toLowerCase() === act)
+          );
+        })
+      )
     : 0;
 
   return (
@@ -636,7 +646,128 @@ function ContextTabs({
   );
 }
 
-export function InterfacesPanel({ contexts }: { readonly contexts: readonly InventoryContext[] }) {
+export interface UnifiedContextTab<T> {
+  readonly context: string;
+  readonly label: string;
+  readonly vsName?: string;
+  readonly originalContext?: T;
+}
+
+export function buildUnifiedContextTabs<T extends { context: string; vs_name?: string | null }>(
+  contexts: readonly T[],
+  virtualSystems: readonly string[] = []
+): {
+  tabs: readonly UnifiedContextTab<T>[];
+  resolveContext: (selectedName: string) => T | undefined;
+} {
+  const physicalCtx = contexts.find(
+    (c) => c.context.toLowerCase() === "physical" || c.context === "0"
+  );
+  const virtualContexts = contexts.filter(
+    (c) => c.context.toLowerCase() !== "physical" && c.context !== "0"
+  );
+
+  const sortedVirtualContexts = [...virtualContexts].sort((a, b) => {
+    const numA = parseInt(a.context, 10);
+    const numB = parseInt(b.context, 10);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    return a.context.localeCompare(b.context);
+  });
+
+  const tabs: UnifiedContextTab<T>[] = [];
+  const mappedVsNames = new Set<string>();
+
+  if (physicalCtx) {
+    tabs.push({
+      context: physicalCtx.context,
+      label: "Physical / VS0",
+      originalContext: physicalCtx,
+    });
+  }
+
+  const unmappedVsList = virtualSystems.filter((vs) => {
+    return !sortedVirtualContexts.some(
+      (c) =>
+        (c.vs_name && c.vs_name.toLowerCase() === vs.toLowerCase()) ||
+        c.context.toLowerCase() === vs.toLowerCase()
+    );
+  });
+
+  let nextUnmappedVsIdx = 0;
+  for (const c of sortedVirtualContexts) {
+    let resolvedVs: string | undefined = undefined;
+
+    if (c.vs_name && c.vs_name.trim()) {
+      resolvedVs = c.vs_name.trim();
+    } else {
+      const directMatch = virtualSystems.find(
+        (vs) => vs.toLowerCase() === c.context.toLowerCase()
+      );
+      if (directMatch) {
+        resolvedVs = directMatch;
+      } else if (!isNaN(parseInt(c.context, 10)) && nextUnmappedVsIdx < unmappedVsList.length) {
+        resolvedVs = unmappedVsList[nextUnmappedVsIdx++];
+      }
+    }
+
+    if (resolvedVs) {
+      mappedVsNames.add(resolvedVs.toLowerCase());
+      tabs.push({
+        context: resolvedVs,
+        label: !isNaN(parseInt(c.context, 10))
+          ? `VS: ${resolvedVs} (VSID ${c.context})`
+          : `VS: ${resolvedVs}`,
+        vsName: resolvedVs,
+        originalContext: c,
+      });
+    } else {
+      const isNum = !isNaN(parseInt(c.context, 10));
+      tabs.push({
+        context: c.context,
+        label: isNum ? `VSID: ${c.context}` : c.context,
+        originalContext: c,
+      });
+    }
+  }
+
+  for (const vs of virtualSystems) {
+    if (!mappedVsNames.has(vs.toLowerCase()) && !tabs.some((t) => t.context.toLowerCase() === vs.toLowerCase())) {
+      tabs.push({
+        context: vs,
+        label: `VS: ${vs}`,
+        vsName: vs,
+      });
+    }
+  }
+
+  const resolveContext = (selectedName: string): T | undefined => {
+    const sel = selectedName.toLowerCase();
+    const tabMatch = tabs.find(
+      (t) =>
+        t.context.toLowerCase() === sel ||
+        (t.vsName && t.vsName.toLowerCase() === sel) ||
+        (t.originalContext && t.originalContext.context.toLowerCase() === sel)
+    );
+    if (tabMatch?.originalContext) {
+      return tabMatch.originalContext;
+    }
+    return contexts.find(
+      (c) =>
+        c.context.toLowerCase() === sel ||
+        (c.vs_name && c.vs_name.toLowerCase() === sel)
+    );
+  };
+
+  return { tabs, resolveContext };
+}
+
+export function InterfacesPanel({
+  contexts,
+  virtualSystems,
+}: {
+  readonly contexts: readonly InventoryContext[];
+  readonly virtualSystems?: readonly string[] | string | null;
+}) {
   if (contexts.length === 0) {
     return (
       <EmptyPanel
@@ -645,11 +776,20 @@ export function InterfacesPanel({ contexts }: { readonly contexts: readonly Inve
       />
     );
   }
+  const vsList = Array.isArray(virtualSystems)
+    ? virtualSystems
+    : typeof virtualSystems === "string"
+    ? virtualSystems.split(/,\s*/).filter(Boolean)
+    : [];
+  const { tabs, resolveContext } = useMemo(
+    () => buildUnifiedContextTabs(contexts, vsList),
+    [contexts, vsList]
+  );
   return (
     <ContextTabs
-      contexts={contexts}
+      contexts={tabs}
       render={(name) => {
-        const context = contexts.find((c) => c.context === name);
+        const context = resolveContext(name);
         return (
           <Stack spacing={1}>
             <ContextHaBadge context={context} />
@@ -661,7 +801,13 @@ export function InterfacesPanel({ contexts }: { readonly contexts: readonly Inve
   );
 }
 
-export function RoutesPanel({ contexts }: { readonly contexts: readonly InventoryContext[] }) {
+export function RoutesPanel({
+  contexts,
+  virtualSystems,
+}: {
+  readonly contexts: readonly InventoryContext[];
+  readonly virtualSystems?: readonly string[] | string | null;
+}) {
   if (contexts.length === 0) {
     return (
       <EmptyPanel
@@ -670,10 +816,22 @@ export function RoutesPanel({ contexts }: { readonly contexts: readonly Inventor
       />
     );
   }
+  const vsList = Array.isArray(virtualSystems)
+    ? virtualSystems
+    : typeof virtualSystems === "string"
+    ? virtualSystems.split(/,\s*/).filter(Boolean)
+    : [];
+  const { tabs, resolveContext } = useMemo(
+    () => buildUnifiedContextTabs(contexts, vsList),
+    [contexts, vsList]
+  );
   return (
     <ContextTabs
-      contexts={contexts}
-      render={(name) => <RoutesTable routes={contexts.find((c) => c.context === name)?.routes ?? []} />}
+      contexts={tabs}
+      render={(name) => {
+        const context = resolveContext(name);
+        return <RoutesTable routes={context?.routes ?? []} />;
+      }}
     />
   );
 }
@@ -693,31 +851,22 @@ export function ClusterInterfacesPanel({
   readonly activeContext?: string | null;
   readonly onSelectContext?: (ctx: string) => void;
 }) {
-  const baseContexts = contexts.map((c) => ({
-    context: c.context,
-    label: c.context.toLowerCase() === "physical" ? "Physical / VS0" : c.context,
-  }));
-  const allContexts = [...baseContexts];
-  for (const vs of virtualSystems) {
-    if (!allContexts.some((c) => c.context.toLowerCase() === vs.toLowerCase())) {
-      allContexts.push({
-        context: vs,
-        label: `VS: ${vs}`,
-      });
-    }
-  }
+  const { tabs, resolveContext } = useMemo(
+    () => buildUnifiedContextTabs(contexts, virtualSystems),
+    [contexts, virtualSystems]
+  );
 
-  if (allContexts.length === 0) {
+  if (tabs.length === 0) {
     return <EmptyPanel title="No interface evidence" body="No cluster member has been collected yet." />;
   }
 
   return (
     <ContextTabs
-      contexts={allContexts}
+      contexts={tabs}
       activeContext={activeContext}
       onSelectContext={onSelectContext}
       render={(name) => {
-        const found = contexts.find((c) => c.context.toLowerCase() === name.toLowerCase());
+        const found = resolveContext(name);
         if (found) {
           return (
             <ClusterInterfacesTable
@@ -745,7 +894,7 @@ export function ClusterInterfacesPanel({
                 <Typography variant="h6" sx={{ fontWeight: 700, color: m3.onSurface }}>
                   Virtual System: {name}
                 </Typography>
-                <StatusChip tone="ok" label="Active VSX Instance" dense />
+                <StatusChip tone="neutral" label="Uncollected Instance" dense />
               </Box>
             </Box>
             <Typography variant="body2" color="text.secondary">
@@ -762,20 +911,9 @@ export function ClusterInterfacesPanel({
               </Box>
               <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "10px", border: `1px solid ${m3.outlineVar}` }}>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>HA Redundancy</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{members.length} Active Nodes</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{members.length} Nodes</Typography>
               </Box>
             </Box>
-            {contexts[0]?.interfaces && (
-              <Box sx={{ mt: 1 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Cluster Interface Topology (VLAN &amp; Bond Mappings)
-                </Typography>
-                <ClusterInterfacesTable
-                  interfaces={contexts[0].interfaces.filter((i) => i.name.includes(".") || i.name.toLowerCase().includes("bond") || i.name.toLowerCase().includes("eth"))}
-                  members={members}
-                />
-              </Box>
-            )}
           </Box>
         );
       }}
@@ -798,31 +936,22 @@ export function ClusterRoutesPanel({
   readonly activeContext?: string | null;
   readonly onSelectContext?: (ctx: string) => void;
 }) {
-  const baseContexts = contexts.map((c) => ({
-    context: c.context,
-    label: c.context.toLowerCase() === "physical" ? "Physical / VS0" : c.context,
-  }));
-  const allContexts = [...baseContexts];
-  for (const vs of virtualSystems) {
-    if (!allContexts.some((c) => c.context.toLowerCase() === vs.toLowerCase())) {
-      allContexts.push({
-        context: vs,
-        label: `VS: ${vs}`,
-      });
-    }
-  }
+  const { tabs, resolveContext } = useMemo(
+    () => buildUnifiedContextTabs(contexts, virtualSystems),
+    [contexts, virtualSystems]
+  );
 
-  if (allContexts.length === 0) {
+  if (tabs.length === 0) {
     return <EmptyPanel title="No routing evidence" body="No cluster member has been collected yet." />;
   }
 
   return (
     <ContextTabs
-      contexts={allContexts}
+      contexts={tabs}
       activeContext={activeContext}
       onSelectContext={onSelectContext}
       render={(name) => {
-        const found = contexts.find((c) => c.context.toLowerCase() === name.toLowerCase());
+        const found = resolveContext(name);
         if (found) {
           return (
             <ClusterRoutesTable
@@ -850,13 +979,8 @@ export function ClusterRoutesPanel({
               </Typography>
             </Box>
             <Typography variant="body2" color="text.secondary">
-              Virtual System <strong>{name}</strong> inherits cluster gateway routes and interfaces from <strong>{clusterRef ?? "ClusterXL"}</strong>.
+              Virtual System <strong>{name}</strong> operates on cluster <strong>{clusterRef ?? "ClusterXL"}</strong>. No routing evidence collected yet.
             </Typography>
-            {contexts[0]?.routes && (
-              <Box sx={{ mt: 1 }}>
-                <ClusterRoutesTable routes={contexts[0].routes} members={members} />
-              </Box>
-            )}
           </Box>
         );
       }}
@@ -1066,14 +1190,14 @@ export function DeviceInventoryPanels({ device }: { readonly device: DeviceSumma
           {
             label: "Interfaces",
             panel: isCluster
-              ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} />
-              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} />,
+              ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} />
+              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} />,
           },
           {
             label: "Routing",
             panel: isCluster
-              ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} />
-              : <RoutesPanel contexts={deviceInventory?.contexts ?? []} />,
+              ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} />
+              : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} />,
           },
           {
             label: "Cluster members",
