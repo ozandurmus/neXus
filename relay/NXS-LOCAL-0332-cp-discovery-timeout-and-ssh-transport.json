@@ -1,0 +1,159 @@
+{
+  "created_at": "2026-09-18T05:05:00Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "ManagementPlaneEnumerationAdapter.EXEC_TIMEOUT is increased to 180 seconds (Duration.ofSeconds(180))",
+          "ManagementPlaneEnumerationAdapter.queryObjects logs query start and completion per domain and object type at INFO level with elapsed time",
+          "SshExecTransport.exec calls channel.setInputStream(null) before channel.connect to ensure EOF on stdin",
+          "SshExecTransport.exec drains channel.getErrStream() during the execution loop so remote process stderr buffer never causes deadlock",
+          "ManagementShellCommands.contextSwitchAndObjectQuery redirects cpmiquerybin stderr with 2>/dev/null while matching CLOSED_COMMAND_PREFIXES",
+          "All tests in :worker:test pass, including ManagementPlaneEnumerationAdapterTest and ManagementShellCommandsClosedSetTest",
+          "Repository privacy check passes with 0 findings"
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md",
+          "observed": "Check Point discovery job 37e7b54a-65ea-4e45-9a8b-a36386f79558 failed with 'management command failed: TimedOut[]' after enumerating 5 valid domains. Execution timed out during queryObjects because EXEC_TIMEOUT is only 30 seconds, SshExecTransport leaves stdin open without channel.setInputStream(null), and SshExecTransport never drains channel.getErrStream() which can deadlock on filled stderr pipe buffers.",
+          "what_exists": "ManagementPlaneEnumerationAdapter has fixed EXEC_TIMEOUT = Duration.ofSeconds(30) which is too short for multi-domain MDS CMA network_objects queries. SshExecTransport.exec() connects without channel.setInputStream(null) and only reads in.available() while ignoring channel.getErrStream(). ManagementShellCommands.contextSwitchAndObjectQuery redirects mdsenv to /dev/null but leaves cpmiquerybin stderr unredirected."
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/cp-discovery-timeout-and-ssh-transport"
+        },
+        "invariants": [
+          "Command gate compliance: CLOSED_COMMAND_PREFIXES preserved",
+          "Opaque identity handling: stable identifiers preserved",
+          "Fail-closed error reporting preserved"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Increase Check Point discovery exec timeout to accommodate multi-domain CMA query execution times, harden SshExecTransport against stdin/stderr pipe stalls, and add INFO-level per-domain/per-object-type query telemetry.",
+        "output_contract": [
+          "Local commit on branch."
+        ],
+        "recommended_reasoning": {
+          "reason": "Fixing SSH transport streams, timeout extension, and discovery query logging",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "In ManagementPlaneEnumerationAdapter.java: increase EXEC_TIMEOUT from Duration.ofSeconds(30) to Duration.ofSeconds(180). In queryObjects, log at Level.INFO when starting: 'Executing Check Point object query for domain {0}, type {1}', measure execution time, and log at Level.INFO upon success: 'Check Point object query succeeded for domain {0}, type {1}: parsed {2} objects in {3}ms'.",
+          "In SshExecTransport.java: in exec(...), call channel.setInputStream(null); before channel.connect. Retrieve InputStream err = channel.getErrStream(); and in the while (true) loop, drain err.available() > 0 into a byte buffer/drain so that remote processes writing to stderr do not block on pipe buffers.",
+          "In ManagementShellCommands.java: in contextSwitchAndObjectQuery, append ' 2>/dev/null' after cpmiquerybin invocation to prevent stderr pollution and buffer blocks: 'loginShell(\"source /etc/profile.d/CP.sh; mdsenv \" + quote(domainIdentifier) + \" >/dev/null 2>&1 && cpmiquerybin object \\\"\\\" network_objects \\\"type='\" + objectTypeFilterValue(objectType) + \"'\\\" 2>/dev/null\");'. Ensure CLOSED_COMMAND_PREFIXES continues to match.",
+          "In ManagementShellCommandsClosedSetTest.java: verify tests pass with the updated command string.",
+          "Run ./ui2/gradlew -p ui2 :worker:test to verify all tests pass."
+        ],
+        "risks": [
+          "Ensuring existing closed-set tests and adapter fixtures continue to pass."
+        ],
+        "scope": {
+          "in": [
+            "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/cp/ManagementPlaneEnumerationAdapter.java",
+            "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/ssh/SshExecTransport.java",
+            "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/cp/ManagementShellCommands.java",
+            "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/cp/ManagementPlaneEnumerationAdapterTest.java",
+            "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/cp/ManagementShellCommandsClosedSetTest.java"
+          ],
+          "out": [
+            "Service layer",
+            "Frontend",
+            "Persistence"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew -p ui2 :worker:test"
+            ],
+            "name": "worker_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-18T05:05:00Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ManagementPlaneEnumerationAdapter.EXEC_TIMEOUT increased to 180s.",
+          "ManagementPlaneEnumerationAdapter logs query start and completion per domain and object type with elapsed time at INFO level.",
+          "SshExecTransport.exec calls channel.setInputStream(null) and drains channel.getErrStream().",
+          "ManagementShellCommands.contextSwitchAndObjectQuery redirects cpmiquerybin stderr with 2>/dev/null."
+        ],
+        "completed": [
+          "Adapter timeout extension, SSH stream hardening, and query telemetry merged via PR #433."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No main_py change.",
+          "ui": "No UI change."
+        },
+        "integration": {
+          "branch": "feature/cp-discovery-timeout-and-ssh-transport",
+          "ci": "RUN_AND_PASSED",
+          "head_sha": "6680cb0",
+          "merge_commit": "786cd54",
+          "merge_decision": "PO merged PR #433.",
+          "merge_state": "MERGED",
+          "pr": 433,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/433"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0332",
+          "movement_type": "VALIDATION",
+          "objective": "Deploy to K3s cluster and verify Check Point discovery live run.",
+          "status": "planned"
+        },
+        "preserved": [
+          "CLOSED_COMMAND_PREFIXES and command gate behavior remain unchanged.",
+          "Opaque identifiers and fail-closed error handling preserved."
+        ],
+        "recommended_reasoning": {
+          "reason": "Verify live Check Point discovery run on K3s.",
+          "tier": "light"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "PASS: ./ui2/gradlew -p ui2 :worker:test completed cleanly.",
+          "diff_check": "PASS: git diff --check origin/main completed cleanly.",
+          "full_regression": "PASS",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py completed with 0 findings.",
+          "real_environment": "PENDING: deploy to K3s cluster.",
+          "state_consistency": "PASS",
+          "targeted": "PASS: :worker:test passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-18T05:08:00Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0332",
+  "movement": "NXS-LOCAL-0332",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md",
+    "docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-18T05:08:00Z"
+}

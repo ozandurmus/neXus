@@ -24,6 +24,7 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0332` — `automated_validated`: Check Point Discovery Timeout (180s) and SSH Exec Transport Stream Hardening.
 `NXS-LOCAL-0331` — `automated_validated`: CpObjectDumpParser Quoted Parens and Display Name Fallback.
 `NXS-LOCAL-0330` — `automated_validated`: Check Point Discovery Parser Hardening, Domain Banner Filtering, and Diagnostic Logging.
 `NXS-LOCAL-0329` — `automated_validated`: Fix Device Deletion SQL Schema and Spring Error Route Un-gating.
