@@ -307,16 +307,20 @@ function ClusterInterfacesTable({
         <TableBody>
           {filtered.map((iface) => {
             const vips = iface.addresses.filter((a) => a.role === "cluster_virtual");
-            let sampleAddress = vips[0]?.address;
-            if (!sampleAddress && iface.member_addresses) {
+            let cidrAddress: string | undefined;
+            if (iface.member_addresses) {
               for (const addrs of Object.values(iface.member_addresses)) {
-                if (addrs.length > 0) {
-                  sampleAddress = addrs[0].address;
+                const found = addrs.find((a) => a.address.includes("/"));
+                if (found) {
+                  cidrAddress = found.address;
                   break;
                 }
               }
             }
-            const network = sampleAddress ? calculateNetwork(sampleAddress) : "—";
+            if (!cidrAddress && vips.length > 0) {
+              cidrAddress = vips[0].address;
+            }
+            const network = cidrAddress ? calculateNetwork(cidrAddress) : "—";
 
             const memberStates = iface.member_states ? Object.values(iface.member_states) : [];
             const allUp = memberStates.length > 0 && memberStates.every((s) => s.toLowerCase() === "up");
