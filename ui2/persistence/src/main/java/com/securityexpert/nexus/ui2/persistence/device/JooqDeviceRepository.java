@@ -43,7 +43,7 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "left join lateral ( "
             + "    select display_name, model, software_version from discovery_candidate c "
             + "    where (c.vendor || '|' || coalesce(c.owning_domain, '') || '|' || c.stable_identifier) = d.discovery_match_key "
-            + "    order by c.created_at desc limit 1 "
+            + "    limit 1 "
             + ") dc on true "
             + "left join lateral ( "
             + "    select address_ref from endpoints ep where ep.device_id = d.device_id order by ep.created_at asc limit 1 "
