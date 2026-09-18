@@ -327,8 +327,10 @@ public class DeviceCompositionConfiguration {
 
     @Bean
     public DeviceAddSingleService deviceAddSingleService(TransactionBoundary transactionBoundary,
-            DeviceRegistrationService deviceRegistrationService, JobAdmissionService jobAdmissionService) {
-        return new DeviceAddSingleService(transactionBoundary, deviceRegistrationService, jobAdmissionService);
+            DeviceRegistrationService deviceRegistrationService, JobAdmissionService jobAdmissionService,
+            DeviceRepository deviceRepository) {
+        return new DeviceAddSingleService(transactionBoundary, deviceRegistrationService, jobAdmissionService,
+                deviceRepository);
     }
 
     @Bean

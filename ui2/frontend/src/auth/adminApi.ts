@@ -444,6 +444,10 @@ export function requestInventoryCollect(deviceId: string, nonce?: string): Promi
   return call(`/devices/${encodeURIComponent(deviceId)}/inventory/collect`, "POST", nonce ? { nonce } : {});
 }
 
+export function retryDeviceConfirm(deviceId: string): Promise<{ admitted: boolean; job_id: string }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/confirm`, "POST", {});
+}
+
 export function requestBulkInventoryCollect(): Promise<{ enrolled_devices: number; admitted: number; refused: number }> {
   return call(`/devices/inventory/collect-all`, "POST", {});
 }

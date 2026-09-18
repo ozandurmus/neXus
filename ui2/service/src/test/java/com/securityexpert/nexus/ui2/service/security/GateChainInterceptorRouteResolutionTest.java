@@ -56,6 +56,15 @@ class GateChainInterceptorSecurityTest {
     }
 
     @Test
+    void deviceConfirmRouteResolvesToDeviceRegisterAction() throws Exception {
+        var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
+        var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
+        method.setAccessible(true);
+        assertEquals(ActionRegistry.DEVICE_REGISTER,
+                method.invoke(interceptor, "POST", "/devices/device-1/confirm"));
+    }
+
+    @Test
     void theOriginalLastSegmentRouteStillResolvesOnItsFirstWildcardAttempt() throws Exception {
         assertEquals("device_read", actionIdFor("GET", "/devices/device-1"));
     }

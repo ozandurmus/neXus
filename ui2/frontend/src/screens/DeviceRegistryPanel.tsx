@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import Box from "@mui/material/Box";
+import Checkbox from "@mui/material/Checkbox";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
@@ -41,6 +42,21 @@ export function DeviceManagementPane() {
     }
   };
 
+  const onBulkDelete = async (deviceIds: string[]) => {
+    if (deviceIds.length === 0) return;
+    if (!window.confirm(`Delete ${deviceIds.length} selected device(s) and all of their collected records? This cannot be undone.`)) return;
+    try {
+      for (const id of deviceIds) {
+        await deleteDevice(id);
+      }
+      setDeleteError(null);
+      refresh();
+    } catch (err) {
+      setDeleteError(describeApiError(err));
+      refresh();
+    }
+  };
+
   const total = devices?.length ?? 0;
   const enrolledCount = devices?.filter((d) => d.enrollment_state === "ENROLLED").length ?? 0;
   const degradedCount = devices?.filter((d) => d.enrollment_state === "DEGRADED" || d.enrollment_state === "UNREACHABLE").length ?? 0;
@@ -48,7 +64,15 @@ export function DeviceManagementPane() {
 
   return (
     <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 2 }}>
-      <DeviceRegistryCard devices={devices} error={error} deleteError={deleteError} onDelete={onDelete} onRetry={refresh} total={total} />
+      <DeviceRegistryCard
+        devices={devices}
+        error={error}
+        deleteError={deleteError}
+        onDelete={onDelete}
+        onBulkDelete={onBulkDelete}
+        onRetry={refresh}
+        total={total}
+      />
       <Stack spacing={2}>
         <EmptyPanel title="Enrollment" body="Enrolling a device grants read collection only.">
           <Stack spacing={1}>
@@ -87,6 +111,7 @@ function DeviceRegistryCard({
   error,
   deleteError,
   onDelete,
+  onBulkDelete,
   onRetry,
   total,
 }: {
@@ -94,9 +119,13 @@ function DeviceRegistryCard({
   readonly error: string | null;
   readonly deleteError: string | null;
   readonly onDelete: (deviceId: string) => void;
+  readonly onBulkDelete: (deviceIds: string[]) => Promise<void>;
   readonly onRetry: () => void;
   readonly total: number;
 }) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
+
   if (error) {
     return (
       <EmptyPanel title="Device registry unavailable" body={error}>
@@ -110,6 +139,43 @@ function DeviceRegistryCard({
   if (devices === null) {
     return <EmptyPanel title="Device registry" body="Loading…" />;
   }
+
+  const isAllSelected = total > 0 && selectedIds.size === total;
+  const isSomeSelected = selectedIds.size > 0 && selectedIds.size < total;
+
+  const handleToggleAll = () => {
+    if (!devices) return;
+    if (selectedIds.size === devices.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(devices.map((d) => d.device_id)));
+    }
+  };
+
+  const handleToggleRow = (deviceId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(deviceId)) next.delete(deviceId);
+      else next.add(deviceId);
+      return next;
+    });
+  };
+
+  const selectAllDraft = () => {
+    if (!devices) return;
+    const drafts = devices.filter((d) => d.enrollment_state === "DRAFT").map((d) => d.device_id);
+    setSelectedIds(new Set(drafts));
+  };
+
+  const handleBulkDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await onBulkDelete(Array.from(selectedIds));
+      setSelectedIds(new Set());
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <EmptyPanel
@@ -133,9 +199,57 @@ function DeviceRegistryCard({
           <Typography color="error">Delete failed: {deleteError}</Typography>
         </Box>
       )}
+      {selectedIds.size > 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            p: 1.25,
+            bgcolor: "action.hover",
+            borderRadius: 1.5,
+            flexWrap: "wrap",
+            gap: 1,
+            mt: 1,
+          }}
+        >
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {selectedIds.size} of {total} selected
+            </Typography>
+            <M3Button emphasis="text" onClick={() => setSelectedIds(new Set())}>
+              Clear selection
+            </M3Button>
+            {devices.some((d) => d.enrollment_state === "DRAFT") && (
+              <M3Button emphasis="outlined" onClick={selectAllDraft}>
+                Select all draft
+              </M3Button>
+            )}
+          </Stack>
+          <M3Button
+            emphasis="filled"
+            icon="delete"
+            onClick={handleBulkDelete}
+            disabled={isDeleting}
+            sx={{ bgcolor: "error.main", color: "error.contrastText", "&:hover": { bgcolor: "error.dark" } }}
+          >
+            {isDeleting ? "Deleting..." : `Delete selected (${selectedIds.size})`}
+          </M3Button>
+        </Box>
+      )}
       {total > 0 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 200px 90px", px: 2, py: 0.5, color: "text.secondary", fontSize: "0.75rem", fontWeight: 600 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "36px 1fr 200px 90px", px: 2, py: 0.5, color: "text.secondary", fontSize: "0.75rem", fontWeight: 600, alignItems: "center" }}>
+            <Box>
+              <Checkbox
+                checked={isAllSelected}
+                indeterminate={isSomeSelected}
+                onChange={handleToggleAll}
+                size="small"
+                sx={{ p: 0 }}
+                inputProps={{ "aria-label": "Select all devices" }}
+              />
+            </Box>
             <Box>DEVICE / HOSTNAME</Box>
             <Box sx={{ textAlign: "center" }}>STATUS</Box>
             <Box sx={{ textAlign: "right" }}>ACTIONS</Box>
@@ -146,18 +260,27 @@ function DeviceRegistryCard({
                 key={device.device_id}
                 sx={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 200px 90px",
+                  gridTemplateColumns: "36px 1fr 200px 90px",
                   alignItems: "center",
-                  gap: 2,
+                  gap: 1,
                   px: 2,
                   py: 1.25,
                   border: "1px solid",
-                  borderColor: "divider",
+                  borderColor: selectedIds.has(device.device_id) ? "primary.main" : "divider",
                   borderRadius: 1.5,
-                  bgcolor: "background.paper",
+                  bgcolor: selectedIds.has(device.device_id) ? "action.selected" : "background.paper",
                   "&:hover": { borderColor: "primary.main" },
                 }}
               >
+                <Box>
+                  <Checkbox
+                    checked={selectedIds.has(device.device_id)}
+                    onChange={() => handleToggleRow(device.device_id)}
+                    size="small"
+                    sx={{ p: 0 }}
+                    inputProps={{ "aria-label": `Select ${device.hostname ?? device.device_id}` }}
+                  />
+                </Box>
                 <Typography variant="body2" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>
                   {device.hostname ?? device.device_id}
                 </Typography>

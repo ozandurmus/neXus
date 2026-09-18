@@ -97,6 +97,35 @@ public final class DeviceRegistrationController {
         return ResponseEntity.ok(Map.of("deleted", true, "device_id", deviceId));
     }
 
+    @PostMapping("/devices/{deviceId}/confirm")
+    public ResponseEntity<Map<String, Object>> retryConfirm(@PathVariable String deviceId,
+            HttpServletRequest servletRequest) {
+        String actorFingerprint = actingUser(servletRequest);
+        DeviceAddSingleService.Outcome outcome = deviceAddSingleService.retryConfirm(deviceId, actorFingerprint);
+        return switch (outcome) {
+            case DeviceAddSingleService.Outcome.Admitted admitted -> {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("admitted", true);
+                body.put("device_id", admitted.deviceId());
+                body.put("job_id", admitted.jobId());
+                yield ResponseEntity.ok(body);
+            }
+            case DeviceAddSingleService.Outcome.ValidationFailed failed -> {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("error", "VALIDATION_FAILED");
+                body.put("reason_code", failed.reasonCode());
+                yield ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
+            }
+            case DeviceAddSingleService.Outcome.AdmissionRefused refused -> {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("error", "ADMISSION_REFUSED");
+                body.put("code", refused.code());
+                body.put("reason", refused.reason());
+                yield ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+            }
+        };
+    }
+
     @GetMapping("/devices/{deviceId}")
     public ResponseEntity<Map<String, Object>> getDevice(@PathVariable String deviceId) {
         DeviceQueryService.DetailOutcome outcome = deviceQueryService.deviceDetail(deviceId);

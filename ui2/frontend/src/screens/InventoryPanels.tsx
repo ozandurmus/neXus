@@ -20,6 +20,7 @@ import {
   getDeviceInventory,
   getClusterInventory,
   requestInventoryCollect,
+  retryDeviceConfirm,
   collectDeviceBackup,
   type ApiError,
   type ClusterContext,
@@ -115,38 +116,78 @@ function AddressChip({ address }: { readonly address: InventoryAddress }) {
 }
 
 function InterfacesTable({ interfaces }: { readonly interfaces: readonly InventoryInterface[] }) {
+  const [upOnly, setUpOnly] = useState(true);
+  const [search, setSearch] = useState("");
+
   if (interfaces.length === 0) {
     return <EmptyPanel title="No interface evidence" body="This context has no collected interfaces yet." />;
   }
+
+  const filtered = interfaces.filter((iface) => {
+    if (upOnly && iface.state?.toLowerCase() === "down") {
+      return false;
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const matchName = iface.name.toLowerCase().includes(q);
+      const matchKind = iface.kind?.toLowerCase().includes(q);
+      const matchAddr = iface.addresses.some((a) => a.address.toLowerCase().includes(q));
+      return matchName || matchKind || matchAddr;
+    }
+    return true;
+  });
+
   return (
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>Name</TableCell>
-          <TableCell>Kind</TableCell>
-          <TableCell>State</TableCell>
-          <TableCell>VLAN</TableCell>
-          <TableCell>Addresses</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {interfaces.map((iface) => (
-          <TableRow key={iface.name}>
-            <TableCell>{iface.name}</TableCell>
-            <TableCell>{iface.kind}</TableCell>
-            <TableCell>
-              <StatusChip tone={iface.state === "up" ? "ok" : iface.state === "down" ? "bad" : "neutral"} label={iface.state} dense />
-            </TableCell>
-            <TableCell>{iface.vlan_id ?? "—"}</TableCell>
-            <TableCell>
-              <Stack spacing={0.5}>
-                {iface.addresses.length === 0 ? "—" : iface.addresses.map((a) => <AddressChip key={a.address} address={a} />)}
-              </Stack>
-            </TableCell>
+    <Stack spacing={1.5}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          Interfaces · {filtered.length} {upOnly && interfaces.length > filtered.length && `(${interfaces.length - filtered.length} down hidden)`}
+        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <TextField
+            size="small"
+            placeholder="Filter interfaces..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            sx={{ "& .MuiInputBase-root": { height: 32, fontSize: "0.8125rem", borderRadius: "8px" } }}
+          />
+          <M3Button
+            emphasis={upOnly ? "filled" : "outlined"}
+            onClick={() => setUpOnly(!upOnly)}
+          >
+            {upOnly ? "✓ Active only" : "All ports"}
+          </M3Button>
+        </Stack>
+      </Box>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Name</TableCell>
+            <TableCell>Kind</TableCell>
+            <TableCell>State</TableCell>
+            <TableCell>VLAN</TableCell>
+            <TableCell>Addresses</TableCell>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHead>
+        <TableBody>
+          {filtered.map((iface) => (
+            <TableRow key={iface.name}>
+              <TableCell>{iface.name}</TableCell>
+              <TableCell>{iface.kind}</TableCell>
+              <TableCell>
+                <StatusChip tone={iface.state === "up" ? "ok" : iface.state === "down" ? "bad" : "neutral"} label={iface.state} dense />
+              </TableCell>
+              <TableCell>{iface.vlan_id ?? "—"}</TableCell>
+              <TableCell>
+                <Stack spacing={0.5}>
+                  {iface.addresses.length === 0 ? "—" : iface.addresses.map((a) => <AddressChip key={a.address} address={a} />)}
+                </Stack>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Stack>
   );
 }
 
@@ -240,7 +281,7 @@ function ClusterInterfacesTable({
   readonly interfaces: readonly ClusterInterface[];
   readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
 }) {
-  const [upOnly, setUpOnly] = useState(false);
+  const [upOnly, setUpOnly] = useState(true);
   const [search, setSearch] = useState("");
 
   if (interfaces.length === 0) {
@@ -249,10 +290,14 @@ function ClusterInterfacesTable({
 
   const filtered = interfaces.filter((iface) => {
     if (upOnly) {
-      const isUp = iface.member_states
-        ? Object.values(iface.member_states).some((s) => s.toLowerCase() === "up")
-        : true;
-      if (!isUp) return false;
+      const memberStates = iface.member_states ? Object.values(iface.member_states) : [];
+      const allDown = memberStates.length > 0 && memberStates.every((s) => s.toLowerCase() === "down");
+      const hasVip = iface.addresses.some((a) => a.role === "cluster_virtual");
+      // Hide strictly when all members are closed/down and there is no VIP.
+      // Degraded/mixed (one member down), warnings, and diffs stay strictly visible.
+      if (allDown && !hasVip && iface.differences.length === 0) {
+        return false;
+      }
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -272,7 +317,7 @@ function ClusterInterfacesTable({
     <Stack spacing={1.5}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          Interfaces · {filtered.length}
+          Interfaces · {filtered.length} {upOnly && interfaces.length > filtered.length && `(${interfaces.length - filtered.length} down hidden)`}
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center">
           <TextField
@@ -286,7 +331,7 @@ function ClusterInterfacesTable({
             emphasis={upOnly ? "filled" : "outlined"}
             onClick={() => setUpOnly(!upOnly)}
           >
-            {upOnly ? "✓ Up only" : "Up only"}
+            {upOnly ? "✓ Active only" : "All ports"}
           </M3Button>
         </Stack>
       </Box>
@@ -1039,6 +1084,30 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
   const [error, setError] = useState<string | null>(null);
   const isDraft = enrollmentState === "DRAFT";
 
+  // Check the latest job state on mount so that past failures are immediately visible and not hanging
+  useEffect(() => {
+    let cancelled = false;
+    getDevice(deviceId)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.job) {
+          setJobState(result.job.state);
+          if (!isTerminalJobState(result.job.state)) {
+            setPhase("polling");
+          } else if (result.job.state === "FAILED" || result.job.state === "REJECTED") {
+            const reason = result.job.terminal_reason ? `: ${result.job.terminal_reason}` : "";
+            setError(`Last run failed (${result.job.state})${reason}`);
+          }
+        }
+      })
+      .catch(() => {
+        // ignore initial query errors
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceId]);
+
   useEffect(() => {
     if (phase !== "polling") return undefined;
     let cancelled = false;
@@ -1050,10 +1119,12 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
           setJobState(result.job?.state ?? null);
           if (result.job !== null && isTerminalJobState(result.job.state)) {
             if (result.job.state === "FAILED" || result.job.state === "REJECTED") {
-              setError(`Collection failed (${result.job.state})`);
+              const reason = result.job.terminal_reason ? `: ${result.job.terminal_reason}` : "";
+              setError(`Operation failed (${result.job.state})${reason}`);
               setPhase("error");
             } else {
               setPhase("idle");
+              setError(null);
               onCollected();
             }
           }
@@ -1069,14 +1140,17 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
       cancelled = true;
       clearInterval(intervalId);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, deviceId]);
+  }, [phase, deviceId, onCollected]);
 
   const handleClick = async () => {
     setError(null);
     setPhase("submitting");
     try {
-      await requestInventoryCollect(deviceId);
+      if (isDraft) {
+        await retryDeviceConfirm(deviceId);
+      } else {
+        await requestInventoryCollect(deviceId);
+      }
       setPhase("polling");
     } catch (err) {
       setError(describeApiError(err));
@@ -1084,23 +1158,34 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
     }
   };
 
+  const isRunning = phase === "submitting" || phase === "polling";
+  const buttonLabel = isRunning
+    ? isDraft
+      ? `Confirming (${jobPhaseLabel(jobState ?? "REQUESTED")})...`
+      : jobPhaseLabel(jobState ?? "REQUESTED")
+    : isDraft
+    ? error
+      ? "Retry confirmation"
+      : "Confirm enrollment"
+    : "Collect now";
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "flex-start" }}>
       <M3Button
         emphasis="outlined"
         icon="download"
         onClick={handleClick}
-        disabled={isDraft || phase === "submitting" || phase === "polling"}
+        disabled={isRunning}
       >
-        {isDraft ? "Enrollment confirming..." : phase === "polling" ? jobPhaseLabel(jobState ?? "REQUESTED") : "Collect now"}
+        {buttonLabel}
       </M3Button>
-      {isDraft && (
+      {isDraft && !error && !isRunning && (
         <Typography variant="body2" color="text.secondary">
           Device is pending enrollment confirmation.
         </Typography>
       )}
       {error && (
-        <Typography variant="body2" color="error">
+        <Typography variant="body2" color="error" sx={{ maxWidth: 450, wordBreak: "break-word" }}>
           {error}
         </Typography>
       )}

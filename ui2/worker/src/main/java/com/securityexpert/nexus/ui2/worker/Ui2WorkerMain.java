@@ -226,6 +226,23 @@ public final class Ui2WorkerMain {
                     paloAltoTrustRuleRef, backupCredentialRef);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));
         }
+
+        com.securityexpert.nexus.ui2.jobs.executor.JobReconciler reconciler =
+                new com.securityexpert.nexus.ui2.jobs.executor.JobReconciler(leaseRepository);
+        java.util.concurrent.ScheduledExecutorService reconcilerExecutor =
+                java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                    Thread t = new Thread(r, "job-reconciler");
+                    t.setDaemon(true);
+                    return t;
+                });
+        reconcilerExecutor.scheduleWithFixedDelay(() -> {
+            try {
+                reconciler.reconcileOnce();
+            } catch (Throwable t) {
+                System.getLogger(Ui2WorkerMain.class.getName())
+                        .log(System.Logger.Level.WARNING, "Periodic job reconciliation error: " + t.getMessage(), t);
+            }
+        }, 10, 30, java.util.concurrent.TimeUnit.SECONDS);
     }
 
     private static String requireEnv(String name) {

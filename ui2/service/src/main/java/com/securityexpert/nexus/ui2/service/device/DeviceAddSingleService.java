@@ -4,11 +4,14 @@ package com.securityexpert.nexus.ui2.service.device;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfirmCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 
 /**
@@ -77,13 +80,47 @@ public final class DeviceAddSingleService {
     private final TransactionBoundary transactionBoundary;
     private final DeviceRegistrationService deviceRegistrationService;
     private final JobAdmissionService jobAdmissionService;
+    private final DeviceRepository deviceRepository;
 
     public DeviceAddSingleService(TransactionBoundary transactionBoundary,
-            DeviceRegistrationService deviceRegistrationService, JobAdmissionService jobAdmissionService) {
+            DeviceRegistrationService deviceRegistrationService, JobAdmissionService jobAdmissionService,
+            DeviceRepository deviceRepository) {
         this.transactionBoundary = Objects.requireNonNull(transactionBoundary, "transactionBoundary");
         this.deviceRegistrationService =
                 Objects.requireNonNull(deviceRegistrationService, "deviceRegistrationService");
         this.jobAdmissionService = Objects.requireNonNull(jobAdmissionService, "jobAdmissionService");
+        this.deviceRepository = deviceRepository;
+    }
+
+    public DeviceAddSingleService(TransactionBoundary transactionBoundary,
+            DeviceRegistrationService deviceRegistrationService, JobAdmissionService jobAdmissionService) {
+        this(transactionBoundary, deviceRegistrationService, jobAdmissionService, null);
+    }
+
+    public Outcome retryConfirm(String deviceId, String actorFingerprint) {
+        if (deviceRepository == null) {
+            throw new IllegalStateException("deviceRepository must be provided to retryConfirm");
+        }
+        Optional<DeviceRecord> deviceOpt = deviceRepository.find(deviceId);
+        if (deviceOpt.isEmpty()) {
+            return new Outcome.ValidationFailed("DEVICE_NOT_FOUND");
+        }
+        DeviceRecord device = deviceOpt.get();
+        if (device.enrollmentState() != com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.DRAFT) {
+            return new Outcome.ValidationFailed("DEVICE_NOT_DRAFT");
+        }
+        VendorMapping mapping = VENDOR_MAPPINGS.get(device.vendorHint());
+        if (mapping == null) {
+            return new Outcome.ValidationFailed(DeviceRegistrationService.REASON_VENDOR_HINT_INVALID);
+        }
+        String idempotencyKey = deviceId + ":confirm:" + UUID.randomUUID();
+        AdmissionResult admission = jobAdmissionService.submit(mapping.capabilityId(), deviceId, idempotencyKey,
+                actorFingerprint, ActionRegistry.DEVICE_REGISTER);
+        return switch (admission) {
+            case AdmissionResult.Admitted admitted -> new Outcome.Admitted(deviceId, admitted.jobId());
+            case AdmissionResult.Deduplicated deduplicated -> new Outcome.Admitted(deviceId, deduplicated.jobId());
+            case AdmissionResult.Refused refused -> new Outcome.AdmissionRefused(refused.code(), refused.reason());
+        };
     }
 
     public Outcome addSingle(String actorFingerprint, String role, String address, String vendor, String credentialReferenceId) {
