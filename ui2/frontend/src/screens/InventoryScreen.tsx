@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
@@ -9,7 +9,7 @@ import { Icon } from "../shell/Icon";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { requestBulkInventoryCollect, listDevices, type ApiError, type DeviceSummary } from "../auth/adminApi";
+import { requestBulkInventoryCollect, listDevices, type ApiError, type DeviceSummary, type ClusterInventory } from "../auth/adminApi";
 import { enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar } from "./InventoryPanels";
@@ -118,6 +118,7 @@ function DeviceList({
   devices,
   selectedDeviceId,
   selectedClusterRef,
+  selectedVs = null,
   clusterOnly = false,
   onSelectDevice,
   onSelectCluster,
@@ -125,9 +126,10 @@ function DeviceList({
   readonly devices: readonly DeviceSummary[];
   readonly selectedDeviceId: string | null;
   readonly selectedClusterRef: string | null;
+  readonly selectedVs?: string | null;
   readonly clusterOnly?: boolean;
   readonly onSelectDevice: (device: DeviceSummary) => void;
-  readonly onSelectCluster: (ref: string, members: DeviceSummary[]) => void;
+  readonly onSelectCluster: (ref: string, members: DeviceSummary[], selectedVs?: string) => void;
 }) {
   const [collapsedRefs, setCollapsedRefs] = useState<ReadonlySet<string>>(new Set());
 
@@ -158,6 +160,14 @@ function DeviceList({
         const isCollapsed = clusterOnly || collapsedRefs.has(ref);
         const firstMember = members[0];
         const isSelected = selectedClusterRef === ref;
+        const clusterVsList = Array.from(
+          new Set(
+            members.flatMap((m) =>
+              m.virtual_systems ? m.virtual_systems.split(/,\s*/) : []
+            )
+          )
+        ).filter(Boolean).sort();
+
         return (
           <Box key={ref} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Box
@@ -191,6 +201,9 @@ function DeviceList({
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>Cluster {ref}</Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                     <StatusChip tone="mem" label={`${members.length} members`} dense />
+                    {clusterVsList.length > 0 && (
+                      <StatusChip tone="neutral" label={`${clusterVsList.length} VS`} dense />
+                    )}
                     {!clusterOnly && (
                       <Box
                         component="span"
@@ -228,6 +241,100 @@ function DeviceList({
                     onSelect={onSelectDevice}
                   />
                 ))}
+                {clusterVsList.length > 0 && (
+                  <Box sx={{ pl: 2.5, display: "flex", flexDirection: "column", gap: 0.75, mt: 0.5 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 700,
+                        color: m3.onSurfaceVar,
+                        fontSize: "0.72rem",
+                        letterSpacing: "0.04em",
+                        textTransform: "uppercase",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.5,
+                      }}
+                    >
+                      <span>Virtual Systems</span>
+                      <Chip
+                        size="small"
+                        label={clusterVsList.length}
+                        sx={{ height: 18, fontSize: "0.65rem", fontWeight: 700, bgcolor: m3.scHigh }}
+                      />
+                    </Typography>
+                    <Stack spacing={0.5}>
+                      {clusterVsList.map((vsName) => {
+                        const isVsSelected = selectedClusterRef === ref && selectedVs === vsName;
+                        return (
+                          <Box
+                            key={vsName}
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCluster(ref, members, vsName);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.stopPropagation();
+                                onSelectCluster(ref, members, vsName);
+                              }
+                            }}
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                              p: 1,
+                              borderRadius: "8px",
+                              bgcolor: isVsSelected ? "#dbeafe" : m3.scLowest,
+                              border: "1px solid",
+                              borderColor: isVsSelected ? m3.primary : m3.outlineVar,
+                              cursor: "pointer",
+                              transition: "all 0.15s ease-in-out",
+                              "&:hover": {
+                                borderColor: m3.primary,
+                                bgcolor: isVsSelected ? "#dbeafe" : "#f0f5ff",
+                                boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+                              },
+                            }}
+                          >
+                            <Chip
+                              label="VS"
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                bgcolor: "#e0e7ff",
+                                color: "#3730a3",
+                                borderRadius: "4px",
+                              }}
+                            />
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: isVsSelected ? 700 : 500,
+                                color: isVsSelected ? m3.primary : m3.onSurface,
+                                flex: 1,
+                                minWidth: 0,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                fontSize: "0.82rem",
+                              }}
+                            >
+                              {vsName}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
+                              VSX
+                            </Typography>
+                          </Box>
+                        );
+                      })}
+                    </Stack>
+                  </Box>
+                )}
               </Stack>
             )}
           </Box>
@@ -251,7 +358,8 @@ export function InventoryScreen() {
     describeApiError,
   );
   const [selectedDevice, setSelectedDevice] = useState<DeviceSummary | null>(null);
-  const [selectedCluster, setSelectedCluster] = useState<{ ref: string; members: DeviceSummary[] } | null>(null);
+  const [selectedCluster, setSelectedCluster] = useState<{ ref: string; members: DeviceSummary[]; initialVs?: string } | null>(null);
+  const clusterCacheRef = useRef<Map<string, ClusterInventory>>(new Map());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -498,13 +606,14 @@ export function InventoryScreen() {
                 devices={filteredDevices}
                 selectedDeviceId={selectedDevice?.device_id ?? null}
                 selectedClusterRef={selectedCluster?.ref ?? null}
+                selectedVs={selectedCluster?.initialVs ?? null}
                 clusterOnly={filterMode === "cluster"}
                 onSelectDevice={(dev) => {
                   setSelectedDevice(dev);
                   setSelectedCluster(null);
                 }}
-                onSelectCluster={(ref, members) => {
-                  setSelectedCluster({ ref, members });
+                onSelectCluster={(ref, members, vsName) => {
+                  setSelectedCluster({ ref, members, initialVs: vsName });
                   setSelectedDevice(null);
                 }}
               />
@@ -518,6 +627,9 @@ export function InventoryScreen() {
                 key={selectedCluster.ref}
                 clusterRef={selectedCluster.ref}
                 members={selectedCluster.members}
+                initialVs={selectedCluster.initialVs}
+                cache={clusterCacheRef.current}
+                onCacheUpdate={(ref, inv) => clusterCacheRef.current.set(ref, inv)}
               />
             ) : selectedDevice ? (
               <DeviceInventoryPanels key={selectedDevice.device_id} device={selectedDevice} />

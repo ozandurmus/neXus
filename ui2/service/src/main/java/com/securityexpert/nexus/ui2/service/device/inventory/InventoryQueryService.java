@@ -70,9 +70,7 @@ public final class InventoryQueryService {
 
     /** 404 when no device carries {@code clusterMemberRef} (WORKER.md "Routes"). */
     public ClusterInventoryOutcome clusterInventory(String clusterMemberRef) {
-        List<DeviceSummaryRecord> members = deviceRepository.listAll().stream()
-                .filter(summary -> summary.clusterMemberRef().equals(Optional.of(clusterMemberRef)))
-                .toList();
+        List<DeviceSummaryRecord> members = deviceRepository.findMembersByClusterRef(clusterMemberRef);
         if (members.isEmpty()) {
             return new ClusterInventoryOutcome.NotFound();
         }

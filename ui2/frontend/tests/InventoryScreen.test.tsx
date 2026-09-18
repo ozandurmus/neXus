@@ -138,6 +138,79 @@ describe("InventoryScreen device list", () => {
     expect(screen.getByText("standalone-c")).toBeInTheDocument();
   });
 
+  it("renders virtual systems under their parent cluster and selects a virtual system context", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/devices") {
+          return Promise.resolve(
+            jsonResponse(200, {
+              devices: [
+                {
+                  device_id: "dev-dmz-1",
+                  vendor_hint: "check_point",
+                  enrollment_state: "ENROLLED",
+                  hostname: "FW-CKP-GARANTIDMZAPP-AA.1",
+                  model: "Quantum",
+                  software_version: "R81.20",
+                  ha_role: "active",
+                  cluster_member_ref: "FW-CKP-GARANTIDMZAPP-CLS-AA",
+                  virtual_systems: "GarantiBetaAA, GarantiPosAppAA",
+                },
+                {
+                  device_id: "dev-dmz-2",
+                  vendor_hint: "check_point",
+                  enrollment_state: "ENROLLED",
+                  hostname: "FW-CKP-GARANTIDMZAPP-AA.2",
+                  model: "Quantum",
+                  software_version: "R81.20",
+                  ha_role: "standby",
+                  cluster_member_ref: "FW-CKP-GARANTIDMZAPP-CLS-AA",
+                  virtual_systems: "GarantiBetaAA, GarantiPosAppAA",
+                },
+              ],
+            }),
+          );
+        }
+        if (url.includes("/clusters/FW-CKP-GARANTIDMZAPP-CLS-AA/inventory")) {
+          return Promise.resolve(
+            jsonResponse(200, {
+              cluster_member_ref: "FW-CKP-GARANTIDMZAPP-CLS-AA",
+              members: [
+                { device_id: "dev-dmz-1", hostname: "FW-CKP-GARANTIDMZAPP-AA.1", ha_role: "active", model: "Quantum", software_version: "R81.20", enrollment_state: "ENROLLED", virtual_systems: "GarantiBetaAA, GarantiPosAppAA" },
+                { device_id: "dev-dmz-2", hostname: "FW-CKP-GARANTIDMZAPP-AA.2", ha_role: "standby", model: "Quantum", software_version: "R81.20", enrollment_state: "ENROLLED", virtual_systems: "GarantiBetaAA, GarantiPosAppAA" },
+              ],
+              contexts: [
+                {
+                  context: "physical",
+                  interfaces: [
+                    { name: "Mgmt", kind: "physical", addresses: [{ address: "10.176.107.91/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
+                  ],
+                  routes: [],
+                },
+              ],
+              virtual_systems: ["GarantiBetaAA", "GarantiPosAppAA"],
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+      }),
+    );
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("Cluster FW-CKP-GARANTIDMZAPP-CLS-AA")).toBeInTheDocument());
+    expect(screen.getByText("2 members")).toBeInTheDocument();
+    expect(screen.getByText("2 VS")).toBeInTheDocument();
+    expect(screen.getByText("GarantiBetaAA")).toBeInTheDocument();
+    expect(screen.getByText("GarantiPosAppAA")).toBeInTheDocument();
+
+    // Clicking the Virtual System selects the cluster and displays the VS details
+    fireEvent.click(screen.getByText("GarantiBetaAA"));
+    await waitFor(() => expect(screen.getByText(/CLS > FW-CKP-GARANTIDMZAPP-CLS-AA/)).toBeInTheDocument());
+    expect(screen.getAllByText("GarantiBetaAA").length).toBeGreaterThanOrEqual(2);
+  });
+
   it("shows an error state with a retry action when the fetch fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network down")));
     render(withTheme(<InventoryScreen />));

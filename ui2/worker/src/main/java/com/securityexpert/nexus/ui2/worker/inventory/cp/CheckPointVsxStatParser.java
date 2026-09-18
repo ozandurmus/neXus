@@ -29,7 +29,7 @@ public final class CheckPointVsxStatParser {
     }
 
     private static final Pattern NOT_SUPPORTED = Pattern.compile("(?i)VSX is not supported on this platform");
-    private static final Pattern DEVICE_ROW = Pattern.compile("^(\\d+)\\s*\\|\\s*([SBRW])\\b");
+    private static final Pattern DEVICE_ROW = Pattern.compile("(?i)^\\s*\\|?\\s*(\\d+)\\s*(?:\\|\\s*|\\s+)([SBRW]|VS|VR|VW|VB)\\b");
 
     private CheckPointVsxStatParser() {
     }

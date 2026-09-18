@@ -92,6 +92,14 @@ public final class InventoryController {
         body.put("cluster_member_ref", found.clusterMemberRef());
         body.put("members", found.members().stream().map(InventoryController::toMemberBody).toList());
         body.put("contexts", found.contexts().stream().map(InventoryController::toMergedContextBody).toList());
+        List<String> clusterVsList = found.members().stream()
+                .map(m -> m.virtualSystems().orElse(""))
+                .filter(s -> !s.isBlank())
+                .flatMap(s -> java.util.Arrays.stream(s.split(",\\s*")))
+                .distinct()
+                .sorted()
+                .toList();
+        body.put("virtual_systems", clusterVsList);
         return ResponseEntity.ok(body);
     }
 
@@ -161,6 +169,7 @@ public final class InventoryController {
         body.put("latest_job_state", member.latestJobState().orElse(null));
         body.put("latest_job_type", member.latestJobType().orElse(null));
         body.put("latest_job_terminal_reason", member.latestJobTerminalReason().orElse(null));
+        body.put("virtual_systems", member.virtualSystems().orElse(null));
         return body;
     }
 

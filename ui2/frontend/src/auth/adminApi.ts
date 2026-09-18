@@ -267,6 +267,7 @@ export interface DeviceSummary {
   readonly latest_job_state?: string | null;
   readonly latest_job_type?: string | null;
   readonly latest_job_terminal_reason?: string | null;
+  readonly virtual_systems?: string | null;
 }
 
 export type DeviceRole = "gateway" | "management_server";
@@ -384,6 +385,7 @@ export interface ClusterMember {
   readonly latest_job_state?: string | null;
   readonly latest_job_type?: string | null;
   readonly latest_job_terminal_reason?: string | null;
+  readonly virtual_systems?: string | null;
 }
 
 /** `"all"` when every member has the row; otherwise the member device ids that do. */
@@ -424,6 +426,7 @@ export interface ClusterInventory {
   readonly cluster_member_ref: string;
   readonly members: ClusterMember[];
   readonly contexts: ClusterContext[];
+  readonly virtual_systems?: readonly string[];
 }
 
 export function getDeviceInventory(deviceId: string): Promise<DeviceInventory> {

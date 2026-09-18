@@ -81,4 +81,11 @@ public interface DeviceRepository {
 
     /** GET /devices (DeviceSummary rows), newest first -- every device, its vendor and its observed facts. */
     List<DeviceSummaryRecord> listAll();
+
+    /** Returns members of a specific cluster (by cluster_member_ref or candidate display name) directly without full scan. */
+    default List<DeviceSummaryRecord> findMembersByClusterRef(String clusterMemberRef) {
+        return listAll().stream()
+                .filter(summary -> summary.clusterMemberRef().equals(Optional.ofNullable(clusterMemberRef)))
+                .toList();
+    }
 }

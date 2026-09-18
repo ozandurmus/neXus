@@ -549,7 +549,8 @@ public final class InventoryCapabilityExecutor {
             case ExecResult.TimedOut ignored -> "";
             case ExecResult.ChannelFailed ignored -> "";
         };
-        if (command.startsWith("cphaprob") && (output.isBlank() || output.contains("not found"))) {
+        if ((command.startsWith("cphaprob") || command.startsWith("vsx") || command.contains("vsx"))
+                && (output.isBlank() || output.contains("not found") || output.contains("CLISH") || output.contains("Unknown command"))) {
             ExecResult fallback = transport.exec(session, new ExecSpec("bash -lc '" + command + "'"), READ_TIMEOUT);
             if (fallback instanceof ExecResult.Completed c && !c.output().isBlank() && !c.output().contains("not found")) {
                 return c.output();

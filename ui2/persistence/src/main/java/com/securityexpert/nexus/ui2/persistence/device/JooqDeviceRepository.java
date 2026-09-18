@@ -30,19 +30,20 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "observed_ha_role, recorded_identity_primary, recorded_identity_secondary, identity_mismatch_state, "
             + "identity_mismatch_presented_primary, identity_mismatch_presented_secondary, cluster_member_ref, "
             + "virtual_system_ref, peer_follow_outcome, peer_follow_reason";
-    private static final String DEVICE_SUMMARY_QUERY =
+    private static final String DEVICE_SUMMARY_SELECT =
             "select d.device_id, d.role, d.vendor_hint, d.enrollment_state, "
             + "coalesce(d.observed_hostname, dc.display_name, ep.address_ref) as observed_hostname, "
             + "coalesce(d.observed_model, dc.model, c_parent.model) as observed_model, "
             + "coalesce(d.observed_software_version, dc.software_version, c_parent.software_version) as observed_software_version, "
             + "d.observed_ha_role, "
             + "coalesce(c_parent.display_name, d.cluster_member_ref, dc.cluster_reference) as cluster_member_ref, "
+            + "vs_info.virtual_systems, "
             + "latest_job.state as latest_job_state, "
             + "latest_job.job_type as latest_job_type, "
             + "latest_job.terminal_reason as latest_job_terminal_reason "
             + "from devices d "
             + "left join lateral ( "
-            + "    select display_name, model, software_version, cluster_reference, parent_candidate_id from discovery_candidate c "
+            + "    select display_name, model, software_version, cluster_reference, parent_candidate_id, candidate_id from discovery_candidate c "
             + "    where (c.vendor || '|' || coalesce(c.owning_domain, '') || '|' || c.stable_identifier) = d.discovery_match_key "
             + "    limit 1 "
             + ") dc on true "
@@ -53,11 +54,21 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "    limit 1 "
             + ") c_parent on true "
             + "left join lateral ( "
+            + "    select string_agg(distinct substring(c_vs.display_name from length(dc.display_name) + 2), ', ' order by substring(c_vs.display_name from length(dc.display_name) + 2)) as virtual_systems "
+            + "    from discovery_candidate c_vs "
+            + "    where dc.display_name is not null and c_vs.display_name like dc.display_name || '_%' "
+            + ") vs_info on true "
+            + "left join lateral ( "
             + "    select address_ref from endpoints ep where ep.device_id = d.device_id order by ep.created_at asc limit 1 "
             + ") ep on true "
             + "left join lateral ( "
             + "    select state, job_type, terminal_reason from jobs j where j.target_device_id = d.device_id order by j.submitted_at desc limit 1 "
-            + ") latest_job on true "
+            + ") latest_job on true ";
+
+    private static final String DEVICE_SUMMARY_QUERY = DEVICE_SUMMARY_SELECT + "order by d.created_at desc, d.device_id";
+
+    private static final String FIND_MEMBERS_BY_CLUSTER_QUERY = DEVICE_SUMMARY_SELECT
+            + "where coalesce(c_parent.display_name, d.cluster_member_ref, dc.cluster_reference) = {0} "
             + "order by d.created_at desc, d.device_id";
 
     private final TransactionBoundary transactionBoundary;
@@ -202,6 +213,17 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 .toList());
     }
 
+    @Override
+    public List<DeviceSummaryRecord> findMembersByClusterRef(String clusterMemberRef) {
+        if (clusterMemberRef == null || clusterMemberRef.isBlank()) {
+            return List.of();
+        }
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(FIND_MEMBERS_BY_CLUSTER_QUERY, clusterMemberRef)
+                .stream()
+                .map(JooqDeviceRepository::toSummaryRecord)
+                .toList());
+    }
+
     private static DeviceRecord toDeviceRecord(Record row) {
         return new DeviceRecord(
                 row.get("device_id", String.class),
@@ -245,7 +267,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 Optional.ofNullable(row.get("cluster_member_ref", String.class)),
                 Optional.ofNullable(row.get("latest_job_state", String.class)),
                 Optional.ofNullable(row.get("latest_job_type", String.class)),
-                Optional.ofNullable(row.get("latest_job_terminal_reason", String.class)));
+                Optional.ofNullable(row.get("latest_job_terminal_reason", String.class)),
+                Optional.ofNullable(row.get("virtual_systems", String.class)));
     }
 
     private static EndpointRecord toEndpointRecord(Record row) {

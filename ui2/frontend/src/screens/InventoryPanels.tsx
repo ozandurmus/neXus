@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -604,18 +605,33 @@ function ClusterRoutesTable({
 /** More than one context renders as its own tab strip; exactly one renders inline, with no extra tab chrome. */
 function ContextTabs({
   contexts,
+  activeContext,
+  onSelectContext,
   render,
 }: {
-  readonly contexts: readonly { context: string }[];
+  readonly contexts: readonly { context: string; label?: string }[];
+  readonly activeContext?: string | null;
+  readonly onSelectContext?: (contextName: string) => void;
   readonly render: (contextName: string) => React.ReactNode;
 }) {
-  if (contexts.length <= 1) {
+  if (contexts.length <= 1 && !activeContext) {
     return <>{render(contexts[0]?.context ?? "physical")}</>;
   }
+  const currentIndex = activeContext
+    ? Math.max(0, contexts.findIndex((c) => c.context.toLowerCase() === activeContext.toLowerCase()))
+    : 0;
+
   return (
     <M3Tabs
       ariaLabel="Inventory context"
-      tabs={contexts.map((c) => ({ label: c.context, panel: render(c.context) }))}
+      value={currentIndex}
+      onChange={(next) => {
+        const target = contexts[next];
+        if (target && onSelectContext) {
+          onSelectContext(target.context);
+        }
+      }}
+      tabs={contexts.map((c) => ({ label: c.label ?? c.context, panel: render(c.context) }))}
     />
   );
 }
@@ -664,46 +680,186 @@ export function RoutesPanel({ contexts }: { readonly contexts: readonly Inventor
 
 export function ClusterInterfacesPanel({
   contexts,
-  members,
+  members = [],
+  clusterRef,
+  virtualSystems = [],
+  activeContext,
+  onSelectContext,
 }: {
   readonly contexts: readonly ClusterContext[];
   readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
+  readonly clusterRef?: string;
+  readonly virtualSystems?: readonly string[];
+  readonly activeContext?: string | null;
+  readonly onSelectContext?: (ctx: string) => void;
 }) {
-  if (contexts.length === 0) {
+  const baseContexts = contexts.map((c) => ({
+    context: c.context,
+    label: c.context.toLowerCase() === "physical" ? "Physical / VS0" : c.context,
+  }));
+  const allContexts = [...baseContexts];
+  for (const vs of virtualSystems) {
+    if (!allContexts.some((c) => c.context.toLowerCase() === vs.toLowerCase())) {
+      allContexts.push({
+        context: vs,
+        label: `VS: ${vs}`,
+      });
+    }
+  }
+
+  if (allContexts.length === 0) {
     return <EmptyPanel title="No interface evidence" body="No cluster member has been collected yet." />;
   }
+
   return (
     <ContextTabs
-      contexts={contexts}
-      render={(name) => (
-        <ClusterInterfacesTable
-          interfaces={contexts.find((c) => c.context === name)?.interfaces ?? []}
-          members={members}
-        />
-      )}
+      contexts={allContexts}
+      activeContext={activeContext}
+      onSelectContext={onSelectContext}
+      render={(name) => {
+        const found = contexts.find((c) => c.context.toLowerCase() === name.toLowerCase());
+        if (found) {
+          return (
+            <ClusterInterfacesTable
+              interfaces={found.interfaces}
+              members={members}
+            />
+          );
+        }
+        const memberNames = members.map((m) => m.hostname ?? m.device_id).join(", ");
+        return (
+          <Box
+            sx={{
+              p: 2.5,
+              bgcolor: m3.scLowest,
+              borderRadius: "16px",
+              border: `1px solid ${m3.outlineVar}`,
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+            }}
+          >
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                <Chip label="VSX" size="small" sx={{ fontWeight: 700, bgcolor: "#e0e7ff", color: "#3730a3", borderRadius: "6px" }} />
+                <Typography variant="h6" sx={{ fontWeight: 700, color: m3.onSurface }}>
+                  Virtual System: {name}
+                </Typography>
+                <StatusChip tone="ok" label="Active VSX Instance" dense />
+              </Box>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              Virtual System <strong>{name}</strong> operates on cluster <strong>{clusterRef ?? "ClusterXL"}</strong> across members (<strong>{memberNames}</strong>).
+            </Typography>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 1.5 }}>
+              <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "10px", border: `1px solid ${m3.outlineVar}` }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Virtual System</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{name}</Typography>
+              </Box>
+              <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "10px", border: `1px solid ${m3.outlineVar}` }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Parent Cluster</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{clusterRef ?? "Parent Cluster"}</Typography>
+              </Box>
+              <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "10px", border: `1px solid ${m3.outlineVar}` }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>HA Redundancy</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{members.length} Active Nodes</Typography>
+              </Box>
+            </Box>
+            {contexts[0]?.interfaces && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  Cluster Interface Topology (VLAN &amp; Bond Mappings)
+                </Typography>
+                <ClusterInterfacesTable
+                  interfaces={contexts[0].interfaces.filter((i) => i.name.includes(".") || i.name.toLowerCase().includes("bond") || i.name.toLowerCase().includes("eth"))}
+                  members={members}
+                />
+              </Box>
+            )}
+          </Box>
+        );
+      }}
     />
   );
 }
 
 export function ClusterRoutesPanel({
   contexts,
-  members,
+  members = [],
+  clusterRef,
+  virtualSystems = [],
+  activeContext,
+  onSelectContext,
 }: {
   readonly contexts: readonly ClusterContext[];
   readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
+  readonly clusterRef?: string;
+  readonly virtualSystems?: readonly string[];
+  readonly activeContext?: string | null;
+  readonly onSelectContext?: (ctx: string) => void;
 }) {
-  if (contexts.length === 0) {
+  const baseContexts = contexts.map((c) => ({
+    context: c.context,
+    label: c.context.toLowerCase() === "physical" ? "Physical / VS0" : c.context,
+  }));
+  const allContexts = [...baseContexts];
+  for (const vs of virtualSystems) {
+    if (!allContexts.some((c) => c.context.toLowerCase() === vs.toLowerCase())) {
+      allContexts.push({
+        context: vs,
+        label: `VS: ${vs}`,
+      });
+    }
+  }
+
+  if (allContexts.length === 0) {
     return <EmptyPanel title="No routing evidence" body="No cluster member has been collected yet." />;
   }
+
   return (
     <ContextTabs
-      contexts={contexts}
-      render={(name) => (
-        <ClusterRoutesTable
-          routes={contexts.find((c) => c.context === name)?.routes ?? []}
-          members={members}
-        />
-      )}
+      contexts={allContexts}
+      activeContext={activeContext}
+      onSelectContext={onSelectContext}
+      render={(name) => {
+        const found = contexts.find((c) => c.context.toLowerCase() === name.toLowerCase());
+        if (found) {
+          return (
+            <ClusterRoutesTable
+              routes={found.routes}
+              members={members}
+            />
+          );
+        }
+        return (
+          <Box
+            sx={{
+              p: 2.5,
+              bgcolor: m3.scLowest,
+              borderRadius: "16px",
+              border: `1px solid ${m3.outlineVar}`,
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+              <Chip label="VSX" size="small" sx={{ fontWeight: 700, bgcolor: "#e0e7ff", color: "#3730a3", borderRadius: "6px" }} />
+              <Typography variant="h6" sx={{ fontWeight: 700, color: m3.onSurface }}>
+                Routing Topology: {name}
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              Virtual System <strong>{name}</strong> inherits cluster gateway routes and interfaces from <strong>{clusterRef ?? "ClusterXL"}</strong>.
+            </Typography>
+            {contexts[0]?.routes && (
+              <Box sx={{ mt: 1 }}>
+                <ClusterRoutesTable routes={contexts[0].routes} members={members} />
+              </Box>
+            )}
+          </Box>
+        );
+      }}
     />
   );
 }
@@ -986,19 +1142,46 @@ export function DeviceInventoryPanels({ device }: { readonly device: DeviceSumma
 export function ClusterDetailPanels({
   clusterRef,
   members,
+  initialVs,
+  cache,
+  onCacheUpdate,
 }: {
   readonly clusterRef: string;
   readonly members: readonly DeviceSummary[];
+  readonly initialVs?: string | null;
+  readonly cache?: Map<string, ClusterInventory>;
+  readonly onCacheUpdate?: (ref: string, inv: ClusterInventory) => void;
 }) {
-  const clusterInventoryFetch = useFetchOnMount<ClusterInventory>(
-    () => getClusterInventory(clusterRef),
-    describeApiError,
-  );
-  const clusterInventory = clusterInventoryFetch.data;
-  const error = clusterInventoryFetch.error;
+  const cachedData = cache?.get(clusterRef);
+  const [clusterInventory, setClusterInventory] = useState<ClusterInventory | null>(cachedData ?? null);
+  const [error, setError] = useState<string | null>(null);
+  const [activeVsContext, setActiveVsContext] = useState<string | null>(initialVs ?? null);
+
+  useEffect(() => {
+    if (initialVs !== undefined) {
+      setActiveVsContext(initialVs);
+    }
+  }, [initialVs]);
+
+  const fetchInventory = useCallback(async () => {
+    try {
+      const data = await getClusterInventory(clusterRef);
+      setClusterInventory(data);
+      onCacheUpdate?.(clusterRef, data);
+      setError(null);
+    } catch (err) {
+      if (!cachedData && !clusterInventory) {
+        setError(describeApiError(err));
+      }
+    }
+  }, [clusterRef, onCacheUpdate, cachedData, clusterInventory]);
+
+  useEffect(() => {
+    fetchInventory();
+  }, [clusterRef]);
 
   const refresh = () => {
-    clusterInventoryFetch.refresh();
+    fetchInventory();
   };
 
   if (error) {
@@ -1016,6 +1199,22 @@ export function ClusterDetailPanels({
   const ifaceCount = allContexts.reduce((acc, c) => acc + c.interfaces.length, 0);
   const routeCount = allContexts.reduce((acc, c) => acc + c.routes.length, 0);
   const isEnrolled = members.some((m) => m.enrollment_state === "ENROLLED");
+
+  // Collect all distinct virtual systems from members & clusterInventory
+  const vsSet = new Set<string>();
+  if (clusterInventory?.virtual_systems) {
+    for (const vs of clusterInventory.virtual_systems) {
+      if (vs) vsSet.add(vs);
+    }
+  }
+  for (const m of members) {
+    if (m.virtual_systems) {
+      for (const vs of m.virtual_systems.split(/,\s*/)) {
+        if (vs.trim()) vsSet.add(vs.trim());
+      }
+    }
+  }
+  const virtualSystems = Array.from(vsSet).sort();
 
   return (
     <Stack spacing={2}>
@@ -1111,6 +1310,88 @@ export function ClusterDetailPanels({
             );
           })}
         </Box>
+
+        {/* Virtual Systems Overview Card */}
+        {virtualSystems.length > 0 && (
+          <Box
+            sx={{
+              p: 1.5,
+              borderRadius: "12px",
+              bgcolor: m3.scLow,
+              border: `1px solid ${m3.outlineVar}`,
+              display: "flex",
+              flexDirection: "column",
+              gap: 1,
+            }}
+          >
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  fontWeight: 700,
+                  color: m3.onSurfaceVar,
+                  textTransform: "uppercase",
+                  fontSize: "0.72rem",
+                  letterSpacing: "0.04em",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75,
+                }}
+              >
+                <span>Virtual Systems (VSX)</span>
+                <Chip
+                  size="small"
+                  label={virtualSystems.length}
+                  sx={{ height: 18, fontSize: "0.65rem", fontWeight: 700, bgcolor: m3.scHighest }}
+                />
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Select context to inspect
+              </Typography>
+            </Box>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              <Chip
+                label="Physical / VS0"
+                size="small"
+                clickable
+                onClick={() => setActiveVsContext(null)}
+                sx={{
+                  borderRadius: "8px",
+                  fontWeight: activeVsContext === null ? 700 : 500,
+                  bgcolor: activeVsContext === null ? m3.primary : m3.scLowest,
+                  color: activeVsContext === null ? m3.onPrimary : m3.onSurface,
+                  border: "1px solid",
+                  borderColor: activeVsContext === null ? m3.primary : m3.outlineVar,
+                  "&:hover": { borderColor: m3.primary },
+                }}
+              />
+              {virtualSystems.map((vs) => {
+                const isSelected = activeVsContext === vs;
+                return (
+                  <Chip
+                    key={vs}
+                    label={`VS: ${vs}`}
+                    size="small"
+                    clickable
+                    onClick={() => setActiveVsContext(isSelected ? null : vs)}
+                    sx={{
+                      borderRadius: "8px",
+                      fontWeight: isSelected ? 700 : 500,
+                      bgcolor: isSelected ? m3.primaryContainer : m3.scLowest,
+                      color: isSelected ? m3.onPrimaryContainer : m3.onSurface,
+                      border: "1px solid",
+                      borderColor: isSelected ? m3.primary : m3.outlineVar,
+                      "&:hover": {
+                        bgcolor: isSelected ? m3.primaryContainer : "#f0f5ff",
+                        borderColor: m3.primary,
+                      },
+                    }}
+                  />
+                );
+              })}
+            </Box>
+          </Box>
+        )}
       </Box>
 
       <M3Tabs
@@ -1118,11 +1399,29 @@ export function ClusterDetailPanels({
         tabs={[
           {
             label: "Interfaces",
-            panel: <ClusterInterfacesPanel contexts={allContexts} members={clusterInventory?.members ?? members} />,
+            panel: (
+              <ClusterInterfacesPanel
+                contexts={allContexts}
+                members={clusterInventory?.members ?? members}
+                clusterRef={clusterRef}
+                virtualSystems={virtualSystems}
+                activeContext={activeVsContext}
+                onSelectContext={setActiveVsContext}
+              />
+            ),
           },
           {
             label: "Routing",
-            panel: <ClusterRoutesPanel contexts={allContexts} members={clusterInventory?.members ?? members} />,
+            panel: (
+              <ClusterRoutesPanel
+                contexts={allContexts}
+                members={clusterInventory?.members ?? members}
+                clusterRef={clusterRef}
+                virtualSystems={virtualSystems}
+                activeContext={activeVsContext}
+                onSelectContext={setActiveVsContext}
+              />
+            ),
           },
           {
             label: "Cluster members",

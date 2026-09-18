@@ -121,20 +121,31 @@ export function M3Tabs({
   tabs,
   ariaLabel,
   initial = 0,
+  value: controlledValue,
+  onChange: onControlledChange,
 }: {
   readonly tabs: readonly M3TabDef[];
   readonly ariaLabel: string;
   readonly initial?: number;
+  readonly value?: number;
+  readonly onChange?: (next: number) => void;
 }) {
-  const [value, setValue] = useState(initial);
+  const [internalValue, setInternalValue] = useState(initial);
+  const value = controlledValue !== undefined ? controlledValue : internalValue;
   const slug = ariaLabel.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
   const panelId = `${slug}-panel`;
   const tabId = (index: number) => `${slug}-tab-${index}`;
+  const safeValue = value >= 0 && value < tabs.length ? value : 0;
   return (
     <>
       <Tabs
-        value={value}
-        onChange={(_event, next: number) => setValue(next)}
+        value={safeValue}
+        onChange={(_event, next: number) => {
+          if (controlledValue === undefined) {
+            setInternalValue(next);
+          }
+          onControlledChange?.(next);
+        }}
         aria-label={ariaLabel}
         variant="scrollable"
         scrollButtons={false}

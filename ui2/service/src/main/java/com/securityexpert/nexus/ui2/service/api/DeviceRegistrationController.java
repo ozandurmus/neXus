@@ -177,6 +177,7 @@ public final class DeviceRegistrationController {
         body.put("latest_job_state", summary.latestJobState().orElse(null));
         body.put("latest_job_type", summary.latestJobType().orElse(null));
         body.put("latest_job_terminal_reason", summary.latestJobTerminalReason().orElse(null));
+        body.put("virtual_systems", summary.virtualSystems().orElse(null));
         return body;
     }
 }
