@@ -149,13 +149,41 @@ public final class JooqDeviceRepository implements DeviceRepository {
             dsl.execute("delete from job_step_attempt where job_id in (select job_id from jobs where target_device_id = {0})", deviceId);
             dsl.execute("delete from job_steps where job_id in (select job_id from jobs where target_device_id = {0})", deviceId);
             dsl.execute("delete from job_reconciliation where job_id in (select job_id from jobs where target_device_id = {0})", deviceId);
-            dsl.execute("delete from device_configuration_run where device_id = {0}", deviceId);
+
+            dsl.execute("delete from device_interface_address where interface_id in ("
+                    + "select interface_id from device_interface where run_id in ("
+                    + "select run_id from device_inventory_run where device_id = {0}))", deviceId);
+            dsl.execute("delete from device_interface where run_id in ("
+                    + "select run_id from device_inventory_run where device_id = {0})", deviceId);
+            dsl.execute("delete from device_route where run_id in ("
+                    + "select run_id from device_inventory_run where device_id = {0})", deviceId);
+            dsl.execute("delete from device_inventory_ha where run_id in ("
+                    + "select run_id from device_inventory_run where device_id = {0})", deviceId);
             dsl.execute("delete from device_inventory_run where device_id = {0}", deviceId);
+
+            dsl.execute("delete from configuration_run_deviation_entry where summary_id in ("
+                    + "select summary_id from configuration_run_deviation_summary where run_id in ("
+                    + "select run_id from device_configuration_run where device_id = {0}))", deviceId);
+            dsl.execute("delete from configuration_run_deviation_summary where run_id in ("
+                    + "select run_id from device_configuration_run where device_id = {0})", deviceId);
+            dsl.execute("delete from device_configuration_index where run_id in ("
+                    + "select run_id from device_configuration_run where device_id = {0})", deviceId);
+            dsl.execute("delete from device_configuration_override where run_id in ("
+                    + "select run_id from device_configuration_run where device_id = {0})", deviceId);
+            dsl.execute("delete from configuration_notification where device_id = {0} or run_id in ("
+                    + "select run_id from device_configuration_run where device_id = {0})", deviceId);
+            dsl.execute("delete from device_configuration_run where device_id = {0}", deviceId);
+
             dsl.execute("delete from configuration_artefact where device_id = {0}", deviceId);
-            dsl.execute("delete from cp_inventory_projection where device_id = {0}", deviceId);
-            dsl.execute("delete from configuration_notification where device_id = {0}", deviceId);
+
+            dsl.execute("delete from artefact_retention_ledger where artefact_id in ("
+                    + "select artefact_id from backup_artefact where device_id = {0})", deviceId);
+            dsl.execute("delete from backup_artefact_retrieval where artefact_id in ("
+                    + "select artefact_id from backup_artefact where device_id = {0})", deviceId);
             dsl.execute("delete from backup_artefact where device_id = {0}", deviceId);
             dsl.execute("delete from backup_endpoint_ineligibility where device_id = {0}", deviceId);
+
+            dsl.execute("delete from cp_inventory_projection where device_id = {0}", deviceId);
             dsl.execute("delete from jobs where target_device_id = {0}", deviceId);
             dsl.execute("delete from endpoints where device_id = {0}", deviceId);
             return dsl.execute("delete from devices where device_id = {0}", deviceId) == 1;
