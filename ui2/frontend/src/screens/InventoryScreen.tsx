@@ -131,6 +131,7 @@ function DeviceList({
   readonly onSelectDevice: (device: DeviceSummary) => void;
   readonly onSelectCluster: (ref: string, members: DeviceSummary[], selectedVs?: string) => void;
 }) {
+  const [expandedRefs, setExpandedRefs] = useState<ReadonlySet<string>>(new Set());
   const [collapsedRefs, setCollapsedRefs] = useState<ReadonlySet<string>>(new Set());
 
   const groups = new Map<string, DeviceSummary[]>();
@@ -146,18 +147,27 @@ function DeviceList({
   }
 
   const toggle = (ref: string) => {
-    setCollapsedRefs((prev) => {
-      const next = new Set(prev);
-      if (next.has(ref)) next.delete(ref);
-      else next.add(ref);
-      return next;
-    });
+    if (clusterOnly) {
+      setExpandedRefs((prev) => {
+        const next = new Set(prev);
+        if (next.has(ref)) next.delete(ref);
+        else next.add(ref);
+        return next;
+      });
+    } else {
+      setCollapsedRefs((prev) => {
+        const next = new Set(prev);
+        if (next.has(ref)) next.delete(ref);
+        else next.add(ref);
+        return next;
+      });
+    }
   };
 
   return (
     <Stack spacing={1.25}>
       {[...groups.entries()].map(([ref, members]) => {
-        const isCollapsed = clusterOnly || collapsedRefs.has(ref);
+        const isCollapsed = clusterOnly ? !expandedRefs.has(ref) : collapsedRefs.has(ref);
         const firstMember = members[0];
         const isSelected = selectedClusterRef === ref;
         const clusterVsList = Array.from(
@@ -173,9 +183,19 @@ function DeviceList({
             <Box
               role="button"
               tabIndex={0}
-              onClick={() => onSelectCluster(ref, members)}
+              onClick={() => {
+                if (clusterOnly) {
+                  setExpandedRefs((prev) => new Set(prev).add(ref));
+                }
+                onSelectCluster(ref, members);
+              }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") onSelectCluster(ref, members);
+                if (e.key === "Enter" || e.key === " ") {
+                  if (clusterOnly) {
+                    setExpandedRefs((prev) => new Set(prev).add(ref));
+                  }
+                  onSelectCluster(ref, members);
+                }
               }}
               sx={{
                 display: "flex",
@@ -204,25 +224,23 @@ function DeviceList({
                     {clusterVsList.length > 0 && (
                       <StatusChip tone="neutral" label={`${clusterVsList.length} VS`} dense />
                     )}
-                    {!clusterOnly && (
-                      <Box
-                        component="span"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggle(ref);
-                        }}
-                        sx={{
-                          cursor: "pointer",
-                          px: 0.5,
-                          color: "text.secondary",
-                          fontSize: "0.875rem",
-                          "&:hover": { color: m3.primary },
-                        }}
-                        title={isCollapsed ? "Expand members" : "Collapse members"}
-                      >
-                        {isCollapsed ? "▼" : "▲"}
-                      </Box>
-                    )}
+                    <Box
+                      component="span"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggle(ref);
+                      }}
+                      sx={{
+                        cursor: "pointer",
+                        px: 0.5,
+                        color: "text.secondary",
+                        fontSize: "0.875rem",
+                        "&:hover": { color: m3.primary },
+                      }}
+                      title={isCollapsed ? "Expand members & virtual systems" : "Collapse members"}
+                    >
+                      {isCollapsed ? "▼" : "▲"}
+                    </Box>
                   </Box>
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
