@@ -68,7 +68,7 @@ export function MetricGrid({ children }: { readonly children: ReactNode }) {
 /** The canvas's list-plus-detail split (Inventory, Configuration, Administration). */
 export function ListDetail({ list, detail }: { readonly list: ReactNode; readonly detail: ReactNode }) {
   return (
-    <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(280px, 352px) minmax(0, 1fr)", gap: 2 }}>
+    <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(280px, 352px) minmax(0, 1fr)", gap: 2, alignItems: "start" }}>
       {list}
       {detail}
     </Box>

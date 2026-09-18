@@ -256,6 +256,7 @@ export interface DeviceDetail {
 
 export interface DeviceSummary {
   readonly device_id: string;
+  readonly role?: string;
   readonly vendor_hint: string;
   readonly enrollment_state: string;
   readonly hostname: string | null;
@@ -263,6 +264,9 @@ export interface DeviceSummary {
   readonly software_version: string | null;
   readonly ha_role: string | null;
   readonly cluster_member_ref: string | null;
+  readonly latest_job_state?: string | null;
+  readonly latest_job_type?: string | null;
+  readonly latest_job_terminal_reason?: string | null;
 }
 
 export type DeviceRole = "gateway" | "management_server";
@@ -377,6 +381,9 @@ export interface DeviceInventory {
 export interface ClusterMember {
   readonly device_id: string;
   readonly hostname: string | null;
+  readonly latest_job_state?: string | null;
+  readonly latest_job_type?: string | null;
+  readonly latest_job_terminal_reason?: string | null;
 }
 
 /** `"all"` when every member has the row; otherwise the member device ids that do. */

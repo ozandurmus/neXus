@@ -12,6 +12,8 @@ import Typography from "@mui/material/Typography";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { jobPhaseLabel, isTerminalJobState } from "../shell/deviceCopy";
+import { m3 } from "../theme/m3Theme";
+import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import {
   getDevice,
   getDeviceInventory,
@@ -326,9 +328,30 @@ export function ClusterRoutesPanel({ contexts }: { readonly contexts: readonly C
 /** WORKER.md "Frontend": "a chip naming the members" -- the cluster row's own membership marker. */
 export function ClusterMembersMarker({ inventory }: { readonly inventory: ClusterInventory }) {
   return (
-    <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+    <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1, alignItems: "center" }}>
       {inventory.members.map((member) => (
-        <StatusChip key={member.device_id} tone="mem" label={member.hostname ?? member.device_id} dense />
+        <Box
+          key={member.device_id}
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 0.75,
+            px: 1,
+            py: 0.25,
+            borderRadius: "8px",
+            bgcolor: m3.memberContainer,
+            color: m3.onMemberContainer,
+          }}
+        >
+          <Typography variant="caption" sx={{ fontWeight: 600 }}>
+            {member.hostname ?? member.device_id}
+          </Typography>
+          <JobStatusIndicator
+            state={member.latest_job_state}
+            type={member.latest_job_type}
+            terminalReason={member.latest_job_terminal_reason}
+          />
+        </Box>
       ))}
     </Stack>
   );
@@ -452,11 +475,52 @@ export function DeviceInventoryPanels({ device }: { readonly device: DeviceSumma
   }
 
   return (
-    <Stack spacing={1.5}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
-        {isCluster && clusterInventory ? <ClusterMembersMarker inventory={clusterInventory} /> : <Box />}
-        <CollectNowButton deviceId={device.device_id} onCollected={refresh} enrollmentState={device.enrollment_state} />
+    <Stack spacing={2}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <Typography variant="caption" color="text.secondary">
+          Devices · {device.vendor_hint === "check_point" ? "Check Point" : "Palo Alto"}
+          {device.cluster_member_ref ? ` ClusterXL (${device.cluster_member_ref})` : ""}
+        </Typography>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="h3" sx={{ fontWeight: 600 }}>
+                {device.hostname ?? device.device_id}
+              </Typography>
+              <JobStatusIndicator
+                state={device.latest_job_state}
+                type={device.latest_job_type}
+                terminalReason={device.latest_job_terminal_reason}
+                size="medium"
+              />
+            </Box>
+            {isCluster && clusterInventory && clusterInventory.members.length > 0 ? (
+              <Typography variant="caption" color="text.secondary">
+                Members: {clusterInventory.members.map((m) => m.hostname ?? m.device_id).join(" · ")}
+              </Typography>
+            ) : null}
+          </Box>
+          <CollectNowButton deviceId={device.device_id} onCollected={refresh} enrollmentState={device.enrollment_state} />
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", pt: 0.5 }}>
+          <StatusChip
+            tone={device.enrollment_state === "ENROLLED" ? "ok" : "warn"}
+            label={device.enrollment_state === "ENROLLED" ? "✓ Live" : device.enrollment_state}
+            dense
+          />
+          <StatusChip tone="ok" label="✓ Identity verified" dense />
+          {device.software_version && (
+            <StatusChip tone="neutral" label={`${device.software_version} · Gaia`} dense />
+          )}
+          {device.model && (
+            <StatusChip tone="neutral" label={device.model} dense />
+          )}
+          {isCluster && clusterInventory && (
+            <ClusterMembersMarker inventory={clusterInventory} />
+          )}
+        </Box>
       </Box>
+
       <M3Tabs
         ariaLabel="Device detail"
         tabs={[
@@ -475,7 +539,40 @@ export function DeviceInventoryPanels({ device }: { readonly device: DeviceSumma
           {
             label: "Cluster members",
             panel: isCluster && clusterInventory
-              ? <ClusterMembersMarker inventory={clusterInventory} />
+              ? (
+                <Stack spacing={2}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Hostname / Member</TableCell>
+                        <TableCell>Device ID</TableCell>
+                        <TableCell>Latest Job Status</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {clusterInventory.members.map((member) => (
+                        <TableRow key={member.device_id}>
+                          <TableCell sx={{ fontWeight: 500 }}>{member.hostname ?? member.device_id}</TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{member.device_id}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              <JobStatusIndicator
+                                state={member.latest_job_state}
+                                type={member.latest_job_type}
+                                terminalReason={member.latest_job_terminal_reason}
+                              />
+                              <Typography variant="caption">
+                                {member.latest_job_state ?? "No recent jobs"}
+                                {member.latest_job_terminal_reason ? ` (${member.latest_job_terminal_reason})` : ""}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Stack>
+              )
               : (
                 <EmptyPanel
                   title="No cluster membership evidence"

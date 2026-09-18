@@ -19,5 +19,33 @@ public record DeviceSummaryRecord(
         Optional<String> observedModel,
         Optional<String> observedSoftwareVersion,
         Optional<String> observedHaRole,
-        Optional<String> clusterMemberRef) {
+        Optional<String> clusterMemberRef,
+        Optional<String> latestJobState,
+        Optional<String> latestJobType,
+        Optional<String> latestJobTerminalReason) {
+
+    public DeviceSummaryRecord(
+            String deviceId,
+            String role,
+            String vendorHint,
+            DeviceEnrollmentState enrollmentState,
+            Optional<String> observedHostname,
+            Optional<String> observedModel,
+            Optional<String> observedSoftwareVersion,
+            Optional<String> observedHaRole,
+            Optional<String> clusterMemberRef) {
+        this(
+                deviceId,
+                role,
+                vendorHint,
+                enrollmentState,
+                observedHostname,
+                observedModel,
+                observedSoftwareVersion,
+                observedHaRole,
+                clusterMemberRef,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty());
+    }
 }

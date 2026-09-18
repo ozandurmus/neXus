@@ -174,6 +174,9 @@ public final class DeviceRegistrationController {
         body.put("software_version", summary.observedSoftwareVersion().orElse(null));
         body.put("ha_role", summary.observedHaRole().orElse(null));
         body.put("cluster_member_ref", summary.clusterMemberRef().orElse(null));
+        body.put("latest_job_state", summary.latestJobState().orElse(null));
+        body.put("latest_job_type", summary.latestJobType().orElse(null));
+        body.put("latest_job_terminal_reason", summary.latestJobTerminalReason().orElse(null));
         return body;
     }
 }

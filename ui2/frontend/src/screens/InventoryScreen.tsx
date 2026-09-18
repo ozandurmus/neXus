@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
@@ -10,6 +11,7 @@ import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { requestBulkInventoryCollect, listDevices, type ApiError, type DeviceSummary } from "../auth/adminApi";
 import { enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
+import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import { DeviceInventoryPanels } from "./InventoryPanels";
 
 function describeApiError(err: unknown): string {
@@ -28,6 +30,57 @@ function vendorLabel(vendorHint: string): string {
   return VENDOR_LABEL[vendorHint] ?? vendorHint;
 }
 
+function VendorAvatar({
+  vendorHint,
+  model,
+  hostname,
+}: {
+  readonly vendorHint: string;
+  readonly model?: string | null;
+  readonly hostname?: string | null;
+}) {
+  let label = "DEV";
+  let bg: string = m3.outline;
+
+  const isVsx =
+    (model && model.toUpperCase().includes("VSX")) ||
+    (hostname && hostname.toUpperCase().includes("VSX"));
+
+  if (vendorHint === "check_point") {
+    if (isVsx) {
+      label = "VSX";
+      bg = m3.vsx;
+    } else {
+      label = "CP";
+      bg = m3.cp;
+    }
+  } else if (vendorHint === "palo_alto") {
+    label = "PAN";
+    bg = m3.pan;
+  }
+
+  return (
+    <Box
+      sx={{
+        width: 32,
+        height: 32,
+        borderRadius: "8px",
+        bgcolor: bg,
+        color: "#ffffff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: 700,
+        fontSize: 11,
+        letterSpacing: 0.5,
+        flexShrink: 0,
+      }}
+    >
+      {label}
+    </Box>
+  );
+}
+
 function DeviceRow({
   device,
   indented = false,
@@ -39,6 +92,8 @@ function DeviceRow({
   readonly selected?: boolean;
   readonly onSelect?: (device: DeviceSummary) => void;
 }) {
+  const isEnrolled = device.enrollment_state === "ENROLLED";
+
   return (
     <Box
       role={onSelect ? "button" : undefined}
@@ -53,36 +108,63 @@ function DeviceRow({
       }
       sx={{
         display: "flex",
-        flexDirection: "column",
-        gap: 0.25,
+        alignItems: "flex-start",
+        gap: 1.25,
         p: 1.25,
-        ml: indented ? 3 : 0,
+        ml: indented ? 2.5 : 0,
+        bgcolor: selected ? "#f0f5ff" : m3.scLowest,
         border: "1px solid",
-        borderColor: selected ? m3.primary : "divider",
-        borderRadius: 2,
+        borderColor: selected ? m3.primary : m3.outlineVar,
+        borderRadius: "12px",
         cursor: onSelect ? "pointer" : undefined,
+        transition: "all 0.15s ease-in-out",
+        "&:hover": {
+          borderColor: m3.primary,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+        },
       }}
     >
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-        <Typography variant="body2" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {device.hostname ?? device.device_id ?? "Unknown"}
+      <VendorAvatar vendorHint={device.vendor_hint} model={device.model} hostname={device.hostname} />
+
+      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.5 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 600,
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                color: m3.onSurface,
+              }}
+            >
+              {device.hostname ?? device.device_id ?? "Unknown"}
+            </Typography>
+            <JobStatusIndicator
+              state={device.latest_job_state}
+              type={device.latest_job_type}
+              terminalReason={device.latest_job_terminal_reason}
+            />
+          </Box>
+          <StatusChip
+            tone={enrollmentStateTone(device.enrollment_state)}
+            label={isEnrolled ? "Live" : enrollmentStateLabel(device.enrollment_state)}
+            dense
+          />
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {device.role === "management_server" ? "Management server" : vendorLabel(device.vendor_hint)}
+          {device.model ? ` · ${device.model}` : " · Unknown model"}
+          {device.software_version ? ` · ${device.software_version}` : " · Unknown version"}
+          {device.ha_role ? ` · ${device.ha_role}` : " · No HA role"}
         </Typography>
-        <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />
       </Box>
-      <Typography variant="caption" color="text.secondary">
-        {vendorLabel(device.vendor_hint)} · {device.model ?? "Unknown model"} · {device.software_version ?? "Unknown version"} ·{" "}
-        {device.ha_role ?? "No HA role"}
-      </Typography>
     </Box>
   );
 }
 
-/**
- * Devices sharing a non-null `cluster_member_ref` render nested under one
- * parent grouping row instead of as flat standalone rows -- the one
- * structurally required piece of this screen. A device whose
- * `cluster_member_ref` is null always renders as a normal standalone row.
- */
 function DeviceList({
   devices,
   selectedDeviceId,
@@ -119,6 +201,7 @@ function DeviceList({
     <Stack spacing={1.25}>
       {[...groups.entries()].map(([ref, members]) => {
         const isCollapsed = collapsedRefs.has(ref);
+        const firstMember = members[0];
         return (
           <Box key={ref} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Box
@@ -130,17 +213,30 @@ function DeviceList({
               }}
               sx={{
                 display: "flex",
-                justifyContent: "space-between",
                 alignItems: "center",
+                gap: 1.25,
+                p: 1.25,
                 cursor: "pointer",
                 bgcolor: m3.scHigh,
-                borderRadius: 2,
-                px: 1.5,
-                py: 1,
+                borderRadius: "12px",
+                border: `1px solid ${m3.outlineVar}`,
+                "&:hover": { bgcolor: m3.scHighest },
               }}
             >
-              <Typography variant="body2">Cluster {ref}</Typography>
-              <StatusChip tone="mem" label={`${members.length} member${members.length === 1 ? "" : "s"}`} dense />
+              <VendorAvatar
+                vendorHint={firstMember?.vendor_hint ?? "check_point"}
+                model={firstMember?.model}
+                hostname={ref}
+              />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Cluster {ref}</Typography>
+                  <StatusChip tone="mem" label={`${members.length} member${members.length === 1 ? "" : "s"}`} dense />
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                  {members.map((m) => m.hostname ?? m.device_id).join(" · ")}
+                </Typography>
+              </Box>
             </Box>
             {!isCollapsed && (
               <Stack spacing={1}>
@@ -170,7 +266,6 @@ function DeviceList({
   );
 }
 
-/** M3Inventory, backed by a real `GET /devices` fetch. */
 export function InventoryScreen() {
   const { data, error, refresh } = useFetchOnMount(
     () => listDevices().then((result) => result.devices ?? []),
@@ -178,13 +273,47 @@ export function InventoryScreen() {
   );
   const [selectedDevice, setSelectedDevice] = useState<DeviceSummary | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
-  const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number, admitted: number, refused: number } | null>(null);
+  const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterMode, setFilterMode] = useState<"all" | "check_point" | "palo_alto" | "stale" | "draft">("all");
 
   const devices = data;
   const total = devices?.length ?? 0;
   const checkPointCount = devices?.filter((d) => d.vendor_hint === "check_point").length ?? 0;
   const paloAltoCount = devices?.filter((d) => d.vendor_hint === "palo_alto").length ?? 0;
   const draftCount = devices?.filter((d) => d.enrollment_state === "DRAFT").length ?? 0;
+  const staleCount = devices?.filter((d) => d.enrollment_state === "DEGRADED" || d.enrollment_state === "UNREACHABLE").length ?? 0;
+
+  // Auto-refresh when jobs are executing or queued
+  useEffect(() => {
+    const hasRunningJobs = devices?.some((d) => {
+      const s = d.latest_job_state?.toUpperCase();
+      return s === "EXECUTING" || s === "CLAIMED" || s === "REQUESTED";
+    });
+    if (!hasRunningJobs) return undefined;
+
+    const interval = setInterval(() => {
+      refresh();
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [devices, refresh]);
+
+  const filteredDevices = (devices ?? []).filter((device) => {
+    if (filterMode === "check_point" && device.vendor_hint !== "check_point") return false;
+    if (filterMode === "palo_alto" && device.vendor_hint !== "palo_alto") return false;
+    if (filterMode === "draft" && device.enrollment_state !== "DRAFT") return false;
+    if (filterMode === "stale" && device.enrollment_state !== "DEGRADED" && device.enrollment_state !== "UNREACHABLE") return false;
+
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase().trim();
+    const matchHostname = device.hostname?.toLowerCase().includes(term);
+    const matchId = device.device_id.toLowerCase().includes(term);
+    const matchModel = device.model?.toLowerCase().includes(term);
+    const matchVersion = device.software_version?.toLowerCase().includes(term);
+    const matchCluster = device.cluster_member_ref?.toLowerCase().includes(term);
+    return Boolean(matchHostname || matchId || matchModel || matchVersion || matchCluster);
+  });
 
   const handleBulkCollect = async () => {
     setBulkBusy(true);
@@ -192,6 +321,7 @@ export function InventoryScreen() {
     try {
       const result = await requestBulkInventoryCollect();
       setBulkResult(result);
+      refresh();
     } catch (err) {
       console.error("Bulk collect failed:", err);
     } finally {
@@ -224,17 +354,134 @@ export function InventoryScreen() {
       )}
       <ListDetail
         list={
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
-            <Box sx={{ height: 48, display: "flex", alignItems: "center", gap: 1.5, px: 2,
-                       borderRadius: "24px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, fontSize: 14 }}>
-              <Icon name="search" size={20} />
-              Subnet, device, serial or IP
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 1.5,
+              minHeight: 0,
+              maxHeight: "calc(100vh - 160px)",
+              overflowY: "auto",
+              position: "sticky",
+              top: 16,
+              pr: 0.5,
+            }}
+          >
+            <Box
+              sx={{
+                height: 44,
+                display: "flex",
+                alignItems: "center",
+                gap: 1.25,
+                px: 2,
+                borderRadius: "24px",
+                bgcolor: m3.scLowest,
+                border: `1px solid ${m3.outlineVar}`,
+                color: m3.onSurface,
+                boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                "&:focus-within": {
+                  borderColor: m3.primary,
+                  boxShadow: `0 0 0 2px ${m3.primaryContainer}`,
+                },
+              }}
+            >
+              <Icon name="search" size={18} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Subnet, device, serial or IP"
+                style={{
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  width: "100%",
+                  fontSize: "13px",
+                  color: "inherit",
+                }}
+              />
+              {searchTerm && (
+                <Box
+                  component="button"
+                  onClick={() => setSearchTerm("")}
+                  sx={{
+                    border: "none",
+                    bgcolor: "transparent",
+                    cursor: "pointer",
+                    p: 0.25,
+                    color: m3.onSurfaceVar,
+                    fontSize: 14,
+                  }}
+                >
+                  ✕
+                </Box>
+              )}
             </Box>
             <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-              <StatusChip tone="neutral" label={`All ${total}`} />
-              <StatusChip tone="neutral" label={`Check Point ${checkPointCount}`} />
-              <StatusChip tone="neutral" label={`Palo Alto ${paloAltoCount}`} />
-              <StatusChip tone="neutral" label={`Draft ${draftCount}`} />
+              <Chip
+                size="small"
+                clickable
+                onClick={() => setFilterMode("all")}
+                label={`All ${total}`}
+                sx={{
+                  bgcolor: filterMode === "all" ? m3.primary : m3.scHigh,
+                  color: filterMode === "all" ? m3.onPrimary : m3.onSurface,
+                  fontWeight: filterMode === "all" ? 600 : 400,
+                  borderRadius: "8px",
+                }}
+              />
+              <Chip
+                size="small"
+                clickable
+                onClick={() => setFilterMode("check_point")}
+                label={`Check Point ${checkPointCount}`}
+                sx={{
+                  bgcolor: filterMode === "check_point" ? m3.primary : m3.scHigh,
+                  color: filterMode === "check_point" ? m3.onPrimary : m3.onSurface,
+                  fontWeight: filterMode === "check_point" ? 600 : 400,
+                  borderRadius: "8px",
+                }}
+              />
+              <Chip
+                size="small"
+                clickable
+                onClick={() => setFilterMode("palo_alto")}
+                label={`Palo Alto ${paloAltoCount}`}
+                sx={{
+                  bgcolor: filterMode === "palo_alto" ? m3.primary : m3.scHigh,
+                  color: filterMode === "palo_alto" ? m3.onPrimary : m3.onSurface,
+                  fontWeight: filterMode === "palo_alto" ? 600 : 400,
+                  borderRadius: "8px",
+                }}
+              />
+              {draftCount > 0 && (
+                <Chip
+                  size="small"
+                  clickable
+                  onClick={() => setFilterMode("draft")}
+                  label={`Draft ${draftCount}`}
+                  sx={{
+                    bgcolor: filterMode === "draft" ? m3.primary : m3.scHigh,
+                    color: filterMode === "draft" ? m3.onPrimary : m3.onSurface,
+                    fontWeight: filterMode === "draft" ? 600 : 400,
+                    borderRadius: "8px",
+                  }}
+                />
+              )}
+              {staleCount > 0 && (
+                <Chip
+                  size="small"
+                  clickable
+                  onClick={() => setFilterMode("stale")}
+                  label={`Stale ${staleCount}`}
+                  sx={{
+                    bgcolor: filterMode === "stale" ? m3.primary : m3.scHigh,
+                    color: filterMode === "stale" ? m3.onPrimary : m3.onSurface,
+                    fontWeight: filterMode === "stale" ? 600 : 400,
+                    borderRadius: "8px",
+                  }}
+                />
+              )}
             </Stack>
             {error && (
               <EmptyPanel title="Inventory unavailable" body={error}>
@@ -247,9 +494,12 @@ export function InventoryScreen() {
             {!error && devices !== null && devices.length === 0 && (
               <EmptyPanel title="No devices" body="Nothing is enrolled yet." />
             )}
-            {!error && devices !== null && devices.length > 0 && (
+            {!error && devices !== null && devices.length > 0 && filteredDevices.length === 0 && (
+              <EmptyPanel title="No matches" body="No devices match the current search and filter criteria." />
+            )}
+            {!error && devices !== null && filteredDevices.length > 0 && (
               <DeviceList
-                devices={devices}
+                devices={filteredDevices}
                 selectedDeviceId={selectedDevice?.device_id ?? null}
                 onSelect={setSelectedDevice}
               />
@@ -270,8 +520,7 @@ export function InventoryScreen() {
                       <Stack spacing={1.5}>
                         <EmptyPanel
                           title="No interface evidence"
-                          body="Enrol a device from Administration to see its interfaces here; none is enrolled
-                                yet."
+                          body="Enrol a device from Administration to see its interfaces here; none is enrolled yet."
                         />
                         <Typography variant="body2">
                           Interface evidence is read over SSH or HTTPS. Values are observed, never written.
@@ -284,8 +533,7 @@ export function InventoryScreen() {
                     panel: (
                       <EmptyPanel
                         title="No routing evidence"
-                        body="Routing tables are read directly from an enrolled device; no device has been
-                              enrolled or read yet."
+                        body="Routing tables are read directly from an enrolled device; no device has been enrolled or read yet."
                       />
                     ),
                   },
@@ -294,8 +542,7 @@ export function InventoryScreen() {
                     panel: (
                       <EmptyPanel
                         title="No cluster membership evidence"
-                        body="Membership needs an identity-verified read from each peer; none has been collected
-                              yet."
+                        body="Membership needs an identity-verified read from each peer; none has been collected yet."
                       />
                     ),
                   },

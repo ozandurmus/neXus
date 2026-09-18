@@ -158,6 +158,9 @@ public final class InventoryController {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("device_id", member.deviceId());
         body.put("hostname", member.observedHostname().orElse(null));
+        body.put("latest_job_state", member.latestJobState().orElse(null));
+        body.put("latest_job_type", member.latestJobType().orElse(null));
+        body.put("latest_job_terminal_reason", member.latestJobTerminalReason().orElse(null));
         return body;
     }
 

@@ -30,8 +30,28 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "observed_ha_role, recorded_identity_primary, recorded_identity_secondary, identity_mismatch_state, "
             + "identity_mismatch_presented_primary, identity_mismatch_presented_secondary, cluster_member_ref, "
             + "virtual_system_ref, peer_follow_outcome, peer_follow_reason";
-    private static final String DEVICE_SUMMARY_COLUMNS = "device_id, role, vendor_hint, enrollment_state, "
-            + "observed_hostname, observed_model, observed_software_version, observed_ha_role, cluster_member_ref";
+    private static final String DEVICE_SUMMARY_QUERY =
+            "select d.device_id, d.role, d.vendor_hint, d.enrollment_state, "
+            + "coalesce(d.observed_hostname, dc.display_name, ep.address_ref) as observed_hostname, "
+            + "coalesce(d.observed_model, dc.model) as observed_model, "
+            + "coalesce(d.observed_software_version, dc.software_version) as observed_software_version, "
+            + "d.observed_ha_role, d.cluster_member_ref, "
+            + "latest_job.state as latest_job_state, "
+            + "latest_job.job_type as latest_job_type, "
+            + "latest_job.terminal_reason as latest_job_terminal_reason "
+            + "from devices d "
+            + "left join lateral ( "
+            + "    select display_name, model, software_version from discovery_candidate c "
+            + "    where (c.vendor || '|' || coalesce(c.owning_domain, '') || '|' || c.stable_identifier) = d.discovery_match_key "
+            + "    order by c.created_at desc limit 1 "
+            + ") dc on true "
+            + "left join lateral ( "
+            + "    select address_ref from endpoints ep where ep.device_id = d.device_id order by ep.created_at asc limit 1 "
+            + ") ep on true "
+            + "left join lateral ( "
+            + "    select state, job_type, terminal_reason from jobs j where j.target_device_id = d.device_id order by j.submitted_at desc limit 1 "
+            + ") latest_job on true "
+            + "order by d.created_at desc, d.device_id";
 
     private final TransactionBoundary transactionBoundary;
     private final AuditedTransactionBoundary auditedTransactionBoundary;
@@ -169,8 +189,7 @@ public final class JooqDeviceRepository implements DeviceRepository {
 
     @Override
     public List<DeviceSummaryRecord> listAll() {
-        return transactionBoundary.inTransaction(dsl -> dsl.fetch(
-                        "select " + DEVICE_SUMMARY_COLUMNS + " from devices order by created_at desc, device_id")
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(DEVICE_SUMMARY_QUERY)
                 .stream()
                 .map(JooqDeviceRepository::toSummaryRecord)
                 .toList());
@@ -216,7 +235,10 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 Optional.ofNullable(row.get("observed_model", String.class)),
                 Optional.ofNullable(row.get("observed_software_version", String.class)),
                 Optional.ofNullable(row.get("observed_ha_role", String.class)),
-                Optional.ofNullable(row.get("cluster_member_ref", String.class)));
+                Optional.ofNullable(row.get("cluster_member_ref", String.class)),
+                Optional.ofNullable(row.get("latest_job_state", String.class)),
+                Optional.ofNullable(row.get("latest_job_type", String.class)),
+                Optional.ofNullable(row.get("latest_job_terminal_reason", String.class)));
     }
 
     private static EndpointRecord toEndpointRecord(Record row) {
