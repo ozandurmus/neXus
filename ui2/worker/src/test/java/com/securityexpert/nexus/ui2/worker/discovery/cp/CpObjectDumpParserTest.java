@@ -87,6 +87,39 @@ class CpObjectDumpParserTest {
         assertEquals("fixture quoted name", object.get("name"));
     }
 
+    @Test
+    void quotedValueMayContainParentheses() {
+        String text = "(fixture-name-1\n"
+                + "\t:comments (\"Created (HA active)\")\n"
+                + ")\n";
+
+        Map<String, Object> object = CpObjectDumpParser.parseObjects(text).get(0);
+
+        assertEquals("Created (HA active)", object.get("comments"));
+    }
+
+    @Test
+    void quotedValueSkipsEscapedQuotesBeforeItsClosingQuote() {
+        String text = "(fixture-name-1\n"
+                + "\t:comments (\"Created (HA \\\"active\\\")\")\n"
+                + ")\n";
+
+        Map<String, Object> object = CpObjectDumpParser.parseObjects(text).get(0);
+
+        assertEquals("Created (HA \\\"active\\\")", object.get("comments"));
+    }
+
+    @Test
+    void objectNameIsUsedWhenNameAttributeIsAbsent() {
+        String text = "(fixture-name-1\n"
+                + "\t:ipaddr (198.51.100.9)\n"
+                + ")\n";
+
+        Map<String, Object> object = CpObjectDumpParser.parseObjects(text).get(0);
+
+        assertEquals("fixture-name-1", object.get("name"));
+    }
+
     /** An empty own address and a missing management address must not shift any other field on that object or the next. */
     @Test
     void emptyOwnAddressAndMissingManagementAddressDoNotShiftOtherFields() {

@@ -92,8 +92,7 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         try {
             connectResult = transport.connect(target, spec, CONNECT_TIMEOUT);
         } catch (RuntimeException e) {
-            LOGGER.log(System.Logger.Level.WARNING, "Check Point management connection failed: {0}",
-                    e.getClass().getSimpleName());
+            LOGGER.log(System.Logger.Level.WARNING, "Check Point management connection failed", e);
             return new ManagementPlaneEnumerationResult.Failed("NOT_EVALUABLE", 0, SessionDisconnectOutcome.NOT_OPENED);
         }
         if (connectResult instanceof ConnectResult.AuthenticationFailed failure
@@ -133,8 +132,7 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         int managementPlaneRequestCount = 1 + counter.count();
 
         if (caught != null) {
-            LOGGER.log(System.Logger.Level.WARNING, "Check Point management enumeration failed: {0}",
-                    caught.getClass().getSimpleName());
+            LOGGER.log(System.Logger.Level.WARNING, "Check Point management enumeration failed", caught);
             String failureReason = caught.getMessage();
             return new ManagementPlaneEnumerationResult.Failed(
                     failureReason == null ? caught.getClass().getSimpleName() : failureReason,

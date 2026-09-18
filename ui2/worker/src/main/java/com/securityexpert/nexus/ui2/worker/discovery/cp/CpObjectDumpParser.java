@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.securityexpert.nexus.ui2.discovery.cp.ManagementApiFieldBinding;
+
 /**
  * T-7: parses the {@code cpmiquerybin object} tree-format dump this
  * transport reads (record §10 row 4, replacing the guessed {@code -f json}
@@ -23,6 +25,9 @@ import java.util.Map;
  * (T-7's "parsed in memory... discarded").
  */
 final class CpObjectDumpParser {
+
+    private static final String DISPLAY_NAME_FIELD =
+            ManagementApiFieldBinding.forRole(ManagementApiFieldBinding.Role.DISPLAY_NAME).apiField().orElseThrow();
 
     private final String text;
     private int pos;
@@ -49,11 +54,9 @@ final class CpObjectDumpParser {
     private Map<String, Object> parseObject() {
         expect('(');
         skipWhitespace();
-        // The object's own name, right after '('. Never carried into the field
-        // map or any candidate row -- fields are read only by role, through
-        // ManagementApiFieldBinding, and AC-8/T-7 forbid retaining a raw name.
-        readToken();
+        String objectName = readToken();
         Map<String, Object> fields = parseFields();
+        fields.putIfAbsent(DISPLAY_NAME_FIELD, objectName);
         skipWhitespace();
         expect(')');
         return fields;
@@ -89,13 +92,38 @@ final class CpObjectDumpParser {
     /** Everything up to the matching ')', trimmed, with a single pair of surrounding quotes stripped. */
     private String readLeafValue() {
         int start = pos;
-        while (pos < text.length() && peek() != ')') {
+        if (pos < text.length() && peek() == '"') {
+            pos++;
+            while (pos < text.length()) {
+                if (peek() == '\\' && pos + 1 < text.length()) {
+                    pos += 2;
+                } else if (peek() == '"') {
+                    String value = text.substring(start + 1, pos);
+                    pos++;
+                    skipWhitespace();
+                    return value;
+                } else {
+                    pos++;
+                }
+            }
+            throw new ManagementPlaneQueryFailedException("unterminated quoted value at position " + start);
+        }
+        int parenDepth = 0;
+        while (pos < text.length()) {
+            if (peek() == '(') {
+                parenDepth++;
+            } else if (peek() == ')') {
+                if (parenDepth == 0) {
+                    break;
+                }
+                parenDepth--;
+            }
             pos++;
         }
-        String raw = text.substring(start, pos).trim();
-        if (raw.length() >= 2 && raw.charAt(0) == '"' && raw.charAt(raw.length() - 1) == '"') {
-            return raw.substring(1, raw.length() - 1);
+        if (parenDepth != 0) {
+            throw new ManagementPlaneQueryFailedException("unterminated parenthesized value at position " + start);
         }
+        String raw = text.substring(start, pos).trim();
         return raw;
     }
 
@@ -113,8 +141,12 @@ final class CpObjectDumpParser {
     }
 
     private void expect(char expected) {
-        if (pos >= text.length() || text.charAt(pos) != expected) {
-            throw new ManagementPlaneQueryFailedException();
+        if (pos >= text.length()) {
+            throw new ManagementPlaneQueryFailedException("expected '" + expected + "' at position " + pos + " but reached end of input");
+        }
+        if (text.charAt(pos) != expected) {
+            throw new ManagementPlaneQueryFailedException("expected '" + expected + "' at position " + pos
+                    + " but found '" + text.charAt(pos) + "'");
         }
         pos++;
     }
