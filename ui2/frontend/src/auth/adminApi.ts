@@ -401,6 +401,8 @@ export interface ClusterInterface {
   readonly addresses: InventoryAddress[];
   readonly presence: Presence;
   readonly differences: ClusterDifference[];
+  readonly member_addresses?: Record<string, InventoryAddress[]>;
+  readonly member_states?: Record<string, string>;
 }
 
 export interface ClusterRoute {

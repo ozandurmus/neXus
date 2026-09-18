@@ -55,8 +55,12 @@ class ClusterInventoryMergerTest {
         assertEquals(InventoryInterface.KIND_PHYSICAL, iface.kind());
         assertTrue(iface.presence() instanceof ClusterInventoryMerger.Presence.All);
         assertTrue(iface.differences().isEmpty(), "kind and state agree, no VIP to compare -- no differences expected");
-        // Member-role addresses are never copied onto the cluster row.
+        // Member-role addresses are never copied onto the cluster VIP addresses row.
         assertTrue(iface.addresses().isEmpty());
+        assertEquals(List.of("192.0.2.1/24"), iface.memberAddresses().get("dev-a").stream().map(InventoryAddress::address).toList());
+        assertEquals(List.of("192.0.2.2/24"), iface.memberAddresses().get("dev-b").stream().map(InventoryAddress::address).toList());
+        assertEquals("up", iface.memberStates().get("dev-a"));
+        assertEquals("up", iface.memberStates().get("dev-b"));
     }
 
     @Test

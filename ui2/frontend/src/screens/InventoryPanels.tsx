@@ -162,79 +162,387 @@ function DifferencesNote({ differences }: { readonly differences: readonly Clust
   );
 }
 
-function ClusterInterfacesTable({ interfaces }: { readonly interfaces: readonly ClusterInterface[] }) {
+function calculateNetwork(cidr: string): string {
+  if (!cidr || !cidr.includes("/")) return "—";
+  const [ip, prefixStr] = cidr.split("/");
+  const prefix = parseInt(prefixStr, 10);
+  if (isNaN(prefix) || prefix < 0 || prefix > 32) return "—";
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some(isNaN)) return "—";
+  const ipNum = ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
+  const netNum = (ipNum & mask) >>> 0;
+  const netParts = [
+    (netNum >>> 24) & 255,
+    (netNum >>> 16) & 255,
+    (netNum >>> 8) & 255,
+    netNum & 255,
+  ];
+  return `${netParts.join(".")}/${prefix}`;
+}
+
+function ClusterInterfacesTable({
+  interfaces,
+  members = [],
+}: {
+  readonly interfaces: readonly ClusterInterface[];
+  readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
+}) {
+  const [upOnly, setUpOnly] = useState(false);
+  const [search, setSearch] = useState("");
+
   if (interfaces.length === 0) {
     return <EmptyPanel title="No interface evidence" body="This context has no collected interfaces yet." />;
   }
+
+  const filtered = interfaces.filter((iface) => {
+    if (upOnly) {
+      const isUp = iface.member_states
+        ? Object.values(iface.member_states).some((s) => s.toLowerCase() === "up")
+        : true;
+      if (!isUp) return false;
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const matchName = iface.name.toLowerCase().includes(q);
+      const matchVip = iface.addresses.some((a) => a.address.toLowerCase().includes(q));
+      const matchMember =
+        iface.member_addresses &&
+        Object.values(iface.member_addresses).some((list) =>
+          list.some((a) => a.address.toLowerCase().includes(q))
+        );
+      return matchName || matchVip || matchMember;
+    }
+    return true;
+  });
+
   return (
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>Name</TableCell>
-          <TableCell>Kind</TableCell>
-          <TableCell>VIPs</TableCell>
-          <TableCell>Presence</TableCell>
-          <TableCell>Differences</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {interfaces.map((iface) => (
-          <TableRow key={iface.name}>
-            <TableCell>{iface.name}</TableCell>
-            <TableCell>{iface.kind}</TableCell>
-            <TableCell>
-              <Stack spacing={0.5}>
-                {iface.addresses.length === 0 ? "—" : iface.addresses.map((a) => <AddressChip key={a.address} address={a} />)}
-              </Stack>
-            </TableCell>
-            <TableCell>
-              <StatusChip tone={iface.presence === "all" ? "ok" : "warn"} label={presenceLabel(iface.presence)} dense />
-            </TableCell>
-            <TableCell>
-              <DifferencesNote differences={iface.differences} />
-            </TableCell>
+    <Stack spacing={1.5}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          Interfaces · {filtered.length}
+        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <TextField
+            size="small"
+            placeholder="Filter interfaces..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            sx={{ "& .MuiInputBase-root": { height: 32, fontSize: "0.8125rem", borderRadius: "8px" } }}
+          />
+          <M3Button
+            emphasis={upOnly ? "filled" : "outlined"}
+            onClick={() => setUpOnly(!upOnly)}
+          >
+            {upOnly ? "✓ Up only" : "Up only"}
+          </M3Button>
+        </Stack>
+      </Box>
+
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell sx={{ fontWeight: 600 }}>Interface</TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>Cluster VIP</TableCell>
+            {members.map((m) => (
+              <TableCell key={m.device_id} sx={{ fontWeight: 600 }}>
+                {m.hostname ?? m.device_id}
+              </TableCell>
+            ))}
+            <TableCell sx={{ fontWeight: 600 }}>Network</TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHead>
+        <TableBody>
+          {filtered.map((iface) => {
+            const vips = iface.addresses.filter((a) => a.role === "cluster_virtual");
+            let sampleAddress = vips[0]?.address;
+            if (!sampleAddress && iface.member_addresses) {
+              for (const addrs of Object.values(iface.member_addresses)) {
+                if (addrs.length > 0) {
+                  sampleAddress = addrs[0].address;
+                  break;
+                }
+              }
+            }
+            const network = sampleAddress ? calculateNetwork(sampleAddress) : "—";
+
+            const memberStates = iface.member_states ? Object.values(iface.member_states) : [];
+            const allUp = memberStates.length > 0 && memberStates.every((s) => s.toLowerCase() === "up");
+            const allDown = memberStates.length > 0 && memberStates.every((s) => s.toLowerCase() === "down");
+            const isMixed = memberStates.length > 0 && !allUp && !allDown;
+
+            return (
+              <TableRow key={iface.name} hover>
+                <TableCell sx={{ fontWeight: 600, fontFamily: "monospace" }}>{iface.name}</TableCell>
+                <TableCell>
+                  {vips.length > 0 ? (
+                    <Stack direction="row" spacing={0.75} alignItems="center">
+                      <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                        {vips.map((a) => a.address).join(", ")}
+                      </Typography>
+                      <StatusChip tone="mem" label="VIP" dense />
+                    </Stack>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">—</Typography>
+                  )}
+                </TableCell>
+                {members.map((m) => {
+                  const mAddrs = iface.member_addresses?.[m.device_id] ?? [];
+                  const mState = iface.member_states?.[m.device_id];
+                  return (
+                    <TableCell key={m.device_id}>
+                      {mAddrs.length > 0 ? (
+                        <Stack direction="row" spacing={0.75} alignItems="center">
+                          <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                            {mAddrs.map((a) => a.address).join(", ")}
+                          </Typography>
+                          {mState && (
+                            <Box
+                              sx={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: "50%",
+                                bgcolor: mState.toLowerCase() === "up" ? m3.success : m3.outline,
+                              }}
+                              title={`State: ${mState}`}
+                            />
+                          )}
+                        </Stack>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">—</Typography>
+                      )}
+                    </TableCell>
+                  );
+                })}
+                <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                  {network}
+                </TableCell>
+                <TableCell>
+                  <Stack spacing={0.5}>
+                    {allUp ? (
+                      <StatusChip tone="ok" label="Up" dense />
+                    ) : allDown ? (
+                      <StatusChip tone="neutral" label="Down" dense />
+                    ) : isMixed ? (
+                      <StatusChip tone="warn" label="Degraded" dense />
+                    ) : (
+                      <StatusChip tone={iface.presence === "all" ? "ok" : "warn"} label={presenceLabel(iface.presence)} dense />
+                    )}
+                    {iface.differences.length > 0 && (
+                      <DifferencesNote differences={iface.differences} />
+                    )}
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </Stack>
   );
 }
 
-function ClusterRoutesTable({ routes }: { readonly routes: readonly ClusterRoute[] }) {
+function ClusterRoutesTable({
+  routes,
+  members = [],
+}: {
+  readonly routes: readonly ClusterRoute[];
+  readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
+}) {
+  const [activeTab, setActiveTab] = useState<string>("logical");
+  const [search, setSearch] = useState("");
+
   if (routes.length === 0) {
     return <EmptyPanel title="No routing evidence" body="This context has no collected routes yet." />;
   }
+
+  const diffRoutes = routes.filter((r) => r.presence !== "all" || r.differences.length > 0);
+  const diffCount = diffRoutes.length;
+
+  let displayedRoutes = routes;
+  if (activeTab === "diff") {
+    displayedRoutes = diffRoutes;
+  } else if (activeTab !== "logical") {
+    displayedRoutes = routes.filter((r) => {
+      if (r.presence === "all") return true;
+      if (Array.isArray(r.presence)) return r.presence.includes(activeTab);
+      return false;
+    });
+  }
+
+  if (search.trim()) {
+    const q = search.toLowerCase();
+    displayedRoutes = displayedRoutes.filter(
+      (r) =>
+        r.destination.toLowerCase().includes(q) ||
+        (r.next_hop && r.next_hop.toLowerCase().includes(q)) ||
+        (r.interface && r.interface.toLowerCase().includes(q)) ||
+        r.protocol.toLowerCase().includes(q)
+    );
+  }
+
+  const memberNameById = new Map<string, string>();
+  members.forEach((m) => memberNameById.set(m.device_id, m.hostname ?? m.device_id));
+
   return (
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>Destination</TableCell>
-          <TableCell>Next hop</TableCell>
-          <TableCell>Interface</TableCell>
-          <TableCell>Protocol</TableCell>
-          <TableCell>Presence</TableCell>
-          <TableCell>Differences</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {routes.map((route, index) => (
-          <TableRow key={`${route.destination}-${route.next_hop ?? ""}-${route.interface ?? ""}-${index}`}>
-            <TableCell>{route.destination}</TableCell>
-            <TableCell>{route.next_hop ?? "—"}</TableCell>
-            <TableCell>{route.interface ?? "—"}</TableCell>
-            <TableCell>
-              <StatusChip tone="neutral" label={route.protocol} dense />
-            </TableCell>
-            <TableCell>
-              <StatusChip tone={route.presence === "all" ? "ok" : "warn"} label={presenceLabel(route.presence)} dense />
-            </TableCell>
-            <TableCell>
-              <DifferencesNote differences={route.differences} />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <Stack spacing={1.5}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+        <Stack direction="row" spacing={0.5} sx={{ bgcolor: m3.scLow, p: 0.5, borderRadius: "10px" }}>
+          <Box
+            role="button"
+            tabIndex={0}
+            onClick={() => setActiveTab("logical")}
+            sx={{
+              px: 1.5,
+              py: 0.5,
+              borderRadius: "8px",
+              cursor: "pointer",
+              bgcolor: activeTab === "logical" ? "#ffffff" : "transparent",
+              boxShadow: activeTab === "logical" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+              fontWeight: activeTab === "logical" ? 600 : 500,
+              fontSize: "0.8125rem",
+              color: activeTab === "logical" ? m3.primary : m3.onSurfaceVar,
+            }}
+          >
+            Logical ({routes.length})
+          </Box>
+          {members.map((m) => (
+            <Box
+              key={m.device_id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveTab(m.device_id)}
+              sx={{
+                px: 1.5,
+                py: 0.5,
+                borderRadius: "8px",
+                cursor: "pointer",
+                bgcolor: activeTab === m.device_id ? "#ffffff" : "transparent",
+                boxShadow: activeTab === m.device_id ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                fontWeight: activeTab === m.device_id ? 600 : 500,
+                fontSize: "0.8125rem",
+                color: activeTab === m.device_id ? m3.primary : m3.onSurfaceVar,
+              }}
+            >
+              {m.hostname ?? m.device_id}
+            </Box>
+          ))}
+          <Box
+            role="button"
+            tabIndex={0}
+            onClick={() => setActiveTab("diff")}
+            sx={{
+              px: 1.5,
+              py: 0.5,
+              borderRadius: "8px",
+              cursor: "pointer",
+              bgcolor: activeTab === "diff" ? "#ffffff" : "transparent",
+              boxShadow: activeTab === "diff" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+              fontWeight: activeTab === "diff" ? 600 : 500,
+              fontSize: "0.8125rem",
+              color: diffCount > 0 ? m3.error : activeTab === "diff" ? m3.primary : m3.onSurfaceVar,
+              display: "flex",
+              alignItems: "center",
+              gap: 0.5,
+            }}
+          >
+            <span>Diff only</span>
+            {diffCount > 0 && (
+              <Box
+                component="span"
+                sx={{
+                  px: 0.6,
+                  py: 0.1,
+                  borderRadius: "10px",
+                  bgcolor: "#fee2e2",
+                  color: "#991b1b",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                }}
+              >
+                {diffCount}
+              </Box>
+            )}
+          </Box>
+        </Stack>
+
+        <TextField
+          size="small"
+          placeholder="Filter routes..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          sx={{ "& .MuiInputBase-root": { height: 32, fontSize: "0.8125rem", borderRadius: "8px" } }}
+        />
+      </Box>
+
+      {activeTab === "diff" && diffCount === 0 ? (
+        <Box sx={{ p: 2.5, bgcolor: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "10px", textAlign: "center" }}>
+          <Typography variant="body2" sx={{ color: "#065f46", fontWeight: 600 }}>
+            ✓ All routes are identical across cluster members. No routing drift detected.
+          </Typography>
+        </Box>
+      ) : displayedRoutes.length === 0 ? (
+        <EmptyPanel title="No matching routes" body="No routes match the current filter." />
+      ) : (
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600 }}>Destination</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Next hop</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Interface</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Protocol</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Member Scope / Diff</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {displayedRoutes.map((route, index) => {
+              const isShared = route.presence === "all";
+              const isDiff = !isShared || route.differences.length > 0;
+              let scopeLabel = "Shared";
+              if (!isShared && Array.isArray(route.presence)) {
+                scopeLabel = route.presence.map((id) => memberNameById.get(id) ?? id).join(", ") + " only";
+              }
+
+              return (
+                <TableRow
+                  key={`${route.destination}-${route.next_hop ?? ""}-${route.interface ?? ""}-${index}`}
+                  hover
+                  sx={{
+                    bgcolor: isDiff ? "#fffbeb" : "inherit",
+                  }}
+                >
+                  <TableCell sx={{ fontFamily: "monospace", fontWeight: 600, fontSize: "0.8125rem" }}>
+                    {route.destination}
+                  </TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                    {route.next_hop ?? "—"}
+                  </TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                    {route.interface ?? "—"}
+                  </TableCell>
+                  <TableCell>
+                    <StatusChip tone="neutral" label={route.protocol} dense />
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={0.75} alignItems="center">
+                      <StatusChip
+                        tone={isShared ? "ok" : "warn"}
+                        label={scopeLabel}
+                        dense
+                      />
+                      {route.differences.length > 0 && (
+                        <DifferencesNote differences={route.differences} />
+                      )}
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
+    </Stack>
   );
 }
 
@@ -299,7 +607,13 @@ export function RoutesPanel({ contexts }: { readonly contexts: readonly Inventor
   );
 }
 
-export function ClusterInterfacesPanel({ contexts }: { readonly contexts: readonly ClusterContext[] }) {
+export function ClusterInterfacesPanel({
+  contexts,
+  members,
+}: {
+  readonly contexts: readonly ClusterContext[];
+  readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
+}) {
   if (contexts.length === 0) {
     return <EmptyPanel title="No interface evidence" body="No cluster member has been collected yet." />;
   }
@@ -307,20 +621,34 @@ export function ClusterInterfacesPanel({ contexts }: { readonly contexts: readon
     <ContextTabs
       contexts={contexts}
       render={(name) => (
-        <ClusterInterfacesTable interfaces={contexts.find((c) => c.context === name)?.interfaces ?? []} />
+        <ClusterInterfacesTable
+          interfaces={contexts.find((c) => c.context === name)?.interfaces ?? []}
+          members={members}
+        />
       )}
     />
   );
 }
 
-export function ClusterRoutesPanel({ contexts }: { readonly contexts: readonly ClusterContext[] }) {
+export function ClusterRoutesPanel({
+  contexts,
+  members,
+}: {
+  readonly contexts: readonly ClusterContext[];
+  readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
+}) {
   if (contexts.length === 0) {
     return <EmptyPanel title="No routing evidence" body="No cluster member has been collected yet." />;
   }
   return (
     <ContextTabs
       contexts={contexts}
-      render={(name) => <ClusterRoutesTable routes={contexts.find((c) => c.context === name)?.routes ?? []} />}
+      render={(name) => (
+        <ClusterRoutesTable
+          routes={contexts.find((c) => c.context === name)?.routes ?? []}
+          members={members}
+        />
+      )}
     />
   );
 }
@@ -527,13 +855,13 @@ export function DeviceInventoryPanels({ device }: { readonly device: DeviceSumma
           {
             label: "Interfaces",
             panel: isCluster
-              ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} />
+              ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} />
               : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} />,
           },
           {
             label: "Routing",
             panel: isCluster
-              ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} />
+              ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} />
               : <RoutesPanel contexts={deviceInventory?.contexts ?? []} />,
           },
           {
@@ -591,6 +919,146 @@ export function DeviceInventoryPanels({ device }: { readonly device: DeviceSumma
               <EmptyPanel
                 title="No identity or provenance evidence"
                 body="Identity requires a direct, verified device read; none has occurred yet."
+              />
+            ),
+          },
+        ]}
+      />
+    </Stack>
+  );
+}
+
+export function ClusterDetailPanels({
+  clusterRef,
+  members,
+}: {
+  readonly clusterRef: string;
+  readonly members: readonly DeviceSummary[];
+}) {
+  const clusterInventoryFetch = useFetchOnMount<ClusterInventory>(
+    () => getClusterInventory(clusterRef),
+    describeApiError,
+  );
+  const clusterInventory = clusterInventoryFetch.data;
+  const error = clusterInventoryFetch.error;
+
+  const refresh = () => {
+    clusterInventoryFetch.refresh();
+  };
+
+  if (error) {
+    return (
+      <EmptyPanel title="Cluster inventory unavailable" body={error}>
+        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+          <M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>
+        </Box>
+      </EmptyPanel>
+    );
+  }
+
+  const firstMember = members[0];
+  const allContexts = clusterInventory?.contexts ?? [];
+  const ifaceCount = allContexts.reduce((acc, c) => acc + c.interfaces.length, 0);
+  const routeCount = allContexts.reduce((acc, c) => acc + c.routes.length, 0);
+  const isEnrolled = members.some((m) => m.enrollment_state === "ENROLLED");
+
+  return (
+    <Stack spacing={2}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <Typography variant="caption" color="text.secondary">
+          Devices · {firstMember?.vendor_hint === "check_point" ? "Check Point" : "Palo Alto"} ClusterXL
+        </Typography>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+            <Typography variant="h3" sx={{ fontWeight: 600 }}>
+              {clusterRef}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Members: {members.map((m) => `${m.hostname ?? m.device_id}${m.ha_role ? ` (${m.ha_role.toLowerCase()})` : ""}`).join(" · ")}
+            </Typography>
+          </Box>
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", pt: 0.5 }}>
+          <StatusChip
+            tone={isEnrolled ? "ok" : "warn"}
+            label={isEnrolled ? "✓ Live" : "Not enrolled"}
+            dense
+          />
+          <StatusChip tone="ok" label="✓ Identity verified" dense />
+          {firstMember?.software_version && (
+            <StatusChip tone="neutral" label={`${firstMember.software_version} · Gaia`} dense />
+          )}
+          {firstMember?.model && (
+            <StatusChip tone="neutral" label={firstMember.model} dense />
+          )}
+          <StatusChip tone="neutral" label={`${ifaceCount} interfaces · ${routeCount} routes`} dense />
+          {clusterInventory && (
+            <ClusterMembersMarker inventory={clusterInventory} />
+          )}
+        </Box>
+      </Box>
+
+      <M3Tabs
+        ariaLabel="Cluster detail"
+        tabs={[
+          {
+            label: "Interfaces",
+            panel: <ClusterInterfacesPanel contexts={allContexts} members={clusterInventory?.members ?? members} />,
+          },
+          {
+            label: "Routing",
+            panel: <ClusterRoutesPanel contexts={allContexts} members={clusterInventory?.members ?? members} />,
+          },
+          {
+            label: "Cluster members",
+            panel: (
+              <Stack spacing={2}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 600 }}>Member Hostname</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Device ID</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>HA Role</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Model / Version</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }} align="right">Action</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {members.map((m) => (
+                      <TableRow key={m.device_id} hover>
+                        <TableCell sx={{ fontWeight: 600 }}>{m.hostname ?? m.device_id}</TableCell>
+                        <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{m.device_id}</TableCell>
+                        <TableCell>
+                          <StatusChip
+                            tone={m.ha_role === "ACTIVE" || m.ha_role === "active" ? "ok" : "neutral"}
+                            label={m.ha_role ?? "—"}
+                            dense
+                          />
+                        </TableCell>
+                        <TableCell>{m.model ?? "—"} · {m.software_version ?? "—"}</TableCell>
+                        <TableCell>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <StatusChip tone={m.enrollment_state === "ENROLLED" ? "ok" : "warn"} label={m.enrollment_state} dense />
+                            <JobStatusIndicator state={m.latest_job_state} type={m.latest_job_type} terminalReason={m.latest_job_terminal_reason} />
+                          </Stack>
+                        </TableCell>
+                        <TableCell align="right">
+                          <CollectNowButton deviceId={m.device_id} onCollected={refresh} enrollmentState={m.enrollment_state} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Stack>
+            ),
+          },
+          {
+            label: "Identity & provenance",
+            panel: (
+              <EmptyPanel
+                title="Identity and cluster provenance"
+                body={`Cluster identity verified across ${members.length} members. Observed from active Check Point ClusterXL runtime topology.`}
               />
             ),
           },

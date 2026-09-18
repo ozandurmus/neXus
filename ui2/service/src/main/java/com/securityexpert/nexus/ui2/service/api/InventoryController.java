@@ -240,6 +240,13 @@ public final class InventoryController {
         body.put("addresses", iface.addresses().stream().map(InventoryController::toAddressBody).toList());
         body.put("presence", toPresenceBody(iface.presence()));
         body.put("differences", iface.differences().stream().map(InventoryController::toDifferenceBody).toList());
+
+        Map<String, Object> memberAddrs = new LinkedHashMap<>();
+        for (Map.Entry<String, List<InventoryAddress>> entry : iface.memberAddresses().entrySet()) {
+            memberAddrs.put(entry.getKey(), entry.getValue().stream().map(InventoryController::toAddressBody).toList());
+        }
+        body.put("member_addresses", memberAddrs);
+        body.put("member_states", iface.memberStates());
         return body;
     }
 

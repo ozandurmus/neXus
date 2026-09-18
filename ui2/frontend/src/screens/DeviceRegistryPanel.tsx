@@ -134,29 +134,43 @@ function DeviceRegistryCard({
         </Box>
       )}
       {total > 0 && (
-        <Stack spacing={1}>
-          {devices.map((device) => (
-            <Box
-              key={device.device_id}
-              sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                px: 1.5,
-                py: 1,
-                border: "1px solid",
-                borderColor: "divider",
-                borderRadius: 1.5,
-              }}
-            >
-              <Typography variant="body2" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {device.hostname ?? device.device_id}
-              </Typography>
-              <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />
-              <M3Button emphasis="outlined" onClick={() => onDelete(device.device_id)}>Delete</M3Button>
-            </Box>
-          ))}
-        </Stack>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 200px 90px", px: 2, py: 0.5, color: "text.secondary", fontSize: "0.75rem", fontWeight: 600 }}>
+            <Box>DEVICE / HOSTNAME</Box>
+            <Box sx={{ textAlign: "center" }}>STATUS</Box>
+            <Box sx={{ textAlign: "right" }}>ACTIONS</Box>
+          </Box>
+          <Stack spacing={1} sx={{ maxHeight: "calc(100vh - 340px)", overflowY: "auto", pr: 0.5 }}>
+            {devices.map((device) => (
+              <Box
+                key={device.device_id}
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 200px 90px",
+                  alignItems: "center",
+                  gap: 2,
+                  px: 2,
+                  py: 1.25,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1.5,
+                  bgcolor: "background.paper",
+                  "&:hover": { borderColor: "primary.main" },
+                }}
+              >
+                <Typography variant="body2" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>
+                  {device.hostname ?? device.device_id}
+                </Typography>
+                <Box sx={{ display: "flex", justifyContent: "center" }}>
+                  <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />
+                </Box>
+                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                  <M3Button emphasis="outlined" onClick={() => onDelete(device.device_id)}>Delete</M3Button>
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
       )}
     </EmptyPanel>
   );

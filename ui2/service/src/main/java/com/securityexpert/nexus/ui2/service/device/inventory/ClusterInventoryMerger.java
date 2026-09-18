@@ -62,7 +62,12 @@ public final class ClusterInventoryMerger {
     }
 
     public record MergedInterface(String name, String kind, List<InventoryAddress> addresses, Presence presence,
-            List<Difference> differences) {
+            List<Difference> differences, Map<String, List<InventoryAddress>> memberAddresses,
+            Map<String, String> memberStates) {
+        public MergedInterface(String name, String kind, List<InventoryAddress> addresses, Presence presence,
+                List<Difference> differences) {
+            this(name, kind, addresses, presence, differences, Map.of(), Map.of());
+        }
     }
 
     public record MergedRoute(String destination, Optional<String> nextHop, Optional<String> interfaceName,
@@ -144,7 +149,19 @@ public final class ClusterInventoryMerger {
             canonicalAndDifferences(memberOrder, byDevice, InventoryInterface::state, "state", differences);
 
             List<InventoryAddress> vips = mergeVirtualAddresses(memberOrder, byDevice);
-            result.add(new MergedInterface(entry.getKey(), kind, vips, presence, differences));
+            Map<String, List<InventoryAddress>> memberAddresses = new LinkedHashMap<>();
+            Map<String, String> memberStates = new LinkedHashMap<>();
+            for (String deviceId : memberOrder) {
+                InventoryInterface iface = byDevice.get(deviceId);
+                if (iface != null) {
+                    memberStates.put(deviceId, iface.state());
+                    List<InventoryAddress> nonVip = iface.addresses().stream()
+                            .filter(a -> !"cluster_virtual".equals(a.role()))
+                            .toList();
+                    memberAddresses.put(deviceId, nonVip);
+                }
+            }
+            result.add(new MergedInterface(entry.getKey(), kind, vips, presence, differences, memberAddresses, memberStates));
         }
         return result;
     }

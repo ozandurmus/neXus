@@ -12,7 +12,7 @@ import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { requestBulkInventoryCollect, listDevices, type ApiError, type DeviceSummary } from "../auth/adminApi";
 import { enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
-import { DeviceInventoryPanels } from "./InventoryPanels";
+import { DeviceInventoryPanels, ClusterDetailPanels } from "./InventoryPanels";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -168,11 +168,15 @@ function DeviceRow({
 function DeviceList({
   devices,
   selectedDeviceId,
-  onSelect,
+  selectedClusterRef,
+  onSelectDevice,
+  onSelectCluster,
 }: {
   readonly devices: readonly DeviceSummary[];
   readonly selectedDeviceId: string | null;
-  readonly onSelect: (device: DeviceSummary) => void;
+  readonly selectedClusterRef: string | null;
+  readonly onSelectDevice: (device: DeviceSummary) => void;
+  readonly onSelectCluster: (ref: string, members: DeviceSummary[]) => void;
 }) {
   const [collapsedRefs, setCollapsedRefs] = useState<ReadonlySet<string>>(new Set());
 
@@ -202,14 +206,15 @@ function DeviceList({
       {[...groups.entries()].map(([ref, members]) => {
         const isCollapsed = collapsedRefs.has(ref);
         const firstMember = members[0];
+        const isSelected = selectedClusterRef === ref;
         return (
           <Box key={ref} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Box
               role="button"
               tabIndex={0}
-              onClick={() => toggle(ref)}
+              onClick={() => onSelectCluster(ref, members)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") toggle(ref);
+                if (e.key === "Enter" || e.key === " ") onSelectCluster(ref, members);
               }}
               sx={{
                 display: "flex",
@@ -217,10 +222,12 @@ function DeviceList({
                 gap: 1.25,
                 p: 1.25,
                 cursor: "pointer",
-                bgcolor: m3.scHigh,
+                bgcolor: isSelected ? "#ebf2ff" : m3.scHigh,
                 borderRadius: "12px",
-                border: `1px solid ${m3.outlineVar}`,
-                "&:hover": { bgcolor: m3.scHighest },
+                border: "1px solid",
+                borderColor: isSelected ? m3.primary : m3.outlineVar,
+                transition: "all 0.15s ease-in-out",
+                "&:hover": { bgcolor: isSelected ? "#ebf2ff" : m3.scHighest },
               }}
             >
               <VendorAvatar
@@ -231,10 +238,29 @@ function DeviceList({
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>Cluster {ref}</Typography>
-                  <StatusChip tone="mem" label={`${members.length} member${members.length === 1 ? "" : "s"}`} dense />
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <StatusChip tone="mem" label={`${members.length} members`} dense />
+                    <Box
+                      component="span"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggle(ref);
+                      }}
+                      sx={{
+                        cursor: "pointer",
+                        px: 0.5,
+                        color: "text.secondary",
+                        fontSize: "0.875rem",
+                        "&:hover": { color: m3.primary },
+                      }}
+                      title={isCollapsed ? "Expand members" : "Collapse members"}
+                    >
+                      {isCollapsed ? "▼" : "▲"}
+                    </Box>
+                  </Box>
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-                  {members.map((m) => m.hostname ?? m.device_id).join(" · ")}
+                  ClusterXL · {members.map((m) => m.hostname ?? m.device_id).join(" · ")}
                 </Typography>
               </Box>
             </Box>
@@ -246,7 +272,7 @@ function DeviceList({
                     device={member}
                     indented
                     selected={member.device_id === selectedDeviceId}
-                    onSelect={onSelect}
+                    onSelect={onSelectDevice}
                   />
                 ))}
               </Stack>
@@ -259,7 +285,7 @@ function DeviceList({
           key={device.device_id}
           device={device}
           selected={device.device_id === selectedDeviceId}
-          onSelect={onSelect}
+          onSelect={onSelectDevice}
         />
       ))}
     </Stack>
@@ -272,6 +298,7 @@ export function InventoryScreen() {
     describeApiError,
   );
   const [selectedDevice, setSelectedDevice] = useState<DeviceSummary | null>(null);
+  const [selectedCluster, setSelectedCluster] = useState<{ ref: string; members: DeviceSummary[] } | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -501,14 +528,28 @@ export function InventoryScreen() {
               <DeviceList
                 devices={filteredDevices}
                 selectedDeviceId={selectedDevice?.device_id ?? null}
-                onSelect={setSelectedDevice}
+                selectedClusterRef={selectedCluster?.ref ?? null}
+                onSelectDevice={(dev) => {
+                  setSelectedDevice(dev);
+                  setSelectedCluster(null);
+                }}
+                onSelectCluster={(ref, members) => {
+                  setSelectedCluster({ ref, members });
+                  setSelectedDevice(null);
+                }}
               />
             )}
           </Box>
         }
         detail={
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
-            {selectedDevice ? (
+            {selectedCluster ? (
+              <ClusterDetailPanels
+                key={selectedCluster.ref}
+                clusterRef={selectedCluster.ref}
+                members={selectedCluster.members}
+              />
+            ) : selectedDevice ? (
               <DeviceInventoryPanels key={selectedDevice.device_id} device={selectedDevice} />
             ) : (
               <M3Tabs
