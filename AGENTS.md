@@ -442,6 +442,18 @@ Reading, copying or querying another product's data on a shared host is
 prohibited outright and has no authorization form. A host absent from the
 register authorizes no command at all, including a read.
 
+**PO Amendment (2026-09-19, Host Action & Troubleshooting Authorization).**
+Per Product Owner directive on 2026-09-19, the ceiling for `HOST-A` in
+`docs/design/HOST_REGISTER.md` is raised to `HOST_W1 + TROUBLESHOOT`. Assistant
+sessions (including Claude, Codex/Copilot, and Antigravity) are explicitly
+authorized to execute SSH operations on `HOST-A` for:
+1. Workspace build and rollout via `bash ~/run_build.sh`.
+2. NeXus namespace operations via `kubectl -n ui2 ...` and `kubectl -n ui2-build ...`.
+3. Non-mutating network reachability diagnostic probes (`ping`, `traceroute`,
+   `nc`, `curl`, SSH banner test) to investigate connectivity to managed targets.
+Agents MUST NOT invoke `sudo`, modify system packages/configurations under `/etc`,
+or access incumbent workloads (`HOST_X`).
+
 ## Architectural invariants (test-enforced, not merely current)
 
 - No Browser → device path. The operator console submits typed intent

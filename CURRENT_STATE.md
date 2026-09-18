@@ -24,6 +24,7 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0330` — `done`: Check Point and Palo Alto Inventory & Discovery Convergence.
 `NXS-LOCAL-0333` — `real_env_validated`: AIView Privacy-Preserving HMAC Masking Funnel & Identity Seeding (`aiview` user with `role:replay_viewer`).
 `NXS-LOCAL-0336` — `done`: K3s Host Disk Exhaustion Remediation (Docker logs truncated, 893GB freed), Database CrashLoop Recovery & Deployment Hardening.
 `NXS-LOCAL-0335` — `done`: Check Point Cluster Virtual Systems Hierarchy and In-Memory UI Caching.

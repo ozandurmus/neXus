@@ -10,3 +10,9 @@ order exactly; do not improvise a shorter or reordered version of it.
   `/docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md`; the locator is not authority.
 - Toolchain and privacy/DLP deltas: unchanged, see `/AGENTS.md` and
   `/PRIVACY_AND_DATA_HANDLING.md`.
+- HOST-A Access & Troubleshooting Authorization: Per PO Decision Record
+  Amendment 2026-09-19 (PO APPROVED), you are explicitly authorized to connect
+  via SSH to HOST-A to run `bash ~/run_build.sh`, inspect and manage neXus
+  resources via `kubectl -n ui2 ...`, and execute non-mutating network
+  diagnostic probes (`ping`, `traceroute`, `nc`, SSH banner checks). You MUST NOT
+  invoke `sudo` or touch incumbent workloads (`HOST_X`).

@@ -22,6 +22,13 @@ the account used on 2026-09-15 is the operator's own, which is in `sudo`,
 `docker`, `adm` and `lxd`. That account is not an agent identity (`15A` HA-2,
 HA-3), so every command with write effect on that day was run by the human.
 
+**PO Amendment (2026-09-19):** Reasoning agents in the assistant seat are
+expressly authorized by the Product Owner to connect via SSH using the operator
+account without sudo for running in-cluster builds (`run_build.sh`), namespace
+operations (`kubectl -n ui2 ...`), and network reachability diagnostic probes
+(`ping`, `nc`, `traceroute`, SSH banner test). Agents MUST NOT invoke `sudo` or
+touch incumbent workloads.
+
 Host-key trust was pinned by the human on first connection and must stay
 `StrictHostKeyChecking yes` (`15A` CR-3).
 

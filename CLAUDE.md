@@ -10,3 +10,9 @@ Claude-specific delta only; `roles/ENGINEER.md` carries the reading order.
   engineering session never invokes `nexus-decision-council`.
 - Relay bootstrap: for `RELAY_READY owner/repository#issue`, follow
   `.github/prompts/relay-bootstrap.prompt.md` and `NEXUS_AGENT_RELAY_PROTOCOL.md`.
+- HOST-A Access & Troubleshooting Authorization: Per PO Decision Record
+  Amendment 2026-09-19 (PO APPROVED), you are explicitly authorized to connect
+  via SSH to HOST-A to run `bash ~/run_build.sh`, inspect and manage neXus
+  resources via `kubectl -n ui2 ...`, and execute non-mutating network
+  diagnostic probes (`ping`, `traceroute`, `nc`, SSH banner checks). You MUST NOT
+  invoke `sudo` or touch incumbent workloads (`HOST_X`).

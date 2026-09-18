@@ -137,6 +137,31 @@ about a product name, and a change of holder changes nothing in them.
   holder. A limit that would make a host command's effect unpredictable makes
   that command `HOST_W2` for that holder, by HA-1.
 
+## 4b. Amendment 2026-09-19 — Troubleshooting and Build Rollout Authorization (PO APPROVED)
+
+**Ratified 2026-09-19 by Product Owner directive.**
+
+This amendment qualifies `HA-4`, `SE-1`, and `SE-3` for the development host `HOST-A`:
+
+1. **Troubleshooting and Rollout Authorization.** Reasoning agents acting in the
+   assistant seat (Claude, Codex/Copilot, Antigravity) are expressly authorized
+   by the Product Owner to connect via SSH to `HOST-A` to:
+   - Trigger and monitor workspace builds and deployments via `bash ~/run_build.sh`.
+   - Inspect and manage neXus-scoped Kubernetes objects using `kubectl -n ui2 ...`
+     and `kubectl -n ui2-build ...`.
+   - Execute non-mutating network reachability diagnostic probes (`ping`, `nc`,
+     `traceroute`, and SSH socket/banner probes) to troubleshoot device
+     communication issues directly from the host environment.
+
+2. **Durable Invariants Preserved.**
+   - **No sudo:** The agent MUST NOT execute `sudo` or request privilege escalation.
+   - **No incumbent workload access:** `HOST_X` prohibitions remain absolute.
+   - **No system-level host mutation:** The agent does not modify `/etc`, systemd
+     units, system packages, or host firewalls (`HOST_W2` remains human-performed).
+   - **Privacy and DLP:** Logging and reporting follow `AGENTS.md` and
+     `PRIVACY_AND_DATA_HANDLING.md`; sensitive identities are masked or reported
+     as local relationships (`aiview` / `role:replay_viewer`).
+
 ## 5. Evidence (EV)
 
 - **EV-1. Baseline before the first write.** The incumbent's footprint is
