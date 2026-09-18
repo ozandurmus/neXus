@@ -36,6 +36,10 @@ spec:
       # Omission is what makes one manifest correct in both places.
       securityContext:
         runAsNonRoot: true
+      tolerations:
+        - key: "node.kubernetes.io/disk-pressure"
+          operator: "Exists"
+          effect: "NoSchedule"
       containers:
         - name: database
           image: quay.io/sclorg/postgresql-16-c9s@sha256:fbef891ec464ee8d20332c7f9a4a68decc0b6db8460e7e875df6f33cac5003dc

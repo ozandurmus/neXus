@@ -13,6 +13,10 @@ metadata:
     app.kubernetes.io/component: image-build
 spec:
   restartPolicy: Never
+  tolerations:
+    - key: "node.kubernetes.io/disk-pressure"
+      operator: "Exists"
+      effect: "NoSchedule"
   containers:
     - name: loader
       image: registry.access.redhat.com/ubi9/openjdk-21@sha256:fa55b9f126da0d855e3709473e2237ad500f8d8e6a059f99b3ca10cdc2c5de58

@@ -32,6 +32,10 @@ spec:
       # image's numeric account is what it is validated against (FS-6).
       securityContext:
         runAsNonRoot: true
+      tolerations:
+        - key: "node.kubernetes.io/disk-pressure"
+          operator: "Exists"
+          effect: "NoSchedule"
       # EP-4: the process must terminate on SIGTERM within this window
       # without leaving the database mid-migration.
       terminationGracePeriodSeconds: 30
