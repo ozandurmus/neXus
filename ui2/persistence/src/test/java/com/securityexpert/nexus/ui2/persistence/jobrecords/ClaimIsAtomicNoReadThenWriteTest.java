@@ -57,8 +57,8 @@ class ClaimIsAtomicNoReadThenWriteTest {
         assertTrue(sql.contains("FOR UPDATE SKIP LOCKED"), "must use FOR UPDATE SKIP LOCKED (C2 §4.1)");
         assertTrue(sql.contains("pg_advisory_xact_lock(294611)"),
                 "the global inventory limit must serialize concurrent claims");
-        assertTrue(sql.contains("state IN ('CLAIMED', 'EXECUTING')") && sql.contains(") < 5)"),
-                "at most five active inventory jobs may be claimed globally");
+        assertTrue(sql.contains("state IN ('CLAIMED', 'EXECUTING')") && sql.contains(") < 10)"),
+                "at most ten active inventory jobs may be claimed globally");
     }
 
     @Test

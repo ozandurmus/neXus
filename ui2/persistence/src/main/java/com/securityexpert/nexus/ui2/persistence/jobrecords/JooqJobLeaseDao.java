@@ -42,7 +42,7 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
                   AND (capability_id <> ALL(ARRAY['cp_inventory_collect', 'pan_inventory_collect'])
                     OR (SELECT count(*) FROM jobs
                         WHERE state IN ('CLAIMED', 'EXECUTING')
-                          AND capability_id = ANY(ARRAY['cp_inventory_collect', 'pan_inventory_collect'])) < 5)
+                          AND capability_id = ANY(ARRAY['cp_inventory_collect', 'pan_inventory_collect'])) < 10)
                 ORDER BY CASE
                     WHEN capability_id = ANY(ARRAY['cp_inventory_collect', 'pan_inventory_collect']) THEN 1
                     WHEN capability_id = ANY(ARRAY['cp_configuration_collect', 'pan_configuration_collect']) THEN 2

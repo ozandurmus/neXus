@@ -47,12 +47,18 @@ public final class CheckPointClusterVirtualInterfaceParser {
         for (String rawLine : output.split("\\R")) {
             String line = rawLine.trim();
             if (!inSection) {
-                if (SECTION_HEADER.matcher(line).matches()) {
+                if (SECTION_HEADER.matcher(line).matches() || line.toLowerCase().startsWith("virtual cluster interfaces:")) {
                     inSection = true;
                 }
                 continue;
             }
-            if (line.isEmpty() || (OTHER_SECTION_HEADER.matcher(line).matches() && !SECTION_HEADER.matcher(line).matches())) {
+            if (line.isEmpty()) {
+                continue;
+            }
+            String lower = line.toLowerCase();
+            if (lower.startsWith("no vlans") || lower.startsWith("clusterxl vlan") || lower.startsWith("vlan monitoring")
+                    || lower.startsWith("interface name:") || lower.startsWith("security gw:")
+                    || (OTHER_SECTION_HEADER.matcher(line).matches() && !lower.startsWith("virtual cluster interfaces"))) {
                 break;
             }
             String[] tokens = line.split("\\s+");

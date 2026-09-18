@@ -53,6 +53,57 @@ function describeApiError(err: unknown): string {
   return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
 }
 
+export function VendorAvatar({
+  vendorHint,
+  model,
+  hostname,
+}: {
+  readonly vendorHint: string;
+  readonly model?: string | null;
+  readonly hostname?: string | null;
+}) {
+  let label = "DEV";
+  let bg: string = m3.outline;
+
+  const isVsx =
+    (model && model.toUpperCase().includes("VSX")) ||
+    (hostname && hostname.toUpperCase().includes("VSX"));
+
+  if (vendorHint === "check_point") {
+    if (isVsx) {
+      label = "VSX";
+      bg = m3.vsx;
+    } else {
+      label = "CP";
+      bg = m3.cp;
+    }
+  } else if (vendorHint === "palo_alto") {
+    label = "PAN";
+    bg = m3.pan;
+  }
+
+  return (
+    <Box
+      sx={{
+        width: 32,
+        height: 32,
+        borderRadius: "8px",
+        bgcolor: bg,
+        color: "#ffffff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: 700,
+        fontSize: 11,
+        letterSpacing: 0.5,
+        flexShrink: 0,
+      }}
+    >
+      {label}
+    </Box>
+  );
+}
+
 function AddressChip({ address }: { readonly address: InventoryAddress }) {
   return (
     <Stack direction="row" spacing={0.75} alignItems="center">
@@ -350,7 +401,7 @@ function ClusterRoutesTable({
   readonly routes: readonly ClusterRoute[];
   readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
 }) {
-  const [activeTab, setActiveTab] = useState<string>("logical");
+  const [diffOnly, setDiffOnly] = useState<boolean>(false);
   const [search, setSearch] = useState("");
 
   if (routes.length === 0) {
@@ -360,16 +411,7 @@ function ClusterRoutesTable({
   const diffRoutes = routes.filter((r) => r.presence !== "all" || r.differences.length > 0);
   const diffCount = diffRoutes.length;
 
-  let displayedRoutes = routes;
-  if (activeTab === "diff") {
-    displayedRoutes = diffRoutes;
-  } else if (activeTab !== "logical") {
-    displayedRoutes = routes.filter((r) => {
-      if (r.presence === "all") return true;
-      if (Array.isArray(r.presence)) return r.presence.includes(activeTab);
-      return false;
-    });
-  }
+  let displayedRoutes = diffOnly ? diffRoutes : routes;
 
   if (search.trim()) {
     const q = search.toLowerCase();
@@ -388,84 +430,70 @@ function ClusterRoutesTable({
   return (
     <Stack spacing={1.5}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
-        <Stack direction="row" spacing={0.5} sx={{ bgcolor: m3.scLow, p: 0.5, borderRadius: "10px" }}>
-          <Box
-            role="button"
-            tabIndex={0}
-            onClick={() => setActiveTab("logical")}
-            sx={{
-              px: 1.5,
-              py: 0.5,
-              borderRadius: "8px",
-              cursor: "pointer",
-              bgcolor: activeTab === "logical" ? "#ffffff" : "transparent",
-              boxShadow: activeTab === "logical" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-              fontWeight: activeTab === "logical" ? 600 : 500,
-              fontSize: "0.8125rem",
-              color: activeTab === "logical" ? m3.primary : m3.onSurfaceVar,
-            }}
-          >
-            Logical ({routes.length})
-          </Box>
-          {members.map((m) => (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            Unified Routing Table · {routes.length} routes
+          </Typography>
+          <Stack direction="row" spacing={0.5} sx={{ bgcolor: m3.scLow, p: 0.5, borderRadius: "10px" }}>
             <Box
-              key={m.device_id}
               role="button"
               tabIndex={0}
-              onClick={() => setActiveTab(m.device_id)}
+              onClick={() => setDiffOnly(false)}
               sx={{
                 px: 1.5,
                 py: 0.5,
                 borderRadius: "8px",
                 cursor: "pointer",
-                bgcolor: activeTab === m.device_id ? "#ffffff" : "transparent",
-                boxShadow: activeTab === m.device_id ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                fontWeight: activeTab === m.device_id ? 600 : 500,
+                bgcolor: !diffOnly ? "#ffffff" : "transparent",
+                boxShadow: !diffOnly ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                fontWeight: !diffOnly ? 600 : 500,
                 fontSize: "0.8125rem",
-                color: activeTab === m.device_id ? m3.primary : m3.onSurfaceVar,
+                color: !diffOnly ? m3.primary : m3.onSurfaceVar,
+                transition: "all 0.15s ease-in-out",
               }}
             >
-              {m.hostname ?? m.device_id}
+              All routes ({routes.length})
             </Box>
-          ))}
-          <Box
-            role="button"
-            tabIndex={0}
-            onClick={() => setActiveTab("diff")}
-            sx={{
-              px: 1.5,
-              py: 0.5,
-              borderRadius: "8px",
-              cursor: "pointer",
-              bgcolor: activeTab === "diff" ? "#ffffff" : "transparent",
-              boxShadow: activeTab === "diff" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-              fontWeight: activeTab === "diff" ? 600 : 500,
-              fontSize: "0.8125rem",
-              color: diffCount > 0 ? m3.error : activeTab === "diff" ? m3.primary : m3.onSurfaceVar,
-              display: "flex",
-              alignItems: "center",
-              gap: 0.5,
-            }}
-          >
-            <span>Diff only</span>
-            {diffCount > 0 && (
-              <Box
-                component="span"
-                sx={{
-                  px: 0.6,
-                  py: 0.1,
-                  borderRadius: "10px",
-                  bgcolor: "#fee2e2",
-                  color: "#991b1b",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                }}
-              >
-                {diffCount}
-              </Box>
-            )}
-          </Box>
-        </Stack>
+            <Box
+              role="button"
+              tabIndex={0}
+              onClick={() => setDiffOnly(true)}
+              sx={{
+                px: 1.5,
+                py: 0.5,
+                borderRadius: "8px",
+                cursor: "pointer",
+                bgcolor: diffOnly ? "#ffffff" : "transparent",
+                boxShadow: diffOnly ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                fontWeight: diffOnly ? 600 : 500,
+                fontSize: "0.8125rem",
+                color: diffCount > 0 ? m3.error : diffOnly ? m3.primary : m3.onSurfaceVar,
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                transition: "all 0.15s ease-in-out",
+              }}
+            >
+              <span>Differences only</span>
+              {diffCount > 0 && (
+                <Box
+                  component="span"
+                  sx={{
+                    px: 0.6,
+                    py: 0.1,
+                    borderRadius: "10px",
+                    bgcolor: "#fee2e2",
+                    color: "#991b1b",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  {diffCount}
+                </Box>
+              )}
+            </Box>
+          </Stack>
+        </Box>
 
         <TextField
           size="small"
@@ -476,7 +504,7 @@ function ClusterRoutesTable({
         />
       </Box>
 
-      {activeTab === "diff" && diffCount === 0 ? (
+      {diffOnly && diffCount === 0 ? (
         <Box sx={{ p: 2.5, bgcolor: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "10px", textAlign: "center" }}>
           <Typography variant="body2" sx={{ color: "#065f46", fontWeight: 600 }}>
             ✓ All routes are identical across cluster members. No routing drift detected.
@@ -492,16 +520,19 @@ function ClusterRoutesTable({
               <TableCell sx={{ fontWeight: 600 }}>Next hop</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Interface</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Protocol</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Member Scope / Diff</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Cluster Alignment / Diff</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {displayedRoutes.map((route, index) => {
               const isShared = route.presence === "all";
               const isDiff = !isShared || route.differences.length > 0;
-              let scopeLabel = "Shared";
+              let diffLabel = null;
               if (!isShared && Array.isArray(route.presence)) {
-                scopeLabel = route.presence.map((id) => memberNameById.get(id) ?? id).join(", ") + " only";
+                const memberNames = route.presence.map((id) => memberNameById.get(id) ?? id).join(", ");
+                diffLabel = `DIFF > ${memberNames} only`;
+              } else if (route.differences.length > 0) {
+                diffLabel = `DIFF > ${route.differences.map((d) => `${d.field}: ${d.value}`).join(", ")}`;
               }
 
               return (
@@ -525,16 +556,36 @@ function ClusterRoutesTable({
                     <StatusChip tone="neutral" label={route.protocol} dense />
                   </TableCell>
                   <TableCell>
-                    <Stack direction="row" spacing={0.75} alignItems="center">
+                    {isDiff && diffLabel ? (
+                      <Stack direction="row" spacing={0.75} alignItems="center">
+                        <Box
+                          sx={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            px: 1,
+                            py: 0.25,
+                            borderRadius: "6px",
+                            bgcolor: "#fef3c7",
+                            border: "1px solid #f59e0b",
+                            color: "#92400e",
+                            fontWeight: 700,
+                            fontSize: "0.75rem",
+                            fontFamily: "monospace",
+                          }}
+                        >
+                          {diffLabel}
+                        </Box>
+                        {route.differences.length > 0 && (
+                          <DifferencesNote differences={route.differences} />
+                        )}
+                      </Stack>
+                    ) : (
                       <StatusChip
-                        tone={isShared ? "ok" : "warn"}
-                        label={scopeLabel}
+                        tone="ok"
+                        label="✓ Shared"
                         dense
                       />
-                      {route.differences.length > 0 && (
-                        <DifferencesNote differences={route.differences} />
-                      )}
-                    </Stack>
+                    )}
                   </TableCell>
                 </TableRow>
               );
@@ -964,37 +1015,97 @@ export function ClusterDetailPanels({
 
   return (
     <Stack spacing={2}>
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <Typography variant="caption" color="text.secondary">
-          Devices · {firstMember?.vendor_hint === "check_point" ? "Check Point" : "Palo Alto"} ClusterXL
-        </Typography>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 1.5,
+          p: 2,
+          bgcolor: m3.scLowest,
+          borderRadius: "16px",
+          border: `1px solid ${m3.outlineVar}`,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        }}
+      >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-            <Typography variant="h3" sx={{ fontWeight: 600 }}>
-              {clusterRef}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Members: {members.map((m) => `${m.hostname ?? m.device_id}${m.ha_role ? ` (${m.ha_role.toLowerCase()})` : ""}`).join(" · ")}
-            </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <VendorAvatar
+              vendorHint={firstMember?.vendor_hint ?? "check_point"}
+              model={firstMember?.model}
+              hostname={clusterRef}
+            />
+            <Box>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: m3.onSurface }}>
+                  CLS &gt; {clusterRef}
+                </Typography>
+                <StatusChip
+                  tone={isEnrolled ? "ok" : "warn"}
+                  label={isEnrolled ? "✓ Live" : "Not enrolled"}
+                  dense
+                />
+                <StatusChip
+                  tone="neutral"
+                  label={`${firstMember?.vendor_hint === "check_point" ? "Check Point" : "Palo Alto"} ClusterXL`}
+                  dense
+                />
+                {firstMember?.software_version && (
+                  <StatusChip tone="neutral" label={`${firstMember.software_version} · Gaia`} dense />
+                )}
+                {firstMember?.model && (
+                  <StatusChip tone="neutral" label={firstMember.model} dense />
+                )}
+                <StatusChip tone="neutral" label={`${ifaceCount} interfaces · ${routeCount} routes`} dense />
+              </Box>
+            </Box>
           </Box>
         </Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", pt: 0.5 }}>
-          <StatusChip
-            tone={isEnrolled ? "ok" : "warn"}
-            label={isEnrolled ? "✓ Live" : "Not enrolled"}
-            dense
-          />
-          <StatusChip tone="ok" label="✓ Identity verified" dense />
-          {firstMember?.software_version && (
-            <StatusChip tone="neutral" label={`${firstMember.software_version} · Gaia`} dense />
-          )}
-          {firstMember?.model && (
-            <StatusChip tone="neutral" label={firstMember.model} dense />
-          )}
-          <StatusChip tone="neutral" label={`${ifaceCount} interfaces · ${routeCount} routes`} dense />
-          {clusterInventory && (
-            <ClusterMembersMarker inventory={clusterInventory} />
-          )}
+
+        {/* 2 Member Cards Sub-row */}
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5, pt: 0.5 }}>
+          {members.map((m) => {
+            const isActive = m.ha_role?.toUpperCase() === "ACTIVE";
+            return (
+              <Box
+                key={m.device_id}
+                sx={{
+                  p: 1.5,
+                  borderRadius: "12px",
+                  bgcolor: isActive ? "#f0fdf4" : m3.scLow,
+                  border: "1px solid",
+                  borderColor: isActive ? "#86efac" : m3.outlineVar,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 0.75,
+                  transition: "all 0.15s ease-in-out",
+                }}
+              >
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: m3.onSurface }}>
+                      {m.hostname ?? m.device_id}
+                    </Typography>
+                    <JobStatusIndicator
+                      state={m.latest_job_state}
+                      type={m.latest_job_type}
+                      terminalReason={m.latest_job_terminal_reason}
+                    />
+                  </Box>
+                  <StatusChip
+                    tone={isActive ? "ok" : "mem"}
+                    label={m.ha_role ? m.ha_role.toUpperCase() : "MEMBER"}
+                    dense
+                  />
+                </Box>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {m.model ?? "Unknown model"} · {m.software_version ?? "Unknown version"}
+                  </Typography>
+                  <CollectNowButton deviceId={m.device_id} onCollected={refresh} enrollmentState={m.enrollment_state} />
+                </Box>
+              </Box>
+            );
+          })}
         </Box>
       </Box>
 

@@ -12,7 +12,7 @@ import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { requestBulkInventoryCollect, listDevices, type ApiError, type DeviceSummary } from "../auth/adminApi";
 import { enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
-import { DeviceInventoryPanels, ClusterDetailPanels } from "./InventoryPanels";
+import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar } from "./InventoryPanels";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -28,57 +28,6 @@ const VENDOR_LABEL: Record<string, string> = {
 
 function vendorLabel(vendorHint: string): string {
   return VENDOR_LABEL[vendorHint] ?? vendorHint;
-}
-
-function VendorAvatar({
-  vendorHint,
-  model,
-  hostname,
-}: {
-  readonly vendorHint: string;
-  readonly model?: string | null;
-  readonly hostname?: string | null;
-}) {
-  let label = "DEV";
-  let bg: string = m3.outline;
-
-  const isVsx =
-    (model && model.toUpperCase().includes("VSX")) ||
-    (hostname && hostname.toUpperCase().includes("VSX"));
-
-  if (vendorHint === "check_point") {
-    if (isVsx) {
-      label = "VSX";
-      bg = m3.vsx;
-    } else {
-      label = "CP";
-      bg = m3.cp;
-    }
-  } else if (vendorHint === "palo_alto") {
-    label = "PAN";
-    bg = m3.pan;
-  }
-
-  return (
-    <Box
-      sx={{
-        width: 32,
-        height: 32,
-        borderRadius: "8px",
-        bgcolor: bg,
-        color: "#ffffff",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontWeight: 700,
-        fontSize: 11,
-        letterSpacing: 0.5,
-        flexShrink: 0,
-      }}
-    >
-      {label}
-    </Box>
-  );
 }
 
 function DeviceRow({
@@ -169,12 +118,14 @@ function DeviceList({
   devices,
   selectedDeviceId,
   selectedClusterRef,
+  clusterOnly = false,
   onSelectDevice,
   onSelectCluster,
 }: {
   readonly devices: readonly DeviceSummary[];
   readonly selectedDeviceId: string | null;
   readonly selectedClusterRef: string | null;
+  readonly clusterOnly?: boolean;
   readonly onSelectDevice: (device: DeviceSummary) => void;
   readonly onSelectCluster: (ref: string, members: DeviceSummary[]) => void;
 }) {
@@ -204,7 +155,7 @@ function DeviceList({
   return (
     <Stack spacing={1.25}>
       {[...groups.entries()].map(([ref, members]) => {
-        const isCollapsed = collapsedRefs.has(ref);
+        const isCollapsed = clusterOnly || collapsedRefs.has(ref);
         const firstMember = members[0];
         const isSelected = selectedClusterRef === ref;
         return (
@@ -240,23 +191,25 @@ function DeviceList({
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>Cluster {ref}</Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                     <StatusChip tone="mem" label={`${members.length} members`} dense />
-                    <Box
-                      component="span"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggle(ref);
-                      }}
-                      sx={{
-                        cursor: "pointer",
-                        px: 0.5,
-                        color: "text.secondary",
-                        fontSize: "0.875rem",
-                        "&:hover": { color: m3.primary },
-                      }}
-                      title={isCollapsed ? "Expand members" : "Collapse members"}
-                    >
-                      {isCollapsed ? "▼" : "▲"}
-                    </Box>
+                    {!clusterOnly && (
+                      <Box
+                        component="span"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggle(ref);
+                        }}
+                        sx={{
+                          cursor: "pointer",
+                          px: 0.5,
+                          color: "text.secondary",
+                          fontSize: "0.875rem",
+                          "&:hover": { color: m3.primary },
+                        }}
+                        title={isCollapsed ? "Expand members" : "Collapse members"}
+                      >
+                        {isCollapsed ? "▼" : "▲"}
+                      </Box>
+                    )}
                   </Box>
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
@@ -280,7 +233,7 @@ function DeviceList({
           </Box>
         );
       })}
-      {standalone.map((device) => (
+      {!clusterOnly && standalone.map((device) => (
         <DeviceRow
           key={device.device_id}
           device={device}
@@ -302,10 +255,11 @@ export function InventoryScreen() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterMode, setFilterMode] = useState<"all" | "check_point" | "palo_alto" | "stale" | "draft">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "cluster" | "check_point" | "palo_alto" | "stale" | "draft">("all");
 
   const devices = data;
   const total = devices?.length ?? 0;
+  const clusterCount = new Set((devices ?? []).map((d) => d.cluster_member_ref).filter(Boolean)).size;
   const checkPointCount = devices?.filter((d) => d.vendor_hint === "check_point").length ?? 0;
   const paloAltoCount = devices?.filter((d) => d.vendor_hint === "palo_alto").length ?? 0;
   const draftCount = devices?.filter((d) => d.enrollment_state === "DRAFT").length ?? 0;
@@ -327,6 +281,7 @@ export function InventoryScreen() {
   }, [devices, refresh]);
 
   const filteredDevices = (devices ?? []).filter((device) => {
+    if (filterMode === "cluster" && !device.cluster_member_ref) return false;
     if (filterMode === "check_point" && device.vendor_hint !== "check_point") return false;
     if (filterMode === "palo_alto" && device.vendor_hint !== "palo_alto") return false;
     if (filterMode === "draft" && device.enrollment_state !== "DRAFT") return false;
@@ -457,6 +412,20 @@ export function InventoryScreen() {
                   borderRadius: "8px",
                 }}
               />
+              {clusterCount > 0 && (
+                <Chip
+                  size="small"
+                  clickable
+                  onClick={() => setFilterMode("cluster")}
+                  label={`Clusters ${clusterCount}`}
+                  sx={{
+                    bgcolor: filterMode === "cluster" ? m3.primary : m3.scHigh,
+                    color: filterMode === "cluster" ? m3.onPrimary : m3.onSurface,
+                    fontWeight: filterMode === "cluster" ? 600 : 400,
+                    borderRadius: "8px",
+                  }}
+                />
+              )}
               <Chip
                 size="small"
                 clickable
@@ -529,6 +498,7 @@ export function InventoryScreen() {
                 devices={filteredDevices}
                 selectedDeviceId={selectedDevice?.device_id ?? null}
                 selectedClusterRef={selectedCluster?.ref ?? null}
+                clusterOnly={filterMode === "cluster"}
                 onSelectDevice={(dev) => {
                   setSelectedDevice(dev);
                   setSelectedCluster(null);

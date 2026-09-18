@@ -76,6 +76,16 @@ public final class SshExecTransport implements DeviceTransport {
         // Per-connect state: a rejection is determined by the key hook, never exception substrings.
         String[] trustFailure = {null};
         boolean[] trusted = {false};
+        // Fast-fail socket pre-check: verify port reachability within 2500ms before blocking in JSch handshake
+        try (java.net.Socket preSocket = new java.net.Socket()) {
+            int socketTimeout = (int) Math.min(timeout.toMillis(), 2500L);
+            preSocket.connect(new java.net.InetSocketAddress(target.host(), target.port()), socketTimeout);
+        } catch (java.io.IOException networkFailure) {
+            LOG.log(System.Logger.Level.INFO, "TCP pre-connect unreachable for {0}:{1}: {2}",
+                    target.host(), target.port(), networkFailure.getMessage());
+            return new ConnectResult.TimedOut();
+        }
+
         Session session = null;
         try {
             JSch jsch = new JSch();

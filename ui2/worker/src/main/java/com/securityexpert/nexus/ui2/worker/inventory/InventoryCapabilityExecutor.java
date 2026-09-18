@@ -21,9 +21,11 @@ import com.securityexpert.nexus.ui2.jobs.transport.ExecSpec;
 import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
 import com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator;
 import com.securityexpert.nexus.ui2.worker.confirm.PresentedIdentity;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointClusterVirtualInterfaceParser;
@@ -141,11 +143,40 @@ public final class InventoryCapabilityExecutor {
             String haStatOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost));
             String vipOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
 
+            List<ParsedInterface> physicalInterfaces = CheckPointIpAddrParser.parse(ipv4, ipv6);
+            List<ParsedRoute> physicalRoutes = CheckPointIpRouteParser.parse(routeOutput);
+
+            // Quantum Spark / Gaia Embedded or restricted Clish shell fallback
+            if (physicalInterfaces.isEmpty()) {
+                String clishIf = execOutput(session, "show interfaces all");
+                if (clishIf.isBlank()) {
+                    clishIf = execOutput(session, "show interfaces table");
+                }
+                if (clishIf.isBlank()) {
+                    clishIf = execOutput(session, "clish -c 'show interfaces all'");
+                }
+                if (!clishIf.isBlank()) {
+                    physicalInterfaces = parseClishInterfaces(clishIf);
+                }
+            }
+            if (physicalRoutes.isEmpty()) {
+                String clishRoutes = execOutput(session, "show route all");
+                if (clishRoutes.isBlank()) {
+                    clishRoutes = execOutput(session, "show route");
+                }
+                if (clishRoutes.isBlank()) {
+                    clishRoutes = execOutput(session, "clish -c 'show route all'");
+                }
+                if (!clishRoutes.isBlank()) {
+                    physicalRoutes = parseClishRoutes(clishRoutes);
+                }
+            }
+
             List<InventoryContext> contexts = new ArrayList<>();
             contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
-                    toInventoryInterfaces(mergeVirtualAddresses(CheckPointIpAddrParser.parse(ipv4, ipv6),
+                    toInventoryInterfaces(mergeVirtualAddresses(physicalInterfaces,
                             CheckPointClusterVirtualInterfaceParser.parse(vipOutput))),
-                    toInventoryRoutes(CheckPointIpRouteParser.parse(routeOutput))));
+                    toInventoryRoutes(physicalRoutes)));
 
             CheckPointHaStateParser.HaState haState = CheckPointHaStateParser.parse(haStatOutput);
             List<InventoryHaFact> haFacts = new ArrayList<>();
@@ -174,6 +205,9 @@ public final class InventoryCapabilityExecutor {
                     haFacts.add(new InventoryHaFact(UUID.randomUUID().toString(), vsid, vsidRole, Optional.empty(),
                             InventoryHaFact.SOURCE_CP_VSLS_TABLE));
                 }
+            }
+            if (contexts.stream().allMatch(c -> c.interfaces().isEmpty() && c.routes().isEmpty())) {
+                return new InventoryResult.ConnectFailed("no_interfaces_or_routes_discovered: device returned no interface or route data");
             }
             return new InventoryResult.Completed(contexts, haFacts);
         } finally {
@@ -298,13 +332,230 @@ public final class InventoryCapabilityExecutor {
         return parsed.stream().map(ParsedRoute::toInventoryRoute).toList();
     }
 
+    private static int maskToPrefix(String mask) {
+        if (mask == null || mask.isBlank()) {
+            return 24;
+        }
+        try {
+            String[] parts = mask.trim().split("\\.");
+            if (parts.length != 4) {
+                return 24;
+            }
+            int bits = 0;
+            for (String part : parts) {
+                int octet = Integer.parseInt(part);
+                bits += Integer.bitCount(octet & 0xFF);
+            }
+            return bits;
+        } catch (Exception e) {
+            return 24;
+        }
+    }
+
+    static List<ParsedInterface> parseClishInterfaces(String output) {
+        if (output == null || output.isBlank()) {
+            return List.of();
+        }
+        Map<String, ClishInterfaceBuilder> builders = new LinkedHashMap<>();
+
+        boolean isBlockFormat = Pattern.compile("(?im)^interface\\s+[a-zA-Z0-9_.-]+\\s*$").matcher(output).find();
+
+        if (isBlockFormat) {
+            ClishInterfaceBuilder current = null;
+            for (String rawLine : output.split("\\R")) {
+                String line = rawLine.trim();
+                if (line.isEmpty() || line.startsWith("---") || line.startsWith("Codes:")) {
+                    continue;
+                }
+
+                Matcher ifHeaderMatcher = Pattern.compile("(?i)^interface\\s+([a-zA-Z0-9_.-]+)$").matcher(line);
+                if (ifHeaderMatcher.find()) {
+                    String name = ifHeaderMatcher.group(1);
+                    current = builders.computeIfAbsent(name, ClishInterfaceBuilder::new);
+                    continue;
+                }
+
+                if (current != null) {
+                    Matcher stateMatcher = Pattern.compile("(?i)(?:state|status)[:\\s]+(on|up|off|down)").matcher(line);
+                    if (stateMatcher.find()) {
+                        String st = stateMatcher.group(1).toLowerCase();
+                        current.state = ("on".equals(st) || "up".equals(st)) ? InventoryInterface.STATE_UP : InventoryInterface.STATE_DOWN;
+                        continue;
+                    }
+                    Matcher ipMatcher = Pattern.compile("(?i)(?:ipv4-address|ip(?:v4)?\\s*address)[:\\s]+([0-9.]+)(?:/(\\d+))?").matcher(line);
+                    if (ipMatcher.find()) {
+                        current.ip = ipMatcher.group(1);
+                        if (ipMatcher.group(2) != null) {
+                            current.prefix = Integer.parseInt(ipMatcher.group(2));
+                        }
+                        continue;
+                    }
+                    Matcher maskMatcher = Pattern.compile("(?i)(?:subnet-mask|netmask|mask)[:\\s]+([0-9.]+)").matcher(line);
+                    if (maskMatcher.find()) {
+                        current.mask = maskMatcher.group(1);
+                        continue;
+                    }
+                }
+            }
+        } else {
+            for (String rawLine : output.split("\\R")) {
+                String line = rawLine.trim();
+                if (line.isEmpty() || line.startsWith("---") || line.startsWith("Codes:")) {
+                    continue;
+                }
+                if (line.toLowerCase().startsWith("interface") || line.toLowerCase().startsWith("name") || line.toLowerCase().startsWith("port")) {
+                    continue;
+                }
+                String[] tokens = line.split("\\s+");
+                if (tokens.length >= 2) {
+                    String candidateName = tokens[0];
+                    if (!candidateName.matches("^\\d{1,3}\\..*") && candidateName.matches("^[a-zA-Z0-9_.-]+$")) {
+                        ClishInterfaceBuilder tb = builders.computeIfAbsent(candidateName, ClishInterfaceBuilder::new);
+                        for (int i = 1; i < tokens.length; i++) {
+                            String tok = tokens[i].toLowerCase();
+                            if ("up".equals(tok) || "on".equals(tok)) {
+                                tb.state = InventoryInterface.STATE_UP;
+                            } else if ("down".equals(tok) || "off".equals(tok)) {
+                                tb.state = InventoryInterface.STATE_DOWN;
+                            } else if (tok.matches("^\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?$")) {
+                                if (tb.ip == null && !tok.startsWith("0.0.0.0")) {
+                                    if (tok.contains("/")) {
+                                        String[] ipAndPrefix = tok.split("/");
+                                        tb.ip = ipAndPrefix[0];
+                                        tb.prefix = Integer.parseInt(ipAndPrefix[1]);
+                                    } else {
+                                        tb.ip = tok;
+                                    }
+                                } else if (tb.ip != null && tb.mask == null && tok.matches("^255\\..*")) {
+                                    tb.mask = tok;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        List<ParsedInterface> result = new ArrayList<>();
+        for (ClishInterfaceBuilder b : builders.values()) {
+            if ("lo".equalsIgnoreCase(b.name)) {
+                continue;
+            }
+            List<ParsedAddress> addrs = new ArrayList<>();
+            if (b.ip != null && !b.ip.equals("0.0.0.0")) {
+                int prefix = b.prefix > 0 ? b.prefix : (b.mask != null ? maskToPrefix(b.mask) : 24);
+                addrs.add(new ParsedAddress(b.ip + "/" + prefix, InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER));
+            }
+            String kind = b.name.contains(".") ? InventoryInterface.KIND_VLAN
+                    : (b.name.startsWith("bond") ? InventoryInterface.KIND_BOND : InventoryInterface.KIND_PHYSICAL);
+            Optional<String> parent = b.name.contains(".") ? Optional.of(b.name.split("\\.")[0]) : Optional.empty();
+            Optional<Integer> vlanId = Optional.empty();
+            if (b.name.contains(".")) {
+                try {
+                    vlanId = Optional.of(Integer.parseInt(b.name.split("\\.")[1]));
+                } catch (Exception ignored) {}
+            }
+            result.add(new ParsedInterface(b.name, parent, kind, b.state, addrs, vlanId));
+        }
+        return result;
+    }
+
+    private static class ClishInterfaceBuilder {
+        final String name;
+        String state = InventoryInterface.STATE_UP;
+        String ip;
+        String mask;
+        int prefix = 0;
+
+        ClishInterfaceBuilder(String name) {
+            this.name = name;
+        }
+    }
+
+    static List<ParsedRoute> parseClishRoutes(String output) {
+        if (output == null || output.isBlank()) {
+            return List.of();
+        }
+        List<ParsedRoute> routes = new ArrayList<>();
+        for (String rawLine : output.split("\\R")) {
+            String line = rawLine.trim();
+            if (line.isEmpty() || line.startsWith("Codes:") || line.startsWith("---") || line.toLowerCase().startsWith("route table")) {
+                continue;
+            }
+            if (line.startsWith("127.")) {
+                continue;
+            }
+
+            String proto = InventoryRoute.PROTOCOL_STATIC;
+            String remaining = line;
+            if (line.matches("^[CSBORKD]\\s+.*")) {
+                char code = line.charAt(0);
+                proto = switch (code) {
+                    case 'C' -> InventoryRoute.PROTOCOL_CONNECTED;
+                    case 'B' -> InventoryRoute.PROTOCOL_BGP;
+                    case 'O' -> InventoryRoute.PROTOCOL_OSPF;
+                    default -> InventoryRoute.PROTOCOL_STATIC;
+                };
+                remaining = line.substring(1).trim();
+            }
+
+            Matcher destMatcher = Pattern.compile("^(default|\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?)").matcher(remaining);
+            if (!destMatcher.find()) {
+                continue;
+            }
+            String rawDest = destMatcher.group(1);
+            String destination = "default".equalsIgnoreCase(rawDest) ? "0.0.0.0/0" : rawDest;
+            if (destination.startsWith("127.")) {
+                continue;
+            }
+            if (!destination.contains("/")) {
+                destination = destination.equals("0.0.0.0") ? "0.0.0.0/0" : destination + "/32";
+            }
+
+            Optional<String> nextHop = Optional.empty();
+            Optional<String> ifName = Optional.empty();
+
+            if (remaining.contains("is directly connected")) {
+                proto = InventoryRoute.PROTOCOL_CONNECTED;
+                Matcher connIf = Pattern.compile("is directly connected(?:,\\s*|\\s+)([a-zA-Z0-9_.-]+)").matcher(remaining);
+                if (connIf.find()) {
+                    ifName = Optional.of(connIf.group(1));
+                }
+            } else {
+                Matcher viaMatcher = Pattern.compile("via\\s+([0-9.]+)(?:,\\s*([a-zA-Z0-9_.-]+))?").matcher(remaining);
+                if (viaMatcher.find()) {
+                    nextHop = Optional.of(viaMatcher.group(1));
+                    if (viaMatcher.group(2) != null && !viaMatcher.group(2).isBlank()) {
+                        ifName = Optional.of(viaMatcher.group(2));
+                    }
+                }
+                if (ifName.isEmpty()) {
+                    Matcher devMatcher = Pattern.compile("(?:dev|interface)\\s+([a-zA-Z0-9_.-]+)").matcher(remaining);
+                    if (devMatcher.find()) {
+                        ifName = Optional.of(devMatcher.group(1));
+                    }
+                }
+            }
+
+            routes.add(new ParsedRoute(destination, nextHop, ifName, proto, Optional.empty()));
+        }
+        return routes;
+    }
+
     private String execOutput(TransportSession session, String command) {
         ExecResult result = transport.exec(session, new ExecSpec(command), READ_TIMEOUT);
-        return switch (result) {
+        String output = switch (result) {
             case ExecResult.Completed completed -> completed.output();
             case ExecResult.TimedOut ignored -> "";
             case ExecResult.ChannelFailed ignored -> "";
         };
+        if (command.startsWith("cphaprob") && (output.isBlank() || output.contains("not found"))) {
+            ExecResult fallback = transport.exec(session, new ExecSpec("bash -lc '" + command + "'"), READ_TIMEOUT);
+            if (fallback instanceof ExecResult.Completed c && !c.output().isBlank() && !c.output().contains("not found")) {
+                return c.output();
+            }
+        }
+        return output;
     }
 
     private String xmlApiOutput(ApiTarget target, String cmd, Map<String, String> headers) {
