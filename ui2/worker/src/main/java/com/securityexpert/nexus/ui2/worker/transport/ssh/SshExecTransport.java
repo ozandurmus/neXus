@@ -81,9 +81,9 @@ public final class SshExecTransport implements DeviceTransport {
                 "[SSH_CONNECT] START target={0}:{1} user={2} timeout={3}ms",
                 target.host(), target.port(), credential.username(), timeout.toMillis());
 
-        // Fast-fail socket pre-check: verify port reachability within 5000ms before blocking in JSch handshake
+        // Fast-fail socket pre-check: verify port reachability within 10000ms before blocking in JSch handshake
         try (java.net.Socket preSocket = new java.net.Socket()) {
-            int socketTimeout = (int) Math.min(timeout.toMillis(), 5000L);
+            int socketTimeout = (int) Math.min(timeout.toMillis(), 10000L);
             long preStart = System.currentTimeMillis();
             preSocket.connect(new java.net.InetSocketAddress(target.host(), target.port()), socketTimeout);
             long preElapsed = System.currentTimeMillis() - preStart;
@@ -95,7 +95,7 @@ public final class SshExecTransport implements DeviceTransport {
             LOG.log(System.Logger.Level.WARNING,
                     "[SSH_CONNECT] TCP pre-connect FAILED after {0}ms for {1}:{2}: {3}",
                     preElapsed, target.host(), target.port(), networkFailure.getMessage());
-            return new ConnectResult.TimedOut();
+            return new ConnectResult.TimedOut("tcp_connect_timeout: port " + target.port() + " unreachable (" + networkFailure.getMessage() + ")");
         }
 
         Session session = null;
@@ -139,11 +139,16 @@ public final class SshExecTransport implements DeviceTransport {
                 return discoveryFailure(e, trustFailure[0], trusted[0]);
             }
             String message = String.valueOf(e.getMessage());
-            if (message.contains("HostKey") || message.contains("reject")) {
+            String lowerMessage = message.toLowerCase(java.util.Locale.ROOT);
+            if (lowerMessage.contains("hostkey") || lowerMessage.contains("reject")) {
                 return new ConnectResult.HostKeyRejected(message);
             }
-            if (message.contains("timeout") || message.contains("Auth cancel")) {
-                return new ConnectResult.TimedOut();
+            if (isNetworkFailure(e) || lowerMessage.contains("timeout") || lowerMessage.contains("timed out")
+                    || message.contains("Auth cancel")) {
+                if (lowerMessage.contains("read timed out")) {
+                    return new ConnectResult.TimedOut("ssh_banner_timeout: remote host did not respond to SSH banner exchange");
+                }
+                return new ConnectResult.TimedOut("ssh_connect_timeout: " + message);
             }
             return new ConnectResult.AuthenticationFailed(message);
         } finally {
@@ -173,7 +178,9 @@ public final class SshExecTransport implements DeviceTransport {
                 return true;
             }
         }
-        return false;
+        String msg = String.valueOf(failure != null ? failure.getMessage() : "").toLowerCase(java.util.Locale.ROOT);
+        return msg.contains("timeout") || msg.contains("timed out") || msg.contains("connection refused")
+                || msg.contains("no route");
     }
 
     @Override

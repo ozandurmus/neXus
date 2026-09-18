@@ -19,7 +19,10 @@ public sealed interface ConnectResult {
     record HostKeyRejected(String reason) implements ConnectResult {
     }
 
-    record TimedOut() implements ConnectResult {
+    record TimedOut(String reason) implements ConnectResult {
+        public TimedOut() {
+            this("timed_out");
+        }
     }
 
     default boolean isSuccess() {

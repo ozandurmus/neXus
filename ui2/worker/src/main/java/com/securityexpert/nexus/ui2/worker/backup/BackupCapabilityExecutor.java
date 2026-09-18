@@ -283,7 +283,7 @@ public final class BackupCapabilityExecutor {
             case ConnectResult.HostKeyRejected rejected -> rejected.reason().startsWith("host_key_mismatch:")
                     ? rejected.reason()
                     : "host_key_rejected: " + rejected.reason();
-            case ConnectResult.TimedOut ignored -> "timed_out";
+            case ConnectResult.TimedOut timedOut -> timedOut.reason();
             case ConnectResult.Authenticated ignored -> "authenticated";
         };
     }
