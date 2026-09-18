@@ -226,15 +226,15 @@ function DeviceRegistryCard({
               </M3Button>
             )}
           </Stack>
-          <M3Button
-            emphasis="filled"
-            icon="delete"
-            onClick={handleBulkDelete}
-            disabled={isDeleting}
-            sx={{ bgcolor: "error.main", color: "error.contrastText", "&:hover": { bgcolor: "error.dark" } }}
-          >
-            {isDeleting ? "Deleting..." : `Delete selected (${selectedIds.size})`}
-          </M3Button>
+          <Box sx={{ "& button": { bgcolor: "error.main", color: "error.contrastText", "&:hover": { bgcolor: "error.dark" } } }}>
+            <M3Button
+              emphasis="filled"
+              onClick={handleBulkDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : `Delete selected (${selectedIds.size})`}
+            </M3Button>
+          </Box>
         </Box>
       )}
       {total > 0 && (
