@@ -24,13 +24,11 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0333` — `real_env_validated`: AIView Privacy-Preserving HMAC Masking Funnel & Identity Seeding (`aiview` user with `role:replay_viewer`).
+`NXS-LOCAL-0336` — `done`: K3s Host Disk Exhaustion Remediation (Docker logs truncated, 893GB freed), Database CrashLoop Recovery & Deployment Hardening.
+`NXS-LOCAL-0335` — `done`: Check Point Cluster Virtual Systems Hierarchy and In-Memory UI Caching.
+`NXS-LOCAL-0334` — `done`: Unified Cluster Routing Matrix and Interface VIP Differentiation.
 `NXS-LOCAL-0332` — `automated_validated`: Check Point Discovery Timeout (180s) and SSH Exec Transport Stream Hardening.
-`NXS-LOCAL-0331` — `automated_validated`: CpObjectDumpParser Quoted Parens and Display Name Fallback.
-`NXS-LOCAL-0330` — `automated_validated`: Check Point Discovery Parser Hardening, Domain Banner Filtering, and Diagnostic Logging.
-`NXS-LOCAL-0329` — `automated_validated`: Fix Device Deletion SQL Schema and Spring Error Route Un-gating.
-`NXS-LOCAL-0328` — `done`: UI2 K3s Remediation Roadmap & Orchestrator Protocol Enforcement (FROZEN: `docs/design/PO_DECISION_RECORD_2026_09_18A_UI2_K3S_REMEDIATION_AND_ORCHESTRATION_ALIGNMENT.md`).
-`NXS-LOCAL-0313` — `done`: Device Workspace UI Revert.
-`NXS-LOCAL-0285` — `done`: Check Point SSH inventory worker finished, hybrid topology contract signed.
 
 `NXS-LOCAL-0176` — `automated_validated`: expire a past-deadline session on
 read so it cannot block login. The newest merged movement, its predecessor
