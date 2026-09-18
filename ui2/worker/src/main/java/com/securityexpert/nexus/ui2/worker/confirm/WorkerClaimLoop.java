@@ -116,6 +116,7 @@ public final class WorkerClaimLoop {
         if (claim.isEmpty()) {
             return false;
         }
+        long claimMs = System.currentTimeMillis();
         ClaimedJob claimed = claim.get();
         Optional<JobRow> jobOpt = jobRecordDao.find(claimed.jobId());
         if (jobOpt.isEmpty()) {
@@ -123,11 +124,21 @@ public final class WorkerClaimLoop {
             return true;
         }
         JobRow job = jobOpt.get();
+        LOGGER.log(System.Logger.Level.INFO,
+                "[WORKER_CLAIM] Worker {0} claimed job {1} ({2}) for device {3} leaseEpoch={4}",
+                workerId, claimed.jobId(), job.capabilityId(), job.targetDeviceId(), claimed.leaseEpoch());
 
         // 14F DR-1: a discovery job's target is a discovery_run row, not a device -- dispatched before any
         // device/endpoint resolution below, which would otherwise crash on a job with no target_device_id.
         if (DiscoveryCapabilityIds.isDiscoveryCapability(job.capabilityId())) {
-            discoveryJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetRef());
+            try {
+                discoveryJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetRef());
+            } finally {
+                long totalJobTime = System.currentTimeMillis() - claimMs;
+                LOGGER.log(System.Logger.Level.INFO,
+                        "[WORKER_RELEASE] Worker {0} finished discovery job {1} in {2}ms",
+                        workerId, claimed.jobId(), totalJobTime);
+            }
             return true;
         }
 
@@ -151,40 +162,47 @@ public final class WorkerClaimLoop {
         }
         EndpointRecord endpoint = endpointOpt.get();
 
-        if (InventoryCapabilityIds.isInventoryCapability(job.capabilityId())) {
-            InventoryRequest inventoryRequest = buildInventoryRequest(job.capabilityId(), endpoint.endpointId(),
-                    endpoint.addressRef(), device.credentialReferenceId());
-            inventoryJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), inventoryRequest,
-                    false);
+        try {
+            if (InventoryCapabilityIds.isInventoryCapability(job.capabilityId())) {
+                InventoryRequest inventoryRequest = buildInventoryRequest(job.capabilityId(), endpoint.endpointId(),
+                        endpoint.addressRef(), device.credentialReferenceId());
+                inventoryJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), inventoryRequest,
+                        false);
+                return true;
+            }
+
+            if (ConfigurationCapabilityIds.isConfigurationCapability(job.capabilityId())) {
+                ConfigurationRequest configurationRequest = buildConfigurationRequest(job.capabilityId(),
+                        endpoint.endpointId(), endpoint.addressRef(), device.credentialReferenceId());
+                configurationJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(),
+                        configurationRequest, false);
+                return true;
+            }
+
+            if (BackupCapabilityIds.isBackupCapability(job.capabilityId())) {
+                // BK-11: the distinct backup credential, never device.credentialReferenceId() (the collection credential).
+                String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
+                        hostOf(endpoint.addressRef()), portOf(endpoint.addressRef()));
+                BackupRequest backupRequest = new BackupRequest(
+                        new ConnectionTarget(endpoint.endpointId(), hostOf(endpoint.addressRef()), portOf(endpoint.addressRef())),
+                        backupCredentialRef, trustRuleRef);
+                backupJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), backupRequest);
+                return true;
+            }
+
+            ConfirmRequest primaryRequest = buildRequest(job.capabilityId(), endpoint.endpointId(), endpoint.addressRef(),
+                    device.credentialReferenceId());
+            var peerRequestFactory = peerRequestFactoryFor(job.capabilityId(), device.credentialReferenceId());
+
+            confirmJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), primaryRequest,
+                    peerRequestFactory, false);
             return true;
+        } finally {
+            long totalJobTime = System.currentTimeMillis() - claimMs;
+            LOGGER.log(System.Logger.Level.INFO,
+                    "[WORKER_RELEASE] Worker {0} finished job {1} in {2}ms",
+                    workerId, claimed.jobId(), totalJobTime);
         }
-
-        if (ConfigurationCapabilityIds.isConfigurationCapability(job.capabilityId())) {
-            ConfigurationRequest configurationRequest = buildConfigurationRequest(job.capabilityId(),
-                    endpoint.endpointId(), endpoint.addressRef(), device.credentialReferenceId());
-            configurationJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(),
-                    configurationRequest, false);
-            return true;
-        }
-
-        if (BackupCapabilityIds.isBackupCapability(job.capabilityId())) {
-            // BK-11: the distinct backup credential, never device.credentialReferenceId() (the collection credential).
-            String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
-                    hostOf(endpoint.addressRef()), portOf(endpoint.addressRef()));
-            BackupRequest backupRequest = new BackupRequest(
-                    new ConnectionTarget(endpoint.endpointId(), hostOf(endpoint.addressRef()), portOf(endpoint.addressRef())),
-                    backupCredentialRef, trustRuleRef);
-            backupJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), backupRequest);
-            return true;
-        }
-
-        ConfirmRequest primaryRequest = buildRequest(job.capabilityId(), endpoint.endpointId(), endpoint.addressRef(),
-                device.credentialReferenceId());
-        var peerRequestFactory = peerRequestFactoryFor(job.capabilityId(), device.credentialReferenceId());
-
-        confirmJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), primaryRequest,
-                peerRequestFactory, false);
-        return true;
     }
 
     private InventoryRequest buildInventoryRequest(String capabilityId, String endpointId, String addressRef,

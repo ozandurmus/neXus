@@ -39,11 +39,12 @@ import com.securityexpert.nexus.ui2.platform.WorkerActor;
  */
 public final class ConfirmJobExecutor {
 
-    private static final String ACTOR = WorkerActor.RESERVED_ACTOR_FINGERPRINT;
-    private static final String ACTION_CLAIM_TO_EXECUTING = "job_confirm_claim_to_executing";
-    private static final String ACTION_CLAIM_TIME_DEVICE_CHECK = "job_confirm_claim_time_device_check";
-    private static final String ACTION_COMPLETED = "job_confirm_completed";
-    private static final String ACTION_FAILED = "job_confirm_failed";
+    private static final System.Logger LOG = System.getLogger(ConfirmJobExecutor.class.getName());
+    private static final String ACTOR = "system:worker";
+    private static final String ACTION_CLAIM_TIME_DEVICE_CHECK = "confirm_claim_time_device_check";
+    private static final String ACTION_CLAIM_TO_EXECUTING = "confirm_claim_to_executing";
+    private static final String ACTION_FAILED = "confirm_failed";
+    private static final String ACTION_COMPLETED = "confirm_completed";
 
     private final JobLeaseRepository leaseRepository;
     private final JobStepAttemptRepository attemptRepository;
@@ -71,6 +72,11 @@ public final class ConfirmJobExecutor {
     public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, ConfirmRequest request,
             PeerFollowResolver.ConfirmRequestFactory peerRequestFactory, boolean strictRefuseEnabled) {
 
+        long jobStart = System.currentTimeMillis();
+        LOG.log(System.Logger.Level.INFO,
+                "[JOB_START] Confirm job {0} for device {1} leaseEpoch={2}",
+                jobId, targetDeviceId, leaseEpoch);
+
         // EC-J1's claim-time mirror of F6's second enforcement point: the confirm is admissible
         // only while the device is still DRAFT and not disabled -- re-checked here independent of
         // JobAdmissionService's own admission-time check (a device disabled between admission and
@@ -79,8 +85,12 @@ public final class ConfirmJobExecutor {
                 deviceEnrollmentReadPort.findEnrollment(targetDeviceId);
         if (enrollment.isEmpty() || enrollment.get().disabled()
                 || enrollment.get().enrollmentState() != DeviceEnrollmentState.DRAFT) {
+            long elapsed = System.currentTimeMillis() - jobStart;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[JOB_REJECTED] Confirm job {0} device {1} not eligible after {2}ms",
+                    jobId, targetDeviceId, elapsed);
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.CLAIMED, JobState.REJECTED, ACTOR,
-                    ACTION_CLAIM_TIME_DEVICE_CHECK);
+                    ACTION_CLAIM_TIME_DEVICE_CHECK, "DEVICE_NOT_ELIGIBLE_AT_CLAIM_TIME (after " + elapsed + "ms)");
             return new JobOutcome.Rejected("DEVICE_NOT_ELIGIBLE_AT_CLAIM_TIME");
         }
 
@@ -100,8 +110,13 @@ public final class ConfirmJobExecutor {
         }
 
         if (!(primaryResult instanceof ConfirmResult.Completed completed)) {
+            long elapsed = System.currentTimeMillis() - jobStart;
+            String reasonWithTime = describeFailure(primaryResult) + " (after " + elapsed + "ms)";
+            LOG.log(System.Logger.Level.WARNING,
+                    "[JOB_FAILED] Confirm job {0} for device {1} FAILED after {2}ms: {3}",
+                    jobId, targetDeviceId, elapsed, reasonWithTime);
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED, describeFailure(primaryResult));
+                    ACTION_FAILED, reasonWithTime);
             return new JobOutcome.Failed(describeFailure(primaryResult));
         }
 
@@ -129,13 +144,22 @@ public final class ConfirmJobExecutor {
         DeviceConfirmFacts facts = toDeviceConfirmFacts(completed, identityDecision, peerFollowOutcome);
         boolean written = deviceRepository.recordConfirmSuccess(targetDeviceId, facts, ACTOR, ACTION_COMPLETED);
         if (!written) {
+            long elapsed = System.currentTimeMillis() - jobStart;
+            String reasonWithTime = "device_confirm_write_conflict (after " + elapsed + "ms)";
+            LOG.log(System.Logger.Level.ERROR,
+                    "[JOB_FAILED] Confirm job {0} for device {1} write conflict after {2}ms",
+                    jobId, targetDeviceId, elapsed);
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED, "device_confirm_write_conflict");
+                    ACTION_FAILED, reasonWithTime);
             return new JobOutcome.Failed("device_confirm_write_conflict");
         }
 
+        long elapsed = System.currentTimeMillis() - jobStart;
+        LOG.log(System.Logger.Level.INFO,
+                "[JOB_COMPLETED] Confirm job {0} for device {1} COMPLETED in {2}ms",
+                jobId, targetDeviceId, elapsed);
         leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR,
-                ACTION_COMPLETED);
+                ACTION_COMPLETED, "completed in " + elapsed + "ms");
         return new JobOutcome.Completed();
     }
 

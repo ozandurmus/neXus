@@ -41,6 +41,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
  */
 public final class ConfirmCapabilityExecutor {
 
+    private static final System.Logger LOG = System.getLogger(ConfirmCapabilityExecutor.class.getName());
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
     private static final Pattern API_KEY = Pattern.compile("<key>([^<]+)</key>");
 
@@ -71,22 +72,46 @@ public final class ConfirmCapabilityExecutor {
     private ConfirmResult confirmCheckPoint(ConfirmRequest request) {
         var target = request.connectionTarget()
                 .orElseThrow(() -> new IllegalArgumentException("check_point confirm requires a connectionTarget"));
+        long overallStart = System.currentTimeMillis();
+        LOG.log(System.Logger.Level.INFO, "[CONFIRM_START] Check Point target={0}:{1}", target.host(), target.port());
         ConnectSpec spec = new ConnectSpec(request.credentialRef(), request.trustRuleRef(), Optional.empty());
         ConnectResult connectResult;
         try {
             connectResult = transport.connect(target, spec, READ_TIMEOUT);
         } catch (IllegalStateException credentialUnresolvable) {
+            long elapsed = System.currentTimeMillis() - overallStart;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[CONFIRM_FAILED] Credential unresolvable for {0}:{1} after {2}ms: {3}",
+                    target.host(), target.port(), elapsed, credentialUnresolvable.getMessage());
             return new ConfirmResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
         }
         if (!(connectResult instanceof ConnectResult.Authenticated authenticated)) {
+            long elapsed = System.currentTimeMillis() - overallStart;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[CONFIRM_FAILED] Connect failed for {0}:{1} after {2}ms: {3}",
+                    target.host(), target.port(), elapsed, describeConnect(connectResult));
             return new ConfirmResult.ConnectFailed(describeConnect(connectResult));
         }
         TransportSession session = authenticated.session();
         try {
             String identityOutput = execOutput(session,
                     DeviceFirstContactCommandSet.forStep(Vendor.CHECK_POINT, ContactStepKind.IDENTITY_READ));
+            if (identityOutput == null) {
+                long elapsed = System.currentTimeMillis() - overallStart;
+                LOG.log(System.Logger.Level.WARNING,
+                        "[CONFIRM_FAILED] Identity read command timed out or failed for {0}:{1} after {2}ms",
+                        target.host(), target.port(), elapsed);
+                return new ConfirmResult.ConnectFailed("command_failed: identity read timed out or failed (after " + elapsed + "ms)");
+            }
             String haPeerOutput = execOutput(session,
                     DeviceFirstContactCommandSet.forStep(Vendor.CHECK_POINT, ContactStepKind.HA_PEER_READ));
+            if (haPeerOutput == null) {
+                long elapsed = System.currentTimeMillis() - overallStart;
+                LOG.log(System.Logger.Level.WARNING,
+                        "[CONFIRM_FAILED] HA peer read command timed out or failed for {0}:{1} after {2}ms",
+                        target.host(), target.port(), elapsed);
+                return new ConfirmResult.ConnectFailed("command_failed: ha peer read timed out or failed (after " + elapsed + "ms)");
+            }
 
             PresentedIdentity presented =
                     checkPointParser.presentedIdentity(identityOutput, session.presentedIdentity());
@@ -94,6 +119,10 @@ public final class ConfirmCapabilityExecutor {
                     checkPointParser.haRole(haPeerOutput));
             HaPeerClaim haPeerClaim = checkPointParser.haPeerClaim(haPeerOutput);
             Optional<String> selfReference = checkPointParser.selfReferenceForPeer(identityOutput);
+            long elapsed = System.currentTimeMillis() - overallStart;
+            LOG.log(System.Logger.Level.INFO,
+                    "[CONFIRM_COMPLETE] Check Point target={0}:{1} completed in {2}ms: model={3}, version={4}",
+                    target.host(), target.port(), elapsed, facts.model().orElse("unknown"), facts.softwareVersion().orElse("unknown"));
             return new ConfirmResult.Completed(presented, facts, haPeerClaim, selfReference);
         } finally {
             transport.disconnect(session);
@@ -135,15 +164,29 @@ public final class ConfirmCapabilityExecutor {
     }
 
     private String execOutput(TransportSession session, DeviceFirstContactCommandSet entry) {
-        // The primary literal form is what this movement sends; the fallback form entry 1 also
-        // declares is a documented alternative for a later correction, never sent speculatively in
-        // the same attempt (AGENTS.md: no invented retry beyond what the gate entry's own retry column
-        // states -- "none; a failure ends the confirm with its outcome").
-        ExecResult result = transport.exec(session, new ExecSpec(entry.literalForms().get(0)), READ_TIMEOUT);
+        long startMs = System.currentTimeMillis();
+        String cmd = entry.literalForms().get(0);
+        ExecResult result = transport.exec(session, new ExecSpec(cmd), READ_TIMEOUT);
+        long elapsedMs = System.currentTimeMillis() - startMs;
         return switch (result) {
-            case ExecResult.Completed completed -> completed.output();
-            case ExecResult.TimedOut ignored -> null;
-            case ExecResult.ChannelFailed ignored -> null;
+            case ExecResult.Completed completed -> {
+                LOG.log(System.Logger.Level.INFO,
+                        "[CONFIRM_EXEC] cmd=\"{0}\" completed in {1}ms (exit={2}, length={3})",
+                        cmd, elapsedMs, completed.exitStatus(), completed.output().length());
+                yield completed.output();
+            }
+            case ExecResult.TimedOut timedOut -> {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[CONFIRM_EXEC_TIMEOUT] cmd=\"{0}\" TIMED OUT after {1}ms!",
+                        cmd, elapsedMs);
+                yield null;
+            }
+            case ExecResult.ChannelFailed failed -> {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[CONFIRM_EXEC_FAILED] cmd=\"{0}\" failed after {1}ms: {2}",
+                        cmd, elapsedMs, failed.reason());
+                yield null;
+            }
         };
     }
 

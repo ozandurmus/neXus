@@ -88,6 +88,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
  */
 public final class InventoryCapabilityExecutor {
 
+    private static final System.Logger LOG = System.getLogger(InventoryCapabilityExecutor.class.getName());
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
     private static final Pattern API_KEY = Pattern.compile("<key>([^<]+)</key>");
     private static final Pattern SERIAL_TAG = Pattern.compile("(?is)<serial>\\s*([^<]+?)\\s*</serial>");
@@ -112,14 +113,24 @@ public final class InventoryCapabilityExecutor {
             boolean strictRefuseEnabled) {
         ConnectionTarget target = request.connectionTarget()
                 .orElseThrow(() -> new IllegalArgumentException("check_point inventory requires a connectionTarget"));
+        long overallStart = System.currentTimeMillis();
+        LOG.log(System.Logger.Level.INFO, "[INVENTORY_COLLECT_START] Check Point target={0}:{1}", target.host(), target.port());
         ConnectSpec spec = new ConnectSpec(request.credentialRef(), request.trustRuleRef(), Optional.empty());
         ConnectResult connectResult;
         try {
             connectResult = transport.connect(target, spec, READ_TIMEOUT);
         } catch (IllegalStateException credentialUnresolvable) {
+            long elapsed = System.currentTimeMillis() - overallStart;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[INVENTORY_COLLECT_FAILED] Credential unresolvable for {0}:{1} after {2}ms: {3}",
+                    target.host(), target.port(), elapsed, credentialUnresolvable.getMessage());
             return new InventoryResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
         }
         if (!(connectResult instanceof ConnectResult.Authenticated authenticated)) {
+            long elapsed = System.currentTimeMillis() - overallStart;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[INVENTORY_COLLECT_FAILED] Connect failed for {0}:{1} after {2}ms: {3}",
+                    target.host(), target.port(), elapsed, describeConnect(connectResult));
             return new InventoryResult.ConnectFailed(describeConnect(connectResult));
         }
         TransportSession session = authenticated.session();
@@ -136,6 +147,9 @@ public final class InventoryCapabilityExecutor {
             String vsxProbeOutput = execOutput(session, InventoryReadPlan.CP_VSX_STAT);
             CheckPointVsxStatParser.VsxStatResult vsxStat = CheckPointVsxStatParser.parse(vsxProbeOutput);
             boolean vsxHost = vsxStat.vsx();
+            LOG.log(System.Logger.Level.INFO,
+                    "[INVENTORY_VSX_PROBE] target={0}:{1} vsx={2}, vsCount={3}",
+                    target.host(), target.port(), vsxHost, vsxStat.devices().size());
 
             String ipv4 = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V4, vsxHost));
             String ipv6 = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V6, vsxHost));
@@ -143,8 +157,13 @@ public final class InventoryCapabilityExecutor {
             String haStatOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost));
             String vipOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
 
+            long parseStart = System.currentTimeMillis();
             List<ParsedInterface> physicalInterfaces = CheckPointIpAddrParser.parse(ipv4, ipv6);
             List<ParsedRoute> physicalRoutes = CheckPointIpRouteParser.parse(routeOutput);
+            long parseElapsed = System.currentTimeMillis() - parseStart;
+            LOG.log(System.Logger.Level.INFO,
+                    "[INVENTORY_PARSE] target={0}:{1} parsed in {2}ms: interfaces={3}, routes={4} (ipv4_len={5}, route_len={6})",
+                    target.host(), target.port(), parseElapsed, physicalInterfaces.size(), physicalRoutes.size(), ipv4.length(), routeOutput.length());
 
             // Quantum Spark / Gaia Embedded or restricted Clish shell fallback
             if (physicalInterfaces.isEmpty()) {
@@ -207,8 +226,17 @@ public final class InventoryCapabilityExecutor {
                 }
             }
             if (contexts.stream().allMatch(c -> c.interfaces().isEmpty() && c.routes().isEmpty())) {
-                return new InventoryResult.ConnectFailed("no_interfaces_or_routes_discovered: device returned no interface or route data");
+                long totalElapsed = System.currentTimeMillis() - overallStart;
+                LOG.log(System.Logger.Level.WARNING,
+                        "[INVENTORY_COLLECT_FAILED] target={0}:{1} returned no interface or route data after {2}ms",
+                        target.host(), target.port(), totalElapsed);
+                return new InventoryResult.ConnectFailed("no_interfaces_or_routes_discovered: device returned no interface or route data (took " + totalElapsed + "ms)");
             }
+            long totalElapsed = System.currentTimeMillis() - overallStart;
+            LOG.log(System.Logger.Level.INFO,
+                    "[INVENTORY_COLLECT_COMPLETE] target={0}:{1} completed in {2}ms, totalContexts={3}, totalInterfaces={4}",
+                    target.host(), target.port(), totalElapsed, contexts.size(),
+                    contexts.stream().mapToInt(c -> c.interfaces().size()).sum());
             return new InventoryResult.Completed(contexts, haFacts);
         } finally {
             transport.disconnect(session);
@@ -543,17 +571,46 @@ public final class InventoryCapabilityExecutor {
     }
 
     private String execOutput(TransportSession session, String command) {
+        long startMs = System.currentTimeMillis();
         ExecResult result = transport.exec(session, new ExecSpec(command), READ_TIMEOUT);
+        long elapsedMs = System.currentTimeMillis() - startMs;
         String output = switch (result) {
-            case ExecResult.Completed completed -> completed.output();
-            case ExecResult.TimedOut ignored -> "";
-            case ExecResult.ChannelFailed ignored -> "";
+            case ExecResult.Completed completed -> {
+                LOG.log(System.Logger.Level.INFO,
+                        "[INVENTORY_EXEC] cmd=\"{0}\" took {1}ms (exit={2}, length={3})",
+                        command, elapsedMs, completed.exitStatus(), completed.output().length());
+                yield completed.output();
+            }
+            case ExecResult.TimedOut timedOut -> {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[INVENTORY_EXEC_TIMEOUT] cmd=\"{0}\" TIMED OUT after {1}ms!",
+                        command, elapsedMs);
+                yield "";
+            }
+            case ExecResult.ChannelFailed failed -> {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[INVENTORY_EXEC_FAILED] cmd=\"{0}\" failed after {1}ms: {2}",
+                        command, elapsedMs, failed.reason());
+                yield "";
+            }
         };
         if ((command.startsWith("cphaprob") || command.startsWith("vsx") || command.contains("vsx"))
                 && (output.isBlank() || output.contains("not found") || output.contains("CLISH") || output.contains("Unknown command"))) {
+            LOG.log(System.Logger.Level.INFO,
+                    "[INVENTORY_FALLBACK] cmd=\"{0}\" clish/empty ({1} chars); running bash fallback...",
+                    command, output.length());
+            long fbStart = System.currentTimeMillis();
             ExecResult fallback = transport.exec(session, new ExecSpec("bash -lc '" + command + "'"), READ_TIMEOUT);
+            long fbElapsed = System.currentTimeMillis() - fbStart;
             if (fallback instanceof ExecResult.Completed c && !c.output().isBlank() && !c.output().contains("not found")) {
+                LOG.log(System.Logger.Level.INFO,
+                        "[INVENTORY_FALLBACK_SUCCESS] bash fallback for \"{0}\" succeeded in {1}ms (length={2})",
+                        command, fbElapsed, c.output().length());
                 return c.output();
+            } else {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[INVENTORY_FALLBACK_FAILED] bash fallback for \"{0}\" failed/empty in {1}ms",
+                        command, fbElapsed);
             }
         }
         return output;

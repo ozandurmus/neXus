@@ -103,7 +103,9 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     jobEvent.targetDeviceId(),
                     jobEvent.state(),
                     maskedReason,
-                    jobEvent.submittedAt());
+                    jobEvent.submittedAt(),
+                    jobEvent.finishedAt(),
+                    jobEvent.durationMs());
         }
         if (obj instanceof Map<?, ?> map) {
             return maskMap((Map<?, ?>) map, parentContextRef);

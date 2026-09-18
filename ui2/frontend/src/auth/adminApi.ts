@@ -741,6 +741,8 @@ export interface JobEventView {
   readonly state: string;
   readonly terminal_reason?: string;
   readonly submitted_at: string;
+  readonly finished_at?: string;
+  readonly duration_ms?: number;
 }
 
 export function listJobs(): Promise<JobEventView[]> {

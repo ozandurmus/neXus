@@ -76,13 +76,25 @@ public final class SshExecTransport implements DeviceTransport {
         // Per-connect state: a rejection is determined by the key hook, never exception substrings.
         String[] trustFailure = {null};
         boolean[] trusted = {false};
-        // Fast-fail socket pre-check: verify port reachability within 2500ms before blocking in JSch handshake
+        long connectStartMs = System.currentTimeMillis();
+        LOG.log(System.Logger.Level.INFO,
+                "[SSH_CONNECT] START target={0}:{1} user={2} timeout={3}ms",
+                target.host(), target.port(), credential.username(), timeout.toMillis());
+
+        // Fast-fail socket pre-check: verify port reachability within 5000ms before blocking in JSch handshake
         try (java.net.Socket preSocket = new java.net.Socket()) {
-            int socketTimeout = (int) Math.min(timeout.toMillis(), 2500L);
+            int socketTimeout = (int) Math.min(timeout.toMillis(), 5000L);
+            long preStart = System.currentTimeMillis();
             preSocket.connect(new java.net.InetSocketAddress(target.host(), target.port()), socketTimeout);
+            long preElapsed = System.currentTimeMillis() - preStart;
+            LOG.log(System.Logger.Level.INFO,
+                    "[SSH_CONNECT] TCP pre-connect SUCCESS in {0}ms for {1}:{2}",
+                    preElapsed, target.host(), target.port());
         } catch (java.io.IOException networkFailure) {
-            LOG.log(System.Logger.Level.INFO, "TCP pre-connect unreachable for {0}:{1}: {2}",
-                    target.host(), target.port(), networkFailure.getMessage());
+            long preElapsed = System.currentTimeMillis() - connectStartMs;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[SSH_CONNECT] TCP pre-connect FAILED after {0}ms for {1}:{2}: {3}",
+                    preElapsed, target.host(), target.port(), networkFailure.getMessage());
             return new ConnectResult.TimedOut();
         }
 
@@ -100,11 +112,21 @@ public final class SshExecTransport implements DeviceTransport {
             // this repository wires it to JSch's own verification hook.
             session.setHostKeyRepository(trustedOnlyRepository(spec.trustRuleRef(), target, trustFailure, trusted));
             session.setConfig("StrictHostKeyChecking", "yes");
+            long jschStart = System.currentTimeMillis();
             session.connect((int) timeout.toMillis());
+            long totalConnectElapsed = System.currentTimeMillis() - connectStartMs;
+            long jschElapsed = System.currentTimeMillis() - jschStart;
+            LOG.log(System.Logger.Level.INFO,
+                    "[SSH_CONNECT] AUTHENTICATED for {0}:{1} in {2}ms (jsch={3}ms)",
+                    target.host(), target.port(), totalConnectElapsed, jschElapsed);
 
             SshTransportSession wrapped = new SshTransportSession(UUID.randomUUID().toString(), session);
             return new ConnectResult.Authenticated(wrapped);
         } catch (JSchException e) {
+            long totalConnectElapsed = System.currentTimeMillis() - connectStartMs;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[SSH_CONNECT] FAILED for {0}:{1} after {2}ms: {3}",
+                    target.host(), target.port(), totalConnectElapsed, e.getMessage());
             if (session != null) {
                 session.disconnect();
             }
@@ -159,6 +181,10 @@ public final class SshExecTransport implements DeviceTransport {
         if (!(session instanceof SshTransportSession sshSession)) {
             return new ExecResult.ChannelFailed("not an ssh_exec session");
         }
+        long execStartMs = System.currentTimeMillis();
+        LOG.log(System.Logger.Level.INFO,
+                "[SSH_EXEC] START cmd=\"{0}\" timeout={1}ms",
+                spec.command(), timeout.toMillis());
         ChannelExec channel = null;
         try {
             channel = (ChannelExec) sshSession.jschSession().openChannel("exec");
@@ -171,11 +197,17 @@ public final class SshExecTransport implements DeviceTransport {
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             byte[] chunk = new byte[4096];
             long deadline = System.currentTimeMillis() + timeout.toMillis();
+            long firstByteMs = -1;
             while (true) {
                 while (in.available() > 0) {
                     int read = in.read(chunk, 0, chunk.length);
                     if (read < 0) {
                         break;
+                    }
+                    if (firstByteMs < 0) {
+                        firstByteMs = System.currentTimeMillis() - execStartMs;
+                        LOG.log(System.Logger.Level.DEBUG,
+                                "[SSH_EXEC] FIRST_DATA cmd=\"{0}\" after {1}ms", spec.command(), firstByteMs);
                     }
                     buffer.write(chunk, 0, read);
                 }
@@ -188,15 +220,28 @@ public final class SshExecTransport implements DeviceTransport {
                     if (in.available() > 0) {
                         continue;
                     }
-                    return new ExecResult.Completed(buffer.toString(java.nio.charset.StandardCharsets.UTF_8),
-                            channel.getExitStatus());
+                    long durationMs = System.currentTimeMillis() - execStartMs;
+                    String outStr = buffer.toString(java.nio.charset.StandardCharsets.UTF_8);
+                    int lines = outStr.split("\r\n|\r|\n").length;
+                    LOG.log(System.Logger.Level.INFO,
+                            "[SSH_EXEC] COMPLETED cmd=\"{0}\" in {1}ms (exit={2}, bytes={3}, lines={4})",
+                            spec.command(), durationMs, channel.getExitStatus(), buffer.size(), lines);
+                    return new ExecResult.Completed(outStr, channel.getExitStatus());
                 }
                 if (System.currentTimeMillis() > deadline) {
+                    long durationMs = System.currentTimeMillis() - execStartMs;
+                    LOG.log(System.Logger.Level.WARNING,
+                            "[SSH_EXEC] TIMEOUT cmd=\"{0}\" HUNG for {1}ms! (timeout={2}ms, bytesReceived={3})",
+                            spec.command(), durationMs, timeout.toMillis(), buffer.size());
                     return new ExecResult.TimedOut();
                 }
                 Thread.sleep(50);
             }
         } catch (JSchException | java.io.IOException | InterruptedException e) {
+            long durationMs = System.currentTimeMillis() - execStartMs;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[SSH_EXEC] FAILED cmd=\"{0}\" after {1}ms: {2}",
+                    spec.command(), durationMs, e.getMessage());
             Thread.currentThread().interrupt();
             return new ExecResult.ChannelFailed(String.valueOf(e.getMessage()));
         } finally {
@@ -250,6 +295,7 @@ public final class SshExecTransport implements DeviceTransport {
     @Override
     public void disconnect(TransportSession session) {
         if (session instanceof SshTransportSession sshSession) {
+            LOG.log(System.Logger.Level.INFO, "[SSH_DISCONNECT] session disconnected: {0}", session.sessionId());
             sshSession.jschSession().disconnect();
         }
     }

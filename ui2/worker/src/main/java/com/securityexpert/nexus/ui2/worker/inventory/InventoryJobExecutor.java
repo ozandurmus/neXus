@@ -44,11 +44,12 @@ import com.securityexpert.nexus.ui2.worker.confirm.PresentedIdentity;
  */
 public final class InventoryJobExecutor {
 
-    private static final String ACTOR = WorkerActor.RESERVED_ACTOR_FINGERPRINT;
-    private static final String ACTION_CLAIM_TO_EXECUTING = "job_inventory_claim_to_executing";
-    private static final String ACTION_CLAIM_TIME_DEVICE_CHECK = "job_inventory_claim_time_device_check";
-    private static final String ACTION_COMPLETED = "job_inventory_completed";
-    private static final String ACTION_FAILED = "job_inventory_failed";
+    private static final System.Logger LOG = System.getLogger(InventoryJobExecutor.class.getName());
+    private static final String ACTOR = "system:worker";
+    private static final String ACTION_CLAIM_TIME_DEVICE_CHECK = "inventory_claim_time_device_check";
+    private static final String ACTION_CLAIM_TO_EXECUTING = "inventory_claim_to_executing";
+    private static final String ACTION_FAILED = "inventory_failed";
+    private static final String ACTION_COMPLETED = "inventory_completed";
 
     private final JobLeaseRepository leaseRepository;
     private final JobStepAttemptRepository attemptRepository;
@@ -70,12 +71,20 @@ public final class InventoryJobExecutor {
 
     public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, InventoryRequest request,
             boolean strictRefuseEnabled) {
+        long jobStart = System.currentTimeMillis();
+        LOG.log(System.Logger.Level.INFO,
+                "[JOB_START] Inventory job {0} for device {1} leaseEpoch={2}",
+                jobId, targetDeviceId, leaseEpoch);
 
         Optional<com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentSnapshot> enrollment =
                 deviceEnrollmentReadPort.findEnrollment(targetDeviceId);
         if (enrollment.isEmpty() || !enrollment.get().permitsReadCollection()) {
+            long elapsed = System.currentTimeMillis() - jobStart;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[JOB_REJECTED] Inventory job {0} device {1} not eligible after {2}ms",
+                    jobId, targetDeviceId, elapsed);
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.CLAIMED, JobState.REJECTED, ACTOR,
-                    ACTION_CLAIM_TIME_DEVICE_CHECK);
+                    ACTION_CLAIM_TIME_DEVICE_CHECK, "DEVICE_NOT_ELIGIBLE_AT_CLAIM_TIME (after " + elapsed + "ms)");
             return new JobOutcome.Rejected("DEVICE_NOT_ELIGIBLE_AT_CLAIM_TIME");
         }
 
@@ -104,8 +113,13 @@ public final class InventoryJobExecutor {
         }
 
         if (!(result instanceof InventoryResult.Completed completed)) {
+            long elapsed = System.currentTimeMillis() - jobStart;
+            String reasonWithTime = describeFailure(result) + " (after " + elapsed + "ms)";
+            LOG.log(System.Logger.Level.WARNING,
+                    "[JOB_FAILED] Inventory job {0} for device {1} FAILED after {2}ms: {3}",
+                    jobId, targetDeviceId, elapsed, reasonWithTime);
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED, describeFailure(result));
+                    ACTION_FAILED, reasonWithTime);
             return new JobOutcome.Failed(describeFailure(result));
         }
 
@@ -114,13 +128,22 @@ public final class InventoryJobExecutor {
         try {
             deviceInventoryRepository.recordRun(run, ACTOR, ACTION_COMPLETED);
         } catch (RuntimeException recordFailed) {
+            long elapsed = System.currentTimeMillis() - jobStart;
+            String reasonWithTime = "inventory_run_write_failed: " + recordFailed.getMessage() + " (after " + elapsed + "ms)";
+            LOG.log(System.Logger.Level.ERROR,
+                    "[JOB_FAILED] Inventory job {0} for device {1} DB write failed after {2}ms: {3}",
+                    jobId, targetDeviceId, elapsed, reasonWithTime);
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    ACTION_FAILED, "inventory_run_write_failed: " + recordFailed.getMessage());
+                    ACTION_FAILED, reasonWithTime);
             return new JobOutcome.Failed("inventory_run_write_failed: " + recordFailed.getMessage());
         }
 
+        long elapsed = System.currentTimeMillis() - jobStart;
+        LOG.log(System.Logger.Level.INFO,
+                "[JOB_COMPLETED] Inventory job {0} for device {1} COMPLETED in {2}ms",
+                jobId, targetDeviceId, elapsed);
         leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR,
-                ACTION_COMPLETED);
+                ACTION_COMPLETED, "completed in " + elapsed + "ms");
         return new JobOutcome.Completed();
     }
 
