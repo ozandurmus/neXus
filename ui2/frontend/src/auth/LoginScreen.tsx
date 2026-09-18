@@ -16,7 +16,11 @@ const GENERIC_ERROR = "Incorrect username or password.";
 const CONFLICT_MESSAGE = "Another session is already active for this account.";
 const UNEXPECTED_ERROR = "Something went wrong. Please try again.";
 
-type Outcome = "ok" | "invalid" | "conflict" | "unexpected";
+type Outcome =
+  | { kind: "ok" }
+  | { kind: "invalid" }
+  | { kind: "conflict"; conflictToken: string }
+  | { kind: "unexpected" };
 type LoginMechanism = "local" | "ldap";
 
 async function submitLogin(username: string, password: string, mechanism: LoginMechanism): Promise<Outcome> {
@@ -27,12 +31,15 @@ async function submitLogin(username: string, password: string, mechanism: LoginM
       credentials: "include",
       body: JSON.stringify({ username, password, mechanism_id: mechanism }),
     });
-    if (response.ok) return "ok";
-    if (response.status === 409) return "conflict";
-    if (response.status === 401) return "invalid";
-    return "unexpected";
+    if (response.ok) return { kind: "ok" };
+    if (response.status === 409) {
+      const data = await response.json().catch(() => ({}));
+      return { kind: "conflict", conflictToken: data.conflict_token || "" };
+    }
+    if (response.status === 401) return { kind: "invalid" };
+    return { kind: "unexpected" };
   } catch {
-    return "unexpected";
+    return { kind: "unexpected" };
   }
 }
 
@@ -47,6 +54,7 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
   const [mechanism, setMechanism] = useState<LoginMechanism>("local");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [conflictToken, setConflictToken] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event?: FormEvent) {
@@ -54,14 +62,16 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
     if (submitting) return;
     setSubmitting(true);
     setError(null);
+    setConflictToken(null);
     try {
       const outcome = await submitLogin(username, password, mechanism);
-      switch (outcome) {
+      switch (outcome.kind) {
         case "ok":
           onAuthenticated();
           return;
         case "conflict":
           setError(CONFLICT_MESSAGE);
+          setConflictToken(outcome.conflictToken);
           return;
         case "invalid":
           setError(GENERIC_ERROR);
@@ -71,6 +81,31 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
       }
     } finally {
       if (mechanism === "ldap") setPassword("");
+      setSubmitting(false);
+    }
+  }
+
+  async function handleTakeover() {
+    if (!conflictToken || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const response = await fetch("/login/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ conflictToken, action: "takeover" }),
+      });
+      if (response.ok) {
+        onAuthenticated();
+      } else {
+        setError(UNEXPECTED_ERROR);
+        setConflictToken(null);
+      }
+    } catch {
+      setError(UNEXPECTED_ERROR);
+      setConflictToken(null);
+    } finally {
       setSubmitting(false);
     }
   }
@@ -140,9 +175,15 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
             {error}
           </Typography>
         ) : null}
-        <M3Button emphasis="filled" onClick={() => handleSubmit()}>
-          {submitting ? "Signing in…" : "Sign in"}
-        </M3Button>
+        {conflictToken ? (
+          <M3Button emphasis="filled" onClick={handleTakeover}>
+            {submitting ? "Signing in…" : "Terminate prior session & sign in"}
+          </M3Button>
+        ) : (
+          <M3Button emphasis="filled" onClick={() => handleSubmit()}>
+            {submitting ? "Signing in…" : "Sign in"}
+          </M3Button>
+        )}
       </Box>
     </Box>
   );

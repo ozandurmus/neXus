@@ -102,13 +102,15 @@ public final class JooqSessionRepository implements SessionRepository {
         // C3 §3.4: attributed to the NEW session's actor, one transaction,
         // so the partial unique index is never transiently absent.
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
-            dsl.execute("update sessions set state = 'SUPERSEDED', superseded_by_session_id = {0} "
-                    + "where session_id = {1} and state = 'ACTIVE'", newSessionId, priorSessionId);
+            dsl.execute("update sessions set state = 'SUPERSEDED' "
+                    + "where session_id = {0} and state = 'ACTIVE'", priorSessionId);
             dsl.execute("insert into sessions(session_id, actor_fingerprint, csrf_secret, state, "
                     + "created_at, last_seen_at, idle_deadline_at, absolute_expires_at) "
                     + "values ({0}, {1}, {2}, 'ACTIVE', {3}, {3}, {4}, {5})",
                     newSessionId, actorFingerprint, csrfSecret, Timestamp.from(now),
                     Timestamp.from(idleDeadline), Timestamp.from(absoluteExpires));
+            dsl.execute("update sessions set superseded_by_session_id = {0}, end_reason = 'login_elsewhere' "
+                    + "where session_id = {1}", newSessionId, priorSessionId);
             return new SessionRecord(newSessionId, actorFingerprint, csrfSecret, SessionState.ACTIVE, now, now,
                     idleDeadline, absoluteExpires, Optional.empty(), Optional.empty(), Optional.empty());
         });
