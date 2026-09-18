@@ -32,7 +32,12 @@ public final class ClaimStatementText {
                     OR (SELECT count(*) FROM jobs
                         WHERE state IN ('CLAIMED', 'EXECUTING')
                           AND capability_id = ANY(ARRAY['cp_inventory_collect', 'pan_inventory_collect'])) < 5)
-                ORDER BY submitted_at
+                ORDER BY CASE
+                    WHEN capability_id = ANY(ARRAY['cp_inventory_collect', 'pan_inventory_collect']) THEN 1
+                    WHEN capability_id = ANY(ARRAY['cp_configuration_collect', 'pan_configuration_collect']) THEN 2
+                    WHEN capability_id = ANY(ARRAY['cp_discovery_enumerate', 'pan_discovery_enumerate']) THEN 3
+                    ELSE 4
+                END, submitted_at
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
             )

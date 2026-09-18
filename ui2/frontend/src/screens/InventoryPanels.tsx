@@ -40,6 +40,12 @@ const POLL_INTERVAL_MS = 1750;
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
+  const code = typeof apiErr.body?.code === "string" ? (apiErr.body.code as string) : undefined;
+  const reason = typeof apiErr.body?.reason === "string" ? (apiErr.body.reason as string) : undefined;
+  if (code === "DEVICE_NOT_ELIGIBLE" && reason && reason.includes("DRAFT")) {
+    return "Device is pending enrollment confirmation. Inventory can be collected once enrolled.";
+  }
+  if (code && reason) return `${code}: ${reason}`;
   const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
   if (serverError) return serverError;
   return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
@@ -334,10 +340,11 @@ export function ClusterMembersMarker({ inventory }: { readonly inventory: Cluste
  * reaches a terminal state -- the same cancellable-interval pattern
  * `AddDeviceDialog` uses to watch a submitted job.
  */
-export function CollectNowButton({ deviceId, onCollected }: { readonly deviceId: string; readonly onCollected: () => void }) {
+export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { readonly deviceId: string; readonly onCollected: () => void; readonly enrollmentState?: string }) {
   const [phase, setPhase] = useState<"idle" | "submitting" | "polling" | "error">("idle");
   const [jobState, setJobState] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isDraft = enrollmentState === "DRAFT";
 
   useEffect(() => {
     if (phase !== "polling") return undefined;
@@ -386,9 +393,19 @@ export function CollectNowButton({ deviceId, onCollected }: { readonly deviceId:
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "flex-start" }}>
-      <M3Button emphasis="outlined" icon="download" onClick={handleClick} disabled={phase === "submitting" || phase === "polling"}>
-        {phase === "polling" ? jobPhaseLabel(jobState ?? "REQUESTED") : "Collect now"}
+      <M3Button
+        emphasis="outlined"
+        icon="download"
+        onClick={handleClick}
+        disabled={isDraft || phase === "submitting" || phase === "polling"}
+      >
+        {isDraft ? "Enrollment confirming..." : phase === "polling" ? jobPhaseLabel(jobState ?? "REQUESTED") : "Collect now"}
       </M3Button>
+      {isDraft && (
+        <Typography variant="body2" color="text.secondary">
+          Device is pending enrollment confirmation.
+        </Typography>
+      )}
       {error && (
         <Typography variant="body2" color="error">
           {error}
@@ -438,7 +455,7 @@ export function DeviceInventoryPanels({ device }: { readonly device: DeviceSumma
     <Stack spacing={1.5}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
         {isCluster && clusterInventory ? <ClusterMembersMarker inventory={clusterInventory} /> : <Box />}
-        <CollectNowButton deviceId={device.device_id} onCollected={refresh} />
+        <CollectNowButton deviceId={device.device_id} onCollected={refresh} enrollmentState={device.enrollment_state} />
       </Box>
       <M3Tabs
         ariaLabel="Device detail"

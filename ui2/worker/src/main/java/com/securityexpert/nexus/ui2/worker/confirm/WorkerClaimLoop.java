@@ -83,11 +83,23 @@ public final class WorkerClaimLoop {
         this.backupCredentialRef = Objects.requireNonNull(backupCredentialRef, "backupCredentialRef");
     }
 
+    private static final System.Logger LOGGER = System.getLogger(WorkerClaimLoop.class.getName());
+
     /** Runs until the thread is interrupted, sleeping {@code pollInterval} whenever the queue was empty. */
     public void runUntilInterrupted(Duration pollInterval) {
         while (!Thread.currentThread().isInterrupted()) {
-            boolean claimed = claimAndExecuteOnce();
-            if (!claimed) {
+            try {
+                boolean claimed = claimAndExecuteOnce();
+                if (!claimed) {
+                    try {
+                        Thread.sleep(pollInterval.toMillis());
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+            } catch (Throwable t) {
+                LOGGER.log(System.Logger.Level.ERROR, "Unexpected error in worker claim loop: " + t.getMessage(), t);
                 try {
                     Thread.sleep(pollInterval.toMillis());
                 } catch (InterruptedException interrupted) {
@@ -105,8 +117,12 @@ public final class WorkerClaimLoop {
             return false;
         }
         ClaimedJob claimed = claim.get();
-        JobRow job = jobRecordDao.find(claimed.jobId())
-                .orElseThrow(() -> new IllegalStateException("claimed job has no row: " + claimed.jobId()));
+        Optional<JobRow> jobOpt = jobRecordDao.find(claimed.jobId());
+        if (jobOpt.isEmpty()) {
+            LOGGER.log(System.Logger.Level.WARNING, "Claimed job has no row: " + claimed.jobId());
+            return true;
+        }
+        JobRow job = jobOpt.get();
 
         // 14F DR-1: a discovery job's target is a discovery_run row, not a device -- dispatched before any
         // device/endpoint resolution below, which would otherwise crash on a job with no target_device_id.
@@ -115,10 +131,25 @@ public final class WorkerClaimLoop {
             return true;
         }
 
-        DeviceRecord device = deviceRepository.find(job.targetDeviceId())
-                .orElseThrow(() -> new IllegalStateException("claimed job targets an unknown device: " + job.targetDeviceId()));
-        EndpointRecord endpoint = deviceRepository.findEndpointByDeviceId(job.targetDeviceId())
-                .orElseThrow(() -> new IllegalStateException("claimed job's device has no endpoint: " + job.targetDeviceId()));
+        Optional<DeviceRecord> deviceOpt = deviceRepository.find(job.targetDeviceId());
+        if (deviceOpt.isEmpty()) {
+            LOGGER.log(System.Logger.Level.WARNING, "Claimed job targets an unknown device: " + job.targetDeviceId());
+            leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                    com.securityexpert.nexus.ui2.jobs.JobState.FAILED, "system:worker", "claim_device_check",
+                    "claimed job targets an unknown device: " + job.targetDeviceId());
+            return true;
+        }
+        DeviceRecord device = deviceOpt.get();
+
+        Optional<EndpointRecord> endpointOpt = deviceRepository.findEndpointByDeviceId(job.targetDeviceId());
+        if (endpointOpt.isEmpty()) {
+            LOGGER.log(System.Logger.Level.WARNING, "Claimed job device has no endpoint: " + job.targetDeviceId());
+            leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                    com.securityexpert.nexus.ui2.jobs.JobState.FAILED, "system:worker", "claim_endpoint_check",
+                    "claimed job's device has no endpoint: " + job.targetDeviceId());
+            return true;
+        }
+        EndpointRecord endpoint = endpointOpt.get();
 
         if (InventoryCapabilityIds.isInventoryCapability(job.capabilityId())) {
             InventoryRequest inventoryRequest = buildInventoryRequest(job.capabilityId(), endpoint.endpointId(),
