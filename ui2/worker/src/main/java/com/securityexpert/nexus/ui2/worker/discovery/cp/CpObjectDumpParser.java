@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.securityexpert.nexus.ui2.discovery.cp.ManagementApiFieldBinding;
+
 /**
  * T-7: parses the {@code cpmiquerybin object} tree-format dump this
  * transport reads (record §10 row 4, replacing the guessed {@code -f json}
@@ -23,6 +25,9 @@ import java.util.Map;
  * (T-7's "parsed in memory... discarded").
  */
 final class CpObjectDumpParser {
+
+    private static final String DISPLAY_NAME_FIELD =
+            ManagementApiFieldBinding.forRole(ManagementApiFieldBinding.Role.DISPLAY_NAME).apiField().orElseThrow();
 
     private final String text;
     private int pos;
@@ -51,7 +56,7 @@ final class CpObjectDumpParser {
         skipWhitespace();
         String objectName = readToken();
         Map<String, Object> fields = parseFields();
-        fields.putIfAbsent("name", objectName);
+        fields.putIfAbsent(DISPLAY_NAME_FIELD, objectName);
         skipWhitespace();
         expect(')');
         return fields;
