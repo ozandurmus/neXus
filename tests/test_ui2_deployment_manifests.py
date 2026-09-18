@@ -273,7 +273,9 @@ def test_the_rule_checks_below_have_something_to_check():
     containers = _containers()
     assert [owner for _, owner, _ in containers] == [
         "StatefulSet/ui2-db:database",
+        "Deployment/ui2-service:migrate",
         "Deployment/ui2-service:service",
+        "Deployment/ui2-worker:migrate",
         "Deployment/ui2-worker:worker",
     ], f"unexpected container set: {[owner for _, owner, _ in containers]}"
 
@@ -507,6 +509,44 @@ def _worker_container() -> dict:
         if container.get("name") == "worker":
             return container
     raise AssertionError("the worker container is missing from the Deployment")
+
+
+def test_migration_credentials_are_init_container_only():
+    """C1 §2.4: long-running processes never receive the DDL credential."""
+    for pod_spec, app_container in (
+        (_service_pod_spec(), _service_container()),
+        (_worker_pod_spec(), _worker_container()),
+    ):
+        init = pod_spec.get("initContainers") or []
+        assert len(init) == 1 and init[0].get("args") == ["migrate"]
+        migrate = init[0]
+
+        app_env = {entry.get("name") for entry in app_container.get("env") or []}
+        migrate_env = {entry.get("name") for entry in migrate.get("env") or []}
+        assert not {"UI2_DB_MIGRATE_USER_FILE", "UI2_DB_MIGRATE_PASSWORD_FILE"} & app_env
+        assert not {"UI2_DB_APP_USER_FILE", "UI2_DB_APP_PASSWORD_FILE"} & migrate_env
+
+        app_mounts = {mount.get("name") for mount in app_container.get("volumeMounts") or []}
+        migrate_mounts = {mount.get("name") for mount in migrate.get("volumeMounts") or []}
+        assert "db-migrate-credentials" not in app_mounts
+        assert "db-app-credentials" not in migrate_mounts
+
+        volumes = {volume.get("name"): volume for volume in pod_spec.get("volumes") or []}
+        app_items = (volumes["db-app-credentials"]["secret"].get("items") or [])
+        migrate_items = (volumes["db-migrate-credentials"]["secret"].get("items") or [])
+        assert {item["key"] for item in app_items} == {"app-user", "app-password"}
+        assert {item["key"] for item in migrate_items} == {"migrate-user", "migrate-password"}
+
+
+def test_database_roles_explicitly_refuse_cluster_wide_privileges():
+    config_maps = [
+        doc for _, doc in _documents(include_openshift=False)
+        if doc.get("kind") == "ConfigMap" and (doc.get("metadata") or {}).get("name") == "ui2-config"
+    ]
+    assert len(config_maps) == 1
+    hook = (config_maps[0].get("data") or {}).get("create-app-role.sh", "")
+    bounded = "NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS"
+    assert hook.count(bounded) == 2, "both database roles must reject cluster-wide authority"
 
 
 def test_the_artefact_store_is_backed_by_a_claim_not_an_emptydir():

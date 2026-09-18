@@ -127,8 +127,7 @@ ENTRYPOINT ["java", \
             "-Duser.home=/app/home", \
             "-jar", "/app/service.jar"]
 
-# EP-1/EP-2: the workload role is an argument, and `service` is the only role
-# this contract authorizes.
+# EP-1/EP-2: the workload role is an argument; service remains the default.
 CMD ["service"]
 
 # FS-6: numeric, never a name — the base family's own non-root id. It is a

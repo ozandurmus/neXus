@@ -19,9 +19,6 @@ ui2:
     url: ${UI2_DB_URL:jdbc:postgresql://localhost:5432/ui2}
     user-file: ${UI2_DB_APP_USER_FILE:/run/secrets/ui2_db_app_user}
     password-file: ${UI2_DB_APP_PASSWORD_FILE:/run/secrets/ui2_db_app_password}
-    migrate-user-file: ${UI2_DB_MIGRATE_USER_FILE:/run/secrets/ui2_db_migrate_user}
-    migrate-password-file: ${UI2_DB_MIGRATE_PASSWORD_FILE:/run/secrets/ui2_db_migrate_password}
-    migration-location: classpath:db/migration
   local-auth:
     # Development default: nothing forces a password change. Turn on for a
     # production posture; PO directive 2026-09-14 (hardening is optional and

@@ -224,7 +224,9 @@ public final class Ui2PostgresFixture implements AutoCloseable {
                 + sqlLiteral(role) + ") THEN CREATE ROLE " + quoteIdentifier(role) + " LOGIN; END IF; END $do$;");
         // Set a per-run password so the fixture works identically against a
         // trust-auth server (where it is ignored) and a password-auth one.
-        statement.execute("ALTER ROLE " + quoteIdentifier(role) + " LOGIN PASSWORD " + sqlLiteral(password));
+        statement.execute("ALTER ROLE " + quoteIdentifier(role)
+                + " LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD "
+                + sqlLiteral(password));
     }
 
     @Override

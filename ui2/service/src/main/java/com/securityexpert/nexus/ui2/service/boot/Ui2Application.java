@@ -4,10 +4,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jooq.JooqAutoConfiguration;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
-import org.springframework.core.env.Environment;
 
 /**
  * UI 2.0 composition root — the entry point that makes the service a running
@@ -16,9 +14,9 @@ import org.springframework.core.env.Environment;
  * <p>Until this class existed the module had six controllers and no way to
  * serve any of them: {@code bootJar} was disabled with the note "no main class
  * wired to it". Phase 1 step 1 is exactly this — the roof — and nothing
- * more: the process starts, connects to its database, applies migrations, and
- * serves a shell. It contacts no device, collects nothing, and authenticates
- * nobody yet.</p>
+ * more: the process starts, connects to its already-migrated database, and
+ * serves a shell. The deployment's short-lived {@link MigrationMain} process
+ * applies migrations before this long-running process starts.</p>
  *
  * <p>Spring's {@code DataSourceAutoConfiguration} is excluded deliberately.
  * The `C1` §6 secret discipline requires the database credential to be read
@@ -70,12 +68,6 @@ import org.springframework.core.env.Environment;
                 type = FilterType.REGEX,
                 pattern = "com\\.securityexpert\\.nexus\\.ui2\\.service\\.api\\.SessionAdminController"))
 public class Ui2Application {
-
-    @Bean
-    static MigrationStartupRunner migrationStartupRunner(Environment environment) {
-        return new MigrationStartupRunner(environment);
-    }
-
     public static void main(String[] args) {
         SpringApplication.run(Ui2Application.class, args);
     }

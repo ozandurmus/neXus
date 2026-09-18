@@ -13,8 +13,8 @@ import java.util.Map;
  * unchanged to that role's own {@code main}.
  *
  * <p>Declared in {@code platform-core} (DIR-1: no project dependencies) so
- * this class never imports a {@code service} or {@code worker} class --
- * each role's main class is resolved by name only, through {@link
+ * this class never imports another role's main class -- each role's main
+ * class is resolved by name only, through {@link
  * Class#forName(String, boolean, ClassLoader)} against the <b>thread
  * context class loader</b>. That loader matters: Spring Boot's fat-jar
  * launcher sets it to its own {@code LaunchedClassLoader} before this
@@ -28,6 +28,7 @@ import java.util.Map;
 public final class Ui2Launcher {
 
     static final Map<String, String> MAIN_CLASS_BY_ROLE = Map.of(
+            "migrate", "com.securityexpert.nexus.ui2.service.boot.MigrationMain",
             "service", "com.securityexpert.nexus.ui2.service.boot.Ui2Application",
             "worker", "com.securityexpert.nexus.ui2.worker.Ui2WorkerMain");
 

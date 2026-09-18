@@ -2,9 +2,8 @@
 # 52-worker-deployment.yaml; `scheduler` remains deferred by the contract,
 # not omitted by accident.
 #
-# `replicas: 1` at stages 1 and 2 (§6.4): at one replica the start-up
-# migration is safe without a concurrent-migration guard, and RESET-3 makes
-# the restart after a reset meaningful.
+# `replicas: 1` at stages 1 and 2 (§6.4); Flyway serializes the short-lived
+# migration steps when service and worker pods start together.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,6 +39,57 @@ spec:
       # EP-4: the process must terminate on SIGTERM within this window
       # without leaving the database mid-migration.
       terminationGracePeriodSeconds: 30
+      initContainers:
+        # C1 §2.4: Flyway runs in a short-lived deployment step. The
+        # privileged credential is not mounted into the service container.
+        - name: migrate
+          image: registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:c57b8aab8d58d77ab68bed80e1cb5e3d23d47a6c4b71acb848fad1b86bd33365
+          args: ["migrate"]
+          env:
+            - name: UI2_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: db_host
+            - name: UI2_DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: db_port
+            - name: UI2_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: db_name
+            - name: UI2_DB_URL
+              value: "jdbc:postgresql://$(UI2_DB_HOST):$(UI2_DB_PORT)/$(UI2_DB_NAME)"
+            - name: UI2_DB_MIGRATE_USER_FILE
+              value: /run/secrets/ui2-db-migrate/user
+            - name: UI2_DB_MIGRATE_PASSWORD_FILE
+              value: /run/secrets/ui2-db-migrate/password
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: tmp
+              mountPath: /app/tmp
+            - name: home
+              mountPath: /app/home
+            - name: db-migrate-credentials
+              mountPath: /run/secrets/ui2-db-migrate
+              readOnly: true
       containers:
         - name: service
           # BP-7/OS-10: an immutable reference. This digest is the image the
@@ -79,18 +129,14 @@ spec:
                 configMapKeyRef:
                   name: ui2-config
                   key: log_level
-            # The credential reaches the process as four mounted files, per
+            # The application credential reaches this process as two files, per
             # the C1 §6 secret-file rule the composition root implements: a
             # missing, unreadable or empty file stops start-up rather than
-            # falling back. These entries carry paths, never values.
+            # falling back. The migration credential is init-container-only.
             - name: UI2_DB_APP_USER_FILE
-              value: /run/secrets/ui2-db/app-user
+              value: /run/secrets/ui2-db-app/user
             - name: UI2_DB_APP_PASSWORD_FILE
-              value: /run/secrets/ui2-db/app-password
-            - name: UI2_DB_MIGRATE_USER_FILE
-              value: /run/secrets/ui2-db/migrate-user
-            - name: UI2_DB_MIGRATE_PASSWORD_FILE
-              value: /run/secrets/ui2-db/migrate-password
+              value: /run/secrets/ui2-db-app/password
             # The service role also carries the credential-store and
             # role-binding keys the worker role uses, so a fresh apply of
             # this set needs no manual patch. Both reach the process by
@@ -146,8 +192,8 @@ spec:
               mountPath: /app/tmp
             - name: home
               mountPath: /app/home
-            - name: db-credentials
-              mountPath: /run/secrets/ui2-db
+            - name: db-app-credentials
+              mountPath: /run/secrets/ui2-db-app
               readOnly: true
             - name: credential-store-key
               mountPath: /run/secrets/ui2-credential-store
@@ -160,10 +206,24 @@ spec:
           emptyDir: {}
         - name: home
           emptyDir: {}
-        - name: db-credentials
+        - name: db-app-credentials
           secret:
             secretName: ui2-db
             defaultMode: 0440
+            items:
+              - key: app-user
+                path: user
+              - key: app-password
+                path: password
+        - name: db-migrate-credentials
+          secret:
+            secretName: ui2-db
+            defaultMode: 0440
+            items:
+              - key: migrate-user
+                path: user
+              - key: migrate-password
+                path: password
         - name: credential-store-key
           secret:
             secretName: ui2-credential-store-key
