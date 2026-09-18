@@ -65,7 +65,7 @@ public final class ManagementShellCommands {
         // "&&", never ";": if the context switch fails, the query must NOT run in the wrong (top-level)
         // scope -- the measurement record (section 3 row 2) says a lost context yields confident wrong answers.
         return loginShell("source /etc/profile.d/CP.sh; mdsenv " + quote(domainIdentifier)
-                + " >/dev/null 2>&1 && cpmiquerybin object \"\" network_objects \"type='" + objectTypeFilterValue(objectType) + "'\"");
+                + " >/dev/null 2>&1 && cpmiquerybin object \"\" network_objects \"type='" + objectTypeFilterValue(objectType) + "'\" 2>/dev/null");
     }
 
     /**

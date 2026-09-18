@@ -60,7 +60,7 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
 
     private static final System.Logger LOGGER = System.getLogger(ManagementPlaneEnumerationAdapter.class.getName());
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
-    private static final Duration EXEC_TIMEOUT = Duration.ofSeconds(30);
+    private static final Duration EXEC_TIMEOUT = Duration.ofSeconds(180);
 
     private final DeviceTransport transport;
     private final SshCredentialResolver credentialResolver;
@@ -196,7 +196,8 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
     private List<RawCandidateInput> queryObjects(TransportSession session, String domain, ObjectType objectType,
             RequestCounter counter, Map<ObjectType, ParseCounts> parseCounts) {
         String command = ManagementShellCommands.contextSwitchAndObjectQuery(domain, objectType);
-        LOGGER.log(System.Logger.Level.DEBUG, "Executing Check Point object query for type {0}", objectType);
+        LOGGER.log(System.Logger.Level.INFO, "Executing Check Point object query for domain {0}, type {1}", domain, objectType);
+        long startedAt = System.nanoTime();
         String response = execRead(session, command);
         counter.increment();
         List<Map<String, Object>> objects = CpObjectDumpParser.parseObjects(response);
@@ -215,6 +216,9 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         ParseCounts previous = parseCounts.getOrDefault(objectType, new ParseCounts(0, 0));
         parseCounts.put(objectType, new ParseCounts(
                 previous.parsed() + objects.size(), previous.missingStableIdentifier() + missingStableIdentifier));
+        LOGGER.log(System.Logger.Level.INFO,
+                "Check Point object query succeeded for domain {0}, type {1}: parsed {2} objects in {3}ms",
+                domain, objectType, objects.size(), Duration.ofNanos(System.nanoTime() - startedAt).toMillis());
         return results;
     }
 
