@@ -237,7 +237,7 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         Address ownAddress = optionalAddress(obj, Role.OWN_ADDRESS);
         Address managementAddress = optionalAddress(obj, Role.MANAGEMENT_ADDRESS);
         ClassificationFlags flags = new ClassificationFlags(
-                optionalBoolean(obj, Role.PRODUCT_FLAG),
+                productFlag(obj, objectType),
                 optionalBoolean(obj, Role.VIRT_HOST_FLAG, objectType),
                 optionalBoolean(obj, Role.VIRT_SYSTEM_FLAG, objectType));
         Optional<ClusterReference> clusterReference = optionalClusterReference(obj);
@@ -316,6 +316,16 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
 
     private static Address optionalAddress(Map<String, Object> obj, Role role) {
         return optionalString(obj, role).map(Address::of).orElse(Address.absent());
+    }
+
+    private static boolean productFlag(Map<String, Object> obj, ObjectType objectType) {
+        Optional<String> val = optionalString(obj, Role.PRODUCT_FLAG);
+        if (val.isPresent()) {
+            return Boolean.parseBoolean(val.get());
+        }
+        // Contract §4.2 K-5..K-10: Check Point cluster members and clusters are product devices by definition.
+        // Interoperable devices are tracked as standalone gateways (§4.2 K-2).
+        return objectType != ObjectType.GATEWAY;
     }
 
     private static boolean optionalBoolean(Map<String, Object> obj, Role role) {

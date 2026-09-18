@@ -56,7 +56,12 @@ final class CpObjectDumpParser {
         skipWhitespace();
         String objectName = readToken();
         Map<String, Object> fields = parseFields();
-        fields.putIfAbsent(DISPLAY_NAME_FIELD, objectName);
+        Object existingName = fields.get(DISPLAY_NAME_FIELD);
+        if (existingName == null || (existingName instanceof String s && s.isBlank())) {
+            if (objectName != null && !objectName.isBlank()) {
+                fields.put(DISPLAY_NAME_FIELD, objectName);
+            }
+        }
         skipWhitespace();
         expect(')');
         return fields;

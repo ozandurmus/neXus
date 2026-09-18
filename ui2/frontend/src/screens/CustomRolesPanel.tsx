@@ -52,12 +52,12 @@ export function CustomRolesPanel() {
   const refreshRoles = () =>
     fetch("/roles")
       .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then(setRoles)
+      .then((res) => setRoles(Array.isArray(res) ? res : []))
       .catch(() => setError("Unable to load roles."));
 
   const refreshBindings = () =>
     listRoleBindings()
-      .then(setBindings)
+      .then((res) => setBindings(Array.isArray(res) ? res : []))
       .catch(() => setError("Unable to load directory group role bindings."));
 
   useEffect(() => {
@@ -74,7 +74,7 @@ export function CustomRolesPanel() {
     }
   };
 
-  const directoryBindings = bindings.filter(
+  const directoryBindings = (Array.isArray(bindings) ? bindings : []).filter(
     (b) => b.binding_kind === "DIRECTORY_GROUP" || (!b.binding_kind && b.directory_profile_id)
   );
 

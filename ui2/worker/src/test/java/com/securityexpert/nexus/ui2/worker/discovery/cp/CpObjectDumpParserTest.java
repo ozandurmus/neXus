@@ -120,6 +120,23 @@ class CpObjectDumpParserTest {
         assertEquals("fixture-name-1", object.get("name"));
     }
 
+    @Test
+    void objectNameIsUsedWhenNameAttributeIsEmptyOrBlank() {
+        String text = "(fixture-empty-name\n"
+                + "\t:name ()\n"
+                + "\t:ipaddr (198.51.100.9)\n"
+                + ")\n"
+                + "(fixture-blank-name\n"
+                + "\t:name (\"\")\n"
+                + "\t:ipaddr (198.51.100.10)\n"
+                + ")\n";
+
+        List<Map<String, Object>> objects = CpObjectDumpParser.parseObjects(text);
+
+        assertEquals("fixture-empty-name", objects.get(0).get("name"));
+        assertEquals("fixture-blank-name", objects.get(1).get("name"));
+    }
+
     /** An empty own address and a missing management address must not shift any other field on that object or the next. */
     @Test
     void emptyOwnAddressAndMissingManagementAddressDoNotShiftOtherFields() {

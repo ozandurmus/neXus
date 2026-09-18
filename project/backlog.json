@@ -513,6 +513,15 @@
       "priority": "P0",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "ui2_private_play_and_mockup_view",
+      "category": "UI",
+      "title": "Private Play & Mockup View integration",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }

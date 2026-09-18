@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0330 · Track: PCP.x · Generated: 2026-09-17T22:53:01Z
+Build: NXS-LOCAL-0330 · Track: PCP.x · Generated: 2026-09-18T05:03:48Z
 
 ## Now
 - NXS-LOCAL-0330 — Check Point Discovery Parser Hardening, Domain Banner Filtering, and Diagnostic Logging (automated_validated)
@@ -44,6 +44,7 @@ Build: NXS-LOCAL-0330 · Track: PCP.x · Generated: 2026-09-17T22:53:01Z
 - P1/planned ui2_ldap_config — LDAP Configuration Screen (target: ui2)
 - P1/planned ui2_networkpolicy_in_cluster_db_reach — NetworkPolicy restricting in-cluster reach to PostgreSQL (target: UI2_0_B1_01C successor)
 - P1/planned ui2_pan_transport_no_credentials_in_url — UI2 Palo Alto transport: no credential ever appears in a U (target: PAN_DISCOVERY_CONTRACT.md T-1/T-5; the P)
+- P1/planned ui2_private_play_and_mockup_view — Private Play & Mockup View integration (target: )
 - P1/planned ui2_reproducible_in_cluster_image_build — UI2 reproducible in-cluster image build and release assura (target: UI2_0_B1_01C in-cluster OCI build; 13D B)
 - P1/planned ui_overview_operations_show_stale_or_empty_state — UNVERIFIED claim: Overview and Operations render empty sta (target: verify against a running deployment befo)
 - P2/in_progress ui2_m3_design_transfer_pass

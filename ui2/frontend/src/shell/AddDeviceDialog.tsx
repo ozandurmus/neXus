@@ -10,6 +10,7 @@ import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
@@ -333,6 +334,32 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
     return selectedCandidateIds.has(candidate.candidate_id);
   };
 
+  const selectableCandidates = useMemo(() => {
+    return (run?.candidates ?? []).filter((c) => c.importable && c.registry_state === "new");
+  }, [run]);
+  const selectableCount = selectableCandidates.length;
+  const selectedCount = useMemo(() => {
+    return selectableCandidates.filter((c) => selectedCandidateIds.has(c.candidate_id)).length;
+  }, [selectableCandidates, selectedCandidateIds]);
+
+  const handleToggleAll = () => {
+    if (selectableCount === 0) return;
+    if (selectedCount === selectableCount) {
+      setSelectedCandidateIds(new Set());
+    } else {
+      setSelectedCandidateIds(new Set(selectableCandidates.map((c) => c.candidate_id)));
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectableCount === 0) return;
+    setSelectedCandidateIds(new Set(selectableCandidates.map((c) => c.candidate_id)));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedCandidateIds(new Set());
+  };
+
   const totalCandidateCount = run?.candidates.length ?? 0;
   const alreadyAddedCount = (run?.candidates ?? []).filter((c) => c.registry_state === "already_imported").length;
   const conflictingCount = (run?.candidates ?? []).filter((c) => c.registry_state === "conflicting").length;
@@ -426,7 +453,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
   </>;
 
   return (
-    <Dialog open onClose={dialogBusy ? undefined : onClose} PaperProps={{ sx: { borderRadius: "28px", width: mode === "discovery" && discoveryPhase !== "form" ? 640 : 460 } }}>
+    <Dialog open onClose={dialogBusy ? undefined : onClose} PaperProps={{ sx: { borderRadius: "28px", width: mode === "discovery" && discoveryPhase !== "form" ? 860 : 460, maxWidth: "95vw" } }}>
       <DialogContent sx={{ p: 3, display: "flex", flexDirection: "column", gap: 2 }}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <Typography variant="h3">Add device</Typography>
@@ -622,44 +649,86 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
                 ))}
               </TextField>
             )}
-            <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-              {candidateSummaryLine}
-            </Typography>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox" />
-                  <TableCell>Name</TableCell>
-                  <TableCell>Kind</TableCell>
-                  <TableCell>Address</TableCell>
-                  {discoveryPhase === "done" && <TableCell>Outcome</TableCell>}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rootCandidates.length === 0 && (
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+              <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                {candidateSummaryLine}
+              </Typography>
+              {discoveryPhase !== "done" && selectableCount > 0 && (
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={handleSelectAll}
+                    disabled={selectedCount === selectableCount || discoveryPhase === "importing"}
+                    sx={{ textTransform: "none", fontSize: "0.8rem", py: 0.25, px: 1 }}
+                  >
+                    Select all ({selectableCount})
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={handleClearSelection}
+                    disabled={selectedCandidateIds.size === 0 || discoveryPhase === "importing"}
+                    sx={{ textTransform: "none", fontSize: "0.8rem", py: 0.25, px: 1 }}
+                  >
+                    Clear selection
+                  </Button>
+                </Stack>
+              )}
+            </Box>
+            <TableContainer
+              sx={{
+                maxHeight: 440,
+                overflow: "auto",
+                border: (theme) => `1px solid ${theme.palette.divider}`,
+                borderRadius: 1,
+              }}
+            >
+              <Table size="small" stickyHeader sx={{ tableLayout: "fixed" }}>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={discoveryPhase === "done" ? 5 : 4} align="center" sx={{ py: 4, color: m3.onSurfaceVar }}>
-                      No candidates found.
+                    <TableCell padding="checkbox" sx={{ width: 48, minWidth: 48, maxWidth: 48 }}>
+                      <Checkbox
+                        size="small"
+                        checked={selectableCount > 0 && selectedCount === selectableCount}
+                        indeterminate={selectedCount > 0 && selectedCount < selectableCount}
+                        disabled={selectableCount === 0 || discoveryPhase === "importing" || discoveryPhase === "done"}
+                        onChange={handleToggleAll}
+                        inputProps={{ "aria-label": "Select all candidates" }}
+                      />
                     </TableCell>
+                    <TableCell sx={{ minWidth: 220 }}>Name</TableCell>
+                    <TableCell sx={{ minWidth: 160 }}>Kind</TableCell>
+                    <TableCell sx={{ minWidth: 140 }}>Address</TableCell>
+                    {discoveryPhase === "done" && <TableCell sx={{ minWidth: 100 }}>Outcome</TableCell>}
                   </TableRow>
-                )}
+                </TableHead>
+                <TableBody>
+                  {rootCandidates.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={discoveryPhase === "done" ? 5 : 4} align="center" sx={{ py: 4, color: m3.onSurfaceVar }}>
+                        No candidates found.
+                      </TableCell>
+                    </TableRow>
+                  )}
 
-                {rootCandidates.map((root) => (
-                  <CandidateRows
-                    key={root.candidate_id}
-                    candidate={root}
-                    depth={0}
-                    childrenOf={childrenOf}
-                    selected={selectedCandidateIds}
-                    isGroupSelected={isGroupSelected}
-                    onToggle={toggleCandidate}
-                    importResults={importResults}
-                    done={discoveryPhase === "done"}
-                    disabled={discoveryPhase === "importing"}
-                  />
-                ))}
-              </TableBody>
-            </Table>
+                  {rootCandidates.map((root) => (
+                    <CandidateRows
+                      key={root.candidate_id}
+                      candidate={root}
+                      depth={0}
+                      childrenOf={childrenOf}
+                      selected={selectedCandidateIds}
+                      isGroupSelected={isGroupSelected}
+                      onToggle={toggleCandidate}
+                      importResults={importResults}
+                      done={discoveryPhase === "done"}
+                      disabled={discoveryPhase === "importing"}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
             {discoveryPhase === "done" && (
               <Typography variant="body2">
                 Imported devices now appear in the device list.
@@ -699,7 +768,7 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
         )}
         {mode === "discovery" && discoveryPhase === "candidates" && (
           <M3Button emphasis="filled" onClick={handleImport} disabled={selectedCandidateIds.size === 0}>
-            Import
+            {selectedCandidateIds.size > 0 ? `Import (${selectedCandidateIds.size})` : "Import"}
           </M3Button>
         )}
       </DialogActions>
@@ -738,10 +807,15 @@ function CandidateRows({
   const checkable = (candidate.importable && candidate.registry_state === "new") || isGroup;
   const result = importResults[candidate.candidate_id];
 
+  const rawName = candidate.display_name?.trim();
+  const displayName = rawName && rawName.length > 0
+    ? rawName
+    : (candidate.own_address || candidate.management_address || "Unnamed");
+
   return (
     <>
       <TableRow sx={notSelectableState ? { opacity: 0.6 } : undefined}>
-        <TableCell padding="checkbox">
+        <TableCell padding="checkbox" sx={{ width: 48, minWidth: 48, maxWidth: 48 }}>
           {checkable && (
             <Checkbox
               size="small"
@@ -751,8 +825,17 @@ function CandidateRows({
             />
           )}
         </TableCell>
-        <TableCell sx={{ pl: depth > 0 ? 3 + depth * 2 : undefined }}>
-          {candidate.display_name ?? "Unnamed"}
+        <TableCell sx={{ pl: depth > 0 ? depth * 2.5 + 2 : 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+            {depth > 0 && (
+              <Typography component="span" variant="body2" sx={{ color: m3.onSurfaceVar, userSelect: "none", mr: 0.5 }}>
+                └─
+              </Typography>
+            )}
+            <Typography variant="body2" sx={{ fontWeight: isGroup ? 600 : 400 }}>
+              {displayName}
+            </Typography>
+          </Box>
           {notSelectableState && (
             <Stack spacing={0.25} sx={{ mt: 0.5 }}>
               <StatusChip

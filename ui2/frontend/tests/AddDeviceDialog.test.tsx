@@ -430,12 +430,13 @@ describe("AddDeviceDialog discovery mode", () => {
     await waitFor(() => expect(screen.getByText("Cluster Alpha")).toBeInTheDocument(), { timeout: 8000 });
 
     const checkboxes = screen.getAllByRole("checkbox");
-    expect(checkboxes).toHaveLength(3);
-    fireEvent.click(checkboxes[0]);
-    await waitFor(() => expect(checkboxes[1]).toBeChecked());
-    expect(checkboxes[2]).toBeChecked();
+    expect(checkboxes).toHaveLength(4);
+    fireEvent.click(checkboxes[1]);
+    await waitFor(() => expect(checkboxes[2]).toBeChecked());
+    expect(checkboxes[3]).toBeChecked();
+    expect(checkboxes[0]).toBeChecked();
 
-    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    fireEvent.click(screen.getByRole("button", { name: "Import (2)" }));
 
     await waitFor(() => expect(screen.getByText("new")).toBeInTheDocument());
     expect(screen.getByText("already_imported")).toBeInTheDocument();
@@ -447,6 +448,59 @@ describe("AddDeviceDialog discovery mode", () => {
     expect(importCall).toBeDefined();
     const body = JSON.parse(importCall![1].body as string);
     expect(new Set(body.candidate_ids)).toEqual(new Set(["c-m1", "c-m2"]));
+  }, 10000);
+
+  it("master checkbox and select all button select all candidates, clear selection deselects all", async () => {
+    const fetchMock = routedFetch({
+      "/credentials": CREDENTIALS_ROUTE,
+      "/session/status": { body: { csrf_token: "test-csrf" } },
+      "/discovery/runs": { status: 202, body: { run_id: "run-1", job_id: "job-1" } },
+      "/discovery/runs/run-1": {
+        body: {
+          run_id: "run-1",
+          vendor: "check_point",
+          state: "FINISHED",
+          job_id: "job-1",
+          outcome_summary: {},
+          candidates: [CLUSTER_CANDIDATE, MEMBER_ONE_CANDIDATE, MEMBER_TWO_CANDIDATE],
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndSwitchToDiscovery("mds.example");
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+    await waitFor(() => expect(screen.getByText("Cluster Alpha")).toBeInTheDocument(), { timeout: 8000 });
+
+    const selectAllBtn = screen.getByRole("button", { name: "Select all (2)" });
+    const clearBtn = screen.getByRole("button", { name: "Clear selection" });
+    const masterCheckbox = screen.getByRole("checkbox", { name: "Select all candidates" });
+
+    expect(clearBtn).toBeDisabled();
+    expect(selectAllBtn).not.toBeDisabled();
+
+    // Click "Select all (2)"
+    fireEvent.click(selectAllBtn);
+    expect(selectAllBtn).toBeDisabled();
+    expect(clearBtn).not.toBeDisabled();
+    expect(masterCheckbox).toBeChecked();
+    expect(screen.getByRole("button", { name: "Import (2)" })).not.toBeDisabled();
+
+    // Click "Clear selection"
+    fireEvent.click(clearBtn);
+    expect(clearBtn).toBeDisabled();
+    expect(selectAllBtn).not.toBeDisabled();
+    expect(masterCheckbox).not.toBeChecked();
+
+    // Click master checkbox in header
+    fireEvent.click(masterCheckbox);
+    expect(masterCheckbox).toBeChecked();
+    expect(screen.getByRole("button", { name: "Import (2)" })).not.toBeDisabled();
+
+    // Toggle master checkbox off
+    fireEvent.click(masterCheckbox);
+    expect(masterCheckbox).not.toBeChecked();
   }, 10000);
 
   it("marks an already-imported candidate disabled and non-selectable, and reports the counts (AC-2/AC-3)", async () => {
@@ -480,11 +534,14 @@ describe("AddDeviceDialog discovery mode", () => {
     // The already-imported row is greyed out with its badge and existing device id, and carries no checkbox.
     expect(screen.getByText("Already added")).toBeInTheDocument();
     expect(screen.getByText(/dev-existing-1/)).toBeInTheDocument();
-    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+    // 1 master checkbox in header + 1 candidate checkbox for Edge Gateway = 2 checkboxes
+    const checkboxes = screen.getAllByRole("checkbox");
+    expect(checkboxes).toHaveLength(2);
 
     // The one selectable row can still be checked -- the disabled row simply has none.
-    fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
+    fireEvent.click(checkboxes[1]);
+    expect(checkboxes[1]).toBeChecked();
+    expect(checkboxes[0]).toBeChecked();
   }, 10000);
 
   it("offers inline credential creation on discovery path and selects the created credential", async () => {

@@ -244,6 +244,42 @@ class ManagementPlaneEnumerationAdapterTest {
         assertEquals(6, totalParsed);
     }
 
+    @Test
+    void memberAndClusterWithoutExplicitProductFlagDefaultToProductDevices() {
+        String memberWithoutProductFlag = "(fixture-member-noprod\n"
+                + "\t:name (fixture-member-noprod)\n"
+                + "\t:type (cluster_member)\n"
+                + "\t:AdminInfo (\n"
+                + "\t\t:chkpf_uid (mem-noprod-uid)\n"
+                + "\t)\n"
+                + "\t:ipaddr (198.51.100.33)\n"
+                + "\t:mgmt_ip (198.51.100.33)\n"
+                + "\t:vsx_cluster_member (false)\n"
+                + "\t:vs_cluster_member (false)\n"
+                + "\t:cluster_object (\n"
+                + "\t\t:chkpf_uid (cl-a-1)\n"
+                + "\t\t:name (fixture-cluster-a-1)\n"
+                + "\t)\n"
+                + ")\n";
+        Function<String, ExecResult> handler = command -> {
+            if (command.equals(DOMAIN_A_MEMBER_QUERY)) {
+                return new ExecResult.Completed(memberWithoutProductFlag, 0);
+            }
+            return happyPathHandler().apply(command);
+        };
+        FakeDeviceTransport transport = new FakeDeviceTransport(handler);
+        ManagementPlaneEnumerationAdapter adapter =
+                new ManagementPlaneEnumerationAdapter(transport, ALWAYS_RESOLVES, d -> { });
+
+        ManagementPlaneEnumerationResult.Completed result =
+                assertInstanceOf(ManagementPlaneEnumerationResult.Completed.class, adapter.run(request()));
+
+        RawCandidateInput memberCandidate = result.candidates().stream()
+                .filter(c -> c.key().stableIdentifier().value().equals("mem-noprod-uid"))
+                .findFirst().orElseThrow();
+        assertTrue(memberCandidate.flags().product(), "Member without explicit cp_products_installed must default to product device");
+    }
+
     /** T-7: no raw response text -- structural markers only a raw blob or a command string would carry -- is reachable from the result. */
     @Test
     void noRawResponseTextIsReachableFromTheResult() {
