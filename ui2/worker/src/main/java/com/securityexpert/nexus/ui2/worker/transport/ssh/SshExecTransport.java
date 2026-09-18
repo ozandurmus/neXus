@@ -153,7 +153,9 @@ public final class SshExecTransport implements DeviceTransport {
         try {
             channel = (ChannelExec) sshSession.jschSession().openChannel("exec");
             channel.setCommand(spec.command());
+            channel.setInputStream(null);
             InputStream in = channel.getInputStream();
+            InputStream err = channel.getErrStream();
             channel.connect((int) timeout.toMillis());
 
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
@@ -166,6 +168,11 @@ public final class SshExecTransport implements DeviceTransport {
                         break;
                     }
                     buffer.write(chunk, 0, read);
+                }
+                while (err.available() > 0) {
+                    if (err.read(chunk, 0, chunk.length) < 0) {
+                        break;
+                    }
                 }
                 if (channel.isClosed()) {
                     if (in.available() > 0) {
