@@ -48,8 +48,12 @@ public class TopologyNamePseudonymizer {
         if (rawClusterName == null || rawClusterName.isBlank()) {
             return rawClusterName;
         }
-        String masked = clusterCache.computeIfAbsent(rawClusterName.trim(), this::computeClusterName);
-        reverseClusterCache.put(masked, rawClusterName.trim());
+        String trimmed = rawClusterName.trim();
+        if (reverseClusterCache.containsKey(trimmed)) {
+            return trimmed;
+        }
+        String masked = clusterCache.computeIfAbsent(trimmed, this::computeClusterName);
+        reverseClusterCache.put(masked, trimmed);
         return masked;
     }
 
