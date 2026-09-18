@@ -23,6 +23,7 @@ public class SubnetPreservingIpMasker {
     private final byte[] secretKey;
     private final Map<String, String> cache = new ConcurrentHashMap<>();
 
+    @org.springframework.beans.factory.annotation.Autowired
     public SubnetPreservingIpMasker(HmacKeyProvider keyProvider) {
         this(keyProvider.getSecretKey());
     }

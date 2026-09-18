@@ -23,6 +23,7 @@ public class HmacKeyProvider {
 
     private final byte[] secretKey;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public HmacKeyProvider() {
         this(resolveKey());
     }

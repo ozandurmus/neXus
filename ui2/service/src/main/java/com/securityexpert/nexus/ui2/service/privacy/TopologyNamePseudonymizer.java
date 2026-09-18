@@ -33,6 +33,7 @@ public class TopologyNamePseudonymizer {
     private final Map<String, String> deviceCache = new ConcurrentHashMap<>();
     private final Map<String, String> vsCache = new ConcurrentHashMap<>();
 
+    @org.springframework.beans.factory.annotation.Autowired
     public TopologyNamePseudonymizer(HmacKeyProvider keyProvider) {
         this(keyProvider.getSecretKey());
     }
