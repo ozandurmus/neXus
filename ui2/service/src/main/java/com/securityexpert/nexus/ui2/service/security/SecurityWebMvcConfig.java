@@ -112,13 +112,23 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             "GET /healthz");
 
     private final GateChain gateChain;
+    private final LocalIdentityResolver localIdentityResolver;
+    private final LocalRoleTokenResolver localRoleTokenResolver;
 
     public SecurityWebMvcConfig(GateChain gateChain) {
+        this(gateChain, null, null);
+    }
+
+    public SecurityWebMvcConfig(GateChain gateChain, LocalIdentityResolver localIdentityResolver,
+            LocalRoleTokenResolver localRoleTokenResolver) {
         this.gateChain = gateChain;
+        this.localIdentityResolver = localIdentityResolver;
+        this.localRoleTokenResolver = localRoleTokenResolver;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new GateChainInterceptor(gateChain, ACTION_ID_BY_ROUTE, EXPLICITLY_UNGATED_ROUTES));
+        registry.addInterceptor(new GateChainInterceptor(gateChain, ACTION_ID_BY_ROUTE, EXPLICITLY_UNGATED_ROUTES,
+                localIdentityResolver, localRoleTokenResolver));
     }
 }

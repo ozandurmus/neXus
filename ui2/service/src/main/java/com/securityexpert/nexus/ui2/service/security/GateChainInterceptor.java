@@ -47,21 +47,32 @@ public final class GateChainInterceptor implements HandlerInterceptor {
 
     public static final String ACTOR_FINGERPRINT_ATTRIBUTE = "ui2.gate.actorFingerprint";
     public static final String SESSION_ID_ATTRIBUTE = "ui2.gate.sessionId";
+    public static final String IS_REPLAY_VIEWER_ATTRIBUTE = "ui2.gate.isReplayViewer";
 
     private final GateChain gateChain;
     private final Map<String, String> actionIdByRoute;
     private final Set<String> explicitlyUngatedRoutes;
+    private final LocalIdentityResolver localIdentityResolver;
+    private final LocalRoleTokenResolver localRoleTokenResolver;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public GateChainInterceptor(GateChain gateChain, Map<String, String> actionIdByRoute) {
-        this(gateChain, actionIdByRoute, Set.of());
+        this(gateChain, actionIdByRoute, Set.of(), null, null);
     }
 
     public GateChainInterceptor(GateChain gateChain, Map<String, String> actionIdByRoute,
             Set<String> explicitlyUngatedRoutes) {
+        this(gateChain, actionIdByRoute, explicitlyUngatedRoutes, null, null);
+    }
+
+    public GateChainInterceptor(GateChain gateChain, Map<String, String> actionIdByRoute,
+            Set<String> explicitlyUngatedRoutes, LocalIdentityResolver localIdentityResolver,
+            LocalRoleTokenResolver localRoleTokenResolver) {
         this.gateChain = gateChain;
         this.actionIdByRoute = actionIdByRoute;
         this.explicitlyUngatedRoutes = explicitlyUngatedRoutes;
+        this.localIdentityResolver = localIdentityResolver;
+        this.localRoleTokenResolver = localRoleTokenResolver;
     }
 
     @Override
@@ -104,6 +115,18 @@ public final class GateChainInterceptor implements HandlerInterceptor {
         if (outcome instanceof GateOutcome.Proceed proceed) {
             request.setAttribute(ACTOR_FINGERPRINT_ATTRIBUTE, proceed.actorFingerprint());
             request.setAttribute(SESSION_ID_ATTRIBUTE, proceed.sessionId());
+            if (localIdentityResolver != null && localRoleTokenResolver != null) {
+                try {
+                    var identity = localIdentityResolver.resolve(proceed.actorFingerprint());
+                    if (identity.isPresent()) {
+                        var roles = localRoleTokenResolver.resolve(identity.get().localIdentityId());
+                        if (roles.contains(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER)) {
+                            request.setAttribute(IS_REPLAY_VIEWER_ATTRIBUTE, true);
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
             return true;
         }
         GateOutcome.Refused refused = (GateOutcome.Refused) outcome;

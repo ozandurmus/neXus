@@ -1,0 +1,182 @@
+{
+  "created_at": "2026-09-18T16:25:00Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "RoleToken defines REPLAY_VIEWER = 'role:replay_viewer'",
+          "BootstrapCredentialDefaults defines AIVIEW_NAME = 'aiview' and initial password 'aiview'",
+          "AiViewIdentitySeedingRunner seeds aiview with role:viewer and role:replay_viewer, and idempotently ensures aiview exists even on already-seeded databases",
+          "SubnetPreservingIpMasker deterministically maps IPv4 addresses under a durable HMAC key so that addresses in the same prefix/subnet (e.g. cluster VIP and member interface IP) map to the exact same synthetic subnet with identical host offsets, while preserving loopback 127.0.0.1/8 and default route 0.0.0.0/0",
+          "TopologyNamePseudonymizer maps cluster names, cluster member hostnames, and virtual system names into synthetic labels (e.g. CLS-ALPHA-01, FW-ALPHA-01-M1, VS-ALPHA-01-APP) while preserving cluster-member-VS relationships",
+          "PrivacyMaskingResponseBodyAdvice intercepts outbound responses for GET /devices, GET /devices/{id}, GET /devices/{id}/inventory, GET /clusters/{clusterMemberRef}/inventory, and GET /api/v2/jobs when authenticated session holds role:replay_viewer, returning deep-masked copies without mutating cached or database entities",
+          "When authenticated as nexusadmin, responses contain unmasked raw production data unchanged",
+          "All tests in :platform-core:test, :persistence:test, and :service:test pass cleanly",
+          "Repository privacy check (python3 scripts/repository_privacy_check.py) passes with 0 findings"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C9_PRODUCTION_REPLAY_ROLE_CONTRACT.md and docs/design/PRIVATE_REPLAY_ARCHITECTURE.md",
+          "observed": "Currently, all authenticated users (nexusadmin, claudeadmin) see raw production hostnames, cluster names, and IP addresses in the UI2 console. The Product Owner requires an 'aiview' account with deterministic relationship-preserving HMAC masking so AI assistants and screenshot-sharing can operate safely without disclosing cleartext production hostnames, VIPs, or routing data.",
+          "what_exists": "UI2_0_C9_PRODUCTION_REPLAY_ROLE_CONTRACT.md specifies role:replay_viewer and server-side ResponseBodyAdvice projection. BootstrapCredentialDefaults currently seeds only nexusadmin and claudeadmin. GateChainInterceptor resolves sessions and sets request attributes. No ResponseBodyAdvice masking funnel exists currently."
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "local validation and deploy to k3s host",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/aiview-privacy-masking-hmac-funnel"
+        },
+        "invariants": [
+          "Database rows and background polling workers remain 100% operational on raw data",
+          "Fail-closed privacy boundary: zero raw hostnames or IPs leak to an aiview session",
+          "Deterministic topology and subnet relationships preserved across all masked responses",
+          "nexusadmin session continues to receive unmasked production data"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the aiview bootstrap identity and a server-side relationship-preserving HMAC masking funnel for devices, inventory, and job logs.",
+        "output_contract": [
+          "Local commit on branch."
+        ],
+        "recommended_reasoning": {
+          "reason": "Cryptographic HMAC pseudonymization, Spring ResponseBodyAdvice funnel, and RBAC integration",
+          "tier": "architecture"
+        },
+        "requirements": [
+          "In RoleToken.java (ui2/platform-core): add public static final String REPLAY_VIEWER = 'role:replay_viewer';",
+          "In BootstrapCredentialDefaults.java (ui2/service): add AIVIEW_NAME = 'aiview' and aiviewInitialPassword() returning 'aiview'.toCharArray().",
+          "In AiViewIdentitySeedingRunner.java (ui2/service): seed aiview with List.of(RoleToken.VIEWER, RoleToken.REPLAY_VIEWER). Ensures aiview exists even on already-seeded databases.",
+          "Create HmacKeyProvider.java in ui2/service/privacy: loads or generates a durable HMAC secret key.",
+          "Create SubnetPreservingIpMasker.java in ui2/service/privacy: parses IPv4 addresses (with or without /mask). Preserves subnet containment, host offsets, loopback 127.0.0.1/8 and 0.0.0.0/0. Includes maskText for logs.",
+          "Create TopologyNamePseudonymizer.java in ui2/service/privacy: maps cluster names, member names, and virtual system names into synthetic readable names while preserving cross-references.",
+          "Create PrivacyMaskingResponseBodyAdvice.java in ui2/service/privacy: annotated with @ControllerAdvice, implementing ResponseBodyAdvice<Object>. Activated on role:replay_viewer.",
+          "In GateChainInterceptor.java: attach IS_REPLAY_VIEWER_ATTRIBUTE when actor holds role:replay_viewer.",
+          "Write unit tests verifying subnet preservation, pseudonymization, and advice funnel.",
+          "Verify tests and privacy gates pass cleanly."
+        ],
+        "risks": [
+          "Ensuring response DTOs are cloned or newly constructed so in-memory cached objects or JPA entities are not mutated."
+        ],
+        "scope": {
+          "in": [
+            "ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/platform/RoleToken.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/BootstrapCredentialDefaults.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/AiViewIdentitySeedingRunner.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/privacy/HmacKeyProvider.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/privacy/SubnetPreservingIpMasker.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/privacy/TopologyNamePseudonymizer.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/privacy/PrivacyMaskingResponseBodyAdvice.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/GateChainInterceptor.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/SecurityWebMvcConfig.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/RbacConfiguration.java",
+            "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/privacy/SubnetPreservingIpMaskerTest.java",
+            "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/privacy/TopologyNamePseudonymizerTest.java",
+            "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/privacy/PrivacyMaskingResponseBodyAdviceTest.java",
+            "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/boot/AiViewIdentitySeedingRunnerTest.java"
+          ],
+          "out": [
+            "ui2/worker/**",
+            "ui2/frontend/**",
+            "Line-1 Python runtime"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "./ui2/gradlew -p ui2 :platform-core:test :persistence:test :service:test"
+            ],
+            "name": "service_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-18T16:25:00Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "RoleToken.java: added REPLAY_VIEWER = 'role:replay_viewer'",
+          "BootstrapCredentialDefaults.java: added AIVIEW_NAME and aiviewInitialPassword()",
+          "AiViewIdentitySeedingRunner.java: implemented idempotent aiview startup seeding runner",
+          "HmacKeyProvider.java: durable HMAC key custody",
+          "SubnetPreservingIpMasker.java: subnet-preserving and CIDR-preserving HMAC IP masking",
+          "TopologyNamePseudonymizer.java: topology and hierarchy-preserving cluster/device/VS masking",
+          "PrivacyMaskingResponseBodyAdvice.java: Spring ControllerAdvice ResponseBodyAdvice projection funnel for role:replay_viewer",
+          "GateChainInterceptor.java & SecurityWebMvcConfig.java: session role token resolution and IS_REPLAY_VIEWER_ATTRIBUTE binding",
+          "Unit tests in SubnetPreservingIpMaskerTest, TopologyNamePseudonymizerTest, PrivacyMaskingResponseBodyAdviceTest, and AiViewIdentitySeedingRunnerTest"
+        ],
+        "completed": [
+          "Fully implemented relationship-preserving HMAC masking funnel for aiview per C9 and PO directive.",
+          "All service, platform-core, persistence, job-engine, and worker unit test suites pass cleanly.",
+          "Standalone repository privacy check passes with 0 findings."
+        ],
+        "continuation": "COMPLETED",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "main",
+          "ci": "Pass: all tests green.",
+          "head_sha": "LOCAL_WORKING_TREE",
+          "merge_commit": null,
+          "merge_decision": "Direct implementation authorized by Product Owner.",
+          "merge_state": "INTEGRATED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0333",
+          "movement_type": "VALIDATION",
+          "objective": "Build docker image and deploy to remote test cluster, verify live login with aiview and nexusadmin.",
+          "status": "ready_for_deploy"
+        },
+        "preserved": [
+          "Raw database entities, cached data, polling workers, and nexusadmin output remain 100% operational on raw production data."
+        ],
+        "recommended_reasoning": {
+          "reason": "Live deployment and verification",
+          "tier": "main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "PASS",
+          "diff_check": "PASS",
+          "full_regression": "PASS",
+          "privacy": "PASS (0 findings)",
+          "real_environment": "READY_FOR_DEPLOY",
+          "state_consistency": "PASS",
+          "targeted": "PASS"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-18T16:47:00Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0333",
+  "movement": "NXS-LOCAL-0333",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C9_PRODUCTION_REPLAY_ROLE_CONTRACT.md",
+    "docs/design/PRIVATE_REPLAY_ARCHITECTURE.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-18T16:47:00Z"
+}

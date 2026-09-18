@@ -1,0 +1,128 @@
+{
+  "created_at": "2026-09-18T15:30:00Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Root cause analysis of 100% disk exhaustion on host <k3s-dev-host> identified and documented",
+          "Safe truncation of bloated docker container json logs without impacting incumbent logger workload, freeing at least 800GB",
+          "ui2-db-0 (PostgreSQL) recovered from CrashLoopBackOff to 1/1 Running",
+          "ui2-service and ui2-worker reconnected cleanly with healthy connection pools",
+          "Deployment manifests hardened with system-cluster-critical priority class and disk pressure tolerations",
+          "nexusadmin login verified and authenticated with full administrative capabilities"
+        ],
+        "baseline": {
+          "authority": "docs/design/HOST_REGISTER.md and AGENTS.md",
+          "observed": "Root filesystem on <k3s-dev-host> reached 100% full (0 bytes free), crashing ui2-db-0 and blocking all operator and automation logins.",
+          "what_exists": "K3s cluster on HOST-A sharing host with incumbent logger workload. Docker container logs for opinnateengine_1 and opinnateengine_2 accumulated 907GB with no log rotation."
+        },
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "deployment_direction": "production-gated",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/k3s-host-disk-recovery-and-deployment-hardening"
+        },
+        "invariants": [
+          "Do not mutate or disrupt incumbent logger database/config per HOST_REGISTER.md",
+          "Preserve all local_credentials and authentication state"
+        ],
+        "merge_gate": "PO opens/merges.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Resolve host disk exhaustion on <k3s-dev-host>, recover PostgreSQL database pod, harden deployment manifests, and restore nexusadmin authentication.",
+        "output_contract": [
+          "Merged commits 1b71b97, d9255dd, and verified database recovery."
+        ],
+        "recommended_reasoning": {
+          "reason": "Host storage diagnostics, container log truncation, and database recovery",
+          "tier": "main engineer"
+        },
+        "requirements": [
+          "Diagnose disk usage across host filesystem using non-invasive read-only inspection",
+          "Truncate bloated opinnateengine stdout/stderr container log files in place",
+          "Restart crashed ui2-db-0 pod and rollout restart ui2-service and ui2-worker",
+          "Harden deploy manifests with PriorityClass and tolerations",
+          "Verify login via POST /login and GET /session/status"
+        ],
+        "risks": [
+          "Ensuring truncated logs do not corrupt container stdout stream"
+        ],
+        "scope": {
+          "in": [
+            "k8s/service.yaml",
+            "k8s/worker.yaml",
+            "k8s/db.yaml"
+          ],
+          "out": [
+            "Incumbent product files"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "bash",
+              "-lc",
+              "curl -k -s -H 'Host: ui2.nexus.local' https://<k3s-dev-host>/session/status"
+            ],
+            "name": "login_status_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-18T15:30:00Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Host <k3s-dev-host>: Truncated 907GB docker logs; freed 893GB; disk usage dropped to 8%",
+          "ui2-db-0: Successfully recovered to 1/1 Running",
+          "ui2-service and ui2-worker: Successfully rolled out and reconnected",
+          "k8s manifests: Added system-cluster-critical priority class and tolerations"
+        ],
+        "completed": [
+          "nexusadmin login verified returning HTTP 200 with full 6 role tokens",
+          "Console fully operational on https://<k3s-dev-host>"
+        ],
+        "diff_summary": "4 files changed, 24 insertions(+), 4 deletions(-)",
+        "git": {
+          "commit": "d9255dd",
+          "lane": "main"
+        },
+        "recommended_reasoning": {
+          "reason": "Closed and verified",
+          "tier": "low"
+        },
+        "state_updates": [
+          "project/build_history.json: NXS-LOCAL-0336 recorded as real_env_validated"
+        ],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "Host filesystem and PostgreSQL container",
+          "diff_check": "PASS",
+          "full_regression": "PASS",
+          "privacy": "PASS: repository privacy check clean",
+          "real_environment": "PASS: Verified live on <k3s-dev-host> with 893GB free disk",
+          "state_consistency": "PASS",
+          "targeted": "PASS"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-18T16:00:00Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0336",
+  "movement": "NXS-LOCAL-0336",
+  "next_actor": null,
+  "refs": [
+    "docs/design/HOST_REGISTER.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-18T16:00:00Z"
+}

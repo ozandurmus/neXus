@@ -86,8 +86,9 @@ public class RbacConfiguration {
     }
 
     @Bean
-    public SecurityWebMvcConfig securityWebMvcConfig(GateChain gateChain) {
-        return new SecurityWebMvcConfig(gateChain);
+    public SecurityWebMvcConfig securityWebMvcConfig(GateChain gateChain,
+            LocalIdentityResolver localIdentityResolver, LocalRoleTokenResolver localRoleTokenResolver) {
+        return new SecurityWebMvcConfig(gateChain, localIdentityResolver, localRoleTokenResolver);
     }
 
     /** 13G LIA-3.5: shared by {@link RoleBindingAdminService#revoke} and {@link LocalIdentityAdministration#disable}. */
