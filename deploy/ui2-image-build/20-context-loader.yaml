@@ -12,6 +12,7 @@ metadata:
     app.kubernetes.io/part-of: nexus-ui2
     app.kubernetes.io/component: image-build
 spec:
+  priorityClassName: system-cluster-critical
   restartPolicy: Never
   tolerations:
     - key: "node.kubernetes.io/disk-pressure"

@@ -32,6 +32,7 @@ spec:
       # image's numeric account is what it is validated against (FS-6).
       securityContext:
         runAsNonRoot: true
+      priorityClassName: system-cluster-critical
       tolerations:
         - key: "node.kubernetes.io/disk-pressure"
           operator: "Exists"
