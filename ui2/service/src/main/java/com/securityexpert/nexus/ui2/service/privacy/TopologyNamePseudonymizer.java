@@ -43,6 +43,7 @@ public class TopologyNamePseudonymizer {
     }
 
     private final Map<String, String> reverseClusterCache = new ConcurrentHashMap<>();
+    private final Map<String, String> rawNameToPseudonym = new ConcurrentHashMap<>();
 
     public String maskClusterName(String rawClusterName) {
         if (rawClusterName == null || rawClusterName.isBlank()) {
@@ -54,6 +55,7 @@ public class TopologyNamePseudonymizer {
         }
         String masked = clusterCache.computeIfAbsent(trimmed, this::computeClusterName);
         reverseClusterCache.put(masked, trimmed);
+        rawNameToPseudonym.put(trimmed, masked);
         return masked;
     }
 
@@ -79,7 +81,9 @@ public class TopologyNamePseudonymizer {
             return rawDeviceName;
         }
         String key = rawDeviceName.trim() + "::" + (clusterMemberRef != null ? clusterMemberRef.trim() : "");
-        return deviceCache.computeIfAbsent(key, k -> computeDeviceName(rawDeviceName.trim(), clusterMemberRef));
+        String masked = deviceCache.computeIfAbsent(key, k -> computeDeviceName(rawDeviceName.trim(), clusterMemberRef));
+        rawNameToPseudonym.put(rawDeviceName.trim(), masked);
+        return masked;
     }
 
     public String maskVirtualSystem(String rawVsName, String parentRef) {
@@ -87,7 +91,27 @@ public class TopologyNamePseudonymizer {
             return rawVsName;
         }
         String key = rawVsName.trim() + "::" + (parentRef != null ? parentRef.trim() : "");
-        return vsCache.computeIfAbsent(key, k -> computeVsName(rawVsName.trim(), parentRef));
+        String masked = vsCache.computeIfAbsent(key, k -> computeVsName(rawVsName.trim(), parentRef));
+        rawNameToPseudonym.put(rawVsName.trim(), masked);
+        return masked;
+    }
+
+    /**
+     * Replaces known raw hostnames, cluster names, and VS names in free-form text.
+     */
+    public String maskText(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+        String result = text;
+        java.util.List<Map.Entry<String, String>> sorted = new java.util.ArrayList<>(rawNameToPseudonym.entrySet());
+        sorted.sort((a, b) -> Integer.compare(b.getKey().length(), a.getKey().length()));
+        for (Map.Entry<String, String> entry : sorted) {
+            if (!entry.getKey().isBlank()) {
+                result = result.replace(entry.getKey(), entry.getValue());
+            }
+        }
+        return result;
     }
 
     private String computeClusterName(String raw) {

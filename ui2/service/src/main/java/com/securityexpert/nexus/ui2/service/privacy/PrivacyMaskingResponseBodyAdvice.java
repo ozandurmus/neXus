@@ -61,7 +61,26 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             return body;
         }
 
+        preRegisterSubnets(body);
         return maskObject(body, null);
+    }
+
+    private void preRegisterSubnets(Object obj) {
+        if (obj instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String key = String.valueOf(entry.getKey());
+                Object val = entry.getValue();
+                if (("address".equals(key) || "destination".equals(key)) && val instanceof String s) {
+                    ipMasker.registerSubnet(s);
+                } else {
+                    preRegisterSubnets(val);
+                }
+            }
+        } else if (obj instanceof List<?> list) {
+            for (Object item : list) {
+                preRegisterSubnets(item);
+            }
+        }
     }
 
     /**
@@ -72,15 +91,18 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             return null;
         }
         if (obj instanceof String text) {
-            return ipMasker.maskText(text);
+            return topologyPseudonymizer.maskText(ipMasker.maskText(text));
         }
         if (obj instanceof JobEvent jobEvent) {
+            String maskedReason = jobEvent.terminalReason() != null
+                    ? topologyPseudonymizer.maskText(ipMasker.maskText(jobEvent.terminalReason()))
+                    : null;
             return new JobEvent(
                     jobEvent.jobId(),
                     jobEvent.jobType(),
                     jobEvent.targetDeviceId(),
                     jobEvent.state(),
-                    ipMasker.maskText(jobEvent.terminalReason()),
+                    maskedReason,
                     jobEvent.submittedAt());
         }
         if (obj instanceof Map<?, ?> map) {
@@ -163,7 +185,7 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 }
                 case "terminal_reason", "latest_job_terminal_reason", "peer_follow_reason" -> {
                     if (value instanceof String s) {
-                        result.put(key, ipMasker.maskText(s));
+                        result.put(key, topologyPseudonymizer.maskText(ipMasker.maskText(s)));
                     } else {
                         result.put(key, value);
                     }

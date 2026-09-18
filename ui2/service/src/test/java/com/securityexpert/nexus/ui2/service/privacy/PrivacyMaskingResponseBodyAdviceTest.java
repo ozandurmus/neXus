@@ -140,4 +140,78 @@ class PrivacyMaskingResponseBodyAdviceTest {
         assertThat(maskedEvent.targetDeviceId()).isEqualTo("148bd45b-e5b4-490b-95c5-54862e2d63d0");
         assertThat(maskedEvent.terminalReason()).doesNotContain("192.168.230.2").contains("10.");
     }
+
+    @Test
+    void masksJobFailureWithBothIpAndRawHostname() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+
+        // Pre-register a device hostname
+        advice.maskObject(Map.of("hostname", "FW-CKP-GARANTIMOBAPP-AA-1"), null);
+
+        JobEvent event = new JobEvent("job-999", "DEVICE_INVENTORY", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
+                "FAILED", "SSH connection to FW-CKP-GARANTIMOBAPP-AA-1 at 192.168.230.2 timed out", Instant.now());
+
+        @SuppressWarnings("unchecked")
+        List<JobEvent> result = (List<JobEvent>) advice.beforeBodyWrite(List.of(event), null, null, null, serverRequest, null);
+
+        assertThat(result).hasSize(1);
+        String reason = result.get(0).terminalReason();
+        assertThat(reason).doesNotContain("FW-CKP-GARANTIMOBAPP-AA-1");
+        assertThat(reason).doesNotContain("192.168.230.2");
+        assertThat(reason).contains("FW-");
+        assertThat(reason).contains("10.");
+    }
+
+    @Test
+    void masksClusterInventoryWithBareVipInheritingSlash23() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+
+        Map<String, Object> vipAddr = Map.of("address", "10.230.4.11");
+        Map<String, Object> m1Addr = Map.of("address", "10.230.4.12/23");
+        Map<String, Object> m2Addr = Map.of("address", "10.230.4.13/23");
+
+        Map<String, Object> iface = Map.of(
+                "name", "eth6-01",
+                "addresses", List.of(vipAddr),
+                "member_addresses", Map.of(
+                        "Member-1", List.of(m1Addr),
+                        "Member-2", List.of(m2Addr)
+                )
+        );
+        Map<String, Object> context = Map.of("context", "system", "interfaces", List.of(iface), "routes", List.of());
+        Map<String, Object> clusterInventory = Map.of(
+                "cluster_member_ref", "CLS-GARANTI-PROD",
+                "contexts", List.of(context)
+        );
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) advice.beforeBodyWrite(clusterInventory, null, null, null, serverRequest, null);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contexts = (List<Map<String, Object>>) result.get("contexts");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> ifaces = (List<Map<String, Object>>) contexts.get(0).get("interfaces");
+        Map<String, Object> maskedIface = ifaces.get(0);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> vips = (List<Map<String, Object>>) maskedIface.get("addresses");
+        @SuppressWarnings("unchecked")
+        Map<String, List<Map<String, Object>>> memberAddrs = (Map<String, List<Map<String, Object>>>) maskedIface.get("member_addresses");
+
+        String maskedVip = (String) vips.get(0).get("address");
+        String maskedM1 = (String) memberAddrs.get("Member-1").get(0).get("address");
+
+        assertThat(maskedVip).doesNotContain("/");
+        assertThat(maskedM1).endsWith("/23");
+
+        // Verify that masked VIP and masked member are in the EXACT same /23 subnet
+        String[] vipParts = maskedVip.split("\\.");
+        String[] m1Parts = maskedM1.substring(0, maskedM1.indexOf('/')).split("\\.");
+
+        assertThat(vipParts[0]).isEqualTo(m1Parts[0]);
+        assertThat(vipParts[1]).isEqualTo(m1Parts[1]);
+        assertThat(Integer.parseInt(vipParts[2]) & ~1).isEqualTo(Integer.parseInt(m1Parts[2]) & ~1);
+        assertThat(vipParts[3]).isEqualTo("11");
+        assertThat(m1Parts[3]).isEqualTo("12");
+    }
 }

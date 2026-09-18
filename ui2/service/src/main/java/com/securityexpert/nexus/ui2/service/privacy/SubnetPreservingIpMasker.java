@@ -20,8 +20,11 @@ public class SubnetPreservingIpMasker {
     private static final Pattern IPV4_PATTERN = Pattern.compile("^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})(?:/(\\d{1,2}))?$");
     private static final Pattern EMBEDDED_IPV4_PATTERN = Pattern.compile("\\b(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(?:/\\d{1,2})?)\\b");
 
+    public record SubnetInfo(long netLong, long mask, int prefixLen, String netAddressStr) {}
+
     private final byte[] secretKey;
     private final Map<String, String> cache = new ConcurrentHashMap<>();
+    private final Map<String, SubnetInfo> registeredSubnets = new ConcurrentHashMap<>();
 
     @org.springframework.beans.factory.annotation.Autowired
     public SubnetPreservingIpMasker(HmacKeyProvider keyProvider) {
@@ -30,6 +33,36 @@ public class SubnetPreservingIpMasker {
 
     public SubnetPreservingIpMasker(byte[] secretKey) {
         this.secretKey = Objects.requireNonNull(secretKey, "secretKey").clone();
+    }
+
+    /**
+     * Registers a known subnet prefix (e.g. "10.230.4.0/23" or "10.230.4.12/23")
+     * into the Longest Prefix Match (LPM) table so bare IPs (VIPs, gateways) inherit it.
+     */
+    public void registerSubnet(String cidrOrIp) {
+        if (cidrOrIp == null || cidrOrIp.isBlank()) {
+            return;
+        }
+        Matcher matcher = IPV4_PATTERN.matcher(cidrOrIp.trim());
+        if (!matcher.matches() || matcher.group(5) == null) {
+            return;
+        }
+        int o1 = Integer.parseInt(matcher.group(1));
+        int o2 = Integer.parseInt(matcher.group(2));
+        int o3 = Integer.parseInt(matcher.group(3));
+        int o4 = Integer.parseInt(matcher.group(4));
+        int prefixLen = Integer.parseInt(matcher.group(5));
+        if (prefixLen <= 0 || prefixLen > 32 || o1 > 255 || o2 > 255 || o3 > 255 || o4 > 255) {
+            return;
+        }
+
+        long ipLong = (((long) o1) << 24) | (((long) o2) << 16) | (((long) o3) << 8) | o4;
+        long mask = (-1L << (32 - prefixLen)) & 0xFFFFFFFFL;
+        long netLong = ipLong & mask;
+        String netAddressStr = String.format("%d.%d.%d.%d",
+                (netLong >> 24) & 0xFF, (netLong >> 16) & 0xFF, (netLong >> 8) & 0xFF, netLong & 0xFF);
+
+        registeredSubnets.put(netAddressStr + "/" + prefixLen, new SubnetInfo(netLong, mask, prefixLen, netAddressStr));
     }
 
     /**
@@ -78,9 +111,15 @@ public class SubnetPreservingIpMasker {
         }
 
         String cidrGroup = matcher.group(5);
-        int prefixLen = cidrGroup != null ? Integer.parseInt(cidrGroup) : 24;
-        if (prefixLen < 0 || prefixLen > 32) {
-            return "[REDACTED_IP]";
+        int prefixLen;
+        if (cidrGroup != null) {
+            prefixLen = Integer.parseInt(cidrGroup);
+            if (prefixLen < 0 || prefixLen > 32) {
+                return "[REDACTED_IP]";
+            }
+            registerSubnet(trimmed);
+        } else {
+            prefixLen = 24; // default unless matched by LPM
         }
 
         // Special network invariant preservation
@@ -98,9 +137,28 @@ public class SubnetPreservingIpMasker {
         long mask = prefixLen == 0 ? 0 : (-1L << (32 - prefixLen)) & 0xFFFFFFFFL;
         long netLong = ipLong & mask;
         long hostOffset = ipLong & ~mask;
-
         String netAddressStr = String.format("%d.%d.%d.%d",
                 (netLong >> 24) & 0xFF, (netLong >> 16) & 0xFF, (netLong >> 8) & 0xFF, netLong & 0xFF);
+
+        // If no explicit CIDR was supplied, perform Longest Prefix Match (LPM)
+        // against registered subnets to inherit containing network prefix
+        if (cidrGroup == null) {
+            SubnetInfo bestMatch = null;
+            for (SubnetInfo info : registeredSubnets.values()) {
+                if ((ipLong & info.mask()) == info.netLong()) {
+                    if (bestMatch == null || info.prefixLen() > bestMatch.prefixLen()) {
+                        bestMatch = info;
+                    }
+                }
+            }
+            if (bestMatch != null) {
+                prefixLen = bestMatch.prefixLen();
+                mask = bestMatch.mask();
+                netLong = bestMatch.netLong();
+                hostOffset = ipLong & ~mask;
+                netAddressStr = bestMatch.netAddressStr();
+            }
+        }
 
         byte[] hmacBytes = hmacSha256("SUBNET:" + netAddressStr + "/" + prefixLen);
         int x = (hmacBytes[0] & 0xFF) % 240 + 10; // 10..249

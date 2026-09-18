@@ -86,4 +86,36 @@ class SubnetPreservingIpMaskerTest {
         String second = masker.mask("10.230.213.204");
         assertThat(second).isEqualTo(first);
     }
+
+    @Test
+    void inheritsContainingPrefixForBareVipInSlash23() {
+        // Register /23 network
+        masker.registerSubnet("10.230.4.12/23");
+        String m1 = masker.mask("10.230.4.12/23");
+        String m2 = masker.mask("10.230.4.13/23");
+
+        // VIP without CIDR prefix
+        String vip = masker.mask("10.230.4.11");
+
+        assertThat(m1).endsWith("/23");
+        assertThat(m2).endsWith("/23");
+        assertThat(vip).doesNotContain("/");
+
+        String m1Ip = m1.substring(0, m1.indexOf('/'));
+        String[] m1Parts = m1Ip.split("\\.");
+        String[] vipParts = vip.split("\\.");
+
+        // Octets 1 and 2 match
+        assertThat(vipParts[0]).isEqualTo(m1Parts[0]);
+        assertThat(vipParts[1]).isEqualTo(m1Parts[1]);
+
+        // For a /23 network, bit 0 of octet 3 is the host bit, so (octet3 & ~1) must match
+        int m1O3 = Integer.parseInt(m1Parts[2]);
+        int vipO3 = Integer.parseInt(vipParts[2]);
+        assertThat(vipO3 & ~1).isEqualTo(m1O3 & ~1);
+
+        // Host offsets match
+        assertThat(vipParts[3]).isEqualTo("11");
+        assertThat(m1Parts[3]).isEqualTo("12");
+    }
 }
