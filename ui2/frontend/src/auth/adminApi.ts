@@ -748,3 +748,94 @@ export interface JobEventView {
 export function listJobs(): Promise<JobEventView[]> {
   return call("/api/v2/jobs", "GET");
 }
+
+export interface ComplianceOverview {
+  readonly total_firewalls: number;
+  readonly evaluated_firewalls: number;
+  readonly assured_compliance_pct: number;
+  readonly evidence_coverage_pct: number;
+  readonly observed_compliance_pct: number;
+  readonly critical_deficiencies: number;
+  readonly data_gaps: number;
+  readonly frameworks: readonly {
+    readonly framework: string;
+    readonly score_pct: number;
+    readonly total_controls: number;
+    readonly pass_count: number;
+    readonly fail_count: number;
+    readonly data_unavailable_count: number;
+  }[];
+}
+
+export interface ComplianceFrameworkMapping {
+  readonly framework: string;
+  readonly clauseId: string;
+  readonly frameworkVersion: string;
+  readonly relationship: string;
+}
+
+export interface ComplianceControlItem {
+  readonly control_id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  readonly category: string;
+  readonly frameworks: readonly ComplianceFrameworkMapping[];
+  readonly status: "PASS" | "FAIL" | "DATA_UNAVAILABLE";
+  readonly compliance_pct: number;
+  readonly target_device_count: number;
+  readonly pass_count: number;
+  readonly fail_count: number;
+  readonly data_unavailable_count: number;
+  readonly missing_reason?: string;
+  readonly affected_devices: readonly string[];
+}
+
+export interface ComplianceControlsResponse {
+  readonly total_controls: number;
+  readonly controls: readonly ComplianceControlItem[];
+}
+
+export interface DeviceComplianceItem {
+  readonly controlId: string;
+  readonly title: string;
+  readonly severity: string;
+  readonly frameworks: readonly ComplianceFrameworkMapping[];
+  readonly verdict: string;
+  readonly reasonCode: string;
+  readonly displayStatus: string;
+  readonly missingEvidenceId?: string;
+  readonly requiredGateEntry?: string;
+  readonly message?: string;
+  readonly observedValue?: string;
+}
+
+export interface DeviceComplianceResult {
+  readonly device_id: string;
+  readonly hostname: string;
+  readonly vendor: string;
+  readonly totalAssigned: number;
+  readonly passCount: number;
+  readonly failCount: number;
+  readonly dataUnavailableCount: number;
+  readonly observedCompliance: number;
+  readonly evidenceCoverage: number;
+  readonly assuredCompliance: number;
+  readonly items: readonly DeviceComplianceItem[];
+}
+
+export function getComplianceOverview(): Promise<ComplianceOverview> {
+  return call<ComplianceOverview>("/compliance/overview", "GET");
+}
+
+export function getComplianceControls(): Promise<ComplianceControlsResponse> {
+  return call<ComplianceControlsResponse>("/compliance/controls", "GET");
+}
+
+export function getDeviceCompliance(deviceId: string): Promise<DeviceComplianceResult> {
+  return call<DeviceComplianceResult>(`/devices/${encodeURIComponent(deviceId)}/compliance`, "GET");
+}
+
+export function triggerComplianceEvaluation(deviceId?: string): Promise<ComplianceOverview> {
+  return call<ComplianceOverview>("/compliance/evaluate", "POST", deviceId ? { device_id: deviceId } : {});
+}

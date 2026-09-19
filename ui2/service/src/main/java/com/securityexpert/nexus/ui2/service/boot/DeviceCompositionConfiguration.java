@@ -424,4 +424,12 @@ public class DeviceCompositionConfiguration {
         return new DiscoveryRunService(transactionBoundary, discoveryRunRepository, jobAdmissionService,
                 credentialReferenceRepository, deviceAddSingleService, deviceDiscoveryMatchRepository);
     }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.compliance.ComplianceService complianceService(
+            ConfigurationQueryService configurationQueryService,
+            DeviceRepository deviceRepository) {
+        return new com.securityexpert.nexus.ui2.service.compliance.ComplianceService(
+                configurationQueryService, deviceRepository);
+    }
 }

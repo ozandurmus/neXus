@@ -112,6 +112,9 @@ spec:
             # Dedicated ui2-configuration microservice internal ClusterIP endpoint
             - name: UI2_CONFIG_SERVICE_URL
               value: "http://ui2-configuration.ui2.svc.cluster.local:8084"
+            # Dedicated ui2-compliance microservice internal ClusterIP endpoint
+            - name: UI2_COMPLIANCE_SERVICE_URL
+              value: "http://ui2-compliance.ui2.svc.cluster.local:8085"
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false

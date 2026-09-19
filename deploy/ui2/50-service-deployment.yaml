@@ -74,6 +74,10 @@ spec:
                   key: db_name
             - name: UI2_DB_URL
               value: "jdbc:postgresql://$(UI2_DB_HOST):$(UI2_DB_PORT)/$(UI2_DB_NAME)"
+            - name: UI2_CONFIG_SERVICE_URL
+              value: "http://ui2-configuration.ui2.svc.cluster.local:8084"
+            - name: UI2_COMPLIANCE_SERVICE_URL
+              value: "http://ui2-compliance.ui2.svc.cluster.local:8085"
             - name: LOGGING_LEVEL_ROOT
               valueFrom:
                 configMapKeyRef:

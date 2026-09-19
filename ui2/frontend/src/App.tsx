@@ -82,7 +82,8 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
     }
   }
 
-  const { screen, preview } = screenFromSearch(search);
+  const { screen: searchScreen, preview } = screenFromSearch(search);
+  const screen = (pathname === "/compliance" || pathname === "/compliance/") ? "compliance" : searchScreen;
   const Product = PRODUCT_SCREENS[screen];
   const Preview = PREVIEW_SCREENS[screen];
 
