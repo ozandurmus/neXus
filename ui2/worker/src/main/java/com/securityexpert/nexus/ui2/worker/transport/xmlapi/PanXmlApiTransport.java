@@ -210,7 +210,9 @@ public final class PanXmlApiTransport implements DeviceTransport {
         TrustResolution resolution = resolveOrThrow();
         SSLContext sslContext = buildSslContext(resolution);
         SSLParameters sslParameters = new SSLParameters();
-        if (!(resolution instanceof TrustResolution.PaloAltoDeviceTrust)) {
+        if (resolution instanceof TrustResolution.PaloAltoDeviceTrust) {
+            sslParameters.setEndpointIdentificationAlgorithm("");
+        } else {
             sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
         }
         return HttpClient.newBuilder()
