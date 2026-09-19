@@ -26,8 +26,7 @@ public final class PaloAltoHaStateParser {
         if (serial == null) {
             return null;
         }
-        String stripped = serial.strip();
-        return stripped.replaceFirst("^0+(?!$)", "");
+        return serial.strip();
     }
 
     public static HaState parse(String output) {

@@ -46,15 +46,15 @@ class PaloAltoHaStateParserTest {
 
         PaloAltoHaStateParser.HaState state = PaloAltoHaStateParser.parse(body);
 
-        assertEquals("123456", state.localSerial().orElseThrow());
-        assertEquals("123456", state.peerSerial().orElseThrow());
+        assertEquals("00123456", state.localSerial().orElseThrow());
+        assertEquals("0123456", state.peerSerial().orElseThrow());
     }
     
     @Test
     void normalizesZeroesCorrectly() {
-        assertEquals("0", PaloAltoHaStateParser.normalizeSerial("0000"));
-        assertEquals("1", PaloAltoHaStateParser.normalizeSerial("0001"));
-        assertEquals("123", PaloAltoHaStateParser.normalizeSerial("0123"));
-        assertEquals("123", PaloAltoHaStateParser.normalizeSerial("  0123  "));
+        assertEquals("0000", PaloAltoHaStateParser.normalizeSerial("0000"));
+        assertEquals("0001", PaloAltoHaStateParser.normalizeSerial("0001"));
+        assertEquals("0123", PaloAltoHaStateParser.normalizeSerial("0123"));
+        assertEquals("0123", PaloAltoHaStateParser.normalizeSerial("  0123  "));
     }
 }

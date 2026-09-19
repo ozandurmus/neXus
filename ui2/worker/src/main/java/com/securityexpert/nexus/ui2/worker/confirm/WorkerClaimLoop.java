@@ -197,6 +197,20 @@ public final class WorkerClaimLoop {
             confirmJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), primaryRequest,
                     peerRequestFactory, false);
             return true;
+        } catch (Throwable t) {
+            LOGGER.log(System.Logger.Level.ERROR,
+                    "Worker {0} caught unhandled error executing job {1}: {2}",
+                    workerId, claimed.jobId(), t.getMessage(), t);
+            try {
+                leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(),
+                        com.securityexpert.nexus.ui2.jobs.JobState.EXECUTING, com.securityexpert.nexus.ui2.jobs.JobState.FAILED,
+                        "system:worker", "unhandled_exception", "unhandled_exception: " + t.getMessage());
+            } catch (Exception transitionEx) {
+                LOGGER.log(System.Logger.Level.ERROR,
+                        "Failed to transition job {0} to FAILED: {1}",
+                        claimed.jobId(), transitionEx.getMessage());
+            }
+            throw t;
         } finally {
             long totalJobTime = System.currentTimeMillis() - claimMs;
             LOGGER.log(System.Logger.Level.INFO,

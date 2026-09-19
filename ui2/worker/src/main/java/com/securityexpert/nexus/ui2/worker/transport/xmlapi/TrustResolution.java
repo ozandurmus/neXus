@@ -14,6 +14,10 @@ public sealed interface TrustResolution {
     record PinnedFingerprint(String sha256Hex) implements TrustResolution {
     }
 
+    /** Verified Palo Alto Networks appliance trust for direct physical firewall connections. */
+    record PaloAltoDeviceTrust(java.util.Optional<String> pinnedFingerprint) implements TrustResolution {
+    }
+
     /** No trust rule is registered for the given ref -- a definite refusal, never trust-on-first-use. */
     record Unresolved() implements TrustResolution {
     }

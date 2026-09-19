@@ -146,21 +146,36 @@ public final class ConfirmCapabilityExecutor {
                 READ_TIMEOUT);
         Optional<String> apiKey = xmlOutput(keyResult).flatMap(ConfirmCapabilityExecutor::extractApiKey);
         if (apiKey.isEmpty()) {
-            return new ConfirmResult.ConnectFailed("palo alto key generation did not return a usable key");
+            String failureReason = keyResult instanceof XmlApiResult.Failed failed
+                    ? "palo alto key generation failed: " + failed.reason()
+                    : "palo alto key generation did not return a usable key";
+            return new ConfirmResult.ConnectFailed(failureReason);
         }
         Map<String, String> headers = Map.of("X-PAN-KEY", apiKey.get());
 
         String identityOutput = xmlApiOutput(target,
                 DeviceFirstContactCommandSet.forStep(Vendor.PALO_ALTO, ContactStepKind.IDENTITY_READ), headers);
+        if (identityOutput == null || identityOutput.isBlank() || isXmlError(identityOutput)) {
+            return new ConfirmResult.ConnectFailed("palo alto identity read timed out or failed");
+        }
+
+        PresentedIdentity presented = paloAltoParser.presentedIdentity(identityOutput, Optional.empty());
+        if (presented.primary() == null || presented.primary().isBlank()) {
+            return new ConfirmResult.ConnectFailed("palo alto identity read returned empty serial number");
+        }
+
         String haPeerOutput = xmlApiOutput(target,
                 DeviceFirstContactCommandSet.forStep(Vendor.PALO_ALTO, ContactStepKind.HA_PEER_READ), headers);
 
-        PresentedIdentity presented = paloAltoParser.presentedIdentity(identityOutput, Optional.empty());
         ObservedFacts facts =
                 withHaRole(paloAltoParser.observedFacts(identityOutput), paloAltoParser.haRole(haPeerOutput));
         HaPeerClaim haPeerClaim = paloAltoParser.haPeerClaim(haPeerOutput);
         Optional<String> selfReference = paloAltoParser.selfReferenceForPeer(identityOutput);
         return new ConfirmResult.Completed(presented, facts, haPeerClaim, selfReference);
+    }
+
+    private static boolean isXmlError(String xml) {
+        return xml.contains("status=\"error\"") || xml.contains("status='error'");
     }
 
     private String execOutput(TransportSession session, DeviceFirstContactCommandSet entry) {

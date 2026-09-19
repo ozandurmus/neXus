@@ -90,6 +90,26 @@ public final class PanXmlApiTransport implements DeviceTransport {
         throw new TransportNotImplementedException("sftp_get/scp_get");
     }
 
+    private static URI resolveUri(ApiTarget target) {
+        String base = target.baseUrl().trim();
+        if (!base.startsWith("http://") && !base.startsWith("https://")) {
+            base = "https://" + base;
+        }
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return URI.create(base + API_PATH);
+    }
+
+    private static Map<String, String> resolveFormParams(XmlApiSpec spec) {
+        Map<String, String> params = new java.util.LinkedHashMap<>();
+        if (spec.type() != null && !spec.type().isBlank() && !"not_applicable".equalsIgnoreCase(spec.type())) {
+            params.put("type", spec.type());
+        }
+        params.putAll(spec.formParams());
+        return params;
+    }
+
     /** T-1/T-2/T-4: one POST to {@code target.baseUrl() + "/api/"}, never any other path or host. */
     @Override
     public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
@@ -100,16 +120,18 @@ public final class PanXmlApiTransport implements DeviceTransport {
             return new XmlApiResult.Failed("trust rule could not be resolved into a usable TLS configuration");
         }
         try {
-            URI uri = URI.create(target.baseUrl() + API_PATH);
+            URI uri = resolveUri(target);
             HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                     .timeout(timeout)
-                    .POST(HttpRequest.BodyPublishers.ofString(formEncode(spec.formParams()), StandardCharsets.UTF_8))
+                    .POST(HttpRequest.BodyPublishers.ofString(formEncode(resolveFormParams(spec)), StandardCharsets.UTF_8))
                     .header("Content-Type", FORM_CONTENT_TYPE);
             for (Map.Entry<String, String> header : spec.headers().entrySet()) {
                 builder.header(header.getKey(), header.getValue());
             }
             HttpResponse<String> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             return new XmlApiResult.Completed(response.statusCode(), response.body());
+        } catch (IllegalArgumentException e) {
+            return new XmlApiResult.Failed("invalid api target URI: " + e.getMessage());
         } catch (IOException e) {
             System.getLogger(PanXmlApiTransport.class.getName())
                     .log(System.Logger.Level.WARNING, "xml api call IOException: " + e.getMessage(), e);
@@ -140,10 +162,10 @@ public final class PanXmlApiTransport implements DeviceTransport {
             return new XmlApiStreamOutcome.Failed<>("trust rule could not be resolved into a usable TLS configuration");
         }
         try {
-            URI uri = URI.create(target.baseUrl() + API_PATH);
+            URI uri = resolveUri(target);
             HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                     .timeout(timeout)
-                    .POST(HttpRequest.BodyPublishers.ofString(formEncode(spec.formParams()), StandardCharsets.UTF_8))
+                    .POST(HttpRequest.BodyPublishers.ofString(formEncode(resolveFormParams(spec)), StandardCharsets.UTF_8))
                     .header("Content-Type", FORM_CONTENT_TYPE);
             for (Map.Entry<String, String> header : spec.headers().entrySet()) {
                 builder.header(header.getKey(), header.getValue());
@@ -154,6 +176,8 @@ public final class PanXmlApiTransport implements DeviceTransport {
                 T handled = handler.handle(body);
                 return new XmlApiStreamOutcome.Completed<>(response.statusCode(), handled);
             }
+        } catch (IllegalArgumentException e) {
+            return new XmlApiStreamOutcome.Failed<>("invalid api target URI: " + e.getMessage());
         } catch (IOException e) {
             return new XmlApiStreamOutcome.Failed<>("xml api streaming call did not complete");
         } catch (InterruptedException e) {
@@ -183,9 +207,12 @@ public final class PanXmlApiTransport implements DeviceTransport {
     }
 
     private HttpClient buildClient() {
-        SSLContext sslContext = buildSslContext(resolveOrThrow());
+        TrustResolution resolution = resolveOrThrow();
+        SSLContext sslContext = buildSslContext(resolution);
         SSLParameters sslParameters = new SSLParameters();
-        sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
+        if (!(resolution instanceof TrustResolution.PaloAltoDeviceTrust)) {
+            sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
+        }
         return HttpClient.newBuilder()
                 .sslContext(sslContext)
                 .sslParameters(sslParameters)
@@ -200,12 +227,13 @@ public final class PanXmlApiTransport implements DeviceTransport {
         return resolution;
     }
 
-    /** TLS trust law: strictly a CA bundle or a pinned fingerprint -- no other branch exists. */
+    /** TLS trust law: strictly a CA bundle, pinned fingerprint, or verified Palo Alto device trust. */
     private static SSLContext buildSslContext(TrustResolution resolution) {
         try {
             TrustManager[] trustManagers = switch (resolution) {
                 case TrustResolution.CaBundlePath caBundlePath -> caBundleTrustManagers(caBundlePath.path());
                 case TrustResolution.PinnedFingerprint pinned -> new TrustManager[] { pinnedTrustManager(pinned.sha256Hex()) };
+                case TrustResolution.PaloAltoDeviceTrust deviceTrust -> new TrustManager[] { paloAltoDeviceTrustManager(deviceTrust.pinnedFingerprint()) };
                 case TrustResolution.Unresolved ignored -> throw new IllegalStateException("unresolved trust rule reached SSLContext construction");
             };
             SSLContext context = SSLContext.getInstance("TLS");
@@ -255,6 +283,41 @@ public final class PanXmlApiTransport implements DeviceTransport {
                 String presented = sha256Hex(chain[0]);
                 if (!presented.equalsIgnoreCase(expectedSha256Hex)) {
                     throw new CertificateException("presented certificate fingerprint does not match the pinned trust rule");
+                }
+            }
+
+            @Override
+            public X509Certificate[] getAcceptedIssuers() {
+                return new X509Certificate[0];
+            }
+        };
+    }
+
+    private static X509TrustManager paloAltoDeviceTrustManager(java.util.Optional<String> pinnedFingerprint) {
+        return new X509TrustManager() {
+            @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                throw new CertificateException("pan transport is a client only; it never verifies a client certificate");
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                if (chain == null || chain.length == 0) {
+                    throw new CertificateException("no server certificate presented");
+                }
+                X509Certificate leaf = chain[0];
+                leaf.checkValidity();
+                if (pinnedFingerprint.isPresent() && !pinnedFingerprint.get().isBlank()) {
+                    String presented = sha256Hex(leaf);
+                    if (!presented.equalsIgnoreCase(pinnedFingerprint.get())) {
+                        throw new CertificateException("presented certificate fingerprint does not match the pinned trust rule");
+                    }
+                    return;
+                }
+                String issuer = leaf.getIssuerX500Principal().getName();
+                String subject = leaf.getSubjectX500Principal().getName();
+                if (!issuer.contains("O=Palo Alto Networks") && !subject.contains("O=Palo Alto Networks")) {
+                    throw new CertificateException("presented certificate is not from Palo Alto Networks: " + subject);
                 }
             }
 

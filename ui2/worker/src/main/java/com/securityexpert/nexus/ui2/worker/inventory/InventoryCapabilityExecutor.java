@@ -261,13 +261,22 @@ public final class InventoryCapabilityExecutor {
                 READ_TIMEOUT);
         Optional<String> apiKey = xmlOutput(keyResult).flatMap(InventoryCapabilityExecutor::extractApiKey);
         if (apiKey.isEmpty()) {
-            return new InventoryResult.ConnectFailed("palo alto key generation did not return a usable key");
+            String failureReason = keyResult instanceof XmlApiResult.Failed failed
+                    ? "palo alto key generation failed: " + failed.reason()
+                    : "palo alto key generation did not return a usable key";
+            return new InventoryResult.ConnectFailed(failureReason);
         }
         Map<String, String> headers = Map.of("X-PAN-KEY", apiKey.get());
 
         String identityOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_SYSTEM_INFO, headers);
+        if (identityOutput == null || identityOutput.isBlank() || isXmlError(identityOutput)) {
+            return new InventoryResult.ConnectFailed("palo alto show system info failed");
+        }
         PaloAltoSystemInfoParser.SystemInfo sysInfo = PaloAltoSystemInfoParser.parse(identityOutput);
         String serial = sysInfo.serial();
+        if (serial == null || serial.isBlank()) {
+            return new InventoryResult.ConnectFailed("palo alto show system info returned empty serial");
+        }
         PresentedIdentity presented = new PresentedIdentity(serial, Optional.empty());
         IdentityMismatchEvaluator.Decision decision =
                 IdentityMismatchEvaluator.evaluate(recordedIdentity, presented, strictRefuseEnabled);
@@ -320,6 +329,10 @@ public final class InventoryCapabilityExecutor {
             contexts.add(new InventoryContext(vsys,
                     toInventoryInterfaces(parsedInterfaces.interfacesByVsys().getOrDefault(vsys, List.of())),
                     toInventoryRoutes(routesByContext.getOrDefault(vsys, List.of()))));
+        }
+
+        if (contexts.stream().allMatch(c -> c.interfaces().isEmpty() && c.routes().isEmpty())) {
+            return new InventoryResult.ConnectFailed("no_interfaces_or_routes_discovered: device returned no interface or route data");
         }
 
         PaloAltoHaStateParser.HaState haState = PaloAltoHaStateParser.parse(haStateOutput);
@@ -637,6 +650,10 @@ public final class InventoryCapabilityExecutor {
         }
         Matcher matcher = pattern.matcher(text);
         return matcher.find() ? Optional.of(matcher.group(1)) : Optional.empty();
+    }
+
+    private static boolean isXmlError(String xml) {
+        return xml != null && (xml.contains("status=\"error\"") || xml.contains("status='error'"));
     }
 
     private static String describeConnect(ConnectResult result) {

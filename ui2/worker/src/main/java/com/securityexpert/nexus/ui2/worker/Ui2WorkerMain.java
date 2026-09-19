@@ -154,13 +154,18 @@ public final class Ui2WorkerMain {
         PanTrustRuleResolver panTrustRuleResolver = trustRuleRef -> {
             String envName = "UI2_" + trustRuleRef.toUpperCase(java.util.Locale.ROOT).replace('.', '_') + "_FINGERPRINT";
             String fingerprint = System.getenv(envName);
-            if (fingerprint == null || fingerprint.isBlank()) {
-                fingerprint = System.getenv("PAN_DISCOVERY_TRUST_PINNED_FINGERPRINT_SHA256");
+            if (fingerprint != null && !fingerprint.isBlank()) {
+                return new TrustResolution.PinnedFingerprint(fingerprint.replace(":", "").trim().toLowerCase());
             }
-            if (fingerprint == null || fingerprint.isBlank()) {
-                return EnvironmentPanTrustRuleResolver.INSTANCE.resolveTrust(trustRuleRef);
+            String caBundlePath = System.getenv("PAN_DISCOVERY_TRUST_CA_BUNDLE_PATH");
+            if (caBundlePath != null && !caBundlePath.isBlank()) {
+                return new TrustResolution.CaBundlePath(caBundlePath);
             }
-            return new TrustResolution.PinnedFingerprint(fingerprint.replace(":", "").trim().toLowerCase());
+            boolean allowDeviceTrust = !"false".equalsIgnoreCase(System.getenv("UI2_PAN_ALLOW_DEVICE_TRUST"));
+            if (allowDeviceTrust) {
+                return new TrustResolution.PaloAltoDeviceTrust(Optional.empty());
+            }
+            return EnvironmentPanTrustRuleResolver.INSTANCE.resolveTrust(trustRuleRef);
         };
         PanXmlApiTransport panTransport = new PanXmlApiTransport(paloAltoTrustRuleRef, panTrustRuleResolver);
 

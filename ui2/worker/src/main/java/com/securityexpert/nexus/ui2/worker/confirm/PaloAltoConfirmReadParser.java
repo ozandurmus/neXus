@@ -19,9 +19,11 @@ final class PaloAltoConfirmReadParser implements ConfirmReadParser {
     private static final Pattern SERIAL = tag("serial");
     private static final Pattern HA_ENABLED = tag("enabled");
     private static final Pattern LOCAL_STATE = Pattern.compile(
-            "(?is)<local>.*?<state>\\s*([A-Za-z-]+)\\s*</state>.*?</local>");
-    private static final Pattern PEER_SERIAL = Pattern.compile("(?is)<peer>.*?<serial>\\s*([^<\\s]+)\\s*</serial>");
-    private static final Pattern PEER_ADDRESS = Pattern.compile("(?is)<peer>.*?<mgmt-ip>\\s*([^<\\s]+)\\s*</mgmt-ip>");
+            "(?is)<(?:local-info|local)>.*?<state>\\s*([A-Za-z-]+)\\s*</state>");
+    private static final Pattern PEER_SERIAL = Pattern.compile(
+            "(?is)<(?:peer-info|peer)>.*?<(?:serial-num|serial)>\\s*([^<\\s]+)\\s*</(?:serial-num|serial)>");
+    private static final Pattern PEER_ADDRESS = Pattern.compile(
+            "(?is)<(?:peer-info|peer)>.*?<mgmt-ip>\\s*([^<\\s]+)\\s*</mgmt-ip>");
 
     private static Pattern tag(String name) {
         return Pattern.compile("(?is)<" + name + ">\\s*([^<]+?)\\s*</" + name + ">");
