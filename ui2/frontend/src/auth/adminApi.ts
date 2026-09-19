@@ -769,9 +769,13 @@ export interface ComplianceOverview {
 
 export interface ComplianceFrameworkMapping {
   readonly framework: string;
-  readonly clauseId: string;
-  readonly frameworkVersion: string;
-  readonly relationship: string;
+  readonly reference?: string;
+  readonly clauseId?: string;
+  readonly version?: string;
+  readonly frameworkVersion?: string;
+  readonly profile?: string;
+  readonly mappingStrength?: string;
+  readonly relationship?: string;
 }
 
 export interface ComplianceControlItem {

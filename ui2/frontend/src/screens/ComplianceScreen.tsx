@@ -138,9 +138,11 @@ export function ComplianceScreen() {
         const inTitle = c.title.toLowerCase().includes(q);
         const inId = c.control_id.toLowerCase().includes(q);
         const inDesc = c.description.toLowerCase().includes(q);
-        const inFw = c.frameworks?.some((f) =>
-          f.clauseId.toLowerCase().includes(q) || f.framework.toLowerCase().includes(q)
-        );
+        const inFw = c.frameworks?.some((f) => {
+          const ref = f.reference || f.clauseId || "";
+          const fw = f.framework || "";
+          return ref.toLowerCase().includes(q) || fw.toLowerCase().includes(q);
+        });
         if (!inTitle && !inId && !inDesc && !inFw) return false;
       }
 
@@ -196,7 +198,7 @@ export function ComplianceScreen() {
       <MetricGrid>
         <ComplianceMetricCard
           title="Assured Compliance (Güvenceli Uyum)"
-          count={overview ? `${overview.assured_compliance_pct}%` : "—"}
+          count={overview ? `${overview.assured_compliance_pct}%` : "0%"}
           badge={{
             label: overview && overview.assured_compliance_pct >= 70 ? "Yüksek Güvence" : "İyileştirme Gerekli",
             tone: overview && overview.assured_compliance_pct >= 70 ? "ok" : "warn",
@@ -205,7 +207,7 @@ export function ComplianceScreen() {
         />
         <ComplianceMetricCard
           title="Evidence Coverage (Kanıt Kapsamı)"
-          count={overview ? `${overview.evidence_coverage_pct}%` : "—"}
+          count={overview ? `${overview.evidence_coverage_pct}%` : "0%"}
           badge={{
             label: overview ? `${overview.evaluated_firewalls} Cihaz` : "0 Cihaz",
             tone: "neutral",
@@ -214,7 +216,7 @@ export function ComplianceScreen() {
         />
         <ComplianceMetricCard
           title="Critical Deficiencies (Kritik Açıklar)"
-          count={overview ? String(overview.critical_deficiencies) : "—"}
+          count={overview ? String(overview.critical_deficiencies) : "0"}
           badge={{
             label: overview?.critical_deficiencies === 0 ? "Sıfır Kritik Açık" : "Acil Müdahale",
             tone: overview?.critical_deficiencies === 0 ? "ok" : "bad",
@@ -223,7 +225,7 @@ export function ComplianceScreen() {
         />
         <ComplianceMetricCard
           title="Data Gaps (Veri Yok / Eksik)"
-          count={overview ? String(overview.data_gaps) : "—"}
+          count={overview ? String(overview.data_gaps) : "0"}
           badge={{
             label: overview && overview.data_gaps > 0 ? "Eksik Komutlar Var" : "Tam Kapsam",
             tone: overview && overview.data_gaps > 0 ? "warn" : "ok",
@@ -486,11 +488,11 @@ export function ComplianceScreen() {
                           <Typography variant="body2" sx={{ fontFamily: "monospace", color: m3.onSurfaceVar, fontSize: 11.5 }}>
                             {c.control_id}
                           </Typography>
-                          {c.frameworks?.slice(0, 3).map((f) => (
+                          {c.frameworks?.slice(0, 3).map((f, idx) => (
                             <Chip
-                              key={f.clauseId}
+                              key={f.reference || f.clauseId || idx}
                               size="small"
-                              label={`${f.framework.replace("_", " ")} ${f.clauseId}`}
+                              label={`${f.framework.replace("_", " ")} ${f.reference || f.clauseId || ""}`}
                               sx={{
                                 height: 20,
                                 fontSize: 10.5,
@@ -709,14 +711,14 @@ export function ComplianceScreen() {
                 Eşleşen Standartlar & Maddeler
               </Typography>
               <Stack spacing={1}>
-                {selectedControl.frameworks?.map((f) => (
-                  <Box key={f.clauseId} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.5, borderBottom: `1px solid ${m3.scHigh}` }}>
+                {selectedControl.frameworks?.map((f, idx) => (
+                  <Box key={f.reference || f.clauseId || idx} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.5, borderBottom: `1px solid ${m3.scHigh}` }}>
                     <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
                       {f.framework.replace("_", " ")}
                     </Typography>
                     <Chip
                       size="small"
-                      label={`Madde ${f.clauseId} (v${f.frameworkVersion})`}
+                      label={`Madde ${f.reference || f.clauseId || ""} (${f.version || f.frameworkVersion || ""})`}
                       sx={{ bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, fontSize: 11 }}
                     />
                   </Box>
