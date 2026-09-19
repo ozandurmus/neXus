@@ -463,6 +463,44 @@
     </main>
 </section>
 
+<section id="ldapSettingsModule" class="app-module" data-module-panel="ldap-settings">
+    <main class="project-plan-shell">
+        <div class="project-plan-heading">
+            <div>
+                <div class="eyebrow">Administration</div>
+                <h1>LDAP Server</h1>
+                <p>Configure the secure directory endpoint used by a separately approved LDAP authentication integration.</p>
+            </div>
+        </div>
+
+        <form id="ldapSettingsForm" class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Directory connection</div><h2>Server settings</h2></div>
+            </div>
+            <div class="m9-enroll-field">
+                <label for="ldapServerUri">Server URI</label>
+                <input id="ldapServerUri" class="control" name="server_uri" type="url" required
+                       placeholder="ldaps://directory.example.com:636" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="m9-enroll-field">
+                <label for="ldapBaseDn">Base DN</label>
+                <input id="ldapBaseDn" class="control" name="base_dn" type="text" required
+                       placeholder="dc=example,dc=com" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="m9-enroll-field">
+                <label for="ldapBindDn">Bind DN (optional)</label>
+                <input id="ldapBindDn" class="control" name="bind_dn" type="text"
+                       placeholder="cn=service,ou=users,dc=example,dc=com" autocomplete="off" spellcheck="false">
+            </div>
+            <p class="detail-subtitle">Bind credentials are not accepted or stored by this console. Saving these settings does not activate LDAP authentication.</p>
+            <div id="ldapSettingsStatus" class="m9-enroll-status" role="status" aria-live="polite"></div>
+            <div class="m9-enroll-actions">
+                <button class="job-type-button" type="submit">Save settings</button>
+            </div>
+        </form>
+    </main>
+</section>
+
 <section id="deviceManagementModule" class="app-module" data-module-panel="device-management">
     <main class="project-plan-shell">
         <div class="project-plan-heading">
