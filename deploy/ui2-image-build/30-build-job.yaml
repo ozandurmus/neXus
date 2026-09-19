@@ -33,9 +33,7 @@ spec:
             - --digest-file=/workspace/image-digest.txt
             - --insecure
             - --skip-tls-verify
-            - --cache=true
-            - --cache-repo=registry.kube-system.svc.cluster.local/nexus-ui2-build-cache
-            - --cache-copy-layers
+            - --cache=false
             - --snapshot-mode=redo
             - --log-format=text
             - --verbosity=info

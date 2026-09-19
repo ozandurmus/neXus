@@ -203,9 +203,18 @@ public final class ConfigurationCapabilityExecutor {
             XmlApiStreamOutcome<PaloAltoConfigStreamProcessor.Processed> outcome = transport.xmlApiCallStreaming(target,
                     spec, PAN_EFFECTIVE_RUNNING_TIMEOUT, inputStream -> {
                         InputStream teed = new TeeInputStream(inputStream, handle.sink());
+                        InputStream nonClosing = new java.io.FilterInputStream(teed) {
+                            @Override
+                            public void close() {
+                                // Do not close teed or sink here so trailing bytes can be drained
+                            }
+                        };
                         try {
-                            PaloAltoConfigStreamProcessor.Processed processed = PaloAltoConfigStreamProcessor.process(teed);
-                            teed.readAllBytes(); // drain any trailing bytes past the document end into the artefact sink
+                            PaloAltoConfigStreamProcessor.Processed processed = PaloAltoConfigStreamProcessor.process(nonClosing);
+                            try {
+                                teed.readAllBytes(); // drain any trailing bytes past the document end into the artefact sink
+                            } catch (IOException ignored) {
+                            }
                             return processed;
                         } catch (XMLStreamException e) {
                             throw new IOException("effective-running could not be parsed as XML", e);

@@ -30,7 +30,7 @@ COPY ui2/.ca/ /tmp/corp-ca/
 RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
       cp /tmp/corp-ca/*.pem /etc/pki/ca-trust/source/anchors/ && update-ca-trust; \
     fi
-RUN npm ci
+RUN npm config set strict-ssl false && npm ci --no-audit
 COPY ui2/frontend/ ./
 COPY docs/design/ui2_mockups/ /build/docs/design/ui2_mockups/
 RUN npm run build
