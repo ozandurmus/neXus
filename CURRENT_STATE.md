@@ -24,6 +24,7 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0338` — `real_env_validated`: Independent Compliance Microservice (`ui2-compliance`), Standards Evaluation Engine (CIS Benchmark, PCI-DSS v4.0.1, NIST SP 800-53, Financial Baseline), `DATA_UNAVAILABLE` Safe Gaps, and Full M3 UI Integration.
 `NXS-LOCAL-0337` — `real_env_validated`: Check Point Configuration Microservice (`ui2-configuration`), 1:1 Python Port, and Live Verification under `aiview`.
 `NXS-LOCAL-0330` — `done`: Check Point and Palo Alto Inventory & Discovery Convergence.
 `NXS-LOCAL-0333` — `real_env_validated`: AIView Privacy-Preserving HMAC Masking Funnel & Identity Seeding (`aiview` user with `role:replay_viewer`).

@@ -45,6 +45,18 @@ spec:
                 configMapKeyRef:
                   name: ui2-build-config
                   key: image_tag
+            - name: HTTP_PROXY
+              value: http://tekprxv2:80
+            - name: HTTPS_PROXY
+              value: http://tekprxv2:80
+            - name: http_proxy
+              value: http://tekprxv2:80
+            - name: https_proxy
+              value: http://tekprxv2:80
+            - name: NO_PROXY
+              value: localhost,127.0.0.1,.svc,.cluster.local,registry.kube-system.svc.cluster.local
+            - name: no_proxy
+              value: localhost,127.0.0.1,.svc,.cluster.local,registry.kube-system.svc.cluster.local
           volumeMounts:
             - name: context
               mountPath: /workspace

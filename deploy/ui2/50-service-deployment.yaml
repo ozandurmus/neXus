@@ -45,7 +45,7 @@ spec:
           # BP-7/OS-10: an immutable reference. This digest is the image the
           # in-cluster build produced from the commit that introduced this
           # file; PORT-2 makes the image reference a per-stage value.
-          image: registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:c57b8aab8d58d77ab68bed80e1cb5e3d23d47a6c4b71acb848fad1b86bd33365
+          image: registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:966cf85b73bc107cc4331f9967f98dfad864e0035d96ea97aa4848fd7deeb136
           # EP-1: the workload role is an argument, not a second image, a
           # second tag or a shell-interpreted environment variable.
           args: ["service"]
