@@ -46,8 +46,11 @@ final class PanoramaResponseParser {
     }
 
     private static RawDeviceInput parseDevice(Element entry) {
-        Serial stableIdentifier = Serial.ofOptional(relativeText(entry, Role.STABLE_IDENTIFIER));
+        Serial stableIdentifier = Serial.ofOptional(serialOf(entry));
         String displayName = relativeText(entry, Role.DISPLAY_NAME).orElse("");
+        if (displayName.isBlank()) {
+            displayName = stableIdentifier.value().orElse("");
+        }
         String deviceTypeMarker = relativeText(entry, Role.DEVICE_TYPE_MARKER).orElse("");
         Optional<String> ownIpv4 = relativeText(entry, Role.OWN_IPV4_ADDRESS);
         Optional<String> ownIpv6 = relativeText(entry, Role.OWN_IPV6_ADDRESS);
@@ -61,19 +64,55 @@ final class PanoramaResponseParser {
                 connectionState, connectionTimestamp, certificateStatus, certificateExpiration, virtualSystems);
     }
 
+    private static Optional<String> serialOf(Element entry) {
+        Optional<String> text = relativeText(entry, Role.STABLE_IDENTIFIER);
+        if (text.isPresent() && !text.get().isBlank()) {
+            return text;
+        }
+        String nameAttr = entry.getAttribute("name");
+        if (nameAttr != null && !nameAttr.isBlank()) {
+            return Optional.of(nameAttr.trim());
+        }
+        return Optional.empty();
+    }
+
     private static List<RawVirtualSystemInput> parseVirtualSystems(Element deviceEntry) {
         String containerPath = fieldPath(Role.VIRTUAL_SYSTEM_ENTRY_CONTAINER);
         List<Element> vsEntries = PanoramaXmlSupport.selectRelative(deviceEntry, containerPath);
         List<RawVirtualSystemInput> result = new ArrayList<>(vsEntries.size());
         for (Element vsEntry : vsEntries) {
-            Serial stableIdentifier = Serial.ofOptional(vsRelativeText(vsEntry, Role.VIRTUAL_SYSTEM_STABLE_IDENTIFIER));
-            String displayName = vsRelativeText(vsEntry, Role.VIRTUAL_SYSTEM_DISPLAY_NAME).orElse("");
+            Serial stableIdentifier = Serial.ofOptional(vsSerialOf(vsEntry));
+            String displayName = vsDisplayNameOf(vsEntry);
             Optional<String> policyOne = vsRelativeText(vsEntry, Role.VIRTUAL_SYSTEM_SHARED_POLICY_ONE);
             Optional<String> policyTwo = vsRelativeText(vsEntry, Role.VIRTUAL_SYSTEM_SHARED_POLICY_TWO);
             Optional<String> policyThree = vsRelativeText(vsEntry, Role.VIRTUAL_SYSTEM_SHARED_POLICY_THREE);
             result.add(new RawVirtualSystemInput(stableIdentifier, displayName, policyOne, policyTwo, policyThree));
         }
         return List.copyOf(result);
+    }
+
+    private static Optional<String> vsSerialOf(Element vsEntry) {
+        Optional<String> text = vsRelativeText(vsEntry, Role.VIRTUAL_SYSTEM_STABLE_IDENTIFIER);
+        if (text.isPresent() && !text.get().isBlank()) {
+            return text;
+        }
+        String nameAttr = vsEntry.getAttribute("name");
+        if (nameAttr != null && !nameAttr.isBlank()) {
+            return Optional.of(nameAttr.trim());
+        }
+        return Optional.empty();
+    }
+
+    private static String vsDisplayNameOf(Element vsEntry) {
+        Optional<String> text = vsRelativeText(vsEntry, Role.VIRTUAL_SYSTEM_DISPLAY_NAME);
+        if (text.isPresent() && !text.get().isBlank()) {
+            return text.get();
+        }
+        String nameAttr = vsEntry.getAttribute("name");
+        if (nameAttr != null && !nameAttr.isBlank()) {
+            return nameAttr.trim();
+        }
+        return "";
     }
 
     private static Optional<String> relativeText(Element entry, Role role) {

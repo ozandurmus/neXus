@@ -2,10 +2,12 @@ package com.securityexpert.nexus.ui2.worker.discovery;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import com.securityexpert.nexus.ui2.discovery.pan.CandidateRow;
 import com.securityexpert.nexus.ui2.discovery.pan.PairingOutcome;
@@ -36,29 +38,34 @@ public final class PaloAltoDiscoveryCandidateMapper {
     }
 
     public static List<DiscoveryCandidateRecord> map(String runId, List<CandidateRow> rows) {
-        Map<String, String> candidateIdBySerial = new HashMap<>();
-        for (CandidateRow row : rows) {
-            row.stableIdentifier().value().ifPresent(serial -> candidateIdBySerial.put(serial, OpaqueId.random().value()));
-        }
+        Map<String, String> candidateIdByHostSerial = new HashMap<>();
         Map<CandidateRow, String> candidateIdByRow = new IdentityHashMap<>();
         for (CandidateRow row : rows) {
-            String id = row.stableIdentifier().value().map(candidateIdBySerial::get).orElseGet(() -> OpaqueId.random().value());
+            String id = OpaqueId.random().value();
             candidateIdByRow.put(row, id);
+            if (row.hostLink().isEmpty()) {
+                row.stableIdentifier().value().ifPresent(serial -> candidateIdByHostSerial.put(serial, id));
+            }
         }
 
+        Set<String> assignedStableIdentifiers = new HashSet<>();
         List<DiscoveryCandidateRecord> out = new ArrayList<>(rows.size());
         for (CandidateRow row : rows) {
             boolean isVirtualSystem = row.hostLink().isPresent();
+            String candidateId = candidateIdByRow.get(row);
             String parentCandidateId = isVirtualSystem
-                    ? row.hostLink().get().hostStableIdentifier().value().map(candidateIdBySerial::get).orElse(null)
+                    ? row.hostLink().get().hostStableIdentifier().value().map(candidateIdByHostSerial::get).orElse(null)
                     : null;
             String clusterReference = !isVirtualSystem ? pairedClusterReference(row) : null;
 
+            String stableIdentifier = resolveStableIdentifier(row, candidateId, assignedStableIdentifiers);
+            assignedStableIdentifiers.add(stableIdentifier);
+
             out.add(new DiscoveryCandidateRecord(
-                    candidateIdByRow.get(row),
+                    candidateId,
                     runId,
                     "palo_alto",
-                    row.stableIdentifier().value().orElse(""),
+                    stableIdentifier,
                     Optional.empty(),
                     isVirtualSystem ? KIND_VIRTUAL_SYSTEM : KIND_DEVICE,
                     row.displayName(),
@@ -73,6 +80,22 @@ public final class PaloAltoDiscoveryCandidateMapper {
                     Optional.empty()));
         }
         return out;
+    }
+
+    private static String resolveStableIdentifier(CandidateRow row, String candidateId, Set<String> seen) {
+        String base = row.stableIdentifier().value().orElse("");
+        if (base.isBlank()) {
+            base = "unidentified-" + candidateId;
+        } else if (row.hostLink().isPresent() && seen.contains(base)) {
+            String parentSerial = row.hostLink().get().hostStableIdentifier().value().orElse("host");
+            base = parentSerial + ":" + base;
+        }
+        String candidate = base;
+        int disambiguator = 1;
+        while (seen.contains(candidate)) {
+            candidate = base + "-" + disambiguator++;
+        }
+        return candidate;
     }
 
     /** Counts by the local kind token (device/virtual-system) -- PR-3: counts and shapes only. */
