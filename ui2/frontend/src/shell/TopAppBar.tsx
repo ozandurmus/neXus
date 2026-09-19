@@ -78,15 +78,57 @@ export function TopAppBar() {
     });
   }
 
+  const userInitials = session?.displayName
+    ? session.displayName.slice(0, 2).toUpperCase()
+    : "OP";
+
   return (
     <Box sx={{ height: 64, flex: "none", display: "flex", alignItems: "center", gap: 2, px: 3, pl: 1 }}>
-      <NexusWordmark height={28} color={m3.onSurface} />
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+        <Box
+          sx={{
+            width: 34,
+            height: 34,
+            borderRadius: "8px",
+            bgcolor: "#DBEAFE",
+            color: "#1E3A8A",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: 700,
+            fontSize: 14,
+            letterSpacing: "0.5px",
+            boxShadow: m3.e1,
+            flexShrink: 0,
+          }}
+        >
+          SX
+        </Box>
+        <NexusWordmark height={26} color={m3.onSurface} />
+      </Box>
       <Box sx={{ flex: 1, maxWidth: 520, height: 48, display: "flex", alignItems: "center", gap: 1.5,
                  px: 2, borderRadius: "24px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, fontSize: 15 }}>
         <Icon name="search" size={20} />
         Search devices, settings, evidence
       </Box>
       <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2, color: m3.onSurfaceVar }}>
+        <Box
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 0.75,
+            px: 1.5,
+            py: 0.5,
+            borderRadius: "16px",
+            bgcolor: m3.successContainer,
+            color: m3.onSuccessContainer,
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: "default",
+          }}
+        >
+          <span>✓</span> Checkpoint run-20260908-0640
+        </Box>
         <BuildBadge />
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <Icon name="bell" size={20} />
@@ -94,6 +136,23 @@ export function TopAppBar() {
         </Box>
         {session ? (
           <>
+            <Box
+              sx={{
+                width: 34,
+                height: 34,
+                borderRadius: "50%",
+                bgcolor: "#E0E7FF",
+                color: "#1E3A8A",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 600,
+                fontSize: 13,
+                flexShrink: 0,
+              }}
+            >
+              {userInitials}
+            </Box>
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.2 }}>
               <Typography variant="body1" sx={{ fontWeight: 500, color: m3.onSurface }}>
                 {session.displayName}

@@ -129,7 +129,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
         }}
       >
         <Box sx={{ mb: 1 }}>
-          <NexusMark size={48} />
+          <NexusMark size={44} />
         </Box>
         <IconButton
           aria-label="Expand navigation"
