@@ -70,6 +70,16 @@ public final class CompositeDeviceTransport implements DeviceTransport {
     }
 
     @Override
+    public <T> com.securityexpert.nexus.ui2.jobs.transport.XmlApiStreamOutcome<T> xmlApiCallStreaming(
+            ApiTarget target, XmlApiSpec spec, Duration timeout,
+            com.securityexpert.nexus.ui2.jobs.transport.XmlApiStreamHandler<T> handler) {
+        return registry.find(TransportKind.PAN_XML_API)
+                .map(transport -> transport.xmlApiCallStreaming(target, spec, timeout, handler))
+                .orElseGet(() -> new com.securityexpert.nexus.ui2.jobs.transport.XmlApiStreamOutcome.Failed<>(
+                        noAdapter(TransportKind.PAN_XML_API)));
+    }
+
+    @Override
     public void disconnect(TransportSession session) {
         registry.find(TransportKind.SSH_EXEC).ifPresent(transport -> transport.disconnect(session));
     }

@@ -182,7 +182,7 @@ public final class PanXmlApiTransport implements DeviceTransport {
         } catch (IllegalArgumentException e) {
             return new XmlApiStreamOutcome.Failed<>("invalid api target URI: " + e.getMessage());
         } catch (IOException e) {
-            return new XmlApiStreamOutcome.Failed<>("xml api streaming call did not complete");
+            return new XmlApiStreamOutcome.Failed<>("xml api streaming call did not complete: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new XmlApiStreamOutcome.Failed<>("xml api streaming call was interrupted");

@@ -216,6 +216,10 @@ public final class ConfigurationCapabilityExecutor {
                 throw new IOException("effective-running streaming call failed: "
                         + (outcome instanceof XmlApiStreamOutcome.Failed<?> failed ? failed.reason() : "unknown"));
             }
+            if (completed.httpStatus() != 200) {
+                closeQuietly(handle);
+                throw new IOException("effective-running streaming call returned HTTP " + completed.httpStatus());
+            }
             ArtefactStore.ArtefactMetadata metadata = handle.finish();
             List<com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationOverride> overrides =
                     panoramaCrossCheck.nameOverrideSources(deviceSerial, completed.handled().overrides());

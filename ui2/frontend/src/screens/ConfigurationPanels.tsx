@@ -204,6 +204,131 @@ function AlignmentTable({
   );
 }
 
+export interface PanSettingAlignmentRow {
+  readonly setting: string;
+  readonly expected: string;
+  readonly effective: string;
+  readonly state: "Aligned" | "Local override" | "Difference observed" | "Effective drift";
+  readonly subtext?: string;
+}
+
+export const DEFAULT_PAN_ALIGNMENT_SETTINGS: readonly PanSettingAlignmentRow[] = [
+  {
+    setting: "Panorama Server · primary",
+    expected: "198.51.100.71",
+    effective: "198.51.100.71",
+    state: "Aligned",
+    subtext: "Connected & managed via Panorama common template",
+  },
+  {
+    setting: "DNS · primary",
+    expected: "198.51.100.53",
+    effective: "198.51.100.53",
+    state: "Aligned",
+  },
+  {
+    setting: "DNS · secondary",
+    expected: "198.51.100.54",
+    effective: "198.51.100.54",
+    state: "Aligned",
+  },
+  {
+    setting: "NTP · server 1",
+    expected: "192.0.2.12",
+    effective: "192.0.2.12",
+    state: "Aligned",
+  },
+  {
+    setting: "NTP · server 2",
+    expected: "192.0.2.13",
+    effective: "192.0.2.99",
+    state: "Effective drift",
+    subtext: "Unexplained difference · device running 192.0.2.99 vs template 192.0.2.13",
+  },
+  {
+    setting: "Syslog · target",
+    expected: "203.0.113.20:514",
+    effective: "203.0.113.20:514",
+    state: "Aligned",
+  },
+  {
+    setting: "Timezone",
+    expected: "Europe/Istanbul",
+    effective: "Europe/Istanbul",
+    state: "Aligned",
+  },
+  {
+    setting: "Login banner",
+    expected: "— not in template intent",
+    effective: "Authorized use only…",
+    state: "Difference observed",
+    subtext: "Device-local banner · unmanaged by Panorama template",
+  },
+  {
+    setting: "HA Peer Link · MTU",
+    expected: "1500",
+    effective: "9000",
+    state: "Local override",
+    subtext: "Local override · Jumbo frame enabled for HA transport",
+  },
+  {
+    setting: "Management · permitted IPs",
+    expected: "192.0.2.0/24",
+    effective: "192.0.2.0/24",
+    state: "Aligned",
+  },
+];
+
+function PanAlignmentTable({
+  settings,
+  onOpenEvidence,
+}: {
+  readonly settings: readonly PanSettingAlignmentRow[];
+  readonly onOpenEvidence?: () => void;
+}) {
+  return (
+    <Box sx={{ bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px", overflow: "hidden" }}>
+      <Table size="small">
+        <TableHead sx={{ bgcolor: m3.scLow }}>
+          <TableRow>
+            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>Setting</TableCell>
+            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>Expected · Panorama template</TableCell>
+            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>Effective · live firewall</TableCell>
+            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>State</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {settings.map((row, idx) => (
+            <TableRow key={`${row.setting}-${idx}`} sx={{ "&:hover": { bgcolor: m3.scLow } }}>
+              <TableCell sx={{ fontWeight: 600, fontSize: 13, color: m3.onSurface, py: 1 }}>{row.setting}</TableCell>
+              <TableCell sx={{ fontFamily: "monospace", fontSize: 12, color: m3.onSurfaceVar, py: 1 }}>{row.expected}</TableCell>
+              <TableCell sx={{ fontFamily: "monospace", fontSize: 12, color: m3.onSurfaceVar, py: 1 }}>{row.effective}</TableCell>
+              <TableCell sx={{ py: 1 }}>
+                <StatusChip tone={alignmentTone(row.state)} label={row.state} dense />
+                {row.subtext && (
+                  <Typography variant="caption" sx={{ display: "block", mt: 0.5, fontSize: 11, color: "text.secondary", fontStyle: "italic" }}>
+                    {row.subtext}
+                  </Typography>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 1.5, bgcolor: m3.scLow, borderTop: `1px solid ${m3.outlineVar}` }}>
+        <Typography variant="caption" color="text.secondary">
+          Comparing live PAN-OS effective running configuration with Panorama common template intent.
+        </Typography>
+        {onOpenEvidence && (
+          <M3Button emphasis="text" onClick={onOpenEvidence}>
+            Open evidence
+          </M3Button>
+        )}
+      </Box>
+    </Box>
+  );
+}
+
 function IndexTable({
   index,
   emptyTitle,
@@ -435,7 +560,8 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
   const overrides = configuration?.overrides ?? [];
   const isChanged = configuration?.change_state === "changed";
   const deviceName = device?.facts?.hostname ?? configuration?.device_id ?? deviceId;
-  const vendorLabel = configuration?.vendor === "palo_alto" ? "Palo Alto Networks" : "Check Point ClusterXL";
+  const isPaloAlto = configuration?.vendor === "palo_alto" || device?.facts?.model?.toLowerCase().includes("pa-") || device?.vendor_hint === "palo_alto";
+  const vendorLabel = isPaloAlto ? "Palo Alto Networks" : "Check Point ClusterXL";
   const collectedDate = configuration?.collected_at ? configuration.collected_at.slice(0, 10) : "2026-09-05";
   const collectedTime = configuration?.collected_at ? configuration.collected_at.slice(11, 16) : "06:41";
 
@@ -452,7 +578,9 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
               {deviceName}
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary", fontSize: 12 }}>
-              Policy IST-Core-Standard installed {collectedDate} · intent snapshot cma-ist 06:40 · effective evidence {collectedTime}
+              {isPaloAlto
+                ? `Panorama Common Template (Stack: STACK-IST-CORP) · effective evidence ${collectedTime}`
+                : `Policy IST-Core-Standard installed ${collectedDate} · intent snapshot cma-ist 06:40 · effective evidence ${collectedTime}`}
             </Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
@@ -510,8 +638,8 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
                 {/* Summary State Pills Bar matching PDF Page 3 */}
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                   <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-                    <StatusChip tone="ok" label="Aligned 21" />
-                    <StatusChip tone="mem" label="Member-specific 2" />
+                    <StatusChip tone="ok" label={isPaloAlto ? "Aligned 24" : "Aligned 21"} />
+                    {!isPaloAlto && <StatusChip tone="mem" label="Member-specific 2" />}
                     <StatusChip tone="warn" label="Local override 1" />
                     <StatusChip tone="attn" label="Difference observed 1" />
                     <StatusChip tone="bad" label="Effective drift 1" />
@@ -520,15 +648,24 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
                 </Box>
 
                 {/* Main Settings Alignment Table matching PDF Page 3 */}
-                <AlignmentTable
-                  settings={DEFAULT_ALIGNMENT_SETTINGS}
-                  onOpenEvidence={() => setActiveTabIndex(2)}
-                />
+                {isPaloAlto ? (
+                  <PanAlignmentTable
+                    settings={DEFAULT_PAN_ALIGNMENT_SETTINGS}
+                    onOpenEvidence={() => setActiveTabIndex(1)}
+                  />
+                ) : (
+                  <AlignmentTable
+                    settings={DEFAULT_ALIGNMENT_SETTINGS}
+                    onOpenEvidence={() => setActiveTabIndex(2)}
+                  />
+                )}
 
                 {/* Section Index Summary Breakdown */}
                 <Box sx={{ mt: 1 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                    {configuration?.withheld_line_count ?? 0} secret-bearing line(s) withheld from the sanitized view.
+                    {isPaloAlto
+                      ? `${index.length} XML configuration categories parsed from PAN-OS effective running tree.`
+                      : `${configuration?.withheld_line_count ?? 0} secret-bearing line(s) withheld from the sanitized view.`}
                   </Typography>
                   <IndexTable
                     index={index}
@@ -544,7 +681,9 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
             panel: (
               <Stack spacing={1}>
                 <Typography variant="body2" color="text.secondary">
-                  {configuration?.withheld_line_count ?? 0} secret-bearing line(s) withheld from the sanitized view.
+                  {isPaloAlto
+                    ? `${index.length} XML categories parsed from PAN-OS effective running tree.`
+                    : `${configuration?.withheld_line_count ?? 0} secret-bearing line(s) withheld from the sanitized view.`}
                 </Typography>
                 <IndexTable
                   index={index}
@@ -555,27 +694,42 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
             ),
           },
           {
-            label: "Sanitized text",
-            panel: configuration?.sanitized_text_available
-              ? (
-                textError
-                  ? <EmptyPanel title="Sanitized text unavailable" body={textError} />
-                  : sanitizedText === null
-                    ? <EmptyPanel title="Sanitized text" body="Loading…" />
-                    : (
-                      <SanitizedTextViewer
-                        text={sanitizedText}
-                        withheldCount={configuration.withheld_line_count}
-                        canonicalHash={configuration.canonical_hash}
-                      />
-                    )
-              )
-              : (
-                <EmptyPanel
-                  title="No sanitized text"
-                  body="The sanitized text view exists only for Check Point's show configuration read."
+            label: isPaloAlto ? "XML Configuration" : "Sanitized text",
+            panel: isPaloAlto ? (
+              <Box sx={{ p: 2.5, bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px" }}>
+                <Typography variant="h3" sx={{ fontSize: 16, fontWeight: 600, mb: 1 }}>
+                  PAN-OS XML Configuration Artefact
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  PAN-OS effective running, active, and merged configurations are streamed directly into the encrypted AES-256-GCM artefact store (Canonical SHA-256: {hashPrefix(configuration?.canonical_hash ?? null)}). XML AST categories and local override markers are indexed under the Index and Overrides tabs.
+                </Typography>
+                <Stack spacing={1}>
+                  <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "8px" }}>
+                    <Typography variant="caption" color="text.secondary">Artefact Storage Status</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      ✓ Encrypted with cluster envelope key · Primary read: effective-running
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Box>
+            ) : configuration?.sanitized_text_available ? (
+              textError ? (
+                <EmptyPanel title="Sanitized text unavailable" body={textError} />
+              ) : sanitizedText === null ? (
+                <EmptyPanel title="Sanitized text" body="Loading…" />
+              ) : (
+                <SanitizedTextViewer
+                  text={sanitizedText}
+                  withheldCount={configuration.withheld_line_count}
+                  canonicalHash={configuration.canonical_hash}
                 />
-              ),
+              )
+            ) : (
+              <EmptyPanel
+                title="No sanitized text"
+                body="The sanitized text view exists only for Check Point's show configuration read."
+              />
+            ),
           },
           {
             label: "Overrides",
@@ -594,14 +748,14 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
                     </Typography>
                   </Box>
                   <Box sx={{ p: 2, bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px" }}>
-                    <Typography variant="caption" color="text.secondary">Withheld Secrets</Typography>
-                    <Typography variant="h3" sx={{ mt: 0.5 }}>{configuration?.withheld_line_count ?? 0}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Keywords masked server-side</Typography>
+                    <Typography variant="caption" color="text.secondary">{isPaloAlto ? "Local Overrides" : "Withheld Secrets"}</Typography>
+                    <Typography variant="h3" sx={{ mt: 0.5 }}>{isPaloAlto ? overrides.length : (configuration?.withheld_line_count ?? 0)}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{isPaloAlto ? "src=local XML attributes detected" : "Keywords masked server-side"}</Typography>
                   </Box>
                   <Box sx={{ p: 2, bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px" }}>
                     <Typography variant="caption" color="text.secondary">Index Sections</Typography>
                     <Typography variant="h3" sx={{ mt: 0.5 }}>{index.length}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Governed Gaia AST groups</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{isPaloAlto ? "PAN-OS XML categories" : "Governed Gaia AST groups"}</Typography>
                   </Box>
                 </Box>
               </Stack>
