@@ -11,9 +11,9 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.TrustResolution;
  * {@code EnvironmentPanCredentialAndTrustResolvers}; only the credential
  * half of that class is replaced, by {@link StoreBackedPanCredentialResolver}.
  */
-final class EnvironmentPanTrustRuleResolver implements PanTrustRuleResolver {
+public final class EnvironmentPanTrustRuleResolver implements PanTrustRuleResolver {
 
-    static final EnvironmentPanTrustRuleResolver INSTANCE = new EnvironmentPanTrustRuleResolver();
+    public static final EnvironmentPanTrustRuleResolver INSTANCE = new EnvironmentPanTrustRuleResolver();
 
     private EnvironmentPanTrustRuleResolver() {
     }

@@ -111,7 +111,9 @@ public final class PanXmlApiTransport implements DeviceTransport {
             HttpResponse<String> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             return new XmlApiResult.Completed(response.statusCode(), response.body());
         } catch (IOException e) {
-            return new XmlApiResult.Failed("xml api call did not complete");
+            System.getLogger(PanXmlApiTransport.class.getName())
+                    .log(System.Logger.Level.WARNING, "xml api call IOException: " + e.getMessage(), e);
+            return new XmlApiResult.Failed("xml api call did not complete: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new XmlApiResult.Failed("xml api call was interrupted");

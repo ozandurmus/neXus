@@ -36,6 +36,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.TrustResolution;
  */
 public final class PanoramaEnumerationAdapter implements PanoramaEnumeration {
 
+    private static final System.Logger LOGGER = System.getLogger(PanoramaEnumerationAdapter.class.getName());
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
     private final DeviceTransport transport;
@@ -71,12 +72,24 @@ public final class PanoramaEnumerationAdapter implements PanoramaEnumeration {
             XmlApiSpec keygenSpec = PanoramaApiRoutes.keyGeneration(credential.username(), credential.password());
             XmlApiResult keygenResult = transport.xmlApiCall(target, keygenSpec, REQUEST_TIMEOUT);
             requestCount++;
-            if (!(keygenResult instanceof XmlApiResult.Completed keygenCompleted) || keygenCompleted.httpStatus() != 200) {
+            if (keygenResult instanceof XmlApiResult.Failed failed) {
+                LOGGER.log(System.Logger.Level.WARNING, "Panorama keygen transport failed: " + failed.reason());
                 return new PanoramaEnumerationResult.Failed(
-                        "panorama key generation did not complete", requestCount, KeyDisposalOutcome.NOT_OBTAINED);
+                        "panorama key generation transport failed: " + failed.reason(), requestCount, KeyDisposalOutcome.NOT_OBTAINED);
+            }
+            if (!(keygenResult instanceof XmlApiResult.Completed keygenCompleted)) {
+                LOGGER.log(System.Logger.Level.WARNING, "Panorama keygen unexpected transport result: " + keygenResult);
+                return new PanoramaEnumerationResult.Failed(
+                        "panorama key generation did not complete: unexpected transport result", requestCount, KeyDisposalOutcome.NOT_OBTAINED);
+            }
+            if (keygenCompleted.httpStatus() != 200) {
+                LOGGER.log(System.Logger.Level.WARNING, "Panorama keygen HTTP status: " + keygenCompleted.httpStatus() + ", body: " + keygenCompleted.body());
+                return new PanoramaEnumerationResult.Failed(
+                        "panorama key generation HTTP " + keygenCompleted.httpStatus(), requestCount, KeyDisposalOutcome.NOT_OBTAINED);
             }
             Optional<String> extractedKey = PanoramaResponseParser.extractKey(keygenCompleted.body());
             if (extractedKey.isEmpty()) {
+                LOGGER.log(System.Logger.Level.WARNING, "Panorama keygen carried no key in 200 OK body: " + keygenCompleted.body());
                 return new PanoramaEnumerationResult.Failed(
                         "panorama key generation response carried no key", requestCount, KeyDisposalOutcome.NOT_OBTAINED);
             }
@@ -85,15 +98,24 @@ public final class PanoramaEnumerationAdapter implements PanoramaEnumeration {
             XmlApiSpec enumerationSpec = PanoramaApiRoutes.managedDeviceEnumeration(key);
             XmlApiResult enumerationResult = transport.xmlApiCall(target, enumerationSpec, REQUEST_TIMEOUT);
             requestCount++;
-            if (!(enumerationResult instanceof XmlApiResult.Completed enumerationCompleted) || enumerationCompleted.httpStatus() != 200) {
+            if (enumerationResult instanceof XmlApiResult.Failed failed) {
+                LOGGER.log(System.Logger.Level.WARNING, "Panorama enumeration transport failed: " + failed.reason());
                 return new PanoramaEnumerationResult.Failed(
-                        "panorama managed-device enumeration did not complete", requestCount, KeyDisposalOutcome.DISCARDED);
+                        "panorama managed-device enumeration transport failed: " + failed.reason(), requestCount, KeyDisposalOutcome.DISCARDED);
+            }
+            if (!(enumerationResult instanceof XmlApiResult.Completed enumerationCompleted) || enumerationCompleted.httpStatus() != 200) {
+                int status = (enumerationResult instanceof XmlApiResult.Completed comp) ? comp.httpStatus() : 0;
+                String body = (enumerationResult instanceof XmlApiResult.Completed comp) ? comp.body() : "";
+                LOGGER.log(System.Logger.Level.WARNING, "Panorama enumeration returned HTTP status: " + status + ", body: " + body);
+                return new PanoramaEnumerationResult.Failed(
+                        "panorama managed-device enumeration HTTP " + status, requestCount, KeyDisposalOutcome.DISCARDED);
             }
             List<RawDeviceInput> devices = PanoramaResponseParser.extractDevices(enumerationCompleted.body());
             return new PanoramaEnumerationResult.Completed(devices, requestCount, KeyDisposalOutcome.DISCARDED);
         } catch (RuntimeException e) {
+            LOGGER.log(System.Logger.Level.WARNING, "Panorama enumeration failed with exception: " + e.getMessage(), e);
             KeyDisposalOutcome outcome = key == null ? KeyDisposalOutcome.NOT_OBTAINED : KeyDisposalOutcome.DISCARDED;
-            return new PanoramaEnumerationResult.Failed("panorama enumeration did not complete", requestCount, outcome);
+            return new PanoramaEnumerationResult.Failed("panorama enumeration did not complete: " + e.getMessage(), requestCount, outcome);
         } finally {
             // T-1: the key is discarded from memory whether the run succeeded or failed.
             if (key != null) {

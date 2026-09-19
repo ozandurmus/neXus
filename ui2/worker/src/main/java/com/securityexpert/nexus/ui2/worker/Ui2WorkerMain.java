@@ -52,6 +52,7 @@ import com.securityexpert.nexus.ui2.worker.configuration.pan.PanoramaCrossCheckP
 import com.securityexpert.nexus.ui2.worker.discovery.DiscoveryJobExecutor;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.MgmtCliEnumerationAdapter;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.StoreBackedSshCredentialResolver;
+import com.securityexpert.nexus.ui2.worker.discovery.pan.EnvironmentPanTrustRuleResolver;
 import com.securityexpert.nexus.ui2.worker.discovery.pan.PanoramaEnumerationAdapter;
 import com.securityexpert.nexus.ui2.worker.discovery.pan.StoreBackedPanCredentialResolver;
 import com.securityexpert.nexus.ui2.worker.inventory.InventoryCapabilities;
@@ -151,11 +152,15 @@ public final class Ui2WorkerMain {
         // secret; trust-rule env names stay as they are") reinterpreted as a
         // pinned TLS certificate fingerprint rather than an SSH host key one.
         PanTrustRuleResolver panTrustRuleResolver = trustRuleRef -> {
-            String fingerprint = System.getenv("UI2_" + trustRuleRef.toUpperCase(java.util.Locale.ROOT)
-                    .replace('.', '_') + "_FINGERPRINT");
-            return fingerprint == null || fingerprint.isBlank()
-                    ? new TrustResolution.Unresolved()
-                    : new TrustResolution.PinnedFingerprint(fingerprint);
+            String envName = "UI2_" + trustRuleRef.toUpperCase(java.util.Locale.ROOT).replace('.', '_') + "_FINGERPRINT";
+            String fingerprint = System.getenv(envName);
+            if (fingerprint == null || fingerprint.isBlank()) {
+                fingerprint = System.getenv("PAN_DISCOVERY_TRUST_PINNED_FINGERPRINT_SHA256");
+            }
+            if (fingerprint == null || fingerprint.isBlank()) {
+                return EnvironmentPanTrustRuleResolver.INSTANCE.resolveTrust(trustRuleRef);
+            }
+            return new TrustResolution.PinnedFingerprint(fingerprint.replace(":", "").trim().toLowerCase());
         };
         PanXmlApiTransport panTransport = new PanXmlApiTransport(paloAltoTrustRuleRef, panTrustRuleResolver);
 
