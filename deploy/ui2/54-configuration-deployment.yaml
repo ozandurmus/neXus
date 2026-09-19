@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui2-configuration
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: configuration
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexus-ui2
+      app.kubernetes.io/component: configuration
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: nexus-ui2
+        app.kubernetes.io/component: configuration
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      priorityClassName: system-cluster-critical
+      tolerations:
+        - key: "node.kubernetes.io/disk-pressure"
+          operator: "Exists"
+          effect: "NoSchedule"
+      terminationGracePeriodSeconds: 15
+      containers:
+        - name: configuration
+          image: registry.kube-system.svc.cluster.local/nexus-ui2-service:latest
+          args: ["worker", "configuration"]
+          env:
+            - name: NEXUS_CONFIG_PORT
+              value: "8084"
+          ports:
+            - name: http
+              containerPort: 8084
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8084
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8084
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui2-configuration
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: configuration
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: configuration
+  ports:
+    - name: http
+      port: 8084
+      targetPort: 8084
+      protocol: TCP

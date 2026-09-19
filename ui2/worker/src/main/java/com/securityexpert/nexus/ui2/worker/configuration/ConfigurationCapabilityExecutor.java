@@ -68,13 +68,23 @@ public final class ConfigurationCapabilityExecutor {
     private final PanCredentialResolver panCredentialResolver;
     private final ArtefactStore artefactStore;
     private final PanoramaCrossCheckPort panoramaCrossCheck;
+    private final com.securityexpert.nexus.ui2.worker.configuration.server.ConfigurationServiceClient configServiceClient;
 
     public ConfigurationCapabilityExecutor(DeviceTransport transport, PanCredentialResolver panCredentialResolver,
             ArtefactStore artefactStore, PanoramaCrossCheckPort panoramaCrossCheck) {
+        this(transport, panCredentialResolver, artefactStore, panoramaCrossCheck,
+                com.securityexpert.nexus.ui2.worker.configuration.server.ConfigurationServiceClient.fromEnvironment());
+    }
+
+    public ConfigurationCapabilityExecutor(DeviceTransport transport, PanCredentialResolver panCredentialResolver,
+            ArtefactStore artefactStore, PanoramaCrossCheckPort panoramaCrossCheck,
+            com.securityexpert.nexus.ui2.worker.configuration.server.ConfigurationServiceClient configServiceClient) {
         this.transport = Objects.requireNonNull(transport, "transport");
         this.panCredentialResolver = panCredentialResolver;
         this.artefactStore = Objects.requireNonNull(artefactStore, "artefactStore");
         this.panoramaCrossCheck = panoramaCrossCheck == null ? PanoramaCrossCheckPort.NONE : panoramaCrossCheck;
+        this.configServiceClient = configServiceClient != null ? configServiceClient
+                : com.securityexpert.nexus.ui2.worker.configuration.server.ConfigurationServiceClient.fromEnvironment();
     }
 
     public ConfigurationResult collect(ConfigurationRequest request, String deviceId, String jobId,
@@ -114,7 +124,7 @@ public final class ConfigurationCapabilityExecutor {
             }
             String rawConfig = execOutput(session, ConfigurationReadPlan.CP_SHOW_CONFIGURATION, CP_CONFIG_TIMEOUT);
 
-            CheckPointGaiaConfigProcessor.Processed processed = CheckPointGaiaConfigProcessor.process(rawConfig);
+            CheckPointGaiaConfigProcessor.Processed processed = configServiceClient.parseCheckPoint(deviceId, rawConfig);
             ArtefactStore.ArtefactHandle handle = null;
             try {
                 handle = artefactStore.open(deviceId, jobId, "check_point", false);

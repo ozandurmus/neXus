@@ -42,34 +42,23 @@ public final class CheckPointGaiaConfigProcessor {
     }
 
     public static Processed process(String rawConfigurationText) {
-        List<String> setLines = new ArrayList<>();
-        for (String line : rawConfigurationText.split("\\R", -1)) {
-            String trimmed = line.strip();
-            if (trimmed.startsWith("set ")) {
-                setLines.add(trimmed);
-            }
-        }
-
-        String canonicalHash = sha256Hex(String.join("\n", setLines));
-
-        Map<String, Integer> sectionCounts = new LinkedHashMap<>();
-        StringBuilder sanitized = new StringBuilder();
-        int withheld = 0;
-        for (String line : setLines) {
-            sectionCounts.merge(sectionOf(line), 1, Integer::sum);
-            if (containsSecretKeyword(line)) {
-                withheld++;
-                continue;
-            }
-            sanitized.append(line).append('\n');
-        }
-
-        List<ConfigurationIndexEntry> index = sectionCounts.entrySet().stream()
-                .map(e -> new ConfigurationIndexEntry(CONTEXT_PHYSICAL, e.getKey(), java.util.Optional.empty(),
-                        e.getValue()))
-                .toList();
-
-        return new Processed(canonicalHash, withheld, sanitized.toString(), index);
+        CheckPointGaiaConfigParser parser = new CheckPointGaiaConfigParser();
+        com.securityexpert.nexus.ui2.worker.configuration.core.ConfigParseContext context =
+                new com.securityexpert.nexus.ui2.worker.configuration.core.ConfigParseContext(
+                        "unknown",
+                        com.securityexpert.nexus.ui2.worker.configuration.core.ConfigVendor.CHECK_POINT,
+                        com.securityexpert.nexus.ui2.worker.configuration.core.ConfigFormat.GAIA_CLISH,
+                        CONTEXT_PHYSICAL,
+                        java.util.Optional.empty()
+                );
+        com.securityexpert.nexus.ui2.worker.configuration.core.ConfigParseResult res =
+                parser.parseString(context, rawConfigurationText);
+        return new Processed(
+                res.canonicalHash().orElse(""),
+                res.withheldLineCount(),
+                res.sanitizedText(),
+                res.index()
+        );
     }
 
     private static boolean containsSecretKeyword(String setLine) {

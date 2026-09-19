@@ -109,6 +109,9 @@ spec:
             # (C1 §6.1), worker-only exactly like the artefact-store key.
             - name: UI2_HOSTNAME_FINGERPRINT_KEY_FILE
               value: /run/secrets/ui2-hostname-fingerprint/key
+            # Dedicated ui2-configuration microservice internal ClusterIP endpoint
+            - name: UI2_CONFIG_SERVICE_URL
+              value: "http://ui2-configuration.ui2.svc.cluster.local:8084"
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
