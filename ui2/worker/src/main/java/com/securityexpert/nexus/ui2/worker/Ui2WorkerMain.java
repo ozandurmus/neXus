@@ -222,7 +222,7 @@ public final class Ui2WorkerMain {
         for (int i = 0; i < 10; i++) {
             WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
                     confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
-                    backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofSeconds(60), checkPointTrustRuleRef,
+                    backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofMinutes(10), checkPointTrustRuleRef,
                     paloAltoTrustRuleRef, backupCredentialRef);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));
         }

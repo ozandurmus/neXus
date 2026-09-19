@@ -125,4 +125,16 @@ class JobReconcilerTest {
         assertEquals(0, summary.outcomeUnknown(), "a fenced write that affects zero rows must not be counted as "
                 + "a successful reconciliation");
     }
+
+    @Test
+    void everyAttemptBoundaryNoFailsWhenMaxAttemptsExceeded() {
+        FakeLeaseRepository repo = new FakeLeaseRepository();
+        repo.allBoundaryNo = List.of(new ClaimedJob("job-e", 5L));
+        JobReconciler reconciler = new JobReconciler(repo);
+
+        JobReconciler.ReconciliationSummary summary = reconciler.reconcileOnce();
+
+        assertEquals(0, summary.requeuedAllBoundaryNo());
+        assertTrue(repo.transitions.contains("job-e:EXECUTING->FAILED"));
+    }
 }

@@ -44,6 +44,11 @@ public final class JobReconciler {
 
         int requeuedAllBoundaryNo = 0;
         for (ClaimedJob job : leaseRepository.findExpiredAllBoundaryNo()) {
+            if (job.leaseEpoch() >= 5) {
+                leaseRepository.transitionState(job.jobId(), job.leaseEpoch(), JobState.EXECUTING, JobState.FAILED,
+                        RECONCILER_ACTOR, "job_reconcile_max_attempts", "lease expired repeatedly (" + job.leaseEpoch() + " attempts)");
+                continue;
+            }
             if (leaseRepository.transitionState(job.jobId(), job.leaseEpoch(), JobState.EXECUTING, JobState.REQUESTED,
                     RECONCILER_ACTOR, ACTION_RECONCILE_REQUEUE)) {
                 requeuedAllBoundaryNo++;
