@@ -20,10 +20,13 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 
+import java.net.Socket;
+import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedTrustManager;
 import javax.net.ssl.X509TrustManager;
 
 import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
@@ -270,15 +273,39 @@ public final class PanXmlApiTransport implements DeviceTransport {
      * fingerprint to equal the pinned value -- never a trust manager that returns without
      * checking (WORKER.md: "no all-trusting TrustManager").
      */
-    private static X509TrustManager pinnedTrustManager(String expectedSha256Hex) throws java.security.GeneralSecurityException {
-        return new X509TrustManager() {
+    private static X509ExtendedTrustManager pinnedTrustManager(String expectedSha256Hex) throws java.security.GeneralSecurityException {
+        return new X509ExtendedTrustManager() {
             @Override
             public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
                 throw new CertificateException("pan discovery transport is a client only; it never verifies a client certificate");
             }
 
             @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
+                checkClientTrusted(chain, authType);
+            }
+
+            @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
+                checkClientTrusted(chain, authType);
+            }
+
+            @Override
             public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                verify(chain);
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
+                verify(chain);
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
+                verify(chain);
+            }
+
+            private void verify(X509Certificate[] chain) throws CertificateException {
                 if (chain == null || chain.length == 0) {
                     throw new CertificateException("no server certificate presented");
                 }
@@ -295,15 +322,39 @@ public final class PanXmlApiTransport implements DeviceTransport {
         };
     }
 
-    private static X509TrustManager paloAltoDeviceTrustManager(java.util.Optional<String> pinnedFingerprint) {
-        return new X509TrustManager() {
+    private static X509ExtendedTrustManager paloAltoDeviceTrustManager(java.util.Optional<String> pinnedFingerprint) {
+        return new X509ExtendedTrustManager() {
             @Override
             public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
                 throw new CertificateException("pan transport is a client only; it never verifies a client certificate");
             }
 
             @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
+                checkClientTrusted(chain, authType);
+            }
+
+            @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
+                checkClientTrusted(chain, authType);
+            }
+
+            @Override
             public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                verify(chain);
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
+                verify(chain);
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
+                verify(chain);
+            }
+
+            private void verify(X509Certificate[] chain) throws CertificateException {
                 if (chain == null || chain.length == 0) {
                     throw new CertificateException("no server certificate presented");
                 }
