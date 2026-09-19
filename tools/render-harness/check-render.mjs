@@ -8,7 +8,8 @@
  *      class of bug (a payload literal corrupted so the whole script is dead);
  *   2. it executes in a DOM without throwing and without console.error;
  *   3. every .module-nav-item switches its [data-module-panel] to .active;
- *   4. every .tab / .config-tab click runs without a new console error.
+ *   4. the discovery candidate Select All control selects every row;
+ *   5. every .tab / .config-tab click runs without a new console error.
  *
  * Exit 0 = pass. Non-zero = fail, with a report on stderr.
  */
@@ -94,7 +95,23 @@ for (const button of navButtons) {
   }
 }
 
-// --- 4. inner tabs (best-effort: must not throw) ---------------------
+// --- 4. discovery candidate selection -------------------------------
+const discoverySelectAll = document.querySelector("#discoverySelectAll");
+const discoveryCandidates = [...document.querySelectorAll(".discovery-candidate-checkbox")];
+if (!discoverySelectAll || !discoveryCandidates.length) {
+  problems.push("discovery candidate Select All controls are missing");
+} else {
+  discoverySelectAll.click();
+  if (!discoveryCandidates.every((checkbox) => checkbox.checked)) {
+    problems.push("discovery candidate Select All did not select every row");
+  }
+  discoveryCandidates[0].click();
+  if (discoverySelectAll.checked || !discoverySelectAll.indeterminate) {
+    problems.push("discovery candidate Select All did not reflect a partial selection");
+  }
+}
+
+// --- 5. inner tabs (best-effort: must not throw) ---------------------
 for (const selector of [".tab[data-tab]", ".config-tab[data-config-tab]"]) {
   for (const tab of document.querySelectorAll(selector)) {
     const before = consoleErrors.length;
