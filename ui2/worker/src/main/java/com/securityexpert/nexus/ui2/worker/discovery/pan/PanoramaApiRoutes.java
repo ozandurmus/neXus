@@ -30,7 +30,7 @@ public final class PanoramaApiRoutes {
 
     private static final String KEYGEN_TYPE = "keygen";
     private static final String ENUMERATION_TYPE = "op";
-    private static final String ENUMERATION_CMD = "<show><devices><all></devices></show>";
+    private static final String ENUMERATION_CMD = "<show><devices><all></all></devices></show>";
     private static final String NOT_APPLICABLE = "not_applicable";
     private static final String NO_TARGET_SCOPE = "no_target";
 
