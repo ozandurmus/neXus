@@ -76,6 +76,12 @@ spec:
                 configMapKeyRef:
                   name: ui2-config
                   key: log_level
+            - name: PAN_DISCOVERY_TRUST_PINNED_FINGERPRINT_SHA256
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: pan_discovery_trust_pinned_fingerprint_sha256
+                  optional: true
             # The credential reaches the process as four mounted files, per
             # the C1 §6 secret-file rule the composition root implements: a
             # missing, unreadable or empty file stops start-up rather than

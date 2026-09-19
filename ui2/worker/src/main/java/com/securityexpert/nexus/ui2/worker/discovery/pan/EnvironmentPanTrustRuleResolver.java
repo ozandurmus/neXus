@@ -27,7 +27,7 @@ final class EnvironmentPanTrustRuleResolver implements PanTrustRuleResolver {
         }
         String pinnedFingerprint = System.getenv("PAN_DISCOVERY_TRUST_PINNED_FINGERPRINT_SHA256");
         if (pinnedFingerprint != null && !pinnedFingerprint.isBlank()) {
-            return new TrustResolution.PinnedFingerprint(pinnedFingerprint);
+            return new TrustResolution.PinnedFingerprint(pinnedFingerprint.replace(":", "").trim().toLowerCase());
         }
         return new TrustResolution.Unresolved();
     }
