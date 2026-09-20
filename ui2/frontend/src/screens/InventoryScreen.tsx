@@ -12,7 +12,7 @@ import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { requestBulkInventoryCollect, listDevices, type ApiError, type DeviceSummary, type ClusterInventory } from "../auth/adminApi";
 import { enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
-import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar } from "./InventoryPanels";
+import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar, deriveClusterTitle } from "./InventoryPanels";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -209,6 +209,7 @@ function DeviceList({
         const firstMember = members[0];
         const isPaloAlto = firstMember?.vendor_hint === "palo_alto";
         const isSelected = selectedClusterRef === ref;
+        const clusterTitle = deriveClusterTitle(ref, members);
         const clusterVsList = Array.from(
           new Set(
             members.flatMap((m) =>
@@ -253,12 +254,14 @@ function DeviceList({
               <VendorAvatar
                 vendorHint={firstMember?.vendor_hint ?? "check_point"}
                 model={firstMember?.model}
-                hostname={ref}
+                hostname={clusterTitle}
               />
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Cluster {ref}</Typography>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    Cluster {clusterTitle}
+                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
                     <StatusChip tone="mem" label={`${members.length} members`} dense />
                     {clusterVsList.length > 0 && (
                       <StatusChip tone="neutral" label={`${clusterVsList.length} ${isPaloAlto ? "VSYS" : "VS"}`} dense />
@@ -282,9 +285,31 @@ function DeviceList({
                     </Box>
                   </Box>
                 </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-                  {isPaloAlto ? "PAN-OS HA" : "ClusterXL"} · {members.map((m) => m.hostname ?? m.device_id).join(" · ")}
-                </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 0.25, overflow: "hidden" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontFamily: "monospace",
+                      fontSize: "0.7rem",
+                      color: m3.primary,
+                      bgcolor: m3.scHigh,
+                      px: 0.75,
+                      py: 0.1,
+                      borderRadius: "4px",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      maxWidth: "200px",
+                      flexShrink: 0,
+                    }}
+                    title={`Verified API Cluster Reference: ${ref}`}
+                  >
+                    {ref}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    · {isPaloAlto ? "PAN-OS HA" : "ClusterXL"} · {members.map((m) => m.hostname ?? m.device_id).join(" · ")}
+                  </Typography>
+                </Box>
               </Box>
             </Box>
             {!isCollapsed && (

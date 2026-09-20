@@ -72,6 +72,60 @@ function describeApiError(err: unknown): string {
   return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
 }
 
+function extractMemberBase(hostname: string): string {
+  let name = hostname.trim();
+  name = name.replace(/[-._](?:0?[1-9]|active|passive|standby|pri|sec|[a-b])$/i, "");
+  name = name.replace(/[-._]+$/, "");
+  return name;
+}
+
+export function deriveClusterTitle(clusterRef: string, members: readonly DeviceSummary[]): string {
+  const isRawUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clusterRef.trim());
+  if (!clusterRef.includes("|") && !isRawUuid && clusterRef.trim().length > 0) {
+    return clusterRef;
+  }
+
+  const names = members
+    .map((m) => m.hostname?.trim())
+    .filter((h): h is string => Boolean(h && h.length > 0));
+
+  if (names.length === 0) {
+    return clusterRef;
+  }
+
+  const bases = names.map(extractMemberBase);
+  // Check if all members unanimously resolve to the same base name
+  if (bases.every((b) => b === bases[0]) && bases[0].length >= 3) {
+    const base = bases[0];
+    return base.toUpperCase().endsWith("-CLS") || base.toUpperCase().endsWith("_CLS")
+      ? base
+      : `${base}-CLS`;
+  }
+
+  // Otherwise, find longest common prefix across the extracted bases
+  let prefix = bases[0];
+  for (let i = 1; i < bases.length; i++) {
+    while (!bases[i].startsWith(prefix)) {
+      prefix = prefix.slice(0, -1);
+      if (!prefix) break;
+    }
+  }
+  prefix = prefix.replace(/[-._]+$/, "").trim();
+
+  if (prefix.length >= 3) {
+    return prefix.toUpperCase().endsWith("-CLS") || prefix.toUpperCase().endsWith("_CLS")
+      ? prefix
+      : `${prefix}-CLS`;
+  }
+
+  // Fall back to joined member hostnames or raw ref
+  if (names.length <= 2) {
+    return `${names.join(" / ")}-CLS`;
+  }
+
+  return clusterRef;
+}
+
 export function VendorAvatar({
   vendorHint,
   model,
@@ -1520,6 +1574,7 @@ export function ClusterDetailPanels({
   const ifaceCount = allContexts.reduce((acc, c) => acc + c.interfaces.length, 0);
   const routeCount = allContexts.reduce((acc, c) => acc + c.routes.length, 0);
   const isEnrolled = members.some((m) => m.enrollment_state === "ENROLLED");
+  const clusterTitle = deriveClusterTitle(clusterRef, members);
 
   // Collect all distinct virtual systems from members & clusterInventory
   const vsSet = new Set<string>();
@@ -1556,12 +1611,28 @@ export function ClusterDetailPanels({
             <VendorAvatar
               vendorHint={firstMember?.vendor_hint ?? "check_point"}
               model={firstMember?.model}
-              hostname={clusterRef}
+              hostname={clusterTitle}
             />
             <Box>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                 <Typography variant="h5" sx={{ fontWeight: 700, color: m3.onSurface }}>
-                  CLS &gt; {clusterRef}
+                  CLS &gt; {clusterTitle}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontFamily: "monospace",
+                    fontSize: "0.75rem",
+                    color: m3.primary,
+                    bgcolor: m3.scHigh,
+                    px: 0.75,
+                    py: 0.2,
+                    borderRadius: "4px",
+                    border: `1px solid ${m3.outlineVar}`,
+                  }}
+                  title={`Verified API Cluster Reference: ${clusterRef}`}
+                >
+                  {clusterRef}
                 </Typography>
                 <StatusChip
                   tone={isEnrolled ? "ok" : "warn"}
@@ -1724,7 +1795,7 @@ export function ClusterDetailPanels({
               <ClusterInterfacesPanel
                 contexts={allContexts}
                 members={clusterInventory?.members ?? members}
-                clusterRef={clusterRef}
+                clusterRef={clusterTitle}
                 virtualSystems={virtualSystems}
                 activeContext={activeVsContext}
                 onSelectContext={setActiveVsContext}
@@ -1737,7 +1808,7 @@ export function ClusterDetailPanels({
               <ClusterRoutesPanel
                 contexts={allContexts}
                 members={clusterInventory?.members ?? members}
-                clusterRef={clusterRef}
+                clusterRef={clusterTitle}
                 virtualSystems={virtualSystems}
                 activeContext={activeVsContext}
                 onSelectContext={setActiveVsContext}

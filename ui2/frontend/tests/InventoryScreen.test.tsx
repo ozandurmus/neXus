@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { InventoryScreen } from "../src/screens/InventoryScreen";
+import { deriveClusterTitle } from "../src/screens/InventoryPanels";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -333,3 +334,47 @@ describe("InventoryScreen device list", () => {
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 });
+
+describe("deriveClusterTitle", () => {
+  it("preserves explicit cluster references that do not contain pipe delimiters", () => {
+    const members = [
+      { device_id: "1", hostname: "cp-gw-1", vendor_hint: "check_point" },
+      { device_id: "2", hostname: "cp-gw-2", vendor_hint: "check_point" },
+    ] as any;
+    expect(deriveClusterTitle("MyClusterName", members)).toBe("MyClusterName");
+    expect(deriveClusterTitle("PA-HA-PAIR", members)).toBe("PA-HA-PAIR");
+  });
+
+  it("derives clean cluster name from Palo Alto reciprocal serial pair references", () => {
+    const members = [
+      { device_id: "1", hostname: "FW-PALT-GARTEST.AA.1", vendor_hint: "palo_alto" },
+      { device_id: "2", hostname: "FW-PALT-GARTEST.AA.2", vendor_hint: "palo_alto" },
+    ] as any;
+    expect(deriveClusterTitle("026109000729|026109000751", members)).toBe("FW-PALT-GARTEST.AA-CLS");
+  });
+
+  it("handles numeric and hyphenated member suffixes like -01 / -02", () => {
+    const members = [
+      { device_id: "1", hostname: "FW-PALT-PENDIKCAMPUS-01", vendor_hint: "palo_alto" },
+      { device_id: "2", hostname: "FW-PALT-PENDIKCAMPUS-02", vendor_hint: "palo_alto" },
+    ] as any;
+    expect(deriveClusterTitle("025501001167|025509000707", members)).toBe("FW-PALT-PENDIKCAMPUS-CLS");
+  });
+
+  it("does not duplicate -CLS if the common base already ends in -CLS", () => {
+    const members = [
+      { device_id: "1", hostname: "FW-EDGE-CLS-1", vendor_hint: "palo_alto" },
+      { device_id: "2", hostname: "FW-EDGE-CLS-2", vendor_hint: "palo_alto" },
+    ] as any;
+    expect(deriveClusterTitle("serial1|serial2", members)).toBe("FW-EDGE-CLS");
+  });
+
+  it("falls back to clusterRef if no member hostnames are present", () => {
+    const members = [
+      { device_id: "1", vendor_hint: "palo_alto" },
+      { device_id: "2", vendor_hint: "palo_alto" },
+    ] as any;
+    expect(deriveClusterTitle("024409002545|024409002564", members)).toBe("024409002545|024409002564");
+  });
+});
+
