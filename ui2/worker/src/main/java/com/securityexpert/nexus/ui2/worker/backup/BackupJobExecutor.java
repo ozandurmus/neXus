@@ -65,6 +65,10 @@ public final class BackupJobExecutor {
     private final DeviceEnrollmentReadPort deviceEnrollmentReadPort;
     private final DeviceRepository deviceRepository;
     private final BackupCapabilityExecutor backupExecutor;
+    private final com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor snapshotExecutor;
+    private final com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor panBackupExecutor;
+    private final com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine deviationEngine;
+    private final com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService retentionPruningService;
     private final BackupArtefactManifestRepository manifestRepository;
     private final BackupEndpointEligibilityRepository eligibilityRepository;
     private final HostnameFingerprint hostnameFingerprint;
@@ -75,11 +79,30 @@ public final class BackupJobExecutor {
             BackupCapabilityExecutor backupExecutor, BackupArtefactManifestRepository manifestRepository,
             BackupEndpointEligibilityRepository eligibilityRepository, HostnameFingerprint hostnameFingerprint,
             String recoveryVolumePath) {
+        this(leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceRepository,
+                backupExecutor, null, null, null, null, manifestRepository, eligibilityRepository,
+                hostnameFingerprint, recoveryVolumePath);
+    }
+
+    public BackupJobExecutor(JobLeaseRepository leaseRepository, JobStepAttemptRepository attemptRepository,
+            DeviceEnrollmentReadPort deviceEnrollmentReadPort, DeviceRepository deviceRepository,
+            BackupCapabilityExecutor backupExecutor,
+            com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor snapshotExecutor,
+            com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor panBackupExecutor,
+            com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine deviationEngine,
+            com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService retentionPruningService,
+            BackupArtefactManifestRepository manifestRepository,
+            BackupEndpointEligibilityRepository eligibilityRepository, HostnameFingerprint hostnameFingerprint,
+            String recoveryVolumePath) {
         this.leaseRepository = Objects.requireNonNull(leaseRepository, "leaseRepository");
         this.attemptRepository = Objects.requireNonNull(attemptRepository, "attemptRepository");
         this.deviceEnrollmentReadPort = Objects.requireNonNull(deviceEnrollmentReadPort, "deviceEnrollmentReadPort");
         this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
         this.backupExecutor = Objects.requireNonNull(backupExecutor, "backupExecutor");
+        this.snapshotExecutor = snapshotExecutor;
+        this.panBackupExecutor = panBackupExecutor;
+        this.deviationEngine = deviationEngine;
+        this.retentionPruningService = retentionPruningService;
         this.manifestRepository = Objects.requireNonNull(manifestRepository, "manifestRepository");
         this.eligibilityRepository = Objects.requireNonNull(eligibilityRepository, "eligibilityRepository");
         this.hostnameFingerprint = Objects.requireNonNull(hostnameFingerprint, "hostnameFingerprint");
@@ -87,6 +110,10 @@ public final class BackupJobExecutor {
     }
 
     public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, BackupRequest request) {
+        return execute(jobId, leaseEpoch, targetDeviceId, request, com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL);
+    }
+
+    public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, BackupRequest request, String capabilityId) {
         Optional<com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentSnapshot> enrollment =
                 deviceEnrollmentReadPort.findEnrollment(targetDeviceId);
         if (enrollment.isEmpty() || !enrollment.get().permitsReadCollection()) {
@@ -107,8 +134,27 @@ public final class BackupJobExecutor {
         }
 
         Optional<DeviceConfirmFacts> confirmFacts = deviceRepository.findConfirmFacts(targetDeviceId);
+        Optional<com.securityexpert.nexus.ui2.persistence.device.DeviceRecord> deviceRecord = deviceRepository.find(targetDeviceId);
+        String vendor = deviceRecord.map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::vendorHint).orElse(VENDOR);
 
-        BackupResult result = backupExecutor.collect(request, targetDeviceId, jobId);
+        BackupResult result;
+        if ((com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP.equals(capabilityId)
+                || "palo_alto".equals(vendor)) && panBackupExecutor != null) {
+            String apiKey = deviceRecord.map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::credentialReferenceId).orElse("");
+            com.securityexpert.nexus.ui2.jobs.transport.ApiTarget target =
+                    new com.securityexpert.nexus.ui2.jobs.transport.ApiTarget(targetDeviceId, request.connectionTarget().host());
+            var panResult = panBackupExecutor.executeBackup(target, apiKey, targetDeviceId, jobId, "");
+            if (panResult.success() && panResult.metadata() != null) {
+                result = new BackupResult.Completed(panResult.metadata(), panResult.artefactId(), Optional.empty(), Optional.empty());
+            } else {
+                result = new BackupResult.ConnectFailed(panResult.errorMessage() != null ? panResult.errorMessage() : "PAN-OS XML API export failed");
+            }
+        } else if ((com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_GAIA_SNAPSHOT.equals(capabilityId)
+                || request.connectionTarget().endpointId().contains("snapshot") || jobId.contains("snap")) && snapshotExecutor != null) {
+            result = snapshotExecutor.collectSnapshot(request, targetDeviceId, jobId);
+        } else {
+            result = backupExecutor.collect(request, targetDeviceId, jobId);
+        }
 
         String outcomeToken = result instanceof BackupResult.Completed ? "MATCHED" : "EXPECTATION_UNMET";
         boolean outcomeWritten =
@@ -185,17 +231,25 @@ public final class BackupJobExecutor {
 
     private boolean recordManifest(ArtefactStore.ArtefactMetadata artefact, String deviceId,
             Optional<DeviceConfirmFacts> confirmFacts, String deviationState) {
+        String vendor = deviceRepository.find(deviceId).map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::vendorHint).orElse(VENDOR);
         Optional<String> virtualSystemRef = confirmFacts.flatMap(DeviceConfirmFacts::virtualSystemRef);
         Optional<String> softwareVersion = confirmFacts.flatMap(DeviceConfirmFacts::observedSoftwareVersion);
         String hostnameSource = confirmFacts.flatMap(DeviceConfirmFacts::observedHostname).orElse(deviceId);
         try {
             BackupArtefactManifestRecord manifest = new BackupArtefactManifestRecord(UUID.randomUUID().toString(), deviceId,
-                    virtualSystemRef, ArtefactClass.BACKUP, VENDOR, softwareVersion, hostnameFingerprint.of(hostnameSource),
+                    virtualSystemRef, ArtefactClass.BACKUP, vendor, softwareVersion, hostnameFingerprint.of(hostnameSource),
                     artefact.plaintextSha256(), artefact.plaintextBytes(), artefact.ciphertextSha256(),
                     artefact.ciphertextBytes(), artefact.keyId(), artefact.wrappedDataKey(),
                     ArtefactValidation.reachedWithoutRestore(BACKUP_VALIDATION_LEVEL), BACKUP_RETENTION_TIER,
                     Optional.empty(), artefact.ref().value(), Optional.of(deviationState));
             manifestRepository.record(manifest, ACTOR, ACTION_MANIFEST_RECORDED);
+
+            if (retentionPruningService != null) {
+                try {
+                    retentionPruningService.prune(com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService.PruningPolicy.DEFAULT);
+                } catch (Exception ignored) {
+                }
+            }
             return true;
         } catch (IllegalStateException versionUnresolvable) {
             return false;

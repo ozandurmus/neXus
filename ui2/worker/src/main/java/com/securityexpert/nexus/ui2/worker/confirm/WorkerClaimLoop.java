@@ -43,7 +43,8 @@ public final class WorkerClaimLoop {
             InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT,
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
-            BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL);
+            BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, BackupCapabilityIds.CP_GAIA_SNAPSHOT,
+            BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP);
     private static final int DEFAULT_SSH_PORT = 22;
 
     private final JobLeaseRepository leaseRepository;
@@ -186,7 +187,7 @@ public final class WorkerClaimLoop {
                 BackupRequest backupRequest = new BackupRequest(
                         new ConnectionTarget(endpoint.endpointId(), hostOf(endpoint.addressRef()), portOf(endpoint.addressRef())),
                         backupCredentialRef, trustRuleRef);
-                backupJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), backupRequest);
+                backupJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), backupRequest, job.capabilityId());
                 return true;
             }
 

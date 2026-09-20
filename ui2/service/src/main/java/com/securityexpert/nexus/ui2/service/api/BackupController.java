@@ -39,7 +39,8 @@ public final class BackupController {
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ISO_INSTANT;
     private static final int DIGEST_PREFIX_LENGTH = 12;
 
-    public record CollectRequest(@JsonProperty("nonce") String nonce, @JsonProperty("reason") String reason) {
+    public record CollectRequest(@JsonProperty("nonce") String nonce, @JsonProperty("reason") String reason,
+            @JsonProperty("type") String type) {
     }
 
     private final BackupCollectService backupCollectService;
@@ -51,18 +52,21 @@ public final class BackupController {
         this.manifestRepository = manifestRepository;
     }
 
-    @PostMapping("/devices/{deviceId}/backup/collect")
+    @PostMapping({"/devices/{deviceId}/backup/collect", "/api/v2/backups/{deviceId}/run"})
     public ResponseEntity<Map<String, Object>> collect(@PathVariable String deviceId,
             @RequestBody(required = false) CollectRequest request, HttpServletRequest servletRequest) {
         String actorFingerprint = actingUser(servletRequest);
         Optional<String> nonce = request == null ? Optional.empty() : Optional.ofNullable(request.nonce());
-        String reason = request == null ? null : request.reason();
+        String reason = request == null || request.reason() == null ? "operator requested backup collection" : request.reason();
+        String type = request == null || request.type() == null ? "backup" : request.type();
         BackupCollectService.Outcome outcome = backupCollectService.requestCollect(deviceId, actorFingerprint, reason,
-                nonce);
+                nonce, type);
         return switch (outcome) {
             case BackupCollectService.Outcome.Admitted admitted -> {
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("job_id", admitted.jobId());
+                body.put("status", "ACCEPTED");
+                body.put("backup_type", type);
                 yield ResponseEntity.status(HttpStatus.ACCEPTED).body(body);
             }
             case BackupCollectService.Outcome.DeviceNotFound notFound -> {

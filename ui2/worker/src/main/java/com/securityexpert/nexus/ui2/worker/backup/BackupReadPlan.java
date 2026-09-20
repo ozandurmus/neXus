@@ -29,6 +29,7 @@ public final class BackupReadPlan {
     }
 
     public static final String CP_SHOW_DISKSPACE = "clish -c \"show diskspace\"";
+    public static final String CP_DF_VAR_LOG = "df -P /var/log";
     public static final String CP_ADD_BACKUP_LOCAL = "clish -c \"add backup local\"";
     public static final String CP_SHOW_BACKUP_STATUS = "clish -c \"show backup status\"";
     /** Governed by entry 4 (14H section 5's closed table) but not issued by this movement's own executor flow -- see the gate doc's own entry-4 note. */
@@ -36,9 +37,19 @@ public final class BackupReadPlan {
     public static final String CP_ARCHIVE_DIGEST_TEMPLATE = "sha256sum %s";
     public static final String CP_DELETE_BACKUP_TEMPLATE = "clish -c \"delete backup %s\"";
 
+    // Gaia Snapshot Commands (Weekly OS Image Level Recovery)
+    public static final String CP_SHOW_SNAPSHOTS = "clish -c \"show snapshots\"";
+    public static final String CP_SHOW_SNAPSHOT_STATUS = "clish -c \"show snapshot status\"";
+    public static final String CP_ADD_SNAPSHOT_TEMPLATE = "clish -c \"add snapshot %s\"";
+    public static final String CP_DELETE_SNAPSHOT_TEMPLATE = "clish -c \"delete snapshot %s\"";
+
     /** 14H section 5's own order: free-space precondition, submit, poll (repeated), fetch, digest, delete. */
     public static final List<String> LITERALS = List.of(CP_SHOW_DISKSPACE, CP_ADD_BACKUP_LOCAL, CP_SHOW_BACKUP_STATUS,
             CP_SHOW_BACKUPS, CP_ARCHIVE_DIGEST_TEMPLATE, CP_DELETE_BACKUP_TEMPLATE);
+
+    /** Check Point Gaia snapshot literal set for weekly image recovery. */
+    public static final List<String> SNAPSHOT_LITERALS = List.of(CP_SHOW_DISKSPACE, CP_DF_VAR_LOG,
+            CP_SHOW_SNAPSHOTS, CP_SHOW_SNAPSHOT_STATUS, CP_ADD_SNAPSHOT_TEMPLATE, CP_DELETE_SNAPSHOT_TEMPLATE);
 
     /** Entry 6: the device-side digest command for the exact archive name this run submitted. */
     public static String archiveDigestCommand(String archiveName) {
@@ -48,5 +59,13 @@ public final class BackupReadPlan {
     /** Entry 7: deletion targets only the exact archive name this run created (BK-7). */
     public static String deleteBackupCommand(String archiveName) {
         return String.format(CP_DELETE_BACKUP_TEMPLATE, archiveName);
+    }
+
+    public static String addSnapshotCommand(String snapshotName) {
+        return String.format(CP_ADD_SNAPSHOT_TEMPLATE, snapshotName);
+    }
+
+    public static String deleteSnapshotCommand(String snapshotName) {
+        return String.format(CP_DELETE_SNAPSHOT_TEMPLATE, snapshotName);
     }
 }

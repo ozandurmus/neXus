@@ -145,10 +145,11 @@ final class BackupJobExecutorFakes {
 
     static final class FakeDeviceRepository implements DeviceRepository {
         Optional<DeviceConfirmFacts> confirmFacts = Optional.empty();
+        Optional<DeviceRecord> deviceRecord = Optional.empty();
 
         @Override
         public Optional<DeviceRecord> find(String deviceId) {
-            throw new UnsupportedOperationException("not used by this test");
+            return deviceRecord;
         }
 
         @Override

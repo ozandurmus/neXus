@@ -153,7 +153,13 @@ class BackupCollectServiceTest {
         Capability alwaysEligible = new Capability(BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, "check_point",
                 "cp_gaia_gateway", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, List.of(), List.of(), Map.of(),
                 true);
-        return new JobAdmissionService(CapabilityRegistry.of(List.of(alwaysEligible)), enrolledEverywhere,
+        Capability cpSnapshot = new Capability(BackupCapabilityIds.CP_GAIA_SNAPSHOT, "check_point",
+                "cp_gaia_gateway", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, List.of(), List.of(), Map.of(),
+                true);
+        Capability panBackup = new Capability(BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, "palo_alto",
+                "pan_os_firewall", TransportKind.PAN_XML_API, MaturityState.CAP_VALIDATED, List.of(), List.of(), Map.of(),
+                true);
+        return new JobAdmissionService(CapabilityRegistry.of(List.of(alwaysEligible, cpSnapshot, panBackup)), enrolledEverywhere,
                 new InMemoryAdmissionRepository());
     }
 
@@ -243,5 +249,29 @@ class BackupCollectServiceTest {
         assertTrue(outcome instanceof BackupCollectService.Outcome.AdmissionRefused);
         assertEquals("BACKUP_CREDENTIAL_NOT_CONFIGURED",
                 ((BackupCollectService.Outcome.AdmissionRefused) outcome).code());
+    }
+
+    @Test
+    void admitsPaloAltoFirewallOnAllowlist() {
+        BackupCollectService service = new BackupCollectService(
+                new StubDeviceRepository().put(PILOT_DEVICE, "palo_alto"),
+                admissionService(), Set.of(PILOT_DEVICE), true);
+
+        BackupCollectService.Outcome outcome =
+                service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());
+
+        assertTrue(outcome instanceof BackupCollectService.Outcome.Admitted, "Palo Alto device should be admitted");
+    }
+
+    @Test
+    void admitsCheckPointSnapshotWhenRequested() {
+        BackupCollectService service = new BackupCollectService(
+                new StubDeviceRepository().put(PILOT_DEVICE, "check_point"),
+                admissionService(), Set.of(PILOT_DEVICE), true);
+
+        BackupCollectService.Outcome outcome =
+                service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty(), "snapshot");
+
+        assertTrue(outcome instanceof BackupCollectService.Outcome.Admitted, "Check Point snapshot should be admitted");
     }
 }

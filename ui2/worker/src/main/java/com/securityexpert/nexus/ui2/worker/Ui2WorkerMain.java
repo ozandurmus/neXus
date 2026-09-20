@@ -245,8 +245,17 @@ public final class Ui2WorkerMain {
                 new JooqBackupEndpointEligibilityRepository(transactionBoundary);
         BackupCapabilityExecutor backupCapabilityExecutor = new BackupCapabilityExecutor(compositeTransport,
                 artefactStore, backupFreeSpaceThresholdBytes, backupPollInterval, backupRunDeadline);
+        com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor snapshotExecutor =
+                new com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor(compositeTransport,
+                        artefactStore, backupFreeSpaceThresholdBytes, backupPollInterval, backupRunDeadline);
+        com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor paloAltoBackupExecutor =
+                new com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor(compositeTransport, artefactStore);
+        com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine deviationEngine =
+                new com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine();
+
         BackupJobExecutor backupJobExecutor = new BackupJobExecutor(leaseRepository, attemptRepository,
-                deviceEnrollmentReadPort, deviceRepository, backupCapabilityExecutor, backupArtefactManifestRepository,
+                deviceEnrollmentReadPort, deviceRepository, backupCapabilityExecutor, snapshotExecutor,
+                paloAltoBackupExecutor, deviationEngine, null, backupArtefactManifestRepository,
                 backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString());
 
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);

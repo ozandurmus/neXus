@@ -13,8 +13,10 @@ import java.util.Set;
 public final class BackupCapabilityIds {
 
     public static final String CP_GAIA_BACKUP_LOCAL = "cp_gateway_backup";
+    public static final String CP_GAIA_SNAPSHOT = "cp_gaia_snapshot";
+    public static final String PAN_DEVICE_STATE_BACKUP = "pan_device_state_backup";
 
-    public static final Set<String> ALL = Set.of(CP_GAIA_BACKUP_LOCAL);
+    public static final Set<String> ALL = Set.of(CP_GAIA_BACKUP_LOCAL, CP_GAIA_SNAPSHOT, PAN_DEVICE_STATE_BACKUP);
 
     private BackupCapabilityIds() {
     }

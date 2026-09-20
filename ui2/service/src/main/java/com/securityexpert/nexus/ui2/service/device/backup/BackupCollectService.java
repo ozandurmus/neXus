@@ -61,6 +61,11 @@ public final class BackupCollectService {
     }
 
     public Outcome requestCollect(String deviceId, String actorFingerprint, String reason, Optional<String> clientNonce) {
+        return requestCollect(deviceId, actorFingerprint, reason, clientNonce, "backup");
+    }
+
+    public Outcome requestCollect(String deviceId, String actorFingerprint, String reason, Optional<String> clientNonce,
+            String backupType) {
         if (reason == null || reason.strip().length() < MIN_REASON_LENGTH) {
             return new Outcome.AdmissionRefused("REASON_TOO_SHORT",
                     "a backup requires a reason of at least eight characters (BK-12)");
@@ -71,7 +76,7 @@ public final class BackupCollectService {
             return new Outcome.DeviceNotFound();
         }
         String role = device.get().role();
-        if (!"gateway".equals(role)) {
+        if (!"gateway".equals(role) && !"firewall".equals(role)) {
             if ("management_server".equals(role)) {
                 return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",
                         "device " + deviceId + " is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)");
@@ -79,26 +84,35 @@ public final class BackupCollectService {
             return new Outcome.AdmissionRefused("ROLE_UNRECOGNISED",
                     "device " + deviceId + " carries role '" + role + "', which is not one the product knows how to collect from, so nothing was issued");
         }
-        if (!"check_point".equals(device.get().vendorHint())) {
+        String vendorHint = device.get().vendorHint();
+        if (!"check_point".equals(vendorHint) && !"palo_alto".equals(vendorHint)) {
             return new Outcome.AdmissionRefused("VENDOR_UNSUPPORTED", "device " + deviceId + " vendor_hint="
-                    + device.get().vendorHint() + " has no registered backup capability (14H BK-9: Check Point "
-                    + "gateway only)");
+                    + vendorHint + " has no registered backup capability (14H BK-9: Check Point gateway only)");
         }
         if (!pilotAllowlist.contains(deviceId)) {
             return new Outcome.AdmissionRefused("DEVICE_NOT_IN_BACKUP_PILOT_ALLOWLIST",
                     "device " + deviceId + " is not on the backup pilot allowlist (14H BK-1) -- refused, never a "
                             + "silent skip");
         }
-        if (!backupCredentialConfigured) {
+        if ("check_point".equals(vendorHint) && !backupCredentialConfigured) {
             return new Outcome.AdmissionRefused("BACKUP_CREDENTIAL_NOT_CONFIGURED",
                     "no distinct backup credential is configured for check_point (BK-11: never falls back to the "
                             + "collection credential)");
         }
 
-        String nonce = clientNonce.filter(value -> !value.isBlank()).orElseGet(this::minuteBucket);
-        String idempotencyKey = deviceId + ":backup:" + nonce;
+        String capabilityId;
+        if ("palo_alto".equals(vendorHint)) {
+            capabilityId = BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP;
+        } else if ("snapshot".equalsIgnoreCase(backupType)) {
+            capabilityId = BackupCapabilityIds.CP_GAIA_SNAPSHOT;
+        } else {
+            capabilityId = BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL;
+        }
 
-        AdmissionResult admission = jobAdmissionService.submit(BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, deviceId,
+        String nonce = clientNonce.filter(value -> !value.isBlank()).orElseGet(this::minuteBucket);
+        String idempotencyKey = deviceId + ":" + capabilityId + ":" + nonce;
+
+        AdmissionResult admission = jobAdmissionService.submit(capabilityId, deviceId,
                 idempotencyKey, actorFingerprint, ActionRegistry.DEVICE_BACKUP_COLLECT);
         return switch (admission) {
             case AdmissionResult.Admitted admitted -> new Outcome.Admitted(admitted.jobId());
