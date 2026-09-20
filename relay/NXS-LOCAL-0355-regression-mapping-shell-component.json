@@ -1,0 +1,113 @@
+{
+  "created_at": "2026-09-20T22:46:47Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "The path set of pull request 437 classifies as inventory+shell rather than blocked",
+          "ui2/frontend/src/shell/TopAppBar.tsx alone classifies as shell",
+          "ui2/frontend/tests/App.test.tsx alone classifies as shell",
+          "A new file added anywhere under ui2/frontend/src/ classifies as some component rather than blocked, proven by a test that walks the tree and asserts every existing frontend source and test path is mapped",
+          "Inventory, discovery and privacy still classify exactly as they do today",
+          "A path outside the product still blocks, and an empty set still blocks",
+          "tests/test_ci_regression_scope.py passes"
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md section 7 (FROZEN, 2026-09-16). An unmapped path blocks visibly; nothing routes to a full suite by surprise.",
+          "engineering": "main at 58b5e84. Components today are ldap, inventory, discovery and privacy.",
+          "observed": "Pull request 437 is blocked, and the gate is right. Its four paths classify individually as inventory, blocked, blocked, inventory: ui2/frontend/src/shell/TopAppBar.tsx and ui2/frontend/tests/App.test.tsx belong to the application shell, which no component maps. This is the third pull request in a row to stop here, each on a different unmapped corner of the frontend, so the mapping is being extended one file at a time while the tree it covers is much larger."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond the two backlog notes in refs",
+          "The backup and failover planes"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/regression-mapping-shell-component"
+        },
+        "invariants": [
+          "The frozen record governs: visible blocking, no surprise full suite, closed and auditable mapping",
+          "A green gate must mean the tests covering the change ran",
+          "Inventory and discovery stay separate",
+          "Fail closed outside the mapped trees"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Map the application shell as its own component, and close the frontend tree so an ordinary user interface change stops blocking on a corner nobody has named yet.",
+        "output_contract": [
+          "A shell component with its own selection",
+          "Full coverage of the frontend source and test trees",
+          "A test that fails if a frontend path is left unmapped",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "One mapping table and its tests, with the components named here.",
+          "tier": "Main engineer"
+        },
+        "requirements": [
+          "The application shell is its own component: ui2/frontend/src/shell/ and the shell-level tests including ui2/frontend/tests/App.test.tsx",
+          "Every path under ui2/frontend/src/ and ui2/frontend/tests/ belongs to exactly one component, so an ordinary user interface change is routed rather than blocked",
+          "Components stay disjoint: shell, inventory, discovery and privacy do not overlap, and inventory and discovery remain separate because they are headed for separate microservices",
+          "A change spanning several components runs the union of their selections",
+          "A path outside the mapped trees still blocks visibly, and an empty set still blocks",
+          "Every mapped prefix still matches at least one existing path, asserted by the existing test"
+        ],
+        "risks": [
+          "Closing the frontend tree must not become a catch-all that routes an unrelated change to an unrelated selection. Name the components; do not add a fallback that swallows everything.",
+          "The shell selection must actually run the shell tests, not inherit another component's."
+        ],
+        "scope": {
+          "in": [
+            "scripts/ci_regression_scope.py: a shell component, and frontend coverage that leaves no ordinary source or test path unnamed",
+            "The workflow selection the shell component runs",
+            "tests/test_ci_regression_scope.py"
+          ],
+          "out": [
+            "Amending the frozen decision record",
+            "Softening the blocked default for a path genuinely outside the product",
+            "Routing anything to the full suite as a fallback",
+            "Pull request 437's own content"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "tests/test_ci_regression_scope.py",
+              "tests/test_ci_workflow_fast_pr_regression.py"
+            ],
+            "name": "scope_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-20T22:46:47Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0355",
+  "movement": "NXS-LOCAL-0355",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md",
+    "scripts/ci_regression_scope.py",
+    "tests/test_ci_regression_scope.py",
+    ".github/workflows/validation.yml"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-20T22:46:47Z"
+}
