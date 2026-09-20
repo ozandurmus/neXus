@@ -1,0 +1,130 @@
+{
+  "created_at": "2026-09-20T19:57:19Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Deleting a device with zero backups succeeds and touches neither backup table",
+          "Deleting a device with backups and the retain choice succeeds, leaves the artefact rows readable, and writes no ledger removal",
+          "Deleting a device with backups and the remove choice succeeds and appends one 'removed' ledger row per artefact",
+          "A delete request that does not carry a choice while the device has backups is refused with a body stating the artefact count, not a 500",
+          "The application role still holds no DELETE on artefact_retention_ledger or backup_artefact_retrieval after the change",
+          "The device registry UI shows the artefact count and the two choices before deleting",
+          "Targeted tests cover all four paths above",
+          "The repository privacy gate reports zero findings"
+        ],
+        "baseline": {
+          "authority": "AGENTS.md; the append-only retention ledger contract recorded in V17__backup_artefact_manifest.sql (BK-18 / C7 section 3.5)",
+          "decision": "Product Owner directive 2026-09-20: an administrator must be able to delete a device. The protection is not a refusal, it is an informed choice -- tell the operator the device still has backups and let them choose to retain them or remove them as well. Silent loss stays prevented by writing the ledger event, not by blocking the delete.",
+          "observed": "Deleting a device returns 500. The live stack trace is PSQLException: permission denied for table artefact_retention_ledger, raised from JooqDeviceRepository.deleteDevice. The cascade issues DELETE against artefact_retention_ledger and backup_artefact_retrieval, and the app role holds only SELECT and INSERT on both because V17 and V18 grant exactly that: the ledger is append-only from its first row and the retrieval table is the fail-closed audit of who fetched a backup."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond links reached by explicit need",
+          "The failover engine, which is blocked and unrelated",
+          "Vendor collectors"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "fix/device-delete-with-backup-choice"
+        },
+        "invariants": [
+          "The retention ledger is append-only from its first row (V17, BK-18 / C7 section 3.5)",
+          "backup_artefact_retrieval is a fail-closed audit and must survive the device it describes",
+          "Absence of evidence is not evidence of absence: a removal that cannot be recorded must not proceed silently",
+          "Identifiers are opaque; do not derive, normalise or parse artefact or device identifiers"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make device deletion succeed for an administrator while keeping the append-only retention ledger and the retrieval audit intact, by asking the operator what should happen to the device's backups and recording the outcome as a ledger event.",
+        "output_contract": [
+          "Device deletion succeeding for an administrator, with the operator's choice about backups honoured",
+          "A ledger row for every artefact removed, and none for artefacts retained",
+          "The named removal shape stated explicitly in the SESSION_CLOSE",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "A bounded fix inside an already-frozen evidence contract. The contract states the invariant, so the work is deterministic; the only judgement is the removal shape, and its options are named in risks.",
+          "tier": "Normal (strong)"
+        },
+        "requirements": [
+          "An administrator can delete any device, including one that has backups",
+          "artefact_retention_ledger and backup_artefact_retrieval are never DELETEd from; the application role's grants stay SELECT, INSERT",
+          "Removing an artefact appends a 'removed' event to artefact_retention_ledger carrying its retention tier, so a removal is never silent",
+          "Retaining artefacts leaves them readable and locatable after the device row is gone",
+          "The operator is told the artefact count before the deletion happens, not after",
+          "No secret, device hostname, serial or management address is introduced into any log line, error body or UI string this movement adds"
+        ],
+        "risks": [
+          "artefact_retention_ledger.artefact_id is a foreign key onto backup_artefact(artefact_id), so deleting the artefact row breaks the ledger's reference. Removal therefore cannot be a plain DELETE of the artefact row. Choose one shape and say which in the SESSION_CLOSE: mark the manifest row removed and free the vault bytes, or relax the reference so the ledger outlives the row. Do not silently cascade.",
+          "The delete path runs inside auditedTransactionBoundary; ledger writes must join that transaction so a partial delete cannot leave artefacts unrecorded",
+          "The vault bytes live outside the database; freeing them is not transactional with it, so decide and state the order of operations"
+        ],
+        "scope": {
+          "in": [
+            "JooqDeviceRepository.deleteDevice and the delete path above it (DeviceDeletionService, DeviceRegistrationController)",
+            "A pre-delete query that reports how many backup artefacts the device still has",
+            "An explicit operator choice carried on the delete request: retain the artefacts or remove them",
+            "Writing a 'removed' row into artefact_retention_ledger for each artefact the operator chose to remove",
+            "Whatever schema change is needed so an artefact can be removed without erasing ledger or retrieval rows",
+            "The frontend delete control in the device registry: surface the count and the choice",
+            "Targeted tests for both choices and for a device with no backups"
+          ],
+          "out": [
+            "Granting DELETE on artefact_retention_ledger or backup_artefact_retrieval to the application role -- the append-only property is the contract, not the bug",
+            "Any change to backup collection, retention policy, the validation ladder or CLASS 1 gating",
+            "The ui2-backup separation (its own contract, docs/design/UI2_BACKUP_PLANE_SEPARATION_CONTRACT.md)",
+            "Restore (RB.6), which stays hard-gated"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./gradlew",
+              ":service:test"
+            ],
+            "name": "service_tests"
+          },
+          {
+            "argv": [
+              "./gradlew",
+              ":persistence:test"
+            ],
+            "name": "persistence_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-20T19:57:19Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0348",
+  "movement": "NXS-LOCAL-0348",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/JooqDeviceRepository.java",
+    "ui2/service/src/main/resources/db/migration/V17__backup_artefact_manifest.sql",
+    "ui2/service/src/main/resources/db/migration/V18__cp_gateway_backup.sql"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-20T19:57:19Z"
+}

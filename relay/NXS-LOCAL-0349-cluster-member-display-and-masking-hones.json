@@ -1,0 +1,129 @@
+{
+  "created_at": "2026-09-20T20:48:23Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Against the live schema, the join predicate resolves 107 of 107 devices rather than 59",
+          "A device row for a cluster member carries a name, a model and a cluster reference where the candidate has them",
+          "A device with no candidate match and no observed hostname renders an explicit unknown in both an unmasked and an aiview session, and the two sessions agree that it is unknown",
+          "Given a management address, the pseudonymizer does not return a string of the FW-XXXX-NN form",
+          "Given a real device name, pseudonymization is unchanged and remains deterministic and relationship preserving",
+          "Existing masking tests still pass unchanged",
+          "The repository privacy gate reports zero findings"
+        ],
+        "baseline": {
+          "authority": "AGENTS.md -- UNKNOWN / fail-closed law, and the mandatory AIView inspection and post-parsing masking law",
+          "engineering": "main at edfac59. The estate was cleared and re-discovered, so the counts above are reproducible: 157 candidates, 107 devices, 60 ENROLLED and 47 DRAFT.",
+          "observed": "Two defects that hide each other, both measured on the live deployment on 2026-09-20 after a fresh discovery run over a cleared estate. First: the lateral join that resolves a device's discovery candidate ends with 'and c.parent_candidate_id is null'. Every cluster member candidate carries a parent, its cluster -- 34 of 34 plain cluster members and 14 of 14 chassis members, and no other kind carries one -- so the join excludes exactly the members. Running the join's own predicate over the device table gives devices=107, join_resolved=59, join_failed=48. The select then falls through coalesce(d.observed_hostname, dc.display_name, ep.address_ref); observed_hostname is null for all 107 because enrollment confirm has not run, so the row renders a management address where a name belongs and loses model, software version and cluster reference with the same join. Second: TopologyNamePseudonymizer.computeDeviceName applies HMAC to any non-blank string and formats the result as FW-XXXX-NN without checking that the input is a hostname, so under the aiview persona that fallback address becomes a convincing device name. A session without the replay-viewer role sees a bare address and no model; aiview sees a healthy-looking fleet. The same broken rows read as broken to one observer and as fine to the other."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond the two backlog notes named in refs",
+          "The failover engine, which is blocked and unrelated",
+          "The backup plane separation, which has its own contract"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "fix/cluster-member-display-and-masking-honesty"
+        },
+        "invariants": [
+          "Absence of evidence is not evidence of absence: an unrecorded name is UNKNOWN, never a substituted address and never an invented one",
+          "Identifiers are opaque: do not parse, normalise or infer meaning from candidate or device identifiers",
+          "Presentation identity is not security identity: a display name is never a join key",
+          "Masking applies to replay-viewer sessions only and must not be weakened; the database and the workers keep operating on raw values"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Restore the device display for cluster members, and stop the masking layer from manufacturing a hostname out of a value that is not one, so that what aiview shows can be trusted as evidence again.",
+        "output_contract": [
+          "Cluster members showing their name, model and cluster reference",
+          "An explicit unknown where a name is genuinely unrecorded, reading the same in a masked and an unmasked session",
+          "A pseudonymizer that refuses to name what is not a name",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "The SQL change is one predicate, but the masking change sits on a privacy boundary and the two fixes gate each other: without the second, the first cannot be verified under the persona the constitution mandates. One tier above the standing dispatch, and no higher, because the design decision is stated here rather than left open.",
+          "tier": "Strong implementation"
+        },
+        "requirements": [
+          "A device whose discovery candidate has a parent resolves that candidate and shows its name, model, software version and cluster reference",
+          "The Palo Alto intention behind the original predicate is preserved: where several candidates match, a parentless one still wins",
+          "A management address is never presented as though it were a device name, in any persona",
+          "A device with no recorded name renders an explicit unknown rather than a substituted value, and that unknown survives masking as an unknown",
+          "The pseudonymizer refuses to mint a name for a value that is not a device name, rather than hashing it into one",
+          "No raw hostname, serial or management address reaches a replay-viewer session as a result of these changes"
+        ],
+        "risks": [
+          "The predicate was introduced by 9f46cc0 to stop a Palo Alto device matching a child candidate. Removing it outright reopens that. Preferring a parentless candidate rather than excluding parented ones satisfies both: order by (c.parent_candidate_id is null) desc before limit 1. Confirm on the live schema that Palo Alto rows still resolve their intended candidate.",
+          "The display chain is read in more than one query in this repository; check every coalesce that places an address where a name belongs, not only the one named here.",
+          "The masker caches by input string and also builds a raw-name-to-pseudonym map used by maskText. A value refused for device naming must not enter that map, or it will leak into free-text replacement.",
+          "This movement deliberately leaves cluster membership unfixed at enrollment. After it lands, the earlier measurement must be repeated, because the two defects read from overlapping sources and have been masking each other."
+        ],
+        "scope": {
+          "in": [
+            "The lateral join predicate in JooqDeviceRepository's device select",
+            "The display chain that currently substitutes a management address into the hostname position",
+            "TopologyNamePseudonymizer: refuse to pseudonymize a value that is not a device name",
+            "However the UI renders a device whose name is genuinely unrecorded",
+            "Targeted tests for the join predicate, for the substitution, and for the masker's refusal"
+          ],
+          "out": [
+            "Discovery collection itself: the management-plane methods, the polling commands and the enumeration adapters are settled and must not be touched",
+            "Enrollment confirm and the separate defect that cluster membership does not reach enrolled devices (cluster_membership_lost_at_enrollment) -- it is measured again after this movement, not fixed inside it",
+            "The inventory and configuration design language, which is a later movement",
+            "Weakening masking in any way, or exposing a raw hostname to a replay-viewer session"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./gradlew",
+              ":persistence:test"
+            ],
+            "name": "persistence_tests"
+          },
+          {
+            "argv": [
+              "./gradlew",
+              ":service:test"
+            ],
+            "name": "service_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-20T20:48:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0349",
+  "movement": "NXS-LOCAL-0349",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/history/backlog/discovery_lateral_join_drops_cluster_members.md",
+    "docs/history/backlog/aiview_masking_manufactures_names_from_any_string.md",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/JooqDeviceRepository.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/privacy/TopologyNamePseudonymizer.java"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-20T20:48:23Z"
+}
