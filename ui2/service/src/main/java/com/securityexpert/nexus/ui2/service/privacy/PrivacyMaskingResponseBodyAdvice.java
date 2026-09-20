@@ -150,6 +150,23 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         result.put(key, value);
                     }
                 }
+                case "affected_devices", "target_devices" -> {
+                    if (value instanceof List<?> devList) {
+                        List<String> maskedList = new ArrayList<>();
+                        for (Object devItem : devList) {
+                            if (devItem instanceof String devStr) {
+                                maskedList.add(topologyPseudonymizer.maskDeviceName(devStr, clusterRef));
+                            } else {
+                                maskedList.add(String.valueOf(devItem));
+                            }
+                        }
+                        result.put(key, maskedList);
+                    } else if (value instanceof String s) {
+                        result.put(key, topologyPseudonymizer.maskDeviceName(s, clusterRef));
+                    } else {
+                        result.put(key, value);
+                    }
+                }
                 case "virtual_systems" -> {
                     if (value instanceof String s) {
                         String masked = Arrays.stream(s.split(",\\s*"))

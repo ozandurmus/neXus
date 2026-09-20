@@ -57,7 +57,7 @@ class PaloAltoPanOsComplianceEvaluatorTest {
                 <entry name="localhost.localdomain">
                   <deviceconfig>
                     <system>
-                      <hostname>MigroFw-02</hostname>
+                      <hostname>FW-TANGO-04</hostname>
                       <login-banner>Authorized Access Only. All activities are logged and monitored.</login-banner>
                       <timezone>Europe/Istanbul</timezone>
                       <ntp-servers>

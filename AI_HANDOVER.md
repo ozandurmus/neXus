@@ -22,7 +22,7 @@ Authority: `AGENTS.md`, `CURRENT_STATE.md`, `ASTRA_BACKUP_ENGINE_ARCHITECTURE_RE
 # Exact next action
 - Operator live hardware verification on HOST-A:
   - Open `http://ui2.nexus.local:30080/?screen=backups` (or Drawer -> Backups & Recovery).
-  - Execute "Backup Now" on `MigroFw-02` (PA-5410) and verify XML API stream into vault.
+  - Execute "Backup Now" on `FW-TANGO-04` (PA-5410) and verify XML API stream into vault.
   - Execute "Backup Now" / "Snapshot Now" on `Tango-01` / `Tango-02` (Check Point Gaia).
   - Trigger "Diff" to verify AST deviation domain categorization.
 

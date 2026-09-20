@@ -56,8 +56,8 @@ export function BackupScreen() {
   // Default fleet representation matching active inventory
   const [devices] = useState<BackupDeviceItem[]>([
     {
-      deviceId: "dev-migrofw-02",
-      name: "MigroFw-02",
+      deviceId: "dev-pa-01",
+      name: "FW-TANGO-04",
       ip: "192.0.2.22",
       vendor: "palo_alto",
       role: "PA-5410 Firewall",

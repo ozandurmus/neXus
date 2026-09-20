@@ -42,7 +42,7 @@ export function BackupPreview() {
         <Stack spacing={1.5}>
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", p: 1.5, bgcolor: m3.surface, borderRadius: "8px" }}>
             <Box>
-              <Typography sx={{ fontWeight: 600 }}>MigroFw-02 (PA-5410)</Typography>
+              <Typography sx={{ fontWeight: 600 }}>FW-TANGO-04 (PA-5410)</Typography>
               <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>192.0.2.22 · Palo Alto Networks · Today at 02:00 UTC</Typography>
             </Box>
             <Chip size="small" label="UNCHANGED" sx={{ bgcolor: m3.successContainer, color: m3.onSuccessContainer, fontWeight: 700 }} />
