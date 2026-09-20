@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T20:57:33Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:35:51Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -37,10 +37,12 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T20:57:33Z
 - P1/planned failover_recheck_on_request — A failover request must re-run every readiness check at th (target: PO rule 2026-09-12; OP.2 contract)
 - P1/planned failover_vsx_vsls_mentality_contract — VSX/VSLS semantics: CP per-VS state independent of chassis (target: PO statement 2026-09-12; needs vendor-se)
 - P1/planned gov_orch_budget_ceiling_not_persisted_or_enforced — The dispatch budget ceiling is neither recorded nor enforc (target: GOV.ORCH.13 DL-3 budget column; scripts/)
+- P1/planned inventory_row_does_not_say_why_a_device_is_unconfirmed — The inventory row shows Registered, not confirmed without (target: InventoryScreen row rendering; jobs.term)
 - P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a pr (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
 - P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP l (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
 - P1/planned pan_collection_contract_from_measurement — Write the Palo Alto collection contract from the PAN_COLLE (target: docs/design/PAN_COLLECTION_MEASUREMENT_B)
 - P1/planned relay_id_reuse_when_record_uncommitted — local_relay _next_id reissues an id whose JSON was never c (target: GOV.ORCH successor or scripts/local_rela)
+- P1/planned top_app_bar_search_is_not_an_input — The top app bar search is a styled box containing static t (target: ui2/frontend/src/shell/TopAppBar.tsx)
 - P1/planned ui2_audit_logging — Audit logging for device and user management (target: ui2)
 - P1/planned ui2_auth_placement_second_authenticated_surface — UI2 AUTH-PLACEMENT: where session and RBAC enforcement liv (target: PO_DECISION_RECORD_2026_09_13D section 3)
 - P1/planned ui2_b1_08_audit_logs_screen — UI2 B1-8 -- audit & logs screen (every mutation since B1-2 (target: workflow §5 B1-8)
@@ -65,7 +67,6 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T20:57:33Z
 - P2/planned device_admin_accounts_and_privileges
 - P2/planned failover_phase_d_has_no_build_record
 - P2/planned gov_orch_turn_counter_blind_to_codex_stream
-- P2/planned inventory_draft_filter_does_nothing
 - P2/planned java_product_plan_build_selection_is_stale
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material

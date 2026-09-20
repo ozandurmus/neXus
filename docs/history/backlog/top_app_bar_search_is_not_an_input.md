@@ -1,0 +1,5 @@
+# The top app bar search is a styled box containing static text, not an input: it has no field, no state and no handler, so it looks like a search and can never search
+
+status: planned · target: ui2/frontend/src/shell/TopAppBar.tsx
+
+Measured 2026-09-20 in TopAppBar.tsx. The element is a Box carrying the literal text 'Search devices, settings, evidence' next to a search icon, styled with a pill radius and a surface colour so that it reads as a field. There is no input element, no state and no handler, so it has never been capable of searching anything. The inventory panel's own search, by contrast, is real: it is bound to searchTerm and matches hostname, device id, model, software version, cluster reference, management address and interface addresses. The defect is therefore not a broken search but a control that advertises a capability the product does not have in that place, which is the same class as the backup screen's fabricated validation badges corrected earlier today. Either wire it to a real cross-screen search or remove it; leaving a decorative field that silently ignores every keystroke is the one option that should not survive.

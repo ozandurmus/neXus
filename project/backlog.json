@@ -605,15 +605,6 @@
       "note": ""
     },
     {
-      "id": "inventory_draft_filter_does_nothing",
-      "category": "ui",
-      "title": "The Draft filter chip on the inventory screen selects but does not filter the list",
-      "status": "planned",
-      "priority": "P2",
-      "target": "ui2 InventoryScreen filter chips",
-      "note": ""
-    },
-    {
       "id": "cluster_member_model_needs_second_query",
       "category": "discovery",
       "title": "Cluster members carry no hardware field in the gateway enumeration, so model and appliance type stay unknown for them unless a second management-plane query supplies it",
@@ -647,6 +638,24 @@
       "status": "planned",
       "priority": "P2",
       "target": "ConfigurationReadPlan CP read plan; CheckPointGaiaConfigParser section list",
+      "note": ""
+    },
+    {
+      "id": "inventory_row_does_not_say_why_a_device_is_unconfirmed",
+      "category": "ui",
+      "title": "The inventory row shows Registered, not confirmed without saying why: 47 of 107 devices failed on connect_failed and the reason is only visible by opening each device",
+      "status": "planned",
+      "priority": "P1",
+      "target": "InventoryScreen row rendering; jobs.terminal_reason",
+      "note": ""
+    },
+    {
+      "id": "top_app_bar_search_is_not_an_input",
+      "category": "ui",
+      "title": "The top app bar search is a styled box containing static text, not an input: it has no field, no state and no handler, so it looks like a search and can never search",
+      "status": "planned",
+      "priority": "P1",
+      "target": "ui2/frontend/src/shell/TopAppBar.tsx",
       "note": ""
     }
   ]

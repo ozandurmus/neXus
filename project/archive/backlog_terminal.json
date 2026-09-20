@@ -1185,6 +1185,15 @@
       "priority": "P1",
       "target": "verify against ui2 service gate chain before scoping",
       "note": ""
+    },
+    {
+      "id": "inventory_draft_filter_does_nothing",
+      "category": "ui",
+      "title": "The Draft filter chip on the inventory screen selects but does not filter the list",
+      "status": "done",
+      "priority": "P2",
+      "target": "ui2 InventoryScreen filter chips",
+      "note": ""
     }
   ]
 }

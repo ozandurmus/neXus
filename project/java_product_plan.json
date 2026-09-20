@@ -119,7 +119,9 @@
     "cluster_member_model_needs_second_query": "java_feature",
     "aiview_masking_manufactures_names_from_any_string": "java_debt",
     "ui2_inventory_and_configuration_design_language": "java_feature",
-    "cp_vsx_config_collected_without_vs_context": "java_debt"
+    "cp_vsx_config_collected_without_vs_context": "java_debt",
+    "inventory_row_does_not_say_why_a_device_is_unconfirmed": "java_debt",
+    "top_app_bar_search_is_not_an_input": "java_debt"
   },
   "converted_lessons": [
     {
