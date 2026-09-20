@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T15:28:05Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T18:19:12Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -24,7 +24,9 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T15:28:05Z
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
+- P1/planned failover_p0_closure_set — Failover Engine: close the eight-item P0 set both external (target: docs/design/CODEX_FAILOVER_ENGINE_FINAL_)
 - P1/planned failover_peer_reciprocal_agreement_check — Eighth stop-condition: both members must agree reciprocall (target: PO rule 2026-09-12; _pan_reciprocal_corr)
+- P1/planned failover_pilot_fence_is_compiled_in — Failover pilot allowlist is hardcoded in a constructor and (target: FailoverPilotAllowlist)
 - P1/planned failover_readiness_check_contract — Failover readiness contract carrying the PO's four semanti (target: PO_DECISION_RECORD 3)
 - P1/planned failover_recheck_on_request — A failover request must re-run every readiness check at th (target: PO rule 2026-09-12; OP.2 contract)
 - P1/planned failover_vsx_vsls_mentality_contract — VSX/VSLS semantics: CP per-VS state independent of chassis (target: PO statement 2026-09-12; needs vendor-se)
@@ -52,6 +54,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T15:28:05Z
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
 - P2/planned device_admin_accounts_and_privileges
+- P2/planned failover_phase_d_has_no_build_record
 - P2/planned gov_orch_turn_counter_blind_to_codex_stream
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
@@ -111,7 +114,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T15:28:05Z
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
 - NXS-LOCAL-0346 (automated_validated)
-- NXS-LOCAL-0345 (automated_validated)
-- NXS-LOCAL-0344 (automated_validated)
+- NXS-LOCAL-0345 (blocked)
+- NXS-LOCAL-0344 (blocked)
 - NXS-LOCAL-0343 (automated_validated)
 - NXS-LOCAL-0342 (automated_validated)

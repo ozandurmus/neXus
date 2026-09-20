@@ -14,21 +14,23 @@
     },
     {
       "build": "NXS-LOCAL-0345",
-      "status": "automated_validated",
+      "status": "blocked",
       "title": "Failover engine phase C: controlled manual execution under CLASS 2 invariants",
       "summary": "Implemented at-most-once command submission, two-sided JIT precondition re-check, ClusterXL and PAN HA executors behind a server-owned pilot fence, and sticky OUTCOME_UNKNOWN quarantine. Added the M3 Operations screen.",
       "completed": "2026-09-20",
       "movement": "IMPLEMENTATION",
-      "docs": {}
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0345.md"
     },
     {
       "build": "NXS-LOCAL-0344",
-      "status": "automated_validated",
+      "status": "blocked",
       "title": "Failover engine phase B: cryptographic 4-eyes dual control and read-only dry run",
       "summary": "Implemented 4-eyes dual control (requesterId != approverId), single-use HMAC-SHA256 lease tokens with length-prefixed canonical framing, and read-only dry-run plan compilation. No device write is enabled.",
       "completed": "2026-09-20",
       "movement": "IMPLEMENTATION",
-      "docs": {}
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0344.md"
     },
     {
       "build": "NXS-LOCAL-0343",

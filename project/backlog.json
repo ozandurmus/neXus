@@ -522,6 +522,33 @@
       "priority": "P1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "failover_p0_closure_set",
+      "category": "failover",
+      "title": "Failover Engine: close the eight-item P0 set both external final reviews require before the engine may be considered deliverable",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/CODEX_FAILOVER_ENGINE_FINAL_REVIEW.md Required P0 Closure Set",
+      "note": ""
+    },
+    {
+      "id": "failover_phase_d_has_no_build_record",
+      "category": "failover",
+      "title": "Failover Engine Phase D was implemented and externally reviewed but carries no build_history record",
+      "status": "planned",
+      "priority": "P2",
+      "target": "ui2 job-engine failover schedule package; CLAUDE_FAILOVER_PHASE_D_REVIEW.md and CODEX_FAILOVER_PHASE_D_REVIEW.md",
+      "note": ""
+    },
+    {
+      "id": "failover_pilot_fence_is_compiled_in",
+      "category": "failover",
+      "title": "Failover pilot allowlist is hardcoded in a constructor and seeds AIView pseudonyms of real fleet devices instead of being recorded configuration",
+      "status": "planned",
+      "priority": "P1",
+      "target": "FailoverPilotAllowlist",
+      "note": ""
     }
   ]
 }
