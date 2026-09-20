@@ -1,0 +1,5 @@
+# Deliver the backup plane as the independent service the reviewed architecture specifies (own port, own vault volume, ui2-service forwards to it), then re-run the security review against the built system
+
+status: planned · target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md; PO decision 2026-09-20 relay NXS-LOCAL-0347 seq 5
+
+Contract drafted 2026-09-20 under NXS-LOCAL-0347: docs/design/UI2_BACKUP_PLANE_SEPARATION_CONTRACT.md (DRAFT - FOR PRODUCT OWNER FREEZE). The separation cannot copy the compliance/configuration pattern, which is stateless by construction with no database or device credentials; the recovery plane needs the vault, the manifest rows and a distinct PAN-OS backup service account, so it moves a credential boundary and a secret-bearing data plane and AGENTS.md requires a frozen contract first. Five decisions are open before freeze: manifest row ownership, quota enforcement (local-path enforces none, so a dedicated PVC is a separate directory and not a separate budget), vendor credential separation, forwarding shape, and migration of the artefacts already in the shared store.
