@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.service.boot;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jooq.JooqAutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -40,7 +41,11 @@ import org.springframework.core.env.Environment;
 // answers 404 while the process looks healthy.
 @SpringBootApplication(
         scanBasePackages = "com.securityexpert.nexus.ui2.service",
-        exclude = {DataSourceAutoConfiguration.class, JooqAutoConfiguration.class})
+        exclude = {
+            DataSourceAutoConfiguration.class,
+            JooqAutoConfiguration.class,
+            FlywayAutoConfiguration.class
+        })
 // The `…service.api` controllers were all written before their collaborators
 // were beans; step 1 excluded the whole package deliberately, one movement at
 // a time removing the filter as it wires each controller's own collaborators.
