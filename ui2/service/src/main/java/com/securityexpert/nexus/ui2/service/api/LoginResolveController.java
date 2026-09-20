@@ -25,9 +25,11 @@ public final class LoginResolveController {
     }
 
     private final LoginFlow loginFlow;
+    private final SessionCookieWriter cookieWriter;
 
-    public LoginResolveController(LoginFlow loginFlow) {
+    public LoginResolveController(LoginFlow loginFlow, SessionCookieWriter cookieWriter) {
         this.loginFlow = loginFlow;
+        this.cookieWriter = cookieWriter;
     }
 
     @PostMapping("/login/resolve")
@@ -42,7 +44,7 @@ public final class LoginResolveController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
         }
         LoginFlow.ResolveResult.TakenOver takenOver = (LoginFlow.ResolveResult.TakenOver) result;
-        LoginController.setSessionCookie(response, takenOver.rawCookieValue());
+        cookieWriter.write(response, takenOver.rawCookieValue());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("ok", true);
         return ResponseEntity.ok(body);

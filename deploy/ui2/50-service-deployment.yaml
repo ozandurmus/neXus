@@ -78,6 +78,11 @@ spec:
               value: "http://ui2-configuration.ui2.svc.cluster.local:8084"
             - name: UI2_COMPLIANCE_SERVICE_URL
               value: "http://ui2-compliance.ui2.svc.cluster.local:8085"
+            - name: UI2_SESSION_COOKIE_SECURE
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: session_cookie_secure
             - name: LOGGING_LEVEL_ROOT
               valueFrom:
                 configMapKeyRef:

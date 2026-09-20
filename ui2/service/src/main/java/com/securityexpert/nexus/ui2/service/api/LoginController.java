@@ -37,11 +37,19 @@ public final class LoginController {
 
     private final MechanismRegistry mechanismRegistry;
     private final LoginFlow loginFlow;
+    private final SessionCookieWriter cookieWriter;
     private final com.securityexpert.nexus.ui2.service.security.LoginAttemptThrottle directoryThrottle = new com.securityexpert.nexus.ui2.service.security.LoginAttemptThrottle();
 
-    public LoginController(MechanismRegistry mechanismRegistry, LoginFlow loginFlow) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public LoginController(MechanismRegistry mechanismRegistry, LoginFlow loginFlow, SessionCookieWriter cookieWriter) {
         this.mechanismRegistry = mechanismRegistry;
         this.loginFlow = loginFlow;
+        this.cookieWriter = cookieWriter;
+    }
+
+    /** Convenience for call sites that carry no cookie configuration; keeps the secure-by-default posture. */
+    public LoginController(MechanismRegistry mechanismRegistry, LoginFlow loginFlow) {
+        this(mechanismRegistry, loginFlow, SessionCookieWriter.secureByDefault());
     }
 
     @PostMapping("/login")
@@ -80,7 +88,7 @@ public final class LoginController {
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(LoginFlow.conflictBody(conflict));
             }
             LoginFlow.LoginResult.NewSession newSession = (LoginFlow.LoginResult.NewSession) result;
-            setSessionCookie(response, newSession.rawCookieValue());
+            cookieWriter.write(response, newSession.rawCookieValue());
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("ok", true);
             return ResponseEntity.ok(body);
@@ -91,15 +99,6 @@ public final class LoginController {
 
     public ResponseEntity<Map<String, Object>> login(LoginRequest request, HttpServletResponse response) {
         return login(request, response, null);
-    }
-
-    static void setSessionCookie(HttpServletResponse response, String rawCookieValue) {
-        jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("ui2_session", rawCookieValue);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(true);
-        cookie.setPath("/");
-        cookie.setAttribute("SameSite", "Strict");
-        response.addCookie(cookie);
     }
 
     private static Map<String, Object> errorBody(String error) {

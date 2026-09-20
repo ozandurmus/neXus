@@ -22,6 +22,14 @@ data:
   log_level: INFO
   ingress_host: ui2.nexus.local
 
+  # The session cookie's Secure attribute. The service defaults it to `true`;
+  # this stage overrides it because `60-ingress.yaml` terminates no TLS and a
+  # browser refuses to store a Secure cookie from a plain-HTTP origin — which
+  # left every login succeeding server-side while the client stayed
+  # unauthenticated. Raise this to "true" the moment the ingress serves HTTPS;
+  # it is a per-stage value, not a manifest difference (PORT-2).
+  session_cookie_secure: "false"
+
   # FIRST-1: the database workload initializes an empty cluster, creates the
   # `ui2` database and the `ui2_migrate` and `ui2_app` roles, and nothing
   # else. The image's own initialization creates the database and the

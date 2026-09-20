@@ -30,15 +30,17 @@ public final class SessionLogoutController {
     private static final String SESSION_COOKIE_NAME = "ui2_session";
 
     private final SessionSelfLogoutService logoutService;
+    private final SessionCookieWriter cookieWriter;
 
-    public SessionLogoutController(SessionSelfLogoutService logoutService) {
+    public SessionLogoutController(SessionSelfLogoutService logoutService, SessionCookieWriter cookieWriter) {
         this.logoutService = logoutService;
+        this.cookieWriter = cookieWriter;
     }
 
     @PostMapping("/session/logout")
     public ResponseEntity<Map<String, Object>> logout(HttpServletRequest request, HttpServletResponse response) {
         Optional<String> rawCookie = findSessionCookie(request);
-        clearSessionCookie(response);
+        cookieWriter.clear(response);
         if (rawCookie.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody());
         }
@@ -56,16 +58,6 @@ public final class SessionLogoutController {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("error", "SESSION_INVALID");
         return body;
-    }
-
-    private static void clearSessionCookie(HttpServletResponse response) {
-        Cookie cookie = new Cookie(SESSION_COOKIE_NAME, "");
-        cookie.setHttpOnly(true);
-        cookie.setSecure(true);
-        cookie.setPath("/");
-        cookie.setAttribute("SameSite", "Strict");
-        cookie.setMaxAge(0);
-        response.addCookie(cookie);
     }
 
     private static Optional<String> findSessionCookie(HttpServletRequest request) {
