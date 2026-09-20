@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:35:51Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:48:54Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -71,6 +71,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:35:51Z
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
 - P2/planned project_plan_crypto_placeholder_sentinel_lost
+- P2/planned regression_mapping_backend_trees_unmapped
 - P2/planned ui2_password_policy_configurable
 - P2/planned ui2_role_display
 - P3/planned cp_cphaprob_peer_observation_corroboration
