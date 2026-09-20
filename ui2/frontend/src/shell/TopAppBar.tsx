@@ -106,11 +106,6 @@ export function TopAppBar() {
         </Box>
         <NexusWordmark height={26} color={m3.onSurface} />
       </Box>
-      <Box sx={{ flex: 1, maxWidth: 520, height: 48, display: "flex", alignItems: "center", gap: 1.5,
-                 px: 2, borderRadius: "24px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, fontSize: 15 }}>
-        <Icon name="search" size={20} />
-        Search devices, settings, evidence
-      </Box>
       <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2, color: m3.onSurfaceVar }}>
         <Box
           sx={{
