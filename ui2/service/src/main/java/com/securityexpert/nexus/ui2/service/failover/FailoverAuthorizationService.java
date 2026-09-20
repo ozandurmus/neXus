@@ -9,6 +9,7 @@ import com.securityexpert.nexus.ui2.jobs.failover.model.PreflightReport;
 import com.securityexpert.nexus.ui2.jobs.failover.model.PreflightVerdict;
 import com.securityexpert.nexus.ui2.jobs.failover.plan.FailoverDryRunPlanner;
 import com.securityexpert.nexus.ui2.jobs.failover.plan.FailoverExecutionPlan;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
@@ -37,6 +38,7 @@ public class FailoverAuthorizationService {
     private final Map<String, FailoverLeaseToken> activeLeaseTokens = new ConcurrentHashMap<>();
     private final Set<String> consumedTokenIds = ConcurrentHashMap.newKeySet();
 
+    @Autowired
     public FailoverAuthorizationService(PreflightService preflightService) {
         this.preflightService = Objects.requireNonNull(preflightService, "preflightService must not be null");
         byte[] secretKey = new byte[32];

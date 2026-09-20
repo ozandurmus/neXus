@@ -6,6 +6,7 @@ import com.securityexpert.nexus.ui2.jobs.failover.model.ClusterEvidenceSnapshot;
 import com.securityexpert.nexus.ui2.jobs.failover.model.ClusterMemberEvidence;
 import com.securityexpert.nexus.ui2.jobs.failover.pilot.FailoverPilotAllowlist;
 import com.securityexpert.nexus.ui2.jobs.failover.schedule.DriftEvaluationResult;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -54,6 +55,7 @@ public class FailoverExecutionService {
         this(authzService, preflightService, pilotAllowlist, new DurableQuarantineStore());
     }
 
+    @Autowired
     public FailoverExecutionService(
         FailoverAuthorizationService authzService,
         PreflightService preflightService,
