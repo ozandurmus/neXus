@@ -567,6 +567,15 @@
       "priority": "P1",
       "target": "docs/design/ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md; PO decision 2026-09-20 relay NXS-LOCAL-0347 seq 5",
       "note": ""
+    },
+    {
+      "id": "vault_has_no_enforced_quota_on_a_shared_host",
+      "category": "backup",
+      "title": "The artefact/recovery store has no enforced quota: local-path ignores the PVC size, evidence and recovery planes share one directory tree, and the host also carries another product's production workload",
+      "status": "planned",
+      "priority": "P1",
+      "target": "deploy/ui2/35-artefact-store-pvc.yaml; storage class local-path; PO decision needed on storage class or filesystem quota",
+      "note": ""
     }
   ]
 }

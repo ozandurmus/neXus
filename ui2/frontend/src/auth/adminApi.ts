@@ -76,6 +76,35 @@ export function listDeviceBackups(deviceId: string): Promise<{ backups: BackupAr
   return call(`/devices/${encodeURIComponent(deviceId)}/backups`, "GET");
 }
 
+/** Every recorded backup artefact across the fleet, newest first as the store returns them. */
+export function listFleetBackups(): Promise<{ backups: BackupArtefact[] }> {
+  return call("/backups", "GET");
+}
+
+export interface BackupPolicy {
+  readonly policy_id: string;
+  readonly daily_backup_cron: string;
+  readonly weekly_snapshot_cron: string;
+  readonly backup_retention_days: number;
+  readonly snapshot_retention_depth: number;
+  readonly major_alert_enabled: boolean;
+  readonly storage_capacity: string;
+}
+
+/** Read-only: the service answers 405 POLICY_IMMUTABLE to any write, by design. */
+export function getBackupPolicy(): Promise<BackupPolicy> {
+  return call("/api/v2/backups/policies", "GET");
+}
+
+export interface BackupDeviations {
+  readonly active_major_deviations: readonly unknown[];
+  readonly total_deviations_checked: number;
+}
+
+export function getBackupDeviations(): Promise<BackupDeviations> {
+  return call("/api/v2/backups/deviations", "GET");
+}
+
 /** BK-12 manual backup (14K BW-4): posts to the collect route with a required reason. */
 export function collectDeviceBackup(deviceId: string, reason: string): Promise<{ job_id: string }> {
   return call(`/devices/${encodeURIComponent(deviceId)}/backup/collect`, "POST", { reason });

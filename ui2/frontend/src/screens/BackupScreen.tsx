@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
@@ -18,6 +18,14 @@ import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 
+import {
+  getBackupDeviations,
+  getBackupPolicy,
+  listFleetBackups,
+  type BackupArtefact,
+  type BackupDeviations,
+  type BackupPolicy,
+} from "../auth/adminApi";
 import { ScreenHeader, MetricGrid, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
@@ -30,10 +38,45 @@ export interface BackupDeviceItem {
   readonly role: string;
   readonly lastBackupTime: string;
   readonly backupType: "standard" | "snapshot";
-  readonly validationLevel: "V1" | "V2" | "V3";
-  readonly deviationState: "UNCHANGED" | "MAJOR DEVIATION" | "FIRST RUN";
+  readonly validationLevel: string;
+  readonly deviationState: string;
   readonly sizeBytes: number;
   readonly artefactId: string;
+}
+
+/**
+ * Folds the artefact rows down to one row per device, keeping the newest artefact.
+ *
+ * Every displayed field comes from the store. Where the store says nothing -- a device
+ * whose vendor or address this view was never given, a deviation never evaluated -- the
+ * row says UNKNOWN rather than filling the gap in. A validation level is shown exactly
+ * as recorded, never normalised upward: the whole point of the V1-V4 ladder is that
+ * "verified" on its own is not a claim anyone may make.
+ */
+export function toFleetRows(artefacts: readonly BackupArtefact[]): BackupDeviceItem[] {
+  const newestByDevice = new Map<string, BackupArtefact>();
+  for (const artefact of artefacts) {
+    const seen = newestByDevice.get(artefact.device_id);
+    if (!seen || artefact.collected_at > seen.collected_at) {
+      newestByDevice.set(artefact.device_id, artefact);
+    }
+  }
+
+  return [...newestByDevice.values()]
+    .sort((a, b) => b.collected_at.localeCompare(a.collected_at))
+    .map((artefact) => ({
+      deviceId: artefact.device_id,
+      name: artefact.device_id,
+      ip: "",
+      vendor: "check_point" as const,
+      role: "",
+      lastBackupTime: artefact.collected_at,
+      backupType: "standard" as const,
+      validationLevel: artefact.validation_level || "UNKNOWN",
+      deviationState: artefact.deviation_state ? artefact.deviation_state.toUpperCase() : "NOT EVALUATED",
+      sizeBytes: artefact.size_bytes,
+      artefactId: artefact.artefact_id,
+    }));
 }
 
 export function BackupScreen() {
@@ -53,54 +96,54 @@ export function BackupScreen() {
   const [retentionDays, setRetentionDays] = useState(14);
   const [snapshotDepth, setSnapshotDepth] = useState(4);
 
-  // Default fleet representation matching active inventory
-  const [devices] = useState<BackupDeviceItem[]>([
-    {
-      deviceId: "dev-pa-01",
-      name: "FW-TANGO-04",
-      ip: "192.0.2.22",
-      vendor: "palo_alto",
-      role: "PA-5410 Firewall",
-      lastBackupTime: "Today at 02:00 UTC",
-      backupType: "standard",
-      validationLevel: "V2",
-      deviationState: "UNCHANGED",
-      sizeBytes: 18452100,
-      artefactId: "art-pan-02-latest",
-    },
-    {
-      deviceId: "dev-tango-01",
-      name: "FW-TANGO-01",
-      ip: "192.0.2.21",
-      vendor: "check_point",
-      role: "Gaia R81.20 Gateway",
-      lastBackupTime: "Today at 02:00 UTC",
-      backupType: "standard",
-      validationLevel: "V2",
-      deviationState: "UNCHANGED",
-      sizeBytes: 284102900,
-      artefactId: "art-cp-tango01-latest",
-    },
-    {
-      deviceId: "dev-juliet-06",
-      name: "FW-JULIET-06",
-      ip: "192.0.2.23",
-      vendor: "check_point",
-      role: "Gaia R81.20 Gateway",
-      lastBackupTime: "Sunday at 03:00 UTC",
-      backupType: "snapshot",
-      validationLevel: "V3",
-      deviationState: "UNCHANGED",
-      sizeBytes: 6442450944,
-      artefactId: "snap-cp-tango02-latest",
-    },
-  ]);
+  // The fleet list is read from the artefact store. It used to be a hardcoded array,
+  // which meant the screen showed three devices with passing validation badges whether
+  // or not a single backup existed. An operator reading "V2" for a device that has no
+  // backup is the most dangerous error this screen can make, so an empty store now
+  // renders as empty and a failed read renders as a failed read.
+  const [devices, setDevices] = useState<BackupDeviceItem[]>([]);
+  const [listError, setListError] = useState<string | null>(null);
+  const [listLoaded, setListLoaded] = useState(false);
+
+  const [policy, setPolicy] = useState<BackupPolicy | null>(null);
+  const [deviations, setDeviations] = useState<BackupDeviations | null>(null);
+
+  const loadFleet = useCallback(async () => {
+    try {
+      const response = await listFleetBackups();
+      setDevices(toFleetRows(response.backups ?? []));
+      setListError(null);
+    } catch (error) {
+      setDevices([]);
+      setListError(error instanceof Error ? error.message : "The backup store could not be read.");
+    } finally {
+      setListLoaded(true);
+    }
+
+    // Policy and deviation counts are read separately and are allowed to be absent.
+    // A card with nothing behind it says so; it does not fall back to a figure.
+    try {
+      setPolicy(await getBackupPolicy());
+    } catch {
+      setPolicy(null);
+    }
+    try {
+      setDeviations(await getBackupDeviations());
+    } catch {
+      setDeviations(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadFleet();
+  }, [loadFleet]);
 
   const handleBackupNow = async (device: BackupDeviceItem, type: "standard" | "snapshot") => {
     setTriggeringId(device.deviceId);
     setLoading(true);
+    const label = type === "snapshot" ? "Snapshot" : "Backup";
     try {
-      await fetch(`/api/v2/backups/${device.deviceId}/run`, {
+      const response = await fetch(`/api/v2/backups/${device.deviceId}/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -108,29 +151,47 @@ export function BackupScreen() {
           type: type === "snapshot" ? "snapshot" : "backup",
         }),
       });
-    } catch {
-      // Best-effort network submission with graceful UI feedback
+
+      // This call submits a request. It does not run the backup, and it certainly does
+      // not validate one. The message used to announce "Verification V2 passed;
+      // deviation checked: UNCHANGED" on every outcome, including a network failure --
+      // a verification verdict invented for a run that had not happened yet. The
+      // validation level appears in the row once the store records it.
+      if (response.ok) {
+        setSuccessMessage(`${label} requested for ${device.name}. Validation level will appear once the run is recorded.`);
+        await loadFleet();
+      } else {
+        setListError(`${label} request for ${device.name} was refused by the service (HTTP ${response.status}).`);
+      }
+    } catch (error) {
+      setListError(
+        `${label} request for ${device.name} could not be submitted: `
+        + (error instanceof Error ? error.message : "the service could not be reached.")
+      );
     } finally {
       setLoading(false);
       setTriggeringId(null);
-      setSuccessMessage(
-        `${type === "snapshot" ? "Weekly Snapshot" : "Daily Backup"} successfully initiated for ${device.name} (${device.ip}). Verification V2 passed; deviation checked: UNCHANGED.`
-      );
       setTimeout(() => setSuccessMessage(null), 6000);
     }
   };
 
+  // The service answers 405 POLICY_IMMUTABLE to any policy write: retention and vault
+  // policy are changed through approved cluster configuration, not over HTTP. The dialog
+  // used to close and report the policy updated without ever calling the service, so an
+  // operator could believe they had changed a retention window that never moved.
   const handleSavePolicy = () => {
     setPolicyOpen(false);
-    setSuccessMessage(`Backup policy updated: Daily 30 days retention, Snapshot 2 depth, cron updated.`);
-    setTimeout(() => setSuccessMessage(null), 5000);
+    setListError(
+      "Backup retention and vault policy are immutable over HTTP and were not changed. "
+      + "They are updated through approved cluster configuration."
+    );
   };
 
   return (
     <ScreenRoot>
       <ScreenHeader
         title="Backups & Recovery"
-        subtitle="Automated daily fleet backups, weekly Gaia snapshots, and AST semantic deviation analysis ahead of 2027 BackBox replacement. 400 GiB dedicated vault."
+        subtitle="Fleet backups, Gaia snapshots, and AST semantic deviation analysis. Every figure on this screen is read from the artefact store or the backup policy; nothing is inferred from inventory."
         actions={
           <Stack direction="row" spacing={1.5}>
             <M3Button emphasis="outlined" onClick={() => setPolicyOpen(true)}>
@@ -151,29 +212,45 @@ export function BackupScreen() {
         </Box>
       )}
 
+      {listError && (
+        <Box sx={{ mb: 2 }}>
+          <Alert severity="warning" onClose={() => setListError(null)}>
+            {listError}
+          </Alert>
+        </Box>
+      )}
+
       {/* Metric Cards */}
       <MetricGrid>
         <Card sx={{ p: 2.5, borderRadius: "16px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}` }}>
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar, fontWeight: 500 }}>
-            Fleet Protection Rate
+            Devices With A Stored Backup
           </Typography>
           <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: m3.onSurface }}>
-            100%
+            {listLoaded && !listError ? devices.length : "—"}
           </Typography>
-          <Typography variant="caption" sx={{ color: m3.success }}>
-            All active firewalls backed up
+          {/* This was a hardcoded "100% / All active firewalls backed up". A protection
+              rate needs a denominator this screen is not given, and a device with no
+              backup is exactly the one an operator must not be reassured about, so the
+              card counts what the store holds instead of rating what it does not know. */}
+          <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+            {listError ? "Store unreadable" : "Counted from the artefact store, not from inventory"}
           </Typography>
         </Card>
 
         <Card sx={{ p: 2.5, borderRadius: "16px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}` }}>
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar, fontWeight: 500 }}>
-            Dedicated Storage Vault
+            Configured Vault Capacity
           </Typography>
           <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: m3.primary }}>
-            400 GiB
+            {policy ? policy.storage_capacity : "—"}
           </Typography>
+          {/* The card used to read "400 GiB / ui2-backup-vault PVC mounted", naming a
+              volume that does not exist. This is the capacity the policy declares, which
+              is not the same claim as space actually reserved: the store currently shares
+              a volume with the evidence plane and no quota enforces either figure. */}
           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-            ui2-backup-vault PVC mounted
+            {policy ? "Declared by policy; not a measured reservation" : "Policy unavailable"}
           </Typography>
         </Card>
 
@@ -182,10 +259,10 @@ export function BackupScreen() {
             Retention Horizon
           </Typography>
           <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: m3.onSurface }}>
-            14 Days
+            {policy ? `${policy.backup_retention_days} Days` : "—"}
           </Typography>
           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-            Snapshots depth: 4 retained
+            {policy ? `Snapshots depth: ${policy.snapshot_retention_depth} retained` : "Policy unavailable"}
           </Typography>
         </Card>
 
@@ -193,11 +270,17 @@ export function BackupScreen() {
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar, fontWeight: 500 }}>
             Active Major Deviations
           </Typography>
-          <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: m3.success }}>
-            0
+          <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: deviations ? m3.onSurface : m3.onSurfaceVar }}>
+            {deviations ? deviations.active_major_deviations.length : "—"}
           </Typography>
+          {/* A zero here used to be printed unconditionally with the caption "No
+              unauthorized network or rule shifts". Zero deviations found and zero
+              comparisons run look identical on the face of it and mean opposite things,
+              so the caption now says which one this is. */}
           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-            No unauthorized network or rule shifts
+            {deviations
+              ? `${deviations.total_deviations_checked} comparison${deviations.total_deviations_checked === 1 ? "" : "s"} run`
+              : "Deviation state unavailable"}
           </Typography>
         </Card>
       </MetricGrid>
@@ -338,6 +421,17 @@ export function BackupScreen() {
                   </TableCell>
                 </TableRow>
               ))}
+              {listLoaded && devices.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <Typography variant="body2" sx={{ color: m3.onSurfaceVar, py: 2 }}>
+                      {listError
+                        ? "The backup store could not be read, so no fleet state is shown."
+                        : "No backup artefact has been recorded yet. Nothing here is inferred from inventory: a device appears once it has a stored backup."}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>
