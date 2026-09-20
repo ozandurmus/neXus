@@ -18,7 +18,9 @@ import { useSession } from "../auth/SessionContext";
  * The canvas draws six collapsed rail destinations (Overview, Devices,
  * Config, Compliance, Operations, Admin) and, expanded, groups four of them
  * under section headers ("Devices", "Planes", "Operations",
- * "Administration") each holding two leaves. Two of those headers
+ * "Administration"). Most hold two leaves; "Operations" holds three, because
+ * "Backups & Recovery" belongs to the Operations plane it already gates on
+ * rather than to "Planes", where it sat until NXS-LOCAL-0347. Two of those headers
  * (Operations, Administration) carry no leaf named after the group itself,
  * so the header doubles as that group's own destination -- exactly what the
  * collapsed rail already points at. "Devices" and "Planes" are pure section
@@ -68,7 +70,6 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
     leaves: [
       { label: "Configuration", screen: "configuration", requiredPlane: "Config" },
       { label: "Compliance", screen: "compliance", requiredPlane: "Compliance" },
-      { label: "Backups & Recovery", screen: "backups", requiredPlane: "Operations" },
     ],
   },
   {
@@ -77,6 +78,7 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
     requiredPlane: "Operations",
     leaves: [
       { label: "HA & readiness", screen: "operations", requiredPlane: "Operations" },
+      { label: "Backups & Recovery", screen: "backups", requiredPlane: "Operations" },
       { label: "Jobs", requiredPlane: "Operations" },
     ],
   },
