@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-09-20T21:57:48Z",
+  "created_at": "2026-09-20T22:07:00Z",
   "entries": [
     {
       "actor": "po",
@@ -12,13 +12,13 @@
           "Running it over the path set of pull request 434 still does not return blocked",
           "Running it over a path in no component still returns blocked",
           "An empty path set still returns blocked, and a documentation-only set still returns skip",
-          "Every prefix named in requirements resolves to a directory or file that exists in the working tree; a test asserts this, so a fictional prefix cannot be added again",
-          "tests/test_ci_regression_scope.py covers each case above and passes"
+          "tests/test_ci_regression_scope.py covers each case above and passes",
+          "Every prefix in every component matches at least one existing path in the working tree, asserted by a test that walks the tree rather than by inspection, so a prefix matching nothing cannot be added again"
         ],
         "baseline": {
           "authority": "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md section 7 (FROZEN, 2026-09-16). Visible blocking for anything unmapped stays; nothing routes to a full suite by surprise.",
-          "engineering": "Branch feature/regression-mapping-discovery-and-inventory at 7a74a3a, pull request 435 open against main. This movement corrects that branch's classifier rather than starting a new one.",
-          "observed": "NXS-LOCAL-0351 added inventory and discovery components to the classifier and opened pull request 435. The inventory half works: the path set of pull request 434 now classifies as inventory instead of blocked. The discovery half does not exist. It is declared as DISCOVERY_PREFIXES = ('ui2/discovery/',) and there is no such directory in this repository, so every real discovery change still classifies as blocked. Verified by running the branch's own classifier over a real discovery path, ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/cp/MgmtCliEnumerationAdapter.java, which returns blocked. The prefixes were guessed rather than measured. Two acceptance criteria of that movement therefore fail."
+          "engineering": "main carries the merged mapping from pull request 435 at 9720b59. The discovery component there is fictional.",
+          "observed": "NXS-LOCAL-0352 stopped on a contradiction in its own packet and was right to. It was given ui2/frontend/src/screens/Inventory, a filename prefix matching InventoryPanels.tsx and InventoryScreen.tsx, while also being required to make every mapped prefix resolve to a directory or file that exists. Both cannot hold. The answer recorded at seq 3 of that record corrects the rule rather than the prefix: a mapped prefix is valid when at least one existing path in the working tree starts with it. That still catches the original failure, because ui2/discovery/ matches nothing, and keeps a filename prefix usable. The underlying defect is unchanged: NXS-LOCAL-0351 mapped discovery to ui2/discovery/, which does not exist, so every real discovery change still classifies as blocked on main today."
         },
         "context_not_loaded": [
           "docs/history/**",
@@ -27,15 +27,15 @@
         "deployment_direction": "local validation only",
         "git": {
           "base": "origin/main",
-          "lane": "feature/regression-mapping-discovery-and-inventory"
+          "lane": "feature/discovery-mapping-existence-rule"
         },
         "invariants": [
-          "A mapped prefix must exist in the tree. The previous movement's failure was a declared path that resolves to nothing, and the new existence test is what stops it recurring.",
+          "A mapped prefix must match something. The earlier failure was a prefix matching nothing at all, and the new test is what stops it recurring; it asserts prefix matching, not path resolution.",
           "Discovery and inventory stay separate; they are two features headed for two microservices",
           "Fail closed: when in doubt the classifier blocks",
           "The frozen record governs: visible blocking, no surprise full suite"
         ],
-        "merge_gate": "Push to the existing branch so pull request 435 carries the correction. Do not open a second pull request and do not merge. Report the state of 435 in the SESSION_CLOSE.",
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
         "movement_type": "IMPLEMENTATION",
         "objective": "Make the discovery component map to the paths discovery actually occupies, and keep inventory and discovery disjoint, so that a discovery change is routed to discovery tests instead of blocking.",
         "output_contract": [
@@ -59,7 +59,7 @@
         "risks": [
           "Do not infer these prefixes or shorten them. They were listed from the working tree and are given verbatim for that reason.",
           "Adding the service-side inventory prefixes widens what routes to inventory. Confirm the inventory selection actually covers those tests, and say so in the SESSION_CLOSE if it does not.",
-          "This movement continues an existing branch with an open pull request. Push to that same branch so pull request 435 carries the correction rather than opening a second one."
+          "Pull request 435 is merged and its branch is gone, so this movement opens its own branch and its own pull request against main."
         ],
         "scope": {
           "in": [
@@ -97,38 +97,19 @@
         ]
       },
       "seq": 1,
-      "timestamp": "2026-09-20T21:57:48Z"
-    },
-    {
-      "actor": "engineer",
-      "marker": "RELAY_QUESTION",
-      "seq": 2,
-      "subject": "Required path absent",
-      "text": "The required inventory prefix ui2/frontend/src/screens/Inventory is absent, but the supplied PR-434 path set depends on it to avoid blocked. Provide an existing exact replacement; none was inferred.",
-      "timestamp": "2026-09-20T22:05:07Z"
-    },
-    {
-      "actor": "po",
-      "authorized_by": "Product Owner - chat directive 2026-09-20",
-      "marker": "RELAY_DECISION",
-      "scope": "The prefix existence rule in the regression mapping and its test. Nothing else in the movement changes.",
-      "seq": 3,
-      "subject": "The existence rule is the thing to correct, not the prefix",
-      "supersedes": "the existence criterion in this movement's own SESSION_START",
-      "text": "The engineer is right and the contradiction is this packet's. It supplied ui2/frontend/src/screens/Inventory, which is a filename prefix matching InventoryPanels.tsx and InventoryScreen.tsx, while also requiring that every mapped prefix resolve to a directory or file that exists. Those two cannot both hold. The rule is what changes, not the prefix: a mapped prefix is valid when at least one existing path in the working tree starts with it. That still catches the failure it was written for, because ui2/discovery/ matches nothing at all, and it keeps a filename prefix usable so a new Inventory screen is covered without editing the mapping. The inventory frontend entries are therefore ui2/frontend/src/screens/Inventory, ui2/frontend/tests/Inventory, ui2/frontend/src/screens/DeviceRegistryPanel.tsx, ui2/frontend/src/screens/DeviceWorkspaceScreen.tsx and ui2/frontend/src/shell/deviceCopy.ts, and the existence test asserts prefix matching rather than path resolution.",
-      "timestamp": "2026-09-20T22:06:25Z"
+      "timestamp": "2026-09-20T22:07:00Z"
     }
   ],
-  "id": "NXS-LOCAL-0352",
-  "movement": "NXS-LOCAL-0352",
+  "id": "NXS-LOCAL-0353",
+  "movement": "NXS-LOCAL-0353",
   "next_actor": "engineer",
   "refs": [
     "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md",
-    "relay/NXS-LOCAL-0351-regression-mapping-discovery-and-invento.json",
     "scripts/ci_regression_scope.py",
-    "tests/test_ci_regression_scope.py"
+    "tests/test_ci_regression_scope.py",
+    "relay/NXS-LOCAL-0352-discovery-mapping-measured-not-guessed.json"
   ],
   "schema_version": 1,
-  "status": "AWAITING_ENGINEER",
-  "updated_at": "2026-09-20T22:06:25Z"
+  "status": "OPEN",
+  "updated_at": "2026-09-20T22:07:00Z"
 }
