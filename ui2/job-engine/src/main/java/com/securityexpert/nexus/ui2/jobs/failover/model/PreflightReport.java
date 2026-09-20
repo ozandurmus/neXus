@@ -19,7 +19,8 @@ public record PreflightReport(
     int passCount,
     int failCount,
     int warningCount,
-    int blockingFailureCount
+    int blockingFailureCount,
+    ClusterEvidenceSnapshot evidenceSnapshot
 ) {
     public PreflightReport {
         Objects.requireNonNull(clusterId, "clusterId must not be null");
@@ -35,12 +36,46 @@ public record PreflightReport(
         }
     }
 
+    /**
+     * Backward-compatible constructor for call sites that do not carry the source
+     * evidence snapshot forward. Such reports can never satisfy a downstream
+     * single-snapshot identity check and will correctly evaluate as NOT_EVALUABLE.
+     */
+    public PreflightReport(
+        String clusterId,
+        String maskedClusterName,
+        String vendor,
+        String haMode,
+        Instant generatedAt,
+        PreflightVerdict overallVerdict,
+        List<CheckResult> checks,
+        int totalChecks,
+        int passCount,
+        int failCount,
+        int warningCount,
+        int blockingFailureCount
+    ) {
+        this(clusterId, maskedClusterName, vendor, haMode, generatedAt, overallVerdict, checks,
+            totalChecks, passCount, failCount, warningCount, blockingFailureCount, null);
+    }
+
     public static PreflightReport fromResults(
         String clusterId,
         String maskedClusterName,
         String vendor,
         String haMode,
         List<CheckResult> results
+    ) {
+        return fromResults(clusterId, maskedClusterName, vendor, haMode, results, null);
+    }
+
+    public static PreflightReport fromResults(
+        String clusterId,
+        String maskedClusterName,
+        String vendor,
+        String haMode,
+        List<CheckResult> results,
+        ClusterEvidenceSnapshot evidenceSnapshot
     ) {
         int pass = 0;
         int fail = 0;
@@ -76,7 +111,8 @@ public record PreflightReport(
             pass,
             fail,
             warn,
-            blockingFails
+            blockingFails,
+            evidenceSnapshot
         );
     }
 }

@@ -32,6 +32,7 @@ public class PreflightRegistry {
         register(new PreemptionAwarenessCheck());
         register(new FlapHistoryCheck());
         register(new PendingCommitCheck());
+        register(new ClockHealthCheck());
 
         // Define Required Check Manifests
         Set<String> cpRequired = Set.of(
@@ -44,7 +45,8 @@ public class PreflightRegistry {
             "preflight.checkpoint_pnotes",
             "preflight.standby_resource_headroom",
             "preflight.preemption_awareness",
-            "preflight.flap_history"
+            "preflight.flap_history",
+            "preflight.clock_health"
         );
         requiredManifestByVendor.put("CHECK_POINT", cpRequired);
         requiredManifestByVendor.put("CHECKPOINT", cpRequired);
@@ -60,7 +62,8 @@ public class PreflightRegistry {
             "preflight.paloalto_pending_commits",
             "preflight.standby_resource_headroom",
             "preflight.preemption_awareness",
-            "preflight.flap_history"
+            "preflight.flap_history",
+            "preflight.clock_health"
         );
         requiredManifestByVendor.put("PALO_ALTO", panRequired);
         requiredManifestByVendor.put("PAN_OS", panRequired);
@@ -153,7 +156,8 @@ public class PreflightRegistry {
             snapshot.maskedClusterName(),
             snapshot.vendor(),
             snapshot.haMode(),
-            results
+            results,
+            snapshot
         );
     }
 }

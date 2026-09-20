@@ -125,12 +125,28 @@ function DeviceRow({
             {trailingExtra}
           </Box>
         </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {device.role === "management_server" ? "Management server" : vendorLabel(device.vendor_hint)}
-          {device.model ? ` · ${device.model}` : " · Unknown model"}
-          {device.software_version ? ` · ${device.software_version}` : " · Unknown version"}
-          {device.ha_role ? ` · ${device.ha_role}` : " · No HA role"}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          <Typography
+            variant="caption"
+            sx={{
+              fontFamily: "monospace",
+              fontWeight: 600,
+              color: m3.primary,
+              bgcolor: m3.scHigh,
+              px: 0.75,
+              py: 0.2,
+              borderRadius: "4px",
+            }}
+          >
+            {device.management_ip ?? "No IP"}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {device.role === "management_server" ? "Management server" : vendorLabel(device.vendor_hint)}
+            {device.model ? ` · ${device.model}` : " · Unknown model"}
+            {device.software_version ? ` · ${device.software_version}` : " · Unknown version"}
+            {device.ha_role ? ` · ${device.ha_role}` : " · No HA role"}
+          </Typography>
+        </Box>
       </Box>
     </Box>
   );
@@ -600,7 +616,9 @@ export function InventoryScreen() {
     const matchModel = device.model?.toLowerCase().includes(term);
     const matchVersion = device.software_version?.toLowerCase().includes(term);
     const matchCluster = device.cluster_member_ref?.toLowerCase().includes(term);
-    return Boolean(matchHostname || matchId || matchModel || matchVersion || matchCluster);
+    const matchMgmtIp = device.management_ip?.toLowerCase().includes(term);
+    const matchIps = device.ip_addresses?.toLowerCase().includes(term);
+    return Boolean(matchHostname || matchId || matchModel || matchVersion || matchCluster || matchMgmtIp || matchIps);
   });
 
   const handleBulkCollect = async () => {

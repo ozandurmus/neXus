@@ -83,6 +83,25 @@ public final class ConfigurationCollectService {
         };
     }
 
+    public record BulkOutcome(int enrolledDevices, int admitted, int refused) {
+    }
+
+    /** Admits one read-only configuration job per currently enrolled device. */
+    public BulkOutcome requestCollectAll(String actorFingerprint) {
+        int enrolledDevices = 0;
+        int admitted = 0;
+        for (var device : deviceRepository.listAll()) {
+            if (device.enrollmentState() != com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.ENROLLED) {
+                continue;
+            }
+            enrolledDevices++;
+            if (requestCollect(device.deviceId(), actorFingerprint, Optional.empty()) instanceof Outcome.Admitted) {
+                admitted++;
+            }
+        }
+        return new BulkOutcome(enrolledDevices, admitted, enrolledDevices - admitted);
+    }
+
     private String minuteBucket() {
         Instant now = Instant.now(clock);
         return String.valueOf(now.getEpochSecond() / 60);

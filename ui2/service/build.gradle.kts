@@ -15,6 +15,11 @@ dependencies {
     api(project(":ldap-adapter"))
 
     implementation(libs.spring.boot.starter.web)
+    // Failover Engine Stage 2 (durable schedules/ledger/quarantine): plain
+    // JdbcTemplate over the same C1 section 6 DataSource bean, auto-configured
+    // by Spring Boot once this starter is present -- no second DataSource, no
+    // competing pool.
+    implementation(libs.spring.boot.starter.jdbc)
     // The composition root builds its own DataSource under C1 section 6's
     // secret-file rule, so the driver is a compile dependency here rather
     // than only a transitive runtime one of :persistence.

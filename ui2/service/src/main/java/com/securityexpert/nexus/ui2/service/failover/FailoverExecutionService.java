@@ -5,6 +5,7 @@ import com.securityexpert.nexus.ui2.jobs.failover.execution.*;
 import com.securityexpert.nexus.ui2.jobs.failover.model.ClusterEvidenceSnapshot;
 import com.securityexpert.nexus.ui2.jobs.failover.model.ClusterMemberEvidence;
 import com.securityexpert.nexus.ui2.jobs.failover.pilot.FailoverPilotAllowlist;
+import com.securityexpert.nexus.ui2.jobs.failover.schedule.DriftEvaluationResult;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -13,35 +14,36 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
 /**
- * Orchestrator for Phase C: Controlled Manual Failover Execution.
- * Invariants:
+ * Orchestrator for Phase C & Phase D: Controlled Failover Execution.
+ * Total-function execution invariants:
  * 1. At-most-once command submission: zero blind retries across mutation boundary.
  * 2. Pre-condition JIT re-check: direct two-sided read immediately before mutation.
- *    Any collection failure or standby unreadiness terminates in ABORTED_PRE_MUTATION.
- * 3. Server-owned pilot allowlist fence: denies unapproved production clusters.
- * 4. Fleet-wide concurrency capped at 1.
- * 5. Sticky entity quarantine: ambiguous outcomes lock cluster and members under OUTCOME_UNKNOWN
- *    until 4-eyes audited acknowledgment with fresh two-sided evidence.
+ * 3. Atomic in-lock single-snapshot gate callback for scheduled executions (Astra P0.1 & Claude F-P1.9).
+ * 4. Server-owned pilot allowlist fence: denies unapproved production clusters.
+ * 5. Fleet-wide concurrency capped at 1.
+ * 6. Sticky entity quarantine: ambiguous outcomes or transport drops lock cluster and members
+ *    under OUTCOME_UNKNOWN until CAS 4-eyes audited acknowledgment.
  */
 @Service
 public class FailoverExecutionService {
 
-    public record QuarantineRecord(
-        String clusterRef,
-        String executionId,
-        Instant quarantinedAt,
-        String reason,
-        Set<String> quarantinedMemberIds
-    ) {}
+    @FunctionalInterface
+    public interface ScheduledPreMutationGate {
+        DriftEvaluationResult evaluate(ClusterEvidenceSnapshot snapshot);
+    }
 
     private final FailoverAuthorizationService authzService;
     private final PreflightService preflightService;
     private final FailoverPilotAllowlist pilotAllowlist;
+    private final DurableQuarantineStore quarantineStore;
     private final Map<String, FailoverDeviceExecutor> executors = new ConcurrentHashMap<>();
+
+    // Affirmative allow-list of vendor-safe roles that prove RETURN_TO_SERVICE recovery
+    // succeeded (Claude CF-P0.21). Never widen this via a negative list.
+    private static final Set<String> AFFIRMATIVE_RECOVERED_ROLES = Set.of("ACTIVE", "STANDBY", "READY", "FUNCTIONAL");
 
     private final Semaphore fleetConcurrencySemaphore = new Semaphore(1);
     private final Map<String, Boolean> activeClusterLocks = new ConcurrentHashMap<>();
-    private final Map<String, QuarantineRecord> quarantinedClusters = new ConcurrentHashMap<>();
     private final Map<String, FailoverExecutionResult> executionHistory = new ConcurrentHashMap<>();
 
     public FailoverExecutionService(
@@ -49,9 +51,19 @@ public class FailoverExecutionService {
         PreflightService preflightService,
         FailoverPilotAllowlist pilotAllowlist
     ) {
+        this(authzService, preflightService, pilotAllowlist, new DurableQuarantineStore());
+    }
+
+    public FailoverExecutionService(
+        FailoverAuthorizationService authzService,
+        PreflightService preflightService,
+        FailoverPilotAllowlist pilotAllowlist,
+        DurableQuarantineStore quarantineStore
+    ) {
         this.authzService = Objects.requireNonNull(authzService, "authzService must not be null");
         this.preflightService = Objects.requireNonNull(preflightService, "preflightService must not be null");
         this.pilotAllowlist = Objects.requireNonNull(pilotAllowlist, "pilotAllowlist must not be null");
+        this.quarantineStore = Objects.requireNonNull(quarantineStore, "quarantineStore must not be null");
 
         // Register default executors
         registerExecutor(new CheckPointClusterXLExecutor());
@@ -70,6 +82,33 @@ public class FailoverExecutionService {
         FailoverActionKind actionKind,
         String operatorId
     ) {
+        return executeFailoverInternal(clusterRef, tokenId, clientNonce, actionKind, operatorId, null, null, null);
+    }
+
+    public FailoverExecutionResult executeScheduledFailover(
+        String clusterRef,
+        String tokenId,
+        String clientNonce,
+        FailoverActionKind actionKind,
+        String operatorId,
+        String signedTargetMemberId,
+        Instant executionDeadline,
+        ScheduledPreMutationGate scheduledGate
+    ) {
+        Objects.requireNonNull(executionDeadline, "executionDeadline must not be null for a scheduled execution");
+        return executeFailoverInternal(clusterRef, tokenId, clientNonce, actionKind, operatorId, signedTargetMemberId, executionDeadline, scheduledGate);
+    }
+
+    private FailoverExecutionResult executeFailoverInternal(
+        String clusterRef,
+        String tokenId,
+        String clientNonce,
+        FailoverActionKind actionKind,
+        String operatorId,
+        String signedTargetMemberId,
+        Instant executionDeadline,
+        ScheduledPreMutationGate scheduledGate
+    ) {
         Objects.requireNonNull(clusterRef, "clusterRef must not be null");
         Objects.requireNonNull(tokenId, "tokenId must not be null");
         Objects.requireNonNull(clientNonce, "clientNonce must not be null");
@@ -84,8 +123,8 @@ public class FailoverExecutionService {
             throw new SecurityException("Cluster is not enrolled in the authorized lab pilot allowlist (pilot fence invariant)");
         }
 
-        // 2. Sticky Quarantine Check
-        if (quarantinedClusters.containsKey(clusterRef)) {
+        // 2. Sticky Quarantine Check (Durable store)
+        if (quarantineStore.isClusterQuarantined(clusterRef)) {
             throw new IllegalStateException("Cluster is currently under sticky quarantine due to a previous ambiguous execution");
         }
 
@@ -99,10 +138,21 @@ public class FailoverExecutionService {
                 throw new IllegalStateException("Cluster execution lock is already held for: " + clusterRef);
             }
             try {
-                // 4. Precondition JIT Re-Check (Two-Sided Direct Read)
+                // 4. Precondition JIT Re-Check (Two-Sided Direct Read inside the exclusive lock)
                 ClusterEvidenceSnapshot snapshot = preflightService.buildSnapshotForCluster(clusterRef);
                 String vendor = snapshot.vendor() != null ? snapshot.vendor().toUpperCase(Locale.ROOT) : "";
                 String maskedName = snapshot.maskedClusterName();
+
+                // F-P1.2: Hoist executor resolution before lease consumption
+                FailoverDeviceExecutor executor;
+                try {
+                    executor = resolveExecutor(vendor);
+                } catch (Exception ex) {
+                    return recordAborted(
+                        executionId, clusterRef, maskedName, vendor, actionKind, requestedAt, operatorId,
+                        "Executor resolution failed prior to mutation boundary: " + ex.getClass().getSimpleName()
+                    );
+                }
 
                 Optional<ClusterMemberEvidence> activeOpt = snapshot.activeMember();
                 Optional<ClusterMemberEvidence> standbyOpt = snapshot.standbyMember();
@@ -117,6 +167,15 @@ public class FailoverExecutionService {
                 ClusterMemberEvidence active = activeOpt.get();
                 ClusterMemberEvidence standby = standbyOpt.get();
 
+                // Signed target member enforcement (Claude F-P0.5)
+                if (signedTargetMemberId != null && !signedTargetMemberId.equals(active.memberId())) {
+                    return recordAborted(
+                        executionId, clusterRef, maskedName, vendor, actionKind, requestedAt, operatorId,
+                        "Target member mismatch: live active member (" + active.maskedName() +
+                            ") does not match the signed authorization target"
+                    );
+                }
+
                 // Affirmative standby readiness verification
                 if (!standby.directObservationSuccessful() || !standby.criticalDevicesOk() || !standby.clusterInterfacesUp()) {
                     return recordAborted(
@@ -129,8 +188,19 @@ public class FailoverExecutionService {
                 if (!pilotAllowlist.isExecutionAllowed(clusterRef, active.memberId())) {
                     return recordAborted(
                         executionId, clusterRef, maskedName, vendor, actionKind, requestedAt, operatorId,
-                        "Pilot fence check failed: Target member " + active.memberId() + " is not enrolled in pilot allowlist"
+                        "Pilot fence check failed: target member " + active.maskedName() + " is not enrolled in pilot allowlist"
                     );
+                }
+
+                // 5. In-Lock Scheduled Gate Callback (Claude F-P1.9 & Astra P0.1)
+                if (scheduledGate != null) {
+                    DriftEvaluationResult driftRes = scheduledGate.evaluate(snapshot);
+                    if (!driftRes.isPass()) {
+                        return recordAborted(
+                            executionId, clusterRef, maskedName, vendor, actionKind, requestedAt, operatorId,
+                            "Scheduled pre-mutation gate failed: " + String.join(", ", driftRes.sanitizedMessages())
+                        );
+                    }
                 }
 
                 TwoSidedObservation preObs = TwoSidedObservation.of(
@@ -138,27 +208,46 @@ public class FailoverExecutionService {
                     MemberObservation.of(standby.memberId(), standby.selfState(), standby.directObservationSuccessful(), standby.criticalDevicesOk(), "Precondition read: OK")
                 );
 
-                // 5. Durable Lease Consumption (Crossing Mutation Boundary)
+                // In-lock deadline recheck #1 (Claude CF-P0.10): the scheduled execution deadline
+                // must still hold immediately before the durable lease is consumed.
+                if (executionDeadline != null && !Instant.now().isBefore(executionDeadline)) {
+                    return recordAborted(
+                        executionId, clusterRef, maskedName, vendor, actionKind, requestedAt, operatorId,
+                        "Execution deadline exceeded immediately before lease consumption"
+                    );
+                }
+
+                // 6. Durable Lease Consumption (Crossing Mutation Boundary)
                 FailoverLeaseToken consumedToken;
                 try {
                     consumedToken = authzService.consumeLeaseForExecution(clusterRef, tokenId, clientNonce);
                 } catch (Exception ex) {
                     return recordAborted(
                         executionId, clusterRef, maskedName, vendor, actionKind, requestedAt, operatorId,
-                        "Authorization lease consumption failed: " + ex.getMessage()
+                        "Authorization lease consumption failed: " + ex.getClass().getSimpleName()
+                    );
+                }
+
+                // In-lock deadline recheck #2 (Claude CF-P0.10): re-verify immediately before the
+                // at-most-once mutation is dispatched, closest possible to the mutation boundary.
+                if (executionDeadline != null && !Instant.now().isBefore(executionDeadline)) {
+                    return recordAborted(
+                        executionId, clusterRef, maskedName, vendor, actionKind, requestedAt, operatorId,
+                        "Execution deadline exceeded immediately before mutation dispatch"
                     );
                 }
 
                 Instant boundaryCrossedAt = Instant.now();
 
-                // 6. Submit At-Most-Once Mutation Command
-                FailoverDeviceExecutor executor = resolveExecutor(vendor);
+                // 7. Submit At-Most-Once Mutation Command
                 FailoverCommandResult cmdResult;
                 try {
                     cmdResult = executor.executeAction(active.memberId(), actionKind);
                 } catch (Exception ex) {
-                    cmdResult = FailoverCommandResult.failure(-1, "Command execution error", ex.getMessage());
-                    engageQuarantine(clusterRef, executionId, "Command threw exception across mutation boundary: " + ex.getMessage(),
+                    cmdResult = FailoverCommandResult.failure(-1, "Command execution error", ex.getClass().getSimpleName(),
+                        FailoverCommandResult.DeliveryCertainty.DELIVERY_UNKNOWN);
+                    quarantineStore.engageQuarantine(clusterRef, executionId,
+                        "Command threw exception across mutation boundary: " + ex.getClass().getSimpleName(),
                         Set.of(active.memberId(), standby.memberId()));
                     return recordResult(
                         executionId, clusterRef, maskedName, vendor, actionKind,
@@ -169,24 +258,76 @@ public class FailoverExecutionService {
                     );
                 }
 
+                // F-P1.3 / CF-P0.16 / CF-P0.18: delivery-certainty-typed rejection handling.
                 if (!cmdResult.successful()) {
-                    // Definite vendor rejection (F-11)
-                    TwoSidedObservation postObs = executor.observePostcondition(clusterRef, active.memberId(), standby.memberId());
+                    String safeErrorReason = cmdResult.errorReason() != null ? cmdResult.errorReason() : "UNKNOWN";
+
+                    // Any delivery outcome that is not affirmatively known to have failed to reach
+                    // the device (transport drop, timeout, ambiguous vendor response) must fail closed.
+                    if (cmdResult.certainty() == FailoverCommandResult.DeliveryCertainty.DELIVERY_UNKNOWN) {
+                        quarantineStore.engageQuarantine(clusterRef, executionId,
+                            "Command delivery certainty is DELIVERY_UNKNOWN across mutation boundary: " + safeErrorReason,
+                            Set.of(active.memberId(), standby.memberId()));
+                        return recordResult(
+                            executionId, clusterRef, maskedName, vendor, actionKind,
+                            FailoverExecutionState.OUTCOME_UNKNOWN, requestedAt, boundaryCrossedAt,
+                            active.memberId(), active.maskedName(), consumedToken.requesterId(), consumedToken.approverId(),
+                            preObs, cmdResult, null, true,
+                            "Command delivery could not be confirmed; entity quarantined"
+                        );
+                    }
+
+                    // DEFINITELY_REJECTED / DEFINITELY_NOT_SUBMITTED: the device is expected to be
+                    // untouched. Corroborate with a guarded post-observation before trusting that.
+                    TwoSidedObservation rejectObs;
+                    try {
+                        rejectObs = executor.observePostcondition(clusterRef, active.memberId(), standby.memberId());
+                    } catch (Exception obsEx) {
+                        quarantineStore.engageQuarantine(clusterRef, executionId,
+                            "Post-observation on rejected command failed: " + obsEx.getClass().getSimpleName(),
+                            Set.of(active.memberId(), standby.memberId()));
+                        return recordResult(
+                            executionId, clusterRef, maskedName, vendor, actionKind,
+                            FailoverExecutionState.OUTCOME_UNKNOWN, requestedAt, boundaryCrossedAt,
+                            active.memberId(), active.maskedName(), consumedToken.requesterId(), consumedToken.approverId(),
+                            preObs, cmdResult, null, true,
+                            "Vendor rejected but post-observation failed; entity quarantined"
+                        );
+                    }
+
+                    boolean rolesUnchanged = rejectObs.bothObservationsSuccessful()
+                        && active.selfState().equalsIgnoreCase(rejectObs.memberAObservation().observedRole())
+                        && standby.selfState().equalsIgnoreCase(rejectObs.memberBObservation().observedRole());
+
+                    if (!rolesUnchanged) {
+                        quarantineStore.engageQuarantine(clusterRef, executionId,
+                            "Vendor reported rejection but member roles changed or could not be corroborated",
+                            Set.of(active.memberId(), standby.memberId()));
+                        return recordResult(
+                            executionId, clusterRef, maskedName, vendor, actionKind,
+                            FailoverExecutionState.OUTCOME_UNKNOWN, requestedAt, boundaryCrossedAt,
+                            active.memberId(), active.maskedName(), consumedToken.requesterId(), consumedToken.approverId(),
+                            preObs, cmdResult, rejectObs, true,
+                            "Rejected command outcome is ambiguous; entity quarantined"
+                        );
+                    }
+
                     return recordResult(
                         executionId, clusterRef, maskedName, vendor, actionKind,
                         FailoverExecutionState.VENDOR_REJECTED, requestedAt, boundaryCrossedAt,
                         active.memberId(), active.maskedName(), consumedToken.requesterId(), consumedToken.approverId(),
-                        preObs, cmdResult, postObs, false,
-                        "Vendor device rejected command without mutating state: " + cmdResult.errorReason()
+                        preObs, cmdResult, rejectObs, false,
+                        "Vendor device rejected command without mutating state: " + safeErrorReason
                     );
                 }
 
-                // 7. Two-Sided Independent Direct Post-Verification Observation
+                // 8. Two-Sided Independent Direct Post-Verification Observation
                 TwoSidedObservation postObs;
                 try {
                     postObs = executor.observePostcondition(clusterRef, active.memberId(), standby.memberId());
                 } catch (Exception ex) {
-                    engageQuarantine(clusterRef, executionId, "Post-verification observation failed: " + ex.getMessage(),
+                    quarantineStore.engageQuarantine(clusterRef, executionId,
+                        "Post-verification observation failed: " + ex.getClass().getSimpleName(),
                         Set.of(active.memberId(), standby.memberId()));
                     return recordResult(
                         executionId, clusterRef, maskedName, vendor, actionKind,
@@ -198,7 +339,7 @@ public class FailoverExecutionService {
                 }
 
                 if (!postObs.bothObservationsSuccessful()) {
-                    engageQuarantine(clusterRef, executionId, "Post-verification unable to observe both members independently",
+                    quarantineStore.engageQuarantine(clusterRef, executionId, "Post-verification unable to observe both members independently",
                         Set.of(active.memberId(), standby.memberId()));
                     return recordResult(
                         executionId, clusterRef, maskedName, vendor, actionKind,
@@ -209,7 +350,7 @@ public class FailoverExecutionService {
                     );
                 }
 
-                // Classify transition outcome
+                // 9. Classify Transition Outcome
                 MemberObservation postA = postObs.memberAObservation();
                 MemberObservation postB = postObs.memberBObservation();
 
@@ -236,7 +377,7 @@ public class FailoverExecutionService {
                             "No transition occurred; original member roles remain active"
                         );
                     } else {
-                        engageQuarantine(clusterRef, executionId, "Asymmetric or ambiguous member roles observed post-mutation",
+                        quarantineStore.engageQuarantine(clusterRef, executionId, "Asymmetric or ambiguous member roles observed post-mutation",
                             Set.of(active.memberId(), standby.memberId()));
                         return recordResult(
                             executionId, clusterRef, maskedName, vendor, actionKind,
@@ -246,14 +387,29 @@ public class FailoverExecutionService {
                             "Asymmetric transition observed; sticky quarantine engaged"
                         );
                     }
-                } else { // RETURN_TO_SERVICE
-                    return recordResult(
-                        executionId, clusterRef, maskedName, vendor, actionKind,
-                        FailoverExecutionState.SUCCEEDED, requestedAt, boundaryCrossedAt,
-                        active.memberId(), active.maskedName(), consumedToken.requesterId(), consumedToken.approverId(),
-                        preObs, cmdResult, postObs, false,
-                        "Return to service completed successfully"
-                    );
+                } else { // RETURN_TO_SERVICE (Claude F-P1.4: verify role recovery)
+                    // Affirmative allow-list of vendor-safe recovered roles (Claude CF-P0.21).
+                    // A negative list (!DOWN && !SUSPENDED) would treat an unrecognized or novel
+                    // vendor role string as recovered by default; require a known-good role instead.
+                    boolean demotedRestored = AFFIRMATIVE_RECOVERED_ROLES.contains(postA.observedRole().toUpperCase(Locale.ROOT));
+
+                    if (demotedRestored) {
+                        return recordResult(
+                            executionId, clusterRef, maskedName, vendor, actionKind,
+                            FailoverExecutionState.SUCCEEDED, requestedAt, boundaryCrossedAt,
+                            active.memberId(), active.maskedName(), consumedToken.requesterId(), consumedToken.approverId(),
+                            preObs, cmdResult, postObs, false,
+                            "Return to service completed successfully: member restored to active or ready state"
+                        );
+                    } else {
+                        return recordResult(
+                            executionId, clusterRef, maskedName, vendor, actionKind,
+                            FailoverExecutionState.FAILED_NO_CHANGE, requestedAt, boundaryCrossedAt,
+                            active.memberId(), active.maskedName(), consumedToken.requesterId(), consumedToken.approverId(),
+                            preObs, cmdResult, postObs, false,
+                            "Return to service failed to restore member state; member remains down/suspended"
+                        );
+                    }
                 }
 
             } finally {
@@ -269,38 +425,38 @@ public class FailoverExecutionService {
     }
 
     public boolean isClusterQuarantined(String clusterRef) {
-        return quarantinedClusters.containsKey(clusterRef);
+        return quarantineStore.isClusterQuarantined(clusterRef);
     }
 
-    public Optional<QuarantineRecord> getQuarantine(String clusterRef) {
-        return Optional.ofNullable(quarantinedClusters.get(clusterRef));
+    public Optional<DurableQuarantineStore.QuarantineEntry> getQuarantine(String clusterRef) {
+        return quarantineStore.getActiveQuarantine(clusterRef);
     }
 
-    public synchronized void acknowledgeQuarantine(String clusterRef, String requesterId, String approverId, String reason) {
-        Objects.requireNonNull(clusterRef, "clusterRef must not be null");
-        Objects.requireNonNull(requesterId, "requesterId must not be null");
-        Objects.requireNonNull(approverId, "approverId must not be null");
-        Objects.requireNonNull(reason, "reason must not be null");
+    public boolean acknowledgeQuarantine(String clusterRef, String executionId, String requesterId, String approverId, String reason) {
+        return quarantineStore.acknowledgeQuarantine(clusterRef, executionId, requesterId, approverId, reason);
+    }
 
-        if (requesterId.equalsIgnoreCase(approverId)) {
-            throw new IllegalArgumentException("Quarantine acknowledgment requires 4-eyes dual control (requester != approver)");
-        }
-        if (reason.trim().length() < 8) {
-            throw new IllegalArgumentException("Quarantine acknowledgment reason must be at least 8 characters");
-        }
-        if (!quarantinedClusters.containsKey(clusterRef)) {
+    /**
+     * CF-P0.20 passthrough: lets {@code FailoverScheduleService}'s startup reconciliation engage
+     * sticky quarantine on a cluster left in an ambiguous state by a crash, without duplicating
+     * ownership of {@link DurableQuarantineStore} outside this service.
+     */
+    public void engageQuarantine(String clusterRef, String executionId, String reason, Set<String> memberIds) {
+        quarantineStore.engageQuarantine(clusterRef, executionId, reason, memberIds);
+    }
+
+    public boolean acknowledgeQuarantine(String clusterRef, String requesterId, String approverId, String reason) {
+        Optional<DurableQuarantineStore.QuarantineEntry> active = quarantineStore.getActiveQuarantine(clusterRef);
+        if (active.isEmpty()) {
             throw new IllegalArgumentException("Cluster is not currently quarantined");
         }
-        quarantinedClusters.remove(clusterRef);
-    }
-
-    private void engageQuarantine(String clusterRef, String executionId, String reason, Set<String> memberIds) {
-        quarantinedClusters.put(clusterRef, new QuarantineRecord(
-            clusterRef, executionId, Instant.now(), reason, memberIds
-        ));
+        return quarantineStore.acknowledgeQuarantine(clusterRef, active.get().executionId(), requesterId, approverId, reason);
     }
 
     private FailoverDeviceExecutor resolveExecutor(String vendor) {
+        if (vendor == null || vendor.isBlank()) {
+            throw new IllegalArgumentException("Cannot resolve failover executor: vendor is null or empty");
+        }
         FailoverDeviceExecutor executor = executors.get(vendor);
         if (executor == null) {
             throw new IllegalArgumentException("No failover device executor registered for vendor: " + vendor);

@@ -9,7 +9,7 @@ import { Icon } from "../shell/Icon";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { listConfigurations, type ApiError, type ConfigurationDeviceListEntry } from "../auth/adminApi";
+import { listConfigurations, requestBulkConfigurationCollect, type ApiError, type ConfigurationDeviceListEntry } from "../auth/adminApi";
 import { DeviceConfigurationPanels } from "./ConfigurationPanels";
 import { VendorAvatar } from "./InventoryPanels";
 
@@ -107,6 +107,22 @@ export function ConfigurationScreen() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "drift" | "override">("all");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
+
+  const handleBulkCollect = async () => {
+    setBulkBusy(true);
+    setBulkResult(null);
+    try {
+      const res = await requestBulkConfigurationCollect();
+      setBulkResult(res);
+      refresh();
+    } catch (err) {
+      console.error("Bulk configuration collect failed:", err);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   const devices = data;
   const total = devices?.length ?? 0;
@@ -134,11 +150,22 @@ export function ConfigurationScreen() {
         subtitle={devices === null ? "Loading…" : `${total} device${total === 1 ? "" : "s"} collected`}
         actions={
           <Stack direction="row" spacing={1.5}>
+            <M3Button emphasis="outlined" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
+              {bulkBusy ? "Starting..." : "Collect All"}
+            </M3Button>
             <M3Button emphasis="outlined" icon="download">Export evidence</M3Button>
             <M3Button emphasis="filled">Compare revisions</M3Button>
           </Stack>
         }
       />
+      {bulkResult && (
+        <Box sx={{ px: 3, pb: 2 }}>
+          <Typography variant="body2" sx={{ color: m3.primary }}>
+            Bulk configuration collect admitted {bulkResult.admitted} of {bulkResult.enrolled_devices} enrolled devices.
+            {bulkResult.refused > 0 && ` (${bulkResult.refused} refused.)`} View Administration &gt; Job Logs for progress.
+          </Typography>
+        </Box>
+      )}
       <ListDetail
         list={
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>

@@ -59,9 +59,19 @@ public class PreflightService {
 
     public PreflightReport evaluateCluster(String clusterRef) {
         ClusterEvidenceSnapshot snapshot = buildSnapshotForCluster(clusterRef);
-        PreflightReport report = preflightRegistry.evaluateAll(snapshot);
+        PreflightReport report = evaluateSnapshot(snapshot);
         reportCache.put(clusterRef, new CachedReport(report, Instant.now()));
         return report;
+    }
+
+    /**
+     * Evaluates the pre-flight battery against an already-captured snapshot rather than
+     * building a new one. Callers that must prove a T0 report and a separately-held live
+     * snapshot originate from the exact same evidence-collection pass (not merely the same
+     * cluster) must use this method with that live snapshot, never {@link #getLatestReport}.
+     */
+    public PreflightReport evaluateSnapshot(ClusterEvidenceSnapshot snapshot) {
+        return preflightRegistry.evaluateAll(snapshot);
     }
 
     public List<PreflightCheckSummary> listRegisteredChecks() {

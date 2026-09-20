@@ -77,4 +77,17 @@ describe("OperationsScreen tabs", () => {
     expect(screen.getByText(/Phase B & C: 4-Eyes Controlled Failover Gate/i)).toBeInTheDocument();
     expect(screen.getByText(/Step 1: Obtain 4-Eyes Authorization Lease/i)).toBeInTheDocument();
   });
+
+  it("opens Phase D Schedule Maintenance Window modal when Schedule Maintenance Window is clicked", () => {
+    render(withTheme(<OperationsScreen />));
+    fireEvent.click(screen.getByText(/Inspect CLS-ROMEO-01/i));
+
+    const schedBtn = screen.getByRole("button", { name: "Schedule Maintenance Window" });
+    expect(schedBtn).not.toBeDisabled();
+
+    fireEvent.click(schedBtn);
+    expect(screen.getByText(/Phase D: Schedule Maintenance Window Failover/i)).toBeInTheDocument();
+    expect(screen.getByText(/Unattended Execution Safety Invariant/i)).toBeInTheDocument();
+    expect(screen.getByText(/Schedule & Seal \(HMAC-SHA256\)/i)).toBeInTheDocument();
+  });
 });

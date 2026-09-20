@@ -39,6 +39,13 @@ ui2:
     # 256-bit, read once at startup, never a property default.
     key-file: ${UI2_CREDENTIAL_STORE_KEY_FILE:/run/secrets/ui2_credential_store_key}
     key-id: ${UI2_CREDENTIAL_STORE_KEY_ID:credential_store_key_v1}
+  failover:
+    # CF-P0.5: the durable local-storage fallback for the schedule-signing
+    # master secret, used only when NEXUS_FAILOVER_MASTER_SECRET and
+    # nexus.failover.master-secret are both unset. Generated once and
+    # persisted on first use so a process restart reads the same key back
+    # rather than minting an ephemeral one (see FailoverKeyManagementService).
+    master-key-file: ${UI2_FAILOVER_MASTER_KEY_FILE:.nexus_failover_master.key}
   project-plan:
     # Empty by default: ProjectPlanConfiguration then locates the repository
     # checkout's own project/ directory itself (deployment_direction: local

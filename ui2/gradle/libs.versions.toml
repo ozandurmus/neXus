@@ -26,6 +26,7 @@ testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "
 testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web", version.ref = "springboot" }
+spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-starter-jdbc", version.ref = "springboot" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test", version.ref = "springboot" }
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 jsch = { module = "com.jcraft:jsch", version.ref = "jsch" }

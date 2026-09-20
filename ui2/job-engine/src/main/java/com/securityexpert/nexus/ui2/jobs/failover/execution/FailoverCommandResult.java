@@ -11,18 +11,33 @@ public record FailoverCommandResult(
     int exitCode,
     String commandSummary,
     Instant executedAt,
-    String errorReason
+    String errorReason,
+    DeliveryCertainty certainty
 ) {
+    /**
+     * Typed certainty of whether a mutating command was actually delivered to and
+     * acted on by the device. Distinguishes a device-confirmed rejection (safe to
+     * treat as no-op) from a transport-ambiguous outcome (must fail closed).
+     */
+    public enum DeliveryCertainty {
+        DEFINITELY_NOT_SUBMITTED,
+        DEFINITELY_REJECTED,
+        SUBMITTED_SUCCESS,
+        DELIVERY_UNKNOWN
+    }
+
     public FailoverCommandResult {
         Objects.requireNonNull(commandSummary, "commandSummary must not be null");
         Objects.requireNonNull(executedAt, "executedAt must not be null");
+        Objects.requireNonNull(certainty, "certainty must not be null");
     }
 
     public static FailoverCommandResult success(String commandSummary) {
-        return new FailoverCommandResult(true, 0, commandSummary, Instant.now(), null);
+        return new FailoverCommandResult(true, 0, commandSummary, Instant.now(), null, DeliveryCertainty.SUBMITTED_SUCCESS);
     }
 
-    public static FailoverCommandResult failure(int exitCode, String commandSummary, String errorReason) {
-        return new FailoverCommandResult(false, exitCode, commandSummary, Instant.now(), errorReason);
+    public static FailoverCommandResult failure(int exitCode, String commandSummary, String errorReason, DeliveryCertainty certainty) {
+        Objects.requireNonNull(certainty, "certainty must not be null");
+        return new FailoverCommandResult(false, exitCode, commandSummary, Instant.now(), errorReason, certainty);
     }
 }

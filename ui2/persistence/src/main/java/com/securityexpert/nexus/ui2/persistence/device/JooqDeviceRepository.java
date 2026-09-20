@@ -40,7 +40,9 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "coalesce(vs_info.virtual_systems, inv_run.virtual_systems) as virtual_systems, "
             + "latest_job.state as latest_job_state, "
             + "latest_job.job_type as latest_job_type, "
-            + "latest_job.terminal_reason as latest_job_terminal_reason "
+            + "latest_job.terminal_reason as latest_job_terminal_reason, "
+            + "ep.address_ref as management_ip, "
+            + "if_ips.interface_ips as ip_addresses "
             + "from devices d "
             + "left join lateral ( "
             + "    select display_name, model, software_version, cluster_reference, parent_candidate_id, candidate_id from discovery_candidate c "
@@ -66,7 +68,13 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + ") ep on true "
             + "left join lateral ( "
             + "    select state, job_type, terminal_reason from jobs j where j.target_device_id = d.device_id order by j.submitted_at desc limit 1 "
-            + ") latest_job on true ";
+            + ") latest_job on true "
+            + "left join lateral ( "
+            + "    select string_agg(distinct dia.address, ' ') as interface_ips "
+            + "    from (select run_id from device_inventory_run r where r.device_id = d.device_id order by r.collected_at desc limit 1) latest_r "
+            + "    join device_interface di on di.run_id = latest_r.run_id "
+            + "    join device_interface_address dia on dia.interface_id = di.interface_id "
+            + ") if_ips on true ";
 
     private static final String DEVICE_SUMMARY_QUERY = DEVICE_SUMMARY_SELECT + "order by d.created_at desc, d.device_id";
 
@@ -299,7 +307,9 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 Optional.ofNullable(row.get("latest_job_state", String.class)),
                 Optional.ofNullable(row.get("latest_job_type", String.class)),
                 Optional.ofNullable(row.get("latest_job_terminal_reason", String.class)),
-                Optional.ofNullable(row.get("virtual_systems", String.class)));
+                Optional.ofNullable(row.get("virtual_systems", String.class)),
+                Optional.ofNullable(row.get("management_ip", String.class)),
+                Optional.ofNullable(row.get("ip_addresses", String.class)));
     }
 
     private static EndpointRecord toEndpointRecord(Record row) {

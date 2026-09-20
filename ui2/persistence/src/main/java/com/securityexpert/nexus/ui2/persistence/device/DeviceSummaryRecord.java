@@ -23,7 +23,41 @@ public record DeviceSummaryRecord(
         Optional<String> latestJobState,
         Optional<String> latestJobType,
         Optional<String> latestJobTerminalReason,
-        Optional<String> virtualSystems) {
+        Optional<String> virtualSystems,
+        Optional<String> managementIp,
+        Optional<String> ipAddresses) {
+
+    public DeviceSummaryRecord(
+            String deviceId,
+            String role,
+            String vendorHint,
+            DeviceEnrollmentState enrollmentState,
+            Optional<String> observedHostname,
+            Optional<String> observedModel,
+            Optional<String> observedSoftwareVersion,
+            Optional<String> observedHaRole,
+            Optional<String> clusterMemberRef,
+            Optional<String> latestJobState,
+            Optional<String> latestJobType,
+            Optional<String> latestJobTerminalReason,
+            Optional<String> virtualSystems) {
+        this(
+                deviceId,
+                role,
+                vendorHint,
+                enrollmentState,
+                observedHostname,
+                observedModel,
+                observedSoftwareVersion,
+                observedHaRole,
+                clusterMemberRef,
+                latestJobState,
+                latestJobType,
+                latestJobTerminalReason,
+                virtualSystems,
+                Optional.empty(),
+                Optional.empty());
+    }
 
     public DeviceSummaryRecord(
             String deviceId,

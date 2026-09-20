@@ -205,6 +205,14 @@ const DEMO_CHECKS_PAN: PreflightCheckItem[] = [
     status: "PASS",
     summary: "Cluster has been completely stable with 0 state transitions in the last 24 hours.",
   },
+  {
+    id: "preflight.clock_health",
+    name: "Host & Evidence Clock Health",
+    category: "System Timing & Security",
+    enforcement: "BLOCKING",
+    status: "PASS",
+    summary: "Host monotonic timer and UTC wall-clock verified in sync with zero NTP jumps.",
+  },
 ];
 
 /** Operations screen featuring HA & readiness pre-flight checklist. */
@@ -233,10 +241,25 @@ export function OperationsScreen() {
   const [ackApproverId, setAckApproverId] = useState("operator-bob");
   const [ackReason, setAckReason] = useState("Verified cluster health manually via out-of-band console");
 
+  // Phase D Scheduled Maintenance Window states
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [schedulesList, setSchedulesList] = useState<any[]>([]);
+  const [scheduleStartTime, setScheduleStartTime] = useState(
+    new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 16)
+  );
+  const [scheduleDuration, setScheduleDuration] = useState(60);
+  const [scheduleMaxDelay, setScheduleMaxDelay] = useState(15);
+  const [scheduleActionKind, setScheduleActionKind] = useState("CONTROLLED_FAILOVER");
+  const [scheduleApproverId, setScheduleApproverId] = useState("operator-bob");
+  const [scheduleReason, setScheduleReason] = useState("Quarterly maintenance failover drill");
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!selectedCluster) {
       setApiChecks(null);
       setApiVerdict(null);
+      setSchedulesList([]);
       return;
     }
 
@@ -265,6 +288,13 @@ export function OperationsScreen() {
       .catch(() => {
         // Standalone/offline reference mode fallback
       });
+
+    fetch(`/api/v2/failover/${selectedCluster}/schedules`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (isMounted && Array.isArray(data)) setSchedulesList(data);
+      })
+      .catch(() => {});
 
     return () => {
       isMounted = false;
@@ -396,6 +426,73 @@ export function OperationsScreen() {
       if (res.ok) {
         setQuarantined(false);
         setShowQuarantineAckModal(false);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleScheduleWindow = async () => {
+    if (!selectedCluster) return;
+    setIsScheduling(true);
+    setScheduleError(null);
+    try {
+      const startIso = new Date(scheduleStartTime).toISOString();
+      const endIso = new Date(new Date(scheduleStartTime).getTime() + scheduleDuration * 60000).toISOString();
+      const res = await fetch(`/api/v2/failover/${selectedCluster}/schedules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actionKind: scheduleActionKind,
+          windowStart: startIso,
+          windowEnd: endIso,
+          maxStartDelayMinutes: scheduleMaxDelay,
+          requesterId: "current-user",
+          approverId: scheduleApproverId,
+          reason: scheduleReason,
+          clientNonce: `nonce-${Date.now()}`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || data.error || `HTTP ${res.status}`);
+      }
+      setSchedulesList((prev) => [data, ...prev]);
+      setShowScheduleModal(false);
+    } catch (err: any) {
+      setScheduleError(err.message);
+    } finally {
+      setIsScheduling(false);
+    }
+  };
+
+  const handleCancelSchedule = async (scheduleId: string) => {
+    try {
+      const res = await fetch(`/api/v2/failover/schedules/${scheduleId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operatorId: "current-user",
+          reason: "Cancelled by operator via operations console",
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSchedulesList((prev) => prev.map((s) => (s.scheduleId === scheduleId ? updated : s)));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleTriggerSchedule = async (scheduleId: string) => {
+    try {
+      const res = await fetch(`/api/v2/failover/schedules/${scheduleId}/trigger`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSchedulesList((prev) => prev.map((s) => (s.scheduleId === scheduleId ? updated : s)));
       }
     } catch {
       // ignore
@@ -626,6 +723,78 @@ export function OperationsScreen() {
           </Table>
         </TableContainer>
 
+        {/* Phase D Scheduled Maintenance Windows Table */}
+        {schedulesList.length > 0 && (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: m3.onSurface }}>
+              Phase D: Scheduled Maintenance Windows ({schedulesList.length})
+            </Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: "12px", border: `1px solid ${m3.outlineVar}` }}>
+              <Table size="small">
+                <TableHead sx={{ bgcolor: m3.scLow }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600 }}>Schedule ID</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Window Start (UTC)</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Deadline (UTC)</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Target Member</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 600, textAlign: "right" }}>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {schedulesList.map((s) => (
+                    <TableRow key={s.scheduleId} hover>
+                      <TableCell sx={{ fontFamily: "monospace", fontSize: 12, fontWeight: 500 }}>
+                        {s.scheduleId}
+                      </TableCell>
+                      <TableCell>
+                        <Chip size="small" label={s.actionKind} sx={{ fontSize: 11 }} />
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 12 }}>{s.windowStart}</TableCell>
+                      <TableCell sx={{ fontSize: 12 }}>{s.executionDeadline}</TableCell>
+                      <TableCell sx={{ fontSize: 12, fontWeight: 500 }}>
+                        {s.signedMutationTarget}
+                      </TableCell>
+                      <TableCell>
+                        <StatusChip
+                          tone={
+                            s.status === "COMPLETED"
+                              ? "ok"
+                              : s.status === "SCHEDULED" || s.status === "CLAIMED_VERIFYING"
+                              ? "warn"
+                              : "bad"
+                          }
+                          label={s.status}
+                          dense
+                        />
+                      </TableCell>
+                      <TableCell sx={{ textAlign: "right" }}>
+                        {s.status === "SCHEDULED" && (
+                          <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
+                            <M3Button
+                              emphasis="tonal"
+                              onClick={() => handleTriggerSchedule(s.scheduleId)}
+                            >
+                              Trigger JIT
+                            </M3Button>
+                            <M3Button
+                              emphasis="text"
+                              onClick={() => handleCancelSchedule(s.scheduleId)}
+                            >
+                              Cancel
+                            </M3Button>
+                          </Box>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        )}
+
         {/* Action Controls & Gate Disclosure */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 2, bgcolor: m3.scLow, borderRadius: "12px", flexWrap: "wrap", gap: 2 }}>
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
@@ -646,13 +815,13 @@ export function OperationsScreen() {
                 </M3Button>
               </span>
             </Tooltip>
-            <Tooltip title="Disabled — Requires Phase D Maintenance Window Engine Approval">
-              <span>
-                <M3Button emphasis="outlined" disabled>
-                  Schedule Maintenance Window
-                </M3Button>
-              </span>
-            </Tooltip>
+            <M3Button
+              emphasis="outlined"
+              disabled={overallVerdict !== "NO_BLOCKING_CONDITIONS_OBSERVED" || quarantined}
+              onClick={() => setShowScheduleModal(true)}
+            >
+              Schedule Maintenance Window
+            </M3Button>
           </Box>
         </Box>
 
@@ -866,6 +1035,117 @@ export function OperationsScreen() {
               onClick={handleAcknowledgeQuarantine}
             >
               Confirm & Lift Quarantine
+            </M3Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Phase D Schedule Maintenance Window Modal */}
+        <Dialog open={showScheduleModal} onClose={() => setShowScheduleModal(false)} maxWidth="md" fullWidth>
+          <DialogTitle sx={{ fontWeight: 600 }}>
+            Phase D: Schedule Maintenance Window Failover — {clusterName}
+          </DialogTitle>
+          <DialogContent dividers>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+              {scheduleError && (
+                <Card sx={{ bgcolor: "#ffebee", border: "1px solid #ef9a9a", p: 1.5 }}>
+                  <Typography variant="body2" sx={{ color: "#c62828", fontWeight: 600 }}>
+                    {scheduleError}
+                  </Typography>
+                </Card>
+              )}
+
+              <Card sx={{ bgcolor: "#fff3e0", border: "1px solid #ffe0b2", p: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#e65100" }}>
+                  ⚠️ Unattended Execution Safety Invariant
+                </Typography>
+                <Typography variant="body2" sx={{ color: "#ef6c00", mt: 0.5 }}>
+                  Scheduled maintenance window failovers execute unattended at T₀ without further human keystrokes.
+                  A fresh, direct two-sided pre-flight check battery is executed at T₀ inside the exclusive execution lock.
+                  If ANY blocking check fails or baseline drift is detected, the execution strictly aborts with zero blind retries.
+                </Typography>
+              </Card>
+
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                <TextField
+                  label="Window Start Time (Local / UTC)"
+                  type="datetime-local"
+                  size="small"
+                  value={scheduleStartTime}
+                  onChange={(e) => setScheduleStartTime(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ flex: 1, minWidth: 240 }}
+                />
+                <TextField
+                  label="Window Duration (minutes)"
+                  type="number"
+                  size="small"
+                  value={scheduleDuration}
+                  onChange={(e) => setScheduleDuration(parseInt(e.target.value) || 60)}
+                  sx={{ width: 180 }}
+                />
+                <TextField
+                  label="Max Start Delay (minutes)"
+                  type="number"
+                  size="small"
+                  value={scheduleMaxDelay}
+                  onChange={(e) => setScheduleMaxDelay(parseInt(e.target.value) || 15)}
+                  helperText="Window deadline gates T₀ start"
+                  sx={{ width: 180 }}
+                />
+              </Box>
+
+              <Box sx={{ display: "flex", gap: 2 }}>
+                <TextField
+                  select
+                  label="Action Kind"
+                  size="small"
+                  value={scheduleActionKind}
+                  onChange={(e) => setScheduleActionKind(e.target.value)}
+                  SelectProps={{ native: true }}
+                  sx={{ width: 240 }}
+                >
+                  <option value="CONTROLLED_FAILOVER">CONTROLLED_FAILOVER</option>
+                  <option value="RETURN_TO_SERVICE">RETURN_TO_SERVICE</option>
+                </TextField>
+                <TextField
+                  label="Approver Principal ID (4-Eyes)"
+                  size="small"
+                  value={scheduleApproverId}
+                  onChange={(e) => setScheduleApproverId(e.target.value)}
+                  helperText="Distinct authenticated reviewer (requester != approver)"
+                  fullWidth
+                />
+              </Box>
+
+              <TextField
+                label="Change Ticket Reference & Operational Justification"
+                size="small"
+                value={scheduleReason}
+                onChange={(e) => setScheduleReason(e.target.value)}
+                helperText="Minimum 8 characters justifying the scheduled window"
+                fullWidth
+              />
+
+              <Card sx={{ bgcolor: m3.scLow, p: 2, borderRadius: "8px" }}>
+                <Typography variant="caption" sx={{ color: m3.onSurfaceVar, fontWeight: 600 }}>
+                  Cryptographic Binding & Canonical Framing:
+                </Typography>
+                <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: 11, mt: 0.5 }}>
+                  Domain: NEXUS_FAILOVER_SCHEDULE_V1 | Target: {isPan ? "FW-TANGO-04" : "FW-TANGO-01"} | HMAC-SHA256
+                </Typography>
+              </Card>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <M3Button emphasis="text" onClick={() => setShowScheduleModal(false)}>
+              Cancel
+            </M3Button>
+            <M3Button
+              emphasis="filled"
+              disabled={isScheduling || scheduleReason.trim().length < 8 || !scheduleApproverId.trim()}
+              onClick={handleScheduleWindow}
+            >
+              {isScheduling ? "Sealing Schedule..." : "Schedule & Seal (HMAC-SHA256)"}
             </M3Button>
           </DialogActions>
         </Dialog>

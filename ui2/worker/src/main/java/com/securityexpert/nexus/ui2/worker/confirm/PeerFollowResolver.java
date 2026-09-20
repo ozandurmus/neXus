@@ -51,7 +51,12 @@ public final class PeerFollowResolver {
         if (!peerNamesFirstDeviceBack) {
             return PeerFollowOutcome.notConfirmed(PeerFollowOutcome.Reason.ONE_SIDED_CLAIM);
         }
-        return PeerFollowOutcome.corroborated(OpaqueId.random().value(), peerCompleted);
+        String self = firstDevice.selfReferenceForPeer().orElse("");
+        String peer = peerCompleted.selfReferenceForPeer().orElse("");
+        String unitId = (!self.isBlank() && !peer.isBlank())
+                ? (self.compareTo(peer) <= 0 ? self + "|" + peer : peer + "|" + self)
+                : OpaqueId.random().value();
+        return PeerFollowOutcome.corroborated(unitId, peerCompleted);
     }
 
     /** Builds the one PF-1 request against a peer's own reported management address. */

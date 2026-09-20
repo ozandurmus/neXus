@@ -50,7 +50,7 @@ class PeerFollowResolverTest {
                 address -> ConfirmRequest.paloAlto(new ApiTarget("ep-peer", address), CRED));
 
         PeerFollowOutcome.Corroborated corroborated = assertInstanceOf(PeerFollowOutcome.Corroborated.class, outcome);
-        assertTrue(corroborated.unitId() != null && !corroborated.unitId().isBlank());
+        assertEquals("0001A|0001B", corroborated.unitId());
         assertEquals("fw-b", corroborated.peerResult().facts().hostname().orElseThrow());
 
         // Only the one PF-1 hop was ever dialed -- the first device's own contact, plus exactly one

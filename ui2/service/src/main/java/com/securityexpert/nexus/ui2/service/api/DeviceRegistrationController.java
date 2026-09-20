@@ -207,6 +207,8 @@ public final class DeviceRegistrationController {
         body.put("latest_job_type", summary.latestJobType().orElse(null));
         body.put("latest_job_terminal_reason", summary.latestJobTerminalReason().orElse(null));
         body.put("virtual_systems", summary.virtualSystems().orElse(null));
+        body.put("management_ip", summary.managementIp().orElse(null));
+        body.put("ip_addresses", summary.ipAddresses().orElse(null));
         return body;
     }
 }

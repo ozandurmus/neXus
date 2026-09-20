@@ -268,6 +268,8 @@ export interface DeviceSummary {
   readonly latest_job_type?: string | null;
   readonly latest_job_terminal_reason?: string | null;
   readonly virtual_systems?: string | null;
+  readonly management_ip?: string | null;
+  readonly ip_addresses?: string | null;
 }
 
 export type DeviceRole = "gateway" | "management_server";
@@ -450,6 +452,10 @@ export function retryDeviceConfirm(deviceId: string): Promise<{ admitted: boolea
 
 export function requestBulkInventoryCollect(): Promise<{ enrolled_devices: number; admitted: number; refused: number }> {
   return call(`/devices/inventory/collect-all`, "POST", {});
+}
+
+export function requestBulkConfigurationCollect(): Promise<{ enrolled_devices: number; admitted: number; refused: number }> {
+  return call(`/devices/configuration/collect-all`, "POST", {});
 }
 
 /**
