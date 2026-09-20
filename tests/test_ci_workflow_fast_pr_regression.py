@@ -132,8 +132,10 @@ def test_component_selections_are_explicit_and_separate():
     assert ":discovery:unitTest" in targeted_block
     assert "contains(needs.regression-scope.outputs.classification, 'inventory')" in targeted_block
     assert "*JooqDeviceRepositoryTest" in targeted_block
+    assert "*Device*" in targeted_block
+    assert "*Inventory*" in targeted_block
+    assert "contains(needs.regression-scope.outputs.classification, 'privacy')" in targeted_block
     assert "*TopologyNamePseudonymizerTest" in targeted_block
-    assert "tests/AdministrationScreen.test.tsx" in targeted_block
 
 
 def test_full_regression_runs_for_major_prs_and_manual_dispatch():

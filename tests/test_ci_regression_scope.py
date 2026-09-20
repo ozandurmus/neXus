@@ -1,4 +1,6 @@
-from scripts.ci_regression_scope import classify
+from pathlib import Path
+
+from scripts.ci_regression_scope import DISCOVERY_PREFIXES, INVENTORY_PREFIXES, LDAP_PREFIXES, PRIVACY_PREFIXES, classify
 
 
 def test_approved_ldap_delivery_is_targeted():
@@ -22,13 +24,24 @@ def test_delivery_files_still_select_ldap_regression():
     assert classify(["scripts/ci_regression_scope.py", "tests/test_ci_regression_scope.py"]) == "ldap"
 
 
-def test_discovery_and_inventory_are_separate_components():
-    assert classify(["ui2/discovery/src/main/kotlin/Example.kt"]) == "discovery"
+def test_every_component_prefix_matches_the_working_tree():
+    root = Path(__file__).resolve().parent.parent
+    paths = {path.relative_to(root).as_posix() for path in root.glob("ui2/**/*")}
+    for prefix in (*LDAP_PREFIXES, *DISCOVERY_PREFIXES, *INVENTORY_PREFIXES, *PRIVACY_PREFIXES):
+        assert any(path.startswith(prefix) for path in paths), prefix
+
+
+def test_discovery_inventory_and_privacy_are_separate_components():
+    assert classify(["ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/cp/MgmtCliEnumerationAdapter.java"]) == "discovery"
     assert classify(["ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/JooqDeviceRepository.java"]) == "inventory"
-    assert classify(["ui2/discovery/src/main/kotlin/Example.kt", "ui2/frontend/src/screens/InventoryScreen.tsx"]) == "discovery+inventory"
+    assert classify(["ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/privacy/TopologyNamePseudonymizer.java"]) == "privacy"
+    assert classify([
+        "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/cp/MgmtCliEnumerationAdapter.java",
+        "ui2/frontend/src/screens/InventoryScreen.tsx",
+    ]) == "discovery+inventory"
 
 
-def test_pr_434_inventory_paths_select_inventory_coverage():
+def test_pr_434_paths_do_not_block():
     assert classify([
         "ui2/frontend/src/screens/DeviceRegistryPanel.tsx",
         "ui2/frontend/src/screens/InventoryPanels.tsx",
@@ -40,7 +53,7 @@ def test_pr_434_inventory_paths_select_inventory_coverage():
         "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/privacy/TopologyNamePseudonymizer.java",
         "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/privacy/PrivacyMaskingResponseBodyAdviceTest.java",
         "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/privacy/TopologyNamePseudonymizerTest.java",
-    ]) == "inventory"
+    ]) == "inventory+privacy"
 
 
 def test_unmapped_persistence_path_is_blocked():

@@ -91,7 +91,7 @@ jobs:
 
   targeted-regression:
     needs: regression-scope
-    if: always() && github.event_name == 'pull_request' && (needs.regression-scope.outputs.classification == 'ldap' || contains(needs.regression-scope.outputs.classification, 'discovery') || contains(needs.regression-scope.outputs.classification, 'inventory'))
+    if: always() && github.event_name == 'pull_request' && (needs.regression-scope.outputs.classification == 'ldap' || contains(needs.regression-scope.outputs.classification, 'discovery') || contains(needs.regression-scope.outputs.classification, 'inventory') || contains(needs.regression-scope.outputs.classification, 'privacy'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -135,7 +135,11 @@ jobs:
           npm --prefix ui2/frontend ci
           npm --prefix ui2/frontend test -- tests/AdministrationScreen.test.tsx
           ./ui2/gradlew --no-daemon --console=plain -p ui2 :persistence:unitTest --tests '*JooqDeviceRepositoryTest'
-          ./ui2/gradlew --no-daemon --console=plain -p ui2 :service:unitTest --tests '*TopologyNamePseudonymizerTest'
+          ./ui2/gradlew --no-daemon --console=plain -p ui2 :service:unitTest --tests '*Device*'
+          ./ui2/gradlew --no-daemon --console=plain -p ui2 :worker:unitTest --tests '*Inventory*'
+      - name: Privacy targeted regression
+        if: contains(needs.regression-scope.outputs.classification, 'privacy')
+        run: ./ui2/gradlew --no-daemon --console=plain -p ui2 :service:unitTest --tests '*TopologyNamePseudonymizerTest'
 
   # FAST PR VALIDATION — runs on every pull_request. Cheap, high-value gates
   # only: import sanity, the repository/privacy gate, project-state
