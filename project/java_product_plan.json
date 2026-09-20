@@ -111,7 +111,12 @@
     "failover_phase_d_has_no_build_record": "agent_operations",
     "java_product_plan_build_selection_is_stale": "agent_operations",
     "backup_plane_separate_service": "java_feature",
-    "vault_has_no_enforced_quota_on_a_shared_host": "java_debt"
+    "vault_has_no_enforced_quota_on_a_shared_host": "java_debt",
+    "discovery_lateral_join_drops_cluster_members": "java_debt",
+    "cluster_membership_lost_at_enrollment": "java_debt",
+    "discovery_connection_state_never_populated": "java_feature",
+    "inventory_draft_filter_does_nothing": "java_debt",
+    "cluster_member_model_needs_second_query": "java_feature"
   },
   "converted_lessons": [
     {

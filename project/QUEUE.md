@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T19:38:11Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T20:29:20Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -11,7 +11,9 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T19:38:11Z
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
 - P0/planned backup_artefact_id_opaque_not_storage_path — The artefact id returned over HTTP must be opaque, not the (target: BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09)
 - P0/planned backup_retrieval_audit_fail_closed_and_reason_persists — Backup retrieval must be fail-closed on its audit row, and (target: BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09)
+- P0/planned cluster_membership_lost_at_enrollment — Cluster membership is known at discovery but does not reac (target: enrollment/confirm path writing devices.)
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
+- P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every c (target: JooqDeviceRepository DEVICE_SELECT later)
 - P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason a (target: jobs.outcome/terminal_reason/finished_at)
 - P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices ( (target: )
 - P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner vs DeviceComposit)
@@ -23,8 +25,10 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T19:38:11Z
 - P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
 - P1/planned backup_plane_separate_service — Deliver the backup plane as the independent service the re (target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITEC)
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
+- P1/planned cluster_member_model_needs_second_query — Cluster members carry no hardware field in the gateway enu (target: Check Point management plane enumeration)
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
+- P1/planned discovery_connection_state_never_populated — Check Point discovery never records the management plane's (target: MgmtCliEnumerationAdapter candidate cons)
 - P1/planned failover_p0_closure_set — Failover Engine: close the eight-item P0 set both external (target: docs/design/CODEX_FAILOVER_ENGINE_FINAL_)
 - P1/planned failover_peer_reciprocal_agreement_check — Eighth stop-condition: both members must agree reciprocall (target: PO rule 2026-09-12; _pan_reciprocal_corr)
 - P1/planned failover_pilot_fence_is_compiled_in — Failover pilot allowlist is hardcoded in a constructor and (target: FailoverPilotAllowlist)
@@ -58,6 +62,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T19:38:11Z
 - P2/planned device_admin_accounts_and_privileges
 - P2/planned failover_phase_d_has_no_build_record
 - P2/planned gov_orch_turn_counter_blind_to_codex_stream
+- P2/planned inventory_draft_filter_does_nothing
 - P2/planned java_product_plan_build_selection_is_stale
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material

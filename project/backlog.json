@@ -576,6 +576,51 @@
       "priority": "P1",
       "target": "deploy/ui2/35-artefact-store-pvc.yaml; storage class local-path; PO decision needed on storage class or filesystem quota",
       "note": ""
+    },
+    {
+      "id": "discovery_lateral_join_drops_cluster_members",
+      "category": "discovery",
+      "title": "Device display falls back to the management IP for every cluster member: the discovery lateral join excludes any candidate that has a parent, so name, model and cluster reference are all lost",
+      "status": "planned",
+      "priority": "P0",
+      "target": "JooqDeviceRepository DEVICE_SELECT lateral join; regression from 9f46cc0 (NXS-LOCAL-0346)",
+      "note": ""
+    },
+    {
+      "id": "cluster_membership_lost_at_enrollment",
+      "category": "discovery",
+      "title": "Cluster membership is known at discovery but does not reach enrolled devices: 48 member candidates carry a cluster reference while only 6 device rows do, and no ENROLLED device has one",
+      "status": "planned",
+      "priority": "P0",
+      "target": "enrollment/confirm path writing devices.cluster_member_ref",
+      "note": ""
+    },
+    {
+      "id": "discovery_connection_state_never_populated",
+      "category": "discovery",
+      "title": "Check Point discovery never records the management plane's own connection state: the adapter passes an empty optional although the enumeration response carries it",
+      "status": "planned",
+      "priority": "P1",
+      "target": "MgmtCliEnumerationAdapter candidate construction; discovery_candidate.connection_state",
+      "note": ""
+    },
+    {
+      "id": "inventory_draft_filter_does_nothing",
+      "category": "ui",
+      "title": "The Draft filter chip on the inventory screen selects but does not filter the list",
+      "status": "planned",
+      "priority": "P2",
+      "target": "ui2 InventoryScreen filter chips",
+      "note": ""
+    },
+    {
+      "id": "cluster_member_model_needs_second_query",
+      "category": "discovery",
+      "title": "Cluster members carry no hardware field in the gateway enumeration, so model and appliance type stay unknown for them unless a second management-plane query supplies it",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Check Point management plane enumeration; measured against two real exports",
+      "note": ""
     }
   ]
 }
