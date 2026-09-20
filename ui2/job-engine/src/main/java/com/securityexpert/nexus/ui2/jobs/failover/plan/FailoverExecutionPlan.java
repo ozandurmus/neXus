@@ -7,6 +7,7 @@ import java.util.Objects;
 /**
  * Compiled execution and reversal plan for controlled firewall failover.
  * In Phase B, planType is strictly DRY_RUN and mutationAuthorized is strictly false.
+ * Per architectural review (Astra & Fable), fabricated traffic impact milliseconds have been removed.
  */
 public record FailoverExecutionPlan(
     String planId,
@@ -17,7 +18,6 @@ public record FailoverExecutionPlan(
     String planType,
     List<FailoverActionStep> transitionSteps,
     List<FailoverActionStep> reversalSteps,
-    long estimatedTrafficImpactMs,
     String sessionContinuityRisk,
     String preemptionBehavior,
     Instant compiledAt,

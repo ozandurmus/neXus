@@ -61,7 +61,7 @@ class FailoverDryRunPlannerTest {
     }
 
     @Test
-    @DisplayName("Compiles Check Point ClusterXL dry-run plan with clusterXL_admin commands")
+    @DisplayName("Compiles Check Point ClusterXL dry-run plan with clusterXL_admin commands and opaque IDs")
     void compilesCheckPointPlan() {
         var memA = member("dev-cp-1", "FW-TANGO-01", "ACTIVE");
         var memB = member("dev-cp-2", "FW-JULIET-06", "STANDBY");
@@ -86,13 +86,16 @@ class FailoverDryRunPlannerTest {
         // Check transition steps
         assertEquals(2, plan.transitionSteps().size());
         assertEquals("clusterXL_admin down", plan.transitionSteps().get(0).command());
-        assertEquals("FW-TANGO-01", plan.transitionSteps().get(0).targetMember());
+        assertEquals("dev-cp-1", plan.transitionSteps().get(0).targetMemberId());
+        assertEquals("FW-TANGO-01", plan.transitionSteps().get(0).targetMemberMaskedName());
+        assertEquals("CONTROLLED_FAILOVER", plan.transitionSteps().get(0).actionKind());
         assertEquals("cphaprob stat", plan.transitionSteps().get(1).command());
 
         // Check reversal steps
         assertEquals(1, plan.reversalSteps().size());
         assertEquals("clusterXL_admin up", plan.reversalSteps().get(0).command());
-        assertEquals("FW-TANGO-01", plan.reversalSteps().get(0).targetMember());
+        assertEquals("dev-cp-1", plan.reversalSteps().get(0).targetMemberId());
+        assertEquals("REVERSAL", plan.reversalSteps().get(0).actionKind());
     }
 
     @Test
@@ -120,12 +123,53 @@ class FailoverDryRunPlannerTest {
         // Check transition steps
         assertEquals(2, plan.transitionSteps().size());
         assertEquals("request high-availability state suspend", plan.transitionSteps().get(0).command());
-        assertEquals("FW-TANGO-04", plan.transitionSteps().get(0).targetMember());
+        assertEquals("dev-pa-1", plan.transitionSteps().get(0).targetMemberId());
+        assertEquals("FW-TANGO-04", plan.transitionSteps().get(0).targetMemberMaskedName());
         assertEquals("show high-availability state", plan.transitionSteps().get(1).command());
 
         // Check reversal steps
         assertEquals(1, plan.reversalSteps().size());
         assertEquals("request high-availability state functional", plan.reversalSteps().get(0).command());
+    }
+
+    @Test
+    @DisplayName("F-2: Planner refuses compilation when active member is UNKNOWN (fail-closed)")
+    void refusesWhenActiveMemberIsUnknown() {
+        var memB = member("dev-cp-2", "FW-JULIET-06", "STANDBY");
+        var snapshot = new ClusterEvidenceSnapshot(
+            "cls-uuid-cp",
+            "CLS-ROMEO-01",
+            "CHECK_POINT",
+            "CLUSTER_XL_HA",
+            null,
+            null, // No active member
+            memB,
+            Instant.now()
+        );
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+            () -> planner.compileDryRunPlan(snapshot, dummyToken("cls-uuid-cp")));
+        assertTrue(ex.getMessage().contains("active member identity is UNKNOWN"));
+    }
+
+    @Test
+    @DisplayName("F-2: Planner refuses compilation when standby member is UNKNOWN (fail-closed)")
+    void refusesWhenStandbyMemberIsUnknown() {
+        var memA = member("dev-cp-1", "FW-TANGO-01", "ACTIVE");
+        var snapshot = new ClusterEvidenceSnapshot(
+            "cls-uuid-cp",
+            "CLS-ROMEO-01",
+            "CHECK_POINT",
+            "CLUSTER_XL_HA",
+            null,
+            memA,
+            null, // No standby member
+            Instant.now()
+        );
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+            () -> planner.compileDryRunPlan(snapshot, dummyToken("cls-uuid-cp")));
+        assertTrue(ex.getMessage().contains("standby member identity is UNKNOWN"));
     }
 
     @Test

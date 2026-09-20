@@ -15,6 +15,11 @@ import java.util.UUID;
  * Compiles dry-run execution and reversal plans for firewall clusters (Phase B).
  * In accordance with Phase B invariants, this compiler executes ZERO device mutations
  * and operates purely as a deterministic disclosure of vendor actions and reversibility steps.
+ * 
+ * Invariants enforced per external model reviews (Astra & Fable):
+ * 1. Fail-closed: Refuses compilation if active or standby member identity is UNKNOWN (F-2).
+ * 2. Removes fabricated traffic impact millisecond claims (Refinement C).
+ * 3. Binds actions to opaque endpoint IDs as well as presentation masked names (F-9).
  */
 public class FailoverDryRunPlanner {
 
@@ -22,74 +27,82 @@ public class FailoverDryRunPlanner {
         Objects.requireNonNull(snapshot, "snapshot must not be null");
         Objects.requireNonNull(leaseToken, "leaseToken must not be null");
 
-        String vendor = snapshot.vendor() != null ? snapshot.vendor().toUpperCase(Locale.ROOT) : "";
-        String activeMemberName = snapshot.activeMember()
-                .map(ClusterMemberEvidence::maskedName)
-                .orElse("ACTIVE_MEMBER");
-        String standbyMemberName = snapshot.standbyMember()
-                .map(ClusterMemberEvidence::maskedName)
-                .orElse("STANDBY_MEMBER");
+        // F-2: Refuse compilation if active or standby member is UNKNOWN (fail-closed)
+        ClusterMemberEvidence activeMember = snapshot.activeMember()
+                .orElseThrow(() -> new IllegalStateException("Cannot compile failover plan: active member identity is UNKNOWN"));
+        ClusterMemberEvidence standbyMember = snapshot.standbyMember()
+                .orElseThrow(() -> new IllegalStateException("Cannot compile failover plan: standby member identity is UNKNOWN"));
 
+        String vendor = snapshot.vendor() != null ? snapshot.vendor().toUpperCase(Locale.ROOT) : "";
         List<FailoverActionStep> transitions = new ArrayList<>();
         List<FailoverActionStep> reversals = new ArrayList<>();
-        long estimatedTrafficImpactMs;
         String preemptionBehavior;
         String sessionContinuityRisk;
 
         if ("CHECK_POINT".equals(vendor) || "CHECKPOINT".equals(vendor)) {
             transitions.add(new FailoverActionStep(
                 1,
-                activeMemberName,
+                activeMember.memberId(),
+                activeMember.maskedName(),
+                "CONTROLLED_FAILOVER",
                 "clusterXL_admin down",
-                "Instruct active ClusterXL member to gracefully lower priority and release Cluster VIPs.",
-                "CONTROLLED_FAILOVER"
+                "Instruct active ClusterXL member to gracefully lower priority and release Cluster VIPs (non-persistent).",
+                "CLASS_2_MUTATION"
             ));
             transitions.add(new FailoverActionStep(
                 2,
-                standbyMemberName,
+                standbyMember.memberId(),
+                standbyMember.maskedName(),
+                "VERIFICATION",
                 "cphaprob stat",
                 "Verify standby member successfully assumed active role with all interfaces healthy.",
-                "VERIFICATION"
+                "READ_ONLY_OBSERVATION"
             ));
 
             reversals.add(new FailoverActionStep(
                 1,
-                activeMemberName,
+                activeMember.memberId(),
+                activeMember.maskedName(),
+                "REVERSAL",
                 "clusterXL_admin up",
                 "Re-enable ClusterXL state on original active member to return it to standby.",
-                "REVERSAL"
+                "CLASS_2_MUTATION"
             ));
 
-            estimatedTrafficImpactMs = 250;
-            preemptionBehavior = "ClusterXL configured to maintain current active. Reversal will not cause second traffic flap.";
-            sessionContinuityRisk = "Full CCP session table synchronized. Stateful TCP/UDP flows preserved without connection drop.";
+            preemptionBehavior = "ClusterXL configured with preemption disabled. Manual reversal required to restore original roles.";
+            sessionContinuityRisk = "Connection state sync verified via preflight. Empirical traffic impact under load is NOT_EVALUABLE statically.";
         } else if ("PALO_ALTO".equals(vendor) || "PAN_OS".equals(vendor)) {
             transitions.add(new FailoverActionStep(
                 1,
-                activeMemberName,
+                activeMember.memberId(),
+                activeMember.maskedName(),
+                "CONTROLLED_FAILOVER",
                 "request high-availability state suspend",
                 "Gracefully suspend active peer to trigger passive peer promotion.",
-                "CONTROLLED_FAILOVER"
+                "CLASS_2_MUTATION"
             ));
             transitions.add(new FailoverActionStep(
                 2,
-                standbyMemberName,
+                standbyMember.memberId(),
+                standbyMember.maskedName(),
+                "VERIFICATION",
                 "show high-availability state",
                 "Verify passive peer promoted to active with dataplane interfaces up.",
-                "VERIFICATION"
+                "READ_ONLY_OBSERVATION"
             ));
 
             reversals.add(new FailoverActionStep(
                 1,
-                activeMemberName,
+                activeMember.memberId(),
+                activeMember.maskedName(),
+                "REVERSAL",
                 "request high-availability state functional",
                 "Return suspended peer to functional state (re-enters passive standby).",
-                "REVERSAL"
+                "CLASS_2_MUTATION"
             ));
 
-            estimatedTrafficImpactMs = 350;
-            preemptionBehavior = "Preemption disabled. Un-suspending will return peer to passive state without fail-back impact.";
-            sessionContinuityRisk = "HA2 session synchronization verified current. Existing connections continue uninterrupted.";
+            preemptionBehavior = "Preemption disabled in HA configuration. Manual return to functional state required.";
+            sessionContinuityRisk = "HA2 session synchronization verified current via preflight. Empirical traffic impact under load is NOT_EVALUABLE statically.";
         } else {
             throw new IllegalArgumentException("Unsupported vendor for failover dry-run compilation: " + vendor);
         }
@@ -103,7 +116,6 @@ public class FailoverDryRunPlanner {
             "DRY_RUN",
             transitions,
             reversals,
-            estimatedTrafficImpactMs,
             sessionContinuityRisk,
             preemptionBehavior,
             Instant.now(),

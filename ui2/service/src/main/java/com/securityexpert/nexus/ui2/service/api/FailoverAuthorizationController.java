@@ -138,7 +138,6 @@ public class FailoverAuthorizationController {
             body.put("ha_mode", plan.haMode());
             body.put("plan_type", plan.planType());
             body.put("mutation_authorized", plan.mutationAuthorized());
-            body.put("estimated_traffic_impact_ms", plan.estimatedTrafficImpactMs());
             body.put("session_continuity_risk", plan.sessionContinuityRisk());
             body.put("preemption_behavior", plan.preemptionBehavior());
             body.put("compiled_at", plan.compiledAt().toString());
@@ -173,7 +172,10 @@ public class FailoverAuthorizationController {
     private Map<String, Object> serializeStep(FailoverActionStep step) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("step_number", step.stepNumber());
+        map.put("target_member_id", step.targetMemberId());
         map.put("target_member", step.targetMember());
+        map.put("target_member_masked_name", step.targetMemberMaskedName());
+        map.put("action_kind", step.actionKind());
         map.put("command", step.command());
         map.put("description", step.description());
         map.put("risk_level", step.riskLevel());
@@ -186,7 +188,9 @@ public class FailoverAuthorizationController {
     }
 
     private static String opaqueClusterId(String clusterRef) {
-        if (clusterRef == null) return UUID.randomUUID().toString();
+        if (clusterRef == null || clusterRef.isBlank()) {
+            return "UNKNOWN_CLUSTER";
+        }
         if (clusterRef.length() == 36) {
             try {
                 UUID.fromString(clusterRef);

@@ -11,7 +11,6 @@ import com.securityexpert.nexus.ui2.jobs.failover.plan.FailoverDryRunPlanner;
 import com.securityexpert.nexus.ui2.jobs.failover.plan.FailoverExecutionPlan;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Map;
 import java.util.Objects;
@@ -24,7 +23,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * 1. An authorization lease is ONLY issued if the pre-flight readiness verdict has ZERO blocking conditions.
  * 2. Requester and approver are distinct authenticated identities.
  * 3. Lease tokens are single-use and expire within 15 minutes.
- * 4. Zero device mutations occur in Phase B (dry-run plan disclosure only).
+ * 4. Dry-run plan disclosure does NOT consume the execution lease token (Astra & Fable review fix).
+ *    Lease consumption occurs strictly when crossing the durable mutation boundary in execution.
+ * 5. Error messages do NOT leak raw cluster references (F-6).
  */
 @Service
 public class FailoverAuthorizationService {
@@ -83,6 +84,34 @@ public class FailoverAuthorizationService {
         Objects.requireNonNull(clientNonce, "clientNonce must not be null");
 
         if (consumedTokenIds.contains(tokenId)) {
+            throw new IllegalStateException("Failover lease token has already been consumed");
+        }
+
+        FailoverLeaseToken token = activeLeaseTokens.get(tokenId);
+        if (token == null) {
+            throw new IllegalArgumentException("No active failover lease token found with ID: " + tokenId);
+        }
+
+        // F-6: Do not leak raw cluster reference in error message
+        if (!token.clusterRef().equals(clusterRef)) {
+            throw new IllegalArgumentException("Lease token cluster mismatch: token not bound to requested cluster");
+        }
+
+        if (!fourEyesRule.verifyTokenSignature(token, clientNonce)) {
+            throw new SecurityException("Failover lease token signature is invalid, expired, or nonce mismatched");
+        }
+
+        // Note: Dry-run discloses the plan WITHOUT consuming the single-use execution lease.
+        ClusterEvidenceSnapshot snapshot = preflightService.buildSnapshotForCluster(clusterRef);
+        return dryRunPlanner.compileDryRunPlan(snapshot, token);
+    }
+
+    public synchronized FailoverLeaseToken consumeLeaseForExecution(String clusterRef, String tokenId, String clientNonce) {
+        Objects.requireNonNull(clusterRef, "clusterRef must not be null");
+        Objects.requireNonNull(tokenId, "tokenId must not be null");
+        Objects.requireNonNull(clientNonce, "clientNonce must not be null");
+
+        if (consumedTokenIds.contains(tokenId)) {
             throw new IllegalStateException("Failover lease token has already been consumed (single-use lease invariant)");
         }
 
@@ -92,18 +121,16 @@ public class FailoverAuthorizationService {
         }
 
         if (!token.clusterRef().equals(clusterRef)) {
-            throw new IllegalArgumentException("Lease token cluster mismatch: token bound to " + token.clusterRef());
+            throw new IllegalArgumentException("Lease token cluster mismatch: token not bound to requested cluster");
         }
 
         if (!fourEyesRule.verifyTokenSignature(token, clientNonce)) {
             throw new SecurityException("Failover lease token signature is invalid, expired, or nonce mismatched");
         }
 
-        // Single-use token consumption
+        // Atomically consume the token upon crossing mutation boundary
         consumedTokenIds.add(tokenId);
         activeLeaseTokens.remove(tokenId);
-
-        ClusterEvidenceSnapshot snapshot = preflightService.buildSnapshotForCluster(clusterRef);
-        return dryRunPlanner.compileDryRunPlan(snapshot, token);
+        return token;
     }
 }

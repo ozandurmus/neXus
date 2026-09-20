@@ -2,10 +2,10 @@ package com.securityexpert.nexus.ui2.jobs.failover.authz;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import javax.crypto.Mac;
@@ -19,7 +19,7 @@ import javax.crypto.spec.SecretKeySpec;
  * 3. Mandatory active maintenance window reference.
  * 4. Mandatory pre-flight assessment digest binding.
  * 5. Ephemeral lease lifetime (bounded to 15 minutes).
- * 6. Cryptographic token signing and single-use verification.
+ * 6. Cryptographic token signing with length-prefixed canonical framing (F-1) and single-use verification.
  */
 public class FourEyesValidationRule {
 
@@ -56,8 +56,10 @@ public class FourEyesValidationRule {
             );
         }
 
-        // 2. Dual-control separation: requester != approver
-        if (reqId.equalsIgnoreCase(appId)) {
+        // 2. Dual-control separation: canonical principal comparison (F-7)
+        String canonicalReq = reqId.toLowerCase(Locale.ROOT);
+        String canonicalApp = appId.toLowerCase(Locale.ROOT);
+        if (canonicalReq.equals(canonicalApp)) {
             return new FourEyesAuthorizationResult.Refused(
                 "FOUR_EYES_IDENTITY_COLLISION",
                 "Requester and approver must be distinct authenticated individuals (4-eyes dual control invariant)"
@@ -147,7 +149,14 @@ public class FourEyesValidationRule {
         try {
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
             mac.init(new SecretKeySpec(secretSigningKey, HMAC_ALGORITHM));
-            String payload = String.join(":", tokenId, clusterRef, requesterId, approverId, digest, String.valueOf(expiresAt.toEpochMilli()), nonce);
+            // F-1: Length-prefixed framing prevents delimiter collision and boundary shifting
+            String payload = lengthPrefixed(tokenId) + "|" +
+                             lengthPrefixed(clusterRef) + "|" +
+                             lengthPrefixed(requesterId) + "|" +
+                             lengthPrefixed(approverId) + "|" +
+                             lengthPrefixed(digest) + "|" +
+                             lengthPrefixed(String.valueOf(expiresAt.toEpochMilli())) + "|" +
+                             lengthPrefixed(nonce);
             byte[] rawHmac = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder(rawHmac.length * 2);
             for (byte b : rawHmac) {
@@ -157,5 +166,9 @@ public class FourEyesValidationRule {
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to compute HMAC-SHA256 signature", ex);
         }
+    }
+
+    private static String lengthPrefixed(String value) {
+        return (value != null ? value.length() : 0) + ":" + (value != null ? value : "");
     }
 }

@@ -123,7 +123,7 @@ class FailoverAuthorizationControllerTest {
     }
 
     @Test
-    @DisplayName("compileDryRun() compiles plan with DRY_RUN type and mutation_authorized=false, then enforces single-use token consumption")
+    @DisplayName("compileDryRun() compiles plan with DRY_RUN type and does NOT consume token; execution consumes lease")
     void compileDryRunAndEnforceSingleUse() {
         preflightService.setVerdict(PreflightVerdict.NO_BLOCKING_CONDITIONS_OBSERVED);
 
@@ -151,10 +151,21 @@ class FailoverAuthorizationControllerTest {
         assertNotNull(dryRunResp.getBody().get("transition_steps"));
         assertNotNull(dryRunResp.getBody().get("reversal_steps"));
 
-        // 3. Second dry-run call with same token must fail (single-use invariant)
+        // 3. Dry-run can be inspected again without consuming the execution lease (Astra & Fable review fix)
+        ResponseEntity<Map<String, Object>> secondDryRunResp = controller.compileDryRun("cls-01", dryRunPayload, req);
+        assertEquals(HttpStatus.OK, secondDryRunResp.getStatusCode());
+
+        // 4. Consume lease via execution boundary
+        FailoverLeaseToken consumed = authzService.consumeLeaseForExecution("cls-01", tokenId, "nonce-001");
+        assertNotNull(consumed);
+
+        // 5. Subsequent dry-run or execution with same token must fail (single-use invariant)
         ResponseEntity<Map<String, Object>> replayResp = controller.compileDryRun("cls-01", dryRunPayload, req);
         assertEquals(HttpStatus.CONFLICT, replayResp.getStatusCode());
         assertEquals("TOKEN_ALREADY_CONSUMED", replayResp.getBody().get("code"));
+
+        assertThrows(IllegalStateException.class,
+            () -> authzService.consumeLeaseForExecution("cls-01", tokenId, "nonce-001"));
     }
 
     private static class StubPreflightService extends PreflightService {

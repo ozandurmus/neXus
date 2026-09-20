@@ -65,4 +65,16 @@ describe("OperationsScreen tabs", () => {
     fireEvent.click(screen.getByText("Clear"));
     expect(screen.getByText("No HA pair or cluster enrolled")).toBeInTheDocument();
   });
+
+  it("opens 4-Eyes Controlled Failover Gate modal when Authorize Failover (4-Eyes) is clicked", () => {
+    render(withTheme(<OperationsScreen />));
+    fireEvent.click(screen.getByText(/Inspect CLS-ROMEO-01/i));
+
+    const authBtn = screen.getByRole("button", { name: "Authorize Failover (4-Eyes)" });
+    expect(authBtn).not.toBeDisabled();
+
+    fireEvent.click(authBtn);
+    expect(screen.getByText(/Phase B & C: 4-Eyes Controlled Failover Gate/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 1: Obtain 4-Eyes Authorization Lease/i)).toBeInTheDocument();
+  });
 });

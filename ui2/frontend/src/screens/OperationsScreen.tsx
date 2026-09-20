@@ -16,6 +16,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Tooltip from "@mui/material/Tooltip";
+import TextField from "@mui/material/TextField";
 
 import { ScreenHeader, MetricGrid, MetricCard, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
@@ -215,6 +216,23 @@ export function OperationsScreen() {
   const [apiChecks, setApiChecks] = useState<PreflightCheckItem[] | null>(null);
   const [apiVerdict, setApiVerdict] = useState<string | null>(null);
 
+  // Phase B / C 4-Eyes Failover and Execution states
+  const [showFailoverModal, setShowFailoverModal] = useState(false);
+  const [approverId, setApproverId] = useState("operator-bob");
+  const [reason, setReason] = useState("Emergency maintenance drill SEC-101");
+  const [mwRef, setMwRef] = useState("CHG-101");
+  const [nonce, setNonce] = useState("nonce-001");
+  const [leaseToken, setLeaseToken] = useState<string | null>(null);
+  const [dryRunPlan, setDryRunPlan] = useState<any | null>(null);
+  const [executionResult, setExecutionResult] = useState<any | null>(null);
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [quarantined, setQuarantined] = useState(false);
+  const [showQuarantineAckModal, setShowQuarantineAckModal] = useState(false);
+  const [ackApproverId, setAckApproverId] = useState("operator-bob");
+  const [ackReason, setAckReason] = useState("Verified cluster health manually via out-of-band console");
+
   useEffect(() => {
     if (!selectedCluster) {
       setApiChecks(null);
@@ -291,6 +309,99 @@ export function OperationsScreen() {
     }
   };
 
+  const handleAuthorizeAndDryRun = async () => {
+    if (!selectedCluster) return;
+    setIsAuthorizing(true);
+    setActionError(null);
+    try {
+      const authRes = await fetch(`/api/v2/failover/${selectedCluster}/authorize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          approver_id: approverId,
+          reason,
+          maintenance_window_ref: mwRef,
+          assessment_digest: "sha256:digest-abc",
+          nonce,
+        }),
+      });
+      const authData = await authRes.json();
+      if (!authRes.ok) {
+        throw new Error(authData.reason || authData.error || `HTTP ${authRes.status}`);
+      }
+      const tokId = authData.token_id;
+      setLeaseToken(tokId);
+
+      // Disclose dry-run plan (does NOT consume single-use execution lease)
+      const dryRes = await fetch(`/api/v2/failover/${selectedCluster}/dry-run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token_id: tokId,
+          nonce,
+        }),
+      });
+      const dryData = await dryRes.json();
+      if (!dryRes.ok) {
+        throw new Error(dryData.reason || dryData.error || `HTTP ${dryRes.status}`);
+      }
+      setDryRunPlan(dryData);
+    } catch (err: any) {
+      setActionError(err.message || "Authorization failed");
+    } finally {
+      setIsAuthorizing(false);
+    }
+  };
+
+  const handleExecuteFailover = async (kind: "CONTROLLED_FAILOVER" | "RETURN_TO_SERVICE") => {
+    if (!selectedCluster || !leaseToken) return;
+    setIsExecuting(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/v2/failover/${selectedCluster}/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token_id: leaseToken,
+          nonce,
+          action_kind: kind,
+        }),
+      });
+      const data = await res.json();
+      setExecutionResult(data);
+      if (data.quarantine_active || data.state === "OUTCOME_UNKNOWN") {
+        setQuarantined(true);
+      }
+      if (!res.ok && res.status !== 409 && res.status !== 422) {
+        throw new Error(data.reason || data.error || `HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      setActionError(err.message || "Execution error");
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  const handleAcknowledgeQuarantine = async () => {
+    if (!selectedCluster) return;
+    try {
+      const res = await fetch(`/api/v2/failover/${selectedCluster}/quarantine/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          approver_id: ackApproverId,
+          reason: ackReason,
+        }),
+      });
+      if (res.ok) {
+        setQuarantined(false);
+        setShowQuarantineAckModal(false);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const renderHaPanel = () => {
     if (!selectedCluster) {
       return (
@@ -354,6 +465,30 @@ export function OperationsScreen() {
             </Box>
           </Box>
         </Card>
+
+        {/* Sticky Quarantine Alert Banner */}
+        {quarantined && (
+          <Card sx={{ bgcolor: "#fff3e0", border: "1px solid #ffb74d", borderRadius: "12px", p: 2 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: "#e65100", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
+                  !
+                </Box>
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#e65100" }}>
+                    STICKY ENTITY QUARANTINE ACTIVE (OUTCOME_UNKNOWN)
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "#bf360c" }}>
+                    Cluster and member endpoints are locked from CLASS 2+ actions until 4-eyes audited acknowledgment.
+                  </Typography>
+                </Box>
+              </Box>
+              <M3Button emphasis="tonal" onClick={() => setShowQuarantineAckModal(true)}>
+                Acknowledge Quarantine (4-Eyes)
+              </M3Button>
+            </Box>
+          </Card>
+        )}
 
         {/* Overall Verdict Banner */}
         {overallVerdict === "BLOCKING_CONDITIONS_PRESENT" ? (
@@ -492,11 +627,18 @@ export function OperationsScreen() {
         </TableContainer>
 
         {/* Action Controls & Gate Disclosure */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 2, bgcolor: m3.scLow, borderRadius: "12px" }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 2, bgcolor: m3.scLow, borderRadius: "12px", flexWrap: "wrap", gap: 2 }}>
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
             Readiness assessment is observed. Device mutation actions require Phase B 4-Eyes authorization & Phase C command gate.
           </Typography>
           <Box sx={{ display: "flex", gap: 1.5 }}>
+            <M3Button
+              emphasis="filled"
+              disabled={overallVerdict !== "NO_BLOCKING_CONDITIONS_OBSERVED" || quarantined}
+              onClick={() => setShowFailoverModal(true)}
+            >
+              Authorize Failover (4-Eyes)
+            </M3Button>
             <Tooltip title="Disabled — Requires Phase B 4-Eyes Authorization & Phase C Gate Approval">
               <span>
                 <M3Button emphasis="outlined" disabled>
@@ -513,6 +655,220 @@ export function OperationsScreen() {
             </Tooltip>
           </Box>
         </Box>
+
+        {/* 4-Eyes Failover Authorization & Execution Dialog */}
+        <Dialog open={showFailoverModal} onClose={() => setShowFailoverModal(false)} maxWidth="md" fullWidth>
+          <DialogTitle sx={{ fontWeight: 600 }}>
+            Phase B & C: 4-Eyes Controlled Failover Gate — {clusterName}
+          </DialogTitle>
+          <DialogContent dividers>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+              {actionError && (
+                <Card sx={{ bgcolor: "#ffebee", border: "1px solid #ef9a9a", p: 1.5 }}>
+                  <Typography variant="body2" sx={{ color: "#c62828", fontWeight: 600 }}>
+                    {actionError}
+                  </Typography>
+                </Card>
+              )}
+
+              {/* Step 1: 4-Eyes Dual Control Inputs */}
+              {!leaseToken ? (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: m3.onSurface }}>
+                    Step 1: Obtain 4-Eyes Authorization Lease
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                    Failover execution is CLASS 2. A distinct secondary approver, operator reason (&gt;= 8 chars), and maintenance ticket are required.
+                  </Typography>
+                  <TextField
+                    label="Approver Principal ID"
+                    size="small"
+                    value={approverId}
+                    onChange={(e) => setApproverId(e.target.value)}
+                    helperText="Must be distinct authenticated principal holding OPERATE role"
+                    fullWidth
+                  />
+                  <TextField
+                    label="Operator Justification / Reason"
+                    size="small"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    helperText="Mandatory minimum 8 characters justification"
+                    fullWidth
+                  />
+                  <TextField
+                    label="Maintenance Window / Change Ticket Ref"
+                    size="small"
+                    value={mwRef}
+                    onChange={(e) => setMwRef(e.target.value)}
+                    fullWidth
+                  />
+                  <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                    <M3Button
+                      emphasis="filled"
+                      disabled={isAuthorizing || reason.trim().length < 8 || !approverId.trim() || !mwRef.trim()}
+                      onClick={handleAuthorizeAndDryRun}
+                    >
+                      {isAuthorizing ? "Authorizing & Disclosing Plan..." : "Authorize & Preview Dry-Run Plan"}
+                    </M3Button>
+                  </Box>
+                </Box>
+              ) : (
+                /* Step 2 & 3: Dry-Run Plan Disclosure and Controlled Execution */
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <Card sx={{ bgcolor: m3.scLow, p: 2, borderRadius: "8px" }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                      ✓ 4-Eyes Lease Token Issued: <span style={{ fontFamily: "monospace" }}>{leaseToken}</span>
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+                      Token valid for 15 minutes. Bound to pre-flight assessment digest. Dry-run disclosed below WITHOUT consuming execution lease.
+                    </Typography>
+                  </Card>
+
+                  {dryRunPlan && (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        Dry-Run Plan: Planned Mutation & Reversal Steps
+                      </Typography>
+                      <TableContainer component={Paper} sx={{ borderRadius: "8px", border: `1px solid ${m3.outlineVar}` }}>
+                        <Table size="small">
+                          <TableHead sx={{ bgcolor: m3.scLow }}>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 600 }}>#</TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>Target Member</TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>Action Kind</TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>Command Literal</TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>Risk Class</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {dryRunPlan.transition_steps?.map((st: any) => (
+                              <TableRow key={st.step_number}>
+                                <TableCell>{st.step_number}</TableCell>
+                                <TableCell sx={{ fontWeight: 500 }}>{st.target_member_masked_name || st.target_member}</TableCell>
+                                <TableCell><Chip size="small" label={st.action_kind || "FAILOVER"} /></TableCell>
+                                <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{st.command}</TableCell>
+                                <TableCell sx={{ fontSize: 12 }}>{st.risk_level}</TableCell>
+                              </TableRow>
+                            ))}
+                            {dryRunPlan.reversal_steps?.map((st: any) => (
+                              <TableRow key={`rev-${st.step_number}`} sx={{ bgcolor: "#fafafa" }}>
+                                <TableCell>Reversal</TableCell>
+                                <TableCell sx={{ fontWeight: 500 }}>{st.target_member_masked_name || st.target_member}</TableCell>
+                                <TableCell><Chip size="small" label={st.action_kind || "REVERSAL"} color="secondary" /></TableCell>
+                                <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{st.command}</TableCell>
+                                <TableCell sx={{ fontSize: 12 }}>{st.risk_level}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+
+                      <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+                        <strong>Continuity Assessment:</strong> {dryRunPlan.session_continuity_risk}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+                        <strong>Preemption Policy:</strong> {dryRunPlan.preemption_behavior}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Execution Action & Outcome */}
+                  {!executionResult ? (
+                    <Box sx={{ mt: 1, p: 2, bgcolor: "#fff3e0", borderRadius: "8px", border: "1px solid #ffe0b2" }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#e65100" }}>
+                        ⚠️ MUTATION BOUNDARY
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: "#bf360c", mb: 2 }}>
+                        Executing controlled failover submits an at-most-once command across the mutation boundary. Zero blind retries will occur.
+                      </Typography>
+                      <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1.5 }}>
+                        <M3Button emphasis="text" onClick={() => setShowFailoverModal(false)} disabled={isExecuting}>
+                          Cancel
+                        </M3Button>
+                        <M3Button
+                          emphasis="filled"
+                          disabled={isExecuting}
+                          onClick={() => handleExecuteFailover("CONTROLLED_FAILOVER")}
+                        >
+                          {isExecuting ? "Executing across boundary..." : "Execute Controlled Failover"}
+                        </M3Button>
+                      </Box>
+                    </Box>
+                  ) : (
+                    /* Execution Result Display */
+                    <Card sx={{ p: 2, bgcolor: executionResult.state === "SUCCEEDED" ? "#e8f5e9" : "#fff3e0", border: `1px solid ${executionResult.state === "SUCCEEDED" ? "#a5d6a7" : "#ffb74d"}` }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: executionResult.state === "SUCCEEDED" ? "#1b5e20" : "#e65100" }}>
+                        EXECUTION STATE: {executionResult.state}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>
+                        {executionResult.summary}
+                      </Typography>
+                      <Typography variant="caption" display="block" sx={{ mt: 1, color: m3.onSurfaceVar }}>
+                        Execution ID: {executionResult.execution_id} • Boundary Crossed: {executionResult.boundary_crossed_at || "NOT_CROSSED"}
+                      </Typography>
+                      {executionResult.state === "SUCCEEDED" && (
+                        <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
+                          <M3Button
+                            emphasis="outlined"
+                            disabled={isExecuting}
+                            onClick={() => handleExecuteFailover("RETURN_TO_SERVICE")}
+                          >
+                            Return to Service (Reversal Action)
+                          </M3Button>
+                        </Box>
+                      )}
+                    </Card>
+                  )}
+                </Box>
+              )}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <M3Button emphasis="filled" onClick={() => setShowFailoverModal(false)}>
+              Close
+            </M3Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Quarantine Acknowledgment Modal */}
+        <Dialog open={showQuarantineAckModal} onClose={() => setShowQuarantineAckModal(false)} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ fontWeight: 600 }}>Acknowledge Sticky Quarantine (4-Eyes)</DialogTitle>
+          <DialogContent dividers>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                Entity quarantine protects the cluster and both endpoints from conflicting mutations. Acknowledgment requires a second authorized approver.
+              </Typography>
+              <TextField
+                label="Second Approver ID"
+                size="small"
+                value={ackApproverId}
+                onChange={(e) => setAckApproverId(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Investigation Findings & Verification Reason"
+                size="small"
+                value={ackReason}
+                onChange={(e) => setAckReason(e.target.value)}
+                helperText="Minimum 8 characters documenting manual state verification"
+                fullWidth
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <M3Button emphasis="text" onClick={() => setShowQuarantineAckModal(false)}>
+              Cancel
+            </M3Button>
+            <M3Button
+              emphasis="filled"
+              disabled={ackReason.trim().length < 8 || !ackApproverId.trim()}
+              onClick={handleAcknowledgeQuarantine}
+            >
+              Confirm & Lift Quarantine
+            </M3Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Check Details Dialog */}
         <Dialog open={selectedCheck !== null} onClose={() => setSelectedCheck(null)} maxWidth="sm" fullWidth>
