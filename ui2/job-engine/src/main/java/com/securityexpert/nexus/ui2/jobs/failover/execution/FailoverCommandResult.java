@@ -30,6 +30,23 @@ public record FailoverCommandResult(
         Objects.requireNonNull(commandSummary, "commandSummary must not be null");
         Objects.requireNonNull(executedAt, "executedAt must not be null");
         Objects.requireNonNull(certainty, "certainty must not be null");
+
+        // CF-P0.16: success and delivery certainty are two different claims, and only
+        // one combination of them is coherent in each direction. A successful result
+        // carrying DELIVERY_UNKNOWN would assert that a command both worked and may
+        // never have arrived, and downstream that combination slipped past the
+        // fail-closed path; an unsuccessful result carrying SUBMITTED_SUCCESS would be
+        // read as an affirmative device rejection when nothing affirmed it. Neither is
+        // representable: a caller that cannot say which one it means must say
+        // DELIVERY_UNKNOWN on an unsuccessful result and let the boundary fail closed.
+        if (successful && certainty != DeliveryCertainty.SUBMITTED_SUCCESS) {
+            throw new IllegalArgumentException(
+                "a successful command result must carry SUBMITTED_SUCCESS, not " + certainty);
+        }
+        if (!successful && certainty == DeliveryCertainty.SUBMITTED_SUCCESS) {
+            throw new IllegalArgumentException(
+                "an unsuccessful command result must not carry SUBMITTED_SUCCESS");
+        }
     }
 
     public static FailoverCommandResult success(String commandSummary) {

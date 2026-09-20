@@ -54,8 +54,15 @@ public class FailoverKeyManagementService {
     static final String ENV_MASTER_SECRET = "NEXUS_FAILOVER_MASTER_SECRET";
     static final String SYSPROP_MASTER_SECRET = "nexus.failover.master-secret";
     private static final String DEFAULT_KEY_FILE = ".nexus_failover_master.key";
+    /** Records that this location has already been provisioned once; see resolveFromLocalStorageFile. */
+    private static final String PROVISIONED_MARKER_SUFFIX = ".provisioned";
+    private static final String PROVISIONED_MARKER_CONTENT =
+        "This location was provisioned with a failover signing key. If the key file is missing while this\n"
+        + "marker is present, the key was lost: the service fails closed to ABORTED_KEY_UNAVAILABLE rather\n"
+        + "than minting a replacement, which would report every existing schedule as tampered.\n";
 
     private final Path keyFile;
+    private final Path provisioningMarker;
     private final Map<String, ScheduleCryptographicService> cryptoServicesByKeyId = new ConcurrentHashMap<>();
     private volatile byte[] resolvedMasterSecret;
 
@@ -71,6 +78,7 @@ public class FailoverKeyManagementService {
     /** Test/tooling entry point: pin the local storage file to an isolated location. */
     public FailoverKeyManagementService(Path keyFile) {
         this.keyFile = Objects.requireNonNull(keyFile, "keyFile must not be null");
+        this.provisioningMarker = this.keyFile.resolveSibling(this.keyFile.getFileName() + PROVISIONED_MARKER_SUFFIX);
     }
 
     /**
@@ -157,6 +165,20 @@ public class FailoverKeyManagementService {
                 return Optional.of(HexFormat.of().parseHex(hex));
             }
 
+            // CF-P0.5: a missing key file is only safe to replace the very first time.
+            // Generating a fresh key after the key was lost is worse than refusing to
+            // start: every schedule sealed under the old key then fails verification and
+            // is reported as ABORTED_TAMPERED, so an operational accident -- an
+            // unmounted volume, a cleaned directory -- becomes indistinguishable from an
+            // attacker having altered a schedule. The provisioning marker records that a
+            // key once existed here, and its presence without the key means loss, which
+            // fails closed to ABORTED_KEY_UNAVAILABLE.
+            if (Files.exists(provisioningMarker)) {
+                LOG.warn("failover_key_unavailable: key file is missing but this location was already provisioned; "
+                    + "refusing to mint a replacement (path={})", keyFile);
+                return Optional.empty();
+            }
+
             byte[] generated = new byte[32];
             new SecureRandom().nextBytes(generated);
             String hex = HexFormat.of().formatHex(generated);
@@ -166,7 +188,9 @@ public class FailoverKeyManagementService {
             }
             Files.writeString(keyFile, hex, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            LOG.info("failover_master_key_generated: persisted a new durable signing key (path={})", keyFile);
+            Files.writeString(provisioningMarker, PROVISIONED_MARKER_CONTENT, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+            LOG.info("failover_master_key_generated: persisted a new durable signing key on first provisioning (path={})", keyFile);
             return Optional.of(generated);
         } catch (IOException | IllegalArgumentException e) {
             LOG.warn("failover_key_unavailable: local storage file could not be read or created (path={}, cause={})",

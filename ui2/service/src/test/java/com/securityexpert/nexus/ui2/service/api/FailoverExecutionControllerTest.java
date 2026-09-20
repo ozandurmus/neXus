@@ -182,6 +182,78 @@ class FailoverExecutionControllerTest {
         assertFalse(executionService.isClusterQuarantined("cls-uuid-cp"));
     }
 
+    /**
+     * CF-P0.18. Return to service used to be judged on the restored member alone, so the
+     * one state a highly available pair must never reach -- both members active -- was
+     * reported as a clean success.
+     */
+    @Test
+    @DisplayName("return to service with both members ACTIVE is quarantined, never reported as success")
+    void returnToServiceRefusesSplitBrain() {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "operator-alice");
+
+        executionService.registerExecutor(new CheckPointClusterXLExecutor(
+            (memberId, cmd) -> FailoverCommandResult.success("Executed " + cmd),
+            (clusterId, memberId) -> MemberObservation.of(memberId, "ACTIVE", true, true, "OK")
+        ));
+
+        String tokenId = issueValidToken("cls-uuid-cp", "nonce-rts-1");
+        var payload = new FailoverExecutionController.ExecutePayload(tokenId, "nonce-rts-1", "RETURN_TO_SERVICE");
+
+        ResponseEntity<Map<String, Object>> response = controller.executeFailover("cls-uuid-cp", payload, req);
+
+        assertEquals("OUTCOME_UNKNOWN", response.getBody().get("state"),
+            "both members reporting ACTIVE is split brain and must not be a success");
+        assertEquals(true, response.getBody().get("quarantine_active"));
+        assertTrue(executionService.isClusterQuarantined("cls-uuid-cp"));
+    }
+
+    @Test
+    @DisplayName("return to service quarantines when the peer's role is not affirmatively recognized")
+    void returnToServiceRefusesUnrecognizedPeerRole() {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "operator-alice");
+
+        executionService.registerExecutor(new CheckPointClusterXLExecutor(
+            (memberId, cmd) -> FailoverCommandResult.success("Executed " + cmd),
+            // The restored member recovers, but the peer answers with a role this build
+            // has never proven the meaning of. Silence about the peer is not safety.
+            (clusterId, memberId) -> MemberObservation.of(
+                memberId, "dev-cp-1".equals(memberId) ? "ACTIVE" : "SOME-NOVEL-VENDOR-ROLE", true, true, "OK")
+        ));
+
+        String tokenId = issueValidToken("cls-uuid-cp", "nonce-rts-2");
+        var payload = new FailoverExecutionController.ExecutePayload(tokenId, "nonce-rts-2", "RETURN_TO_SERVICE");
+
+        ResponseEntity<Map<String, Object>> response = controller.executeFailover("cls-uuid-cp", payload, req);
+
+        assertEquals("OUTCOME_UNKNOWN", response.getBody().get("state"));
+        assertEquals(true, response.getBody().get("quarantine_active"));
+    }
+
+    @Test
+    @DisplayName("return to service succeeds when the restored member recovers and the peer is a recognized, non-conflicting role")
+    void returnToServiceSucceedsOnASafePair() {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "operator-alice");
+
+        executionService.registerExecutor(new CheckPointClusterXLExecutor(
+            (memberId, cmd) -> FailoverCommandResult.success("Executed " + cmd),
+            (clusterId, memberId) -> MemberObservation.of(
+                memberId, "dev-cp-1".equals(memberId) ? "STANDBY" : "ACTIVE", true, true, "OK")
+        ));
+
+        String tokenId = issueValidToken("cls-uuid-cp", "nonce-rts-3");
+        var payload = new FailoverExecutionController.ExecutePayload(tokenId, "nonce-rts-3", "RETURN_TO_SERVICE");
+
+        ResponseEntity<Map<String, Object>> response = controller.executeFailover("cls-uuid-cp", payload, req);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("SUCCEEDED", response.getBody().get("state"));
+        assertEquals(false, response.getBody().get("quarantine_active"));
+    }
+
     private static class StubPreflightService extends PreflightService {
         private PreflightVerdict verdict = PreflightVerdict.NO_BLOCKING_CONDITIONS_OBSERVED;
 

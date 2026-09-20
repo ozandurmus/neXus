@@ -77,6 +77,24 @@ public record BaselineSnapshotSummary(
         }
     }
 
+    /**
+     * CF-P0.2: re-derives the digest from this baseline's own content and compares it
+     * against the digest the record carries.
+     *
+     * <p>The envelope signature covers {@code assessmentDigest}, not the baseline fields
+     * behind it, so a signature that verifies proves only that the digest is the one that
+     * was signed. Without this check a party able to write the stored baseline could
+     * change which member is recorded as active, leave the old digest in place, and still
+     * pass envelope verification -- which would aim a mutating command at the wrong
+     * member. Constant-time comparison, because the digest is a verification secret in
+     * the only sense that matters here: an attacker must not learn how close a guess is.
+     */
+    public boolean digestMatchesContent() {
+        byte[] carried = assessmentDigest.getBytes(StandardCharsets.UTF_8);
+        byte[] recomputed = computeCanonicalDigest().getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(carried, recomputed);
+    }
+
     private static void appendField(StringBuilder sb, String value) {
         if (value == null) {
             sb.append("-1:NULL|");

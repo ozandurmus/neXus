@@ -549,6 +549,15 @@
       "priority": "P1",
       "target": "FailoverPilotAllowlist",
       "note": ""
+    },
+    {
+      "id": "java_product_plan_build_selection_is_stale",
+      "category": "project_state",
+      "title": "java_product_plan.json product_build_ids stops at NXS-LOCAL-0165 and omits every UI2 build since, so the Administration project-plan payload under-reports the Java product",
+      "status": "planned",
+      "priority": "P2",
+      "target": "project/java_product_plan.json product_build_ids",
+      "note": ""
     }
   ]
 }

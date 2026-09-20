@@ -297,6 +297,22 @@ public class FailoverScheduleService {
             return keyUnavailable;
         }
 
+        // 2b. Baseline content integrity (CF-P0.2). The envelope signature below covers
+        // the digest, not the baseline fields behind it, so it can only prove that the
+        // digest is the one that was signed. Re-derive the digest from the stored
+        // baseline first: without this, a party able to write the stored baseline could
+        // change the recorded active member, keep the old digest, pass envelope
+        // verification, and have a mutating command aimed at the wrong member of the pair.
+        if (!record.baselineSummary().digestMatchesContent()) {
+            FailoverScheduleRecord baselineTampered = record.withAbort(
+                FailoverScheduleStatus.ABORTED_TAMPERED, "BASELINE_DIGEST_MISMATCH",
+                "Stored baseline content does not re-derive to its recorded assessment digest"
+            );
+            updateScheduleCas(scheduleId, record.status(), baselineTampered);
+            scheduleLedger.recordTransition(scheduleId, record.status(), FailoverScheduleStatus.ABORTED_TAMPERED, attemptId, triggeringActor, "Baseline digest mismatch at dispatch");
+            return baselineTampered;
+        }
+
         // 3. Cryptographic Envelope Verification (Claude F-P0.3)
         FailoverScheduleEnvelope envelope = new FailoverScheduleEnvelope(
             record.scheduleId(), record.clusterRef(), record.vendor(), record.commandFamilyId(),

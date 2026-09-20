@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "reviewed_at": "2026-09-17",
-  "reviewed_current_build": "NXS-LOCAL-0330",
+  "reviewed_at": "2026-09-20",
+  "reviewed_current_build": "NXS-LOCAL-0346",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -105,7 +105,11 @@
     "ui2_service_cannot_bootstrap_an_empty_database": "java_debt",
     "job_failure_reason_is_never_recorded": "java_debt",
     "ui2_microservices_deployment_split": "java_debt",
-    "ui2_private_play_and_mockup_view": "java_feature"
+    "ui2_private_play_and_mockup_view": "java_feature",
+    "failover_p0_closure_set": "java_debt",
+    "failover_pilot_fence_is_compiled_in": "java_debt",
+    "failover_phase_d_has_no_build_record": "agent_operations",
+    "java_product_plan_build_selection_is_stale": "agent_operations"
   },
   "converted_lessons": [
     {

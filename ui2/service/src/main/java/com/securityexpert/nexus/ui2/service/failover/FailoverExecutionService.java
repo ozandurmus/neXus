@@ -260,12 +260,33 @@ public class FailoverExecutionService {
                     );
                 }
 
-                // F-P1.3 / CF-P0.16 / CF-P0.18: delivery-certainty-typed rejection handling.
+                // CF-P0.16: uncertain delivery fails closed on its own terms, before the
+                // result's own success claim is consulted at all. This guard used to sit
+                // inside the not-successful branch, so a result claiming success while
+                // carrying DELIVERY_UNKNOWN walked past quarantine into normal
+                // post-verification. FailoverCommandResult now refuses to represent that
+                // pair; this check is the second line, because the question "did the
+                // command reach the device" is not answered by "did it work".
+                if (cmdResult.certainty() == FailoverCommandResult.DeliveryCertainty.DELIVERY_UNKNOWN) {
+                    String uncertainReason = cmdResult.errorReason() != null ? cmdResult.errorReason() : "UNKNOWN";
+                    quarantineStore.engageQuarantine(clusterRef, executionId,
+                        "Command delivery certainty is DELIVERY_UNKNOWN across mutation boundary: " + uncertainReason,
+                        Set.of(active.memberId(), standby.memberId()));
+                    return recordResult(
+                        executionId, clusterRef, maskedName, vendor, actionKind,
+                        FailoverExecutionState.OUTCOME_UNKNOWN, requestedAt, boundaryCrossedAt,
+                        active.memberId(), active.maskedName(), consumedToken.requesterId(), consumedToken.approverId(),
+                        preObs, cmdResult, null, true,
+                        "Command delivery could not be confirmed; entity quarantined"
+                    );
+                }
+
+                // F-P1.3 / CF-P0.18: delivery-certainty-typed rejection handling.
                 if (!cmdResult.successful()) {
                     String safeErrorReason = cmdResult.errorReason() != null ? cmdResult.errorReason() : "UNKNOWN";
 
-                    // Any delivery outcome that is not affirmatively known to have failed to reach
-                    // the device (transport drop, timeout, ambiguous vendor response) must fail closed.
+                    // Retained as a defensive branch: the guard above already returned for
+                    // DELIVERY_UNKNOWN, so reaching this is a contradiction, not a state.
                     if (cmdResult.certainty() == FailoverCommandResult.DeliveryCertainty.DELIVERY_UNKNOWN) {
                         quarantineStore.engageQuarantine(clusterRef, executionId,
                             "Command delivery certainty is DELIVERY_UNKNOWN across mutation boundary: " + safeErrorReason,
@@ -393,7 +414,46 @@ public class FailoverExecutionService {
                     // Affirmative allow-list of vendor-safe recovered roles (Claude CF-P0.21).
                     // A negative list (!DOWN && !SUSPENDED) would treat an unrecognized or novel
                     // vendor role string as recovered by default; require a known-good role instead.
-                    boolean demotedRestored = AFFIRMATIVE_RECOVERED_ROLES.contains(postA.observedRole().toUpperCase(Locale.ROOT));
+                    //
+                    // CF-P0.18: the restored member recovering is not on its own a safe outcome.
+                    // Return to service is a two-member question, so the peer is evaluated
+                    // affirmatively too and the resulting pair must be a safe one. Two members
+                    // both reporting ACTIVE is the split-brain this whole engine exists to avoid;
+                    // it is never reported as success, and an unrecognized peer role is not read
+                    // as safe by default.
+                    String restoredRole = postA.observedRole() == null ? "" : postA.observedRole().toUpperCase(Locale.ROOT);
+                    String peerRole = postB.observedRole() == null ? "" : postB.observedRole().toUpperCase(Locale.ROOT);
+                    boolean restoredMemberRecovered = AFFIRMATIVE_RECOVERED_ROLES.contains(restoredRole);
+                    boolean peerRoleAffirmativelyKnown = AFFIRMATIVE_RECOVERED_ROLES.contains(peerRole);
+                    boolean bothMembersActive = "ACTIVE".equals(restoredRole) && "ACTIVE".equals(peerRole);
+
+                    if (bothMembersActive) {
+                        quarantineStore.engageQuarantine(clusterRef, executionId,
+                            "Both members report ACTIVE after return to service",
+                            Set.of(active.memberId(), standby.memberId()));
+                        return recordResult(
+                            executionId, clusterRef, maskedName, vendor, actionKind,
+                            FailoverExecutionState.OUTCOME_UNKNOWN, requestedAt, boundaryCrossedAt,
+                            active.memberId(), active.maskedName(), consumedToken.requesterId(), consumedToken.approverId(),
+                            preObs, cmdResult, postObs, true,
+                            "Both members report the active role after return to service; sticky quarantine engaged"
+                        );
+                    }
+
+                    if (restoredMemberRecovered && !peerRoleAffirmativelyKnown) {
+                        quarantineStore.engageQuarantine(clusterRef, executionId,
+                            "Peer member role not affirmatively recognized after return to service",
+                            Set.of(active.memberId(), standby.memberId()));
+                        return recordResult(
+                            executionId, clusterRef, maskedName, vendor, actionKind,
+                            FailoverExecutionState.OUTCOME_UNKNOWN, requestedAt, boundaryCrossedAt,
+                            active.memberId(), active.maskedName(), consumedToken.requesterId(), consumedToken.approverId(),
+                            preObs, cmdResult, postObs, true,
+                            "Restored member recovered but the peer role is not affirmatively recognized; sticky quarantine engaged"
+                        );
+                    }
+
+                    boolean demotedRestored = restoredMemberRecovered && peerRoleAffirmativelyKnown;
 
                     if (demotedRestored) {
                         return recordResult(
