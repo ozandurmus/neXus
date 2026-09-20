@@ -1,0 +1,147 @@
+{
+  "id": "NXS-LOCAL-0339",
+  "movement": "NXS-LOCAL-0339",
+  "schema_version": 1,
+  "status": "CLOSED",
+  "next_actor": null,
+  "created_at": "2026-09-19T14:00:00Z",
+  "updated_at": "2026-09-19T16:45:00Z",
+  "refs": [
+    "docs/design/PAN_DISCOVERY_CONTRACT.md",
+    "docs/design/PAN_INVENTORY_MEASURED_FORMS.md"
+  ],
+  "entries": [
+    {
+      "seq": 1,
+      "actor": "po",
+      "marker": "SESSION_START",
+      "timestamp": "2026-09-19T14:00:00Z",
+      "report": {
+        "baseline": {
+          "authority": "docs/design/PAN_DISCOVERY_CONTRACT.md",
+          "observed": "Palo Alto firewalls could only be discovered through Panorama, with no direct device XML API inventory collection or multi-vsys interface attribution.",
+          "what_exists": "Panorama candidate discovery and Check Point SSH inventory collector."
+        },
+        "objective": "Enable Palo Alto direct device enrollment, XML API inventory collection, TLS trust hardening, and multi-VSYS routing/interface attribution.",
+        "scope": {
+          "in": [
+            "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/pan/",
+            "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/trust/PaloAltoDeviceTrust.java",
+            "ui2/frontend/src/screens/InventoryPanels.tsx"
+          ],
+          "out": [
+            "Check Point SSH transport"
+          ]
+        },
+        "movement_type": "IMPLEMENTATION",
+        "requirements": [
+          "Implement direct device HTTPS XML API inventory collector for PAN-OS",
+          "Implement X509ExtendedTrustManager with colon-normalized SHA256 pinning",
+          "Parse multi-VSYS interfaces, routing tables, and HA status",
+          "Ensure AIView pseudonymization compliance during live validation"
+        ],
+        "acceptance_criteria": [
+          "Direct PAN-OS enrollment succeeds over HTTPS XML API",
+          "TLS trust verifier accepts colon-normalized fingerprints and rejects mismatches",
+          "Interfaces and routes mapped to respective VSYS contexts",
+          "Live collection verified on FW-TANGO-04"
+        ],
+        "validation_plan": [
+          {
+            "name": "pan_inventory_tests",
+            "argv": [
+              "./gradlew",
+              ":worker:test",
+              "--tests",
+              "*PaloAlto*"
+            ]
+          }
+        ],
+        "invariants": [
+          "Never log plaintext PAN credentials in URLs or messages",
+          "Strict fail-closed TLS verification"
+        ],
+        "risks": [
+          "Self-signed TLS certificate rejection by standard trust managers"
+        ],
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "recommended_reasoning": {
+          "tier": "main engineer",
+          "reason": "PAN-OS XML API protocol, custom TLS trust manager, and multi-VSYS parsing"
+        },
+        "git": {
+          "lane": "feature/palo-alto-direct-enrollment-and-live-inventory",
+          "base": "origin/main"
+        },
+        "merge_gate": "PO opens/merges.",
+        "deployment_direction": "staging-like",
+        "output_contract": [
+          "Merged commit 1567c30."
+        ]
+      }
+    },
+    {
+      "seq": 2,
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "timestamp": "2026-09-19T16:45:00Z",
+      "report": {
+        "completed": [
+          "Implemented PaloAltoInventoryCollector and PaloAltoDeviceTrust",
+          "Hardened X509ExtendedTrustManager against premature hostname verification",
+          "Verified direct live inventory collection on FW-TANGO-04 under aiview"
+        ],
+        "changed": [
+          "Updated PaloAltoDeviceTrust with custom trust managers",
+          "Added multi-vsys interface extraction in CompositeDeviceTransport",
+          "Updated inventory panels to render PAN-OS VSYS tabs"
+        ],
+        "preserved": [
+          "Panorama discovery flow preserved intact",
+          "Check Point SSH inventory mechanisms unmodified"
+        ],
+        "validation": {
+          "targeted": "PASS: :worker:test PaloAlto test suite green",
+          "affected": "ui2-worker and inventory screens",
+          "full_regression": "PASS: full gradle build clean",
+          "privacy": "PASS: 0 privacy gate findings",
+          "state_consistency": "PASS",
+          "diff_check": "PASS",
+          "real_environment": "PASS: verified live on FW-TANGO-04 on HOST-A"
+        },
+        "unresolved_risks": [],
+        "state_updates": [
+          "CURRENT_STATE.md: NXS-LOCAL-0339 recorded as real_env_validated"
+        ],
+        "next": {
+          "movement": "NXS-LOCAL-0340",
+          "movement_type": "IMPLEMENTATION",
+          "status": "planned",
+          "objective": "Check Point single-session SSH command batching and VSYS formatting"
+        },
+        "recommended_reasoning": {
+          "tier": "main engineer",
+          "reason": "SSH transport optimization and VSYS formatting"
+        },
+        "continuation": "SAME_SESSION",
+        "integration": {
+          "branch": "main",
+          "head_sha": "1567c30",
+          "pr": null,
+          "pr_url": null,
+          "ci": "PASS",
+          "merge_state": "MERGED",
+          "merge_commit": "1567c30",
+          "merge_decision": "Approved by Product Owner"
+        },
+        "effects": {
+          "main_py": "None",
+          "ui": "Palo Alto devices show live interface and routing evidence per VSYS"
+        }
+      }
+    }
+  ]
+}

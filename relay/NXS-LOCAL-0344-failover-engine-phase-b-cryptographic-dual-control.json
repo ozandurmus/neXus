@@ -1,0 +1,147 @@
+{
+  "id": "NXS-LOCAL-0344",
+  "movement": "NXS-LOCAL-0344",
+  "schema_version": 1,
+  "status": "CLOSED",
+  "next_actor": null,
+  "created_at": "2026-09-20T04:00:00Z",
+  "updated_at": "2026-09-20T06:30:00Z",
+  "refs": [
+    "docs/design/FAILOVER_ENGINE_ARCHITECTURE.md",
+    "docs/design/UI2_0_FAILOVER_ENGINE_ARCHITECTURE.md"
+  ],
+  "entries": [
+    {
+      "seq": 1,
+      "actor": "po",
+      "marker": "SESSION_START",
+      "timestamp": "2026-09-20T04:00:00Z",
+      "report": {
+        "baseline": {
+          "authority": "docs/design/FAILOVER_ENGINE_ARCHITECTURE.md",
+          "observed": "Failover readiness assessment was read-only; no mechanism existed to compile dry-run failover plans or enforce cryptographic 4-Eyes dual control authorization prior to executing CLASS 2 writes.",
+          "what_exists": "OP.0a readiness evaluator and action taxonomy."
+        },
+        "objective": "Implement Failover Engine Phase B: cryptographic 4-Eyes dual control authorization (requesterId != approverId), single-use HMAC-SHA256 lease tokens, and read-only dry-run plan compiler.",
+        "scope": {
+          "in": [
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/failover/FailoverPlanCompiler.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/failover/FailoverAuthorizationService.java",
+            "ui2/service/src/main/resources/db/migration/V31__failover_engine_schema.sql"
+          ],
+          "out": [
+            "Real hardware command execution (Phase C)"
+          ]
+        },
+        "movement_type": "IMPLEMENTATION",
+        "requirements": [
+          "Implement FailoverPlanCompiler for Check Point ClusterXL and Palo Alto Networks HA",
+          "Implement FailoverAuthorizationService enforcing requesterId != approverId",
+          "Generate single-use HMAC-SHA256 lease tokens with 300s TTL and canonical length-prefixed framing",
+          "Create V31 Flyway schema for failover plans, authorization leases, and execution audit ledger"
+        ],
+        "acceptance_criteria": [
+          "Dry-run plan compiles without network mutation",
+          "Self-approval attempt rejected with 403 / DUAL_CONTROL_VIOLATION",
+          "Lease token validated cryptographically with single-use replay protection",
+          "All failover unit tests pass"
+        ],
+        "validation_plan": [
+          {
+            "name": "failover_phase_b_tests",
+            "argv": [
+              "./gradlew",
+              ":service:test",
+              "--tests",
+              "*Failover*"
+            ]
+          }
+        ],
+        "invariants": [
+          "Strict dual control: requesterId != approverId invariant is inviolable",
+          "Lease token is single-use and invalid after expiry"
+        ],
+        "risks": [
+          "Clock drift impacting token TTL evaluation"
+        ],
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "recommended_reasoning": {
+          "tier": "architecture",
+          "reason": "Cryptographic authorization token design, length-prefixed framing, and failover plan compilation"
+        },
+        "git": {
+          "lane": "feature/failover-engine-phase-b",
+          "base": "origin/main"
+        },
+        "merge_gate": "PO opens/merges.",
+        "deployment_direction": "staging-like",
+        "output_contract": [
+          "Merged commit 719d6b4."
+        ]
+      }
+    },
+    {
+      "seq": 2,
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "timestamp": "2026-09-20T06:30:00Z",
+      "report": {
+        "completed": [
+          "Implemented FailoverPlanCompiler and FailoverAuthorizationService",
+          "Delivered cryptographic 4-Eyes HMAC-SHA256 dual-control lease token engine",
+          "Applied V31 Flyway migration and verified unit tests"
+        ],
+        "changed": [
+          "Added failover services and controller endpoints under /api/v2/failover",
+          "Added V31__failover_engine_schema.sql",
+          "Added FailoverPlanCompilerTest and FailoverAuthorizationServiceTest"
+        ],
+        "preserved": [
+          "Action taxonomy CLASS 2 safety boundaries preserved",
+          "Read-only readiness checks preserved"
+        ],
+        "validation": {
+          "targeted": "PASS: all Failover tests green",
+          "affected": "ui2-service failover module",
+          "full_regression": "PASS: full gradle build clean",
+          "privacy": "PASS: 0 privacy gate findings",
+          "state_consistency": "PASS",
+          "diff_check": "PASS",
+          "real_environment": "PASS: verified on HOST-A testbed"
+        },
+        "unresolved_risks": [],
+        "state_updates": [
+          "CURRENT_STATE.md: NXS-LOCAL-0344 recorded as automated_validated"
+        ],
+        "next": {
+          "movement": "NXS-LOCAL-0345",
+          "movement_type": "IMPLEMENTATION",
+          "status": "planned",
+          "objective": "Controlled manual failover execution under CLASS 2 invariants (Phase C)"
+        },
+        "recommended_reasoning": {
+          "tier": "architecture",
+          "reason": "Controlled CLASS 2 execution, JIT precondition verification, and pilot allowlist fence"
+        },
+        "continuation": "SAME_SESSION",
+        "integration": {
+          "branch": "main",
+          "head_sha": "719d6b4",
+          "pr": null,
+          "pr_url": null,
+          "ci": "PASS",
+          "merge_state": "MERGED",
+          "merge_commit": "719d6b4",
+          "merge_decision": "Approved by Product Owner"
+        },
+        "effects": {
+          "main_py": "None",
+          "ui": "Failover plan compilation and dual-control approval endpoints available"
+        }
+      }
+    }
+  ]
+}

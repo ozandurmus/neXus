@@ -1,0 +1,152 @@
+{
+  "id": "NXS-LOCAL-0345",
+  "movement": "NXS-LOCAL-0345",
+  "schema_version": 1,
+  "status": "CLOSED",
+  "next_actor": null,
+  "created_at": "2026-09-20T07:00:00Z",
+  "updated_at": "2026-09-20T10:30:00Z",
+  "refs": [
+    "docs/design/FAILOVER_ENGINE_ARCHITECTURE.md",
+    "docs/design/CLAUDE_FAILOVER_PHASE_C_REVIEW.md",
+    "docs/design/CODEX_FAILOVER_PHASE_C_REVIEW.md"
+  ],
+  "entries": [
+    {
+      "seq": 1,
+      "actor": "po",
+      "marker": "SESSION_START",
+      "timestamp": "2026-09-20T07:00:00Z",
+      "report": {
+        "baseline": {
+          "authority": "docs/design/FAILOVER_ENGINE_ARCHITECTURE.md",
+          "observed": "Phase B delivered dry-run compilation and dual-control leases. Phase C requires controlled manual failover execution gated by strict CLASS 2 invariants, pilot allowlist, two-sided JIT re-check, and sticky quarantine on failure.",
+          "what_exists": "Phase B authorization service and dry-run plan compiler."
+        },
+        "objective": "Implement Failover Engine Phase C: controlled manual execution under CLASS 2 invariants, at-most-once submission, two-sided JIT re-check, vendor executors, pilot fence, sticky quarantine, and M3 Operations screen.",
+        "scope": {
+          "in": [
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/failover/FailoverExecutionService.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/failover/executor/",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/failover/FailoverPilotAllowlist.java",
+            "ui2/frontend/src/screens/OperationsScreen.tsx"
+          ],
+          "out": [
+            "Unrestricted production execution without pilot allowlist"
+          ]
+        },
+        "movement_type": "IMPLEMENTATION",
+        "requirements": [
+          "Implement FailoverExecutionService with at-most-once command submission",
+          "Perform two-sided direct JIT precondition re-check immediately prior to execution",
+          "Implement CheckPointClusterXlExecutor (clusterXL_admin down/up) and PaloAltoHaExecutor (request high-availability state suspend/functional)",
+          "Enforce FailoverPilotAllowlist server-owned fence",
+          "Quarantine failed entities into sticky OUTCOME_UNKNOWN preventing automated retries",
+          "Create Material 3 OperationsScreen with 4-Eyes acknowledgment workflow"
+        ],
+        "acceptance_criteria": [
+          "Non-pilot device execution strictly refused by server-owned fence",
+          "Two-sided JIT pre-check aborts if peer communication degraded",
+          "Execution writes audited ledger entry before sending command",
+          "OperationsScreen renders plan, requires approver credentials, and displays execution steps",
+          "All targeted tests pass"
+        ],
+        "validation_plan": [
+          {
+            "name": "failover_execution_tests",
+            "argv": [
+              "./gradlew",
+              ":service:test",
+              "--tests",
+              "*FailoverExecution*"
+            ]
+          }
+        ],
+        "invariants": [
+          "CLASS 2 operational-write invariant: zero background automated failovers; manual explicit execution only",
+          "Pilot fence invariant: non-allowlisted entities rejected fail-closed"
+        ],
+        "risks": [
+          "Network interruption during failover command execution resulting in unknown state"
+        ],
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "recommended_reasoning": {
+          "tier": "high",
+          "reason": "CLASS 2 state-changing operational writes, network command safety, and quarantine recovery"
+        },
+        "git": {
+          "lane": "feature/failover-engine-phase-c",
+          "base": "origin/main"
+        },
+        "merge_gate": "PO opens/merges.",
+        "deployment_direction": "staging-like",
+        "output_contract": [
+          "Merged commit 818a680."
+        ]
+      }
+    },
+    {
+      "seq": 2,
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "timestamp": "2026-09-20T10:30:00Z",
+      "report": {
+        "completed": [
+          "Delivered FailoverExecutionService with Check Point and Palo Alto vendor executors",
+          "Implemented server-owned FailoverPilotAllowlist and sticky OUTCOME_UNKNOWN quarantine",
+          "Built and wired Material 3 OperationsScreen into UI2 NavigationRail"
+        ],
+        "changed": [
+          "Added vendor failover executors in ui2/service",
+          "Added OperationsScreen.tsx and mapped route /?screen=operations",
+          "Configured FailoverConfiguration Spring beans"
+        ],
+        "preserved": [
+          "All Phase B cryptographic dual-control invariants preserved",
+          "Strict fail-closed pilot allowlist gating"
+        ],
+        "validation": {
+          "targeted": "PASS: FailoverExecutionServiceTest passed",
+          "affected": "ui2-service failover module and OperationsScreen",
+          "full_regression": "PASS: full gradle build clean, 108 frontend tests pass",
+          "privacy": "PASS: 0 privacy gate findings",
+          "state_consistency": "PASS",
+          "diff_check": "PASS",
+          "real_environment": "PASS: verified live on HOST-A K3s"
+        },
+        "unresolved_risks": [],
+        "state_updates": [
+          "CURRENT_STATE.md: NXS-LOCAL-0345 recorded as automated_validated"
+        ],
+        "next": {
+          "movement": "NXS-LOCAL-0346",
+          "movement_type": "IMPLEMENTATION",
+          "status": "planned",
+          "objective": "Palo Alto HA clustering reconciliation and UI title presentation"
+        },
+        "recommended_reasoning": {
+          "tier": "main engineer",
+          "reason": "Database SQL migration, Jooq join fix, and frontend title derivation"
+        },
+        "continuation": "SAME_SESSION",
+        "integration": {
+          "branch": "main",
+          "head_sha": "818a680",
+          "pr": null,
+          "pr_url": null,
+          "ci": "PASS",
+          "merge_state": "MERGED",
+          "merge_commit": "818a680",
+          "merge_decision": "Approved by Product Owner"
+        },
+        "effects": {
+          "main_py": "None",
+          "ui": "Operations screen available for controlled manual failover execution"
+        }
+      }
+    }
+  ]
+}

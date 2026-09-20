@@ -1,0 +1,144 @@
+{
+  "id": "NXS-LOCAL-0343",
+  "movement": "NXS-LOCAL-0343",
+  "schema_version": 1,
+  "status": "CLOSED",
+  "next_actor": null,
+  "created_at": "2026-09-20T01:30:00Z",
+  "updated_at": "2026-09-20T03:45:00Z",
+  "refs": [
+    "docs/design/ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md",
+    "docs/design/FABLE_BACKUP_ENGINE_SECURITY_REVIEW.md"
+  ],
+  "entries": [
+    {
+      "seq": 1,
+      "actor": "po",
+      "marker": "SESSION_START",
+      "timestamp": "2026-09-20T01:30:00Z",
+      "report": {
+        "baseline": {
+          "authority": "docs/design/ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md and FABLE_BACKUP_ENGINE_SECURITY_REVIEW.md",
+          "observed": "Dual external CLI reviews identified vulnerabilities: potential insecure background daemon, AST secret leakage in diffs, unverified Gaia disk space prior to SCP pull, and missing tombstoning on retention pruning.",
+          "what_exists": "Initial ui2-backup microservice implementation."
+        },
+        "objective": "Harden Backup & Recovery engine per Astra and Fable external CLI reviews: remove insecure daemons, scrub AST secrets, parse Gaia disk space, enforce tombstoning, and protect last backup in vault.",
+        "scope": {
+          "in": [
+            "ui2/backup/src/main/java/com/securityexpert/nexus/ui2/backup/engine/",
+            "ui2/backup/src/main/java/com/securityexpert/nexus/ui2/backup/retention/RetentionPruningService.java",
+            "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/backup/BackupController.java"
+          ],
+          "out": [
+            "Failover engine"
+          ]
+        },
+        "movement_type": "IMPLEMENTATION",
+        "requirements": [
+          "Eliminate background daemon execution in favour of audited synchronous requests",
+          "Scrub credentials and private keys in SemanticDeviationEngine AST representations",
+          "Parse df output on Gaia to ensure >=2x archive size available before SCP pull",
+          "Enforce append-only tombstones in artefact_retention_ledger and preserve last-known-good backup"
+        ],
+        "acceptance_criteria": [
+          "All Astra and Fable security review findings remediated",
+          "Gaia disk pre-flight checks fail-closed on low disk space",
+          "Retention pruning never deletes the last remaining valid backup of an active device"
+        ],
+        "validation_plan": [
+          {
+            "name": "backup_hardening_tests",
+            "argv": [
+              "./gradlew",
+              ":backup:test"
+            ]
+          }
+        ],
+        "invariants": [
+          "Last-backup vault protection invariant: zero active devices left with 0 backups",
+          "Zero secret leakage in deviation diffs"
+        ],
+        "risks": [
+          "Gaia df output variation across major versions (R80 vs R81)"
+        ],
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "recommended_reasoning": {
+          "tier": "architecture",
+          "reason": "Security vulnerability remediation, disk geometry parsing, and retention guarantees"
+        },
+        "git": {
+          "lane": "feature/backup-recovery-engine-hardening",
+          "base": "origin/main"
+        },
+        "merge_gate": "PO opens/merges.",
+        "deployment_direction": "staging-like",
+        "output_contract": [
+          "Merged commit a2455cf."
+        ]
+      }
+    },
+    {
+      "seq": 2,
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "timestamp": "2026-09-20T03:45:00Z",
+      "report": {
+        "completed": [
+          "Remediated all external security review findings in ui2-backup",
+          "Implemented Gaia available-space parsing and pre-flight abort",
+          "Implemented tombstoning and last-backup protection in RetentionPruningService"
+        ],
+        "changed": [
+          "Hardened SemanticDeviationEngine with regex AST secret scrubbing",
+          "Added GaiaDiskSpaceValidator in CheckPointBackupExecutor",
+          "Updated BackupController edge security mapping"
+        ],
+        "preserved": [
+          "400GiB vault layout and database schema preserved",
+          "Material 3 UI presentation preserved"
+        ],
+        "validation": {
+          "targeted": "PASS: all hardening tests in :backup:test pass",
+          "affected": "ui2-backup and retention pruner",
+          "full_regression": "PASS: full gradle build clean",
+          "privacy": "PASS: 0 privacy gate findings",
+          "state_consistency": "PASS",
+          "diff_check": "PASS",
+          "real_environment": "PASS: verified live on HOST-A K3s"
+        },
+        "unresolved_risks": [],
+        "state_updates": [
+          "CURRENT_STATE.md: NXS-LOCAL-0343 recorded as automated_validated"
+        ],
+        "next": {
+          "movement": "NXS-LOCAL-0344",
+          "movement_type": "IMPLEMENTATION",
+          "status": "planned",
+          "objective": "Failover Engine Phase B cryptographic dual-control and dry-run plan compilation"
+        },
+        "recommended_reasoning": {
+          "tier": "architecture",
+          "reason": "Cryptographic 4-Eyes dual control tokens and dry-run plan compiler"
+        },
+        "continuation": "SAME_SESSION",
+        "integration": {
+          "branch": "main",
+          "head_sha": "a2455cf",
+          "pr": null,
+          "pr_url": null,
+          "ci": "PASS",
+          "merge_state": "MERGED",
+          "merge_commit": "a2455cf",
+          "merge_decision": "Approved by Product Owner"
+        },
+        "effects": {
+          "main_py": "None",
+          "ui": "Hardened vault operations with visible quota and retention safety"
+        }
+      }
+    }
+  ]
+}

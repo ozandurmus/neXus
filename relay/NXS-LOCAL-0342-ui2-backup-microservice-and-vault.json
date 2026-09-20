@@ -1,0 +1,147 @@
+{
+  "id": "NXS-LOCAL-0342",
+  "movement": "NXS-LOCAL-0342",
+  "schema_version": 1,
+  "status": "CLOSED",
+  "next_actor": null,
+  "created_at": "2026-09-19T22:00:00Z",
+  "updated_at": "2026-09-20T01:00:00Z",
+  "refs": [
+    "docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md",
+    "docs/design/BACKUP_RECOVERY_CONTRACTS.md"
+  ],
+  "entries": [
+    {
+      "seq": 1,
+      "actor": "po",
+      "marker": "SESSION_START",
+      "timestamp": "2026-09-19T22:00:00Z",
+      "report": {
+        "baseline": {
+          "authority": "docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md",
+          "observed": "NeXus lacked an independent backup and recovery engine ahead of the 2027 BackBox non-renewal. Backups were limited to rudimentary local clish dumps.",
+          "what_exists": "Prototype backup tab and initial Gaia backup command gates."
+        },
+        "objective": "Implement dedicated ui2-backup microservice, Check Point Gaia SCP pull, Palo Alto XML API stream, AST semantic deviation engine, and 400GiB PVC vault.",
+        "scope": {
+          "in": [
+            "ui2/backup/src/main/java/com/securityexpert/nexus/ui2/backup/",
+            "ui2/frontend/src/screens/BackupScreen.tsx",
+            "deploy/ui2/35-artefact-store-pvc.yaml",
+            "deploy/ui2/36-backup.yaml"
+          ],
+          "out": [
+            "Failover execution engine"
+          ]
+        },
+        "movement_type": "IMPLEMENTATION",
+        "requirements": [
+          "Implement ui2-backup microservice running on port 8086",
+          "Implement Gaia SCP pull and PAN XML API streaming directly into ArtefactStore",
+          "Implement SemanticDeviationEngine classifying changes into MAJOR vs MINOR",
+          "Provision 400GiB PVC vault on HOST-A K3s cluster with 30-day retention pruning",
+          "Create Material 3 BackupScreen with fleet status and action triggers"
+        ],
+        "acceptance_criteria": [
+          "ui2-backup builds, runs on port 8086, and mounts 400GiB vault",
+          "SCP pull and XML API stream store encrypted artefacts with opaque UUIDs",
+          "AST deviation engine identifies structural vs trivial configuration diffs",
+          "BackupScreen displays vault capacity and backup history"
+        ],
+        "validation_plan": [
+          {
+            "name": "backup_microservice_tests",
+            "argv": [
+              "./gradlew",
+              ":backup:test"
+            ]
+          }
+        ],
+        "invariants": [
+          "Opaque artefact IDs: storage paths never leak over HTTP",
+          "Fail-closed audit logging on all backup downloads"
+        ],
+        "risks": [
+          "Disk exhaustion during simultaneous large gateway backup pulls"
+        ],
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "recommended_reasoning": {
+          "tier": "architecture",
+          "reason": "Multi-vendor backup engine, large storage PVC lifecycle, and AST diff parsing"
+        },
+        "git": {
+          "lane": "feature/ui2-backup-microservice-and-vault",
+          "base": "origin/main"
+        },
+        "merge_gate": "PO opens/merges.",
+        "deployment_direction": "staging-like",
+        "output_contract": [
+          "Merged commit 95758a0."
+        ]
+      }
+    },
+    {
+      "seq": 2,
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "timestamp": "2026-09-20T01:00:00Z",
+      "report": {
+        "completed": [
+          "Delivered ui2-backup microservice with SCP pull and PAN XML API stream",
+          "Implemented SemanticDeviationEngine with AST classification",
+          "Created 400GiB PVC vault on HOST-A and deployed BackupScreen"
+        ],
+        "changed": [
+          "Created ui2/backup subproject",
+          "Added V30 Flyway migration for backup schedules and deviation ledgers",
+          "Integrated BackupScreen into Material 3 NavigationRail"
+        ],
+        "preserved": [
+          "Existing ArtefactStore content-addressed storage semantics",
+          "Strict audit fail-closed invariant"
+        ],
+        "validation": {
+          "targeted": "PASS: :backup:test suite passes",
+          "affected": "ui2-backup, storage PVC, and frontend backup screen",
+          "full_regression": "PASS: full gradle build clean",
+          "privacy": "PASS: 0 privacy gate findings",
+          "state_consistency": "PASS",
+          "diff_check": "PASS",
+          "real_environment": "PASS: verified live on HOST-A with 400GiB storage mounted"
+        },
+        "unresolved_risks": [],
+        "state_updates": [
+          "CURRENT_STATE.md: NXS-LOCAL-0342 recorded as automated_validated"
+        ],
+        "next": {
+          "movement": "NXS-LOCAL-0343",
+          "movement_type": "IMPLEMENTATION",
+          "status": "planned",
+          "objective": "Dual external CLI review remediation for backup and recovery engine"
+        },
+        "recommended_reasoning": {
+          "tier": "architecture",
+          "reason": "Security hardening per Astra and Fable review findings"
+        },
+        "continuation": "SAME_SESSION",
+        "integration": {
+          "branch": "main",
+          "head_sha": "95758a0",
+          "pr": null,
+          "pr_url": null,
+          "ci": "PASS",
+          "merge_state": "MERGED",
+          "merge_commit": "95758a0",
+          "merge_decision": "Approved by Product Owner"
+        },
+        "effects": {
+          "main_py": "None",
+          "ui": "Backup & Recovery console available via Navigation Rail"
+        }
+      }
+    }
+  ]
+}

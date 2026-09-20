@@ -1,0 +1,160 @@
+{
+  "id": "NXS-LOCAL-0346",
+  "movement": "NXS-LOCAL-0346",
+  "schema_version": 1,
+  "status": "CLOSED",
+  "next_actor": null,
+  "created_at": "2026-09-20T16:50:00Z",
+  "updated_at": "2026-09-20T17:10:00Z",
+  "refs": [
+    "docs/design/PAN_DISCOVERY_CONTRACT.md",
+    "AGENTS.md"
+  ],
+  "entries": [
+    {
+      "seq": 1,
+      "actor": "po",
+      "marker": "SESSION_START",
+      "timestamp": "2026-09-20T16:50:00Z",
+      "report": {
+        "baseline": {
+          "authority": "AGENTS.md (Presentation identity != security identity) and PAN_DISCOVERY_CONTRACT.md",
+          "observed": "Palo Alto clusters showed cross-contamination due to a legacy migration crossing GARTEST and HOST pairs. Furthermore, JooqDeviceRepository failed to resolve discovery candidate metadata for PAN devices due to a null domain join bug, and UI displayed raw serial pipes instead of human-friendly cluster titles.",
+          "what_exists": "Verified reciprocal serial pairs in discovery_candidate table from Panorama discovery."
+        },
+        "objective": "Reconcile Palo Alto HA cluster pairings with official discovery API evidence, fix JooqDeviceRepository lateral join, implement deterministic UI title derivation (<base>-CLS), and deploy live to HOST-A.",
+        "scope": {
+          "in": [
+            "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/JooqDeviceRepository.java",
+            "ui2/service/src/main/resources/db/migration/V33__reconcile_ha_pairs_from_discovery_api.sql",
+            "ui2/frontend/src/screens/InventoryPanels.tsx",
+            "ui2/frontend/src/screens/InventoryScreen.tsx",
+            "ui2/frontend/tests/InventoryScreen.test.tsx"
+          ],
+          "out": [
+            "Check Point ClusterXL clustering logic"
+          ]
+        },
+        "movement_type": "IMPLEMENTATION",
+        "requirements": [
+          "Update JooqDeviceRepository lateral join to support vendor|serial and primary serial lookup with parent_candidate_id IS NULL",
+          "Create and apply Flyway migration V33 to separate crossed GARTEST and HOST pairs and link TAKASNETWEB/APP",
+          "Implement deriveClusterTitle() in InventoryPanels.tsx to synthesize clean <base>-CLS titles while preserving the verified API reference badge",
+          "Add unit tests in InventoryScreen.test.tsx covering title derivation edge cases",
+          "Build and deploy to HOST-A and verify 17 clean 2-node clusters"
+        ],
+        "acceptance_criteria": [
+          "JooqDeviceRepository matches PAN discovery candidate metadata cleanly",
+          "All 17 Palo Alto clusters in live database have exactly 2 reciprocal members matching API evidence",
+          "UI renders clean cluster names in navigation list and details panel",
+          "All 108 frontend tests pass, Gradle build passes, and rollout succeeds on HOST-A"
+        ],
+        "validation_plan": [
+          {
+            "name": "frontend_tests",
+            "argv": [
+              "npm",
+              "test"
+            ]
+          },
+          {
+            "name": "backend_build",
+            "argv": [
+              "./gradlew",
+              ":persistence:test",
+              ":service:bootJar"
+            ]
+          }
+        ],
+        "invariants": [
+          "Presentation identity != security identity: clustering remains 100% bound to API evidence, never grouped by name",
+          "AIView pseudonymization law strictly enforced"
+        ],
+        "risks": [
+          "Common prefix truncation over-stripping member names"
+        ],
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "recommended_reasoning": {
+          "tier": "main engineer",
+          "reason": "SQL join optimization, Flyway migration, and React UI title synthesis"
+        },
+        "git": {
+          "lane": "main",
+          "base": "origin/main"
+        },
+        "merge_gate": "PO opens/merges.",
+        "deployment_direction": "staging-like",
+        "output_contract": [
+          "Merged commit 7e59833."
+        ]
+      }
+    },
+    {
+      "seq": 2,
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "timestamp": "2026-09-20T17:10:00Z",
+      "report": {
+        "completed": [
+          "Fixed JooqDeviceRepository lateral join to resolve PAN discovery candidates",
+          "Delivered and applied Flyway V33 migration restoring reciprocal API pairings",
+          "Implemented deriveClusterTitle() with comprehensive unit tests",
+          "Deployed live to HOST-A: all 17 PAN clusters verified with exactly 2 nodes"
+        ],
+        "changed": [
+          "JooqDeviceRepository.java: dc join condition enhanced",
+          "V33__reconcile_ha_pairs_from_discovery_api.sql: Flyway migration",
+          "InventoryPanels.tsx & InventoryScreen.tsx: deriveClusterTitle() and badge chips",
+          "InventoryScreen.test.tsx: 5 new unit tests"
+        ],
+        "preserved": [
+          "Check Point cluster naming and clustering preserved",
+          "cluster_member_ref in database strictly reflects API evidence"
+        ],
+        "validation": {
+          "targeted": "PASS: 13/13 tests in InventoryScreen.test.tsx pass",
+          "affected": "ui2-persistence, ui2-service, ui2-frontend",
+          "full_regression": "PASS: 108/108 frontend tests pass, :persistence:test and :service:bootJar pass",
+          "privacy": "PASS: 0 findings on repository privacy check",
+          "state_consistency": "PASS: project/QUEUE.md check clean",
+          "diff_check": "PASS",
+          "real_environment": "PASS: verified live on HOST-A K3s; 17 clusters x 2 members; web bundle index-Duk84Ker.js served"
+        },
+        "unresolved_risks": [],
+        "state_updates": [
+          "CURRENT_STATE.md: NXS-LOCAL-0346 recorded as real_env_validated",
+          "AI_HANDOVER.md: updated with clustering reconciliation summary",
+          "Desktop session_2026_09_20.md: created"
+        ],
+        "next": {
+          "movement": "NXS-LOCAL-0347",
+          "movement_type": "VALIDATION",
+          "status": "planned",
+          "objective": "Operator visual review under aiview and failover trial"
+        },
+        "recommended_reasoning": {
+          "tier": "low",
+          "reason": "Read-only inspection and operator sign-off"
+        },
+        "continuation": "SAME_SESSION",
+        "integration": {
+          "branch": "main",
+          "head_sha": "7e59833",
+          "pr": null,
+          "pr_url": null,
+          "ci": "PASS",
+          "merge_state": "MERGED",
+          "merge_commit": "7e59833",
+          "merge_decision": "Approved by Product Owner"
+        },
+        "effects": {
+          "main_py": "None",
+          "ui": "Clean cluster names (Cluster <base>-CLS) and inspectable API serial reference chip"
+        }
+      }
+    }
+  ]
+}

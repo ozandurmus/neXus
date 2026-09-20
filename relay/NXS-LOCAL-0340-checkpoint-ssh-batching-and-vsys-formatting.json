@@ -1,0 +1,143 @@
+{
+  "id": "NXS-LOCAL-0340",
+  "movement": "NXS-LOCAL-0340",
+  "schema_version": 1,
+  "status": "CLOSED",
+  "next_actor": null,
+  "created_at": "2026-09-19T17:00:00Z",
+  "updated_at": "2026-09-19T18:30:00Z",
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md"
+  ],
+  "entries": [
+    {
+      "seq": 1,
+      "actor": "po",
+      "marker": "SESSION_START",
+      "timestamp": "2026-09-19T17:00:00Z",
+      "report": {
+        "baseline": {
+          "authority": "PO_DECISION_RECORD_2026_09_14C",
+          "observed": "Check Point inventory collection executed commands sequentially over multiple SSH connections, taking 15-30s per device, with inconsistent VSYS naming.",
+          "what_exists": "Sequential SSH command executor in CpSshInventoryCollector."
+        },
+        "objective": "Implement single-session SSH command batching (executing in under 3 seconds) and format Virtual Systems cleanly as VR_NAME (vsys id) and vs-name (VSID vsid).",
+        "scope": {
+          "in": [
+            "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/cp/CpSshInventoryCollector.java",
+            "ui2/frontend/src/screens/InventoryScreen.tsx"
+          ],
+          "out": [
+            "Palo Alto collectors"
+          ]
+        },
+        "movement_type": "IMPLEMENTATION",
+        "requirements": [
+          "Batch clish/bash commands into a single SSH exec channel with boundary delimiters",
+          "Reduce Check Point inventory collection latency to under 3 seconds",
+          "Normalize VSYS names into vendor-specific canonical forms",
+          "Verify live collection on Check Point VSX clusters"
+        ],
+        "acceptance_criteria": [
+          "SSH inventory collection completes in ~2.4s",
+          "Interfaces and routing correctly parsed from batched output stream",
+          "VSYS names render cleanly in UI list and context selector"
+        ],
+        "validation_plan": [
+          {
+            "name": "cp_ssh_batch_test",
+            "argv": [
+              "./gradlew",
+              ":worker:test",
+              "--tests",
+              "*CpSsh*"
+            ]
+          }
+        ],
+        "invariants": [
+          "Single SSH session per device per run invariant strictly enforced",
+          "Fail-closed on corrupted stream delimiters"
+        ],
+        "risks": [
+          "Buffer truncation on large routing tables"
+        ],
+        "context_not_loaded": [
+          "Unrelated history"
+        ],
+        "recommended_reasoning": {
+          "tier": "main engineer",
+          "reason": "SSH protocol multiplexing and stream delimiter parsing"
+        },
+        "git": {
+          "lane": "feature/checkpoint-ssh-batching-and-vsys-formatting",
+          "base": "origin/main"
+        },
+        "merge_gate": "PO opens/merges.",
+        "deployment_direction": "staging-like",
+        "output_contract": [
+          "Merged commit 3f38831."
+        ]
+      }
+    },
+    {
+      "seq": 2,
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "timestamp": "2026-09-19T18:30:00Z",
+      "report": {
+        "completed": [
+          "Implemented single-session SSH batching executing in ~2.4s on live gateways",
+          "Delivered dual-vendor VSYS formatting (VR_NAME vs VSID)",
+          "Deployed and verified live on Check Point VSX cluster on HOST-A"
+        ],
+        "changed": [
+          "CpSshInventoryCollector refactored to use delimited script batching",
+          "InventoryScreen context tabs updated to support formatted VSYS names"
+        ],
+        "preserved": [
+          "Full route and interface parser regex semantics preserved",
+          "Fallback clish parsing preserved"
+        ],
+        "validation": {
+          "targeted": "PASS: CpSshInventoryCollectorTest passed",
+          "affected": "Check Point worker collection and frontend inventory",
+          "full_regression": "PASS: all worker tests green",
+          "privacy": "PASS: 0 privacy gate findings",
+          "state_consistency": "PASS",
+          "diff_check": "PASS",
+          "real_environment": "PASS: verified live on HOST-A against Check Point gateways"
+        },
+        "unresolved_risks": [],
+        "state_updates": [
+          "CURRENT_STATE.md: NXS-LOCAL-0340 recorded as real_env_validated"
+        ],
+        "next": {
+          "movement": "NXS-LOCAL-0341",
+          "movement_type": "IMPLEMENTATION",
+          "status": "planned",
+          "objective": "Palo Alto PAN-OS compliance catalog with 24 CIS controls"
+        },
+        "recommended_reasoning": {
+          "tier": "main engineer",
+          "reason": "Compliance check rule authoring and PAN-OS evaluation"
+        },
+        "continuation": "SAME_SESSION",
+        "integration": {
+          "branch": "main",
+          "head_sha": "3f38831",
+          "pr": null,
+          "pr_url": null,
+          "ci": "PASS",
+          "merge_state": "MERGED",
+          "merge_commit": "3f38831",
+          "merge_decision": "Approved by Product Owner"
+        },
+        "effects": {
+          "main_py": "None",
+          "ui": "Fast 2.4s inventory collection and formatted VSYS labels"
+        }
+      }
+    }
+  ]
+}
