@@ -23,13 +23,14 @@ Authority: `AGENTS.md`, `CURRENT_STATE.md`, `ASTRA_BACKUP_ENGINE_ARCHITECTURE_RE
 - Operator live hardware verification on HOST-A:
   - Open `http://ui2.nexus.local:30080/?screen=backups` (or Drawer -> Backups & Recovery).
   - Execute "Backup Now" on `FW-TANGO-04` (PA-5410) and verify XML API stream into vault.
-  - Execute "Backup Now" / "Snapshot Now" on `Tango-01` / `Tango-02` (Check Point Gaia).
+  - Execute "Backup Now" / "Snapshot Now" on `FW-TANGO-01` / `FW-JULIET-06` (Check Point Gaia).
   - Trigger "Diff" to verify AST deviation domain categorization.
 
 # Test delta
 - Frontend: 105 passed across 15 test suites (`npm test`).
-- Backend: `SemanticDeviationEngineTest`, `RetentionPruningServiceTest`, `Ui2BackupServerTest` all green.
+- Backend: 222 passed in `:worker:test`, 230 passed in `:service:test`.
 - Repository privacy gate: 0 findings (`python3 main.py --repository-privacy-check`).
+- Architecture convergence: 23 passed (`tests/test_architecture_convergence.py`).
 
 # Risks
 - Live hardware backup execution deferred to manual operator testing per PO directive.
