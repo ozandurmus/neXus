@@ -35,4 +35,34 @@ describe("OperationsScreen tabs", () => {
     expect(screen.getByText("No HA pair or cluster enrolled")).toBeInTheDocument();
     expect(screen.queryByText("No jobs yet")).toBeNull();
   });
+
+  it("renders rich pre-flight checklist and verdict banner when a cluster is inspected", () => {
+    render(withTheme(<OperationsScreen />));
+
+    // Click to inspect Check Point cluster
+    fireEvent.click(screen.getByText(/Inspect CLS-ROMEO-01/i));
+
+    // Verify cluster card & verdict banner
+    expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument();
+    expect(screen.getByText(/VERDICT: NO_BLOCKING_CONDITIONS_OBSERVED/i)).toBeInTheDocument();
+
+    // Verify core pre-flight checks are rendered
+    expect(screen.getByText("Two-Sided Split-Brain Prevention")).toBeInTheDocument();
+    expect(screen.getByText("Critical Problem Notifications (pnotes)")).toBeInTheDocument();
+    expect(screen.getByText("State Synchronization Health")).toBeInTheDocument();
+
+    // Verify failover mutation buttons are safely disabled
+    const failoverBtn = screen.getByRole("button", { name: "Initiate Failover" });
+    expect(failoverBtn).toBeDisabled();
+
+    // Switch to Palo Alto cluster
+    fireEvent.click(screen.getByText("CLS-TANGO-01 (PAN)"));
+    expect(screen.getByText("CLS-TANGO-01")).toBeInTheDocument();
+    expect(screen.getByText("HA Path & Link Monitoring")).toBeInTheDocument();
+    expect(screen.getByText("Pending / In-Flight Commits")).toBeInTheDocument();
+
+    // Clear cluster inspection
+    fireEvent.click(screen.getByText("Clear"));
+    expect(screen.getByText("No HA pair or cluster enrolled")).toBeInTheDocument();
+  });
 });

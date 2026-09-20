@@ -16,3 +16,4 @@ order exactly; do not improvise a shorter or reordered version of it.
   resources via `kubectl -n ui2 ...`, and execute non-mutating network
   diagnostic probes (`ping`, `traceroute`, `nc`, SSH banner checks). You MUST NOT
   invoke `sudo` or touch incumbent workloads (`HOST_X`).
+- Multi-Model Consultation & External Reviewers: Per constitutional law in `/AGENTS.md`, whenever the Product Owner or a task directive requests consultation with Claude/Fable, Codex/Astra, or another external reviewer, the agent MUST ALWAYS execute the consultation through the authorized scripts in `scripts/` (e.g. `scripts/consult_claude_*.py` via `claude -p`, `scripts/consult_codex_*.py` via `codex exec`). Simulating reviews via internal subagents or personas is strictly prohibited.

@@ -387,6 +387,20 @@ tier-name table (which model/tier maps to which task category) lives in
 `AI_START_HERE.md`; tool-specific tier names live only in that tool's own
 delta file (`CLAUDE.md`, `.github/copilot-instructions.md`).
 
+## External model and second-opinion consultation law
+
+When the Product Owner, a task directive, or a governance protocol instructs
+the agent to consult an external model, second-opinion reviewer, or multi-model
+review council, the agent MUST NOT simulate, impersonate, or substitute the
+consultation using internal subagents, internal personas, or synthetic prompts
+within the host agent. The agent MUST ALWAYS execute the consultation through
+the authorized repository orchestrator scripts (`scripts/consult_*.py`) that
+directly invoke the installed external CLI tools configured on the host system.
+The full, unaltered review output MUST be written directly to the designated
+repository artifact (e.g., in `docs/design/`). Deceiving the Product Owner,
+simulating external reviews, or substituting an internal subagent for an
+external CLI consultation is a constitutional violation.
+
 ## Context/token discipline
 
 - Search/symbol-driven inspection before large-file reads.
@@ -460,7 +474,7 @@ register authorizes no command at all, including a read.
 **PO Amendment (2026-09-19, Host Action & Troubleshooting Authorization).**
 Per Product Owner directive on 2026-09-19, the ceiling for `HOST-A` in
 `docs/design/HOST_REGISTER.md` is raised to `HOST_W1 + TROUBLESHOOT`. Assistant
-sessions (including Claude, Codex/Copilot, and Antigravity) are explicitly
+sessions across all authorized environments and tools are explicitly
 authorized to execute SSH operations on `HOST-A` for:
 1. Workspace build and rollout via `bash ~/run_build.sh`.
 2. NeXus namespace operations via `kubectl -n ui2 ...` and `kubectl -n ui2-build ...`.
