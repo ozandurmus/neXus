@@ -24,27 +24,20 @@ has no enabled product path.
 
 ## Active build
 
-`NXS-LOCAL-0346` — `real_env_validated`: Palo Alto PAN-OS HA Clustering Reconciliation per Official Discovery API Evidence, Reciprocal Serial Pairing, Jooq Lateral Join Fix, Deterministic UI Title Derivation (`<base>-CLS`), and Live K3s Deployment on HOST-A.
-`NXS-LOCAL-0345` — `automated_validated`: Failover Engine Phase C — Controlled Manual Failover Execution under strict CLASS 2 invariants, At-Most-Once Command Submission, Two-Sided Direct JIT Precondition Re-Check, CheckPoint ClusterXL (`clusterXL_admin down/up`) & Palo Alto HA (`request high-availability state suspend/functional`) Executors, Server-Owned Pilot Fence (`FailoverPilotAllowlist`), Sticky `OUTCOME_UNKNOWN` Entity Quarantine, 4-Eyes Acknowledgment, and M3 Operations Screen.
-`NXS-LOCAL-0344` — `automated_validated`: Failover Engine Phase B — Cryptographic 4-Eyes Dual Control Authorization (`requesterId != approverId`), Single-Use HMAC-SHA256 Lease Tokens, Length-Prefixed Canonical Framing, and Read-Only Dry-Run Plan Compilation for Check Point ClusterXL and Palo Alto Networks HA.
-`NXS-LOCAL-0343` — `automated_validated`: Backup & Recovery Engine Hardening per Dual External CLI Security & Architecture Reviews — Insecure Daemon Removal, AST Secret Scrubbing, Gaia Available-Space Disk Parsing, Status Fail-Closed Polling, Store-Owned Tombstoning & Last-Backup Vault Protection, and API Edge Hardening.
-`NXS-LOCAL-0342` — `automated_validated`: Backup & Recovery Microservice (`ui2-backup`), Check Point Gaia Fail-Closed SCP Pull, Palo Alto HTTPS XML API Stream, AST Semantic Deviation Engine, and 400GiB Artefact Vault.
-`NXS-LOCAL-0341` — `real_env_validated`: Palo Alto PAN-OS Compliance Catalog (24 CIS controls), Fail-Closed Evaluator, Multi-Vendor Aggregation, XML Credential Redaction, and Live Verification on FW-TANGO-04 under `aiview`.
-`NXS-LOCAL-0340` — `real_env_validated`: Check Point Single-Session SSH Command Batching (2.4s execution), Vendor Virtual Systems Formatting (`VR_NAME (vsys id)` & `vs-name (VSID vsid)`), and Live Multi-Context Deployment.
-`NXS-LOCAL-0339` — `real_env_validated`: Palo Alto Direct Device Enrollment & Live Inventory Collection (`pan_xml_api`), TLS Device Trust Hardening, and Multi-VSYS Interface/Routing Attribution under `aiview`.
-`NXS-LOCAL-0338` — `real_env_validated`: Independent Compliance Microservice (`ui2-compliance`), Standards Evaluation Engine (CIS Benchmark, PCI-DSS v4.0.1, NIST SP 800-53, Financial Baseline), `DATA_UNAVAILABLE` Safe Gaps, and Full M3 UI Integration.
-`NXS-LOCAL-0337` — `real_env_validated`: Check Point Configuration Microservice (`ui2-configuration`), 1:1 Python Port, and Live Verification under `aiview`.
-`NXS-LOCAL-0330` — `done`: Check Point and Palo Alto Inventory & Discovery Convergence.
-`NXS-LOCAL-0333` — `real_env_validated`: AIView Privacy-Preserving HMAC Masking Funnel & Identity Seeding (`aiview` user with `role:replay_viewer`).
-`NXS-LOCAL-0336` — `done`: K3s Host Disk Exhaustion Remediation (Docker logs truncated, 893GB freed), Database CrashLoop Recovery & Deployment Hardening.
-`NXS-LOCAL-0335` — `done`: Check Point Cluster Virtual Systems Hierarchy and In-Memory UI Caching.
-`NXS-LOCAL-0334` — `done`: Unified Cluster Routing Matrix and Interface VIP Differentiation.
-`NXS-LOCAL-0332` — `automated_validated`: Check Point Discovery Timeout (180s) and SSH Exec Transport Stream Hardening.
+`NXS-LOCAL-0347` — `in_progress`: real-environment validation, under the
+`aiview` persona, of the Palo Alto HA cluster presentation that
+`NXS-LOCAL-0346` was graded on but never received, plus the delivery-grade
+correction and machine-authority backfill for `NXS-LOCAL-0331`–`0346`.
+Movement record: `relay/NXS-LOCAL-0347-real-environment-validation-of-pan-ha-cl.json`.
 
-`NXS-LOCAL-0176` — `automated_validated`: expire a past-deadline session on
-read so it cannot block login. The newest merged movement, its predecessor
-records, and the current roadmap pointer are in `project/QUEUE.md` and
-`project/build_history.json`.
+`NXS-LOCAL-0346` — `automated_validated`: Palo Alto PAN-OS HA clustering
+reconciliation per official discovery API evidence, reciprocal serial
+pairing, jOOQ lateral-join fix, and deterministic `<base>-CLS` title
+derivation for presentation only.
+
+Predecessor builds carry one structured record each in
+`project/build_history.json`; `project/QUEUE.md` is the cold-start view. No
+predecessor detail is repeated here.
 
 ## Open Product Owner decisions
 

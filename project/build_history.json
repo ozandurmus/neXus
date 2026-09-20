@@ -3,6 +3,151 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0346",
+      "status": "automated_validated",
+      "title": "Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence",
+      "summary": "Reconciled PAN HA pairings to reciprocal discovery-API serial evidence, fixed the JooqDeviceRepository lateral join and derived deterministic <base>-CLS cluster titles for presentation only. Graded automated_validated: the rollout was deplo",
+      "completed": "2026-09-20",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0346.md"
+    },
+    {
+      "build": "NXS-LOCAL-0345",
+      "status": "automated_validated",
+      "title": "Failover engine phase C: controlled manual execution under CLASS 2 invariants",
+      "summary": "Implemented at-most-once command submission, two-sided JIT precondition re-check, ClusterXL and PAN HA executors behind a server-owned pilot fence, and sticky OUTCOME_UNKNOWN quarantine. Added the M3 Operations screen.",
+      "completed": "2026-09-20",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0344",
+      "status": "automated_validated",
+      "title": "Failover engine phase B: cryptographic 4-eyes dual control and read-only dry run",
+      "summary": "Implemented 4-eyes dual control (requesterId != approverId), single-use HMAC-SHA256 lease tokens with length-prefixed canonical framing, and read-only dry-run plan compilation. No device write is enabled.",
+      "completed": "2026-09-20",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0343",
+      "status": "automated_validated",
+      "title": "Backup and recovery engine hardening per dual external CLI reviews",
+      "summary": "Removed the insecure daemon, added AST secret scrubbing, Gaia available-space parsing and fail-closed status polling. Hardened store-owned tombstoning, last-backup vault protection and the API edge.",
+      "completed": "2026-09-20",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0342",
+      "status": "automated_validated",
+      "title": "Backup and recovery microservice (ui2-backup) and 400GiB artefact vault",
+      "summary": "Stood up ui2-backup with Check Point Gaia fail-closed SCP pull and a Palo Alto HTTPS XML API stream. Added the AST semantic deviation engine and the 400GiB artefact vault.",
+      "completed": "2026-09-20",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0341",
+      "status": "automated_validated",
+      "title": "Palo Alto PAN-OS compliance catalog (24 CIS controls) and fail-closed evaluator",
+      "summary": "Added the PAN-OS compliance catalog with a fail-closed evaluator, XML credential redaction and multi-vendor aggregation.",
+      "completed": "2026-09-19",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0340",
+      "status": "automated_validated",
+      "title": "Check Point single-session SSH command batching and vendor virtual-systems formatting",
+      "summary": "Batched Check Point commands into a single SSH session and formatted Virtual Systems as VR_NAME (vsys id) and vs-name (VSID vsid).",
+      "completed": "2026-09-19",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0339",
+      "status": "automated_validated",
+      "title": "Palo Alto direct device enrollment and live inventory collection (pan_xml_api)",
+      "summary": "Enabled Palo Alto direct enrollment and XML API inventory collection with TLS device-trust hardening. Added multi-VSYS interface and routing attribution.",
+      "completed": "2026-09-19",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0338",
+      "status": "automated_validated",
+      "title": "Independent compliance microservice (ui2-compliance) and standards evaluation engine",
+      "summary": "Stood up ui2-compliance with the standards evaluation engine (CIS, PCI-DSS v4.0.1, NIST SP 800-53, financial baseline) and DATA_UNAVAILABLE safe gaps. Integrated the compliance dashboard into the M3 UI.",
+      "completed": "2026-09-19",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0337",
+      "status": "automated_validated",
+      "title": "Check Point configuration microservice (ui2-configuration) and 1:1 Python port",
+      "summary": "Stood up the independent ui2-configuration microservice as a 1:1 port of the Python configuration collector.",
+      "completed": "2026-09-19",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0336",
+      "status": "done",
+      "title": "K3s host disk exhaustion remediation and database crash-loop recovery",
+      "summary": "Recovered the development host from disk exhaustion, restored the PostgreSQL pod from its crash loop and hardened the deployment manifests. Host remediation, not a product behaviour, so it carries no validation grade.",
+      "completed": "2026-09-18",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0335",
+      "status": "automated_validated",
+      "title": "Check Point cluster virtual systems hierarchy and in-memory UI caching",
+      "summary": "Linked Virtual Systems under their clusters and added a generic VIP parser. Added in-memory caching for cluster views.",
+      "completed": "2026-09-18",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0334",
+      "status": "automated_validated",
+      "title": "Unified cluster routing matrix and interface VIP differentiation",
+      "summary": "Implemented the unified cluster interface matrix with route diff comparison and a TCP pre-check. Raised the claim loop to ten workers.",
+      "completed": "2026-09-17",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0333",
+      "status": "automated_validated",
+      "title": "AIView privacy-preserving HMAC masking funnel and identity seeding",
+      "summary": "Added the aiview bootstrap identity and a server-side, relationship-preserving HMAC masking funnel over devices, inventory and job logs. Masking applies to sessions holding role:replay_viewer only.",
+      "completed": "2026-09-18",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0332",
+      "status": "automated_validated",
+      "title": "Check Point discovery timeout (180s) and SSH exec transport stream hardening",
+      "summary": "Raised the Check Point discovery exec timeout to cover multi-domain CMA query times and hardened SshExecTransport against stdin/stderr pipe stalls.",
+      "completed": "2026-09-18",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
+      "build": "NXS-LOCAL-0331",
+      "status": "automated_validated",
+      "title": "Check Point object-dump parser hardening for quoted strings and display-name fallback",
+      "summary": "Made CpObjectDumpParser handle quoted strings containing parentheses and fall back to the object name for DISPLAY_NAME. Enabled stack traces in the management path for diagnosis.",
+      "completed": "2026-09-18",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0330",
       "status": "automated_validated",
       "title": "Check Point Discovery Parser Hardening, Domain Banner Filtering, and Diagnostic Logging",
