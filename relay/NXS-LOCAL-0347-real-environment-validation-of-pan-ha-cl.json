@@ -125,6 +125,25 @@
       "supersedes": "none",
       "text": "Part 1 - delivery grade. The real_env_validated grade recorded for NXS-LOCAL-0346 in CURRENT_STATE.md is withdrawn. Evidence basis: the NXS-LOCAL-0346 relay record closes with next_actor VALIDATION, and AI_HANDOVER.md names the operator aiview visual verification as the exact next action. A successful K3s rollout is deployment evidence, not real-environment validation (AGENTS.md evidence laws). Directed outcome: record NXS-LOCAL-0346 as automated_validated in machine authority via scripts/project_queue.py and correct CURRENT_STATE.md to match; carry real-environment validation in this movement; apply the same evidence test to NXS-LOCAL-0332 through NXS-LOCAL-0345, where automated_validated is the ceiling for any row with no recorded real-environment evidence. Part 2 - execution authority and recorded deviation. The agent raised one concrete objection that GOV_PO_ROLE_MIGRATION.md section 6.1 and the nexus-po skill section 5 bar a Product Owner assistant episode from executing. The Product Owner, so informed, expressly overruled it on 2026-09-20, stating that the PO role in this project also carries orchestration and therefore execution authority. Under the AGENTS.md rule that an informed reaffirmation controls, the agent proceeds. This is recorded as a deviation from a FROZEN governance contract, not as a precedent: it authorizes execution within this movement only, and GOV_PO_ROLE_MIGRATION.md remains unamended until a governance movement amends it.",
       "timestamp": "2026-09-20T15:05:39Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_ACK",
+      "seq": 4,
+      "subject": "Turn returned to PO to record the backup architecture decision",
+      "text": "Returning the turn so the Product Owner decision on backup plane separation is recorded at its own marker rather than inside an engineering note.",
+      "timestamp": "2026-09-20T19:07:19Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner - chat directive 2026-09-20",
+      "marker": "RELAY_DECISION",
+      "scope": "The target architecture of the backup plane. Authorizes a separation movement to be planned and implemented; does not by itself authorize deployment to HOST-A, does not lift the CLASS 1 backup gating, and does not change the failover engine's blocked status.",
+      "seq": 5,
+      "subject": "Backup is to be a separate service, as the reviewed architecture describes",
+      "supersedes": "none",
+      "text": "The Product Owner directs that the backup plane be delivered as the independent service the reviewed architecture specifies, not as a capability inside ui2-service and ui2-worker. The reviewed target is docs/design/ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md: an independent service in the ui2 namespace on port 8086, its own vault volume separate from the database and the evidence stores, and ui2-service forwarding backup requests to it rather than serving them itself. Reason of record: both external reviews were performed against that separated design, and Fable's security review treats the isolation between the VERIFY plane (masked evidence) and the RECOVER plane (full-fidelity configuration, which is secret-bearing) as correct and load-bearing. The delivered implementation serves both planes from the same process, so the boundary those reviews assessed is not the boundary that runs today. Consequences recorded with the decision: NXS-LOCAL-0342 does not describe what was delivered and its record already carries that correction; the two manifests removed in commit ed7aead are not to be restored, because they omitted every database and secret environment value and their arguments fell through to the generic worker, so the separation movement writes its own manifests; the separated service needs its own database and secret wiring, its own vault volume, and a forwarding path from ui2-service; and once it exists the security review must be re-run against the built system rather than inherited from the review of the design.",
+      "timestamp": "2026-09-20T19:07:19Z"
     }
   ],
   "id": "NXS-LOCAL-0347",
@@ -138,5 +157,5 @@
   ],
   "schema_version": 1,
   "status": "AWAITING_ENGINEER",
-  "updated_at": "2026-09-20T15:05:39Z"
+  "updated_at": "2026-09-20T19:07:19Z"
 }

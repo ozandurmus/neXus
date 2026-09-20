@@ -109,7 +109,8 @@
     "failover_p0_closure_set": "java_debt",
     "failover_pilot_fence_is_compiled_in": "java_debt",
     "failover_phase_d_has_no_build_record": "agent_operations",
-    "java_product_plan_build_selection_is_stale": "agent_operations"
+    "java_product_plan_build_selection_is_stale": "agent_operations",
+    "backup_plane_separate_service": "java_feature"
   },
   "converted_lessons": [
     {

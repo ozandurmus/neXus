@@ -558,6 +558,15 @@
       "priority": "P2",
       "target": "project/java_product_plan.json product_build_ids",
       "note": ""
+    },
+    {
+      "id": "backup_plane_separate_service",
+      "category": "backup",
+      "title": "Deliver the backup plane as the independent service the reviewed architecture specifies (own port, own vault volume, ui2-service forwards to it), then re-run the security review against the built system",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md; PO decision 2026-09-20 relay NXS-LOCAL-0347 seq 5",
+      "note": ""
     }
   ]
 }
