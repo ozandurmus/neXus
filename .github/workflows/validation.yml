@@ -91,7 +91,7 @@ jobs:
 
   targeted-regression:
     needs: regression-scope
-    if: always() && github.event_name == 'pull_request' && (needs.regression-scope.outputs.classification == 'ldap' || contains(needs.regression-scope.outputs.classification, 'discovery') || contains(needs.regression-scope.outputs.classification, 'inventory') || contains(needs.regression-scope.outputs.classification, 'privacy'))
+    if: always() && github.event_name == 'pull_request' && (needs.regression-scope.outputs.classification == 'ldap' || contains(needs.regression-scope.outputs.classification, 'discovery') || contains(needs.regression-scope.outputs.classification, 'inventory') || contains(needs.regression-scope.outputs.classification, 'privacy') || contains(needs.regression-scope.outputs.classification, 'shell'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -140,6 +140,11 @@ jobs:
       - name: Privacy targeted regression
         if: contains(needs.regression-scope.outputs.classification, 'privacy')
         run: ./ui2/gradlew --no-daemon --console=plain -p ui2 :service:unitTest --tests '*TopologyNamePseudonymizerTest'
+      - name: Shell targeted regression
+        if: contains(needs.regression-scope.outputs.classification, 'shell')
+        run: |
+          npm --prefix ui2/frontend ci
+          npm --prefix ui2/frontend test -- tests/App.test.tsx
 
   # FAST PR VALIDATION — runs on every pull_request. Cheap, high-value gates
   # only: import sanity, the repository/privacy gate, project-state
