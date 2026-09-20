@@ -46,7 +46,8 @@
       "summary": "Stood up ui2-backup with Check Point Gaia fail-closed SCP pull and a Palo Alto HTTPS XML API stream. Added the AST semantic deviation engine and the 400GiB artefact vault.",
       "completed": "2026-09-20",
       "movement": "IMPLEMENTATION",
-      "docs": {}
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0342.md"
     },
     {
       "build": "NXS-LOCAL-0341",
