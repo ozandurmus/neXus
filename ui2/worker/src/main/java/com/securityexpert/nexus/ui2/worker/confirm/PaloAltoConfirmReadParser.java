@@ -53,7 +53,11 @@ final class PaloAltoConfirmReadParser implements ConfirmReadParser {
         if (!isMember) {
             return HaPeerClaim.standalone();
         }
-        return new HaPeerClaim(true, firstMatch(PEER_SERIAL, haPeerReadOutput), firstMatch(PEER_ADDRESS, haPeerReadOutput));
+        Optional<String> peerAddr = firstMatch(PEER_ADDRESS, haPeerReadOutput).map(ip -> {
+            int slash = ip.indexOf('/');
+            return (slash > 0 ? ip.substring(0, slash) : ip).trim();
+        });
+        return new HaPeerClaim(true, firstMatch(PEER_SERIAL, haPeerReadOutput), peerAddr);
     }
 
     @Override

@@ -322,13 +322,22 @@ public final class InventoryController {
                     result.put(ctx, vs);
                     break;
                 }
+                String lowerVs = vs.toLowerCase();
+                String lowerCtx = ctx.toLowerCase();
+                String digitsOnlyCtx = ctx.replaceAll("\\D+", "");
+                if (lowerVs.contains("(" + lowerCtx + ")")
+                        || lowerVs.contains("(vsid " + lowerCtx + ")")
+                        || (!digitsOnlyCtx.isEmpty() && (lowerVs.contains("(vsid " + digitsOnlyCtx + ")") || lowerVs.contains("(" + digitsOnlyCtx + ")")))) {
+                    result.put(ctx, vs);
+                    break;
+                }
             }
         }
         List<String> numericContexts = contexts.stream()
                 .filter(c -> !"physical".equalsIgnoreCase(c) && !"0".equals(c) && !result.containsKey(c))
                 .sorted(java.util.Comparator.comparingInt(c -> {
                     try {
-                        return Integer.parseInt(c);
+                        return Integer.parseInt(c.replaceAll("\\D+", ""));
                     } catch (NumberFormatException e) {
                         return Integer.MAX_VALUE;
                     }

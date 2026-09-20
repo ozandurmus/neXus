@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.inventory;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
@@ -9,11 +10,21 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact
 public sealed interface InventoryResult {
 
     /** {@code haFacts} (migration V17): every {@link InventoryHaFact} the contact produced, across every context. */
-    record Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts) implements InventoryResult {
+    record Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems) implements InventoryResult {
+
+        public Completed {
+            contexts = contexts == null ? List.of() : List.copyOf(contexts);
+            haFacts = haFacts == null ? List.of() : List.copyOf(haFacts);
+            virtualSystems = virtualSystems == null ? Optional.empty() : virtualSystems;
+        }
+
+        public Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts) {
+            this(contexts, haFacts, Optional.empty());
+        }
 
         /** Pre-V17 shape, kept so a caller that never mentions HA facts keeps compiling unchanged. */
         public Completed(List<InventoryContext> contexts) {
-            this(contexts, List.of());
+            this(contexts, List.of(), Optional.empty());
         }
     }
 

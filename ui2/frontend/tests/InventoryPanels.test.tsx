@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { InventoryScreen } from "../src/screens/InventoryScreen";
-import { BackupPanel } from "../src/screens/InventoryPanels";
+import { BackupPanel, buildUnifiedContextTabs } from "../src/screens/InventoryPanels";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -517,5 +517,45 @@ describe("BackupPanel", () => {
     expect(screen.queryByText(/restore/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/download/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/decrypt/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("buildUnifiedContextTabs", () => {
+  it("formats Check Point virtual systems without duplicating (VSID n)", () => {
+    const contexts = [
+      { context: "physical", interfaces: [] },
+      { context: "2", vs_name: "vs-finance (VSID 2)", interfaces: [] },
+      { context: "3", vs_name: "vs-dmz", interfaces: [] },
+    ];
+    const virtualSystems = ["vs-finance (VSID 2)", "vs-dmz"];
+
+    const { tabs, resolveContext } = buildUnifiedContextTabs(contexts, virtualSystems);
+
+    expect(tabs).toHaveLength(3);
+    expect(tabs[0].label).toBe("Physical / VS0");
+    // Should NOT be "VS: vs-finance (VSID 2) (VSID 2)"
+    expect(tabs[1].label).toBe("VS: vs-finance (VSID 2)");
+    // Should append (VSID 3) because vs-dmz doesn't have parens
+    expect(tabs[2].label).toBe("VS: vs-dmz (VSID 3)");
+
+    expect(resolveContext("vs-finance (VSID 2)")).toBe(contexts[1]);
+    expect(resolveContext("2")).toBe(contexts[1]);
+  });
+
+  it("formats Palo Alto virtual systems with VR name first and VSYS prefix", () => {
+    const contexts = [
+      { context: "vsys1", vs_name: "default (vsys1)", interfaces: [] },
+      { context: "vsys2", vs_name: "VR-DMZ (vsys2)", interfaces: [] },
+    ];
+    const virtualSystems = ["default (vsys1)", "VR-DMZ (vsys2)"];
+
+    const { tabs, resolveContext } = buildUnifiedContextTabs(contexts, virtualSystems);
+
+    expect(tabs).toHaveLength(2);
+    expect(tabs[0].label).toBe("VSYS: default (vsys1)");
+    expect(tabs[1].label).toBe("VSYS: VR-DMZ (vsys2)");
+
+    expect(resolveContext("default (vsys1)")).toBe(contexts[0]);
+    expect(resolveContext("vsys1")).toBe(contexts[0]);
   });
 });

@@ -52,11 +52,13 @@ function DeviceRow({
   indented = false,
   selected = false,
   onSelect,
+  trailingExtra,
 }: {
   readonly device: DeviceSummary;
   readonly indented?: boolean;
   readonly selected?: boolean;
   readonly onSelect?: (device: DeviceSummary) => void;
+  readonly trailingExtra?: React.ReactNode;
 }) {
   const isEnrolled = device.enrollment_state === "ENROLLED";
 
@@ -114,11 +116,14 @@ function DeviceRow({
               terminalReason={device.latest_job_terminal_reason}
             />
           </Box>
-          <StatusChip
-            tone={enrollmentStateTone(device.enrollment_state)}
-            label={isEnrolled ? "Live" : enrollmentStateLabel(device.enrollment_state)}
-            dense
-          />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <StatusChip
+              tone={enrollmentStateTone(device.enrollment_state)}
+              label={isEnrolled ? "Live" : enrollmentStateLabel(device.enrollment_state)}
+              dense
+            />
+            {trailingExtra}
+          </Box>
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {device.role === "management_server" ? "Management server" : vendorLabel(device.vendor_hint)}
@@ -145,7 +150,7 @@ function DeviceList({
   readonly selectedClusterRef: string | null;
   readonly selectedVs?: string | null;
   readonly clusterOnly?: boolean;
-  readonly onSelectDevice: (device: DeviceSummary) => void;
+  readonly onSelectDevice: (device: DeviceSummary, selectedVs?: string) => void;
   readonly onSelectCluster: (ref: string, members: DeviceSummary[], selectedVs?: string) => void;
 }) {
   const [expandedRefs, setExpandedRefs] = useState<ReadonlySet<string>>(new Set());
@@ -186,6 +191,7 @@ function DeviceList({
       {[...groups.entries()].map(([ref, members]) => {
         const isCollapsed = clusterOnly ? !expandedRefs.has(ref) : collapsedRefs.has(ref);
         const firstMember = members[0];
+        const isPaloAlto = firstMember?.vendor_hint === "palo_alto";
         const isSelected = selectedClusterRef === ref;
         const clusterVsList = Array.from(
           new Set(
@@ -239,7 +245,7 @@ function DeviceList({
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                     <StatusChip tone="mem" label={`${members.length} members`} dense />
                     {clusterVsList.length > 0 && (
-                      <StatusChip tone="neutral" label={`${clusterVsList.length} VS`} dense />
+                      <StatusChip tone="neutral" label={`${clusterVsList.length} ${isPaloAlto ? "VSYS" : "VS"}`} dense />
                     )}
                     <Box
                       component="span"
@@ -261,7 +267,7 @@ function DeviceList({
                   </Box>
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-                  ClusterXL · {members.map((m) => m.hostname ?? m.device_id).join(" · ")}
+                  {isPaloAlto ? "PAN-OS HA" : "ClusterXL"} · {members.map((m) => m.hostname ?? m.device_id).join(" · ")}
                 </Typography>
               </Box>
             </Box>
@@ -291,7 +297,7 @@ function DeviceList({
                         gap: 0.5,
                       }}
                     >
-                      <span>Virtual Systems</span>
+                      <span>{isPaloAlto ? "Virtual Systems (VSYS)" : "Virtual Systems (VSX)"}</span>
                       <Chip
                         size="small"
                         label={clusterVsList.length}
@@ -335,14 +341,14 @@ function DeviceList({
                             }}
                           >
                             <Chip
-                              label="VS"
+                              label={isPaloAlto ? "VSYS" : "VS"}
                               size="small"
                               sx={{
                                 height: 20,
                                 fontSize: "0.68rem",
                                 fontWeight: 700,
-                                bgcolor: "#e0e7ff",
-                                color: "#3730a3",
+                                bgcolor: isPaloAlto ? "#fef3c7" : "#e0e7ff",
+                                color: isPaloAlto ? "#92400e" : "#3730a3",
                                 borderRadius: "4px",
                               }}
                             />
@@ -362,7 +368,7 @@ function DeviceList({
                               {vsName}
                             </Typography>
                             <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
-                              VSX
+                              {isPaloAlto ? "PAN-OS" : "VSX"}
                             </Typography>
                           </Box>
                         );
@@ -375,14 +381,155 @@ function DeviceList({
           </Box>
         );
       })}
-      {!clusterOnly && standalone.map((device) => (
-        <DeviceRow
-          key={device.device_id}
-          device={device}
-          selected={device.device_id === selectedDeviceId}
-          onSelect={onSelectDevice}
-        />
-      ))}
+      {!clusterOnly && standalone.map((device) => {
+        const isPaloAlto = device.vendor_hint === "palo_alto";
+        const standaloneVsList = device.virtual_systems
+          ? device.virtual_systems.split(/,\s*/).filter(Boolean)
+          : [];
+        const isDeviceSelected = device.device_id === selectedDeviceId;
+        const isExpanded = !collapsedRefs.has(device.device_id);
+
+        if (standaloneVsList.length === 0) {
+          return (
+            <DeviceRow
+              key={device.device_id}
+              device={device}
+              selected={isDeviceSelected && !selectedVs}
+              onSelect={(dev) => onSelectDevice(dev)}
+            />
+          );
+        }
+
+        return (
+          <Box key={device.device_id} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <DeviceRow
+              device={device}
+              selected={isDeviceSelected && !selectedVs}
+              onSelect={(dev) => onSelectDevice(dev)}
+              trailingExtra={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <StatusChip
+                    tone="neutral"
+                    label={`${standaloneVsList.length} ${isPaloAlto ? "VSYS" : "VS"}`}
+                    dense
+                  />
+                  <Box
+                    component="span"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggle(device.device_id);
+                    }}
+                    sx={{
+                      cursor: "pointer",
+                      px: 0.5,
+                      color: "text.secondary",
+                      fontSize: "0.875rem",
+                      "&:hover": { color: m3.primary },
+                    }}
+                    title={isExpanded ? "Collapse virtual systems" : "Expand virtual systems"}
+                  >
+                    {isExpanded ? "▲" : "▼"}
+                  </Box>
+                </Box>
+              }
+            />
+            {isExpanded && (
+              <Box sx={{ pl: 2.5, display: "flex", flexDirection: "column", gap: 0.75, mt: 0.25 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 700,
+                    color: m3.onSurfaceVar,
+                    fontSize: "0.72rem",
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                  }}
+                >
+                  <span>{isPaloAlto ? "Virtual Systems (VSYS)" : "Virtual Systems (VSX)"}</span>
+                  <Chip
+                    size="small"
+                    label={standaloneVsList.length}
+                    sx={{ height: 18, fontSize: "0.65rem", fontWeight: 700, bgcolor: m3.scHigh }}
+                  />
+                </Typography>
+                <Stack spacing={0.5}>
+                  {standaloneVsList.map((vsName) => {
+                    const isVsSelected = isDeviceSelected && selectedVs === vsName;
+                    return (
+                      <Box
+                        key={vsName}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectDevice(device, vsName);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.stopPropagation();
+                            onSelectDevice(device, vsName);
+                          }
+                        }}
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          p: 1,
+                          borderRadius: "8px",
+                          bgcolor: isVsSelected ? "#dbeafe" : m3.scLowest,
+                          border: "1px solid",
+                          borderColor: isVsSelected ? m3.primary : m3.outlineVar,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease-in-out",
+                          "&:hover": {
+                            borderColor: m3.primary,
+                            bgcolor: isVsSelected ? "#dbeafe" : "#f0f5ff",
+                            boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+                          },
+                        }}
+                      >
+                        <Chip
+                          label={isPaloAlto ? "VSYS" : "VS"}
+                          size="small"
+                          sx={{
+                            height: 20,
+                            fontSize: "0.68rem",
+                            fontWeight: 700,
+                            bgcolor: isPaloAlto ? "#fef3c7" : "#e0e7ff",
+                            color: isPaloAlto ? "#92400e" : "#3730a3",
+                            borderRadius: "4px",
+                          }}
+                        />
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: isVsSelected ? 700 : 500,
+                            color: isVsSelected ? m3.primary : m3.onSurface,
+                            flex: 1,
+                            minWidth: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            fontSize: "0.82rem",
+                          }}
+                        >
+                          {vsName}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
+                          {isPaloAlto ? "PAN-OS" : "VSX"}
+                        </Typography>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              </Box>
+            )}
+          </Box>
+        );
+      })}
     </Stack>
   );
 }
@@ -393,6 +540,7 @@ export function InventoryScreen() {
     describeApiError,
   );
   const [selectedDevice, setSelectedDevice] = useState<DeviceSummary | null>(null);
+  const [selectedDeviceVs, setSelectedDeviceVs] = useState<string | null>(null);
   const [selectedCluster, setSelectedCluster] = useState<{ ref: string; members: DeviceSummary[]; initialVs?: string } | null>(null);
   const clusterCacheRef = useRef<Map<string, ClusterInventory>>(new Map());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -656,15 +804,17 @@ export function InventoryScreen() {
                 devices={filteredDevices}
                 selectedDeviceId={selectedDevice?.device_id ?? null}
                 selectedClusterRef={selectedCluster?.ref ?? null}
-                selectedVs={selectedCluster?.initialVs ?? null}
+                selectedVs={selectedCluster ? selectedCluster.initialVs : selectedDeviceVs}
                 clusterOnly={filterMode === "cluster"}
-                onSelectDevice={(dev) => {
+                onSelectDevice={(dev, vsName) => {
                   setSelectedDevice(dev);
+                  setSelectedDeviceVs(vsName ?? null);
                   setSelectedCluster(null);
                 }}
                 onSelectCluster={(ref, members, vsName) => {
                   setSelectedCluster({ ref, members, initialVs: vsName });
                   setSelectedDevice(null);
+                  setSelectedDeviceVs(null);
                 }}
               />
             )}
@@ -685,6 +835,7 @@ export function InventoryScreen() {
               <DeviceInventoryPanels
                 key={selectedDevice.device_id}
                 device={selectedDevice}
+                initialVs={selectedDeviceVs ?? undefined}
                 onDeviceStateChange={refresh}
               />
             ) : (

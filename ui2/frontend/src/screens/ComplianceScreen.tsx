@@ -170,7 +170,7 @@ export function ComplianceScreen() {
 
   const subtitle =
     overview && overview.evaluated_firewalls > 0
-      ? "CIS Benchmark · PCI-DSS v4.0.1 · NIST SP 800-53 · Finansal Temel Çizgi"
+      ? "CIS Benchmark · PCI-DSS v4.0.1 · NIST SP 800-53 · Financial Baseline"
       : "No framework assigned · nothing assessed yet";
 
   return (
@@ -185,10 +185,10 @@ export function ComplianceScreen() {
               onClick={handleReEvaluate}
               disabled={reEvaluating || loading}
             >
-              {reEvaluating ? "Değerlendiriliyor..." : "Yeniden Değerlendir"}
+              {reEvaluating ? "Evaluating..." : "Re-evaluate"}
             </M3Button>
             <M3Button emphasis="filled" icon="download">
-              Denetim Raporu Al
+              Export Audit Report
             </M3Button>
           </Stack>
         }
@@ -197,40 +197,40 @@ export function ComplianceScreen() {
       {/* 4 Top KPI Cards */}
       <MetricGrid>
         <ComplianceMetricCard
-          title="Assured Compliance (Güvenceli Uyum)"
+          title="Assured Compliance"
           count={overview ? `${overview.assured_compliance_pct}%` : "0%"}
           badge={{
-            label: overview && overview.assured_compliance_pct >= 70 ? "Yüksek Güvence" : "İyileştirme Gerekli",
+            label: overview && overview.assured_compliance_pct >= 70 ? "High Assurance" : "Improvement Needed",
             tone: overview && overview.assured_compliance_pct >= 70 ? "ok" : "warn",
           }}
-          note="PASS / Toplam Atanan Kontroller"
+          note="PASS / Total Assigned Controls"
         />
         <ComplianceMetricCard
-          title="Evidence Coverage (Kanıt Kapsamı)"
+          title="Evidence Coverage"
           count={overview ? `${overview.evidence_coverage_pct}%` : "0%"}
           badge={{
-            label: overview ? `${overview.evaluated_firewalls} Cihaz` : "0 Cihaz",
+            label: overview ? `${overview.evaluated_firewalls} Firewalls` : "0 Firewalls",
             tone: "neutral",
           }}
-          note="Kanıtı toplanan kontroller oranı"
+          note="Controls with collected evidence"
         />
         <ComplianceMetricCard
-          title="Critical Deficiencies (Kritik Açıklar)"
+          title="Critical Deficiencies"
           count={overview ? String(overview.critical_deficiencies) : "0"}
           badge={{
-            label: overview?.critical_deficiencies === 0 ? "Sıfır Kritik Açık" : "Acil Müdahale",
+            label: overview?.critical_deficiencies === 0 ? "Zero Critical" : "Immediate Action",
             tone: overview?.critical_deficiencies === 0 ? "ok" : "bad",
           }}
-          note="Yüksek öncelikli başarısız kontroller"
+          note="High priority failing controls"
         />
         <ComplianceMetricCard
-          title="Data Gaps (Veri Yok / Eksik)"
+          title="Data Gaps"
           count={overview ? String(overview.data_gaps) : "0"}
           badge={{
-            label: overview && overview.data_gaps > 0 ? "Eksik Komutlar Var" : "Tam Kapsam",
+            label: overview && overview.data_gaps > 0 ? "Missing Commands" : "Full Coverage",
             tone: overview && overview.data_gaps > 0 ? "warn" : "ok",
           }}
-          note="Toplama bekleyen denetim maddeleri"
+          note="Controls awaiting evidence collection"
         />
       </MetricGrid>
 
@@ -283,13 +283,13 @@ export function ComplianceScreen() {
 
             <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
               <Typography variant="body2" sx={{ color: m3.success, fontWeight: 500 }}>
-                ✓ {f.pass_count} Uyumlu
+                ✓ {f.pass_count} Passing
               </Typography>
               <Typography variant="body2" sx={{ color: m3.error, fontWeight: 500 }}>
-                ✕ {f.fail_count} Uyumsuz
+                ✕ {f.fail_count} Failing
               </Typography>
               <Typography variant="body2" sx={{ color: m3.warning, fontWeight: 500 }}>
-                ? {f.data_unavailable_count} Veri Yok
+                ? {f.data_unavailable_count} Unavailable
               </Typography>
             </Stack>
           </Card>
@@ -327,7 +327,7 @@ export function ComplianceScreen() {
             >
               <Icon name="search" size={20} />
               <InputBase
-                placeholder="Kontrollerde ara (ID, başlık, PCI / CIS maddesi, anahtar kelime)..."
+                placeholder="Search controls (ID, title, PCI / CIS reference, keyword)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 sx={{ flex: 1, fontSize: 14 }}
@@ -342,7 +342,7 @@ export function ComplianceScreen() {
             {/* Severity and Framework Dropdowns */}
             <Stack direction="row" spacing={1}>
               <select
-                aria-label="Önem Derecesi Filtresi"
+                aria-label="Severity Filter"
                 value={severityFilter}
                 onChange={(e) => setSeverityFilter(e.target.value)}
                 style={{
@@ -355,15 +355,15 @@ export function ComplianceScreen() {
                   color: m3.onSurface,
                 }}
               >
-                <option value="ALL">Tüm Önem Dereceleri</option>
-                <option value="CRITICAL">Kritik (CRITICAL)</option>
-                <option value="HIGH">Yüksek (HIGH)</option>
-                <option value="MEDIUM">Orta (MEDIUM)</option>
-                <option value="LOW">Düşük (LOW)</option>
+                <option value="ALL">All Severities</option>
+                <option value="CRITICAL">Critical</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="LOW">Low</option>
               </select>
 
               <select
-                aria-label="Standart Filtresi"
+                aria-label="Framework Filter"
                 value={frameworkFilter}
                 onChange={(e) => setFrameworkFilter(e.target.value)}
                 style={{
@@ -376,11 +376,11 @@ export function ComplianceScreen() {
                   color: m3.onSurface,
                 }}
               >
-                <option value="ALL">Tüm Standartlar</option>
+                <option value="ALL">All Frameworks</option>
                 <option value="CIS">CIS Benchmark</option>
                 <option value="PCI">PCI-DSS v4.0.1</option>
                 <option value="NIST">NIST SP 800-53</option>
-                <option value="FINANCIAL">Finansal Temel Çizgi</option>
+                <option value="FINANCIAL">Financial Baseline</option>
               </select>
             </Stack>
           </Stack>
@@ -389,7 +389,7 @@ export function ComplianceScreen() {
           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
             <Chip
               clickable
-              label={`Tümü (${controls.length})`}
+              label={`All (${controls.length})`}
               onClick={() => setStatusFilter("ALL")}
               sx={{
                 bgcolor: statusFilter === "ALL" ? m3.primaryContainer : m3.scLow,
@@ -399,7 +399,7 @@ export function ComplianceScreen() {
             />
             <Chip
               clickable
-              label={`Uyumsuz (${failingCount})`}
+              label={`Failing (${failingCount})`}
               onClick={() => setStatusFilter("FAILING")}
               sx={{
                 bgcolor: statusFilter === "FAILING" ? m3.errorContainer : m3.scLow,
@@ -409,7 +409,7 @@ export function ComplianceScreen() {
             />
             <Chip
               clickable
-              label={`Veri Yok / Eksik (${unavailCount})`}
+              label={`Data Gaps (${unavailCount})`}
               onClick={() => setStatusFilter("UNAVAILABLE")}
               sx={{
                 bgcolor: statusFilter === "UNAVAILABLE" ? m3.warningContainer : m3.scLow,
@@ -419,7 +419,7 @@ export function ComplianceScreen() {
             />
             <Chip
               clickable
-              label={`Uyumlu (${passingCount})`}
+              label={`Passing (${passingCount})`}
               onClick={() => setStatusFilter("PASSING")}
               sx={{
                 bgcolor: statusFilter === "PASSING" ? m3.successContainer : m3.scLow,
@@ -446,12 +446,12 @@ export function ComplianceScreen() {
           <Table size="medium">
             <TableHead sx={{ bgcolor: m3.scLow }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13 }}>Kontrol Kodu & Tanımı</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 110 }}>Önem</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 100 }}>Cihazlar</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 170 }}>Durum Dağılımı</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 140 }}>Sonuç</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 90 }} align="right">İşlem</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: 13 }}>Control Code & Title</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 110 }}>Severity</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 100 }}>Firewalls</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 170 }}>Posture Breakdown</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 140 }}>Outcome</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 90 }} align="right">Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -459,7 +459,7 @@ export function ComplianceScreen() {
                 <TableRow>
                   <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
                     <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-                      Kontroller yükleniyor...
+                      Loading compliance controls...
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -467,7 +467,7 @@ export function ComplianceScreen() {
                 <TableRow>
                   <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
                     <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-                      Filtreye uygun kontrol bulunamadı.
+                      No controls matching filter criteria.
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -503,7 +503,7 @@ export function ComplianceScreen() {
                           ))}
                           {c.frameworks && c.frameworks.length > 3 && (
                             <Typography variant="body2" sx={{ fontSize: 11, color: m3.onSurfaceVar }}>
-                              +{c.frameworks.length - 3} standart
+                              +{c.frameworks.length - 3} more
                             </Typography>
                           )}
                         </Stack>
@@ -540,7 +540,7 @@ export function ComplianceScreen() {
 
                     <TableCell>
                       <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
-                        {c.target_device_count} Firewall
+                        {c.target_device_count} {c.target_device_count === 1 ? "Firewall" : "Firewalls"}
                       </Typography>
                     </TableCell>
 
@@ -549,17 +549,17 @@ export function ComplianceScreen() {
                       <Stack spacing={0.5}>
                         <Box sx={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", bgcolor: m3.scHigh }}>
                           {c.pass_count > 0 && (
-                            <Box sx={{ flex: c.pass_count, bgcolor: m3.success }} title={`${c.pass_count} Uyumlu`} />
+                            <Box sx={{ flex: c.pass_count, bgcolor: m3.success }} title={`${c.pass_count} Passing`} />
                           )}
                           {c.fail_count > 0 && (
-                            <Box sx={{ flex: c.fail_count, bgcolor: m3.error }} title={`${c.fail_count} Uyumsuz`} />
+                            <Box sx={{ flex: c.fail_count, bgcolor: m3.error }} title={`${c.fail_count} Failing`} />
                           )}
                           {c.data_unavailable_count > 0 && (
-                            <Box sx={{ flex: c.data_unavailable_count, bgcolor: m3.warning }} title={`${c.data_unavailable_count} Veri Yok`} />
+                            <Box sx={{ flex: c.data_unavailable_count, bgcolor: m3.warning }} title={`${c.data_unavailable_count} Data Unavailable`} />
                           )}
                         </Box>
                         <Typography variant="body2" sx={{ fontSize: 11, color: m3.onSurfaceVar }}>
-                          {c.compliance_pct}% Güvence
+                          {c.compliance_pct}% Assurance
                         </Typography>
                       </Stack>
                     </TableCell>
@@ -569,10 +569,10 @@ export function ComplianceScreen() {
                         size="small"
                         label={
                           c.status === "PASS"
-                            ? "Uyumlu"
+                            ? "Compliant"
                             : c.status === "FAIL"
-                            ? "Uyumsuz"
-                            : "Veri Yok / Eksik"
+                            ? "Non-Compliant"
+                            : "Data Unavailable"
                         }
                         sx={{
                           fontWeight: 600,
@@ -657,10 +657,10 @@ export function ComplianceScreen() {
               <Chip
                 label={
                   selectedControl.status === "PASS"
-                    ? "Uyumlu (PASS)"
+                    ? "Compliant (PASS)"
                     : selectedControl.status === "FAIL"
-                    ? "Uyumsuz (FAIL)"
-                    : "Veri Yok / Eksik (DATA_UNAVAILABLE)"
+                    ? "Non-Compliant (FAIL)"
+                    : "Data Unavailable (DATA_UNAVAILABLE)"
                 }
                 sx={{
                   fontWeight: 600,
@@ -685,11 +685,11 @@ export function ComplianceScreen() {
               <Card sx={{ bgcolor: m3.warningContainer, p: 2, borderRadius: "12px", border: "1px solid", borderColor: m3.warning }}>
                 <Stack spacing={1}>
                   <Typography sx={{ fontWeight: 600, color: m3.onWarningContainer, fontSize: 14 }}>
-                    ⚠ Veri Yok / Toplanmayan Komut
+                    ⚠ Data Unavailable / Command Not Collected
                   </Typography>
                   <Typography variant="body2" sx={{ color: m3.onWarningContainer, lineHeight: 1.5 }}>
                     {selectedControl.missing_reason ??
-                      "Bu kontrol için gerekli olan komut henüz firewall'dan toplanmamıştır. Kontrol atlanmamış, denetim bütünlüğü gereği 'Veri Yok' olarak raporlanmıştır. İleride komut gateway kapsamına eklendiğinde otomatik olarak denetlenecektir."}
+                      "The diagnostic command required for this control has not been collected from the firewall yet. The control has not been skipped; per audit integrity standards, it is reported as 'Data Unavailable'. When the command is added to the collection scope, it will be evaluated automatically."}
                   </Typography>
                 </Stack>
               </Card>
@@ -698,7 +698,7 @@ export function ComplianceScreen() {
             {/* Description & Security Rationale */}
             <Card sx={{ bgcolor: m3.scLowest, p: 2, borderRadius: "12px", border: "1px solid", borderColor: m3.outlineVar }}>
               <Typography sx={{ fontWeight: 600, fontSize: 13, mb: 1, color: m3.onSurface }}>
-                Güvenlik Gerekçesi & Denetim Amacı
+                Security Rationale & Audit Objective
               </Typography>
               <Typography variant="body2" sx={{ color: m3.onSurfaceVar, lineHeight: 1.6 }}>
                 {selectedControl.description}
@@ -708,7 +708,7 @@ export function ComplianceScreen() {
             {/* Regulatory Framework Mappings */}
             <Card sx={{ bgcolor: m3.scLowest, p: 2, borderRadius: "12px", border: "1px solid", borderColor: m3.outlineVar }}>
               <Typography sx={{ fontWeight: 600, fontSize: 13, mb: 1.5, color: m3.onSurface }}>
-                Eşleşen Standartlar & Maddeler
+                Framework Mappings & Clauses
               </Typography>
               <Stack spacing={1}>
                 {selectedControl.frameworks?.map((f, idx) => (
@@ -718,7 +718,7 @@ export function ComplianceScreen() {
                     </Typography>
                     <Chip
                       size="small"
-                      label={`Madde ${f.reference || f.clauseId || ""} (${f.version || f.frameworkVersion || ""})`}
+                      label={`Section ${f.reference || f.clauseId || ""} (${f.version || f.frameworkVersion || ""})`}
                       sx={{ bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, fontSize: 11 }}
                     />
                   </Box>
@@ -729,10 +729,10 @@ export function ComplianceScreen() {
             {/* Affected Firewalls */}
             <Card sx={{ bgcolor: m3.scLowest, p: 2, borderRadius: "12px", border: "1px solid", borderColor: m3.outlineVar }}>
               <Typography sx={{ fontWeight: 600, fontSize: 13, mb: 1, color: m3.onSurface }}>
-                Hedef Firewallar & Durum
+                Target Firewalls & Status
               </Typography>
               <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 1.5 }}>
-                Toplam {selectedControl.target_device_count} cihaz değerlendirildi.
+                Total {selectedControl.target_device_count} {selectedControl.target_device_count === 1 ? "device" : "devices"} evaluated.
               </Typography>
               <Stack spacing={1}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 1, bgcolor: m3.scLow, borderRadius: "8px" }}>

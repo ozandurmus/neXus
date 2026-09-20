@@ -92,6 +92,8 @@ public final class InventoryCapabilityExecutor {
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
     private static final Pattern API_KEY = Pattern.compile("<key>([^<]+)</key>");
     private static final Pattern SERIAL_TAG = Pattern.compile("(?is)<serial>\\s*([^<]+?)\\s*</serial>");
+    private static final String BATCH_TAG = "===NEXUS_SECTION:";
+    private static final String BATCH_TAG_END = "===";
 
     private final DeviceTransport transport;
     private final PanCredentialResolver panCredentialResolver;
@@ -151,11 +153,51 @@ public final class InventoryCapabilityExecutor {
                     "[INVENTORY_VSX_PROBE] target={0}:{1} vsx={2}, vsCount={3}",
                     target.host(), target.port(), vsxHost, vsxStat.devices().size());
 
-            String ipv4 = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V4, vsxHost));
-            String ipv6 = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V6, vsxHost));
-            String routeOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ROUTE_SHOW, vsxHost));
-            String haStatOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost));
-            String vipOutput = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
+            List<String> vsids = vsxStat.devices().stream()
+                    .map(CheckPointVsxStatParser.VsxDevice::vsid)
+                    .filter(vsid -> !"0".equals(vsid))
+                    .toList();
+
+            List<String> vsNames = new ArrayList<>();
+            for (CheckPointVsxStatParser.VsxDevice dev : vsxStat.devices()) {
+                if ("0".equals(dev.vsid())) {
+                    continue;
+                }
+                String name = dev.name();
+                if (name != null && !name.isBlank() && !name.equalsIgnoreCase("vs" + dev.vsid()) && !name.equalsIgnoreCase("vs0")) {
+                    vsNames.add(name + " (VSID " + dev.vsid() + ")");
+                } else {
+                    vsNames.add("VSID " + dev.vsid());
+                }
+            }
+            String virtualSystemsString = vsNames.isEmpty() ? null : String.join(", ", vsNames);
+
+            // Single-session compound batch read: all physical + VSID reads in one subshell
+            Map<String, String> batchSections = Map.of();
+            String batchCmd = buildCheckPointBatchCommand(vsxHost, vsids);
+            String batchOutput = execOutput(session, batchCmd);
+            if (!batchOutput.isBlank() && batchOutput.contains(BATCH_TAG)) {
+                batchSections = parseBatchSections(batchOutput);
+                LOG.log(System.Logger.Level.INFO,
+                        "[INVENTORY_BATCH_SUCCESS] target={0}:{1} batch parsed {2} sections in single session",
+                        target.host(), target.port(), batchSections.size());
+            }
+
+            String ipv4 = batchSections.containsKey("ipv4")
+                    ? batchSections.get("ipv4")
+                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V4, vsxHost));
+            String ipv6 = batchSections.containsKey("ipv6")
+                    ? batchSections.get("ipv6")
+                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V6, vsxHost));
+            String routeOutput = batchSections.containsKey("route")
+                    ? batchSections.get("route")
+                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ROUTE_SHOW, vsxHost));
+            String haStatOutput = batchSections.containsKey("ha")
+                    ? batchSections.get("ha")
+                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost));
+            String vipOutput = batchSections.containsKey("vip")
+                    ? batchSections.get("vip")
+                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
 
             long parseStart = System.currentTimeMillis();
             List<ParsedInterface> physicalInterfaces = CheckPointIpAddrParser.parse(ipv4, ipv6);
@@ -202,15 +244,20 @@ public final class InventoryCapabilityExecutor {
             haFacts.add(new InventoryHaFact(UUID.randomUUID().toString(), InventoryContext.PHYSICAL, haState.role(),
                     haState.clusterMode(), InventoryHaFact.SOURCE_CP_CPHAPROB_STAT));
 
-            List<String> vsids = vsxStat.devices().stream()
-                    .map(CheckPointVsxStatParser.VsxDevice::vsid)
-                    .filter(vsid -> !"0".equals(vsid))
-                    .toList();
             for (String vsid : vsids) {
-                List<String> steps = InventoryReadPlan.checkPointVsidSteps(vsid);
-                String addrAndRouteCombined = execOutput(session, steps.get(0));
-                String vsClusterIfOutput = execOutput(session, steps.get(1));
-                execOutput(session, steps.get(2));
+                String addrAndRouteCombined;
+                String vsClusterIfOutput;
+                String vsAddrRouteKey = "vs_" + vsid + "_addr_route";
+                String vsVipKey = "vs_" + vsid + "_vip";
+                if (batchSections.containsKey(vsAddrRouteKey)) {
+                    addrAndRouteCombined = batchSections.get(vsAddrRouteKey);
+                    vsClusterIfOutput = batchSections.getOrDefault(vsVipKey, "");
+                } else {
+                    List<String> steps = InventoryReadPlan.checkPointVsidSteps(vsid);
+                    addrAndRouteCombined = execOutput(session, steps.get(0));
+                    vsClusterIfOutput = execOutput(session, steps.get(1));
+                    execOutput(session, steps.get(2));
+                }
                 CheckPointVsidCompositeOutputSplitter.Halves halves =
                         CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
                 List<ParsedInterface> vsInterfaces = mergeVirtualAddresses(
@@ -237,7 +284,7 @@ public final class InventoryCapabilityExecutor {
                     "[INVENTORY_COLLECT_COMPLETE] target={0}:{1} completed in {2}ms, totalContexts={3}, totalInterfaces={4}",
                     target.host(), target.port(), totalElapsed, contexts.size(),
                     contexts.stream().mapToInt(c -> c.interfaces().size()).sum());
-            return new InventoryResult.Completed(contexts, haFacts);
+            return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString));
         } finally {
             transport.disconnect(session);
         }
@@ -339,7 +386,30 @@ public final class InventoryCapabilityExecutor {
         List<InventoryHaFact> haFacts = List.of(new InventoryHaFact(UUID.randomUUID().toString(),
                 InventoryContext.PHYSICAL, haState.role(), haState.clusterMode(),
                 InventoryHaFact.SOURCE_PAN_HIGH_AVAILABILITY_STATE));
-        return new InventoryResult.Completed(contexts, haFacts);
+
+        Map<String, java.util.Set<String>> vsysToVirtualRouters = new LinkedHashMap<>();
+        parsedInterfaces.interfaceNameToVsys().forEach((ifName, vsys) -> {
+            String vr = parsedInterfaces.interfaceNameToVirtualRouter().get(ifName);
+            if (vr != null && !vr.isBlank()) {
+                vsysToVirtualRouters.computeIfAbsent(vsys, k -> new java.util.LinkedHashSet<>()).add(vr);
+            }
+        });
+        virtualRouterToVsys.forEach((vr, vsysSet) -> {
+            for (String vsys : vsysSet) {
+                vsysToVirtualRouters.computeIfAbsent(vsys, k -> new java.util.LinkedHashSet<>()).add(vr);
+            }
+        });
+
+        List<String> panVsNames = new ArrayList<>();
+        for (String vsys : vsysIds) {
+            java.util.Set<String> vrs = vsysToVirtualRouters.getOrDefault(vsys, java.util.Set.of());
+            String vrDisplay = String.join(", ", vrs);
+            String displayName = vrDisplay.isEmpty() ? vsys : vrDisplay + " (" + vsys + ")";
+            panVsNames.add(displayName);
+        }
+        String virtualSystemsString = panVsNames.isEmpty() ? null : String.join(", ", panVsNames);
+
+        return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString));
     }
 
     private static List<ParsedInterface> mergeVirtualAddresses(List<ParsedInterface> interfaces,
@@ -585,7 +655,16 @@ public final class InventoryCapabilityExecutor {
 
     private String execOutput(TransportSession session, String command) {
         long startMs = System.currentTimeMillis();
-        ExecResult result = transport.exec(session, new ExecSpec(command), READ_TIMEOUT);
+        ExecResult result;
+        try {
+            result = transport.exec(session, new ExecSpec(command), READ_TIMEOUT);
+        } catch (Exception e) {
+            long elapsedMs = System.currentTimeMillis() - startMs;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[INVENTORY_EXEC_EXCEPTION] cmd=\"{0}\" threw exception after {1}ms: {2}",
+                    command, elapsedMs, e.getMessage());
+            return "";
+        }
         long elapsedMs = System.currentTimeMillis() - startMs;
         String output = switch (result) {
             case ExecResult.Completed completed -> {
@@ -654,6 +733,42 @@ public final class InventoryCapabilityExecutor {
 
     private static boolean isXmlError(String xml) {
         return xml != null && (xml.contains("status=\"error\"") || xml.contains("status='error'"));
+    }
+
+    static String buildCheckPointBatchCommand(boolean vsxHost, List<String> vsids) {
+        StringBuilder sb = new StringBuilder();
+        String prefix = vsxHost ? "vsenv 0 >/dev/null 2>&1 || true; " : "";
+        sb.append("echo '===NEXUS_SECTION:ipv4==='; ").append(prefix).append(InventoryReadPlan.CP_IP_ADDR_SHOW_V4).append("; ");
+        sb.append("echo '===NEXUS_SECTION:ipv6==='; ").append(prefix).append(InventoryReadPlan.CP_IP_ADDR_SHOW_V6).append("; ");
+        sb.append("echo '===NEXUS_SECTION:route==='; ").append(prefix).append(InventoryReadPlan.CP_IP_ROUTE_SHOW).append("; ");
+        sb.append("echo '===NEXUS_SECTION:ha==='; ").append(prefix).append(InventoryReadPlan.CP_CPHAPROB_STAT).append("; ");
+        sb.append("echo '===NEXUS_SECTION:vip==='; ").append(prefix).append(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF).append("; ");
+        for (String vsid : vsids) {
+            String vsPrefix = "vsenv " + vsid + " >/dev/null 2>&1 || true; ";
+            sb.append("echo '===NEXUS_SECTION:vs_").append(vsid).append("_addr_route==='; ")
+                    .append(vsPrefix).append("ip -4 addr show; ip -4 route show; ");
+            sb.append("echo '===NEXUS_SECTION:vs_").append(vsid).append("_vip==='; ")
+                    .append(vsPrefix).append(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF).append("; ");
+        }
+        sb.append("echo '===NEXUS_SECTION:END==='");
+        return sb.toString();
+    }
+
+    static Map<String, String> parseBatchSections(String output) {
+        Map<String, String> sections = new LinkedHashMap<>();
+        if (output == null || !output.contains(BATCH_TAG)) {
+            return sections;
+        }
+        String[] parts = output.split(Pattern.quote(BATCH_TAG));
+        for (String part : parts) {
+            int endTag = part.indexOf(BATCH_TAG_END);
+            if (endTag > 0) {
+                String sectionName = part.substring(0, endTag).trim();
+                String content = part.substring(endTag + BATCH_TAG_END.length()).trim();
+                sections.put(sectionName, content);
+            }
+        }
+        return sections;
     }
 
     private static String describeConnect(ConnectResult result) {

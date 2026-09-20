@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
+import java.util.Optional;
+
 /**
  * One completed {@code inventory_collect} job's own {@code
  * device_inventory_run} row (14C D-4) plus every {@link InventoryContext}
@@ -15,7 +17,7 @@ import java.util.Objects;
  * built and proven against fixtures before any live run).
  */
 public record InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,
-        List<InventoryContext> contexts, List<InventoryHaFact> haFacts) {
+        List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems) {
 
     public InventoryRun {
         Objects.requireNonNull(runId, "runId");
@@ -24,11 +26,18 @@ public record InventoryRun(String runId, String deviceId, String jobId, Instant 
         Objects.requireNonNull(collectedAt, "collectedAt");
         contexts = contexts == null ? List.of() : List.copyOf(contexts);
         haFacts = haFacts == null ? List.of() : List.copyOf(haFacts);
+        virtualSystems = virtualSystems == null ? Optional.empty() : virtualSystems;
+    }
+
+    public InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,
+            List<InventoryContext> contexts, List<InventoryHaFact> haFacts) {
+        this(runId, deviceId, jobId, collectedAt, contextCount, contexts, haFacts, Optional.empty());
     }
 
     /** Pre-V17 shape, kept so every existing caller that never mentions HA facts keeps compiling unchanged. */
     public InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,
             List<InventoryContext> contexts) {
-        this(runId, deviceId, jobId, collectedAt, contextCount, contexts, List.of());
+        this(runId, deviceId, jobId, collectedAt, contextCount, contexts, List.of(), Optional.empty());
     }
 }
+

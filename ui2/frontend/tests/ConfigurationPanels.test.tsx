@@ -103,8 +103,8 @@ describe("ConfigurationScreen device selection and panels", () => {
     fireEvent.click(screen.getByText("fw-edge-1"));
 
     await waitFor(() => expect(screen.getByText("override")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("tab", { name: "Sanitized text" }));
-    expect(screen.getByText("No sanitized text")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "XML Configuration" }));
+    expect(screen.getByText("PAN-OS XML Configuration Artefact")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Overrides" }));
     expect(screen.getByText(/address\/addr-2/)).toBeInTheDocument();

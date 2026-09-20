@@ -781,11 +781,15 @@ export function buildUnifiedContextTabs<T extends { context: string; vs_name?: s
 
     if (resolvedVs) {
       mappedVsNames.add(resolvedVs.toLowerCase());
+      const hasParenthesis = resolvedVs.includes("(");
+      const isNum = !isNaN(parseInt(c.context, 10));
+      const prefix = resolvedVs.toLowerCase().includes("vsys") ? "VSYS" : "VS";
+      const label = hasParenthesis || !isNum
+        ? (resolvedVs.startsWith("VS:") || resolvedVs.startsWith("VSYS:") ? resolvedVs : `${prefix}: ${resolvedVs}`)
+        : `VS: ${resolvedVs} (VSID ${c.context})`;
       tabs.push({
         context: resolvedVs,
-        label: !isNaN(parseInt(c.context, 10))
-          ? `VS: ${resolvedVs} (VSID ${c.context})`
-          : `VS: ${resolvedVs}`,
+        label,
         vsName: resolvedVs,
         originalContext: c,
       });
@@ -801,9 +805,10 @@ export function buildUnifiedContextTabs<T extends { context: string; vs_name?: s
 
   for (const vs of virtualSystems) {
     if (!mappedVsNames.has(vs.toLowerCase()) && !tabs.some((t) => t.context.toLowerCase() === vs.toLowerCase())) {
+      const prefix = vs.toLowerCase().includes("vsys") ? "VSYS" : "VS";
       tabs.push({
         context: vs,
-        label: `VS: ${vs}`,
+        label: vs.startsWith("VS:") || vs.startsWith("VSYS:") ? vs : `${prefix}: ${vs}`,
         vsName: vs,
       });
     }
@@ -833,9 +838,13 @@ export function buildUnifiedContextTabs<T extends { context: string; vs_name?: s
 export function InterfacesPanel({
   contexts,
   virtualSystems,
+  activeContext,
+  onSelectContext,
 }: {
   readonly contexts: readonly InventoryContext[];
   readonly virtualSystems?: readonly string[] | string | null;
+  readonly activeContext?: string | null;
+  readonly onSelectContext?: (ctx: string) => void;
 }) {
   if (contexts.length === 0) {
     return (
@@ -857,6 +866,8 @@ export function InterfacesPanel({
   return (
     <ContextTabs
       contexts={tabs}
+      activeContext={activeContext}
+      onSelectContext={onSelectContext}
       render={(name) => {
         const context = resolveContext(name);
         return (
@@ -873,9 +884,13 @@ export function InterfacesPanel({
 export function RoutesPanel({
   contexts,
   virtualSystems,
+  activeContext,
+  onSelectContext,
 }: {
   readonly contexts: readonly InventoryContext[];
   readonly virtualSystems?: readonly string[] | string | null;
+  readonly activeContext?: string | null;
+  readonly onSelectContext?: (ctx: string) => void;
 }) {
   if (contexts.length === 0) {
     return (
@@ -897,6 +912,8 @@ export function RoutesPanel({
   return (
     <ContextTabs
       contexts={tabs}
+      activeContext={activeContext}
+      onSelectContext={onSelectContext}
       render={(name) => {
         const context = resolveContext(name);
         return <RoutesTable routes={context?.routes ?? []} />;
@@ -959,15 +976,24 @@ export function ClusterInterfacesPanel({
           >
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-                <Chip label="VSX" size="small" sx={{ fontWeight: 700, bgcolor: "#e0e7ff", color: "#3730a3", borderRadius: "6px" }} />
+                <Chip
+                  label={name.toLowerCase().includes("vsys") ? "VSYS" : "VSX"}
+                  size="small"
+                  sx={{
+                    fontWeight: 700,
+                    bgcolor: name.toLowerCase().includes("vsys") ? "#fef3c7" : "#e0e7ff",
+                    color: name.toLowerCase().includes("vsys") ? "#92400e" : "#3730a3",
+                    borderRadius: "6px"
+                  }}
+                />
                 <Typography variant="h6" sx={{ fontWeight: 700, color: m3.onSurface }}>
-                  Virtual System: {name}
+                  {name.toLowerCase().includes("vsys") ? "Virtual System (VSYS)" : "Virtual System"}: {name}
                 </Typography>
                 <StatusChip tone="neutral" label="Uncollected Instance" dense />
               </Box>
             </Box>
             <Typography variant="body2" color="text.secondary">
-              Virtual System <strong>{name}</strong> operates on cluster <strong>{clusterRef ?? "ClusterXL"}</strong> across members (<strong>{memberNames}</strong>).
+              Virtual System <strong>{name}</strong> operates on cluster <strong>{clusterRef ?? "Cluster"}</strong> across members (<strong>{memberNames}</strong>).
             </Typography>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 1.5 }}>
               <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "10px", border: `1px solid ${m3.outlineVar}` }}>
@@ -1042,13 +1068,22 @@ export function ClusterRoutesPanel({
             }}
           >
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-              <Chip label="VSX" size="small" sx={{ fontWeight: 700, bgcolor: "#e0e7ff", color: "#3730a3", borderRadius: "6px" }} />
+              <Chip
+                label={name.toLowerCase().includes("vsys") ? "VSYS" : "VSX"}
+                size="small"
+                sx={{
+                  fontWeight: 700,
+                  bgcolor: name.toLowerCase().includes("vsys") ? "#fef3c7" : "#e0e7ff",
+                  color: name.toLowerCase().includes("vsys") ? "#92400e" : "#3730a3",
+                  borderRadius: "6px"
+                }}
+              />
               <Typography variant="h6" sx={{ fontWeight: 700, color: m3.onSurface }}>
                 Routing Topology: {name}
               </Typography>
             </Box>
             <Typography variant="body2" color="text.secondary">
-              Virtual System <strong>{name}</strong> operates on cluster <strong>{clusterRef ?? "ClusterXL"}</strong>. No routing evidence collected yet.
+              Virtual System <strong>{name}</strong> operates on cluster <strong>{clusterRef ?? "Cluster"}</strong>. No routing evidence collected yet.
             </Typography>
           </Box>
         );
@@ -1240,12 +1275,23 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
  */
 export function DeviceInventoryPanels({
   device,
+  initialVs,
   onDeviceStateChange,
 }: {
   readonly device: DeviceSummary;
+  readonly initialVs?: string;
   readonly onDeviceStateChange?: () => void;
 }) {
   const isCluster = device.cluster_member_ref !== null;
+  const isPaloAlto = device.vendor_hint === "palo_alto";
+  const [activeContext, setActiveContext] = useState<string | null>(initialVs ?? null);
+
+  useEffect(() => {
+    if (initialVs) {
+      setActiveContext(initialVs);
+    }
+  }, [initialVs]);
+
   const deviceInventoryFetch = useFetchOnMount<DeviceInventory>(
     () => getDeviceInventory(device.device_id),
     describeApiError,
@@ -1278,8 +1324,8 @@ export function DeviceInventoryPanels({
     <Stack spacing={2}>
       <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
         <Typography variant="caption" color="text.secondary">
-          Devices · {device.vendor_hint === "check_point" ? "Check Point" : "Palo Alto"}
-          {device.cluster_member_ref ? ` ClusterXL (${device.cluster_member_ref})` : ""}
+          Devices · {isPaloAlto ? "Palo Alto" : "Check Point"}
+          {device.cluster_member_ref ? ` ${isPaloAlto ? "PAN-OS HA" : "ClusterXL"} (${device.cluster_member_ref})` : ""}
         </Typography>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
@@ -1310,7 +1356,7 @@ export function DeviceInventoryPanels({
           />
           <StatusChip tone="ok" label="✓ Identity verified" dense />
           {device.software_version && (
-            <StatusChip tone="neutral" label={`${device.software_version} · Gaia`} dense />
+            <StatusChip tone="neutral" label={`${device.software_version} · ${isPaloAlto ? "PAN-OS" : "Gaia"}`} dense />
           )}
           {device.model && (
             <StatusChip tone="neutral" label={device.model} dense />
@@ -1327,14 +1373,14 @@ export function DeviceInventoryPanels({
           {
             label: "Interfaces",
             panel: isCluster
-              ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} />
-              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} />,
+              ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} />
+              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} />,
           },
           {
             label: "Routing",
             panel: isCluster
-              ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} />
-              : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} />,
+              ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} />
+              : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} />,
           },
           {
             label: "Cluster members",
@@ -1510,11 +1556,11 @@ export function ClusterDetailPanels({
                 />
                 <StatusChip
                   tone="neutral"
-                  label={`${firstMember?.vendor_hint === "check_point" ? "Check Point" : "Palo Alto"} ClusterXL`}
+                  label={firstMember?.vendor_hint === "palo_alto" ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"}
                   dense
                 />
                 {firstMember?.software_version && (
-                  <StatusChip tone="neutral" label={`${firstMember.software_version} · Gaia`} dense />
+                  <StatusChip tone="neutral" label={`${firstMember.software_version} · ${firstMember?.vendor_hint === "palo_alto" ? "PAN-OS" : "Gaia"}`} dense />
                 )}
                 {firstMember?.model && (
                   <StatusChip tone="neutral" label={firstMember.model} dense />
@@ -1733,7 +1779,7 @@ export function ClusterDetailPanels({
             panel: (
               <EmptyPanel
                 title="Identity and cluster provenance"
-                body={`Cluster identity verified across ${members.length} members. Observed from active Check Point ClusterXL runtime topology.`}
+                body={`Cluster identity verified across ${members.length} members. Observed from active ${firstMember?.vendor_hint === "palo_alto" ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"} runtime topology.`}
               />
             ),
           },

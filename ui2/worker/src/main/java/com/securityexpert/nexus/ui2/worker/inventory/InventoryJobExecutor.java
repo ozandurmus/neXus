@@ -124,7 +124,7 @@ public final class InventoryJobExecutor {
         }
 
         InventoryRun run = new InventoryRun(UUID.randomUUID().toString(), targetDeviceId, jobId, Instant.now(),
-                completed.contexts().size(), completed.contexts(), completed.haFacts());
+                completed.contexts().size(), completed.contexts(), completed.haFacts(), completed.virtualSystems());
         try {
             deviceInventoryRepository.recordRun(run, ACTOR, ACTION_COMPLETED);
         } catch (RuntimeException recordFailed) {

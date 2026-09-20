@@ -211,6 +211,120 @@ describe("InventoryScreen device list", () => {
     expect(screen.getAllByText("GarantiBetaAA").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("groups Palo Alto HA members and renders PAN-OS HA with VSYS chips", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/devices") {
+          return Promise.resolve(
+            jsonResponse(200, {
+              devices: [
+                {
+                  device_id: "pa-1",
+                  vendor_hint: "palo_alto",
+                  enrollment_state: "ENROLLED",
+                  hostname: "PA-FW-01",
+                  model: "PA-3220",
+                  software_version: "10.2.4",
+                  ha_role: "active",
+                  cluster_member_ref: "PA-HA-PAIR",
+                  virtual_systems: "default (vsys1), VR-DMZ (vsys2)",
+                },
+                {
+                  device_id: "pa-2",
+                  vendor_hint: "palo_alto",
+                  enrollment_state: "ENROLLED",
+                  hostname: "PA-FW-02",
+                  model: "PA-3220",
+                  software_version: "10.2.4",
+                  ha_role: "passive",
+                  cluster_member_ref: "PA-HA-PAIR",
+                  virtual_systems: "default (vsys1), VR-DMZ (vsys2)",
+                },
+              ],
+            }),
+          );
+        }
+        if (url === "/clusters/PA-HA-PAIR/inventory") {
+          return Promise.resolve(
+            jsonResponse(200, {
+              cluster_ref: "PA-HA-PAIR",
+              collected_at: "2026-09-19T12:00:00Z",
+              members: [
+                { device_id: "pa-1", hostname: "PA-FW-01", ha_role: "active", model: "PA-3220", software_version: "10.2.4", enrollment_state: "ENROLLED", virtual_systems: "default (vsys1), VR-DMZ (vsys2)" },
+                { device_id: "pa-2", hostname: "PA-FW-02", ha_role: "passive", model: "PA-3220", software_version: "10.2.4", enrollment_state: "ENROLLED", virtual_systems: "default (vsys1), VR-DMZ (vsys2)" },
+              ],
+              contexts: [],
+              virtual_systems: ["default (vsys1)", "VR-DMZ (vsys2)"],
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+      }),
+    );
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("Cluster PA-HA-PAIR")).toBeInTheDocument());
+    expect(screen.getByText("2 members")).toBeInTheDocument();
+    expect(screen.getByText("2 VSYS")).toBeInTheDocument();
+    expect(screen.getByText(/PAN-OS HA · PA-FW-01 · PA-FW-02/)).toBeInTheDocument();
+    expect(screen.getByText("default (vsys1)")).toBeInTheDocument();
+    expect(screen.getByText("VR-DMZ (vsys2)")).toBeInTheDocument();
+  });
+
+  it("renders standalone device virtual systems with expand/collapse and selection", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/devices") {
+          return Promise.resolve(
+            jsonResponse(200, {
+              devices: [
+                {
+                  device_id: "standalone-pa-1",
+                  vendor_hint: "palo_alto",
+                  enrollment_state: "ENROLLED",
+                  hostname: "PA-STANDALONE",
+                  model: "PA-440",
+                  software_version: "11.0.1",
+                  ha_role: null,
+                  cluster_member_ref: null,
+                  virtual_systems: "default (vsys1), CorpNet (vsys2)",
+                },
+              ],
+            }),
+          );
+        }
+        if (url === "/devices/standalone-pa-1/inventory") {
+          return Promise.resolve(
+            jsonResponse(200, {
+              device_id: "standalone-pa-1",
+              collected_at: "2026-09-19T12:00:00Z",
+              contexts: [
+                { context: "vsys1", vs_name: "default (vsys1)", interfaces: [], routes: [] },
+                { context: "vsys2", vs_name: "CorpNet (vsys2)", interfaces: [], routes: [] },
+              ],
+              virtual_systems: ["default (vsys1)", "CorpNet (vsys2)"],
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+      }),
+    );
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("PA-STANDALONE")).toBeInTheDocument());
+    expect(screen.getByText("2 VSYS")).toBeInTheDocument();
+    expect(screen.getByText("default (vsys1)")).toBeInTheDocument();
+    expect(screen.getByText("CorpNet (vsys2)")).toBeInTheDocument();
+
+    // Clicking CorpNet selects the standalone device and activates the CorpNet context tab
+    fireEvent.click(screen.getByText("CorpNet (vsys2)"));
+    await waitFor(() => expect(screen.getAllByText(/CorpNet \(vsys2\)/).length).toBeGreaterThanOrEqual(2));
+  });
+
   it("shows an error state with a retry action when the fetch fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network down")));
     render(withTheme(<InventoryScreen />));

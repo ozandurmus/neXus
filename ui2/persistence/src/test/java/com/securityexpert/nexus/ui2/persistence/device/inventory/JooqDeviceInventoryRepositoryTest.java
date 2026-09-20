@@ -76,8 +76,8 @@ class JooqDeviceInventoryRepositoryTest {
         DSLContext create = DSL.using(SQLDialect.POSTGRES);
 
         Result<Record> runResult = create.fetchFromStringData(
-                new String[] { "run_id", "device_id", "job_id", "collected_at", "context_count" },
-                new String[] { "run-1", "device-1", "job-1", "2026-09-14 00:00:00", "1" });
+                new String[] { "run_id", "device_id", "job_id", "collected_at", "context_count", "virtual_systems" },
+                new String[] { "run-1", "device-1", "job-1", "2026-09-14 00:00:00", "1", "vs-test (VSID 1)" });
 
         Result<Record> addressResult = create.fetchFromStringData(
                 new String[] { "address_id", "interface_id", "address", "family", "role" },
@@ -112,6 +112,7 @@ class JooqDeviceInventoryRepositoryTest {
         assertTrue(found.isPresent());
         InventoryRun run = found.get();
         assertEquals("run-1", run.runId());
+        assertEquals(Optional.of("vs-test (VSID 1)"), run.virtualSystems());
         assertEquals(1, run.contexts().size());
         InventoryContext context = run.contexts().get(0);
         assertEquals("physical", context.context());
