@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:48:54Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:51:33Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -16,6 +16,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:48:54Z
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every c (target: JooqDeviceRepository DEVICE_SELECT later)
 - P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason a (target: jobs.outcome/terminal_reason/finished_at)
+- P0/planned pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a c (target: PanXmlApiTransport certificate verificat)
 - P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices ( (target: )
 - P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner vs DeviceComposit)
 - P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect, warn with the (target: ui2 worker HostKeyVerifier / TrustRuleRe)
@@ -30,6 +31,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:48:54Z
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
 - P1/planned discovery_connection_state_never_populated — Check Point discovery never records the management plane's (target: MgmtCliEnumerationAdapter candidate cons)
+- P1/planned discovery_failure_summary_stores_certificate_subject — A failed Palo Alto discovery stores the presented certific (target: PanXmlApiTransport certificate exception)
 - P1/planned failover_p0_closure_set — Failover Engine: close the eight-item P0 set both external (target: docs/design/CODEX_FAILOVER_ENGINE_FINAL_)
 - P1/planned failover_peer_reciprocal_agreement_check — Eighth stop-condition: both members must agree reciprocall (target: PO rule 2026-09-12; _pan_reciprocal_corr)
 - P1/planned failover_pilot_fence_is_compiled_in — Failover pilot allowlist is hardcoded in a constructor and (target: FailoverPilotAllowlist)
