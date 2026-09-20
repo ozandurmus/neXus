@@ -114,7 +114,7 @@ def test_targeted_and_unmapped_paths_have_truthful_jobs():
     text = _read_workflow()
     targeted_block = _job_block(text, "targeted-regression")
     blocked_block = _job_block(text, "scope-blocked")
-    assert "classification == 'targeted'" in targeted_block
+    assert "classification == 'ldap'" in targeted_block
     assert ":ldap-adapter:unitTest" in targeted_block
     assert ":architecture-tests:architectureTest" in targeted_block
     assert "npm --prefix ui2/frontend test -- tests/ProjectPlanPanel.test.tsx" in targeted_block
@@ -123,6 +123,17 @@ def test_targeted_and_unmapped_paths_have_truthful_jobs():
     assert "frontendTest" not in targeted_block
     assert "classification == 'blocked'" in blocked_block
     assert "run: exit 1" in blocked_block
+
+
+def test_component_selections_are_explicit_and_separate():
+    targeted_block = _job_block(_read_workflow(), "targeted-regression")
+    assert "classification == 'ldap'" in targeted_block
+    assert "contains(needs.regression-scope.outputs.classification, 'discovery')" in targeted_block
+    assert ":discovery:unitTest" in targeted_block
+    assert "contains(needs.regression-scope.outputs.classification, 'inventory')" in targeted_block
+    assert "*JooqDeviceRepositoryTest" in targeted_block
+    assert "*TopologyNamePseudonymizerTest" in targeted_block
+    assert "tests/AdministrationScreen.test.tsx" in targeted_block
 
 
 def test_full_regression_runs_for_major_prs_and_manual_dispatch():
