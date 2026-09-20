@@ -41,6 +41,11 @@ records is this repository's legacy name for **class 1** only.
 - Engineering baseline: see `CURRENT_STATE.md` (never hard-code a specific
   value here — this file is operating protocol, not state; a hard-coded
   baseline here has gone stale before and contradicted `CURRENT_STATE.md`)
+- **Post-Parsing AIView & Privacy Law**: Core parsing models for the supported
+  estate are complete. All visual inspections, UI reviews, and PO handovers
+  operate exclusively under the masked `aiview` persona (`FW-TANGO-04`, `CLS-ROMEO-01`).
+  Database checks follow the AIView mentality (opaque UUIDs, booleans, counts;
+  never unmasked dumps).
 
 ---
 

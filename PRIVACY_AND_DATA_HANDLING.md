@@ -99,6 +99,20 @@ logs:
 -   certificate private material,
 -   unredacted secret-bearing configuration.
 
+## Post-parsing operational mandate: mandatory AIView funnel
+
+Once vendor discovery, capability measurement, and core parsing models are established for an estate, raw operational identities must never enter conversational or review surfaces:
+
+1. **Mandatory AIView Persona (`role:replay_viewer`)**:
+   - All browser-based UI verifications, inspection workflows, screenshots, and PO visual checkpoints must be executed under the `aiview` persona.
+   - All entities (Check Point clusters, VSX contexts, Palo Alto firewalls, VSYS instances) must appear strictly under their deterministic pseudonyms (e.g. `FW-TANGO-04`, `FW-JULIET-06`, `CLS-ROMEO-01`).
+2. **Product Owner & Agent Communication**:
+   - The Product Owner and AI agents converse, evaluate compliance/backup drift, and record deliverables using solely the masked AIView identities.
+   - Live hardware hostnames or real environment endpoints are strictly prohibited in chat contexts, PR descriptions, and state handovers.
+3. **Database & Diagnostic Inspection (AIView Mentality)**:
+   - Agents connecting to servers or databases must apply the AIView mentality: never query or dump unmasked device tables into chat or reports.
+   - Inspect only opaque UUIDs, existence booleans, aggregate counts, or query through server-side pseudonymized projections (`TopologyNamePseudonymizer`).
+
 ## Runtime directory policy
 
 Default AI behavior:

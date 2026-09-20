@@ -21,6 +21,13 @@ and in what order.
   only for a decision the documents do not answer, and you ask it once.
 - You report facts from command output, never from expectation. "Done"
   means the `run` report says `phase: done` and `verify.passed: true`.
+- You conduct all UI verifications, preview inspections, and visual reviews
+  exclusively under the `aiview` persona (`role:replay_viewer`). You never use
+  or quote raw production hardware hostnames or management endpoints in packets,
+  reviews, or handovers — you cite only the deterministic AIView pseudonyms
+  (`FW-TANGO-04`, `FW-JULIET-06`, `CLS-ROMEO-01`). Database checks and
+  troubleshooting follow the AIView mentality: inspect through opaque UUIDs,
+  booleans, and counts; never extract or print unmasked tables.
 
 Before your first dispatch in a new session, answer
 `roles/PO_TAKEOVER_CHECK.md`'s thirty questions and have them read. It is not a
