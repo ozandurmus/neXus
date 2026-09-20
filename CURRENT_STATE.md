@@ -24,6 +24,7 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0346` — `real_env_validated`: Palo Alto PAN-OS HA Clustering Reconciliation per Official Discovery API Evidence, Reciprocal Serial Pairing, Jooq Lateral Join Fix, Deterministic UI Title Derivation (`<base>-CLS`), and Live K3s Deployment on HOST-A.
 `NXS-LOCAL-0345` — `automated_validated`: Failover Engine Phase C — Controlled Manual Failover Execution under strict CLASS 2 invariants, At-Most-Once Command Submission, Two-Sided Direct JIT Precondition Re-Check, CheckPoint ClusterXL (`clusterXL_admin down/up`) & Palo Alto HA (`request high-availability state suspend/functional`) Executors, Server-Owned Pilot Fence (`FailoverPilotAllowlist`), Sticky `OUTCOME_UNKNOWN` Entity Quarantine, 4-Eyes Acknowledgment, and M3 Operations Screen.
 `NXS-LOCAL-0344` — `automated_validated`: Failover Engine Phase B — Cryptographic 4-Eyes Dual Control Authorization (`requesterId != approverId`), Single-Use HMAC-SHA256 Lease Tokens, Length-Prefixed Canonical Framing, and Read-Only Dry-Run Plan Compilation for Check Point ClusterXL and Palo Alto Networks HA.
 `NXS-LOCAL-0343` — `automated_validated`: Backup & Recovery Engine Hardening per Dual External CLI Security & Architecture Reviews — Insecure Daemon Removal, AST Secret Scrubbing, Gaia Available-Space Disk Parsing, Status Fail-Closed Polling, Store-Owned Tombstoning & Last-Backup Vault Protection, and API Edge Hardening.
