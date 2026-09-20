@@ -671,7 +671,7 @@
       "id": "pan_tls_trust_rejects_corporate_ca",
       "category": "discovery",
       "title": "Palo Alto discovery cannot reach a Panorama fronted by a corporate CA certificate: without a pinned fingerprint the transport accepts only certificates carrying O=Palo Alto Networks",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P0",
       "target": "PanXmlApiTransport certificate verification; EnvironmentPanTrustRuleResolver",
       "note": ""

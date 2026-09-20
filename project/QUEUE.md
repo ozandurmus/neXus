@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:51:33Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:54:24Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -7,6 +7,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:51:33Z
 - M12 — M12 -- per-device / per-capability schedules (D5 producer) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
+- P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a c (target: PanXmlApiTransport certificate verificat)
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test env (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
 - P0/planned aiview_masking_manufactures_names_from_any_string — The AIView pseudonymizer turns any non-blank string into a (target: TopologyNamePseudonymizer.computeDeviceN)
@@ -16,7 +17,6 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T22:51:33Z
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every c (target: JooqDeviceRepository DEVICE_SELECT later)
 - P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason a (target: jobs.outcome/terminal_reason/finished_at)
-- P0/planned pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a c (target: PanXmlApiTransport certificate verificat)
 - P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices ( (target: )
 - P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner vs DeviceComposit)
 - P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect, warn with the (target: ui2 worker HostKeyVerifier / TrustRuleRe)
