@@ -1,32 +1,35 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
 # Snapshot
-UI2 is live on K3s HOST_A (ui2.nexus.local) with image sha256:82a9115039791078fa35bc1fa543cab274a2632ddd54884432c270539e37df43.
-Palo Alto PAN-OS Compliance Catalog (24 CIS controls) and Check Point Gaia Compliance Catalog (24 controls) are fully operational across mixed fleets.
-Live evaluation verified against Palo Alto firewall MigroFw-02 and Check Point gateway c154432c-1e28-4a20-aa26-ab4a05c0d9af under aiview persona.
-All 105/105 frontend tests, 100% backend tests, and repository privacy gate passing.
-Authority: `AGENTS.md`, `CURRENT_STATE.md`, `CLAUDE_PALO_ALTO_COMPLIANCE_REVIEW.md`.
+Backup & Recovery Engine (`ui2-backup`) implemented ahead of 2027 BackBox non-renewal.
+Multi-vendor backup engine covers Check Point Gaia (SCP pull) and Palo Alto PAN-OS (XML API stream).
+Semantic AST deviation engine classifies changes into MAJOR vs MINOR, alerting on critical posture drift.
+Dedicated 400GiB PVC allocated on K3s HOST-A with 30-day daily backup and 2-depth snapshot retention.
+All 105 frontend tests, backend unit/integration tests, and repository privacy gate passing.
+Authority: `AGENTS.md`, `CURRENT_STATE.md`, `ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md`, `FABLE_BACKUP_ENGINE_SECURITY_REVIEW.md`.
 
 # Recent session changes
-- Palo Alto Compliance Implementation (`ui2-compliance` & `ui2-service`):
-  - Created `PaloAltoComplianceCatalog.java` with 24 CIS controls mapped to CIS v1.1.0, PCI-DSS v4.0.1, NIST SP 800-53 Rev 5, and Financial Baseline (BDDK).
-  - Created `PaloAltoPanOsComplianceEvaluator.java` with StAX XML parsing, sensitive identity masking, and fail-closed `DATA_UNAVAILABLE` handling for the 4 gated commands (`PAN-GATE-*`).
-  - Updated `Ui2ComplianceServer.java` with dynamic vendor routing (`X-Nexus-Vendor`), combined health metrics (48 total controls: 24 CP, 24 PAN), and vendor catalog filtering.
-  - Updated `ConfigurationCapabilityExecutor.java` with `sanitizePaloAltoXml` redacting passwords/keys/secrets and persisting `sanitized_text`.
-  - Updated `ConfigurationQueryService.java` to expose sanitized XML text for Palo Alto devices from `ACTIVE` or `EFFECTIVE_RUNNING`.
-  - Updated `ComplianceService.java` to prevent cross-vendor metric distortion using `NOT_APPLICABLE` filtering.
-- Testing & Live Validation:
-  - Unit tests: `PaloAltoPanOsComplianceEvaluatorTest.java` (100% passing) and expanded `Ui2ComplianceServerTest.java`.
-  - HOST-A Deployment: Built via Kaniko and deployed to `ui2-service`, `ui2-worker`, and `ui2-compliance`.
-  - Live verification: Triggered live config collection on `MigroFw-02` (7,828 bytes sanitized XML), evaluated compliance, and captured AIView visual artifacts (`15_aiview_compliance_fleet_overview.png`, `18_aiview_compliance_palo_alto_table.png`, `19_aiview_compliance_palo_alto_drawer.png`).
+- Microservice & Worker Implementation (`ui2-backup` on port 8086):
+  - `SemanticDeviationEngine.java`: AST config parser for Check Point Clish and Palo Alto XML, categorizing changes into MAJOR (interfaces, routing, rules, NAT, admins, HA) vs MINOR (session counters, uptime).
+  - `RetentionPruningService.java`: Enforces 30-day daily backup retention and 2-depth snapshot limit with append-only tombstones to `artefact_retention_ledger`.
+  - `PaloAltoBackupExecutor.java`: Streams encrypted `device-state` bundles directly to `ArtefactStore` via HTTPS XML API with zero firewall flash footprint.
+  - `Ui2BackupServer.java` and `Ui2BackupMain.java`: Virtual-thread HTTP server dispatching backups and diff evaluations.
+- UI & Orchestration:
+  - `BackupScreen.tsx`: Material 3 management console with 400GiB vault metrics, fleet status, and operator action triggers ("Backup Now", "Snapshot Now", "Diff", "Export").
+  - `V30__backup_schedule_and_policies.sql`: Database schema migration for backup policies, schedules, and semantic deviations.
+  - `deploy/ui2/35-artefact-store-pvc.yaml` resized to 400Gi; K3s deployment and service manifests created.
 
 # Exact next action
-- Present live Palo Alto compliance evaluation results and visual artifacts to Product Owner.
+- Operator live hardware verification on HOST-A:
+  - Open `http://ui2.nexus.local:30080/?screen=backups` (or Drawer -> Backups & Recovery).
+  - Execute "Backup Now" on `MigroFw-02` (PA-5410) and verify XML API stream into vault.
+  - Execute "Backup Now" / "Snapshot Now" on `Tango-01` / `Tango-02` (Check Point Gaia).
+  - Trigger "Diff" to verify AST deviation domain categorization.
 
 # Test delta
-- Frontend: 105 passed across 15 test files.
-- Backend: `:worker:test` (14/14 compliance tests passed), `:service:test` 100% green.
-- Python privacy & architecture convergence: 29/29 passed.
+- Frontend: 105 passed across 15 test suites (`npm test`).
+- Backend: `SemanticDeviationEngineTest`, `RetentionPruningServiceTest`, `Ui2BackupServerTest` all green.
+- Repository privacy gate: 0 findings (`python3 main.py --repository-privacy-check`).
 
 # Risks
-- None identified. Full architectural parity maintained between Check Point Gaia and Palo Alto PAN-OS compliance evaluators.
+- Live hardware backup execution deferred to manual operator testing per PO directive.

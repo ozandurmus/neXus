@@ -24,6 +24,7 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0342` — `automated_validated`: Backup & Recovery Microservice (`ui2-backup`), Check Point Gaia Fail-Closed SCP Pull, Palo Alto HTTPS XML API Stream, AST Semantic Deviation Engine, and 400GiB Artefact Vault.
 `NXS-LOCAL-0341` — `real_env_validated`: Palo Alto PAN-OS Compliance Catalog (24 CIS controls), Fail-Closed Evaluator, Multi-Vendor Aggregation, XML Credential Redaction, and Live Verification on MigroFw-02 under `aiview`.
 `NXS-LOCAL-0340` — `real_env_validated`: Check Point Single-Session SSH Command Batching (2.4s execution), Vendor Virtual Systems Formatting (`VR_NAME (vsys id)` & `vs-name (VSID vsid)`), and Live Multi-Context Deployment.
 `NXS-LOCAL-0339` — `real_env_validated`: Palo Alto Direct Device Enrollment & Live Inventory Collection (`pan_xml_api`), TLS Device Trust Hardening, and Multi-VSYS Interface/Routing Attribution under `aiview`.
