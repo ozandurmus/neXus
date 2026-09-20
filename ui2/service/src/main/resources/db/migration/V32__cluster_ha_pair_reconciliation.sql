@@ -1,6 +1,9 @@
 -- V32__cluster_ha_pair_reconciliation.sql
 -- Reconcile and unify Palo Alto HA pairs with deterministic cluster references (serialA|serialB)
 
+SELECT set_config('app.actor_fingerprint', 'migration:V32_cluster_ha_pair_reconciliation', true);
+SELECT set_config('app.action_id', 'cluster_ha_pair_reconciliation_by_migration', true);
+
 -- FW-PALT-PENDIKCAMPUS pair (user reported split bfe1f040... and 07e03889...):
 UPDATE devices
 SET cluster_member_ref = '025501001167|025509000707', peer_follow_outcome = 'CORROBORATED'

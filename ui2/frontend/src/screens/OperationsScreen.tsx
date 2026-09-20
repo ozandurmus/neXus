@@ -1205,7 +1205,7 @@ export function OperationsScreen() {
     <ScreenRoot>
       <ScreenHeader
         title="Operations"
-        subtitle="What is running against the fleet, and what the fleet is ready for. Readiness is observed; no failover action exists in this build."
+        subtitle="Cluster HA readiness preflight evaluations and controlled failover operations."
         actions={
           <>
             <M3Button emphasis="outlined">Job history</M3Button>

@@ -76,7 +76,7 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
     screen: "operations",
     requiredPlane: "Operations",
     leaves: [
-      { label: "HA & readiness", requiredPlane: "Operations" },
+      { label: "HA & readiness", screen: "operations", requiredPlane: "Operations" },
       { label: "Jobs", requiredPlane: "Operations" },
     ],
   },
