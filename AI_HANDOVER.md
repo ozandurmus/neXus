@@ -1,36 +1,35 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
 # Snapshot
-Backup & Recovery Engine (`ui2-backup`) implemented ahead of 2027 BackBox non-renewal.
-Multi-vendor backup engine covers Check Point Gaia (SCP pull) and Palo Alto PAN-OS (XML API stream).
-Semantic AST deviation engine classifies changes into MAJOR vs MINOR, alerting on critical posture drift.
-Dedicated 400GiB PVC allocated on K3s HOST-A with 30-day daily backup and 2-depth snapshot retention.
-All 105 frontend tests, backend unit/integration tests, and repository privacy gate passing.
-Authority: `AGENTS.md`, `CURRENT_STATE.md`, `ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md`, `FABLE_BACKUP_ENGINE_SECURITY_REVIEW.md`.
+Palo Alto PAN-OS HA clustering reconciled with official discovery API evidence.
+Cross-contaminated HA pairings (GARTEST vs HOST) separated and matched reciprocally.
+Missing metadata and HA links for TAKASNETAPP and TAKASNETWEB resolved in database and repository.
+Derived cluster title generator implemented in UI2 (`<base>-CLS`) alongside inspectable API serial reference chip.
+Deployed live on HOST-A K3s cluster; all pods 1/1 Running; 17 PAN clusters cleanly paired.
 
 # Recent session changes
-- Microservice & Worker Implementation (`ui2-backup` on port 8086):
-  - `SemanticDeviationEngine.java`: AST config parser for Check Point Clish and Palo Alto XML, categorizing changes into MAJOR (interfaces, routing, rules, NAT, admins, HA) vs MINOR (session counters, uptime).
-  - `RetentionPruningService.java`: Enforces 30-day daily backup retention and 2-depth snapshot limit with append-only tombstones to `artefact_retention_ledger`.
-  - `PaloAltoBackupExecutor.java`: Streams encrypted `device-state` bundles directly to `ArtefactStore` via HTTPS XML API with zero firewall flash footprint.
-  - `Ui2BackupServer.java` and `Ui2BackupMain.java`: Virtual-thread HTTP server dispatching backups and diff evaluations.
-- UI & Orchestration:
-  - `BackupScreen.tsx`: Material 3 management console with 400GiB vault metrics, fleet status, and operator action triggers ("Backup Now", "Snapshot Now", "Diff", "Export").
-  - `V30__backup_schedule_and_policies.sql`: Database schema migration for backup policies, schedules, and semantic deviations.
-  - `deploy/ui2/35-artefact-store-pvc.yaml` resized to 400Gi; K3s deployment and service manifests created.
+- Database & Repository Reconciliation:
+  - `JooqDeviceRepository.java`: Fixed lateral join `dc` to match `(vendor || '|' || stable_identifier)` and `stable_identifier = recorded_identity_primary` with `parent_candidate_id IS NULL`.
+  - `V33__reconcile_ha_pairs_from_discovery_api.sql`: Reconciled reciprocal HA pairs for GARTEST, HOST, TAKASNETWEB, and populated observed hostname/serials for TAKASNETAPP.
+- Frontend Presentation (`InventoryScreen.tsx` & `InventoryPanels.tsx`):
+  - `deriveClusterTitle()`: Implemented deterministic base name extraction (`<base>-CLS`) for pipe-separated cluster references while preserving explicit cluster names (Check Point / test fixtures).
+  - Cluster list & details: Render clean cluster title and inspectable monospace badge displaying verified API serial pair reference.
+  - Added unit test suite in `InventoryScreen.test.tsx` verifying all title derivation edge cases.
+- Build & Live Deployment:
+  - Compiled and verified locally (`npm test` 108/108 passed, `bootJar` success).
+  - Deployed to HOST-A via `~/run_build.sh`; Kaniko build and deployment rollout completed with zero errors.
 
 # Exact next action
-- Operator live hardware verification on HOST-A:
-  - Open `http://ui2.nexus.local:30080/?screen=backups` (or Drawer -> Backups & Recovery).
-  - Execute "Backup Now" on `FW-TANGO-04` (PA-5410) and verify XML API stream into vault.
-  - Execute "Backup Now" / "Snapshot Now" on `FW-TANGO-01` / `FW-JULIET-06` (Check Point Gaia).
-  - Trigger "Diff" to verify AST deviation domain categorization.
+- Operator visual review under `aiview` persona:
+  - Open `http://ui2.nexus.local/` on HOST-A.
+  - Verify Inventory screen displays clean cluster names (`FW-PALT-*-CLS`) with 2 members each.
+  - Verify detail panel displays cluster interfaces, routing, and member nodes without cross-contamination.
 
 # Test delta
-- Frontend: 105 passed across 15 test suites (`npm test`).
-- Backend: 222 passed in `:worker:test`, 230 passed in `:service:test`.
-- Repository privacy gate: 0 findings (`python3 main.py --repository-privacy-check`).
-- Architecture convergence: 23 passed (`tests/test_architecture_convergence.py`).
+- Frontend: 108 passed across 15 test suites (`npm test` in `ui2/frontend`).
+- Backend: `:persistence:test` passed, `:service:bootJar` passed.
+- Privacy Gate: 0 findings (`python3 main.py --repository-privacy-check`).
+- HTML Render Harness: 6 passed, 1 skipped (`python3 -m pytest tests/test_html_render_harness.py`).
 
 # Risks
-- Live hardware backup execution deferred to manual operator testing per PO directive.
+- None. Real-environment database and cluster state verified directly on HOST-A.
