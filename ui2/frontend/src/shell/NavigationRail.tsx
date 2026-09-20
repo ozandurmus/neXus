@@ -40,6 +40,11 @@ export const DESTINATIONS: readonly RailDestination[] = [
   { id: "devices", label: "Devices", icon: "devices", screen: "inventory", requiredPlane: "Devices" },
   { id: "config", label: "Config", icon: "config", screen: "configuration", requiredPlane: "Config" },
   { id: "compliance", label: "Compliance", icon: "compliance", screen: "compliance", requiredPlane: "Compliance" },
+  // The Product Owner's backup requirement asks for a left-hand Backup destination
+  // outright, and RECOVER is its own stage of the product axis rather than a leaf of
+  // another plane. The "backup" icon was already defined and unused, so the rail was
+  // drawn for this destination before it was dropped.
+  { id: "backups", label: "Backups", icon: "backup", screen: "backups", requiredPlane: "Operations" },
   { id: "operations", label: "Operations", icon: "operations", screen: "operations", requiredPlane: "Operations" },
   { id: "admin", label: "Admin", icon: "admin", screen: "administration", requiredPlane: "Admin" },
 ];
