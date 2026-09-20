@@ -1,0 +1,119 @@
+{
+  "created_at": "2026-09-20T21:26:04Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Given only discovery paths, the classifier selects the discovery component and not the inventory one",
+          "Given only inventory paths, the classifier selects the inventory component and not the discovery one",
+          "Given the path set of pull request 434, the classifier selects a component whose selection includes JooqDeviceRepositoryTest, TopologyNamePseudonymizerTest and the inventory frontend tests, and does not return blocked",
+          "Given a persistence path that belongs to neither the LDAP delivery nor a newly mapped component, the classifier returns blocked rather than the LDAP selection",
+          "Given the LDAP delivery's own file set, the classifier still returns its existing targeted selection",
+          "Given an empty path set, the classifier still returns blocked",
+          "Given only docs and markdown, the classifier still returns skip",
+          "tests/test_ci_regression_scope.py covers each case above, including one asserting that discovery and inventory selections stay disjoint, and passes"
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md section 7 (FROZEN, 2026-09-16). It governs this movement and is not amended by it: an unmapped path or failed selector blocks visibly, and neither skips validation nor launches a full suite by surprise.",
+          "engineering": "main at the head that carries the NXS-LOCAL-0350 relay record including the answering decision. No branch or commit was produced by NXS-LOCAL-0350.",
+          "observed": "NXS-LOCAL-0350 was dispatched with an instruction to route unmapped and persistence-only changes to the full regression. That contradicted the frozen record, the engineer raised it as a RELAY_QUESTION rather than reconciling two authorities, and the Product Owner answered at seq 3 of that movement's record: the frozen record governs, the mapping is extended instead of the fallback, and visible blocking stays. This movement carries the corrected instruction. The defect that remains real and is not resolved by the frozen record: scripts/ci_regression_scope.py maps ui2/persistence/ and ui2/service/ wholesale to the approved LDAP delivery's fixed targeted selection, so a change to either that has nothing to do with that delivery reaches a green gate having run none of the tests that cover it. Pull request 434 would have done exactly that had it not also touched frontend files, because JooqDeviceRepositoryTest and TopologyNamePseudonymizerTest match none of the LDAP filters."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond the decision record named in refs",
+          "The device display and masking change on pull request 434, which is already verified and out of scope"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/regression-mapping-discovery-and-inventory"
+        },
+        "invariants": [
+          "The frozen record governs: visible blocking, no surprise full suite, closed and auditable mapping",
+          "A green gate must mean the tests that cover the change were run",
+          "Discovery and inventory stay separate; a future microservice split must not have to undo this mapping",
+          "Fail closed: when in doubt the classifier blocks"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Extend the closed regression mapping so that discovery and inventory are separately mapped components, each running the tests that actually cover it, while visible blocking for anything still unmapped is preserved exactly as the frozen record requires.",
+        "output_contract": [
+          "Discovery and inventory mapped as separate components, each with its own selection",
+          "Persistence and service no longer inheriting the LDAP selection outside that delivery",
+          "Visible blocking preserved for anything unmapped",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "A bounded change to one classifier, one workflow job and their tests. The authority conflict is already resolved and recorded, and the separation constraint is stated here, so no design question is left open.",
+          "tier": "Main engineer"
+        },
+        "requirements": [
+          "Discovery and inventory are separate mapped components. They are never folded into one entry, never share a selection, and neither is reachable through the other's paths. The Product Owner's reason, recorded so it is not lost: they are two features and are intended to become two separate microservices.",
+          "Each mapped component names the tests that cover it, so that a green gate means those tests ran",
+          "A change spanning several mapped components runs the union of their selections",
+          "A change inside the approved LDAP delivery keeps its existing selection unchanged",
+          "A change to ui2/persistence or ui2/service that lies outside the LDAP delivery no longer inherits that delivery's selection",
+          "An unmapped path, an empty path set, or a failed selector still blocks visibly",
+          "A documentation-only change still routes to skip, and the major prefixes still route to full"
+        ],
+        "risks": [
+          "Narrowing ui2/persistence and ui2/service will block changes that previously passed. That is the correction, not a regression: they were passing on tests that did not cover them. Do not offset it by widening a selection.",
+          "The workflow currently has one targeted job with a hardcoded command list. Supporting several components may need either one job per component or a selection the job reads from the classifier. Choose the smaller change that keeps the mapping auditable, and state which you chose and why in the SESSION_CLOSE.",
+          "scripts/ci_regression_scope.py is itself in the delivery file set, so this movement's own pull request routes through the mapping it changes. Verify its own gate behaves as expected."
+        ],
+        "scope": {
+          "in": [
+            "scripts/ci_regression_scope.py: add separately named component mappings and narrow the existing wholesale prefixes",
+            ".github/workflows/validation.yml: the job or jobs that execute a component's selection",
+            "tests/test_ci_regression_scope.py, extended to pin every routing case including the separation"
+          ],
+          "out": [
+            "Amending PO_DECISION_RECORD_2026_09_15C in any way; it is FROZEN and governs",
+            "Removing or softening the blocked default -- an unrecognised path must still block visibly",
+            "Routing anything to the full suite as a fallback; the frozen record forbids launching it by surprise",
+            "Changing what any job is permitted to execute beyond selecting which tests run",
+            "Pull request 434, which is validated separately through the manual workflow_dispatch path the frozen record names"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "tests/test_ci_regression_scope.py",
+              "tests/test_ci_workflow_fast_pr_regression.py"
+            ],
+            "name": "scope_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-20T21:26:04Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0351",
+  "movement": "NXS-LOCAL-0351",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md",
+    "relay/NXS-LOCAL-0350-honest-regression-routing.json",
+    "scripts/ci_regression_scope.py",
+    ".github/workflows/validation.yml",
+    "tests/test_ci_regression_scope.py"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-20T21:26:04Z"
+}

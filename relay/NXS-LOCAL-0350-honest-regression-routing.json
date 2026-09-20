@@ -94,6 +94,25 @@
       },
       "seq": 1,
       "timestamp": "2026-09-20T21:05:56Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "Frozen routing contract conflict",
+      "text": "Approved task requires unmapped and ui2/persistence-only changes to classify as full. The named FROZEN PO_DECISION_RECORD_2026_09_15C section 7 requires an unmapped path or failed selector to block visibly and neither skip validation nor launch a full suite by surprise. Which authority governs?",
+      "timestamp": "2026-09-20T21:08:40Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner - chat directive 2026-09-20",
+      "marker": "RELAY_DECISION",
+      "scope": "The regression routing mapping and its tests. Does not amend PO_DECISION_RECORD_2026_09_15C, which stands unchanged, and does not alter what any job is permitted to execute.",
+      "seq": 3,
+      "subject": "The frozen record governs; extend the closed mapping instead, with discovery and inventory as separate components",
+      "supersedes": "the routing instruction in this movement's own SESSION_START",
+      "text": "The question is answered against this packet. PO_DECISION_RECORD_2026_09_15C section 7 is FROZEN and governs: an unmapped path or failed selector blocks visibly, and neither skips validation nor launches a full suite by surprise. The approved task's instruction to route unmapped and persistence-only changes to full contradicted that and was wrong to issue; visible blocking is a deliberate choice, not a stale list, and the packet mistook one for the other. The engineer was right to stop rather than reconcile two authorities. Corrected direction, which the frozen record already anticipates by calling the mapping closed and auditable and extending it as deliveries land: extend the mapping rather than the fallback. Discovery and inventory are separate features that will become separate microservices, so they get separate entries and are never folded into one another; each names its own targeted selection so that a green gate means the tests covering that component ran. A change spanning several mapped components runs the union of their selections. Anything still unmapped keeps blocking visibly, exactly as section 7 requires. The concern that survives the frozen record and is not resolved by it: ui2/persistence and ui2/service are mapped to the LDAP delivery's fixed selection, so a change to either that has nothing to do with that delivery can reach a green gate having run none of the tests that cover it. Pull request 434 would have done so had it not also touched frontend files, since JooqDeviceRepositoryTest and TopologyNamePseudonymizerTest match none of the LDAP filters. Narrowing that is in scope for the reissued movement. For pull request 434 itself, section 7 names manual workflow_dispatch as the full-regression path, so it is validated that way rather than by loosening any gate.",
+      "timestamp": "2026-09-20T21:18:45Z"
     }
   ],
   "id": "NXS-LOCAL-0350",
@@ -107,6 +126,6 @@
     "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-20T21:05:56Z"
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-20T21:18:45Z"
 }
