@@ -36,6 +36,10 @@ export function enrollmentStateTone(state: string): Tone {
   return ENROLLMENT_STATE_TONE[state] ?? "neutral";
 }
 
+export function deviceNameLabel(hostname: string | null | undefined): string {
+  return hostname?.trim() || "Unknown";
+}
+
 const TERMINAL_JOB_STATES = new Set([
   "COMPLETED",
   "FAILED",

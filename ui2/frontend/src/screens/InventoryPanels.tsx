@@ -12,7 +12,7 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
-import { jobPhaseLabel, isTerminalJobState } from "../shell/deviceCopy";
+import { deviceNameLabel, jobPhaseLabel, isTerminalJobState } from "../shell/deviceCopy";
 import { m3 } from "../theme/m3Theme";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import {
@@ -414,7 +414,7 @@ function ClusterInterfacesTable({
             <TableCell sx={{ fontWeight: 600 }}>Cluster VIP</TableCell>
             {members.map((m) => (
               <TableCell key={m.device_id} sx={{ fontWeight: 600 }}>
-                {m.hostname ?? m.device_id}
+                {deviceNameLabel(m.hostname)}
               </TableCell>
             ))}
             <TableCell sx={{ fontWeight: 600 }}>Network</TableCell>
@@ -546,7 +546,7 @@ function ClusterRoutesTable({
   }
 
   const memberNameById = new Map<string, string>();
-  members.forEach((m) => memberNameById.set(m.device_id, m.hostname ?? m.device_id));
+  members.forEach((m) => memberNameById.set(m.device_id, deviceNameLabel(m.hostname)));
 
   return (
     <Stack spacing={1.5}>
@@ -1029,7 +1029,7 @@ export function ClusterInterfacesPanel({
             />
           );
         }
-        const memberNames = members.map((m) => m.hostname ?? m.device_id).join(", ");
+        const memberNames = members.map((m) => deviceNameLabel(m.hostname)).join(", ");
         return (
           <Box
             sx={{
@@ -1179,7 +1179,7 @@ export function ClusterMembersMarker({ inventory }: { readonly inventory: Cluste
           }}
         >
           <Typography variant="caption" sx={{ fontWeight: 600 }}>
-            {member.hostname ?? member.device_id}
+            {deviceNameLabel(member.hostname)}
           </Typography>
           <JobStatusIndicator
             state={member.latest_job_state}
@@ -1399,7 +1399,7 @@ export function DeviceInventoryPanels({
           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Typography variant="h3" sx={{ fontWeight: 600 }}>
-                {device.hostname ?? device.device_id}
+                {deviceNameLabel(device.hostname)}
               </Typography>
               <JobStatusIndicator
                 state={device.latest_job_state}
@@ -1410,7 +1410,7 @@ export function DeviceInventoryPanels({
             </Box>
             {isCluster && clusterInventory && clusterInventory.members.length > 0 ? (
               <Typography variant="caption" color="text.secondary">
-                Members: {clusterInventory.members.map((m) => m.hostname ?? m.device_id).join(" · ")}
+                Members: {clusterInventory.members.map((m) => deviceNameLabel(m.hostname)).join(" · ")}
               </Typography>
             ) : null}
           </Box>
@@ -1466,7 +1466,7 @@ export function DeviceInventoryPanels({
                     <TableBody>
                       {clusterInventory.members.map((member) => (
                         <TableRow key={member.device_id}>
-                          <TableCell sx={{ fontWeight: 500 }}>{member.hostname ?? member.device_id}</TableCell>
+                          <TableCell sx={{ fontWeight: 500 }}>{deviceNameLabel(member.hostname)}</TableCell>
                           <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{member.device_id}</TableCell>
                           <TableCell>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -1678,7 +1678,7 @@ export function ClusterDetailPanels({
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                     <Typography variant="body2" sx={{ fontWeight: 700, color: m3.onSurface }}>
-                      {m.hostname ?? m.device_id}
+                      {deviceNameLabel(m.hostname)}
                     </Typography>
                     <JobStatusIndicator
                       state={m.latest_job_state}
@@ -1833,7 +1833,7 @@ export function ClusterDetailPanels({
                   <TableBody>
                     {members.map((m) => (
                       <TableRow key={m.device_id} hover>
-                        <TableCell sx={{ fontWeight: 600 }}>{m.hostname ?? m.device_id}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{deviceNameLabel(m.hostname)}</TableCell>
                         <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{m.device_id}</TableCell>
                         <TableCell>
                           <StatusChip

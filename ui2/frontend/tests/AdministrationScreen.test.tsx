@@ -153,6 +153,34 @@ describe("AdministrationScreen tabs", () => {
     expect(screen.getAllByText("Enrolled").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("1 device")).toBeInTheDocument();
   });
+
+  it("renders an explicit unknown instead of a device id when hostname evidence is missing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "/devices": {
+          body: {
+            devices: [
+              {
+                device_id: "opaque-device-id",
+                vendor_hint: "check_point",
+                enrollment_state: "DRAFT",
+                hostname: null,
+                model: null,
+                software_version: null,
+                ha_role: null,
+                cluster_member_ref: null,
+              },
+            ],
+          },
+        },
+      }),
+    );
+    render(withTheme(<AdministrationScreen />));
+
+    await waitFor(() => expect(screen.getByText("Unknown")).toBeInTheDocument());
+    expect(screen.queryByText("opaque-device-id")).toBeNull();
+  });
 });
 
 describe("AdministrationScreen Local identities tab", () => {

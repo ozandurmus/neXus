@@ -48,6 +48,18 @@ class TopologyNamePseudonymizerTest {
     }
 
     @Test
+    void managementAddressIsUnknownAndNeverRegisteredForTextReplacement() {
+        assertThat(pseudonymizer.maskDeviceName("192.0.2.10", null)).isEqualTo("Unknown");
+        assertThat(pseudonymizer.maskText("connection to 192.0.2.10 failed"))
+                .isEqualTo("connection to 192.0.2.10 failed");
+    }
+
+    @Test
+    void explicitUnknownSurvivesMasking() {
+        assertThat(pseudonymizer.maskDeviceName("Unknown", null)).isEqualTo("Unknown");
+    }
+
+    @Test
     void virtualSystemsShareParentBase() {
         String clusterName = "FW-CKP-GARANTIMOBAPP-AA-CLS";
         String maskedCluster = pseudonymizer.maskClusterName(clusterName);

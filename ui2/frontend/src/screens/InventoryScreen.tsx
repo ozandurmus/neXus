@@ -10,7 +10,7 @@ import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { requestBulkInventoryCollect, listDevices, type ApiError, type DeviceSummary, type ClusterInventory } from "../auth/adminApi";
-import { enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
+import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar, deriveClusterTitle } from "./InventoryPanels";
 
@@ -108,7 +108,7 @@ function DeviceRow({
                 color: m3.onSurface,
               }}
             >
-              {device.hostname ?? device.device_id ?? "Unknown"}
+              {deviceNameLabel(device.hostname)}
             </Typography>
             <JobStatusIndicator
               state={device.latest_job_state}
@@ -307,7 +307,7 @@ function DeviceList({
                     {ref}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    · {isPaloAlto ? "PAN-OS HA" : "ClusterXL"} · {members.map((m) => m.hostname ?? m.device_id).join(" · ")}
+                    · {isPaloAlto ? "PAN-OS HA" : "ClusterXL"} · {members.map((m) => deviceNameLabel(m.hostname)).join(" · ")}
                   </Typography>
                 </Box>
               </Box>

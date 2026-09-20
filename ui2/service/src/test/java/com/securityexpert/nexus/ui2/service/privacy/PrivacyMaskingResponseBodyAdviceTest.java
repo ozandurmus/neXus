@@ -52,6 +52,25 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void missingHostnameRemainsMissingForBothSessionKinds() {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("device_id", "148bd45b-e5b4-490b-95c5-54862e2d63d0");
+        body.put("hostname", null);
+        body.put("management_ip", "192.0.2.10");
+
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(false);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> unmasked = (Map<String, Object>) advice.beforeBodyWrite(body, null, null, null, serverRequest, null);
+
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> masked = (Map<String, Object>) advice.beforeBodyWrite(body, null, null, null, serverRequest, null);
+
+        assertThat(unmasked.get("hostname")).isNull();
+        assertThat(masked.get("hostname")).isNull();
+    }
+
+    @Test
     void masksDeviceSummaryListForReplayViewer() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
 

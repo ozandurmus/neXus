@@ -32,7 +32,7 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "virtual_system_ref, peer_follow_outcome, peer_follow_reason";
     private static final String DEVICE_SUMMARY_SELECT =
             "select d.device_id, d.role, d.vendor_hint, d.enrollment_state, "
-            + "coalesce(d.observed_hostname, dc.display_name, ep.address_ref) as observed_hostname, "
+            + "coalesce(d.observed_hostname, dc.display_name) as observed_hostname, "
             + "coalesce(d.observed_model, dc.model, c_parent.model) as observed_model, "
             + "coalesce(d.observed_software_version, dc.software_version, c_parent.software_version) as observed_software_version, "
             + "d.observed_ha_role, "
@@ -49,7 +49,7 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "    where ((c.vendor || '|' || coalesce(c.owning_domain, '') || '|' || c.stable_identifier) = d.discovery_match_key "
             + "       or (c.vendor || '|' || c.stable_identifier) = d.discovery_match_key "
             + "       or c.stable_identifier = d.recorded_identity_primary) "
-            + "      and c.parent_candidate_id is null "
+            + "    order by (c.parent_candidate_id is null) desc "
             + "    limit 1 "
             + ") dc on true "
             + "left join lateral ( "
