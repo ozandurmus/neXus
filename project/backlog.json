@@ -630,6 +630,15 @@
       "priority": "P0",
       "target": "TopologyNamePseudonymizer.computeDeviceName; interacts with discovery_lateral_join_drops_cluster_members",
       "note": ""
+    },
+    {
+      "id": "ui2_inventory_and_configuration_design_language",
+      "category": "ui",
+      "title": "Apply the inventory and configuration design language: cluster as the unit with virtual systems beneath it, agreement rendered once and difference rendered explicitly, stated identity, freshness, coverage counters and provenance",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md (DRAFT, needs freeze with D-UI1 and D-UI2 answered)",
+      "note": ""
     }
   ]
 }

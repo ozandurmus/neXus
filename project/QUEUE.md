@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T20:44:18Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T20:52:24Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -49,6 +49,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T20:44:18Z
 - P1/planned ui2_b1_11_acceptance_scenario_worker_loss — UI2 B1-11 -- acceptance scenario B: worker killed mid-step (target: workflow §5 B1-11)
 - P1/planned ui2_database_roles_and_data_ownership — UI2 database roles: least-privilege runtime roles per serv (target: PO_DECISION_RECORD_2026_09_13D section 3)
 - P1/planned ui2_device_session_one_per_device — UI2 transport rule: one SSH session per device per run, a (target: PO rule 2026-09-12; CP discovery already)
+- P1/planned ui2_inventory_and_configuration_design_language — Apply the inventory and configuration design language: clu (target: docs/design/UI2_INVENTORY_AND_CONFIGURAT)
 - P1/planned ui2_ldap_config — LDAP Configuration Screen (target: ui2)
 - P1/planned ui2_networkpolicy_in_cluster_db_reach — NetworkPolicy restricting in-cluster reach to PostgreSQL (target: UI2_0_B1_01C successor)
 - P1/planned ui2_pan_transport_no_credentials_in_url — UI2 Palo Alto transport: no credential ever appears in a U (target: PAN_DISCOVERY_CONTRACT.md T-1/T-5; the P)
