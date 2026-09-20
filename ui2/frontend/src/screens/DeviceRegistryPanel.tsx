@@ -9,7 +9,7 @@ import { EmptyPanel } from "../shell/ScreenLayout";
 import { CapabilityMenu, M3Button, StatusChip, ToggleRow } from "../shell/M3Widgets";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { deleteDevice, listDevices, type ApiError, type DeviceSummary } from "../auth/adminApi";
-import { enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
+import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -278,11 +278,11 @@ function DeviceRegistryCard({
                     onChange={() => handleToggleRow(device.device_id)}
                     size="small"
                     sx={{ p: 0 }}
-                    inputProps={{ "aria-label": `Select ${device.hostname ?? device.device_id}` }}
+                    inputProps={{ "aria-label": `Select ${deviceNameLabel(device.hostname)}` }}
                   />
                 </Box>
                 <Typography variant="body2" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>
-                  {device.hostname ?? device.device_id}
+                  {deviceNameLabel(device.hostname)}
                 </Typography>
                 <Box sx={{ display: "flex", justifyContent: "center" }}>
                   <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />

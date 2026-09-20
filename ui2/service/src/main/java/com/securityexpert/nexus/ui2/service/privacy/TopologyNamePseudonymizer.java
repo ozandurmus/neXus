@@ -27,6 +27,7 @@ public class TopologyNamePseudonymizer {
     );
 
     private static final Pattern MEMBER_ORDINAL_PATTERN = Pattern.compile("[-_.]?(?:0?([1-9]|10)|m([1-9]|10)|member([1-9]|10)|aa|bb)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern IPV4_PATTERN = Pattern.compile("^(?:\\d{1,3}\\.){3}\\d{1,3}(?:/\\d{1,2})?$");
 
     private final byte[] secretKey;
     private final Map<String, String> clusterCache = new ConcurrentHashMap<>();
@@ -80,9 +81,13 @@ public class TopologyNamePseudonymizer {
         if (rawDeviceName == null || rawDeviceName.isBlank()) {
             return rawDeviceName;
         }
-        String key = rawDeviceName.trim() + "::" + (clusterMemberRef != null ? clusterMemberRef.trim() : "");
-        String masked = deviceCache.computeIfAbsent(key, k -> computeDeviceName(rawDeviceName.trim(), clusterMemberRef));
-        rawNameToPseudonym.put(rawDeviceName.trim(), masked);
+        String trimmed = rawDeviceName.trim();
+        if ("unknown".equalsIgnoreCase(trimmed) || IPV4_PATTERN.matcher(trimmed).matches() || trimmed.contains(":")) {
+            return "Unknown";
+        }
+        String key = trimmed + "::" + (clusterMemberRef != null ? clusterMemberRef.trim() : "");
+        String masked = deviceCache.computeIfAbsent(key, k -> computeDeviceName(trimmed, clusterMemberRef));
+        rawNameToPseudonym.put(trimmed, masked);
         return masked;
     }
 
