@@ -118,7 +118,8 @@
     "inventory_draft_filter_does_nothing": "java_debt",
     "cluster_member_model_needs_second_query": "java_feature",
     "aiview_masking_manufactures_names_from_any_string": "java_debt",
-    "ui2_inventory_and_configuration_design_language": "java_feature"
+    "ui2_inventory_and_configuration_design_language": "java_feature",
+    "cp_vsx_config_collected_without_vs_context": "java_debt"
   },
   "converted_lessons": [
     {
