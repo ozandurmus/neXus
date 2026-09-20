@@ -82,7 +82,7 @@ public class PreflightService {
         String defaultPolicy
     ) {}
 
-    private ClusterEvidenceSnapshot buildSnapshotForCluster(String clusterRef) {
+    public ClusterEvidenceSnapshot buildSnapshotForCluster(String clusterRef) {
         String maskedClusterName = pseudonymizer != null
             ? pseudonymizer.maskClusterName(clusterRef)
             : clusterRef;

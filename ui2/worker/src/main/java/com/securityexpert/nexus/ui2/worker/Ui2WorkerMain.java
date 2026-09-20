@@ -111,16 +111,7 @@ public final class Ui2WorkerMain {
                 System.exit(1);
             }
         }
-        if ("backup".equalsIgnoreCase(System.getenv("NEXUS_WORKLOAD_ROLE"))
-                || (args.length > 0 && "backup".equalsIgnoreCase(args[0]))) {
-            try {
-                com.securityexpert.nexus.ui2.worker.backup.server.Ui2BackupMain.main(args);
-                return;
-            } catch (Exception e) {
-                System.err.println("Failed to start ui2-backup microservice: " + e.getMessage());
-                System.exit(1);
-            }
-        }
+
         String jdbcUrl = requireEnv("UI2_DB_URL");
         String dbUser = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_USER_FILE")), "worker.db_user");
         String dbPassword = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_PASSWORD_FILE")), "worker.db_password");

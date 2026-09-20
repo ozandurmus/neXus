@@ -119,6 +119,21 @@ class CheckPointSnapshotExecutorTest {
         assertTrue(result instanceof BackupResult.SubmitRefused);
     }
 
+    @Test
+    void failsWhenStatusSaysSnapshotNotCompleted() {
+        transport.execOutputs.put(BackupReadPlan.CP_SHOW_DISKSPACE, "Free disk space on /var/log: 50000 MB");
+        transport.statusSequence = "Operation not completed due to timeout";
+
+        BackupRequest request = new BackupRequest(
+                new ConnectionTarget("target-1", "192.0.2.1", 22),
+                Optional.of("cred-backup"),
+                "trust-rule-1"
+        );
+
+        BackupResult result = executor.collectSnapshot(request, DEVICE_ID, JOB_ID);
+        assertTrue(result instanceof BackupResult.SubmitRefused, "Expected SubmitRefused when status says not completed, got: " + result);
+    }
+
     private static class ScriptedSnapshotTransport implements DeviceTransport {
         final Map<String, String> execOutputs = new HashMap<>();
         final List<String> commandsIssued = new ArrayList<>();

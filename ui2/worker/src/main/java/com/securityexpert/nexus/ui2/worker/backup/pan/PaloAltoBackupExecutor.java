@@ -57,8 +57,7 @@ public final class PaloAltoBackupExecutor {
                 null,
                 Map.of(
                         "type", "config",
-                        "action", "show",
-                        "key", apiKey
+                        "action", "show"
                 ),
                 Map.of("X-PAN-KEY", apiKey)
         );
@@ -66,7 +65,10 @@ public final class PaloAltoBackupExecutor {
         XmlApiResult configResult = transport.xmlApiCall(target, configSpec, CONFIG_TIMEOUT);
         String currentConfigXml = "";
         if (configResult instanceof XmlApiResult.Completed completed && completed.httpStatus() == 200) {
-            currentConfigXml = completed.body();
+            String body = completed.body();
+            if (body != null && !body.contains("status=\"error\"") && !body.contains("status='error'")) {
+                currentConfigXml = body;
+            }
         }
 
         SemanticDeviationEngine.DeviationOutcome deviationOutcome =
@@ -77,7 +79,7 @@ public final class PaloAltoBackupExecutor {
         try {
             handle = artefactStore.open(deviceId, jobId, "palo_alto", false);
         } catch (IOException e) {
-            return new PanBackupResult(false, null, null, deviationOutcome, "Failed to open artefact store: " + e.getMessage());
+            return new PanBackupResult(false, null, null, deviationOutcome, "Failed to open artefact store");
         }
 
         XmlApiSpec exportSpec = new XmlApiSpec(
@@ -87,8 +89,7 @@ public final class PaloAltoBackupExecutor {
                 null,
                 Map.of(
                         "type", "export",
-                        "category", "device-state",
-                        "key", apiKey
+                        "category", "device-state"
                 ),
                 Map.of("X-PAN-KEY", apiKey)
         );
@@ -103,9 +104,7 @@ public final class PaloAltoBackupExecutor {
 
             if (!(streamOutcome instanceof XmlApiStreamOutcome.Completed<Long>)) {
                 handle.close();
-                String err = streamOutcome instanceof XmlApiStreamOutcome.Failed<Long> failed
-                        ? failed.reason() : "Unknown stream failure";
-                return new PanBackupResult(false, null, null, deviationOutcome, "Streaming export failed: " + err);
+                return new PanBackupResult(false, null, null, deviationOutcome, "Streaming export failed: transport stream incomplete");
             }
 
             ArtefactStore.ArtefactMetadata metadata = handle.finish();
@@ -115,17 +114,22 @@ public final class PaloAltoBackupExecutor {
                 handle.close();
             } catch (IOException ignored) {
             }
-            return new PanBackupResult(false, null, null, deviationOutcome, "Device state export failed: " + e.getMessage());
+            return new PanBackupResult(false, null, null, deviationOutcome, "Device state export failed: stream transfer error");
         }
     }
+
+    private static final long MAX_PAN_DEVICE_STATE_BYTES = 10L * 1024L * 1024L * 1024L; // 10 GB limit
 
     private static long copyStream(InputStream from, OutputStream to) throws IOException {
         byte[] buffer = new byte[65536];
         long total = 0;
         int read;
         while ((read = from.read(buffer)) != -1) {
-            to.write(buffer, 0, read);
             total += read;
+            if (total > MAX_PAN_DEVICE_STATE_BYTES) {
+                throw new IOException("Stream exceeded maximum allowable size (" + MAX_PAN_DEVICE_STATE_BYTES + " bytes)");
+            }
+            to.write(buffer, 0, read);
         }
         to.flush();
         return total;

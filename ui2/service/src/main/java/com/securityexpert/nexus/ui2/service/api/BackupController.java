@@ -38,6 +38,7 @@ public final class BackupController {
 
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ISO_INSTANT;
     private static final int DIGEST_PREFIX_LENGTH = 12;
+    private static final java.util.Set<String> VALID_BACKUP_TYPES = java.util.Set.of("backup", "standard", "snapshot", "device_state");
 
     public record CollectRequest(@JsonProperty("nonce") String nonce, @JsonProperty("reason") String reason,
             @JsonProperty("type") String type) {
@@ -55,10 +56,48 @@ public final class BackupController {
     @PostMapping({"/devices/{deviceId}/backup/collect", "/api/v2/backups/{deviceId}/run"})
     public ResponseEntity<Map<String, Object>> collect(@PathVariable String deviceId,
             @RequestBody(required = false) CollectRequest request, HttpServletRequest servletRequest) {
+        // Validate deviceId format / traversal
+        if (deviceId == null || deviceId.isBlank() || deviceId.contains("..") || deviceId.contains("/") || deviceId.contains("\\")) {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("error", "INVALID_DEVICE_ID");
+            body.put("code", "MALFORMED_IDENTIFIER");
+            body.put("reason", "Device identifier must be a valid non-empty identifier without path characters");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        }
+
+        // Enforce authenticated actor fingerprint (fail-closed)
         String actorFingerprint = actingUser(servletRequest);
-        Optional<String> nonce = request == null ? Optional.empty() : Optional.ofNullable(request.nonce());
-        String reason = request == null || request.reason() == null ? "operator requested backup collection" : request.reason();
-        String type = request == null || request.type() == null ? "backup" : request.type();
+        if (actorFingerprint == null || actorFingerprint.isBlank()) {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("error", "AUTHENTICATION_REQUIRED");
+            body.put("code", "ACTOR_FINGERPRINT_MISSING");
+            body.put("reason", "An authenticated actor fingerprint is required for backup operations (Plane 3 Security Gate)");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+        }
+
+        // Mandatory operator justification (BK-12, min 8 chars)
+        if (request == null || request.reason() == null || request.reason().strip().length() < 8) {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("error", "ADMISSION_REFUSED");
+            body.put("code", "REASON_TOO_SHORT");
+            body.put("reason", "A backup operation requires an explicit operator justification of at least 8 characters (BK-12)");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        }
+        String reason = request.reason().strip();
+
+        // Validated closed type enum
+        String rawType = request.type() == null ? "backup" : request.type().strip().toLowerCase();
+        if (!VALID_BACKUP_TYPES.contains(rawType)) {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("error", "ADMISSION_REFUSED");
+            body.put("code", "INVALID_BACKUP_TYPE");
+            body.put("reason", "Backup type must be one of: " + VALID_BACKUP_TYPES);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        }
+        String type = "standard".equals(rawType) ? "backup" : rawType;
+
+        Optional<String> nonce = Optional.ofNullable(request.nonce()).filter(n -> !n.isBlank());
+
         BackupCollectService.Outcome outcome = backupCollectService.requestCollect(deviceId, actorFingerprint, reason,
                 nonce, type);
         return switch (outcome) {
@@ -88,6 +127,9 @@ public final class BackupController {
 
     @GetMapping("/devices/{deviceId}/backups")
     public ResponseEntity<Map<String, Object>> deviceBackups(@PathVariable String deviceId) {
+        if (deviceId == null || deviceId.isBlank() || deviceId.contains("..") || deviceId.contains("/") || deviceId.contains("\\")) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "INVALID_DEVICE_ID"));
+        }
         List<BackupArtefactSummary> rows = manifestRepository.findByDevice(deviceId, ArtefactClass.BACKUP);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("device_id", deviceId);
@@ -109,8 +151,8 @@ public final class BackupController {
         body.put("policy_id", "default");
         body.put("daily_backup_cron", "0 2 * * *");
         body.put("weekly_snapshot_cron", "0 3 * * 0");
-        body.put("backup_retention_days", 30);
-        body.put("snapshot_retention_depth", 2);
+        body.put("backup_retention_days", 14);
+        body.put("snapshot_retention_depth", 4);
         body.put("major_alert_enabled", true);
         body.put("storage_capacity", "400Gi");
         return ResponseEntity.ok(body);
@@ -119,15 +161,10 @@ public final class BackupController {
     @PutMapping("/api/v2/backups/policies")
     public ResponseEntity<Map<String, Object>> updateBackupPolicy(@RequestBody(required = false) Map<String, Object> policy) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("status", "UPDATED");
-        body.put("policy_id", "default");
-        body.put("daily_backup_cron", policy != null && policy.containsKey("daily_backup_cron") ? policy.get("daily_backup_cron") : "0 2 * * *");
-        body.put("weekly_snapshot_cron", policy != null && policy.containsKey("weekly_snapshot_cron") ? policy.get("weekly_snapshot_cron") : "0 3 * * 0");
-        body.put("backup_retention_days", policy != null && policy.containsKey("backup_retention_days") ? policy.get("backup_retention_days") : 30);
-        body.put("snapshot_retention_depth", policy != null && policy.containsKey("snapshot_retention_depth") ? policy.get("snapshot_retention_depth") : 2);
-        body.put("major_alert_enabled", policy != null && policy.containsKey("major_alert_enabled") ? policy.get("major_alert_enabled") : true);
-        body.put("storage_capacity", "400Gi");
-        return ResponseEntity.ok(body);
+        body.put("error", "POLICY_IMMUTABLE");
+        body.put("code", "READ_ONLY_POLICY");
+        body.put("reason", "Backup retention and vault policies are immutable via HTTP API and must be updated via approved cluster configuration.");
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(body);
     }
 
     @GetMapping("/api/v2/backups/deviations")
@@ -139,6 +176,9 @@ public final class BackupController {
     }
 
     private static String actingUser(HttpServletRequest servletRequest) {
+        if (servletRequest == null) {
+            return null;
+        }
         return (String) servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
     }
 
@@ -148,8 +188,11 @@ public final class BackupController {
         body.put("device_id", summary.deviceId());
         body.put("collected_at", TIMESTAMP.format(summary.createdAt()));
         body.put("size_bytes", summary.plaintextBytes());
-        body.put("digest_prefix", summary.plaintextSha256().substring(0,
-                Math.min(DIGEST_PREFIX_LENGTH, summary.plaintextSha256().length())));
+        String sha = summary.plaintextSha256();
+        String prefix = (sha != null && !sha.isBlank())
+                ? sha.substring(0, Math.min(DIGEST_PREFIX_LENGTH, sha.length()))
+                : "UNKNOWN";
+        body.put("digest_prefix", prefix);
         body.put("validation_level", summary.validationLevel());
         body.put("deviation_state", summary.deviationState().orElse(null));
         return body;

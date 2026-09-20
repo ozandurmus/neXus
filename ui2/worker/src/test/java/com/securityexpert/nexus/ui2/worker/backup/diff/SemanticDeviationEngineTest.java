@@ -55,6 +55,11 @@ class SemanticDeviationEngineTest {
         assertEquals(SemanticDeviationEngine.DeviationClass.MAJOR, outcome.deviationClass());
         assertTrue(outcome.majorAlert());
         assertTrue(outcome.summary().contains("admin user"));
+
+        // Secret Containment: Verify password hash is strictly withheld from outcome details and summary
+        String detailsStr = outcome.details().toString();
+        assertFalse(detailsStr.contains("$1$xyz"), "Password hash must never leak into deviation details");
+        assertFalse(outcome.summary().contains("$1$xyz"), "Password hash must never leak into summary");
     }
 
     @Test
@@ -66,6 +71,20 @@ class SemanticDeviationEngineTest {
         assertEquals(SemanticDeviationEngine.DeviationClass.MAJOR, outcome.deviationClass());
         assertTrue(outcome.majorAlert());
         assertTrue(outcome.summary().contains("security rule(s) added"));
+    }
+
+    @Test
+    void unknownVendorFailsClosedAndDoesNotLeakRawLines() {
+        String prev = "secret-key=abc123456";
+        String curr = "secret-key=xyz987654";
+
+        SemanticDeviationEngine.DeviationOutcome outcome = engine.evaluate("cisco_asa", prev, curr);
+        assertEquals(SemanticDeviationEngine.DeviationClass.UNCHANGED, outcome.deviationClass());
+        assertFalse(outcome.majorAlert());
+        assertTrue(outcome.summary().contains("UNSUPPORTED"));
+
+        String detailsStr = outcome.details().toString();
+        assertFalse(detailsStr.contains("secret-key"), "Raw configuration lines must not leak for unsupported vendors");
     }
 
     @Test

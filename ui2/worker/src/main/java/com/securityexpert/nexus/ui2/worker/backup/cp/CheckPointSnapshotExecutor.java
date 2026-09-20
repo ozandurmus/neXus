@@ -76,7 +76,7 @@ public final class CheckPointSnapshotExecutor {
         }
 
         if (!(connectResult instanceof ConnectResult.Authenticated authenticated)) {
-            return new BackupResult.ConnectFailed("SSH connection failed to " + request.connectionTarget());
+            return new BackupResult.ConnectFailed("SSH connection failed to target device");
         }
 
         TransportSession session = authenticated.session();
@@ -119,12 +119,22 @@ public final class CheckPointSnapshotExecutor {
 
             ExecOutcome poll = exec(session, BackupReadPlan.CP_SHOW_SNAPSHOT_STATUS, POLL_TIMEOUT);
             String output = poll.output().toLowerCase();
-            if (output.contains("completed") || output.contains("success") || output.contains("finished")) {
+
+            // Fail-closed negative checks first to eliminate false-success on "not completed"
+            if (output.contains("not completed") || output.contains("failed") || output.contains("error") || output.contains("aborted")) {
+                return new BackupResult.SubmitRefused("snapshot operation reported failure: " + poll.output());
+            }
+
+            // In-progress indicators
+            if (output.contains("in progress") || output.contains("running") || output.contains("pending")) {
+                continue;
+            }
+
+            // Definite positive terminal tokens
+            if (output.contains("snapshot completed") || output.contains("operation succeeded")
+                    || output.contains("status: success") || output.contains("finished successfully")) {
                 completed = true;
                 break;
-            }
-            if (output.contains("failed") || output.contains("error")) {
-                return new BackupResult.SubmitRefused("snapshot operation reported failure: " + poll.output());
             }
         }
 
@@ -187,14 +197,34 @@ public final class CheckPointSnapshotExecutor {
             return Optional.empty();
         }
         for (String line : output.split("\\R")) {
-            String lower = line.toLowerCase();
-            if (lower.contains("free") || lower.contains("available") || lower.contains("/var/log")) {
-                Matcher m = FIRST_INTEGER.matcher(line);
+            String trimmed = line.trim();
+            String lower = trimmed.toLowerCase();
+            if (lower.startsWith("filesystem") || lower.startsWith("#")) {
+                continue;
+            }
+            if (lower.contains("/var/log") || lower.contains("available") || lower.contains("free")) {
+                // Key-value style: "Free disk space on /var/log: 50000 MB"
+                Matcher m = Pattern.compile("(?:free|available)[^0-9]*(\\d+)").matcher(lower);
                 if (m.find()) {
                     try {
-                        long value = Long.parseLong(m.group(1));
-                        return Optional.of(value * 1024L * 1024L); // assume MB if in show diskspace, or scale
-                    } catch (NumberFormatException ignored) {
+                        long val = Long.parseLong(m.group(1));
+                        return Optional.of(val * 1024L * 1024L);
+                    } catch (NumberFormatException ignored) {}
+                }
+
+                // Table row style: /dev/mapper/... 10079 3400 6167 36% /var/log
+                String[] tokens = trimmed.split("\\s+");
+                if (tokens.length >= 4) {
+                    for (int i = tokens.length - 1; i >= 0; i--) {
+                        if (tokens[i].contains("/var/log") && i >= 3) {
+                            String availStr = tokens[i - 2].replaceAll("[^0-9]", "");
+                            if (!availStr.isEmpty()) {
+                                try {
+                                    long val = Long.parseLong(availStr);
+                                    return Optional.of(val * 1024L * 1024L); // MB
+                                } catch (NumberFormatException ignored) {}
+                            }
+                        }
                     }
                 }
             }

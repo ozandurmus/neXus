@@ -75,8 +75,13 @@ public final class SemanticDeviationEngine {
             );
         }
 
-        if (currentConfigText == null) {
-            currentConfigText = "";
+        if (currentConfigText == null || currentConfigText.isBlank()) {
+            return new DeviationOutcome(
+                    DeviationClass.MAJOR,
+                    "COLLECTION_FAILED: Current configuration is empty or uncollected; deviation cannot be evaluated.",
+                    Map.of("status", "collection_failed"),
+                    true
+            );
         }
 
         if (previousConfigText.trim().equals(currentConfigText.trim())) {
@@ -174,38 +179,10 @@ public final class SemanticDeviationEngine {
     }
 
     private DeviationOutcome evaluateGeneric(String prev, String curr) {
-        List<String> prevLines = prev.lines().map(String::trim).filter(s -> !s.isEmpty()).toList();
-        List<String> currLines = curr.lines().map(String::trim).filter(s -> !s.isEmpty()).toList();
-
-        Set<String> prevSet = new LinkedHashSet<>(prevLines);
-        Set<String> currSet = new LinkedHashSet<>(currLines);
-
-        Set<String> added = new LinkedHashSet<>(currSet);
-        added.removeAll(prevSet);
-
-        Set<String> removed = new LinkedHashSet<>(prevSet);
-        removed.removeAll(currSet);
-
-        boolean major = added.stream().anyMatch(this::isMajorKeyword)
-                || removed.stream().anyMatch(this::isMajorKeyword);
-
-        Map<String, Object> details = new LinkedHashMap<>();
-        details.put("lines_added", added.stream().limit(20).toList());
-        details.put("lines_removed", removed.stream().limit(20).toList());
-
-        if (major) {
-            return new DeviationOutcome(
-                    DeviationClass.MAJOR,
-                    "MAJOR: Significant network/policy keyword modifications detected in backup diff.",
-                    details,
-                    true
-            );
-        }
-
         return new DeviationOutcome(
-                DeviationClass.MINOR,
-                "MINOR: Non-critical lines modified.",
-                details,
+                DeviationClass.UNCHANGED,
+                "UNSUPPORTED: Semantic deviation engine strictly supports 'check_point' and 'palo_alto'. Raw diff withheld to preserve secret containment.",
+                Map.of("status", "unsupported_vendor"),
                 false
         );
     }
@@ -233,14 +210,14 @@ public final class SemanticDeviationEngine {
         List<String> diffs = new ArrayList<>();
         for (Map.Entry<String, String> entry : curr.entrySet()) {
             if (!prev.containsKey(entry.getKey())) {
-                diffs.add(entity + " '" + entry.getKey() + "' added: " + entry.getValue());
+                diffs.add(entity + " '" + entry.getKey() + "' added");
             } else if (!Objects.equals(prev.get(entry.getKey()), entry.getValue())) {
-                diffs.add(entity + " '" + entry.getKey() + "' modified: [" + prev.get(entry.getKey()) + "] -> [" + entry.getValue() + "]");
+                diffs.add(entity + " '" + entry.getKey() + "' modified");
             }
         }
         for (String key : prev.keySet()) {
             if (!curr.containsKey(key)) {
-                diffs.add(entity + " '" + key + "' removed (was: " + prev.get(key) + ")");
+                diffs.add(entity + " '" + key + "' removed");
             }
         }
         return diffs;

@@ -47,11 +47,11 @@ export function BackupScreen() {
   const [exportReason, setExportReason] = useState("");
   const [policyOpen, setPolicyOpen] = useState(false);
 
-  // Policy configuration
+  // Policy configuration (PO requirements: 14 days standard retention, depth 4 snapshots, 400 GB vault)
   const [dailyCron, setDailyCron] = useState("0 2 * * *");
   const [weeklyCron, setWeeklyCron] = useState("0 3 * * 0");
-  const [retentionDays, setRetentionDays] = useState(30);
-  const [snapshotDepth, setSnapshotDepth] = useState(2);
+  const [retentionDays, setRetentionDays] = useState(14);
+  const [snapshotDepth, setSnapshotDepth] = useState(4);
 
   // Default fleet representation matching active inventory
   const [devices] = useState<BackupDeviceItem[]>([
@@ -182,10 +182,10 @@ export function BackupScreen() {
             Retention Horizon
           </Typography>
           <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: m3.onSurface }}>
-            30 Days
+            14 Days
           </Typography>
           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-            Snapshots depth: 2 retained
+            Snapshots depth: 4 retained
           </Typography>
         </Card>
 
