@@ -89,12 +89,18 @@ public final class Ui2ComplianceServer {
                 sendResponse(exchange, 405, Map.of("error", "Method Not Allowed"));
                 return;
             }
+            int cpCount = CheckPointComplianceCatalog.getControls().size();
+            int panCount = com.securityexpert.nexus.ui2.worker.compliance.catalog.PaloAltoComplianceCatalog.getControls().size();
             sendResponse(exchange, 200, Map.of(
                     "status", "UP",
                     "service", "ui2-compliance",
                     "version", "1.0.0",
                     "catalog_version", CheckPointComplianceCatalog.CATALOG_VERSION,
-                    "controls_count", CheckPointComplianceCatalog.getControls().size()
+                    "controls_count", cpCount + panCount,
+                    "controls_by_vendor", Map.of(
+                            "check_point", cpCount,
+                            "palo_alto", panCount
+                    )
             ));
         }
     }
@@ -106,7 +112,18 @@ public final class Ui2ComplianceServer {
                 sendResponse(exchange, 405, Map.of("error", "Method Not Allowed"));
                 return;
             }
-            List<ComplianceControl> controls = CheckPointComplianceCatalog.getControls();
+            String query = exchange.getRequestURI().getQuery();
+            List<ComplianceControl> controls;
+            if (query != null && query.contains("vendor=palo_alto")) {
+                controls = com.securityexpert.nexus.ui2.worker.compliance.catalog.PaloAltoComplianceCatalog.getControls();
+            } else if (query != null && query.contains("vendor=check_point")) {
+                controls = CheckPointComplianceCatalog.getControls();
+            } else {
+                List<ComplianceControl> combined = new java.util.ArrayList<>();
+                combined.addAll(CheckPointComplianceCatalog.getControls());
+                combined.addAll(com.securityexpert.nexus.ui2.worker.compliance.catalog.PaloAltoComplianceCatalog.getControls());
+                controls = combined;
+            }
             sendResponse(exchange, 200, Map.of(
                     "version", CheckPointComplianceCatalog.CATALOG_VERSION,
                     "count", controls.size(),
@@ -124,7 +141,7 @@ public final class Ui2ComplianceServer {
             }
 
             String deviceId = getHeader(exchange, HEADER_DEVICE_ID, "unknown");
-            String vendor = getHeader(exchange, HEADER_VENDOR, "check_point");
+            String vendor = getHeader(exchange, HEADER_VENDOR, "check_point").toLowerCase(java.util.Locale.ROOT);
 
             String configContent;
             try (InputStream in = exchange.getRequestBody()) {
@@ -132,26 +149,41 @@ public final class Ui2ComplianceServer {
             }
 
             try {
-                // Parse configuration through CheckPoint parser
-                ConfigParseContext ctx = new ConfigParseContext(
-                        deviceId,
-                        ConfigVendor.CHECK_POINT,
-                        ConfigFormat.GAIA_CLISH,
-                        "physical",
-                        Optional.empty()
-                );
-                ConfigParseResult parseResult = cpParser.parse(ctx, new ByteArrayInputStream(configContent.getBytes(StandardCharsets.UTF_8)));
+                if ("palo_alto".equals(vendor)) {
+                    EvaluationResult evalResult = com.securityexpert.nexus.ui2.worker.compliance.evaluator.PaloAltoPanOsComplianceEvaluator.evaluate(
+                            deviceId,
+                            vendor,
+                            "pan_os",
+                            configContent,
+                            null
+                    );
+                    sendResponse(exchange, 200, evalResult);
+                } else if ("check_point".equals(vendor)) {
+                    // Parse configuration through CheckPoint parser
+                    ConfigParseContext ctx = new ConfigParseContext(
+                            deviceId,
+                            ConfigVendor.CHECK_POINT,
+                            ConfigFormat.GAIA_CLISH,
+                            "physical",
+                            Optional.empty()
+                    );
+                    ConfigParseResult parseResult = cpParser.parse(ctx, new ByteArrayInputStream(configContent.getBytes(StandardCharsets.UTF_8)));
 
-                EvaluationResult evalResult = CheckPointGaiaComplianceEvaluator.evaluate(
-                        deviceId,
-                        vendor,
-                        "gaia",
-                        parseResult.sections(),
-                        configContent,
-                        null
-                );
-
-                sendResponse(exchange, 200, evalResult);
+                    EvaluationResult evalResult = CheckPointGaiaComplianceEvaluator.evaluate(
+                            deviceId,
+                            vendor,
+                            "gaia",
+                            parseResult.sections(),
+                            configContent,
+                            null
+                    );
+                    sendResponse(exchange, 200, evalResult);
+                } else {
+                    sendResponse(exchange, 400, Map.of(
+                            "error", "UNSUPPORTED_VENDOR",
+                            "message", "Vendor not supported for compliance evaluation: " + vendor
+                    ));
+                }
             } catch (Exception e) {
                 sendResponse(exchange, 500, Map.of(
                         "error", "EVALUATION_FAILED",

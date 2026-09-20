@@ -76,7 +76,7 @@ public final class ComplianceService {
     public Map<String, Object> getOverview() {
         List<ConfigurationQueryService.DeviceListEntry> devices = configurationQueryService.listDevices();
         List<ConfigurationQueryService.DeviceListEntry> evaluated = devices.stream()
-                .filter(d -> d.latestRun().isPresent() && "check_point".equalsIgnoreCase(d.vendor()))
+                .filter(d -> d.latestRun().isPresent() && ("check_point".equalsIgnoreCase(d.vendor()) || "palo_alto".equalsIgnoreCase(d.vendor())))
                 .toList();
 
         int totalDevices = devices.size();
@@ -94,7 +94,7 @@ public final class ComplianceService {
 
         // Framework accumulators: [total, pass, fail, unavail]
         Map<String, int[]> frameworkStats = new LinkedHashMap<>();
-        frameworkStats.put("CIS Gaia v1.1.0", new int[]{0, 0, 0, 0});
+        frameworkStats.put("CIS Benchmark", new int[]{0, 0, 0, 0});
         frameworkStats.put("PCI-DSS v4.0.1", new int[]{0, 0, 0, 0});
         frameworkStats.put("NIST SP 800-53", new int[]{0, 0, 0, 0});
         frameworkStats.put("Financial Baseline", new int[]{0, 0, 0, 0});
@@ -173,7 +173,7 @@ public final class ComplianceService {
         List<Map<String, Object>> catalog = fetchCatalog();
         List<ConfigurationQueryService.DeviceListEntry> devices = configurationQueryService.listDevices();
         List<ConfigurationQueryService.DeviceListEntry> evaluated = devices.stream()
-                .filter(d -> d.latestRun().isPresent() && "check_point".equalsIgnoreCase(d.vendor()))
+                .filter(d -> d.latestRun().isPresent() && ("check_point".equalsIgnoreCase(d.vendor()) || "palo_alto".equalsIgnoreCase(d.vendor())))
                 .toList();
 
         List<Map<String, Object>> result = new ArrayList<>();
@@ -186,7 +186,7 @@ public final class ComplianceService {
             String category = String.valueOf(c.get("category"));
             Object frameworks = c.get("frameworks");
 
-            int targetDevices = evaluated.size();
+            int targetDevices = 0;
             int passCount = 0;
             int failCount = 0;
             int unavailCount = 0;
@@ -201,6 +201,11 @@ public final class ComplianceService {
                 for (Map<String, Object> item : items) {
                     if (controlId.equals(item.get("controlId"))) {
                         String st = String.valueOf(item.get("displayStatus"));
+                        if ("NOT_APPLICABLE".equalsIgnoreCase(st)) {
+                            // Control does not apply to this device's vendor platform
+                            break;
+                        }
+                        targetDevices++;
                         if ("PASS".equalsIgnoreCase(st)) {
                             passCount++;
                         } else if ("FAIL".equalsIgnoreCase(st)) {
@@ -219,7 +224,7 @@ public final class ComplianceService {
 
             double compliancePct = targetDevices > 0 ? Math.round((passCount * 100.0 / targetDevices) * 10.0) / 10.0 : 0.0;
             String status = unavailCount > 0 && passCount == 0 && failCount == 0 ? "DATA_UNAVAILABLE" :
-                    (failCount > 0 ? "FAIL" : "PASS");
+                    (failCount > 0 ? "FAIL" : (passCount > 0 ? "PASS" : "NOT_APPLICABLE"));
 
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("control_id", controlId);
@@ -265,6 +270,9 @@ public final class ComplianceService {
     }
 
     public Map<String, Object> evaluateDevice(String deviceId) {
+        Optional<DeviceRecord> device = deviceRepository.find(deviceId);
+        String vendor = device.map(DeviceRecord::vendorHint).orElse("check_point");
+
         Optional<String> sanitizedConfig = configurationQueryService.sanitizedText(deviceId);
         String configText = sanitizedConfig.orElse("");
 
@@ -280,7 +288,7 @@ public final class ComplianceService {
                     .uri(URI.create(complianceServiceUrl + "/api/v1/compliance/evaluate"))
                     .timeout(Duration.ofSeconds(15))
                     .header("X-Nexus-Device-Id", deviceId)
-                    .header("X-Nexus-Vendor", "check_point")
+                    .header("X-Nexus-Vendor", vendor)
                     .POST(HttpRequest.BodyPublishers.ofString(configText, StandardCharsets.UTF_8))
                     .build();
 
@@ -296,7 +304,7 @@ public final class ComplianceService {
         // Return empty evaluation if microservice unreachable and no config
         Map<String, Object> fallback = new LinkedHashMap<>();
         fallback.put("deviceId", deviceId);
-        fallback.put("vendor", "check_point");
+        fallback.put("vendor", vendor);
         fallback.put("totalAssigned", 24);
         fallback.put("passCount", 0);
         fallback.put("failCount", 0);
@@ -332,7 +340,7 @@ public final class ComplianceService {
     private static String mapFrameworkName(String raw) {
         if (raw == null) return "Financial Baseline";
         return switch (raw.toUpperCase(Locale.ROOT)) {
-            case "CIS" -> "CIS Gaia v1.1.0";
+            case "CIS" -> "CIS Benchmark";
             case "PCI_DSS" -> "PCI-DSS v4.0.1";
             case "NIST_800_53" -> "NIST SP 800-53";
             default -> "Financial Baseline";
@@ -349,7 +357,7 @@ public final class ComplianceService {
         overview.put("critical_deficiencies", 0);
         overview.put("data_gaps", 0);
         overview.put("frameworks", List.of(
-                Map.of("framework", "CIS Gaia v1.1.0", "score_pct", 0.0, "total_controls", 24, "pass_count", 0, "fail_count", 0, "data_unavailable_count", 24),
+                Map.of("framework", "CIS Benchmark", "score_pct", 0.0, "total_controls", 24, "pass_count", 0, "fail_count", 0, "data_unavailable_count", 24),
                 Map.of("framework", "PCI-DSS v4.0.1", "score_pct", 0.0, "total_controls", 16, "pass_count", 0, "fail_count", 0, "data_unavailable_count", 16),
                 Map.of("framework", "NIST SP 800-53", "score_pct", 0.0, "total_controls", 20, "pass_count", 0, "fail_count", 0, "data_unavailable_count", 20),
                 Map.of("framework", "Financial Baseline", "score_pct", 0.0, "total_controls", 10, "pass_count", 0, "fail_count", 0, "data_unavailable_count", 10)

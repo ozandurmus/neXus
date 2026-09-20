@@ -247,12 +247,23 @@ public final class ConfigurationCapabilityExecutor {
         try {
             handle.sink().write(rawText.getBytes(StandardCharsets.UTF_8));
             ArtefactStore.ArtefactMetadata metadata = handle.finish();
-            return new ConfigurationRunData(readKind, primary, metadata.plaintextSha256(), 0, Optional.empty(),
+            Optional<String> sanitized = (ConfigurationReadKind.ACTIVE.equals(readKind) || primary)
+                    ? Optional.of(sanitizePaloAltoXml(rawText))
+                    : Optional.empty();
+            return new ConfigurationRunData(readKind, primary, metadata.plaintextSha256(), 0, sanitized,
                     List.of(), List.of(), toRecord(metadata, deviceId, jobId, "palo_alto"));
         } catch (IOException e) {
             closeQuietly(handle);
             throw e;
         }
+    }
+
+    static String sanitizePaloAltoXml(String xml) {
+        if (xml == null || xml.isBlank()) {
+            return xml;
+        }
+        return xml.replaceAll("(?is)<(phash|admin-password|pre-shared-key|private-key|community|passphrase|bind-password|secret|shared-secret|auth-key|priv-key)>.*?</\\1>",
+                "<$1>[REDACTED]</$1>");
     }
 
     private static ConfigurationArtefactRecord toRecord(ArtefactStore.ArtefactMetadata metadata, String deviceId,

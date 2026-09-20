@@ -53,14 +53,25 @@ public final class ConfigurationQueryService {
         return new DeviceConfigurationOutcome.Found(deviceId, deviceConfigurationRepository.findRunView(deviceId));
     }
 
-    /** {@code GET /devices/{id}/configuration/text}: the Check Point sanitized text, or empty (404) for any other case. */
+    /** {@code GET /devices/{id}/configuration/text}: sanitized configuration text for Check Point or Palo Alto, or empty (404) for any other case. */
     public Optional<String> sanitizedText(String deviceId) {
         Optional<DeviceRecord> device = deviceRepository.find(deviceId);
-        if (device.isEmpty() || !"check_point".equals(device.get().vendorHint())) {
+        if (device.isEmpty()) {
             return Optional.empty();
         }
-        return deviceConfigurationRepository.findLatestRun(deviceId, ConfigurationReadKind.SHOW_CONFIGURATION)
-                .flatMap(ConfigurationRun::sanitizedText);
+        String vendor = device.get().vendorHint();
+        if ("check_point".equalsIgnoreCase(vendor)) {
+            return deviceConfigurationRepository.findLatestRun(deviceId, ConfigurationReadKind.SHOW_CONFIGURATION)
+                    .flatMap(ConfigurationRun::sanitizedText);
+        } else if ("palo_alto".equalsIgnoreCase(vendor)) {
+            Optional<ConfigurationRun> activeRun = deviceConfigurationRepository.findLatestRun(deviceId, ConfigurationReadKind.ACTIVE);
+            if (activeRun.isPresent() && activeRun.get().sanitizedText().isPresent()) {
+                return activeRun.get().sanitizedText();
+            }
+            return deviceConfigurationRepository.findLatestRun(deviceId, ConfigurationReadKind.EFFECTIVE_RUNNING)
+                    .flatMap(ConfigurationRun::sanitizedText);
+        }
+        return Optional.empty();
     }
 
     /** {@code GET /configuration}: every device, its vendor, and its latest primary run if any. */
