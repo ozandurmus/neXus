@@ -621,6 +621,15 @@
       "priority": "P1",
       "target": "Check Point management plane enumeration; measured against two real exports",
       "note": ""
+    },
+    {
+      "id": "aiview_masking_manufactures_names_from_any_string",
+      "category": "privacy",
+      "title": "The AIView pseudonymizer turns any non-blank string into a convincing hostname, so a fallback management address renders as a healthy device name and hides the data gap from the one persona the constitution mandates for verification",
+      "status": "planned",
+      "priority": "P0",
+      "target": "TopologyNamePseudonymizer.computeDeviceName; interacts with discovery_lateral_join_drops_cluster_members",
+      "note": ""
     }
   ]
 }

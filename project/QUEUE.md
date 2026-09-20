@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T20:29:20Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T20:44:18Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -9,6 +9,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-20T20:29:20Z
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test env (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
+- P0/planned aiview_masking_manufactures_names_from_any_string — The AIView pseudonymizer turns any non-blank string into a (target: TopologyNamePseudonymizer.computeDeviceN)
 - P0/planned backup_artefact_id_opaque_not_storage_path — The artefact id returned over HTTP must be opaque, not the (target: BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09)
 - P0/planned backup_retrieval_audit_fail_closed_and_reason_persists — Backup retrieval must be fail-closed on its audit row, and (target: BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09)
 - P0/planned cluster_membership_lost_at_enrollment — Cluster membership is known at discovery but does not reac (target: enrollment/confirm path writing devices.)
