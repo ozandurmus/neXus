@@ -1,0 +1,112 @@
+{
+  "created_at": "2026-09-20T21:05:56Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Given the exact path set of pull request 434, the classifier returns full rather than blocked",
+          "Given a change to ui2/persistence only, the classifier no longer returns targeted, because the targeted job does not cover it",
+          "Given the LDAP delivery's own file set, the classifier still returns targeted",
+          "Given only docs and markdown, the classifier still returns skip",
+          "Given an empty path set, the classifier still returns blocked",
+          "tests/test_ci_regression_scope.py covers each case above and passes"
+        ],
+        "baseline": {
+          "authority": "AGENTS.md -- automated validation and real-environment validation are separate gates, and a green gate is not evidence unless it ran the thing it claims to cover",
+          "engineering": "main at 81f29c7. Pull request 434 is open, mergeable, unstable on this job alone; its suites were run by hand off-CI and pass.",
+          "observed": "Pull request 434 is blocked by the scope-blocked job. The cause is not the change: scripts/ci_regression_scope.py is a fail-closed allowlist written for the approved LDAP delivery, and its frontend entries are only ProjectPlanPanel.test.tsx, its fixture, LoginScreen.tsx and LoginScreen.test.tsx. Any other frontend path classifies as blocked, so every pull request touching an inventory or shell screen will hit this. The larger problem is what happens when a path IS on the list. The targeted-regression job does not select tests from the change; it runs a hardcoded set belonging to that delivery -- three frontend test files, the ldap-adapter, platform-core, persistence, cli and architecture-tests modules, and service unit tests filtered to Login, RoleBinding, Rbac, Directory, Security, Local, ProjectPlanReader and FirstBoot. ui2/persistence/ and ui2/service/ are both on the allowlist, so a change to either routes to targeted and passes having run none of the tests that cover it. Pull request 434 would have done exactly that had it not also touched frontend files: its own JooqDeviceRepositoryTest and TopologyNamePseudonymizerTest match none of those filters."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond the decision record named in refs",
+          "The device and masking change on pull request 434, which is already verified"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/honest-regression-routing"
+        },
+        "invariants": [
+          "Fail closed: an unrecognised change set is blocked, never silently allowed",
+          "A green gate must mean the tests that cover the change were run",
+          "Do not widen what any job is permitted to execute; this movement changes routing only"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make the regression routing honest: a change outside the approved LDAP delivery must route to the full regression rather than to a targeted set that does not cover it, and no change may reach a green gate through tests unrelated to it.",
+        "output_contract": [
+          "A classifier that routes anything outside the LDAP delivery to full",
+          "Tests pinning each routing case, including the fail-closed default",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "A bounded change to one classifier function and its test, with the decision already taken in this packet. No new architecture and no vendor semantics.",
+          "tier": "Main engineer"
+        },
+        "requirements": [
+          "A change whose paths are not wholly inside the approved LDAP delivery routes to full",
+          "The LDAP delivery's own paths keep routing to targeted, so that delivery's fast lane is unchanged",
+          "A documentation-only change still routes to skip",
+          "The major prefixes keep routing to full",
+          "An empty or unrecognised path set still fails closed rather than passing",
+          "The routing states which classification it chose and why, so a reader of the run can tell which tests were meant to cover the change"
+        ],
+        "risks": [
+          "Routing more changes to full makes pull requests slower. That is the intended trade: a slow honest gate beats a fast one that ran the wrong tests. Do not offset it by broadening the targeted allowlist.",
+          "The repository carries a Product Owner decision record on when the regression gate runs (docs/design/PO_DECISION_RECORD_2026_09_15C_...). Read it before changing the contract, and if this movement contradicts it, stop and report the contradiction rather than reconciling it.",
+          "scripts/ci_regression_scope.py is itself in the delivery file set, so this movement's own pull request classifies as targeted. Check that its own gate behaves as expected once changed."
+        ],
+        "scope": {
+          "in": [
+            "scripts/ci_regression_scope.py classification",
+            "tests/test_ci_regression_scope.py, extended to pin the new behaviour",
+            ".github/workflows/validation.yml only if the classification contract requires it"
+          ],
+          "out": [
+            "Rewriting targeted-regression into a general per-path test selector -- a larger design this movement does not attempt",
+            "Changing what the full regression runs",
+            "Relaxing or removing the fail-closed default: an unrecognised path must never silently pass",
+            "Pull request 434 itself, which is verified and waiting on this"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "tests/test_ci_regression_scope.py",
+              "tests/test_ci_workflow_fast_pr_regression.py"
+            ],
+            "name": "scope_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-20T21:05:56Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0350",
+  "movement": "NXS-LOCAL-0350",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "scripts/ci_regression_scope.py",
+    ".github/workflows/validation.yml",
+    "tests/test_ci_regression_scope.py",
+    "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-20T21:05:56Z"
+}

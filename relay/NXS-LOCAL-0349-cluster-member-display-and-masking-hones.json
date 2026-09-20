@@ -111,11 +111,84 @@
       },
       "seq": 1,
       "timestamp": "2026-09-20T20:48:57Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "JooqDeviceRepository orders matching candidates by parent_candidate_id nullness instead of excluding parented candidates.",
+          "JooqDeviceRepository hostname projection now uses only observed hostname or discovery display name.",
+          "TopologyNamePseudonymizer returns Unknown for explicit unknown and IP-like device-name inputs.",
+          "Device registry and inventory presentation use one shared fail-closed device-name label.",
+          "Added targeted persistence, masking, and frontend regression tests."
+        ],
+        "completed": [
+          "Restored discovery-candidate resolution for cluster members while preserving parentless-candidate preference.",
+          "Removed management-address substitution from the hostname projection.",
+          "Made the pseudonymizer refuse IP-like device names before cache and free-text replacement registration.",
+          "Rendered genuinely missing device names explicitly as Unknown.",
+          "Opened pull request 434 against main without merging it."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Unchanged.",
+          "ui": "Missing device names now render as Unknown instead of a management address or opaque device id."
+        },
+        "integration": {
+          "branch": "feature/cluster-member-display-and-masking-honesty",
+          "ci": "Not inspected; orchestrator verification pending.",
+          "head_sha": "260e2c0326a75c7b1447b146d0ea270865fdcf5e",
+          "merge_commit": null,
+          "merge_decision": "Do not merge in the worker; merge-mode orchestrator owns verification and merge.",
+          "merge_state": "OPEN",
+          "pr": 434,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/434"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0349 orchestrator verification",
+          "movement_type": "VALIDATION",
+          "objective": "Verify PR 434, repeat count-only live-schema join and Palo Alto preference checks, then merge only if orchestrator gates pass.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "Parentless candidates still win when several candidates match, preserving the Palo Alto selection intent.",
+          "Real device-name pseudonymization remains deterministic and relationship preserving.",
+          "Masking remains limited to replay-viewer responses; database and worker values remain raw.",
+          "Discovery collection, enrollment confirm, and configuration design language were not changed.",
+          "No deployment, device, or production-data mutation was performed."
+        ],
+        "recommended_reasoning": {
+          "reason": "Implementation and automated regression are complete; only bounded PR and live-schema verification remain.",
+          "tier": "Focused validation"
+        },
+        "state_updates": [
+          "No project-state files changed because the worker scope named only implementation and targeted test paths.",
+          "The canonical relay is closed by this SESSION_CLOSE."
+        ],
+        "unresolved_risks": [
+          "The live-schema 107-of-107 count and Palo Alto parentless-candidate preference require orchestrator remeasurement.",
+          "The separate cluster_membership_lost_at_enrollment defect remains deliberately out of scope and must be remeasured after merge.",
+          "The dispatch validation commands named root-level Gradle and npm entry points, but the checked-in entry points are ui2/gradlew and ui2/frontend/package.json; corrected commands were used."
+        ],
+        "validation": {
+          "affected": "PASS: persistence and service module suites plus frontend tests covering the affected device registry and inventory paths.",
+          "diff_check": "PASS: git diff --check origin/main; final worktree clean.",
+          "full_regression": "PASS: :persistence:test, :service:test, and all 16 frontend test files with 119 tests. Existing non-failing React act/mock-fetch warnings remain.",
+          "privacy": "PASS: repository privacy gate scanned 1967 files and reported 0 findings.",
+          "real_environment": "UNVERIFIED: HOST-A was not resolvable from this worker environment, so the 107-of-107 join count and Palo Alto live preference remeasurement remain for orchestrator validation.",
+          "state_consistency": "PASS: current origin/main rebase was conflict-free; no project-state update was authorized or required for this bounded implementation lane.",
+          "targeted": "PASS: JooqDeviceRepositoryTest, TopologyNamePseudonymizerTest, PrivacyMaskingResponseBodyAdviceTest, AdministrationScreen.test.tsx, and InventoryScreen.test.tsx."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-20T20:58:23Z"
     }
   ],
   "id": "NXS-LOCAL-0349",
   "movement": "NXS-LOCAL-0349",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "AGENTS.md",
     "docs/history/backlog/discovery_lateral_join_drops_cluster_members.md",
@@ -124,6 +197,6 @@
     "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/privacy/TopologyNamePseudonymizer.java"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-20T20:48:57Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-20T20:58:23Z"
 }
