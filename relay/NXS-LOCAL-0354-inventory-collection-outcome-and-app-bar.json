@@ -97,11 +97,70 @@
       },
       "seq": 1,
       "timestamp": "2026-09-20T22:37:29Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "Inventory rows show Collection completed, Collection attempt failed with the safe Connection failed class, or Not yet collected.",
+          "Failed N of total filters FAILED latest-job rows; Draft filtering remains unchanged.",
+          "Added focused inventory and app bar assertions."
+        ],
+        "completed": [
+          "Committed UI-only inventory outcome presentation and removal of the non-functional app bar search affordance."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "Inventory outcome rows and failure filtering added; non-interactive app bar search removed."
+        },
+        "integration": {
+          "branch": "feature/inventory-collection-outcome-and-app-bar-search",
+          "ci": "NOT_STARTED: required frontend test command could not start.",
+          "head_sha": "f3f83dc",
+          "merge_commit": null,
+          "merge_decision": "No PR opened because the dispatch requires green validation; orchestrator mode prohibits worker merge.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0354",
+          "movement_type": "VALIDATION",
+          "objective": "Provide the existing frontend test dependency, run the required frontend suite, then open the PR; do not merge in orchestrator mode.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No collection, retry, vendor, polling, discovery, Draft predicate, or inventory-panel-search behavior changed.",
+          "No raw transport detail, port, or address was added."
+        ],
+        "recommended_reasoning": {
+          "reason": "Only the already-written frontend assertions need execution; no further design or implementation work is indicated.",
+          "tier": "Lightest validation tier"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Frontend assertions remain unexecuted until the existing frontend dependencies are available."
+        ],
+        "validation": {
+          "affected": "UNVERIFIED: frontend suite could not start because vitest was not found in this worktree.",
+          "diff_check": "PASS: git diff --check origin/main before commit.",
+          "full_regression": "NOT_RUN: not required by dispatch.",
+          "privacy": "PASS: python3 main.py --repository-privacy-check reported zero findings.",
+          "real_environment": "NOT_RUN: local validation only.",
+          "state_consistency": "NOT_APPLICABLE: no durable project-state file was in scope.",
+          "targeted": "UNVERIFIED: npm --prefix ui2/frontend test could not start because vitest was not found in this worktree."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-20T22:43:28Z"
     }
   ],
   "id": "NXS-LOCAL-0354",
   "movement": "NXS-LOCAL-0354",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "AGENTS.md",
     "docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md",
@@ -111,6 +170,6 @@
     "ui2/frontend/src/shell/TopAppBar.tsx"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-20T22:37:29Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-20T22:43:28Z"
 }

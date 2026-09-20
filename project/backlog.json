@@ -657,6 +657,33 @@
       "priority": "P1",
       "target": "ui2/frontend/src/shell/TopAppBar.tsx",
       "note": ""
+    },
+    {
+      "id": "regression_mapping_backend_trees_unmapped",
+      "category": "ci",
+      "title": "The regression mapping still leaves the backend trees unnamed: worker, job-engine and capability-registry paths block, so each will cost a round the first time it is touched",
+      "status": "planned",
+      "priority": "P2",
+      "target": "scripts/ci_regression_scope.py; follow-on to the frontend coverage closed by NXS-LOCAL-0355",
+      "note": ""
+    },
+    {
+      "id": "pan_tls_trust_rejects_corporate_ca",
+      "category": "discovery",
+      "title": "Palo Alto discovery cannot reach a Panorama fronted by a corporate CA certificate: without a pinned fingerprint the transport accepts only certificates carrying O=Palo Alto Networks",
+      "status": "in_progress",
+      "priority": "P0",
+      "target": "PanXmlApiTransport certificate verification; EnvironmentPanTrustRuleResolver",
+      "note": ""
+    },
+    {
+      "id": "discovery_failure_summary_stores_certificate_subject",
+      "category": "privacy",
+      "title": "A failed Palo Alto discovery stores the presented certificate's full subject distinguished name in the run's outcome summary, putting a real hostname and organisation into a durable record and onto the screen",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PanXmlApiTransport certificate exception message; discovery_run.outcome_summary",
+      "note": ""
     }
   ]
 }

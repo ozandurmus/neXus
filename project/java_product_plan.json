@@ -121,7 +121,10 @@
     "ui2_inventory_and_configuration_design_language": "java_feature",
     "cp_vsx_config_collected_without_vs_context": "java_debt",
     "inventory_row_does_not_say_why_a_device_is_unconfirmed": "java_debt",
-    "top_app_bar_search_is_not_an_input": "java_debt"
+    "top_app_bar_search_is_not_an_input": "java_debt",
+    "regression_mapping_backend_trees_unmapped": "agent_operations",
+    "pan_tls_trust_rejects_corporate_ca": "java_debt",
+    "discovery_failure_summary_stores_certificate_subject": "java_debt"
   },
   "converted_lessons": [
     {
