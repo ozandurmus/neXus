@@ -327,7 +327,12 @@ public final class InventoryController {
                 String digitsOnlyCtx = ctx.replaceAll("\\D+", "");
                 if (lowerVs.contains("(" + lowerCtx + ")")
                         || lowerVs.contains("(vsid " + lowerCtx + ")")
-                        || (!digitsOnlyCtx.isEmpty() && (lowerVs.contains("(vsid " + digitsOnlyCtx + ")") || lowerVs.contains("(" + digitsOnlyCtx + ")")))) {
+                        || lowerVs.contains("(vsys " + lowerCtx + ")")
+                        || lowerVs.contains("(vsys" + lowerCtx + ")")
+                        || (!digitsOnlyCtx.isEmpty() && (lowerVs.contains("(vsid " + digitsOnlyCtx + ")")
+                                || lowerVs.contains("(vsys" + digitsOnlyCtx + ")")
+                                || lowerVs.contains("(vsys " + digitsOnlyCtx + ")")
+                                || lowerVs.contains("(" + digitsOnlyCtx + ")")))) {
                     result.put(ctx, vs);
                     break;
                 }

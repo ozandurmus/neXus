@@ -74,8 +74,11 @@ public final class PaloAltoInterfaceParser {
                 byVsys.computeIfAbsent(vsys, key -> new ArrayList<>())
                         .add(new ParsedInterface(name, parent, kind, state, addresses, vlanId));
                 interfaceNameToVsys.put(name, vsys);
-                firstMatch(FWD, entryBody).filter(v -> !v.isBlank())
-                        .map(PaloAltoInterfaceParser::stripVrPrefix)
+                firstMatch(FWD, entryBody)
+                        .map(String::trim)
+                        .filter(v -> !v.isBlank() && v.startsWith(VR_PREFIX))
+                        .map(v -> v.substring(VR_PREFIX.length()).trim())
+                        .filter(vr -> !vr.isBlank() && !"N/A".equalsIgnoreCase(vr))
                         .ifPresent(vr -> interfaceNameToVirtualRouter.put(name, vr));
             }
 

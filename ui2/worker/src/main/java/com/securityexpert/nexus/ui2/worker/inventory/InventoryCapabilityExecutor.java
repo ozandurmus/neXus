@@ -362,15 +362,25 @@ public final class InventoryCapabilityExecutor {
             }
         });
 
-        List<String> vsysIds = new ArrayList<>(parsedInterfaces.interfacesByVsys().keySet());
+        List<ParsedInterface> physicalInterfaces = new ArrayList<>(parsedInterfaces.physicalPorts());
+        if (parsedInterfaces.interfacesByVsys().containsKey("0")) {
+            physicalInterfaces.addAll(parsedInterfaces.interfacesByVsys().get("0"));
+        }
+
+        List<String> vsysIds = new ArrayList<>();
+        for (String vsys : parsedInterfaces.interfacesByVsys().keySet()) {
+            if (isValidPanVsys(vsys) && !vsysIds.contains(vsys)) {
+                vsysIds.add(vsys);
+            }
+        }
         for (String vsys : routesByContext.keySet()) {
-            if (!InventoryContext.PHYSICAL.equals(vsys) && !vsysIds.contains(vsys)) {
+            if (isValidPanVsys(vsys) && !vsysIds.contains(vsys)) {
                 vsysIds.add(vsys);
             }
         }
 
         List<InventoryContext> contexts = new ArrayList<>();
-        contexts.add(new InventoryContext(InventoryContext.PHYSICAL, toInventoryInterfaces(parsedInterfaces.physicalPorts()),
+        contexts.add(new InventoryContext(InventoryContext.PHYSICAL, toInventoryInterfaces(physicalInterfaces),
                 toInventoryRoutes(routesByContext.getOrDefault(InventoryContext.PHYSICAL, List.of()))));
         for (String vsys : vsysIds) {
             contexts.add(new InventoryContext(vsys,
@@ -402,14 +412,32 @@ public final class InventoryCapabilityExecutor {
 
         List<String> panVsNames = new ArrayList<>();
         for (String vsys : vsysIds) {
+            String vsysLabel = vsys.toLowerCase().startsWith("vsys") ? vsys.toLowerCase() : "vsys" + vsys;
             java.util.Set<String> vrs = vsysToVirtualRouters.getOrDefault(vsys, java.util.Set.of());
             String vrDisplay = String.join(", ", vrs);
-            String displayName = vrDisplay.isEmpty() ? vsys : vrDisplay + " (" + vsys + ")";
+            String displayName = vrDisplay.isEmpty() ? vsysLabel : vrDisplay + " (" + vsysLabel + ")";
             panVsNames.add(displayName);
         }
         String virtualSystemsString = panVsNames.isEmpty() ? null : String.join(", ", panVsNames);
 
         return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString));
+    }
+
+    private static boolean isValidPanVsys(String vsys) {
+        if (vsys == null || vsys.isBlank()) {
+            return false;
+        }
+        if (InventoryContext.PHYSICAL.equalsIgnoreCase(vsys)
+                || "0".equals(vsys)
+                || "ha".equalsIgnoreCase(vsys)
+                || "N/A".equalsIgnoreCase(vsys)) {
+            return false;
+        }
+        try {
+            return Integer.parseInt(vsys) > 0;
+        } catch (NumberFormatException e) {
+            return vsys.toLowerCase().startsWith("vsys");
+        }
     }
 
     private static List<ParsedInterface> mergeVirtualAddresses(List<ParsedInterface> interfaces,

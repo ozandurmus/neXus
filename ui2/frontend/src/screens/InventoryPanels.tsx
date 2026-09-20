@@ -754,12 +754,28 @@ export function buildUnifiedContextTabs<T extends { context: string; vs_name?: s
     });
   }
 
-  const unmappedVsList = virtualSystems.filter((vs) => {
-    return !sortedVirtualContexts.some(
-      (c) =>
-        (c.vs_name && c.vs_name.toLowerCase() === vs.toLowerCase()) ||
-        c.context.toLowerCase() === vs.toLowerCase()
+  const matchesContext = (vs: string, c: T): boolean => {
+    const lowerVs = vs.toLowerCase();
+    const lowerCtx = c.context.toLowerCase();
+    const digits = c.context.replace(/\D+/g, "");
+    return (
+      (c.vs_name != null && c.vs_name.toLowerCase() === lowerVs) ||
+      lowerCtx === lowerVs ||
+      lowerVs === `vsys${lowerCtx}` ||
+      lowerVs.includes(`(${lowerCtx})`) ||
+      lowerVs.includes(`(vsid ${lowerCtx})`) ||
+      lowerVs.includes(`(vsys ${lowerCtx})`) ||
+      lowerVs.includes(`(vsys${lowerCtx})`) ||
+      (digits.length > 0 &&
+        (lowerVs.includes(`(vsid ${digits})`) ||
+          lowerVs.includes(`(vsys${digits})`) ||
+          lowerVs.includes(`(vsys ${digits})`) ||
+          lowerVs.includes(`(${digits})`)))
     );
+  };
+
+  const unmappedVsList = virtualSystems.filter((vs) => {
+    return !sortedVirtualContexts.some((c) => matchesContext(vs, c));
   });
 
   let nextUnmappedVsIdx = 0;
@@ -769,9 +785,7 @@ export function buildUnifiedContextTabs<T extends { context: string; vs_name?: s
     if (c.vs_name && c.vs_name.trim()) {
       resolvedVs = c.vs_name.trim();
     } else {
-      const directMatch = virtualSystems.find(
-        (vs) => vs.toLowerCase() === c.context.toLowerCase()
-      );
+      const directMatch = virtualSystems.find((vs) => matchesContext(vs, c));
       if (directMatch) {
         resolvedVs = directMatch;
       } else if (!isNaN(parseInt(c.context, 10)) && nextUnmappedVsIdx < unmappedVsList.length) {
