@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-09-20T20:48:23Z",
+  "created_at": "2026-09-20T20:48:57Z",
   "entries": [
     {
       "actor": "po",
@@ -27,7 +27,7 @@
         "deployment_direction": "local validation only",
         "git": {
           "base": "origin/main",
-          "lane": "fix/cluster-member-display-and-masking-honesty"
+          "lane": "feature/cluster-member-display-and-masking-honesty"
         },
         "invariants": [
           "Absence of evidence is not evidence of absence: an unrecorded name is UNKNOWN, never a substituted address and never an invented one",
@@ -110,7 +110,7 @@
         ]
       },
       "seq": 1,
-      "timestamp": "2026-09-20T20:48:23Z"
+      "timestamp": "2026-09-20T20:48:57Z"
     }
   ],
   "id": "NXS-LOCAL-0349",
@@ -125,5 +125,5 @@
   ],
   "schema_version": 1,
   "status": "OPEN",
-  "updated_at": "2026-09-20T20:48:23Z"
+  "updated_at": "2026-09-20T20:48:57Z"
 }
