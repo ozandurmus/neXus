@@ -1,0 +1,116 @@
+{
+  "created_at": "2026-09-20T22:37:29Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "With the current data, the list distinguishes the 60 devices whose last job completed from the 47 whose last job failed",
+          "A failed row states that the collection attempt failed and shows the recorded reason class",
+          "A device with no job at all reads as not yet collected, not as failed",
+          "Filtering by the new chip yields exactly the devices whose last job failed, and clearing it restores the full list",
+          "The Draft chip still filters to DRAFT devices exactly as it does today, proven by a test",
+          "The top app bar search either accepts input and filters, or is gone; a test asserts that no non-interactive element in the app bar carries placeholder-like search text",
+          "No raw port, transport detail or address appears in any string this movement adds to the list",
+          "Frontend tests pass, and the repository privacy gate reports zero findings"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md (FROZEN, 2026-09-20). Freshness and collection outcome are stated fields rather than implied ones, and a control must not advertise a capability the product does not have.",
+          "engineering": "main at 58b5e84. The inventory screen now resolves a name, model and cluster reference for all 107 devices.",
+          "observed": "Measured on the live deployment on 2026-09-20 after the device display fix landed. Of 107 enrolled devices, 60 have a last job in COMPLETED and 47 in FAILED, and every one of those 47 failed on connect_failed; 47 is also exactly the DRAFT count. The device detail states the reason plainly, down to the port and the elapsed timeout. The list row does not: it shows 'Registered, not confirmed' beside a warning triangle, so distinguishing a device the product can reach from one it cannot means opening each device in turn. Separately, the top app bar's search is not a search: TopAppBar.tsx renders a Box containing the literal text 'Search devices, settings, evidence' beside a search icon, with a pill radius and a surface colour that make it read as a field. There is no input element, no state and no handler. The inventory panel's own search is real and binds to searchTerm across hostname, device id, model, software version, cluster reference, management address and interface addresses, which is what makes the decorative one easy to mistake for working. The Draft filter chip is NOT defective: it is wired and its predicate is correct, and clicking it on the live deployment filters to the 47 unconfirmed devices. An earlier claim that it did nothing was withdrawn as a false finding; do not 'fix' it."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond the two backlog notes in refs",
+          "The backup and failover planes"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/inventory-collection-outcome-and-app-bar-search"
+        },
+        "invariants": [
+          "Collection failure is not a known-bad state: a device the product could not reach is unreached, not unhealthy, and the wording must not upgrade one into the other",
+          "Absence of evidence is not evidence of absence: never collected and failed to collect are different readings",
+          "A recorded job outcome is evidence; a reachability claim not backed by a recorded attempt is not, and none may be invented",
+          "Presentation identity is never a join key"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "UI",
+        "objective": "Let an operator see from the inventory list which devices the product could not reach and why, and stop the top app bar presenting a search it cannot perform.",
+        "output_contract": [
+          "An inventory list that distinguishes reached, unreached and never collected",
+          "A filter for devices whose last collection attempt failed",
+          "A top app bar that either searches or does not pretend to",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "A bounded presentation change against a frozen design contract, with the data already measured and the states named. No new vendor semantics and no collection behaviour.",
+          "tier": "Main engineer"
+        },
+        "requirements": [
+          "The row states the last collection outcome using the reason already recorded on the job, never a reason derived, guessed or reworded into a claim the record does not make",
+          "A device whose last job failed is visibly distinguishable from one that has never been collected, and both from one that succeeded: three different states, three different readings",
+          "No device is hidden or filtered away by default because of its outcome",
+          "The reason shown is a safe class, not a raw transport string: no host, port-level detail, credential or address is introduced into the list row",
+          "The top app bar either performs a search or does not look like one; a styled box that ignores every keystroke is not an acceptable outcome",
+          "If the top bar is wired rather than removed, typing in it drives the same inventory filtering the panel search already performs, and the two do not hold separate contradictory states"
+        ],
+        "risks": [
+          "The terminal reason is a transport string and may carry detail that does not belong in a list row. Map it to a safe class rather than printing it; the detail pane already carries the full text for whoever needs it.",
+          "The design language forbids a coverage figure without a denominator, so a count of failures is stated against the total rather than as a bare number or a percentage.",
+          "Three states must stay distinguishable after the change: succeeded, failed, never collected. Collapsing the last two is the easy mistake here."
+        ],
+        "scope": {
+          "in": [
+            "The inventory list row: surface the last job's outcome and its recorded reason class",
+            "A filter chip for devices whose last collection attempt failed",
+            "The top app bar search element: wire it to the inventory search, or remove it"
+          ],
+          "out": [
+            "The Draft filter chip and its predicate, which work and must not be touched",
+            "The inventory panel's own search, which works",
+            "Discovery collection, vendor methods and polling behaviour",
+            "Retrying or changing any collection; this movement reports an outcome already recorded, it does not contact a device",
+            "Inventing a reachability probe of any kind"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-20T22:37:29Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0354",
+  "movement": "NXS-LOCAL-0354",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md",
+    "docs/history/backlog/inventory_row_does_not_say_why_a_device_is_unconfirmed.md",
+    "docs/history/backlog/top_app_bar_search_is_not_an_input.md",
+    "ui2/frontend/src/screens/InventoryScreen.tsx",
+    "ui2/frontend/src/shell/TopAppBar.tsx"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-20T22:37:29Z"
+}

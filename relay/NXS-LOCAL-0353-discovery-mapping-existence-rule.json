@@ -98,11 +98,73 @@
       },
       "seq": 1,
       "timestamp": "2026-09-20T22:07:00Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Replaced the nonexistent discovery prefix with the supplied measured prefixes.",
+          "Separated privacy from inventory and added a privacy-targeted workflow selection.",
+          "Added every-component prefix existence coverage by walking the ui2 working tree."
+        ],
+        "completed": [
+          "Opened pull request 436 against main; merge remains orchestrator-owned.",
+          "Mapped discovery, inventory, and privacy through closed targeted selections."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED"
+        },
+        "integration": {
+          "branch": "feature/discovery-mapping-existence-rule",
+          "ci": "pending orchestrator verification",
+          "head_sha": "545c5dba5e72322fb3c30ca735caec712da43f4d",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode; no engineer merge command was executed.",
+          "merge_state": "OPEN",
+          "pr": 436,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/436"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0353",
+          "movement_type": "VALIDATION",
+          "objective": "Orchestrator verification and merge-mode processing for pull request 436.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "Unmapped and empty scopes remain blocked; documentation-only scopes remain skipped.",
+          "No full-suite fallback was added.",
+          "Discovery, inventory, and privacy classify independently, with multi-component scopes returning their union."
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work is orchestrator verification of a bounded routing change.",
+          "tier": "Low"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The local upstream-tracking configuration could not be written because the shared git config was not writable; the pushed remote branch was verified with git ls-remote.",
+          "CI is the remaining execution authority for the frontend Inventory path and Gradle test patterns."
+        ],
+        "validation": {
+          "affected": "PASS: routing, workflow-selection, prefix-existence, and PR 434 non-blocking cases are covered by the targeted test command.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "NOT RUN: not required by the approved validation plan.",
+          "privacy": "PASS: python3 main.py --repository-privacy-check.",
+          "real_environment": "NOT APPLICABLE: local CI routing change only.",
+          "state_consistency": "NOT RUN: no durable project-state authority changed.",
+          "targeted": "PASS: python3 -m pytest -q tests/test_ci_regression_scope.py tests/test_ci_workflow_fast_pr_regression.py (21 passed)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-20T22:14:29Z"
     }
   ],
   "id": "NXS-LOCAL-0353",
   "movement": "NXS-LOCAL-0353",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md",
     "scripts/ci_regression_scope.py",
@@ -110,6 +172,6 @@
     "relay/NXS-LOCAL-0352-discovery-mapping-measured-not-guessed.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-20T22:07:00Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-20T22:14:29Z"
 }
