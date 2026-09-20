@@ -100,11 +100,76 @@
       },
       "seq": 1,
       "timestamp": "2026-09-20T21:26:04Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Separated discovery and inventory classifier components.",
+          "Narrowed persistence and service inventory paths.",
+          "Added conditional component selections to the existing targeted workflow job.",
+          "Pinned component, PR 434, fail-closed, and union routing tests."
+        ],
+        "completed": [
+          "Implemented and pushed commit 7a74a3a.",
+          "Opened PR 435 against main."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No main.py source change; repository privacy gate was run.",
+          "ui": "No product UI behavior changed."
+        },
+        "integration": {
+          "branch": "feature/regression-mapping-discovery-and-inventory",
+          "ci": "Local scope tests and privacy gate passed; GitHub checks await orchestrator verification.",
+          "head_sha": "7a74a3a",
+          "merge_commit": "NONE",
+          "merge_decision": "ORCHESTRATOR",
+          "merge_state": "OPEN",
+          "pr": 435,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/435"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0351",
+          "movement_type": "VALIDATION",
+          "objective": "Orchestrator verifies PR 435 checks and owns merge.",
+          "status": "planned"
+        },
+        "preserved": [
+          "LDAP delivery selection remains available.",
+          "Documentation-only paths skip, major paths select full, and empty paths block.",
+          "Discovery and inventory selections remain disjoint.",
+          "Unmapped paths remain visibly blocked and no fallback full suite was added."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded PR check verification only.",
+          "tier": "Low"
+        },
+        "state_updates": [
+          "Not required for this bounded CI classifier, workflow selection, and test change."
+        ],
+        "unresolved_risks": [
+          "GitHub-hosted component commands await orchestrator CI verification; local scope and privacy validation passed."
+        ],
+        "validation": {
+          "affected": "PASS: classifier and workflow scope tests (20 passed).",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "NOT_RUN: forbidden as an automatic fallback and out of scope.",
+          "privacy": "PASS: repository privacy gate found 0 findings.",
+          "real_environment": "NOT_APPLICABLE: CI routing-only change.",
+          "state_consistency": "NOT_APPLICABLE: no durable project-state update required.",
+          "targeted": "PASS: changed-path selection is ldap."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-20T21:36:30Z"
     }
   ],
   "id": "NXS-LOCAL-0351",
   "movement": "NXS-LOCAL-0351",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "AGENTS.md",
     "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md",
@@ -114,6 +179,6 @@
     "tests/test_ci_regression_scope.py"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-20T21:26:04Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-20T21:36:30Z"
 }
