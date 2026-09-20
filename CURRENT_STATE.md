@@ -24,6 +24,7 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0340` — `real_env_validated`: Check Point Single-Session SSH Command Batching (2.4s execution), Vendor Virtual Systems Formatting (`VR_NAME (vsys id)` & `vs-name (VSID vsid)`), and Live Multi-Context Deployment.
 `NXS-LOCAL-0339` — `real_env_validated`: Palo Alto Direct Device Enrollment & Live Inventory Collection (`pan_xml_api`), TLS Device Trust Hardening, and Multi-VSYS Interface/Routing Attribution under `aiview`.
 `NXS-LOCAL-0338` — `real_env_validated`: Independent Compliance Microservice (`ui2-compliance`), Standards Evaluation Engine (CIS Benchmark, PCI-DSS v4.0.1, NIST SP 800-53, Financial Baseline), `DATA_UNAVAILABLE` Safe Gaps, and Full M3 UI Integration.
 `NXS-LOCAL-0337` — `real_env_validated`: Check Point Configuration Microservice (`ui2-configuration`), 1:1 Python Port, and Live Verification under `aiview`.
