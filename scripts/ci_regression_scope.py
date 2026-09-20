@@ -47,6 +47,10 @@ PRIVACY_PREFIXES = (
     "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/privacy/",
     "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/privacy/",
 )
+SHELL_PREFIXES = (
+    "ui2/frontend/src/",
+    "ui2/frontend/tests/",
+)
 DELIVERY_FILES = {
     ".github/workflows/validation.yml",
     "AI_HANDOVER.md",
@@ -62,6 +66,19 @@ DELIVERY_FILES = {
     "tests/test_nexus_engineer_tool_gate.py",
 }
 MAJOR_PREFIXES = ("ui2/build.gradle.kts", "ui2/settings.gradle.kts", "gradle/", "requirements")
+COMPONENT_PREFIXES = (
+    ("discovery", DISCOVERY_PREFIXES),
+    ("inventory", INVENTORY_PREFIXES),
+    ("privacy", PRIVACY_PREFIXES),
+    ("shell", SHELL_PREFIXES),
+)
+
+
+def component_for_path(path: str) -> str | None:
+    for name, prefixes in COMPONENT_PREFIXES:
+        if path.startswith(prefixes):
+            return name
+    return None
 
 
 def classify(paths: list[str]) -> str:
@@ -77,16 +94,11 @@ def classify(paths: list[str]) -> str:
     )
     if ldap:
         return "ldap"
-    components = {
-        name for name, prefixes in (
-            ("discovery", DISCOVERY_PREFIXES),
-            ("inventory", INVENTORY_PREFIXES),
-            ("privacy", PRIVACY_PREFIXES),
-        )
-        if any(path.startswith(prefixes) for path in paths)
-    }
-    component_prefixes = DISCOVERY_PREFIXES + INVENTORY_PREFIXES + PRIVACY_PREFIXES
-    if components and all(path in DELIVERY_FILES or path.startswith(component_prefixes) for path in paths):
+    components = {component for path in paths if (component := component_for_path(path))}
+    if components and all(
+        path in DELIVERY_FILES or component_for_path(path)
+        for path in paths
+    ):
         return "+".join(sorted(components))
     return "blocked"
 

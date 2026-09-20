@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scripts.ci_regression_scope import DISCOVERY_PREFIXES, INVENTORY_PREFIXES, LDAP_PREFIXES, PRIVACY_PREFIXES, classify
+from scripts.ci_regression_scope import DISCOVERY_PREFIXES, INVENTORY_PREFIXES, LDAP_PREFIXES, PRIVACY_PREFIXES, SHELL_PREFIXES, classify
 
 
 def test_approved_ldap_delivery_is_targeted():
@@ -27,7 +27,7 @@ def test_delivery_files_still_select_ldap_regression():
 def test_every_component_prefix_matches_the_working_tree():
     root = Path(__file__).resolve().parent.parent
     paths = {path.relative_to(root).as_posix() for path in root.glob("ui2/**/*")}
-    for prefix in (*LDAP_PREFIXES, *DISCOVERY_PREFIXES, *INVENTORY_PREFIXES, *PRIVACY_PREFIXES):
+    for prefix in (*LDAP_PREFIXES, *DISCOVERY_PREFIXES, *INVENTORY_PREFIXES, *PRIVACY_PREFIXES, *SHELL_PREFIXES):
         assert any(path.startswith(prefix) for path in paths), prefix
 
 
@@ -54,6 +54,28 @@ def test_pr_434_paths_do_not_block():
         "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/privacy/PrivacyMaskingResponseBodyAdviceTest.java",
         "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/privacy/TopologyNamePseudonymizerTest.java",
     ]) == "inventory+privacy"
+
+
+def test_frontend_shell_paths_do_not_block():
+    assert classify([
+        "ui2/frontend/src/shell/TopAppBar.tsx",
+        "ui2/frontend/tests/App.test.tsx",
+    ]) == "shell"
+    assert classify([
+        "ui2/frontend/src/screens/InventoryScreen.tsx",
+        "ui2/frontend/src/shell/TopAppBar.tsx",
+    ]) == "inventory+shell"
+
+
+def test_every_frontend_source_and_test_path_is_mapped_once():
+    root = Path(__file__).resolve().parent.parent
+    paths = [path.relative_to(root).as_posix() for path in root.glob("ui2/frontend/src/**/*") if path.is_file()]
+    paths += [path.relative_to(root).as_posix() for path in root.glob("ui2/frontend/tests/**/*") if path.is_file()]
+    for path in paths:
+        classification = classify([path])
+        assert classification != "blocked", path
+        assert "+" not in classification, path
+    assert classify(["ui2/frontend/src/new/OrdinaryPanel.tsx"]) == "shell"
 
 
 def test_unmapped_persistence_path_is_blocked():

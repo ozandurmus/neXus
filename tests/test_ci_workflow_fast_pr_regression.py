@@ -136,6 +136,8 @@ def test_component_selections_are_explicit_and_separate():
     assert "*Inventory*" in targeted_block
     assert "contains(needs.regression-scope.outputs.classification, 'privacy')" in targeted_block
     assert "*TopologyNamePseudonymizerTest" in targeted_block
+    assert "contains(needs.regression-scope.outputs.classification, 'shell')" in targeted_block
+    assert "npm --prefix ui2/frontend test -- tests/App.test.tsx" in targeted_block
 
 
 def test_full_regression_runs_for_major_prs_and_manual_dispatch():
