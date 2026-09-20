@@ -87,6 +87,35 @@ describe("InventoryScreen device list", () => {
     expect(screen.getByText("1 device enrolled")).toBeInTheDocument();
   });
 
+  it("distinguishes completed, failed, and never-collected devices and filters only failures", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, {
+      devices: [
+        { device_id: "done", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "done-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "COMPLETED" },
+        { device_id: "failed", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "failed-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "FAILED", latest_job_terminal_reason: "connect_failed" },
+        { device_id: "new", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "new-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
+      ],
+    })));
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("Collection completed")).toBeInTheDocument());
+    expect(screen.getByText("Collection attempt failed · Connection failed")).toBeInTheDocument();
+    expect(screen.getByText("Not yet collected")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Failed 1 of 3" }));
+    expect(screen.getByText("failed-device")).toBeInTheDocument();
+    expect(screen.queryByText("done-device")).toBeNull();
+    expect(screen.queryByText("new-device")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "All 3" }));
+    expect(screen.getByText("done-device")).toBeInTheDocument();
+    expect(screen.getByText("new-device")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Draft 2" }));
+    expect(screen.getByText("failed-device")).toBeInTheDocument();
+    expect(screen.getByText("new-device")).toBeInTheDocument();
+    expect(screen.queryByText("done-device")).toBeNull();
+  });
+
   it("groups devices sharing a cluster_member_ref under one parent grouping", async () => {
     vi.stubGlobal(
       "fetch",
@@ -377,4 +406,3 @@ describe("deriveClusterTitle", () => {
     expect(deriveClusterTitle("024409002545|024409002564", members)).toBe("024409002545|024409002564");
   });
 });
-

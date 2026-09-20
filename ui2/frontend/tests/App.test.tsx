@@ -26,6 +26,11 @@ const PREVIEW_MARKERS: Record<string, string> = {
 };
 
 describe("the UI 2.0 shell navigation", () => {
+  it("does not present non-interactive search text in the app bar", () => {
+    render(<App />);
+    expect(screen.queryByText(/Search devices, settings, evidence/)).toBeNull();
+  });
+
   it("renders every collapsed rail destination from the design canvas, in order", () => {
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });

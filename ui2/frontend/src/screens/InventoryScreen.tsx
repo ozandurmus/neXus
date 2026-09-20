@@ -47,6 +47,23 @@ function vendorLabel(vendorHint: string): string {
   return VENDOR_LABEL[vendorHint] ?? vendorHint;
 }
 
+function collectionOutcome(device: DeviceSummary): string {
+  const state = device.latest_job_state?.toUpperCase();
+  if (!state) return "Not yet collected";
+  if (state === "FAILED") {
+    const reasonClass = device.latest_job_terminal_reason?.trim().toLowerCase() === "connect_failed"
+      ? "Connection failed"
+      : "Recorded failure";
+    return `Collection attempt failed · ${reasonClass}`;
+  }
+  if (state === "COMPLETED" || state === "SUCCEEDED") return "Collection completed";
+  return "Collection in progress";
+}
+
+function hasFailedCollection(device: DeviceSummary): boolean {
+  return device.latest_job_state?.toUpperCase() === "FAILED";
+}
+
 function DeviceRow({
   device,
   indented = false,
@@ -126,6 +143,9 @@ function DeviceRow({
           </Box>
         </Box>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          <Typography variant="caption" color="text.secondary">
+            {collectionOutcome(device)}
+          </Typography>
           <Typography
             variant="caption"
             sx={{
@@ -587,7 +607,7 @@ export function InventoryScreen() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterMode, setFilterMode] = useState<"all" | "cluster" | "check_point" | "palo_alto" | "stale" | "draft">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "cluster" | "check_point" | "palo_alto" | "stale" | "draft" | "failed">("all");
 
   const devices = data;
   const total = devices?.length ?? 0;
@@ -596,6 +616,7 @@ export function InventoryScreen() {
   const paloAltoCount = devices?.filter((d) => d.vendor_hint === "palo_alto").length ?? 0;
   const draftCount = devices?.filter((d) => d.enrollment_state === "DRAFT").length ?? 0;
   const staleCount = devices?.filter((d) => d.enrollment_state === "DEGRADED" || d.enrollment_state === "UNREACHABLE").length ?? 0;
+  const failedCount = devices?.filter(hasFailedCollection).length ?? 0;
 
   // Auto-refresh when jobs are executing or queued
   useEffect(() => {
@@ -632,6 +653,7 @@ export function InventoryScreen() {
     if (filterMode === "check_point" && device.vendor_hint !== "check_point") return false;
     if (filterMode === "palo_alto" && device.vendor_hint !== "palo_alto") return false;
     if (filterMode === "draft" && device.enrollment_state !== "DRAFT") return false;
+    if (filterMode === "failed" && !hasFailedCollection(device)) return false;
     if (filterMode === "stale" && device.enrollment_state !== "DEGRADED" && device.enrollment_state !== "UNREACHABLE") return false;
 
     if (!searchTerm.trim()) return true;
@@ -809,6 +831,20 @@ export function InventoryScreen() {
                     bgcolor: filterMode === "draft" ? m3.primary : m3.scHigh,
                     color: filterMode === "draft" ? m3.onPrimary : m3.onSurface,
                     fontWeight: filterMode === "draft" ? 600 : 400,
+                    borderRadius: "8px",
+                  }}
+                />
+              )}
+              {failedCount > 0 && (
+                <Chip
+                  size="small"
+                  clickable
+                  onClick={() => setFilterMode("failed")}
+                  label={`Failed ${failedCount} of ${total}`}
+                  sx={{
+                    bgcolor: filterMode === "failed" ? m3.primary : m3.scHigh,
+                    color: filterMode === "failed" ? m3.onPrimary : m3.onSurface,
+                    fontWeight: filterMode === "failed" ? 600 : 400,
                     borderRadius: "8px",
                   }}
                 />
