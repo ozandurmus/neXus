@@ -91,7 +91,7 @@ jobs:
 
   targeted-regression:
     needs: regression-scope
-    if: always() && github.event_name == 'pull_request' && needs.regression-scope.outputs.classification == 'targeted'
+    if: always() && github.event_name == 'pull_request' && (needs.regression-scope.outputs.classification == 'ldap' || contains(needs.regression-scope.outputs.classification, 'discovery') || contains(needs.regression-scope.outputs.classification, 'inventory') || contains(needs.regression-scope.outputs.classification, 'privacy'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -119,12 +119,27 @@ jobs:
         with:
           node-version: '22'
       - name: Approved LDAP targeted regression
+        if: needs.regression-scope.outputs.classification == 'ldap'
         run: |
           npm --prefix ui2/frontend ci
           npm --prefix ui2/frontend run build
           npm --prefix ui2/frontend test -- tests/ProjectPlanPanel.test.tsx tests/LoginScreen.test.tsx tests/AuthGate.test.tsx
           ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :ldap-adapter:unitTest :platform-core:unitTest :persistence:unitTest :cli:unitTest :architecture-tests:architectureTest
           ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :service:unitTest --tests '*Login*' --tests '*RoleBinding*' --tests '*Rbac*' --tests '*Directory*' --tests '*Security*' --tests '*Local*' --tests '*ProjectPlanReader*' --tests '*FirstBoot*'
+      - name: Discovery targeted regression
+        if: contains(needs.regression-scope.outputs.classification, 'discovery')
+        run: ./ui2/gradlew --no-daemon --console=plain -p ui2 :discovery:unitTest
+      - name: Inventory targeted regression
+        if: contains(needs.regression-scope.outputs.classification, 'inventory')
+        run: |
+          npm --prefix ui2/frontend ci
+          npm --prefix ui2/frontend test -- tests/AdministrationScreen.test.tsx
+          ./ui2/gradlew --no-daemon --console=plain -p ui2 :persistence:unitTest --tests '*JooqDeviceRepositoryTest'
+          ./ui2/gradlew --no-daemon --console=plain -p ui2 :service:unitTest --tests '*Device*'
+          ./ui2/gradlew --no-daemon --console=plain -p ui2 :worker:unitTest --tests '*Inventory*'
+      - name: Privacy targeted regression
+        if: contains(needs.regression-scope.outputs.classification, 'privacy')
+        run: ./ui2/gradlew --no-daemon --console=plain -p ui2 :service:unitTest --tests '*TopologyNamePseudonymizerTest'
 
   # FAST PR VALIDATION — runs on every pull_request. Cheap, high-value gates
   # only: import sanity, the repository/privacy gate, project-state

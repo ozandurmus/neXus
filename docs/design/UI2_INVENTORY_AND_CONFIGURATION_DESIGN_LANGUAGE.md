@@ -1,10 +1,14 @@
 # UI2 Inventory and Configuration — Design Language
 
-**Status: DRAFT — FOR PRODUCT OWNER FREEZE.** Not implementation authority until its
-status line reads `FROZEN` (`AGENTS.md`, Contract-status law). Drafted 2026-09-20 from
-the Product Owner's walkthrough of the Python product's rendered inventory and
-configuration screens, and from the approved design canvases in
-`docs/design/ui2_mockups/` (`M3Inventory.dc.html`, `M3Configuration.dc.html`).
+**Status: FROZEN — PRODUCT OWNER APPROVED, 2026-09-20.** Implementation authority for how
+the inventory and configuration screens present what the product already holds, within
+the scope §1 states and no further. It authorizes nothing device-facing: collection
+methods, vendor commands and the network-device command gate are untouched by it (§9).
+Drafted from the Product Owner's walkthrough of the Python product's rendered inventory
+and configuration screens on 2026-09-20, and from the approved design canvases in
+`docs/design/ui2_mockups/` (`M3Inventory.dc.html`, `M3Configuration.dc.html`). The two
+decisions it left open, D-UI1 and D-UI2, were answered by the Product Owner in the same
+session and are recorded in §8.
 
 Every example here is masked (`FW-TANGO-04`, `CLS-ROMEO-01`, `192.0.2.0/24`). The
 screens this was drawn from carry real estate identities; none are reproduced.
@@ -152,15 +156,34 @@ version — that is rendered as a difference, not as two screens to compare. The
 material makes the case by itself: two members of one cluster reported 352 and 354
 projected settings, and the divergence was only findable by opening both.
 
-## 8. Open decisions
+## 8. Decisions taken
 
-- **D-UI1 — Do both difference forms stay?** §3 keeps per-member columns and
-  shared-or-member chips. Both are justified by their data shapes, but two idioms for
-  one concept costs the operator something. Keep both, or converge on one?
-- **D-UI2 — Virtual systems in the configuration tab.** Palo Alto VSYS carry no
-  configuration of their own — it comes from the physical member — so they are removed
-  from the configuration tab and the cluster is the unit there. Check Point VSX virtual
-  systems do carry their own configuration. Do they stay as configuration nodes?
+**D-UI1 — both difference forms stay, and the screen chooses.** Per-member columns and
+shared-or-member chips answer the same question at different divergence levels, and
+each fails where the other works. Columns suit a table where nearly every row differs,
+as a cluster's own interfaces do when each member holds its own address; chips suit a
+table where rows are overwhelmingly common and a handful are not, as a Palo Alto
+cluster's interfaces are. The choice is made from the data, not offered as an operator
+setting, and the view states which form it is showing. (Product Owner, 2026-09-20.)
+
+**D-UI2 — virtual systems are not configuration nodes, for either vendor.** The
+configuration plane collects nothing that belongs to a virtual system. The Check Point
+collector gathers Gaia sections — system, DNS, NTP, management, password policy, login
+banner, management services, logging, high availability, interfaces, routing, SNMP,
+authentication — over `clish`, with no `vsenv` and no VSID anywhere in its read plan.
+Every setting it holds is the physical member's. Rendering a virtual system as a
+configuration node therefore repeats the member's own Gaia configuration once per
+virtual system, which is what the Product Owner recognised on the live screen. Palo Alto
+VSYS carry no configuration of their own either. So in Configuration the unit is the
+cluster, with member differences rendered per §3, and virtual systems do not appear.
+They remain nodes in Inventory, where interfaces and routing genuinely differ per
+virtual system, and in Policy & Objects. (Product Owner, 2026-09-20.)
+
+Recorded alongside D-UI2, not resolved by it: `interfaces` and `routing` appear in the
+Check Point configuration section list although they are collected without a virtual
+system context, so for VSX what is held under those two sections is the member's view
+rather than each virtual system's. That is a collection gap, tracked separately, and it
+does not change the rule above.
 
 ## 9. Out of scope
 

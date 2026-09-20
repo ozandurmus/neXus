@@ -1,0 +1,115 @@
+{
+  "created_at": "2026-09-20T22:07:00Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Running the classifier over ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/cp/MgmtCliEnumerationAdapter.java selects discovery and not inventory",
+          "Running it over ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/inventory/ selects inventory and not discovery",
+          "Running it over ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/privacy/ selects the privacy component and not inventory",
+          "Running it over the path set of pull request 434 still does not return blocked",
+          "Running it over a path in no component still returns blocked",
+          "An empty path set still returns blocked, and a documentation-only set still returns skip",
+          "tests/test_ci_regression_scope.py covers each case above and passes",
+          "Every prefix in every component matches at least one existing path in the working tree, asserted by a test that walks the tree rather than by inspection, so a prefix matching nothing cannot be added again"
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md section 7 (FROZEN, 2026-09-16). Visible blocking for anything unmapped stays; nothing routes to a full suite by surprise.",
+          "engineering": "main carries the merged mapping from pull request 435 at 9720b59. The discovery component there is fictional.",
+          "observed": "NXS-LOCAL-0352 stopped on a contradiction in its own packet and was right to. It was given ui2/frontend/src/screens/Inventory, a filename prefix matching InventoryPanels.tsx and InventoryScreen.tsx, while also being required to make every mapped prefix resolve to a directory or file that exists. Both cannot hold. The answer recorded at seq 3 of that record corrects the rule rather than the prefix: a mapped prefix is valid when at least one existing path in the working tree starts with it. That still catches the original failure, because ui2/discovery/ matches nothing, and keeps a filename prefix usable. The underlying defect is unchanged: NXS-LOCAL-0351 mapped discovery to ui2/discovery/, which does not exist, so every real discovery change still classifies as blocked on main today."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "The device display and masking change on pull request 434"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/discovery-mapping-existence-rule"
+        },
+        "invariants": [
+          "A mapped prefix must match something. The earlier failure was a prefix matching nothing at all, and the new test is what stops it recurring; it asserts prefix matching, not path resolution.",
+          "Discovery and inventory stay separate; they are two features headed for two microservices",
+          "Fail closed: when in doubt the classifier blocks",
+          "The frozen record governs: visible blocking, no surprise full suite"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make the discovery component map to the paths discovery actually occupies, and keep inventory and discovery disjoint, so that a discovery change is routed to discovery tests instead of blocking.",
+        "output_contract": [
+          "A discovery component mapped to paths that exist",
+          "Privacy separated from inventory",
+          "A test that fails if any mapped prefix does not exist in the tree",
+          "Pull request 435 updated"
+        ],
+        "recommended_reasoning": {
+          "reason": "A correction to one mapping table and its tests, with every prefix supplied measured. No design question remains open.",
+          "tier": "Main engineer"
+        },
+        "requirements": [
+          "The discovery component maps to these measured prefixes, which were listed from the working tree rather than inferred: ui2/job-engine/src/main/java/com/securityexpert/nexus/ui2/jobs/discovery/, ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/discovery/, ui2/persistence/src/test/java/com/securityexpert/nexus/ui2/persistence/discovery/, ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/discovery/, ui2/platform-core/src/test/java/com/securityexpert/nexus/ui2/discovery/, ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/discovery/, ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/discovery/, ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/, ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/, ui2/frontend/src/shell/AddDeviceDialog.tsx, ui2/frontend/tests/AddDeviceDialog.test.tsx",
+          "The inventory component maps to the measured inventory prefixes, which include the service side the current branch omits: ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/, ui2/persistence/src/test/java/com/securityexpert/nexus/ui2/persistence/device/, ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/, ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/, ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/, ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/inventory/, ui2/frontend/src/screens/Inventory, ui2/frontend/src/screens/DeviceRegistryPanel.tsx, ui2/frontend/src/screens/DeviceWorkspaceScreen.tsx, ui2/frontend/src/shell/deviceCopy.ts, ui2/frontend/tests/Inventory",
+          "The privacy and masking paths are their own component rather than part of inventory: ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/privacy/ and its test tree. They are a cross-cutting layer, not an inventory concern, and folding them in would make a masking change look like an inventory change.",
+          "Discovery and inventory selections stay disjoint: no path routes to both, and neither is reachable through the other's prefixes",
+          "A change spanning several components runs the union of their selections",
+          "Anything still unmapped blocks visibly; an empty path set blocks; documentation-only still skips"
+        ],
+        "risks": [
+          "Do not infer these prefixes or shorten them. They were listed from the working tree and are given verbatim for that reason.",
+          "Adding the service-side inventory prefixes widens what routes to inventory. Confirm the inventory selection actually covers those tests, and say so in the SESSION_CLOSE if it does not.",
+          "Pull request 435 is merged and its branch is gone, so this movement opens its own branch and its own pull request against main."
+        ],
+        "scope": {
+          "in": [
+            "scripts/ci_regression_scope.py: replace the fictional discovery prefix with the measured ones, and move privacy out of the inventory component",
+            ".github/workflows/validation.yml: the discovery component's own selection, if it needs one",
+            "tests/test_ci_regression_scope.py: pin each measured prefix"
+          ],
+          "out": [
+            "Amending the frozen decision record",
+            "Softening the blocked default",
+            "Any routing to the full suite as a fallback",
+            "Pull request 434 and the device display change"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "tests/test_ci_regression_scope.py",
+              "tests/test_ci_workflow_fast_pr_regression.py"
+            ],
+            "name": "scope_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-20T22:07:00Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0353",
+  "movement": "NXS-LOCAL-0353",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md",
+    "scripts/ci_regression_scope.py",
+    "tests/test_ci_regression_scope.py",
+    "relay/NXS-LOCAL-0352-discovery-mapping-measured-not-guessed.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-20T22:07:00Z"
+}

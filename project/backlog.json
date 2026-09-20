@@ -639,6 +639,15 @@
       "priority": "P1",
       "target": "docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md (DRAFT, needs freeze with D-UI1 and D-UI2 answered)",
       "note": ""
+    },
+    {
+      "id": "cp_vsx_config_collected_without_vs_context",
+      "category": "configuration",
+      "title": "Check Point configuration collection runs without a virtual system context, so for VSX the interfaces and routing sections hold the member's view rather than each virtual system's",
+      "status": "planned",
+      "priority": "P2",
+      "target": "ConfigurationReadPlan CP read plan; CheckPointGaiaConfigParser section list",
+      "note": ""
     }
   ]
 }
