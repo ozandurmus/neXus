@@ -1,0 +1,142 @@
+{
+  "created_at": "2026-09-20T15:05:05Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "The Inventory screen under aiview shows Palo Alto clusters with derived -CLS titles and a member count of exactly two per cluster",
+          "For at least two clusters, the interfaces and routing tabs render both members without cross-device contamination",
+          "The live Palo Alto fleet totals are corroborated as counts only: total devices, clustered devices, cluster count, standalone count",
+          "NXS-LOCAL-0346 carries a grade supported by the evidence recorded in this movement",
+          "NXS-LOCAL-0332 through NXS-LOCAL-0346 exist in build_history.json, roadmap.json, feature_registry.json and QUEUE.md",
+          "roadmap now_next.now.build equals the newest build_history record",
+          "CURRENT_STATE.md contains no claim that project JSON does not support"
+        ],
+        "baseline": {
+          "authority": "AGENTS.md evidence laws (automated validation is not real-environment validation) and the AIView post-parsing masking law",
+          "engineering": "main equals origin/main at c6eda93, working tree clean. HOST-A ui2 namespace reachable; five pods Running, flyway bootstrap Completed.",
+          "observed": "NXS-LOCAL-0346 was recorded real_env_validated in CURRENT_STATE.md on the strength of a successful K3s rollout, while its own relay record closed with next_actor VALIDATION and AI_HANDOVER.md still named the operator aiview visual verification as the exact next action. Separately, NXS-LOCAL-0332 through NXS-LOCAL-0346 are absent from build_history.json, roadmap.json, feature_registry.json and QUEUE.md; machine authority still reports NXS-LOCAL-0330 as the current build."
+        },
+        "context_not_loaded": [
+          "docs/history/** beyond links reached by explicit need",
+          "Vendor collector source",
+          "The V32 and V33 migration bodies"
+        ],
+        "deployment_direction": "staging-like",
+        "git": {
+          "base": "origin/main",
+          "lane": "main"
+        },
+        "invariants": [
+          "Presentation identity is never a join key or an identity gate",
+          "A member report about its peer is not independent peer observation",
+          "Collection success is not semantic correctness",
+          "Absence of evidence is not evidence of absence; prefer UNKNOWN over fabricated certainty",
+          "CURRENT_STATE.md never contains a claim project JSON does not support"
+        ],
+        "merge_gate": "Product Owner authorizes; state backfill must show the convergence test and queue check green before it lands.",
+        "movement_type": "VALIDATION",
+        "objective": "Perform the real-environment validation that NXS-LOCAL-0346 was graded on but never received, under the aiview persona, and record every affected build at the grade its evidence actually supports.",
+        "output_contract": [
+          "Recorded real-environment evidence for the Palo Alto HA cluster presentation, expressed as counts and relationships only",
+          "A durable grade for NXS-LOCAL-0346 supported by that evidence",
+          "NXS-LOCAL-0332 through NXS-LOCAL-0346 present in machine authority with roadmap now agreeing with the newest build history record",
+          "A SESSION_CLOSE recording which findings from the preceding REVIEW remain open"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic verification against an already-frozen contract plus mechanical state backfill; no new architecture or vendor semantics are being decided, so the lightest tier that covers the work is sufficient.",
+          "tier": "Normal (strong)"
+        },
+        "requirements": [
+          "All UI inspection is conducted exclusively under the aiview persona per the AGENTS.md AIView law",
+          "No unmasked hostname, serial or management address is reproduced into chat, repository records or commit messages",
+          "Database corroboration reports relationships and counts, never row dumps",
+          "A build is promoted to real_env_validated only against recorded real-environment evidence produced in this movement"
+        ],
+        "risks": [
+          "The repository privacy gate currently returns PASS while unmasked hostnames and raw serials are present in four repository files and one relay record; a green gate is not evidence in this movement and must not be cited as one",
+          "Correcting fifteen delivery grades at once can mask a row whose real evidence differs; each row is graded on its own recorded evidence, not on the batch",
+          "The 0346 relay record is CLOSED, so the grade correction is carried by this movement rather than by an amendment to that record"
+        ],
+        "scope": {
+          "in": [
+            "Operator inspection of the Inventory screen under the aiview persona at the deployed UI2 instance",
+            "Verification that Palo Alto HA clusters render derived -CLS titles with exactly two members and no cross-member contamination in interfaces and routing",
+            "AIView-mentality database corroboration on HOST-A: counts, booleans and opaque references only",
+            "Correction of the NXS-LOCAL-0346 delivery grade in durable project state",
+            "Backfill of NXS-LOCAL-0332 through NXS-LOCAL-0346 into machine authority via scripts/project_queue.py"
+          ],
+          "out": [
+            "Any product source or test change",
+            "Privacy remediation of findings F5, F6 and F12 (unmasked hostnames and raw serials in repository files and pushed commit messages)",
+            "Any CLASS 1 or higher device operation, including failover execution",
+            "Any change to the privacy gate scope"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "-q",
+              "tests/test_architecture_convergence.py"
+            ],
+            "name": "state_consistency"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "queue_check"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "repository_privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-20T15:05:05Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_ACK",
+      "seq": 2,
+      "subject": "Turn returned to PO to record the governing decision before execution",
+      "text": "Movement received. Returning the turn so the delivery-grade decision that governs this movement is recorded by the Product Owner before any execution step runs.",
+      "timestamp": "2026-09-20T15:05:39Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner - chat directive 2026-09-20",
+      "marker": "RELAY_DECISION",
+      "scope": "Delivery grade recorded in durable project state for NXS-LOCAL-0332 through NXS-LOCAL-0346, and execution authority for NXS-LOCAL-0347 covering HOST-A SSH troubleshooting, kubectl in the ui2 namespace, and aiview UI verification. Does not authorize sudo, incumbent workloads, any CLASS 1 or higher device operation, the privacy remediation of findings F5 F6 and F12, or any amendment to GOV_PO_ROLE_MIGRATION.md.",
+      "seq": 3,
+      "subject": "Delivery grade of NXS-LOCAL-0346 corrected to automated_validated; PO grants execution authority for this movement",
+      "supersedes": "none",
+      "text": "Part 1 - delivery grade. The real_env_validated grade recorded for NXS-LOCAL-0346 in CURRENT_STATE.md is withdrawn. Evidence basis: the NXS-LOCAL-0346 relay record closes with next_actor VALIDATION, and AI_HANDOVER.md names the operator aiview visual verification as the exact next action. A successful K3s rollout is deployment evidence, not real-environment validation (AGENTS.md evidence laws). Directed outcome: record NXS-LOCAL-0346 as automated_validated in machine authority via scripts/project_queue.py and correct CURRENT_STATE.md to match; carry real-environment validation in this movement; apply the same evidence test to NXS-LOCAL-0332 through NXS-LOCAL-0345, where automated_validated is the ceiling for any row with no recorded real-environment evidence. Part 2 - execution authority and recorded deviation. The agent raised one concrete objection that GOV_PO_ROLE_MIGRATION.md section 6.1 and the nexus-po skill section 5 bar a Product Owner assistant episode from executing. The Product Owner, so informed, expressly overruled it on 2026-09-20, stating that the PO role in this project also carries orchestration and therefore execution authority. Under the AGENTS.md rule that an informed reaffirmation controls, the agent proceeds. This is recorded as a deviation from a FROZEN governance contract, not as a precedent: it authorizes execution within this movement only, and GOV_PO_ROLE_MIGRATION.md remains unamended until a governance movement amends it.",
+      "timestamp": "2026-09-20T15:05:39Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0347",
+  "movement": "NXS-LOCAL-0347",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "CURRENT_STATE.md",
+    "relay/NXS-LOCAL-0346-palo-alto-ha-clustering-and-presentation-reconciliation.json",
+    "docs/design/GOV_PO_ROLE_MIGRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-20T15:05:39Z"
+}
