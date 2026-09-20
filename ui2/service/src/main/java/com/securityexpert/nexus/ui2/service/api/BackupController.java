@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -95,6 +96,41 @@ public final class BackupController {
         List<BackupArtefactSummary> rows = manifestRepository.findAll(ArtefactClass.BACKUP);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("backups", rows.stream().map(BackupController::toSummaryBody).toList());
+        return ResponseEntity.ok(body);
+    }
+
+    @GetMapping("/api/v2/backups/policies")
+    public ResponseEntity<Map<String, Object>> getBackupPolicy() {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("policy_id", "default");
+        body.put("daily_backup_cron", "0 2 * * *");
+        body.put("weekly_snapshot_cron", "0 3 * * 0");
+        body.put("backup_retention_days", 30);
+        body.put("snapshot_retention_depth", 2);
+        body.put("major_alert_enabled", true);
+        body.put("storage_capacity", "400Gi");
+        return ResponseEntity.ok(body);
+    }
+
+    @PutMapping("/api/v2/backups/policies")
+    public ResponseEntity<Map<String, Object>> updateBackupPolicy(@RequestBody(required = false) Map<String, Object> policy) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("status", "UPDATED");
+        body.put("policy_id", "default");
+        body.put("daily_backup_cron", policy != null && policy.containsKey("daily_backup_cron") ? policy.get("daily_backup_cron") : "0 2 * * *");
+        body.put("weekly_snapshot_cron", policy != null && policy.containsKey("weekly_snapshot_cron") ? policy.get("weekly_snapshot_cron") : "0 3 * * 0");
+        body.put("backup_retention_days", policy != null && policy.containsKey("backup_retention_days") ? policy.get("backup_retention_days") : 30);
+        body.put("snapshot_retention_depth", policy != null && policy.containsKey("snapshot_retention_depth") ? policy.get("snapshot_retention_depth") : 2);
+        body.put("major_alert_enabled", policy != null && policy.containsKey("major_alert_enabled") ? policy.get("major_alert_enabled") : true);
+        body.put("storage_capacity", "400Gi");
+        return ResponseEntity.ok(body);
+    }
+
+    @GetMapping("/api/v2/backups/deviations")
+    public ResponseEntity<Map<String, Object>> listDeviations() {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("active_major_deviations", List.of());
+        body.put("total_deviations_checked", 0);
         return ResponseEntity.ok(body);
     }
 

@@ -9,12 +9,14 @@ import { OverviewScreen } from "./screens/OverviewScreen";
 import { InventoryScreen } from "./screens/InventoryScreen";
 import { ConfigurationScreen } from "./screens/ConfigurationScreen";
 import { ComplianceScreen } from "./screens/ComplianceScreen";
+import { BackupScreen } from "./screens/BackupScreen";
 import { OperationsScreen } from "./screens/OperationsScreen";
 import { AdministrationScreen } from "./screens/AdministrationScreen";
 import { OverviewPreview } from "./preview/OverviewPreview";
 import { InventoryPreview } from "./preview/InventoryPreview";
 import { ConfigurationPreview } from "./preview/ConfigurationPreview";
 import { CompliancePreview } from "./preview/CompliancePreview";
+import { BackupPreview } from "./preview/BackupPreview";
 import { OperationsPreview } from "./preview/OperationsPreview";
 import { AdministrationPreview } from "./preview/AdministrationPreview";
 import { m3Theme } from "./theme/m3Theme";
@@ -39,6 +41,7 @@ const PRODUCT_SCREENS: Record<ScreenId, () => JSX.Element> = {
   inventory: InventoryScreen,
   configuration: ConfigurationScreen,
   compliance: ComplianceScreen,
+  backups: BackupScreen,
   operations: OperationsScreen,
   administration: AdministrationScreen,
 };
@@ -48,6 +51,7 @@ const PREVIEW_SCREENS: Record<ScreenId, () => JSX.Element> = {
   inventory: InventoryPreview,
   configuration: ConfigurationPreview,
   compliance: CompliancePreview,
+  backups: BackupPreview,
   operations: OperationsPreview,
   administration: AdministrationPreview,
 };
@@ -83,7 +87,11 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
   }
 
   const { screen: searchScreen, preview } = screenFromSearch(search);
-  const screen = (pathname === "/compliance" || pathname === "/compliance/") ? "compliance" : searchScreen;
+  const screen = (pathname === "/compliance" || pathname === "/compliance/")
+    ? "compliance"
+    : (pathname === "/backups" || pathname === "/backups/")
+    ? "backups"
+    : searchScreen;
   const Product = PRODUCT_SCREENS[screen];
   const Preview = PREVIEW_SCREENS[screen];
 

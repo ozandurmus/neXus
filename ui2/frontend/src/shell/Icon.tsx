@@ -10,6 +10,7 @@ export type IconName =
   | "devices"
   | "config"
   | "compliance"
+  | "backup"
   | "operations"
   | "admin"
   | "search"
@@ -61,6 +62,14 @@ export function Icon({ name, size = 20 }: { readonly name: IconName; readonly si
         <svg {...props}>
           <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
           <path d="M9 12l2 2 4-4" />
+        </svg>
+      );
+    case "backup":
+      return (
+        <svg {...props}>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
       );
     case "operations":

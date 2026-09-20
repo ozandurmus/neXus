@@ -68,6 +68,7 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
     leaves: [
       { label: "Configuration", screen: "configuration", requiredPlane: "Config" },
       { label: "Compliance", screen: "compliance", requiredPlane: "Compliance" },
+      { label: "Backups & Recovery", screen: "backups", requiredPlane: "Operations" },
     ],
   },
   {

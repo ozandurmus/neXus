@@ -4,6 +4,7 @@ export type ScreenId =
   | "inventory"
   | "configuration"
   | "compliance"
+  | "backups"
   | "operations"
   | "administration";
 
@@ -12,6 +13,7 @@ export const SCREEN_IDS: readonly ScreenId[] = [
   "inventory",
   "configuration",
   "compliance",
+  "backups",
   "operations",
   "administration",
 ];
