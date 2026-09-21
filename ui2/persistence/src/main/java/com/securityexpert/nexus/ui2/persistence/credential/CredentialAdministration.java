@@ -58,6 +58,11 @@ public final class CredentialAdministration implements CredentialStorePort {
             passphrase.ifPresent(CredentialAdministration::zero);
             return new ReplaceSecretResult.NotFound();
         }
+        if (passphrase.isPresent() && existing.orElseThrow().kind() != CredentialKind.SSH_PRIVATE_KEY) {
+            zero(secret);
+            passphrase.ifPresent(CredentialAdministration::zero);
+            return new ReplaceSecretResult.PassphraseNotAllowed();
+        }
         byte[] encryptedSecret = encryptAndZero(secret);
         byte[] encryptedPassphrase = passphrase.map(this::encryptAndZero).orElse(null);
         credentialRepository.replaceSecret(credentialId, encryptedSecret, encryptedPassphrase, envelopeKeyId,

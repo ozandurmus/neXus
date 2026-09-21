@@ -67,6 +67,9 @@ public interface CredentialStorePort {
 
         record NotFound() implements ReplaceSecretResult {
         }
+
+        record PassphraseNotAllowed() implements ReplaceSecretResult {
+        }
     }
 
     sealed interface DeleteResult {

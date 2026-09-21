@@ -47,7 +47,7 @@ function vendorLabel(view: CredentialView): string {
  */
 export function CredentialsPanel() {
   const [createOpen, setCreateOpen] = useState(false);
-  const [replaceSecretFor, setReplaceSecretFor] = useState<string | null>(null);
+  const [replaceSecretFor, setReplaceSecretFor] = useState<CredentialView | null>(null);
   const [deleteError, setDeleteError] = useState<Record<string, string>>({});
 
   const {
@@ -135,7 +135,7 @@ export function CredentialsPanel() {
             </Box>
             <Stack direction="row" spacing={1} alignItems="center">
               <StatusChip tone="neutral" label={vendorLabel(credential)} dense />
-              <Button size="small" onClick={() => setReplaceSecretFor(credential.credential_id)}>
+              <Button size="small" onClick={() => setReplaceSecretFor(credential)}>
                 Replace secret
               </Button>
               <Button size="small" color="error" onClick={() => handleDelete(credential.credential_id)}>
@@ -148,7 +148,8 @@ export function CredentialsPanel() {
       {createOpen && <CreateCredentialDialog onClose={() => setCreateOpen(false)} onCreated={() => refresh()} />}
       {replaceSecretFor && (
         <ReplaceSecretDialog
-          credentialId={replaceSecretFor}
+          credentialId={replaceSecretFor.credential_id}
+          kind={replaceSecretFor.kind}
           onClose={() => setReplaceSecretFor(null)}
           onDone={refresh}
         />
@@ -247,10 +248,12 @@ export function CreateCredentialDialog({ onClose, onCreated, initialVendor }: {
 
 function ReplaceSecretDialog({
   credentialId,
+  kind,
   onClose,
   onDone,
 }: {
   readonly credentialId: string;
+  readonly kind: CredentialView["kind"];
   readonly onClose: () => void;
   readonly onDone: () => void;
 }) {
@@ -264,12 +267,14 @@ function ReplaceSecretDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1, minWidth: 320 }}>
           <TextField label="New secret" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoFocus />
-          <TextField
-            label="Passphrase (optional)"
-            type="password"
-            value={passphrase}
-            onChange={(e) => setPassphrase(e.target.value)}
-          />
+          {kind === "ssh_private_key" && (
+            <TextField
+              label="Passphrase (optional)"
+              type="password"
+              value={passphrase}
+              onChange={(e) => setPassphrase(e.target.value)}
+            />
+          )}
           {error && <Typography color="error">{error}</Typography>}
         </Stack>
       </DialogContent>

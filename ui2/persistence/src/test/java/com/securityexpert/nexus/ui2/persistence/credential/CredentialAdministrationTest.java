@@ -43,6 +43,7 @@ class CredentialAdministrationTest {
         final Map<String, CredentialRecord> byId = new HashMap<>();
         final Map<String, String> referenceIdByCredentialId = new HashMap<>();
         final Set<String> deviceUsedReferenceIds = new HashSet<>();
+        int replaceSecretCalls;
 
         @Override
         public String create(String credentialId, String credentialReferenceId, String displayName,
@@ -75,6 +76,7 @@ class CredentialAdministrationTest {
         @Override
         public void replaceSecret(String credentialId, byte[] encryptedSecret, byte[] encryptedPassphrase,
                 String envelopeKeyId, String actingAdminActorFingerprint) {
+            replaceSecretCalls++;
             CredentialRecord existing = byId.get(credentialId);
             byId.put(credentialId, new CredentialRecord(existing.credentialId(), existing.displayName(),
                     existing.kind(), existing.username(), encryptedSecret, encryptedPassphrase, envelopeKeyId,
@@ -197,6 +199,27 @@ class CredentialAdministrationTest {
     }
 
     @Test
+    void replaceSecretRejectsPassphraseForNonPrivateKeyCredentialsBeforeWrite() {
+        for (CredentialKind kind : List.of(CredentialKind.SSH_PASSWORD, CredentialKind.API_PASSWORD)) {
+            Fixture fx = fixture();
+            CredentialStorePort.CredentialView created = fx.administration.create("admin1", "edge-fw-1", kind,
+                    "svc-account", true, false, "original-secret".toCharArray(), Optional.empty());
+            CredentialRecord before = fx.repository.findById(created.credentialId()).orElseThrow();
+            char[] secret = "replacement-secret".toCharArray();
+            char[] passphrase = "not-allowed".toCharArray();
+
+            CredentialStorePort.ReplaceSecretResult result = fx.administration.replaceSecret("admin1",
+                    created.credentialId(), secret, Optional.of(passphrase));
+
+            assertTrue(result instanceof CredentialStorePort.ReplaceSecretResult.PassphraseNotAllowed);
+            assertEquals(0, fx.repository.replaceSecretCalls);
+            assertEquals(before, fx.repository.findById(created.credentialId()).orElseThrow());
+            assertTrue(new String(secret).chars().allMatch(c -> c == '\0'));
+            assertTrue(new String(passphrase).chars().allMatch(c -> c == '\0'));
+        }
+    }
+
+    @Test
     void privateKeyRoundTripEncryptsBothSecretAndPassphraseAndZeroesBothArrays() {
         Fixture fx = fixture();
         char[] pem = "-----BEGIN PRIVATE KEY-----\nfixture\n-----END PRIVATE KEY-----".toCharArray();
@@ -211,5 +234,16 @@ class CredentialAdministrationTest {
         assertFalse(new String(stored.encryptedPassphrase()).contains("fixture-passphrase"));
         assertTrue(created.allowsCheckPoint());
         assertTrue(created.allowsPaloAlto());
+
+        char[] replacement = "replacement-key".toCharArray();
+        char[] replacementPassphrase = "replacement-passphrase".toCharArray();
+        CredentialStorePort.ReplaceSecretResult result = fx.administration.replaceSecret("admin1",
+                created.credentialId(), replacement, Optional.of(replacementPassphrase));
+
+        assertTrue(result instanceof CredentialStorePort.ReplaceSecretResult.Ok);
+        assertEquals(1, fx.repository.replaceSecretCalls);
+        assertTrue(new String(replacement).chars().allMatch(c -> c == '\0'));
+        assertTrue(new String(replacementPassphrase).chars().allMatch(c -> c == '\0'));
+        assertTrue(fx.repository.findById(created.credentialId()).orElseThrow().encryptedPassphrase() != null);
     }
 }

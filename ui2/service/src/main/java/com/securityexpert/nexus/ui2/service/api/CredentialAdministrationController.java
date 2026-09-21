@@ -108,6 +108,9 @@ public final class CredentialAdministrationController {
             if (result instanceof CredentialStorePort.ReplaceSecretResult.NotFound) {
                 return notFound();
             }
+            if (result instanceof CredentialStorePort.ReplaceSecretResult.PassphraseNotAllowed) {
+                return badRequest("PASSPHRASE_NOT_ALLOWED_FOR_CREDENTIAL_KIND");
+            }
             CredentialStorePort.ReplaceSecretResult.Ok ok = (CredentialStorePort.ReplaceSecretResult.Ok) result;
             return ResponseEntity.ok(toBody(ok.view()));
         } finally {
