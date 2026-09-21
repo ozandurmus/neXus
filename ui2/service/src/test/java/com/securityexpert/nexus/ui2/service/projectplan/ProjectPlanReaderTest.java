@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.service.projectplan;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -191,6 +192,22 @@ class ProjectPlanReaderTest {
         assertTrue(warnings.contains("backlog.json is missing or unreadable; using an empty default."));
         assertTrue(warnings.contains("archive/backlog_terminal.json is missing or unreadable; using an empty default."));
         assertTrue(warnings.contains("build_history.json is missing or unreadable; using an empty default."));
+        assertNull(payload.get("deployed_commit"), "no deploy_info.json yet -- never fabricated");
+        assertNull(payload.get("deployed_at"));
+    }
+
+    /** HOST-A's run_build.sh writes this file fresh per deploy (2026-09-21) so the badge shows
+     * exactly what is actually running, never a hand-maintained build id. */
+    @Test
+    void deployInfoJsonSuppliesTheDeployedCommitAndTimestamp(@TempDir Path directory) throws Exception {
+        Files.writeString(directory.resolve("deploy_info.json"), """
+                {"commit": "abcdef0123456789", "built_at": "2026-09-21T22:00:00Z"}
+                """);
+
+        Map<String, Object> payload = new ProjectPlanReader(directory).read();
+
+        assertEquals("abcdef0123456789", payload.get("deployed_commit"));
+        assertEquals("2026-09-21T22:00:00Z", payload.get("deployed_at"));
     }
 
     @Test

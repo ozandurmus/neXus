@@ -20,7 +20,7 @@ class PaloAltoInterfaceParserTest {
         PaloAltoInterfaceParseResult result = PaloAltoInterfaceParser.parse(Fixtures.read("pan/show_interface_all.xml"));
 
         assertEquals(2, result.interfacesByVsys().size());
-        assertEquals(2, result.interfacesByVsys().get("1").size(), "ethernet1/1 and the address-less ha1");
+        assertEquals(3, result.interfacesByVsys().get("1").size(), "ethernet1/1, the address-less ha1, and ethernet1/1.50");
         assertEquals(2, result.interfacesByVsys().get("2").size(), "ethernet1/2.100 and ethernet1/3");
 
         ParsedInterface eth1 = result.interfacesByVsys().get("1").stream().filter(i -> i.name().equals("ethernet1/1"))
@@ -64,6 +64,19 @@ class PaloAltoInterfaceParserTest {
         ParsedInterface eth3Port = result.physicalPorts().stream().filter(p -> p.name().equals("ethernet1/3"))
                 .findFirst().orElseThrow();
         assertEquals(InventoryInterface.STATE_DOWN, eth3Port.state());
+    }
+
+    /** Product Owner correction (2026-09-21): a subinterface's own ifnet entry never carries a
+     * <state> leaf -- only its physical port in <hw> does -- and a subinterface cannot be up while
+     * its physical port is down, so it inherits that port's state exactly. */
+    @Test
+    void aSubinterfaceWithNoStateLeafInheritsItsPhysicalPortsState() {
+        PaloAltoInterfaceParseResult result = PaloAltoInterfaceParser.parse(Fixtures.read("pan/show_interface_all.xml"));
+
+        ParsedInterface subif = result.interfacesByVsys().get("1").stream().filter(i -> i.name().equals("ethernet1/1.50"))
+                .findFirst().orElseThrow();
+        assertEquals(java.util.Optional.of("ethernet1/1"), subif.parent());
+        assertEquals(InventoryInterface.STATE_UP, subif.state(), "ethernet1/1's own hw port is up");
     }
 
     @Test

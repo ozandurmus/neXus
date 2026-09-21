@@ -261,6 +261,9 @@ public final class ProjectPlanReader {
         payload.put("build_history", productBuilds);
         payload.put("archived_build_count", archivedBuildCount);
         payload.put("metadata_warnings", metadataWarnings);
+        FileLoad deployInfoLoad = loadObject("deploy_info.json");
+        payload.put("deployed_commit", deployInfoLoad.present() ? deployInfoLoad.value().get("commit") : null);
+        payload.put("deployed_at", deployInfoLoad.present() ? deployInfoLoad.value().get("built_at") : null);
         return payload;
     }
 

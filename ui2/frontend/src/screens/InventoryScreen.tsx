@@ -293,41 +293,38 @@ function DeviceList({
                 model={firstMember?.model}
                 hostname={clusterTitle}
               />
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    Cluster {clusterTitle}
-                  </Typography>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
-                    <StatusChip tone="neutral" label="Cluster" dense />
-                    <StatusChip
-                      tone={clusterHealthTone(members)}
-                      label={clusterHealthLabel(members)}
-                      dense
-                    />
-                    <Box
-                      component="span"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggle(ref);
-                      }}
-                      sx={{
-                        cursor: "pointer",
-                        px: 0.5,
-                        color: "text.secondary",
-                        fontSize: "0.875rem",
-                        "&:hover": { color: m3.primary },
-                      }}
-                      title={isCollapsed ? "Expand members & virtual systems" : "Collapse members"}
-                    >
-                      {isCollapsed ? "▼" : "▲"}
-                    </Box>
+              <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  title={clusterTitle}
+                >
+                  {clusterTitle}
+                </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+                  <StatusChip tone="neutral" label="CLS" dense />
+                  <StatusChip
+                    tone={clusterHealthTone(members)}
+                    label={clusterHealthLabel(members)}
+                    dense
+                  />
+                  <Box
+                    component="span"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggle(ref);
+                    }}
+                    sx={{
+                      cursor: "pointer",
+                      px: 0.5,
+                      color: "text.secondary",
+                      fontSize: "0.875rem",
+                      "&:hover": { color: m3.primary },
+                    }}
+                    title={isCollapsed ? "Expand virtual systems" : "Collapse virtual systems"}
+                  >
+                    {isCollapsed ? "▼" : "▲"}
                   </Box>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 0.25, overflow: "hidden" }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {isPaloAlto ? "PAN-OS HA" : "ClusterXL"} · {members.map((m) => deviceNameLabel(m.hostname)).join(" · ")}
-                  </Typography>
                 </Box>
               </Box>
             </Box>

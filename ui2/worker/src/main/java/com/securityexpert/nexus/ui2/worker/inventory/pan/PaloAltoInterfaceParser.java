@@ -91,6 +91,33 @@ public final class PaloAltoInterfaceParser {
                 physicalPorts.add(new ParsedInterface(name, Optional.empty(), InventoryInterface.KIND_PHYSICAL, state,
                         List.of(), Optional.empty()));
             }
+
+            // Product Owner correction (2026-09-21): a logical/VLAN subinterface's own ifnet entry
+            // never carries its own <state> leaf (only the physical port in <hw> does), and a
+            // subinterface cannot be up while its physical port is down -- so an ifnet entry whose
+            // own state is unknown inherits its parent physical port's state (name before the first
+            // "."), never guessed beyond what that port itself reports.
+            Map<String, String> physicalStateByName = new LinkedHashMap<>();
+            for (ParsedInterface port : physicalPorts) {
+                physicalStateByName.put(port.name(), port.state());
+            }
+            for (Map.Entry<String, List<ParsedInterface>> vsysEntry : byVsys.entrySet()) {
+                List<ParsedInterface> inherited = vsysEntry.getValue().stream()
+                        .map(iface -> {
+                            if (!InventoryInterface.STATE_UNKNOWN.equals(iface.state())) {
+                                return iface;
+                            }
+                            String parentName = iface.parent().orElse(iface.name());
+                            String parentState = physicalStateByName.get(parentName);
+                            if (parentState == null || InventoryInterface.STATE_UNKNOWN.equals(parentState)) {
+                                return iface;
+                            }
+                            return new ParsedInterface(iface.name(), iface.parent(), iface.kind(), parentState,
+                                    iface.addresses(), iface.vlanId());
+                        })
+                        .toList();
+                vsysEntry.setValue(inherited);
+            }
         }
 
         return new PaloAltoInterfaceParseResult(byVsys, physicalPorts, interfaceNameToVsys, interfaceNameToVirtualRouter);

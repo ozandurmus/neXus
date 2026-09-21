@@ -43,6 +43,15 @@
         <vsys>1</vsys>
         <state>down</state>
       </entry>
+      <entry>
+        <name>ethernet1/1.50</name>
+        <id>20</id>
+        <ip>192.0.2.50/28</ip>
+        <tag>50</tag>
+        <vsys>1</vsys>
+        <zone>trust</zone>
+        <fwd>vr:default</fwd>
+      </entry>
     </ifnet>
     <hw>
       <entry>

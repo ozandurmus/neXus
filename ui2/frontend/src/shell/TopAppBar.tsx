@@ -29,16 +29,48 @@ function NotificationBadge() {
   return <StatusChip tone="warn" label={String(unread)} dense />;
 }
 
+function relativeTimeFromNow(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return iso;
+  const diffMs = Date.now() - then;
+  const minutes = Math.round(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+/**
+ * Shows exactly what HOST-A's build script actually baked into the running image
+ * (project/deploy_info.json's commit + built_at, generated fresh per deploy) instead of a
+ * hand-maintained build id -- there is nothing here to remember to update by hand. Falls
+ * back to the project plan's own current_product_build only until the first deploy using
+ * that step has run.
+ */
 function BuildBadge() {
   const { data } = useFetchOnMount(
-    () => getProjectPlan().then((plan) => plan.current_product_build ?? "NXS-LOCAL-0313"),
+    () => getProjectPlan().then((plan) => ({
+      commit: plan.deployed_commit ?? null,
+      builtAt: plan.deployed_at ?? null,
+      fallback: plan.current_product_build ?? "NXS-LOCAL-0313",
+    })),
     () => "",
   );
-  const buildTag = data || "NXS-LOCAL-0313";
+  if (!data) {
+    return null;
+  }
+  const label = data.commit
+    ? `${data.commit.slice(0, 12)}${data.builtAt ? ` · ${relativeTimeFromNow(data.builtAt)}` : ""}`
+    : data.fallback;
+  const tooltip = data.commit
+    ? `Deployed commit ${data.commit}${data.builtAt ? ` at ${data.builtAt}` : ""}`
+    : `neXus Active Build: ${data.fallback}`;
   return (
-    <Tooltip title={`neXus Active Build: ${buildTag}`}>
+    <Tooltip title={tooltip}>
       <Box sx={{ display: "inline-flex" }}>
-        <StatusChip tone="neutral" label={buildTag} dense />
+        <StatusChip tone="neutral" label={label} dense />
       </Box>
     </Tooltip>
   );

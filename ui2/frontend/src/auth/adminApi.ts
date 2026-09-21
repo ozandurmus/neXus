@@ -756,6 +756,11 @@ export interface ProjectPlanLesson {
 export interface ProjectPlanView {
   readonly product_scope?: string;
   readonly current_product_build?: string | null;
+  /** The exact commit and UTC timestamp HOST-A's build script baked into the running image
+   * (project/deploy_info.json, generated per build, never hand-authored) -- null until the
+   * first build using that step has been deployed. */
+  readonly deployed_commit?: string | null;
+  readonly deployed_at?: string | null;
   readonly excluded_backlog_count?: number;
   readonly source_metadata?: {
     readonly revision: string;

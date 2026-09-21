@@ -188,11 +188,12 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("Cluster cluster-1")).toBeInTheDocument());
-    expect(screen.getByText("Cluster")).toBeInTheDocument();
-    // Design language §2: a member is named in the cluster's own row and detail header,
-    // never rendered as its own sibling row in the list.
-    expect(screen.getAllByText((_, node) => node?.textContent === "ClusterXL · member-a · member-b").length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByText("cluster-1")).toBeInTheDocument());
+    expect(screen.getByText("CLS")).toBeInTheDocument();
+    // Design language §2 (refined by Product Owner direction): the sidebar row keeps only the
+    // cluster's own name, a "CLS" tag and a health chip -- members are named in the detail
+    // header once selected, never rendered as their own sibling row or caption line here.
+    expect(screen.queryByText((_, node) => node?.textContent === "ClusterXL · member-a · member-b")).toBeNull();
     expect(screen.queryByRole("button", { name: /^member-a$/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^member-b$/ })).toBeNull();
     // The standalone device (null cluster_member_ref) renders as a normal row, not nested.
@@ -260,7 +261,7 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("Cluster FW-CKP-GARANTIDMZAPP-CLS-AA")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("FW-CKP-GARANTIDMZAPP-CLS-AA")).toBeInTheDocument());
     expect(screen.getByText("GarantiBetaAA")).toBeInTheDocument();
     expect(screen.getByText("GarantiPosAppAA")).toBeInTheDocument();
 
@@ -339,8 +340,8 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("Cluster FW-CKP-VSX-CLS")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Cluster FW-CKP-VSX-CLS"));
+    await waitFor(() => expect(screen.getByText("FW-CKP-VSX-CLS")).toBeInTheDocument());
+    fireEvent.click(screen.getAllByText("FW-CKP-VSX-CLS")[0]);
 
     // Default (no VS selected) merges every collected context, physical included, into one table --
     // matching Palo Alto's own reference view, per the Product Owner's explicit direction.
@@ -354,7 +355,7 @@ describe("InventoryScreen device list", () => {
 
     // Re-clicking the cluster's own row resets back to the merged view -- this must not stay
     // stuck showing the previously selected VS (the bug the Product Owner reported live).
-    fireEvent.click(screen.getByText("Cluster FW-CKP-VSX-CLS"));
+    fireEvent.click(screen.getAllByText("FW-CKP-VSX-CLS")[0]);
     await waitFor(() => expect(screen.getByText("Mgmt")).toBeInTheDocument());
     expect(screen.getByText("eth0.100")).toBeInTheDocument();
   });
@@ -473,8 +474,8 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("Cluster PA-PAIR")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Cluster PA-PAIR"));
+    await waitFor(() => expect(screen.getByText("PA-PAIR")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("PA-PAIR"));
 
     // Both members agreeing on "unknown" is agreement, not a difference -- reads as Unknown, not Degraded.
     await waitFor(() => expect(screen.getByText("ethernet1/1")).toBeInTheDocument());
@@ -539,8 +540,7 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("Cluster PA-HA-PAIR")).toBeInTheDocument());
-    expect(screen.getByText(/PAN-OS HA · PA-FW-01 · PA-FW-02/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("PA-HA-PAIR")).toBeInTheDocument());
     expect(screen.getByText("default (vsys1)")).toBeInTheDocument();
     expect(screen.getByText("VR-DMZ (vsys2)")).toBeInTheDocument();
   });
@@ -596,8 +596,8 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("Cluster PA-HA-PAIR")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Cluster PA-HA-PAIR"));
+    await waitFor(() => expect(screen.getByText("PA-HA-PAIR")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("PA-HA-PAIR"));
 
     await waitFor(() => expect(screen.getByText("ethernet1/5")).toBeInTheDocument());
     // One shared Address column, not one column per member -- the header above
