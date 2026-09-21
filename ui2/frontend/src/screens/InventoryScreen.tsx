@@ -604,6 +604,7 @@ export function InventoryScreen() {
   const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "cluster" | "check_point" | "palo_alto" | "stale" | "draft" | "failed">("all");
+  const [sortMode, setSortMode] = useState<"name_asc" | "name_desc" | "vendor">("name_asc");
 
   const devices = data;
   const total = devices?.length ?? 0;
@@ -662,6 +663,15 @@ export function InventoryScreen() {
     const matchMgmtIp = device.management_ip?.toLowerCase().includes(term);
     const matchIps = device.ip_addresses?.toLowerCase().includes(term);
     return Boolean(matchHostname || matchId || matchModel || matchVersion || matchCluster || matchMgmtIp || matchIps);
+  });
+
+  const sortedDevices = [...filteredDevices].sort((a, b) => {
+    const nameCmp = deviceNameLabel(a.hostname).localeCompare(deviceNameLabel(b.hostname), undefined, { sensitivity: "base" });
+    if (sortMode === "vendor") {
+      const vendorCmp = vendorLabel(a.vendor_hint).localeCompare(vendorLabel(b.vendor_hint));
+      return vendorCmp !== 0 ? vendorCmp : nameCmp;
+    }
+    return sortMode === "name_desc" ? -nameCmp : nameCmp;
   });
 
   const handleBulkCollect = async () => {
@@ -765,6 +775,31 @@ export function InventoryScreen() {
                   ✕
                 </Box>
               )}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 0.75 }}>
+              <Typography variant="caption" color="text.secondary">
+                Sort
+              </Typography>
+              <Box
+                component="select"
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
+                aria-label="Sort devices"
+                sx={{
+                  fontSize: "12px",
+                  color: m3.onSurface,
+                  bgcolor: m3.scLowest,
+                  border: `1px solid ${m3.outlineVar}`,
+                  borderRadius: "8px",
+                  px: 1,
+                  py: 0.4,
+                  cursor: "pointer",
+                }}
+              >
+                <option value="name_asc">Name (A→Z)</option>
+                <option value="name_desc">Name (Z→A)</option>
+                <option value="vendor">Vendor (A→Z)</option>
+              </Box>
             </Box>
             <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
               <Chip
@@ -876,7 +911,7 @@ export function InventoryScreen() {
             )}
             {!error && devices !== null && filteredDevices.length > 0 && (
               <DeviceList
-                devices={filteredDevices}
+                devices={sortedDevices}
                 selectedDeviceId={selectedDevice?.device_id ?? null}
                 selectedClusterRef={selectedCluster?.ref ?? null}
                 selectedVs={selectedCluster ? selectedCluster.initialVs : selectedDeviceVs}

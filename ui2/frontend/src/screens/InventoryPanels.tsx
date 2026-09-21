@@ -1019,25 +1019,19 @@ export function InterfacesPanel({
     [contexts, vsList]
   );
 
-  // Check Point's VSX virtual systems stay their own tabbed contexts, Physical showing only the
+  // Check Point's VSX virtual systems stay their own separate contexts, Physical showing only the
   // chassis's own interfaces; Palo Alto's vsys merges by default, matching the single-device
-  // reference view (see ClusterInterfacesPanel for the same vendor split on the cluster path).
+  // reference view (see ClusterInterfacesPanel for the same vendor split on the cluster path). No
+  // tab-strip chrome here for either vendor: the left sidebar's own VS/VSYS sub-navigation already
+  // sets activeContext for this device (DeviceList), so a second selector in the panel would just
+  // duplicate it.
   if (!isPaloAlto) {
+    const context = resolveContext(activeContext ?? "physical");
     return (
-      <ContextTabs
-        contexts={tabs}
-        activeContext={activeContext}
-        onSelectContext={onSelectContext}
-        render={(name) => {
-          const context = resolveContext(name);
-          return (
-            <Stack spacing={1}>
-              <ContextHaBadge context={context} />
-              <InterfacesTable interfaces={context?.interfaces ?? []} />
-            </Stack>
-          );
-        }}
-      />
+      <Stack spacing={1}>
+        <ContextHaBadge context={context} />
+        <InterfacesTable interfaces={context?.interfaces ?? []} />
+      </Stack>
     );
   }
 
@@ -1095,14 +1089,8 @@ export function RoutesPanel({
   );
 
   if (!isPaloAlto) {
-    return (
-      <ContextTabs
-        contexts={tabs}
-        activeContext={activeContext}
-        onSelectContext={onSelectContext}
-        render={(name) => <RoutesTable routes={resolveContext(name)?.routes ?? []} />}
-      />
-    );
+    const context = resolveContext(activeContext ?? "physical");
+    return <RoutesTable routes={context?.routes ?? []} />;
   }
 
   if (!activeContext) {

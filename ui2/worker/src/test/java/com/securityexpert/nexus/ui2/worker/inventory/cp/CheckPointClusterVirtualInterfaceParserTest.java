@@ -3,9 +3,11 @@ package com.securityexpert.nexus.ui2.worker.inventory.cp;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
 import com.securityexpert.nexus.ui2.worker.inventory.Fixtures;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointClusterVirtualInterfaceParser.VirtualInterfaceAddress;
 
@@ -26,6 +28,17 @@ class CheckPointClusterVirtualInterfaceParserTest {
                 new VirtualInterfaceAddress("Mgmt", "192.0.2.1"),
                 new VirtualInterfaceAddress("Sync", "198.51.100.1")),
                 vips, "the VMAC address trailer on the Sync row is not an IPv4 literal and is ignored");
+    }
+
+    /** cp_vsx_interfaces_identical_to_physical (2026-09-21): the earlier "Interface Name:  Status:"
+     * table gives Up/Down for a monitored interface -- the trailing "(S)" sync-role marker is
+     * stripped so the name matches the address section's own "Mgmt"/"Sync" exactly. */
+    @Test
+    void readsTheInterfaceNameStatusTableStrippingTheTrailingRoleMarker() {
+        Map<String, String> states =
+                CheckPointClusterVirtualInterfaceParser.parseInterfaceStates(Fixtures.read("cp/cphaprob_a_m_if.txt"));
+
+        assertEquals(Map.of("Mgmt", InventoryInterface.STATE_UP, "Sync", InventoryInterface.STATE_UP), states);
     }
 
     @Test

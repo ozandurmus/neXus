@@ -15,6 +15,7 @@ import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
 import com.securityexpert.nexus.ui2.jobs.transport.ConnectionTarget;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
 
 /**
@@ -43,7 +44,7 @@ class InventoryJobExecutorEndToEndTest {
                 Map.entry("bash -lc 'vsenv 2 && fw getifs && ip -4 route show'",
                         "default via 203.0.113.1 dev eth0 proto 7\n"),
                 Map.entry("bash -lc 'vsenv 2 && cphaprob -a if'",
-                        "Virtual cluster interfaces: 1\neth0        203.0.113.2\n"),
+                        "Interface Name:  Status:\neth0        UP\n\nVirtual cluster interfaces: 1\neth0        203.0.113.2\n"),
                 Map.entry("bash -lc 'vsenv 2 && cphaprob stat'", "1 (local) 203.0.113.2 100% ACTIVE gw-a\n"),
                 Map.entry("bash -lc 'vsenv 5 && fw getifs && ip -4 route show'",
                         "198.51.100.0/29 dev eth0 proto kernel scope link src 198.51.100.2\n"),
@@ -93,18 +94,22 @@ class InventoryJobExecutorEndToEndTest {
         // cp_vsx_interfaces_identical_to_physical: on a genuine cluster member (role != STANDALONE),
         // a VS context's interfaces come from "cphaprob -a if"'s own "Virtual cluster interfaces"
         // section, not "fw getifs" (measured live to return an internal VSX addressing scheme on a
-        // cluster member) -- bare address, no netmask, state unknown (that section carries neither).
+        // cluster member) -- bare address, no netmask. State comes from that same output's earlier
+        // "Interface Name: Status:" table when present (vsid 2); an interface absent from that table
+        // (vsid 5's fixture carries none) stays unknown rather than guessed.
         InventoryContext vsid2 = contextNamed(run, "2");
         assertEquals(1, vsid2.interfaces().size());
         assertEquals(1, vsid2.interfaces().get(0).addresses().size(), "this VS's own cluster-interface address only");
         assertEquals("203.0.113.2", vsid2.interfaces().get(0).addresses().get(0).address());
         assertEquals(InventoryAddress.ROLE_MEMBER, vsid2.interfaces().get(0).addresses().get(0).role());
+        assertEquals(InventoryInterface.STATE_UP, vsid2.interfaces().get(0).state());
         assertEquals(1, vsid2.routes().size());
 
         InventoryContext vsid5 = contextNamed(run, "5");
         assertEquals(1, vsid5.interfaces().get(0).addresses().size(), "this VS's own cluster-interface address only");
         assertEquals("198.51.100.2", vsid5.interfaces().get(0).addresses().get(0).address());
         assertEquals(InventoryAddress.ROLE_MEMBER, vsid5.interfaces().get(0).addresses().get(0).role());
+        assertEquals(InventoryInterface.STATE_UNKNOWN, vsid5.interfaces().get(0).state());
         assertEquals(1, vsid5.routes().size());
     }
 

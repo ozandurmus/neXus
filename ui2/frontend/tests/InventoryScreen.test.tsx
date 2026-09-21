@@ -87,6 +87,30 @@ describe("InventoryScreen device list", () => {
     expect(screen.getByText("1 device enrolled")).toBeInTheDocument();
   });
 
+  it("sorts the device list by name and by vendor via the sort control", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, {
+      devices: [
+        { device_id: "z-pan", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "zeta-pan", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
+        { device_id: "a-cp", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "alpha-cp", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
+        { device_id: "m-cp", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "mid-cp", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
+      ],
+    })));
+    render(withTheme(<InventoryScreen />));
+    await waitFor(() => expect(screen.getByText("zeta-pan")).toBeInTheDocument());
+
+    const namesInOrder = () => screen.getAllByText(/^(zeta-pan|alpha-cp|mid-cp)$/).map((el) => el.textContent);
+
+    // Default: Name (A->Z).
+    expect(namesInOrder()).toEqual(["alpha-cp", "mid-cp", "zeta-pan"]);
+
+    fireEvent.change(screen.getByLabelText("Sort devices"), { target: { value: "name_desc" } });
+    expect(namesInOrder()).toEqual(["zeta-pan", "mid-cp", "alpha-cp"]);
+
+    fireEvent.change(screen.getByLabelText("Sort devices"), { target: { value: "vendor" } });
+    // Check Point sorts before Palo Alto alphabetically; within Check Point, name breaks the tie.
+    expect(namesInOrder()).toEqual(["alpha-cp", "mid-cp", "zeta-pan"]);
+  });
+
   it("distinguishes completed, failed, and never-collected devices and filters only failures", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, {
       devices: [
@@ -328,6 +352,75 @@ describe("InventoryScreen device list", () => {
     fireEvent.click(screen.getByText("GarantiBetaAA"));
     await waitFor(() => expect(screen.getByText("eth0.100")).toBeInTheDocument());
     expect(screen.queryByText("Mgmt")).toBeNull();
+  });
+
+  it("keeps a standalone Check Point VSX device's Physical and VS contexts separate and sidebar-driven, never merged or double-selectable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/devices") {
+          return Promise.resolve(
+            jsonResponse(200, {
+              devices: [
+                {
+                  device_id: "standalone-vsx-1",
+                  vendor_hint: "check_point",
+                  enrollment_state: "ENROLLED",
+                  hostname: "FW-CKP-STANDALONE-VSX",
+                  model: "Quantum",
+                  software_version: "R81.20",
+                  ha_role: null,
+                  cluster_member_ref: null,
+                  virtual_systems: "GarantiBetaAA",
+                },
+              ],
+            }),
+          );
+        }
+        if (url === "/devices/standalone-vsx-1/inventory") {
+          return Promise.resolve(
+            jsonResponse(200, {
+              device_id: "standalone-vsx-1",
+              collected_at: "2026-09-21T12:00:00Z",
+              contexts: [
+                {
+                  context: "physical",
+                  interfaces: [{ name: "Mgmt", kind: "physical", addresses: [{ address: "10.1.1.1/24", family: "ipv4", role: "member" }] }],
+                  routes: [],
+                },
+                {
+                  context: "1",
+                  vs_name: "GarantiBetaAA",
+                  interfaces: [{ name: "eth0.100", kind: "vlan", addresses: [{ address: "192.0.2.1/24", family: "ipv4", role: "member" }] }],
+                  routes: [],
+                },
+              ],
+              virtual_systems: ["GarantiBetaAA"],
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+      }),
+    );
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("FW-CKP-STANDALONE-VSX")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("FW-CKP-STANDALONE-VSX"));
+
+    // Physical shows only the chassis's own interface -- never merged with the VS's, and no
+    // second tab-strip selector (beyond the outer Interfaces/Routing/... tabs) duplicates the
+    // sidebar's own VS sub-navigation.
+    await waitFor(() => expect(screen.getByText("Mgmt")).toBeInTheDocument());
+    expect(screen.queryByText("eth0.100")).toBeNull();
+    expect(screen.queryByRole("tab", { name: /GarantiBetaAA/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /Physical/i })).toBeNull();
+
+    // Selecting the VS from the sidebar switches straight to that VS's own interface.
+    fireEvent.click(screen.getByText("GarantiBetaAA"));
+    await waitFor(() => expect(screen.getByText("eth0.100")).toBeInTheDocument());
+    expect(screen.queryByText("Mgmt")).toBeNull();
+    expect(screen.queryByRole("tab", { name: /GarantiBetaAA/i })).toBeNull();
   });
 
   it("reads two members agreeing on a non-up/down state as that state, not Degraded, and hides loopback", async () => {

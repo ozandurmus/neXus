@@ -274,7 +274,8 @@ public final class InventoryCapabilityExecutor {
                         CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
                 if (clusterMember) {
                     String clusterIfOutput = execOutput(session, steps.get(1));
-                    vsInterfaces = toParsedInterfaces(CheckPointClusterVirtualInterfaceParser.parse(clusterIfOutput));
+                    vsInterfaces = toParsedInterfaces(CheckPointClusterVirtualInterfaceParser.parse(clusterIfOutput),
+                            CheckPointClusterVirtualInterfaceParser.parseInterfaceStates(clusterIfOutput));
                 } else {
                     vsInterfaces = CheckPointFwGetifsParser.parse(halves.addrOutput());
                 }
@@ -484,10 +485,12 @@ public final class InventoryCapabilityExecutor {
      * configured one). That section carries no netmask and no up/down state, so the address is recorded
      * bare and the state {@link InventoryInterface#STATE_UNKNOWN}, same fail-closed treatment as {@code
      * fw getifs} on a standalone gateway. */
-    private static List<ParsedInterface> toParsedInterfaces(List<VirtualInterfaceAddress> clusterInterfaces) {
+    private static List<ParsedInterface> toParsedInterfaces(List<VirtualInterfaceAddress> clusterInterfaces,
+            Map<String, String> interfaceStates) {
         return clusterInterfaces.stream()
                 .map(vip -> new ParsedInterface(vip.interfaceName(), Optional.empty(),
-                        CheckPointFwGetifsParser.kindOf(vip.interfaceName()), InventoryInterface.STATE_UNKNOWN,
+                        CheckPointFwGetifsParser.kindOf(vip.interfaceName()),
+                        interfaceStates.getOrDefault(vip.interfaceName(), InventoryInterface.STATE_UNKNOWN),
                         List.of(new ParsedAddress(vip.address(), InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER)),
                         Optional.empty()))
                 .toList();
