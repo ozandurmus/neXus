@@ -233,10 +233,14 @@ public final class InventoryCapabilityExecutor {
                 }
             }
 
+            List<VirtualInterfaceAddress> physicalVips = CheckPointClusterVirtualInterfaceParser.parse(vipOutput);
+            LOG.log(System.Logger.Level.INFO,
+                    "[INVENTORY_VIP_PARSE] target={0}:{1} vip_output_len={2} vip_addresses_found={3}",
+                    target.host(), target.port(), vipOutput.length(), physicalVips.size());
+
             List<InventoryContext> contexts = new ArrayList<>();
             contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
-                    toInventoryInterfaces(mergeVirtualAddresses(physicalInterfaces,
-                            CheckPointClusterVirtualInterfaceParser.parse(vipOutput))),
+                    toInventoryInterfaces(mergeVirtualAddresses(physicalInterfaces, physicalVips)),
                     toInventoryRoutes(physicalRoutes)));
 
             CheckPointHaStateParser.HaState haState = CheckPointHaStateParser.parse(haStatOutput);
