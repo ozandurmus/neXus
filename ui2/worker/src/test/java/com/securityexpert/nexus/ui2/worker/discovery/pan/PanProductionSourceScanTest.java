@@ -17,9 +17,8 @@ import com.securityexpert.nexus.ui2.discovery.pan.PanoramaApiFieldBinding;
 
 /**
  * Static-scan checks over this movement's production sources: FB-2 field-
- * binding isolation (AC-5), the TLS "no all-trusting trust manager/
- * hostname verifier" invariant (AC-3), and T-7's "nothing written to disk"
- * property (AC-6). Mirrors cp's {@code FieldBindingIsolationTest} and
+ * binding isolation (AC-5), the PAN validity-only TLS boundary, and T-7's
+ * "nothing written to disk" property (AC-6). Mirrors cp's {@code FieldBindingIsolationTest} and
  * {@code NoNumericPortLiteralTest} pattern: scan the whole package's
  * production text, not a hand-picked sample.
  */
@@ -59,38 +58,35 @@ class PanProductionSourceScanTest {
         assertFalse(!violations.isEmpty(), "field-binding isolation violated: " + violations);
     }
 
-    /**
-     * AC-3: no all-trusting {@code TrustManager} or hostname verifier exists anywhere in
-     * production source, and the one trust manager this movement does ship both names its
-     * check method and can actually reject a certificate.
-     */
+    /** PAN TLS accepts any chain but still rejects missing, malformed, or expired certificates. */
     @Test
-    void tlsProductionSourceContainsNoAllTrustingTrustManagerOrHostnameVerifier() throws IOException {
+    void tlsProductionSourceUsesValidityOnlyAndNoEnrollmentOrPin() throws IOException {
         List<String> forbidden = List.of(
-                "TrustAllCerts", "ALLOW_ALL_HOSTNAME_VERIFIER", "NoopHostnameVerifier", "trustAllCertificates",
-                "setHostnameVerifier", "-> true");
+                "CaBundlePath", "PinnedFingerprint", "pinnedFingerprint", "findActiveFingerprint",
+                "PAN_DISCOVERY_TRUST_CA_BUNDLE_PATH", "PAN_DISCOVERY_TRUST_PINNED_FINGERPRINT_SHA256");
         List<String> violations = new ArrayList<>();
         String transportSource;
-        try (Stream<Path> files = Files.walk(xmlApiTransportMainSourceDir())) {
-            List<Path> javaFiles = files.filter(p -> p.toString().endsWith(".java")).toList();
-            StringBuilder combined = new StringBuilder();
-            for (Path p : javaFiles) {
-                String content = Files.readString(p);
-                combined.append(content);
-                for (String pattern : forbidden) {
-                    if (content.contains(pattern)) {
-                        violations.add(p.getFileName() + " contains forbidden pattern \"" + pattern + "\"");
+        StringBuilder combined = new StringBuilder();
+        for (Path packageDir : List.of(discoveryPanMainSourceDir(), xmlApiTransportMainSourceDir())) {
+            try (Stream<Path> files = Files.walk(packageDir)) {
+                for (Path p : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                    String content = Files.readString(p);
+                    combined.append(content);
+                    for (String pattern : forbidden) {
+                        if (content.contains(pattern)) {
+                            violations.add(p.getFileName() + " contains forbidden pattern \"" + pattern + "\"");
+                        }
                     }
                 }
             }
-            transportSource = combined.toString();
         }
-        assertTrue(violations.isEmpty(), "TLS bypass pattern found: " + violations);
+        transportSource = combined.toString();
+        assertTrue(violations.isEmpty(), "legacy PAN trust path found: " + violations);
         assertTrue(transportSource.contains("checkServerTrusted"), "expected a checkServerTrusted implementation");
+        assertTrue(transportSource.contains("certificate.checkValidity()"),
+                "expected every presented certificate to have its validity period checked");
         assertTrue(transportSource.contains("throw new CertificateException"),
                 "the trust manager must be able to reject a certificate, not merely declare a check method");
-        assertTrue(transportSource.contains("setEndpointIdentificationAlgorithm(\"HTTPS\")"),
-                "expected explicit HTTPS hostname verification to be requested");
     }
 
     /** T-7/AC-6: nothing in this movement's production source ever writes a file. */

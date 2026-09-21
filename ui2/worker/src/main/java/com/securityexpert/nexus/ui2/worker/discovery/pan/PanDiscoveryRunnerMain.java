@@ -24,7 +24,6 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanXmlApiTransport;
  * <p>Invocation:</p>
  * <pre>
  * UI2_DB_URL=... UI2_DB_APP_USER_FILE=... UI2_DB_APP_PASSWORD_FILE=... UI2_CREDENTIAL_STORE_KEY_FILE=... \
- *   PAN_DISCOVERY_TRUST_CA_BUNDLE_PATH=... (or PAN_DISCOVERY_TRUST_PINNED_FINGERPRINT_SHA256=...) \
  *   java -cp worker.jar:... com.securityexpert.nexus.ui2.worker.discovery.pan.PanDiscoveryRunnerMain \
  *   --panorama-host &lt;host&gt; --panorama-port &lt;port&gt; \
  *   --credential-ref &lt;opaque-ref&gt; --trust-rule-ref &lt;opaque-ref&gt;

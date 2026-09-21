@@ -148,11 +148,7 @@ public final class Ui2WorkerMain {
                 new StoreBackedSshCredentialResolver(resolverComponents.credentialReferenceRepository(),
                         resolverComponents.credentialRepository(), resolverComponents.cipher());
         SshExecTransport sshTransport = new SshExecTransport(sshCredentialResolver, trustRuleResolver);
-        boolean allowDeviceTrust = !"false".equalsIgnoreCase(System.getenv("UI2_PAN_ALLOW_DEVICE_TRUST"));
-        PanTrustRuleResolver panTrustRuleResolver = new EnvironmentPanTrustRuleResolver(
-                new com.securityexpert.nexus.ui2.persistence.discovery.JooqManagementEndpointPanCertTrustRepository(
-                        transactionBoundary),
-                allowDeviceTrust);
+        PanTrustRuleResolver panTrustRuleResolver = EnvironmentPanTrustRuleResolver.INSTANCE;
         PanXmlApiTransport panTransport = new PanXmlApiTransport(paloAltoTrustRuleRef, panTrustRuleResolver);
 
         // WORKER.md "Both vendors in one worker": one composite DeviceTransport

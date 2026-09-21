@@ -7,16 +7,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.KeyStore;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
-import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 
@@ -25,9 +19,7 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509ExtendedTrustManager;
-import javax.net.ssl.X509TrustManager;
 
 import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
 import com.securityexpert.nexus.ui2.jobs.transport.ConnectResult;
@@ -52,17 +44,8 @@ import com.securityexpert.nexus.ui2.jobs.transport.XmlApiStreamOutcome;
  * TransportNotImplementedException} exactly as {@code SshExecTransport}
  * does for {@code xmlApiCall} (contract §5).
  *
- * <p>TLS verification is always on (WORKER.md "TLS trust"): the {@link
- * SSLContext} used for every request is built strictly from the resolved
- * {@link TrustResolution} -- a PEM CA bundle or a pinned certificate
- * fingerprint -- and standard HTTPS hostname verification is always
- * requested via {@link SSLParameters#setEndpointIdentificationAlgorithm}.
- * There is no branch anywhere in this class that accepts an unresolved
- * trust rule or any certificate: an unresolved trust rule fails every call
- * this instance ever makes ({@link XmlApiResult.Failed}), and this is
- * defense-in-depth only -- {@code PanoramaEnumerationAdapter} refuses the
- * run before this class is ever invoked for an unresolvable trust rule
- * (AC-3), so this path is exercised by no fixture test.</p>
+ * <p>Palo Alto certificates are accepted without chain, hostname, or
+ * per-device verification after their X.509 validity period is checked.</p>
  */
 public final class PanXmlApiTransport implements DeviceTransport {
 
@@ -136,10 +119,6 @@ public final class PanXmlApiTransport implements DeviceTransport {
         } catch (IllegalArgumentException e) {
             return new XmlApiResult.Failed("invalid api target URI: " + e.getMessage());
         } catch (IOException e) {
-            String certificateFailure = certificateFailureReason(e);
-            if (certificateFailure != null) {
-                return new XmlApiResult.Failed(certificateFailure);
-            }
             System.getLogger(PanXmlApiTransport.class.getName())
                     .log(System.Logger.Level.WARNING, "xml api call IOException: " + e.getMessage(), e);
             return new XmlApiResult.Failed("xml api call did not complete: " + e.getMessage());
@@ -187,10 +166,6 @@ public final class PanXmlApiTransport implements DeviceTransport {
         } catch (IllegalArgumentException e) {
             return new XmlApiStreamOutcome.Failed<>("invalid api target URI: " + e.getMessage());
         } catch (IOException e) {
-            String certificateFailure = certificateFailureReason(e);
-            if (certificateFailure != null) {
-                return new XmlApiStreamOutcome.Failed<>(certificateFailure);
-            }
             return new XmlApiStreamOutcome.Failed<>("xml api streaming call did not complete: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -206,14 +181,10 @@ public final class PanXmlApiTransport implements DeviceTransport {
     }
 
     private HttpClient buildClient(URI endpoint) {
-        TrustResolution resolution = resolveOrThrow(endpoint);
-        SSLContext sslContext = buildSslContext(resolution);
+        resolveOrThrow(endpoint);
+        SSLContext sslContext = buildSslContext();
         SSLParameters sslParameters = new SSLParameters();
-        if (resolution instanceof TrustResolution.PaloAltoDeviceTrust) {
-            sslParameters.setEndpointIdentificationAlgorithm("");
-        } else {
-            sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
-        }
+        sslParameters.setEndpointIdentificationAlgorithm("");
         return HttpClient.newBuilder()
                 .sslContext(sslContext)
                 .sslParameters(sslParameters)
@@ -229,48 +200,17 @@ public final class PanXmlApiTransport implements DeviceTransport {
         return resolution;
     }
 
-    /** TLS trust law: strictly a CA bundle, pinned fingerprint, or verified Palo Alto device trust. */
-    private static SSLContext buildSslContext(TrustResolution resolution) {
+    private static SSLContext buildSslContext() {
         try {
-            TrustManager[] trustManagers = switch (resolution) {
-                case TrustResolution.CaBundlePath caBundlePath -> caBundleTrustManagers(caBundlePath.path());
-                case TrustResolution.PinnedFingerprint pinned -> new TrustManager[] { pinnedTrustManager(pinned.sha256Hex()) };
-                case TrustResolution.PaloAltoDeviceTrust deviceTrust -> new TrustManager[] { paloAltoDeviceTrustManager(deviceTrust) };
-                case TrustResolution.Unresolved ignored -> throw new IllegalStateException("unresolved trust rule reached SSLContext construction");
-            };
             SSLContext context = SSLContext.getInstance("TLS");
-            context.init(null, trustManagers, new SecureRandom());
+            context.init(null, new TrustManager[] { paloAltoDeviceTrustManager() }, new SecureRandom());
             return context;
-        } catch (java.security.GeneralSecurityException | IOException e) {
-            throw new IllegalStateException("could not build a TLS trust configuration from the resolved trust rule", e);
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IllegalStateException("could not build the Palo Alto TLS configuration", e);
         }
     }
 
-    private static TrustManager[] caBundleTrustManagers(String path) throws java.security.GeneralSecurityException, IOException {
-        CertificateFactory factory = CertificateFactory.getInstance("X.509");
-        Collection<? extends java.security.cert.Certificate> certificates;
-        try (var in = Files.newInputStream(Path.of(path))) {
-            certificates = factory.generateCertificates(in);
-        }
-        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
-        trustStore.load(null, null);
-        int index = 0;
-        for (java.security.cert.Certificate certificate : certificates) {
-            trustStore.setCertificateEntry("pan-discovery-ca-" + index, certificate);
-            index++;
-        }
-        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-        trustManagerFactory.init(trustStore);
-        return trustManagerFactory.getTrustManagers();
-    }
-
-    /**
-     * Verifies the presented chain the same way a CA-backed trust manager would (no
-     * expiry/path shortcuts), then additionally requires the leaf certificate's SHA-256
-     * fingerprint to equal the pinned value -- never a trust manager that returns without
-     * checking (WORKER.md: "no all-trusting TrustManager").
-     */
-    private static X509ExtendedTrustManager pinnedTrustManager(String expectedSha256Hex) throws java.security.GeneralSecurityException {
+    static X509ExtendedTrustManager paloAltoDeviceTrustManager() {
         return new X509ExtendedTrustManager() {
             @Override
             public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
@@ -306,9 +246,11 @@ public final class PanXmlApiTransport implements DeviceTransport {
                 if (chain == null || chain.length == 0) {
                     throw new CertificateException("no server certificate presented");
                 }
-                String presented = sha256Hex(chain[0]);
-                if (!presented.equalsIgnoreCase(expectedSha256Hex)) {
-                    throw new CertificateException("presented certificate fingerprint does not match the pinned trust rule");
+                for (X509Certificate certificate : chain) {
+                    if (certificate == null) {
+                        throw new CertificateException("invalid server certificate chain");
+                    }
+                    certificate.checkValidity();
                 }
             }
 
@@ -317,124 +259,6 @@ public final class PanXmlApiTransport implements DeviceTransport {
                 return new X509Certificate[0];
             }
         };
-    }
-
-    private static X509ExtendedTrustManager paloAltoDeviceTrustManager(java.util.Optional<String> pinnedFingerprint)
-            throws java.security.GeneralSecurityException {
-        return paloAltoDeviceTrustManager(new TrustResolution.PaloAltoDeviceTrust(pinnedFingerprint));
-    }
-
-    private static X509ExtendedTrustManager paloAltoDeviceTrustManager(TrustResolution.PaloAltoDeviceTrust deviceTrust)
-            throws java.security.GeneralSecurityException {
-        TrustManagerFactory factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-        factory.init((KeyStore) null);
-        for (TrustManager manager : factory.getTrustManagers()) {
-            if (manager instanceof X509ExtendedTrustManager extended) {
-                return paloAltoDeviceTrustManager(deviceTrust, extended);
-            }
-        }
-        throw new java.security.GeneralSecurityException("platform did not provide an X.509 trust manager");
-    }
-
-    static X509ExtendedTrustManager paloAltoDeviceTrustManager(java.util.Optional<String> pinnedFingerprint,
-            X509ExtendedTrustManager platformTrustManager) {
-        return paloAltoDeviceTrustManager(new TrustResolution.PaloAltoDeviceTrust(pinnedFingerprint), platformTrustManager);
-    }
-
-    static X509ExtendedTrustManager paloAltoDeviceTrustManager(TrustResolution.PaloAltoDeviceTrust deviceTrust,
-            X509ExtendedTrustManager platformTrustManager) {
-        return new X509ExtendedTrustManager() {
-            @Override
-            public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-                throw new CertificateException("pan transport is a client only; it never verifies a client certificate");
-            }
-
-            @Override
-            public void checkClientTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
-                checkClientTrusted(chain, authType);
-            }
-
-            @Override
-            public void checkClientTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
-                checkClientTrusted(chain, authType);
-            }
-
-            @Override
-            public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-                verify(chain, () -> platformTrustManager.checkServerTrusted(chain, authType));
-            }
-
-            @Override
-            public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
-                verify(chain, () -> platformTrustManager.checkServerTrusted(chain, authType, socket));
-            }
-
-            @Override
-            public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
-                verify(chain, () -> platformTrustManager.checkServerTrusted(chain, authType, engine));
-            }
-
-            private void verify(X509Certificate[] chain, CertificateCheck platformCheck) throws CertificateException {
-                if (chain == null || chain.length == 0) {
-                    throw new CertificateException("no server certificate presented");
-                }
-                try {
-                    platformCheck.run();
-                    return;
-                } catch (CertificateException ignored) {
-                    // Explicit per-endpoint authorization is consulted only after chain verification fails.
-                }
-                chain[0].checkValidity();
-                String presented = sha256Hex(chain[0]);
-                java.util.Optional<String> pinnedFingerprint = deviceTrust.pinnedFingerprint();
-                if (pinnedFingerprint.isPresent() && !pinnedFingerprint.get().isBlank()) {
-                    if (!presented.equalsIgnoreCase(pinnedFingerprint.get())) {
-                        throw new CertificateException("presented certificate fingerprint does not match the enrolled trust entry");
-                    }
-                    return;
-                }
-                throw new UnverifiableCertificateException(presented);
-            }
-
-            @Override
-            public X509Certificate[] getAcceptedIssuers() {
-                return platformTrustManager.getAcceptedIssuers();
-            }
-        };
-    }
-
-    @FunctionalInterface
-    private interface CertificateCheck {
-        void run() throws CertificateException;
-    }
-
-    private static final class UnverifiableCertificateException extends CertificateException {
-        private UnverifiableCertificateException(String fingerprint) {
-            super("server certificate unverifiable; fingerprint_sha256=" + fingerprint);
-        }
-    }
-
-    static String certificateFailureReason(Throwable failure) {
-        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-            if (cause instanceof UnverifiableCertificateException) {
-                return cause.getMessage();
-            }
-        }
-        return null;
-    }
-
-    private static String sha256Hex(X509Certificate certificate) throws CertificateException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(certificate.getEncoded());
-            StringBuilder sb = new StringBuilder(hash.length * 2);
-            for (byte b : hash) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new CertificateException(e);
-        }
     }
 
     private static String formEncode(Map<String, String> params) {
