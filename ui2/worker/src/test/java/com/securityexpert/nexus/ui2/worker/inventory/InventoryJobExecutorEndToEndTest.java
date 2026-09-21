@@ -41,7 +41,7 @@ class InventoryJobExecutorEndToEndTest {
                 Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ADDR_SHOW_V6), ""),
                 Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ROUTE_SHOW), "default via 192.0.2.1 dev eth0 proto 7\n"),
                 Map.entry(vsenvZero(InventoryReadPlan.CP_CPHAPROB_STAT), "1 (local) 192.0.2.10 100% ACTIVE gw-a\n"),
-                Map.entry(vsenvZero(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF),
+                Map.entry(vsenvZeroFaultTolerant(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF),
                         "Virtual cluster interfaces: 1\neth0        192.0.2.1\n"),
                 Map.entry("bash -lc 'vsenv 2 && ip -4 addr show && ip -4 route show'",
                         "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"
@@ -114,6 +114,13 @@ class InventoryJobExecutorEndToEndTest {
 
     private static String vsenvZero(String read) {
         return "bash -lc 'vsenv 0 && " + read + "'";
+    }
+
+    /** cp_cluster_vip_never_observed_in_fleet: the cluster-VIP read alone uses the fault-tolerant
+     * vsenv shape (vsenv 0 >/dev/null 2>&1 || true; <read>), matching InventoryCapabilityExecutor's own
+     * faultTolerantVsenv0 -- a misdetected-VSX device's failing vsenv 0 no longer short-circuits it via &&. */
+    private static String vsenvZeroFaultTolerant(String read) {
+        return "bash -lc 'vsenv 0 >/dev/null 2>&1 || true; " + read + "'";
     }
 
     /**

@@ -235,8 +235,13 @@ public final class InventoryCapabilityExecutor {
             // fine without one -- while the same command run interactively (a real terminal) produces its
             // full report. Issued here as its own pty-enabled exec, not chained into the batch, so the
             // working batch reads keep their current, already-parsed, non-terminal output shape.
-            String vipOutput = execOutputPty(session,
-                    InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
+            //
+            // Product Owner measured directly (2026-09-21): checkPointPhysicalCommand's vsenv wrap chains
+            // with &&, so a device the vsx-detection step misclassifies as VSX -- vsenv 0 then genuinely
+            // fails ("This is only supported on a VSX machine") -- short-circuits cphaprob entirely; it never
+            // runs at all. The batch's own prefix already tolerates exactly this (vsenv ... || true; <read>);
+            // this call now matches that fault-tolerant shape instead of checkPointPhysicalCommand's &&.
+            String vipOutput = execOutputPty(session, faultTolerantVsenv0(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
             List<VirtualInterfaceAddress> physicalVips = CheckPointClusterVirtualInterfaceParser.parse(vipOutput);
             LOG.log(System.Logger.Level.INFO,
                     "[INVENTORY_VIP_PARSE] target={0}:{1} vip_output_len={2} vip_addresses_found={3}",
@@ -740,6 +745,14 @@ public final class InventoryCapabilityExecutor {
             }
         }
         return output;
+    }
+
+    /** cp_cluster_vip_never_observed_in_fleet: {@code checkPointPhysicalCommand}'s own {@code vsenv 0 &&
+     * <read>} wrap short-circuits {@code <read>} entirely whenever vsenv fails -- including when vsx-detection
+     * misclassifies a plain gateway as VSX, measured live. Mirrors the batch's own already-fault-tolerant
+     * {@code vsenv 0 >/dev/null 2>&1 || true; <read>} shape instead. */
+    private static String faultTolerantVsenv0(String read, boolean vsxHost) {
+        return vsxHost ? "bash -lc 'vsenv 0 >/dev/null 2>&1 || true; " + read + "'" : read;
     }
 
     /** cp_cluster_vip_never_observed_in_fleet: identical to {@link #execOutput}, except the exec channel
