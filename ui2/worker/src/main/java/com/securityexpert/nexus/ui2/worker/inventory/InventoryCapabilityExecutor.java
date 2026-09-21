@@ -243,10 +243,15 @@ public final class InventoryCapabilityExecutor {
             LOG.log(System.Logger.Level.INFO,
                     "[INVENTORY_VIP_PARSE] target={0}:{1} vip_output_len={2} vip_addresses_found={3}",
                     target.host(), target.port(), vipOutput.length(), physicalVips.size());
+            // cp_vsx_interfaces_identical_to_physical (State column): "fw getifs" carries no up/down
+            // column at all (unlike the old "ip addr show" physical read it replaced), but this same
+            // cphaprob -a if call's own "Interface Name: Status:" table does -- apply it here so a
+            // monitored physical interface keeps its real state instead of falling to unknown.
+            Map<String, String> physicalStates = CheckPointClusterVirtualInterfaceParser.parseInterfaceStates(vipOutput);
 
             List<InventoryContext> contexts = new ArrayList<>();
             contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
-                    toInventoryInterfaces(mergeVirtualAddresses(physicalInterfaces, physicalVips)),
+                    toInventoryInterfaces(applyInterfaceStates(mergeVirtualAddresses(physicalInterfaces, physicalVips), physicalStates)),
                     toInventoryRoutes(physicalRoutes)));
 
             CheckPointHaStateParser.HaState haState = CheckPointHaStateParser.parse(haStatOutput);
@@ -493,6 +498,21 @@ public final class InventoryCapabilityExecutor {
                         interfaceStates.getOrDefault(vip.interfaceName(), InventoryInterface.STATE_UNKNOWN),
                         List.of(new ParsedAddress(vip.address(), InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER)),
                         Optional.empty()))
+                .toList();
+    }
+
+    /** Overrides each interface's state from {@code states} by name when present, leaving it as
+     * parsed (typically {@code unknown}, since {@code fw getifs} carries no state column) otherwise. */
+    private static List<ParsedInterface> applyInterfaceStates(List<ParsedInterface> interfaces, Map<String, String> states) {
+        return interfaces.stream()
+                .map(iface -> {
+                    String state = states.get(iface.name());
+                    if (state == null) {
+                        return iface;
+                    }
+                    return new ParsedInterface(iface.name(), iface.parent(), iface.kind(), state, iface.addresses(),
+                            iface.vlanId());
+                })
                 .toList();
     }
 

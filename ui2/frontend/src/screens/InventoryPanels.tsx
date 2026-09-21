@@ -1182,18 +1182,11 @@ export function ClusterInterfacesPanel({
     </Box>
   );
 
-  // Check Point's VSX virtual systems are their own contexts -- Physical shows only the chassis's
-  // own interfaces, never merged with a virtual system's. Selection is the sidebar's own VS
-  // sub-navigation under this cluster (already driving activeContext); no second tab strip is
-  // rendered here to pick the same thing again. Palo Alto's vsys genuinely shares the single-
-  // device reference view instead: merged by default, tagged by a VSYS column.
-  if (!isPaloAlto) {
-    const found = resolveContext(activeContext ?? "physical");
-    return found
-      ? <ClusterInterfacesTable interfaces={found.interfaces} members={members} />
-      : renderUncollected(activeContext ?? "physical");
-  }
-
+  // Both vendors' virtual systems share the same reference view: merged by default (tagged by a
+  // VSYS/VS column), filtered to one context when the sidebar's own VS sub-navigation under this
+  // cluster picks one -- no second tab strip is rendered here to pick the same thing again.
+  // sharedAddressOnly still separates Check Point's own per-member address columns (plus Cluster
+  // VIP) from Palo Alto's single shared Address column; only the merge/filter structure is shared.
   if (!activeContext) {
     const merged = tabs.flatMap((tab) => {
       const found = resolveContext(tab.context);
@@ -1268,15 +1261,8 @@ export function ClusterRoutesPanel({
     </Box>
   );
 
-  // Same split as ClusterInterfacesPanel: Check Point's VS selection comes from the sidebar
-  // alone, no second tab strip here to pick the same context again.
-  if (!isPaloAlto) {
-    const found = resolveContext(activeContext ?? "physical");
-    return found
-      ? <ClusterRoutesTable routes={found.routes} members={members} />
-      : renderUncollected(activeContext ?? "physical");
-  }
-
+  // Same merge/filter structure as ClusterInterfacesPanel, for both vendors: merged by default,
+  // filtered to one context when the sidebar's own VS sub-navigation picks one.
   if (!activeContext) {
     const merged = tabs.flatMap((tab) => {
       const found = resolveContext(tab.context);
@@ -1486,10 +1472,10 @@ export function DeviceInventoryPanels({
   const isPaloAlto = device.vendor_hint === "palo_alto";
   const [activeContext, setActiveContext] = useState<string | null>(initialVs ?? null);
 
+  // Re-clicking the device's own row (not a VS) sends initialVs=undefined -- that must clear
+  // back to Physical too, not just switching to a different VS's value.
   useEffect(() => {
-    if (initialVs) {
-      setActiveContext(initialVs);
-    }
+    setActiveContext(initialVs ?? null);
   }, [initialVs]);
 
   const deviceInventoryFetch = useFetchOnMount<DeviceInventory>(
@@ -1667,10 +1653,10 @@ export function ClusterDetailPanels({
   const [error, setError] = useState<string | null>(null);
   const [activeVsContext, setActiveVsContext] = useState<string | null>(initialVs ?? null);
 
+  // Re-clicking the cluster's own row (not a VS) sends initialVs=undefined -- that must clear
+  // back to Physical too, not just switching to a different VS's value.
   useEffect(() => {
-    if (initialVs !== undefined) {
-      setActiveVsContext(initialVs);
-    }
+    setActiveVsContext(initialVs ?? null);
   }, [initialVs]);
 
   const fetchInventory = useCallback(async () => {

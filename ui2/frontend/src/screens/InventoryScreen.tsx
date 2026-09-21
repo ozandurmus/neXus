@@ -64,6 +64,23 @@ function hasFailedCollection(device: DeviceSummary): boolean {
   return device.latest_job_state?.toUpperCase() === "FAILED";
 }
 
+// The sidebar's cluster row keeps only what tells the operator whether this cluster is worth a
+// look: its name, that it is a cluster, and whether the connection is clean -- member count,
+// virtual-system count and the raw cluster reference move to the detail view, which already
+// shows every member's own version/serial/identity once selected.
+function clusterHealthTone(members: readonly DeviceSummary[]): "ok" | "warn" {
+  const allEnrolled = members.every((m) => m.enrollment_state === "ENROLLED");
+  const anyFailed = members.some(hasFailedCollection);
+  return allEnrolled && !anyFailed ? "ok" : "warn";
+}
+
+function clusterHealthLabel(members: readonly DeviceSummary[]): string {
+  const anyFailed = members.some(hasFailedCollection);
+  if (anyFailed) return "Collection issue";
+  const allEnrolled = members.every((m) => m.enrollment_state === "ENROLLED");
+  return allEnrolled ? "✓ Live" : "Not enrolled";
+}
+
 function DeviceRow({
   device,
   indented = false,
@@ -282,10 +299,12 @@ function DeviceList({
                     Cluster {clusterTitle}
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
-                    <StatusChip tone="mem" label={`${members.length} members`} dense />
-                    {clusterVsList.length > 0 && (
-                      <StatusChip tone="neutral" label={`${clusterVsList.length} ${isPaloAlto ? "VSYS" : "VS"}`} dense />
-                    )}
+                    <StatusChip tone="neutral" label="Cluster" dense />
+                    <StatusChip
+                      tone={clusterHealthTone(members)}
+                      label={clusterHealthLabel(members)}
+                      dense
+                    />
                     <Box
                       component="span"
                       onClick={(e) => {
@@ -306,28 +325,8 @@ function DeviceList({
                   </Box>
                 </Box>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 0.25, overflow: "hidden" }}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      fontFamily: "monospace",
-                      fontSize: "0.7rem",
-                      color: m3.primary,
-                      bgcolor: m3.scHigh,
-                      px: 0.75,
-                      py: 0.1,
-                      borderRadius: "4px",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      maxWidth: "200px",
-                      flexShrink: 0,
-                    }}
-                    title={`Verified API Cluster Reference: ${ref}`}
-                  >
-                    {ref}
-                  </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    · {isPaloAlto ? "PAN-OS HA" : "ClusterXL"} · {members.map((m) => deviceNameLabel(m.hostname)).join(" · ")}
+                    {isPaloAlto ? "PAN-OS HA" : "ClusterXL"} · {members.map((m) => deviceNameLabel(m.hostname)).join(" · ")}
                   </Typography>
                 </Box>
               </Box>

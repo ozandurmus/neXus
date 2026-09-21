@@ -189,10 +189,10 @@ describe("InventoryScreen device list", () => {
     render(withTheme(<InventoryScreen />));
 
     await waitFor(() => expect(screen.getByText("Cluster cluster-1")).toBeInTheDocument());
-    expect(screen.getByText("2 members")).toBeInTheDocument();
+    expect(screen.getByText("Cluster")).toBeInTheDocument();
     // Design language §2: a member is named in the cluster's own row and detail header,
     // never rendered as its own sibling row in the list.
-    expect(screen.getByText((_, node) => node?.textContent === "· ClusterXL · member-a · member-b")).toBeInTheDocument();
+    expect(screen.getAllByText((_, node) => node?.textContent === "ClusterXL · member-a · member-b").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /^member-a$/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^member-b$/ })).toBeNull();
     // The standalone device (null cluster_member_ref) renders as a normal row, not nested.
@@ -261,8 +261,6 @@ describe("InventoryScreen device list", () => {
     render(withTheme(<InventoryScreen />));
 
     await waitFor(() => expect(screen.getByText("Cluster FW-CKP-GARANTIDMZAPP-CLS-AA")).toBeInTheDocument());
-    expect(screen.getByText("2 members")).toBeInTheDocument();
-    expect(screen.getByText("2 VS")).toBeInTheDocument();
     expect(screen.getByText("GarantiBetaAA")).toBeInTheDocument();
     expect(screen.getByText("GarantiPosAppAA")).toBeInTheDocument();
 
@@ -272,7 +270,7 @@ describe("InventoryScreen device list", () => {
     expect(screen.getAllByText("GarantiBetaAA").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("keeps a Check Point cluster's Physical and VSX contexts as separate tabs, never merged", async () => {
+  it("merges a Check Point cluster's Physical and VSX contexts by default like Palo Alto, filters on VS selection, and resets on re-selecting the cluster", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((input: RequestInfo | URL) => {
@@ -344,14 +342,21 @@ describe("InventoryScreen device list", () => {
     await waitFor(() => expect(screen.getByText("Cluster FW-CKP-VSX-CLS")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Cluster FW-CKP-VSX-CLS"));
 
-    // Default (Physical) tab shows only the chassis's own interface -- never merged with a VSX's.
+    // Default (no VS selected) merges every collected context, physical included, into one table --
+    // matching Palo Alto's own reference view, per the Product Owner's explicit direction.
     await waitFor(() => expect(screen.getByText("Mgmt")).toBeInTheDocument());
-    expect(screen.queryByText("eth0.100")).toBeNull();
+    expect(screen.getByText("eth0.100")).toBeInTheDocument();
 
-    // Selecting the VS from the sidebar switches to that VSX's own tab, showing only its interface.
+    // Selecting the VS from the sidebar filters to that VS's own interface only.
     fireEvent.click(screen.getByText("GarantiBetaAA"));
-    await waitFor(() => expect(screen.getByText("eth0.100")).toBeInTheDocument());
-    expect(screen.queryByText("Mgmt")).toBeNull();
+    await waitFor(() => expect(screen.queryByText("Mgmt")).toBeNull());
+    expect(screen.getByText("eth0.100")).toBeInTheDocument();
+
+    // Re-clicking the cluster's own row resets back to the merged view -- this must not stay
+    // stuck showing the previously selected VS (the bug the Product Owner reported live).
+    fireEvent.click(screen.getByText("Cluster FW-CKP-VSX-CLS"));
+    await waitFor(() => expect(screen.getByText("Mgmt")).toBeInTheDocument());
+    expect(screen.getByText("eth0.100")).toBeInTheDocument();
   });
 
   it("keeps a standalone Check Point VSX device's Physical and VS contexts separate and sidebar-driven, never merged or double-selectable", async () => {
@@ -535,8 +540,6 @@ describe("InventoryScreen device list", () => {
     render(withTheme(<InventoryScreen />));
 
     await waitFor(() => expect(screen.getByText("Cluster PA-HA-PAIR")).toBeInTheDocument());
-    expect(screen.getByText("2 members")).toBeInTheDocument();
-    expect(screen.getByText("2 VSYS")).toBeInTheDocument();
     expect(screen.getByText(/PAN-OS HA · PA-FW-01 · PA-FW-02/)).toBeInTheDocument();
     expect(screen.getByText("default (vsys1)")).toBeInTheDocument();
     expect(screen.getByText("VR-DMZ (vsys2)")).toBeInTheDocument();
