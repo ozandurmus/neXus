@@ -30,6 +30,11 @@ public interface SessionRepository {
         return findBySessionId(sessionId);
     }
 
+    /** Active rows as of one instant, after ending any rows whose deadline has elapsed. */
+    default List<SessionRecord> findActive(Instant asOf) {
+        throw new UnsupportedOperationException("active session listing is not implemented");
+    }
+
     /** {@code ACTIVE} rows whose idle or absolute deadline has already elapsed, for the reconciler (C3 §3.3 rows 4-5). */
     List<SessionRecord> findActivePastDeadline(Instant asOf);
 

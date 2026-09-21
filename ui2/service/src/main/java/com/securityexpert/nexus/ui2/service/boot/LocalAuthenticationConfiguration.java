@@ -56,6 +56,14 @@ public class LocalAuthenticationConfiguration {
     static final Duration IDLE_TIMEOUT = Duration.ofMinutes(30);
     private static final Duration ABSOLUTE_LIFETIME = Duration.ofHours(10);
 
+    public static Duration idleTimeout() {
+        return IDLE_TIMEOUT;
+    }
+
+    public static Duration absoluteLifetime() {
+        return ABSOLUTE_LIFETIME;
+    }
+
     private final Path groupReferenceKeyFile;
     private final String groupReferenceKeyId;
 

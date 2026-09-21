@@ -69,6 +69,14 @@ public final class JooqSessionRepository implements SessionRepository {
     }
 
     @Override
+    public java.util.List<SessionRecord> findActive(Instant asOf) {
+        return afterExpiringPastDeadline(asOf, dsl -> dsl.fetch("select " + COLUMNS
+                + " from sessions where state = 'ACTIVE'"
+                + " and idle_deadline_at > {0} and absolute_expires_at > {0} order by created_at", Timestamp.from(asOf))
+                .stream().map(JooqSessionRepository::toRecord).toList());
+    }
+
+    @Override
     public java.util.List<SessionRecord> findActivePastDeadline(Instant asOf) {
         return transactionBoundary.inTransaction(dsl -> findActivePastDeadline(dsl, asOf));
     }

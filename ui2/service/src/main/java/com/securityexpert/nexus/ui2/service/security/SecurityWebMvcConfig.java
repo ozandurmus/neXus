@@ -24,6 +24,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("POST /role-bindings/revoke", ActionRegistry.ROLE_BINDING_REVOKE),
+            Map.entry("GET /sessions", ActionRegistry.SESSION_REVOKE),
             Map.entry("POST /sessions/revoke", ActionRegistry.SESSION_REVOKE),
             Map.entry("POST /devices/add-single", ActionRegistry.DEVICE_REGISTER),
             Map.entry("POST /devices/*/confirm", ActionRegistry.DEVICE_REGISTER),

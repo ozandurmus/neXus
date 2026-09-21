@@ -3,6 +3,7 @@ import { AddDeviceDialogTrigger } from "../shell/AddDeviceDialog";
 import { M3Button, M3Tabs } from "../shell/M3Widgets";
 import { CredentialsPanel } from "./CredentialsPanel";
 import { LocalIdentitiesPanel } from "./LocalIdentitiesPanel";
+import { SessionsPanel } from "./SessionsPanel";
 import { DeviceManagementPane } from "./DeviceRegistryPanel";
 import { ProjectPlanPanel } from "./ProjectPlanPanel";
 
@@ -54,6 +55,10 @@ export function AdministrationScreen() {
           {
             label: "Local identities",
             panel: <LocalIdentitiesPanel />,
+          },
+          {
+            label: "Sessions",
+            panel: <SessionsPanel />,
           },
           {
             label: "Roles & Permissions",
