@@ -34,7 +34,7 @@ class ManagementEndpointSshTrustDiscoveryTest {
         assertEquals(0, store.writes);
         assertEquals(ManagementEndpointSshTrustService.Outcome.NOT_EVALUABLE,
                 service.enroll("fixture-actor", "fixture-management", 0, "ssh-ed25519", "0".repeat(64), Instant.EPOCH, true, false));
-        var controller = new DiscoveryController(null, service);
+        var controller = new DiscoveryController(null, service, null);
         var request = new DiscoveryController.TrustRequest("fixture-management", 22, "ssh-ed25519", "0".repeat(64), Instant.EPOCH, true);
         var servlet = new MockHttpServletRequest();
         servlet.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "fixture-actor");

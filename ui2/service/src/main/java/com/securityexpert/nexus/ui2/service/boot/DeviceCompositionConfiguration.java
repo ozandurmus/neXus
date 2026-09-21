@@ -302,6 +302,18 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
+    public com.securityexpert.nexus.ui2.persistence.discovery.ManagementEndpointPanCertTrustRepository managementEndpointPanCertTrustRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.discovery.JooqManagementEndpointPanCertTrustRepository(transactionBoundary);
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointPanCertTrustService managementEndpointPanCertTrustService(
+            com.securityexpert.nexus.ui2.persistence.discovery.ManagementEndpointPanCertTrustRepository repository) {
+        return new com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointPanCertTrustService(repository);
+    }
+
+    @Bean
     public DiscoveryRunRepository discoveryRunRepository(TransactionBoundary transactionBoundary) {
         return new JooqDiscoveryRunRepository(transactionBoundary);
     }

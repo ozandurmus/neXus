@@ -71,7 +71,6 @@ public final class PanXmlApiTransport implements DeviceTransport {
 
     private final String trustRuleRef;
     private final PanTrustRuleResolver trustRuleResolver;
-    private volatile HttpClient cachedClient;
 
     public PanXmlApiTransport(String trustRuleRef, PanTrustRuleResolver trustRuleResolver) {
         this.trustRuleRef = Objects.requireNonNull(trustRuleRef, "trustRuleRef");
@@ -117,13 +116,14 @@ public final class PanXmlApiTransport implements DeviceTransport {
     @Override
     public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
         HttpClient client;
+        URI uri;
         try {
-            client = client();
+            uri = resolveUri(target);
+            client = buildClient(uri);
         } catch (RuntimeException e) {
             return new XmlApiResult.Failed("trust rule could not be resolved into a usable TLS configuration");
         }
         try {
-            URI uri = resolveUri(target);
             HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                     .timeout(timeout)
                     .POST(HttpRequest.BodyPublishers.ofString(formEncode(resolveFormParams(spec)), StandardCharsets.UTF_8))
@@ -163,13 +163,14 @@ public final class PanXmlApiTransport implements DeviceTransport {
     public <T> XmlApiStreamOutcome<T> xmlApiCallStreaming(ApiTarget target, XmlApiSpec spec, Duration timeout,
             XmlApiStreamHandler<T> handler) {
         HttpClient client;
+        URI uri;
         try {
-            client = client();
+            uri = resolveUri(target);
+            client = buildClient(uri);
         } catch (RuntimeException e) {
             return new XmlApiStreamOutcome.Failed<>("trust rule could not be resolved into a usable TLS configuration");
         }
         try {
-            URI uri = resolveUri(target);
             HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                     .timeout(timeout)
                     .POST(HttpRequest.BodyPublishers.ofString(formEncode(resolveFormParams(spec)), StandardCharsets.UTF_8))
@@ -204,21 +205,8 @@ public final class PanXmlApiTransport implements DeviceTransport {
         // disposal (PanoramaEnumerationAdapter) is what T-1's "closed when the run ends" means.
     }
 
-    private HttpClient client() {
-        HttpClient client = cachedClient;
-        if (client != null) {
-            return client;
-        }
-        synchronized (this) {
-            if (cachedClient == null) {
-                cachedClient = buildClient();
-            }
-            return cachedClient;
-        }
-    }
-
-    private HttpClient buildClient() {
-        TrustResolution resolution = resolveOrThrow();
+    private HttpClient buildClient(URI endpoint) {
+        TrustResolution resolution = resolveOrThrow(endpoint);
         SSLContext sslContext = buildSslContext(resolution);
         SSLParameters sslParameters = new SSLParameters();
         if (resolution instanceof TrustResolution.PaloAltoDeviceTrust) {
@@ -232,8 +220,9 @@ public final class PanXmlApiTransport implements DeviceTransport {
                 .build();
     }
 
-    private TrustResolution resolveOrThrow() {
-        TrustResolution resolution = trustRuleResolver.resolveTrust(trustRuleRef);
+    private TrustResolution resolveOrThrow(URI endpoint) {
+        int port = endpoint.getPort() > 0 ? endpoint.getPort() : 443;
+        TrustResolution resolution = trustRuleResolver.resolveTrust(trustRuleRef, endpoint.getHost(), port);
         if (resolution instanceof TrustResolution.Unresolved) {
             throw new IllegalStateException("trust rule ref did not resolve to a usable trust configuration");
         }
@@ -246,7 +235,7 @@ public final class PanXmlApiTransport implements DeviceTransport {
             TrustManager[] trustManagers = switch (resolution) {
                 case TrustResolution.CaBundlePath caBundlePath -> caBundleTrustManagers(caBundlePath.path());
                 case TrustResolution.PinnedFingerprint pinned -> new TrustManager[] { pinnedTrustManager(pinned.sha256Hex()) };
-                case TrustResolution.PaloAltoDeviceTrust deviceTrust -> new TrustManager[] { paloAltoDeviceTrustManager(deviceTrust.pinnedFingerprint()) };
+                case TrustResolution.PaloAltoDeviceTrust deviceTrust -> new TrustManager[] { paloAltoDeviceTrustManager(deviceTrust) };
                 case TrustResolution.Unresolved ignored -> throw new IllegalStateException("unresolved trust rule reached SSLContext construction");
             };
             SSLContext context = SSLContext.getInstance("TLS");
@@ -332,17 +321,27 @@ public final class PanXmlApiTransport implements DeviceTransport {
 
     private static X509ExtendedTrustManager paloAltoDeviceTrustManager(java.util.Optional<String> pinnedFingerprint)
             throws java.security.GeneralSecurityException {
+        return paloAltoDeviceTrustManager(new TrustResolution.PaloAltoDeviceTrust(pinnedFingerprint));
+    }
+
+    private static X509ExtendedTrustManager paloAltoDeviceTrustManager(TrustResolution.PaloAltoDeviceTrust deviceTrust)
+            throws java.security.GeneralSecurityException {
         TrustManagerFactory factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         factory.init((KeyStore) null);
         for (TrustManager manager : factory.getTrustManagers()) {
             if (manager instanceof X509ExtendedTrustManager extended) {
-                return paloAltoDeviceTrustManager(pinnedFingerprint, extended);
+                return paloAltoDeviceTrustManager(deviceTrust, extended);
             }
         }
         throw new java.security.GeneralSecurityException("platform did not provide an X.509 trust manager");
     }
 
     static X509ExtendedTrustManager paloAltoDeviceTrustManager(java.util.Optional<String> pinnedFingerprint,
+            X509ExtendedTrustManager platformTrustManager) {
+        return paloAltoDeviceTrustManager(new TrustResolution.PaloAltoDeviceTrust(pinnedFingerprint), platformTrustManager);
+    }
+
+    static X509ExtendedTrustManager paloAltoDeviceTrustManager(TrustResolution.PaloAltoDeviceTrust deviceTrust,
             X509ExtendedTrustManager platformTrustManager) {
         return new X509ExtendedTrustManager() {
             @Override
@@ -379,26 +378,27 @@ public final class PanXmlApiTransport implements DeviceTransport {
                 if (chain == null || chain.length == 0) {
                     throw new CertificateException("no server certificate presented");
                 }
+                try {
+                    platformCheck.run();
+                    return;
+                } catch (CertificateException ignored) {
+                    // Explicit per-endpoint authorization is consulted only after chain verification fails.
+                }
+                chain[0].checkValidity();
+                String presented = sha256Hex(chain[0]);
+                java.util.Optional<String> pinnedFingerprint = deviceTrust.pinnedFingerprint();
                 if (pinnedFingerprint.isPresent() && !pinnedFingerprint.get().isBlank()) {
-                    chain[0].checkValidity();
-                    String presented = sha256Hex(chain[0]);
                     if (!presented.equalsIgnoreCase(pinnedFingerprint.get())) {
-                        throw new CertificateException("presented certificate fingerprint does not match the pinned trust rule");
+                        throw new CertificateException("presented certificate fingerprint does not match the enrolled trust entry");
                     }
                     return;
                 }
-                try {
-                    platformCheck.run();
-                } catch (CertificateException e) {
-                    throw new UnverifiableCertificateException(sha256Hex(chain[0]));
-                }
+                throw new UnverifiableCertificateException(presented);
             }
 
             @Override
             public X509Certificate[] getAcceptedIssuers() {
-                return pinnedFingerprint.isPresent() && !pinnedFingerprint.get().isBlank()
-                        ? new X509Certificate[0]
-                        : platformTrustManager.getAcceptedIssuers();
+                return platformTrustManager.getAcceptedIssuers();
             }
         };
     }

@@ -52,13 +52,24 @@ public final class DiscoveryController {
             @JsonProperty("independently_verified") boolean independentlyVerified) {
     }
 
+    public record PanTrustRequest(
+            @JsonProperty("management_address") String managementAddress,
+            @JsonProperty("management_port") int managementPort,
+            @JsonProperty("fingerprint_sha256") String fingerprint,
+            @JsonProperty("observed_at") java.time.Instant observedAt,
+            @JsonProperty("explicitly_confirmed") boolean explicitlyConfirmed) {
+    }
+
     private final com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService trustService;
+    private final com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointPanCertTrustService panTrustService;
     private final DiscoveryRunService discoveryRunService;
 
     public DiscoveryController(DiscoveryRunService discoveryRunService,
-            com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService trustService) {
+            com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService trustService,
+            com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointPanCertTrustService panTrustService) {
         this.discoveryRunService = discoveryRunService;
         this.trustService = trustService;
+        this.panTrustService = panTrustService;
     }
 
     @PostMapping("/discovery/ssh-trust/enroll")
@@ -71,11 +82,32 @@ public final class DiscoveryController {
         return authorizeTrust(request, servletRequest, true);
     }
 
+    @PostMapping("/discovery/pan-trust/enroll")
+    public ResponseEntity<Map<String, Object>> enrollPanTrust(@RequestBody PanTrustRequest request,
+            HttpServletRequest servletRequest) {
+        return authorizePanTrust(request, servletRequest, false);
+    }
+
+    @PostMapping("/discovery/pan-trust/re-enroll")
+    public ResponseEntity<Map<String, Object>> reEnrollPanTrust(@RequestBody PanTrustRequest request,
+            HttpServletRequest servletRequest) {
+        return authorizePanTrust(request, servletRequest, true);
+    }
+
     private ResponseEntity<Map<String, Object>> authorizeTrust(TrustRequest request, HttpServletRequest servletRequest,
             boolean reEnroll) {
         var outcome = trustService.enroll(actingUser(servletRequest), request.managementAddress(), request.managementPort(),
                 request.keyAlgorithm(), request.fingerprint(), request.observedAt(), request.independentlyVerified(), reEnroll);
         return ResponseEntity.status(outcome == com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointSshTrustService.Outcome.MATCH
+                ? HttpStatus.OK : HttpStatus.CONFLICT).body(Map.of("relationship", outcome.name()));
+    }
+
+    private ResponseEntity<Map<String, Object>> authorizePanTrust(PanTrustRequest request,
+            HttpServletRequest servletRequest, boolean reEnroll) {
+        var outcome = panTrustService.enroll(actingUser(servletRequest), request.managementAddress(),
+                request.managementPort(), request.fingerprint(), request.observedAt(),
+                request.explicitlyConfirmed(), reEnroll);
+        return ResponseEntity.status(outcome == com.securityexpert.nexus.ui2.service.discovery.ManagementEndpointPanCertTrustService.Outcome.MATCH
                 ? HttpStatus.OK : HttpStatus.CONFLICT).body(Map.of("relationship", outcome.name()));
     }
 

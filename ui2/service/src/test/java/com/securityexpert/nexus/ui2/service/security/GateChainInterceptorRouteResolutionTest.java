@@ -53,6 +53,10 @@ class GateChainInterceptorSecurityTest {
                 method.invoke(interceptor, "POST", "/discovery/ssh-trust/enroll"));
         assertEquals(ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL,
                 method.invoke(interceptor, "POST", "/discovery/ssh-trust/re-enroll"));
+        assertEquals(ActionRegistry.DISCOVERY_PAN_TRUST_ENROLL,
+                method.invoke(interceptor, "POST", "/discovery/pan-trust/enroll"));
+        assertEquals(ActionRegistry.DISCOVERY_PAN_TRUST_RE_ENROLL,
+                method.invoke(interceptor, "POST", "/discovery/pan-trust/re-enroll"));
     }
 
     @Test

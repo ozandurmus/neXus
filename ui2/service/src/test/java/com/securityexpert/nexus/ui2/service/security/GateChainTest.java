@@ -286,7 +286,9 @@ class GateChainTest {
             sessions.put(activeSession(SessionHasher.hash("fixture-role-cookie")));
             var evaluator = new RbacEvaluator(bindings, new FakeActorAuthzStateRepository(Set.of(group), groupCipher), groupCipher);
             var chain = new GateChain(sessions, new ActionRegistry(), evaluator, new FakeAuthzDecisionRepository());
-            for (String action : List.of(ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL, ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL)) {
+            for (String action : List.of(ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL,
+                    ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL, ActionRegistry.DISCOVERY_PAN_TRUST_ENROLL,
+                    ActionRegistry.DISCOVERY_PAN_TRUST_RE_ENROLL)) {
                 var outcome = chain.evaluate(new GateRequest("POST", Optional.of("fixture-role-cookie"), Optional.of("csrf-secret"),
                         Optional.of("https://ui2.example.com"), action, Optional.empty()), NOW);
                 if (group.equals("fixture-security-group")) {
@@ -308,7 +310,9 @@ class GateChainTest {
         ActionRegistry registry = new ActionRegistry();
         FakeSessionRepository sessions = new FakeSessionRepository();
         sessions.put(activeSession(SessionHasher.hash("fixture-trust-cookie")));
-        for (String action : List.of(ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL, ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL)) {
+        for (String action : List.of(ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL,
+                ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL, ActionRegistry.DISCOVERY_PAN_TRUST_ENROLL,
+                ActionRegistry.DISCOVERY_PAN_TRUST_RE_ENROLL)) {
             assertEquals(Optional.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN),
                     registry.find(action).orElseThrow().requiredRoleToken());
             GateOutcome outcome = newChain(sessions, new FakeRoleBindingRepository(), new FakeAuthzDecisionRepository())
