@@ -525,5 +525,10 @@ or access incumbent workloads (`HOST_X`).
   contract defines an identity gate.
 - Production TLS requires trusted corporate CA verification. Historical POC
   TLS-verification exceptions are technical debt, never production design.
+  **Superseded for this deployment** by `docs/design/PO_DECISION_RECORD_2026_09_21_PAN_TLS_VERIFICATION_DISABLED.md`
+  (RATIFIED, 2026-09-21): the Product Owner, told plainly what it means,
+  directed that Palo Alto certificate verification be removed entirely for
+  this internal-only environment. This general rule stands for any future
+  vendor or environment that does not carry that same decision.
 - PAN authentication transport convergence remains a hardening concern; do
   not silently normalize behavior without an explicit build.
