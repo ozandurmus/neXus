@@ -94,11 +94,71 @@
       },
       "seq": 1,
       "timestamp": "2026-09-21T05:19:23Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "Derived the failure class from the leading colon-delimited segment and retained the generic recorded-failure label for unknown classes.",
+          "Rendered the unchanged device identifier beside the device name in the detail header.",
+          "Resolved job-row names from the existing device list and rendered each beside the unchanged target identifier.",
+          "Added focused UI assertions for detailed and unknown reason classes, detail-header identifier rendering, and log-row name plus identifier rendering."
+        ],
+        "completed": [
+          "Implemented the bounded UI changes and focused test coverage; validation remains blocked."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "CHANGED: failure-class, detail-header identifier, and log-row correlation presentation."
+        },
+        "integration": {
+          "branch": "feature/failure-class-and-identifier-correlation",
+          "ci": "NOT_RUN: frontend test runner unavailable.",
+          "head_sha": "UNCOMMITTED",
+          "merge_commit": "NONE",
+          "merge_decision": "Not eligible: required validation is blocked; orchestrator mode prohibits worker merge.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": "NOT_OPENED"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0357",
+          "movement_type": "VALIDATION",
+          "objective": "Restore the frontend test runner, validate the implemented UI changes, then integrate if green.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No collection behaviour, Draft or Failed filters, masking layer, or transport detail in list rows changed.",
+          "Opaque identifiers are displayed byte-for-byte without parsing or normalization."
+        ],
+        "recommended_reasoning": {
+          "reason": "Resolve the local validation dependency before integration.",
+          "tier": "Main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Required frontend tests cannot run without the missing vitest executable."
+        ],
+        "validation": {
+          "affected": "UI presentation and focused frontend tests.",
+          "diff_check": "PASS: git diff --check origin/main returned no findings.",
+          "full_regression": "NOT_RUN: not in the dispatch validation plan.",
+          "privacy": "PASS: repository privacy gate reported 0 findings.",
+          "real_environment": "NOT_RUN: local validation only.",
+          "state_consistency": "NOT_RUN: no durable state changes.",
+          "targeted": "BLOCKED: npm --prefix ui2/frontend test could not start because vitest is not installed in this worktree (sh: vitest: command not found)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-21T05:26:01Z"
     }
   ],
   "id": "NXS-LOCAL-0357",
   "movement": "NXS-LOCAL-0357",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md",
     "ui2/frontend/src/screens/InventoryScreen.tsx",
@@ -106,6 +166,6 @@
     "ui2/frontend/src/screens/InventoryPanels.tsx"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-21T05:19:23Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-21T05:26:01Z"
 }

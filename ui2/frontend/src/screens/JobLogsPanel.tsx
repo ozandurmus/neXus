@@ -63,7 +63,13 @@ export function JobLogsPanel() {
   const fetchDeviceNames = useCallback(() => {
     listDevices()
       .then(({ devices }) => {
-        setDeviceNames(Object.fromEntries((devices ?? []).map((device) => [device.device_id, device.hostname])));
+        // A device with no recorded hostname contributes no entry, so its rows
+        // read as unknown rather than carrying an empty name beside the identifier.
+        setDeviceNames(Object.fromEntries(
+          (devices ?? [])
+            .filter((device): device is typeof device & { hostname: string } => Boolean(device.hostname))
+            .map((device) => [device.device_id, device.hostname]),
+        ));
       })
       // The identifier is the record; a name we could not read stays unknown
       // rather than blanking the log or failing the panel.
