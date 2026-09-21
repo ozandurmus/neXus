@@ -195,9 +195,6 @@ public final class InventoryCapabilityExecutor {
             String haStatOutput = batchSections.containsKey("ha")
                     ? batchSections.get("ha")
                     : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost));
-            String vipOutput = batchSections.containsKey("vip")
-                    ? batchSections.get("vip")
-                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
 
             long parseStart = System.currentTimeMillis();
             List<ParsedInterface> physicalInterfaces = CheckPointIpAddrParser.parse(ipv4, ipv6);
@@ -233,28 +230,17 @@ public final class InventoryCapabilityExecutor {
                 }
             }
 
+            // cp_cluster_vip_never_observed_in_fleet: measured live that cphaprob -a if / -a -m if return
+            // nothing over a plain exec channel, on the same session where ip/route/cphaprob stat all work
+            // fine without one -- while the same command run interactively (a real terminal) produces its
+            // full report. Issued here as its own pty-enabled exec, not chained into the batch, so the
+            // working batch reads keep their current, already-parsed, non-terminal output shape.
+            String vipOutput = execOutputPty(session,
+                    InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
             List<VirtualInterfaceAddress> physicalVips = CheckPointClusterVirtualInterfaceParser.parse(vipOutput);
             LOG.log(System.Logger.Level.INFO,
                     "[INVENTORY_VIP_PARSE] target={0}:{1} vip_output_len={2} vip_addresses_found={3}",
                     target.host(), target.port(), vipOutput.length(), physicalVips.size());
-
-            // Diagnostic only (cp_cluster_vip_never_observed_in_fleet): the same command, issued as its own
-            // standalone exec rather than chained with ; into the batched read, to isolate whether batching
-            // itself is why cphaprob's cluster-interface section never comes back through the compound read.
-            String vipStandalone = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(
-                    InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
-            LOG.log(System.Logger.Level.INFO,
-                    "[INVENTORY_VIP_STANDALONE_PARSE] target={0}:{1} standalone_len={2} standalone_addresses_found={3}",
-                    target.host(), target.port(), vipStandalone.length(),
-                    CheckPointClusterVirtualInterfaceParser.parse(vipStandalone).size());
-            // Temporary, bounded (cp_cluster_vip_never_observed_in_fleet): a short, fixed-length non-empty
-            // standalone result across unrelated devices looks like a shell rejection message rather than real
-            // command output. This prefix is never persisted and is only read from the live pod log for this
-            // one diagnosis; remove once the cause is found.
-            if (!vipStandalone.isBlank()) {
-                LOG.log(System.Logger.Level.INFO, "[INVENTORY_VIP_STANDALONE_PREFIX] target={0}:{1} prefix={2}",
-                        target.host(), target.port(), vipStandalone.substring(0, Math.min(80, vipStandalone.length())));
-            }
 
             List<InventoryContext> contexts = new ArrayList<>();
             contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
@@ -268,18 +254,16 @@ public final class InventoryCapabilityExecutor {
 
             for (String vsid : vsids) {
                 String addrAndRouteCombined;
-                String vsClusterIfOutput;
                 String vsAddrRouteKey = "vs_" + vsid + "_addr_route";
-                String vsVipKey = "vs_" + vsid + "_vip";
+                List<String> steps = InventoryReadPlan.checkPointVsidSteps(vsid);
                 if (batchSections.containsKey(vsAddrRouteKey)) {
                     addrAndRouteCombined = batchSections.get(vsAddrRouteKey);
-                    vsClusterIfOutput = batchSections.getOrDefault(vsVipKey, "");
                 } else {
-                    List<String> steps = InventoryReadPlan.checkPointVsidSteps(vsid);
                     addrAndRouteCombined = execOutput(session, steps.get(0));
-                    vsClusterIfOutput = execOutput(session, steps.get(1));
                     execOutput(session, steps.get(2));
                 }
+                // cp_cluster_vip_never_observed_in_fleet: same pty requirement as the physical-context read.
+                String vsClusterIfOutput = execOutputPty(session, steps.get(1));
                 CheckPointVsidCompositeOutputSplitter.Halves halves =
                         CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
                 List<ParsedInterface> vsInterfaces = mergeVirtualAddresses(
@@ -756,6 +740,44 @@ public final class InventoryCapabilityExecutor {
             }
         }
         return output;
+    }
+
+    /** cp_cluster_vip_never_observed_in_fleet: identical to {@link #execOutput}, except the exec channel
+     * requests a pseudo-terminal -- some vendor report commands (measured: cphaprob's cluster-interface read)
+     * produce nothing at all without one. No bash-lc fallback here: a pty-requiring command that still fails
+     * under a pty is not helped by a plain, non-pty bash retry. */
+    private String execOutputPty(TransportSession session, String command) {
+        long startMs = System.currentTimeMillis();
+        ExecResult result;
+        try {
+            result = transport.exec(session, new ExecSpec(command, true), READ_TIMEOUT);
+        } catch (Exception e) {
+            long elapsedMs = System.currentTimeMillis() - startMs;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[INVENTORY_EXEC_PTY_EXCEPTION] cmd=\"{0}\" threw exception after {1}ms: {2}",
+                    command, elapsedMs, e.getMessage());
+            return "";
+        }
+        long elapsedMs = System.currentTimeMillis() - startMs;
+        return switch (result) {
+            case ExecResult.Completed completed -> {
+                LOG.log(System.Logger.Level.INFO,
+                        "[INVENTORY_EXEC_PTY] cmd=\"{0}\" took {1}ms (exit={2}, length={3})",
+                        command, elapsedMs, completed.exitStatus(), completed.output().length());
+                yield completed.output();
+            }
+            case ExecResult.TimedOut timedOut -> {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[INVENTORY_EXEC_PTY_TIMEOUT] cmd=\"{0}\" TIMED OUT after {1}ms!", command, elapsedMs);
+                yield "";
+            }
+            case ExecResult.ChannelFailed failed -> {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[INVENTORY_EXEC_PTY_FAILED] cmd=\"{0}\" failed after {1}ms: {2}",
+                        command, elapsedMs, failed.reason());
+                yield "";
+            }
+        };
     }
 
     private String xmlApiOutput(ApiTarget target, String cmd, Map<String, String> headers) {

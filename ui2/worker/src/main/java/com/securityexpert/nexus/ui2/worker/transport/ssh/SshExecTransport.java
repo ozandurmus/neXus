@@ -196,6 +196,7 @@ public final class SshExecTransport implements DeviceTransport {
         try {
             channel = (ChannelExec) sshSession.jschSession().openChannel("exec");
             channel.setCommand(spec.command());
+            channel.setPty(spec.pty());
             channel.setInputStream(null);
             InputStream in = channel.getInputStream();
             InputStream err = channel.getErrStream();
