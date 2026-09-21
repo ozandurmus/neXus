@@ -325,8 +325,11 @@ export function listDevices(): Promise<{ devices: DeviceSummary[] }> {
   return call("/devices", "GET");
 }
 
-export function deleteDevice(deviceId: string): Promise<{ deleted: boolean; device_id: string }> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/delete`, "POST");
+export type BackupDisposition = "KEEP" | "REMOVE";
+
+export function deleteDevice(deviceId: string, backupDisposition?: BackupDisposition): Promise<{ deleted: boolean; device_id: string; backup_artefact_count: number }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/delete`, "POST",
+    backupDisposition ? { backup_disposition: backupDisposition } : undefined);
 }
 
 export interface TransportEntry {

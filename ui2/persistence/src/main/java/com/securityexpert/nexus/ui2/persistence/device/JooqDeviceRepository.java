@@ -157,8 +157,15 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
-    public boolean deleteDevice(String deviceId, String actorFingerprint, String actionId) {
+    public DeleteResult deleteDevice(String deviceId, BackupDisposition backupDisposition,
+            String actorFingerprint, String actionId) {
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
+            long backupArtefactCount = ((Number) dsl.fetchValue(
+                    "select count(*) from backup_artefact where device_id = {0}", deviceId)).longValue();
+            if (backupArtefactCount > 0 && backupDisposition == null) {
+                return new DeleteResult(false, backupArtefactCount, true);
+            }
+
             dsl.execute("update jobs set reconciliation_ref = null where target_device_id = {0}", deviceId);
             dsl.execute("delete from job_step_attempt where job_id in (select job_id from jobs where target_device_id = {0})", deviceId);
             dsl.execute("delete from job_steps where job_id in (select job_id from jobs where target_device_id = {0})", deviceId);
@@ -190,17 +197,16 @@ public final class JooqDeviceRepository implements DeviceRepository {
 
             dsl.execute("delete from configuration_artefact where device_id = {0}", deviceId);
 
-            dsl.execute("delete from artefact_retention_ledger where artefact_id in ("
-                    + "select artefact_id from backup_artefact where device_id = {0})", deviceId);
-            dsl.execute("delete from backup_artefact_retrieval where artefact_id in ("
-                    + "select artefact_id from backup_artefact where device_id = {0})", deviceId);
-            dsl.execute("delete from backup_artefact where device_id = {0}", deviceId);
+            if (backupDisposition == BackupDisposition.REMOVE) {
+                dsl.execute("delete from backup_artefact where device_id = {0}", deviceId);
+            }
             dsl.execute("delete from backup_endpoint_ineligibility where device_id = {0}", deviceId);
 
             dsl.execute("delete from cp_inventory_projection where device_id = {0}", deviceId);
             dsl.execute("delete from jobs where target_device_id = {0}", deviceId);
             dsl.execute("delete from endpoints where device_id = {0}", deviceId);
-            return dsl.execute("delete from devices where device_id = {0}", deviceId) == 1;
+            boolean deleted = dsl.execute("delete from devices where device_id = {0}", deviceId) == 1;
+            return new DeleteResult(deleted, backupArtefactCount, false);
         });
     }
 

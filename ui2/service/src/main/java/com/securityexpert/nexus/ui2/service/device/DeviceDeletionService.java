@@ -1,6 +1,8 @@
 package com.securityexpert.nexus.ui2.service.device;
 
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository.BackupDisposition;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository.DeleteResult;
 
 /** Deletes one enrolled device and its persistence-owned records. */
 public final class DeviceDeletionService {
@@ -11,7 +13,8 @@ public final class DeviceDeletionService {
         this.deviceRepository = deviceRepository;
     }
 
-    public boolean deleteDevice(String deviceId, String actorFingerprint, String actionId) {
-        return deviceRepository.deleteDevice(deviceId, actorFingerprint, actionId);
+    public DeleteResult deleteDevice(String deviceId, BackupDisposition backupDisposition,
+            String actorFingerprint, String actionId) {
+        return deviceRepository.deleteDevice(deviceId, backupDisposition, actorFingerprint, actionId);
     }
 }
