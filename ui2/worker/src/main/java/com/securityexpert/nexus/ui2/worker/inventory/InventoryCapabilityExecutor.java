@@ -821,23 +821,33 @@ public final class InventoryCapabilityExecutor {
         return xml != null && (xml.contains("status=\"error\"") || xml.contains("status='error'"));
     }
 
+    /**
+     * cp_vsx_interfaces_identical_to_physical: {@code vsenv} is a shell function defined by the Expert
+     * profile, not a binary -- it only exists in a login shell. This batch used to be sent as a bare
+     * SSH exec command (no shell wrapper), so every {@code vsenv <VSID> || true} in it silently failed
+     * ("command not found", swallowed by {@code || true}), the context switch never happened, and every
+     * VSID section re-read the same physical context. {@code checkPointPhysicalCommand}/{@code
+     * checkPointVsidSteps} already wrap each of their reads in {@code bash -lc '...'} for exactly this
+     * reason; this batch now wraps its whole body in one {@code bash -lc} the same way, so {@code vsenv}
+     * is defined for every section including the per-VSID ones.
+     */
     static String buildCheckPointBatchCommand(boolean vsxHost, List<String> vsids) {
         StringBuilder sb = new StringBuilder();
         String prefix = vsxHost ? "vsenv 0 >/dev/null 2>&1 || true; " : "";
-        sb.append("echo '===NEXUS_SECTION:ipv4==='; ").append(prefix).append(InventoryReadPlan.CP_IP_ADDR_SHOW_V4).append("; ");
-        sb.append("echo '===NEXUS_SECTION:ipv6==='; ").append(prefix).append(InventoryReadPlan.CP_IP_ADDR_SHOW_V6).append("; ");
-        sb.append("echo '===NEXUS_SECTION:route==='; ").append(prefix).append(InventoryReadPlan.CP_IP_ROUTE_SHOW).append("; ");
-        sb.append("echo '===NEXUS_SECTION:ha==='; ").append(prefix).append(InventoryReadPlan.CP_CPHAPROB_STAT).append("; ");
-        sb.append("echo '===NEXUS_SECTION:vip==='; ").append(prefix).append(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF).append("; ");
+        sb.append("echo \"===NEXUS_SECTION:ipv4===\"; ").append(prefix).append(InventoryReadPlan.CP_IP_ADDR_SHOW_V4).append("; ");
+        sb.append("echo \"===NEXUS_SECTION:ipv6===\"; ").append(prefix).append(InventoryReadPlan.CP_IP_ADDR_SHOW_V6).append("; ");
+        sb.append("echo \"===NEXUS_SECTION:route===\"; ").append(prefix).append(InventoryReadPlan.CP_IP_ROUTE_SHOW).append("; ");
+        sb.append("echo \"===NEXUS_SECTION:ha===\"; ").append(prefix).append(InventoryReadPlan.CP_CPHAPROB_STAT).append("; ");
+        sb.append("echo \"===NEXUS_SECTION:vip===\"; ").append(prefix).append(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF).append("; ");
         for (String vsid : vsids) {
             String vsPrefix = "vsenv " + vsid + " >/dev/null 2>&1 || true; ";
-            sb.append("echo '===NEXUS_SECTION:vs_").append(vsid).append("_addr_route==='; ")
+            sb.append("echo \"===NEXUS_SECTION:vs_").append(vsid).append("_addr_route===\"; ")
                     .append(vsPrefix).append("ip -4 addr show; ip -4 route show; ");
-            sb.append("echo '===NEXUS_SECTION:vs_").append(vsid).append("_vip==='; ")
+            sb.append("echo \"===NEXUS_SECTION:vs_").append(vsid).append("_vip===\"; ")
                     .append(vsPrefix).append(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF).append("; ");
         }
-        sb.append("echo '===NEXUS_SECTION:END==='");
-        return sb.toString();
+        sb.append("echo \"===NEXUS_SECTION:END===\"");
+        return "bash -lc '" + sb + "'";
     }
 
     static Map<String, String> parseBatchSections(String output) {
