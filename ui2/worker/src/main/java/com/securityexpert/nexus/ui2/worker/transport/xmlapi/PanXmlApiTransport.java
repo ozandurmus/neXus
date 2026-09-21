@@ -136,6 +136,10 @@ public final class PanXmlApiTransport implements DeviceTransport {
         } catch (IllegalArgumentException e) {
             return new XmlApiResult.Failed("invalid api target URI: " + e.getMessage());
         } catch (IOException e) {
+            String certificateFailure = certificateFailureReason(e);
+            if (certificateFailure != null) {
+                return new XmlApiResult.Failed(certificateFailure);
+            }
             System.getLogger(PanXmlApiTransport.class.getName())
                     .log(System.Logger.Level.WARNING, "xml api call IOException: " + e.getMessage(), e);
             return new XmlApiResult.Failed("xml api call did not complete: " + e.getMessage());
@@ -182,6 +186,10 @@ public final class PanXmlApiTransport implements DeviceTransport {
         } catch (IllegalArgumentException e) {
             return new XmlApiStreamOutcome.Failed<>("invalid api target URI: " + e.getMessage());
         } catch (IOException e) {
+            String certificateFailure = certificateFailureReason(e);
+            if (certificateFailure != null) {
+                return new XmlApiStreamOutcome.Failed<>(certificateFailure);
+            }
             return new XmlApiStreamOutcome.Failed<>("xml api streaming call did not complete: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -322,7 +330,20 @@ public final class PanXmlApiTransport implements DeviceTransport {
         };
     }
 
-    private static X509ExtendedTrustManager paloAltoDeviceTrustManager(java.util.Optional<String> pinnedFingerprint) {
+    private static X509ExtendedTrustManager paloAltoDeviceTrustManager(java.util.Optional<String> pinnedFingerprint)
+            throws java.security.GeneralSecurityException {
+        TrustManagerFactory factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        factory.init((KeyStore) null);
+        for (TrustManager manager : factory.getTrustManagers()) {
+            if (manager instanceof X509ExtendedTrustManager extended) {
+                return paloAltoDeviceTrustManager(pinnedFingerprint, extended);
+            }
+        }
+        throw new java.security.GeneralSecurityException("platform did not provide an X.509 trust manager");
+    }
+
+    static X509ExtendedTrustManager paloAltoDeviceTrustManager(java.util.Optional<String> pinnedFingerprint,
+            X509ExtendedTrustManager platformTrustManager) {
         return new X509ExtendedTrustManager() {
             @Override
             public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
@@ -341,44 +362,65 @@ public final class PanXmlApiTransport implements DeviceTransport {
 
             @Override
             public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-                verify(chain);
+                verify(chain, () -> platformTrustManager.checkServerTrusted(chain, authType));
             }
 
             @Override
             public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
-                verify(chain);
+                verify(chain, () -> platformTrustManager.checkServerTrusted(chain, authType, socket));
             }
 
             @Override
             public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
-                verify(chain);
+                verify(chain, () -> platformTrustManager.checkServerTrusted(chain, authType, engine));
             }
 
-            private void verify(X509Certificate[] chain) throws CertificateException {
+            private void verify(X509Certificate[] chain, CertificateCheck platformCheck) throws CertificateException {
                 if (chain == null || chain.length == 0) {
                     throw new CertificateException("no server certificate presented");
                 }
-                X509Certificate leaf = chain[0];
-                leaf.checkValidity();
                 if (pinnedFingerprint.isPresent() && !pinnedFingerprint.get().isBlank()) {
-                    String presented = sha256Hex(leaf);
+                    chain[0].checkValidity();
+                    String presented = sha256Hex(chain[0]);
                     if (!presented.equalsIgnoreCase(pinnedFingerprint.get())) {
                         throw new CertificateException("presented certificate fingerprint does not match the pinned trust rule");
                     }
                     return;
                 }
-                String issuer = leaf.getIssuerX500Principal().getName();
-                String subject = leaf.getSubjectX500Principal().getName();
-                if (!issuer.contains("O=Palo Alto Networks") && !subject.contains("O=Palo Alto Networks")) {
-                    throw new CertificateException("presented certificate is not from Palo Alto Networks: " + subject);
+                try {
+                    platformCheck.run();
+                } catch (CertificateException e) {
+                    throw new UnverifiableCertificateException(sha256Hex(chain[0]));
                 }
             }
 
             @Override
             public X509Certificate[] getAcceptedIssuers() {
-                return new X509Certificate[0];
+                return pinnedFingerprint.isPresent() && !pinnedFingerprint.get().isBlank()
+                        ? new X509Certificate[0]
+                        : platformTrustManager.getAcceptedIssuers();
             }
         };
+    }
+
+    @FunctionalInterface
+    private interface CertificateCheck {
+        void run() throws CertificateException;
+    }
+
+    private static final class UnverifiableCertificateException extends CertificateException {
+        private UnverifiableCertificateException(String fingerprint) {
+            super("server certificate unverifiable; fingerprint_sha256=" + fingerprint);
+        }
+    }
+
+    static String certificateFailureReason(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof UnverifiableCertificateException) {
+                return cause.getMessage();
+            }
+        }
+        return null;
     }
 
     private static String sha256Hex(X509Certificate certificate) throws CertificateException {

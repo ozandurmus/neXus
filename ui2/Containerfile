@@ -77,6 +77,14 @@ FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:360822c35c5741f54
 USER 0
 RUN mkdir -p /app /app/tmp /app/home
 
+# Install the same optional corporate anchors into the runtime system trust
+# store. Red Hat's OpenJDK reads the extracted Java store populated here.
+COPY ui2/.ca/ /tmp/corp-ca/
+RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
+      cp /tmp/corp-ca/*.pem /etc/pki/ca-trust/source/anchors/ && update-ca-trust; \
+    fi \
+ && rm -rf /tmp/corp-ca
+
 COPY --from=build /build/service-boot.jar /app/service.jar
 COPY project/roadmap.json project/feature_registry.json project/backlog.json project/build_history.json project/java_product_plan.json /app/project/
 COPY project/archive/backlog_terminal.json project/archive/build_history_*.json /app/project/archive/
@@ -124,6 +132,7 @@ EXPOSE 8080
 ENTRYPOINT ["java", \
             "-XX:MaxRAMPercentage=75.0", \
             "-Djava.io.tmpdir=/app/tmp", \
+            "-Djavax.net.ssl.trustStore=/etc/pki/java/cacerts", \
             "-Duser.home=/app/home", \
             "-jar", "/app/service.jar"]
 
