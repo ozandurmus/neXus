@@ -334,15 +334,11 @@ function DeviceList({
             </Box>
             {!isCollapsed && (
               <Stack spacing={1}>
-                {members.map((member) => (
-                  <DeviceRow
-                    key={member.device_id}
-                    device={member}
-                    indented
-                    selected={member.device_id === selectedDeviceId}
-                    onSelect={onSelectDevice}
-                  />
-                ))}
+                {/* Design language §2: a member is a column or a chip inside the cluster's
+                    own detail, never a sibling row in this list -- the cluster's own caption
+                    line above already names every member, and its detail header repeats them
+                    with IP/serial/version. Nothing here loses that information; it only stops
+                    duplicating each member as its own selectable row. */}
                 {clusterVsList.length > 0 && (
                   <Box sx={{ pl: 2.5, display: "flex", flexDirection: "column", gap: 0.75, mt: 0.5 }}>
                     <Typography

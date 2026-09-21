@@ -178,8 +178,8 @@ describe("InventoryScreen device selection and panels", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("member-a")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("member-a"));
+    await waitFor(() => expect(screen.getByText("Cluster cluster-1")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Cluster cluster-1"));
 
     // The membership marker names both members, and the VIP appears exactly once.
     await waitFor(() => expect(screen.getAllByText("member-b").length).toBeGreaterThan(0));

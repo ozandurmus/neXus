@@ -166,8 +166,11 @@ describe("InventoryScreen device list", () => {
 
     await waitFor(() => expect(screen.getByText("Cluster cluster-1")).toBeInTheDocument());
     expect(screen.getByText("2 members")).toBeInTheDocument();
-    expect(screen.getByText("member-a")).toBeInTheDocument();
-    expect(screen.getByText("member-b")).toBeInTheDocument();
+    // Design language §2: a member is named in the cluster's own row and detail header,
+    // never rendered as its own sibling row in the list.
+    expect(screen.getByText((_, node) => node?.textContent === "· ClusterXL · member-a · member-b")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^member-a$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^member-b$/ })).toBeNull();
     // The standalone device (null cluster_member_ref) renders as a normal row, not nested.
     expect(screen.getByText("standalone-c")).toBeInTheDocument();
   });
@@ -245,6 +248,90 @@ describe("InventoryScreen device list", () => {
     expect(screen.getAllByText("GarantiBetaAA").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("merges every collected context into one interfaces table by default, and filters to one VS when selected", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/devices") {
+          return Promise.resolve(
+            jsonResponse(200, {
+              devices: [
+                {
+                  device_id: "dev-vsx-1",
+                  vendor_hint: "check_point",
+                  enrollment_state: "ENROLLED",
+                  hostname: "FW-CKP-VSX-1",
+                  model: "Quantum",
+                  software_version: "R81.20",
+                  ha_role: "active",
+                  cluster_member_ref: "FW-CKP-VSX-CLS",
+                  virtual_systems: "GarantiBetaAA",
+                },
+                {
+                  device_id: "dev-vsx-2",
+                  vendor_hint: "check_point",
+                  enrollment_state: "ENROLLED",
+                  hostname: "FW-CKP-VSX-2",
+                  model: "Quantum",
+                  software_version: "R81.20",
+                  ha_role: "standby",
+                  cluster_member_ref: "FW-CKP-VSX-CLS",
+                  virtual_systems: "GarantiBetaAA",
+                },
+              ],
+            }),
+          );
+        }
+        if (url.includes("/clusters/FW-CKP-VSX-CLS/inventory")) {
+          return Promise.resolve(
+            jsonResponse(200, {
+              cluster_member_ref: "FW-CKP-VSX-CLS",
+              members: [
+                { device_id: "dev-vsx-1", hostname: "FW-CKP-VSX-1" },
+                { device_id: "dev-vsx-2", hostname: "FW-CKP-VSX-2" },
+              ],
+              contexts: [
+                {
+                  context: "physical",
+                  interfaces: [
+                    { name: "Mgmt", kind: "physical", addresses: [{ address: "10.1.1.1/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
+                  ],
+                  routes: [],
+                },
+                {
+                  context: "1",
+                  vs_name: "GarantiBetaAA",
+                  interfaces: [
+                    { name: "eth0.100", kind: "vlan", addresses: [{ address: "192.0.2.1/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
+                  ],
+                  routes: [],
+                },
+              ],
+              virtual_systems: ["GarantiBetaAA"],
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+      }),
+    );
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("Cluster FW-CKP-VSX-CLS")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Cluster FW-CKP-VSX-CLS"));
+
+    // Default view: both the physical and the VS interface appear together, each labelled.
+    await waitFor(() => expect(screen.getByText("Mgmt")).toBeInTheDocument());
+    expect(screen.getByText("eth0.100")).toBeInTheDocument();
+    expect(screen.getByText("Physical / VS0")).toBeInTheDocument();
+    expect(screen.getByText("VS: GarantiBetaAA (VSID 1)")).toBeInTheDocument();
+
+    // Selecting the VS from the sidebar filters down to only that context's own interface.
+    fireEvent.click(screen.getByText("GarantiBetaAA"));
+    await waitFor(() => expect(screen.getByText("eth0.100")).toBeInTheDocument());
+    expect(screen.queryByText("Mgmt")).toBeNull();
+  });
+
   it("groups Palo Alto HA members and renders PAN-OS HA with VSYS chips", async () => {
     vi.stubGlobal(
       "fetch",
@@ -305,6 +392,69 @@ describe("InventoryScreen device list", () => {
     expect(screen.getByText(/PAN-OS HA · PA-FW-01 · PA-FW-02/)).toBeInTheDocument();
     expect(screen.getByText("default (vsys1)")).toBeInTheDocument();
     expect(screen.getByText("VR-DMZ (vsys2)")).toBeInTheDocument();
+  });
+
+  it("renders one shared Address column for a Palo Alto HA pair instead of a column per member", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/devices") {
+          return Promise.resolve(
+            jsonResponse(200, {
+              devices: [
+                { device_id: "pa-1", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "PA-FW-01", model: "PA-3220", software_version: "10.2.4", ha_role: "active", cluster_member_ref: "PA-HA-PAIR" },
+                { device_id: "pa-2", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "PA-FW-02", model: "PA-3220", software_version: "10.2.4", ha_role: "passive", cluster_member_ref: "PA-HA-PAIR" },
+              ],
+            }),
+          );
+        }
+        if (url === "/clusters/PA-HA-PAIR/inventory") {
+          return Promise.resolve(
+            jsonResponse(200, {
+              cluster_ref: "PA-HA-PAIR",
+              members: [
+                { device_id: "pa-1", hostname: "PA-FW-01" },
+                { device_id: "pa-2", hostname: "PA-FW-02" },
+              ],
+              contexts: [
+                {
+                  context: "physical",
+                  interfaces: [
+                    {
+                      name: "ethernet1/5",
+                      kind: "physical",
+                      addresses: [],
+                      presence: "all",
+                      differences: [],
+                      member_addresses: {
+                        "pa-1": [{ address: "192.168.250.5/28", family: "ipv4" }],
+                        "pa-2": [{ address: "192.168.250.5/28", family: "ipv4" }],
+                      },
+                    },
+                  ],
+                  routes: [],
+                },
+              ],
+              virtual_systems: [],
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+      }),
+    );
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("Cluster PA-HA-PAIR")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Cluster PA-HA-PAIR"));
+
+    await waitFor(() => expect(screen.getByText("ethernet1/5")).toBeInTheDocument());
+    // One shared Address column, not one column per member -- the header above
+    // still names each member (PO: that part stays as is), so the table itself
+    // is what this asserts, not the whole screen.
+    expect(screen.getByText("Address")).toBeInTheDocument();
+    expect(screen.getAllByText("192.168.250.5/28")).toHaveLength(1);
+    expect(screen.queryByText("Cluster VIP")).toBeNull();
   });
 
   it("renders standalone device virtual systems with expand/collapse and selection", async () => {

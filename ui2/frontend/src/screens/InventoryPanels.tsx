@@ -348,9 +348,15 @@ function calculateNetwork(cidr: string): string {
 function ClusterInterfacesTable({
   interfaces,
   members = [],
+  sharedAddressOnly = false,
 }: {
-  readonly interfaces: readonly ClusterInterface[];
+  readonly interfaces: readonly (ClusterInterface & { readonly vsysLabel?: string })[];
   readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
+  /** Palo Alto HA members share one address per interface -- render it once instead of
+   * one identical-looking column per member (design language §3: render one view when
+   * members agree; per-member columns are for a cluster whose members genuinely differ,
+   * as Check Point's own cluster VIP + per-member addresses do). */
+  readonly sharedAddressOnly?: boolean;
 }) {
   const [upOnly, setUpOnly] = useState(true);
   const [search, setSearch] = useState("");
@@ -358,6 +364,10 @@ function ClusterInterfacesTable({
   if (interfaces.length === 0) {
     return <EmptyPanel title="No interface evidence" body="This context has no collected interfaces yet." />;
   }
+
+  // A row carries vsysLabel only in the cluster's merged, all-VS default view; a single
+  // selected VS's own table never needs it since every row already shares that context.
+  const showVsysColumn = interfaces.some((iface) => iface.vsysLabel !== undefined);
 
   const filtered = interfaces.filter((iface) => {
     if (upOnly) {
@@ -379,7 +389,8 @@ function ClusterInterfacesTable({
         Object.values(iface.member_addresses).some((list) =>
           list.some((a) => a.address.toLowerCase().includes(q))
         );
-      return matchName || matchVip || matchMember;
+      const matchVsys = iface.vsysLabel?.toLowerCase().includes(q);
+      return matchName || matchVip || matchMember || matchVsys;
     }
     return true;
   });
@@ -410,13 +421,20 @@ function ClusterInterfacesTable({
       <Table size="small">
         <TableHead>
           <TableRow>
+            {showVsysColumn && <TableCell sx={{ fontWeight: 600 }}>VSYS</TableCell>}
             <TableCell sx={{ fontWeight: 600 }}>Interface</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Cluster VIP</TableCell>
-            {members.map((m) => (
-              <TableCell key={m.device_id} sx={{ fontWeight: 600 }}>
-                {deviceNameLabel(m.hostname)}
-              </TableCell>
-            ))}
+            {sharedAddressOnly ? (
+              <TableCell sx={{ fontWeight: 600 }}>Address</TableCell>
+            ) : (
+              <>
+                <TableCell sx={{ fontWeight: 600 }}>Cluster VIP</TableCell>
+                {members.map((m) => (
+                  <TableCell key={m.device_id} sx={{ fontWeight: 600 }}>
+                    {deviceNameLabel(m.hostname)}
+                  </TableCell>
+                ))}
+              </>
+            )}
             <TableCell sx={{ fontWeight: 600 }}>Network</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
           </TableRow>
@@ -445,48 +463,67 @@ function ClusterInterfacesTable({
             const isMixed = memberStates.length > 0 && !allUp && !allDown;
 
             return (
-              <TableRow key={iface.name} hover>
+              <TableRow key={`${iface.vsysLabel ?? ""}:${iface.name}`} hover>
+                {showVsysColumn && (
+                  <TableCell>
+                    <StatusChip tone="neutral" label={iface.vsysLabel ?? "Physical"} dense />
+                  </TableCell>
+                )}
                 <TableCell sx={{ fontWeight: 600, fontFamily: "monospace" }}>{iface.name}</TableCell>
-                <TableCell>
-                  {vips.length > 0 ? (
-                    <Stack direction="row" spacing={0.75} alignItems="center">
+                {sharedAddressOnly ? (
+                  <TableCell>
+                    {cidrAddress ? (
                       <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
-                        {vips.map((a) => a.address).join(", ")}
+                        {cidrAddress}
                       </Typography>
-                      <StatusChip tone="mem" label="VIP" dense />
-                    </Stack>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">—</Typography>
-                  )}
-                </TableCell>
-                {members.map((m) => {
-                  const mAddrs = iface.member_addresses?.[m.device_id] ?? [];
-                  const mState = iface.member_states?.[m.device_id];
-                  return (
-                    <TableCell key={m.device_id}>
-                      {mAddrs.length > 0 ? (
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">—</Typography>
+                    )}
+                  </TableCell>
+                ) : (
+                  <>
+                    <TableCell>
+                      {vips.length > 0 ? (
                         <Stack direction="row" spacing={0.75} alignItems="center">
                           <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
-                            {mAddrs.map((a) => a.address).join(", ")}
+                            {vips.map((a) => a.address).join(", ")}
                           </Typography>
-                          {mState && (
-                            <Box
-                              sx={{
-                                width: 7,
-                                height: 7,
-                                borderRadius: "50%",
-                                bgcolor: mState.toLowerCase() === "up" ? m3.success : m3.outline,
-                              }}
-                              title={`State: ${mState}`}
-                            />
-                          )}
+                          <StatusChip tone="mem" label="VIP" dense />
                         </Stack>
                       ) : (
                         <Typography variant="body2" color="text.secondary">—</Typography>
                       )}
                     </TableCell>
-                  );
-                })}
+                    {members.map((m) => {
+                      const mAddrs = iface.member_addresses?.[m.device_id] ?? [];
+                      const mState = iface.member_states?.[m.device_id];
+                      return (
+                        <TableCell key={m.device_id}>
+                          {mAddrs.length > 0 ? (
+                            <Stack direction="row" spacing={0.75} alignItems="center">
+                              <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                                {mAddrs.map((a) => a.address).join(", ")}
+                              </Typography>
+                              {mState && (
+                                <Box
+                                  sx={{
+                                    width: 7,
+                                    height: 7,
+                                    borderRadius: "50%",
+                                    bgcolor: mState.toLowerCase() === "up" ? m3.success : m3.outline,
+                                  }}
+                                  title={`State: ${mState}`}
+                                />
+                              )}
+                            </Stack>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">—</Typography>
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                  </>
+                )}
                 <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
                   {network}
                 </TableCell>
@@ -519,7 +556,7 @@ function ClusterRoutesTable({
   routes,
   members = [],
 }: {
-  readonly routes: readonly ClusterRoute[];
+  readonly routes: readonly (ClusterRoute & { readonly vsysLabel?: string })[];
   readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
 }) {
   const [diffOnly, setDiffOnly] = useState<boolean>(false);
@@ -528,6 +565,8 @@ function ClusterRoutesTable({
   if (routes.length === 0) {
     return <EmptyPanel title="No routing evidence" body="This context has no collected routes yet." />;
   }
+
+  const showVsysColumn = routes.some((route) => route.vsysLabel !== undefined);
 
   const diffRoutes = routes.filter((r) => r.presence !== "all" || r.differences.length > 0);
   const diffCount = diffRoutes.length;
@@ -541,7 +580,8 @@ function ClusterRoutesTable({
         r.destination.toLowerCase().includes(q) ||
         (r.next_hop && r.next_hop.toLowerCase().includes(q)) ||
         (r.interface && r.interface.toLowerCase().includes(q)) ||
-        r.protocol.toLowerCase().includes(q)
+        r.protocol.toLowerCase().includes(q) ||
+        (r.vsysLabel && r.vsysLabel.toLowerCase().includes(q))
     );
   }
 
@@ -637,6 +677,7 @@ function ClusterRoutesTable({
         <Table size="small">
           <TableHead>
             <TableRow>
+              {showVsysColumn && <TableCell sx={{ fontWeight: 600 }}>VSYS</TableCell>}
               <TableCell sx={{ fontWeight: 600 }}>Destination</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Next hop</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Interface</TableCell>
@@ -658,12 +699,17 @@ function ClusterRoutesTable({
 
               return (
                 <TableRow
-                  key={`${route.destination}-${route.next_hop ?? ""}-${route.interface ?? ""}-${index}`}
+                  key={`${route.vsysLabel ?? ""}-${route.destination}-${route.next_hop ?? ""}-${route.interface ?? ""}-${index}`}
                   hover
                   sx={{
                     bgcolor: isDiff ? "#fffbeb" : "inherit",
                   }}
                 >
+                  {showVsysColumn && (
+                    <TableCell>
+                      <StatusChip tone="neutral" label={route.vsysLabel ?? "Physical"} dense />
+                    </TableCell>
+                  )}
                   <TableCell sx={{ fontFamily: "monospace", fontWeight: 600, fontSize: "0.8125rem" }}>
                     {route.destination}
                   </TableCell>
@@ -996,7 +1042,7 @@ export function ClusterInterfacesPanel({
   clusterRef,
   virtualSystems = [],
   activeContext,
-  onSelectContext,
+  isPaloAlto = false,
 }: {
   readonly contexts: readonly ClusterContext[];
   readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
@@ -1004,6 +1050,7 @@ export function ClusterInterfacesPanel({
   readonly virtualSystems?: readonly string[];
   readonly activeContext?: string | null;
   readonly onSelectContext?: (ctx: string) => void;
+  readonly isPaloAlto?: boolean;
 }) {
   const { tabs, resolveContext } = useMemo(
     () => buildUnifiedContextTabs(contexts, virtualSystems),
@@ -1014,73 +1061,73 @@ export function ClusterInterfacesPanel({
     return <EmptyPanel title="No interface evidence" body="No cluster member has been collected yet." />;
   }
 
+  // No VS chosen (the header's own "Virtual Systems" selector, or the sidebar's VS
+  // sub-navigation): show every collected context in one table, tagged by which VSYS/VS
+  // each row came from, matching the single-device reference view instead of forcing a
+  // per-VS tab click just to see what the cluster carries.
+  if (!activeContext) {
+    const merged = tabs.flatMap((tab) => {
+      const found = resolveContext(tab.context);
+      if (!found) return [];
+      return found.interfaces.map((iface) => ({ ...iface, vsysLabel: tab.label }));
+    });
+    return <ClusterInterfacesTable interfaces={merged} members={members} sharedAddressOnly={isPaloAlto} />;
+  }
+
+  const found = resolveContext(activeContext);
+  if (found) {
+    return <ClusterInterfacesTable interfaces={found.interfaces} members={members} sharedAddressOnly={isPaloAlto} />;
+  }
+  const memberNames = members.map((m) => deviceNameLabel(m.hostname)).join(", ");
+  const name = activeContext;
   return (
-    <ContextTabs
-      contexts={tabs}
-      activeContext={activeContext}
-      onSelectContext={onSelectContext}
-      render={(name) => {
-        const found = resolveContext(name);
-        if (found) {
-          return (
-            <ClusterInterfacesTable
-              interfaces={found.interfaces}
-              members={members}
-            />
-          );
-        }
-        const memberNames = members.map((m) => deviceNameLabel(m.hostname)).join(", ");
-        return (
-          <Box
-            sx={{
-              p: 2.5,
-              bgcolor: m3.scLowest,
-              borderRadius: "16px",
-              border: `1px solid ${m3.outlineVar}`,
-              display: "flex",
-              flexDirection: "column",
-              gap: 2,
-            }}
-          >
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-                <Chip
-                  label={name.toLowerCase().includes("vsys") ? "VSYS" : "VSX"}
-                  size="small"
-                  sx={{
-                    fontWeight: 700,
-                    bgcolor: name.toLowerCase().includes("vsys") ? "#fef3c7" : "#e0e7ff",
-                    color: name.toLowerCase().includes("vsys") ? "#92400e" : "#3730a3",
-                    borderRadius: "6px"
-                  }}
-                />
-                <Typography variant="h6" sx={{ fontWeight: 700, color: m3.onSurface }}>
-                  {name.toLowerCase().includes("vsys") ? "Virtual System (VSYS)" : "Virtual System"}: {name}
-                </Typography>
-                <StatusChip tone="neutral" label="Uncollected Instance" dense />
-              </Box>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              Virtual System <strong>{name}</strong> operates on cluster <strong>{clusterRef ?? "Cluster"}</strong> across members (<strong>{memberNames}</strong>).
-            </Typography>
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 1.5 }}>
-              <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "10px", border: `1px solid ${m3.outlineVar}` }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Virtual System</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{name}</Typography>
-              </Box>
-              <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "10px", border: `1px solid ${m3.outlineVar}` }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Parent Cluster</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{clusterRef ?? "Parent Cluster"}</Typography>
-              </Box>
-              <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "10px", border: `1px solid ${m3.outlineVar}` }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>HA Redundancy</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{members.length} Nodes</Typography>
-              </Box>
-            </Box>
-          </Box>
-        );
+    <Box
+      sx={{
+        p: 2.5,
+        bgcolor: m3.scLowest,
+        borderRadius: "16px",
+        border: `1px solid ${m3.outlineVar}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
       }}
-    />
+    >
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+          <Chip
+            label={name.toLowerCase().includes("vsys") ? "VSYS" : "VSX"}
+            size="small"
+            sx={{
+              fontWeight: 700,
+              bgcolor: name.toLowerCase().includes("vsys") ? "#fef3c7" : "#e0e7ff",
+              color: name.toLowerCase().includes("vsys") ? "#92400e" : "#3730a3",
+              borderRadius: "6px"
+            }}
+          />
+          <Typography variant="h6" sx={{ fontWeight: 700, color: m3.onSurface }}>
+            {name.toLowerCase().includes("vsys") ? "Virtual System (VSYS)" : "Virtual System"}: {name}
+          </Typography>
+          <StatusChip tone="neutral" label="Uncollected Instance" dense />
+        </Box>
+      </Box>
+      <Typography variant="body2" color="text.secondary">
+        Virtual System <strong>{name}</strong> operates on cluster <strong>{clusterRef ?? "Cluster"}</strong> across members (<strong>{memberNames}</strong>).
+      </Typography>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 1.5 }}>
+        <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "10px", border: `1px solid ${m3.outlineVar}` }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Virtual System</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{name}</Typography>
+        </Box>
+        <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "10px", border: `1px solid ${m3.outlineVar}` }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Parent Cluster</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{clusterRef ?? "Parent Cluster"}</Typography>
+        </Box>
+        <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "10px", border: `1px solid ${m3.outlineVar}` }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>HA Redundancy</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{members.length} Nodes</Typography>
+        </Box>
+      </Box>
+    </Box>
   );
 }
 
@@ -1090,7 +1137,6 @@ export function ClusterRoutesPanel({
   clusterRef,
   virtualSystems = [],
   activeContext,
-  onSelectContext,
 }: {
   readonly contexts: readonly ClusterContext[];
   readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
@@ -1108,55 +1154,51 @@ export function ClusterRoutesPanel({
     return <EmptyPanel title="No routing evidence" body="No cluster member has been collected yet." />;
   }
 
+  if (!activeContext) {
+    const merged = tabs.flatMap((tab) => {
+      const found = resolveContext(tab.context);
+      if (!found) return [];
+      return found.routes.map((route) => ({ ...route, vsysLabel: tab.label }));
+    });
+    return <ClusterRoutesTable routes={merged} members={members} />;
+  }
+
+  const found = resolveContext(activeContext);
+  if (found) {
+    return <ClusterRoutesTable routes={found.routes} members={members} />;
+  }
+  const name = activeContext;
   return (
-    <ContextTabs
-      contexts={tabs}
-      activeContext={activeContext}
-      onSelectContext={onSelectContext}
-      render={(name) => {
-        const found = resolveContext(name);
-        if (found) {
-          return (
-            <ClusterRoutesTable
-              routes={found.routes}
-              members={members}
-            />
-          );
-        }
-        return (
-          <Box
-            sx={{
-              p: 2.5,
-              bgcolor: m3.scLowest,
-              borderRadius: "16px",
-              border: `1px solid ${m3.outlineVar}`,
-              display: "flex",
-              flexDirection: "column",
-              gap: 2,
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-              <Chip
-                label={name.toLowerCase().includes("vsys") ? "VSYS" : "VSX"}
-                size="small"
-                sx={{
-                  fontWeight: 700,
-                  bgcolor: name.toLowerCase().includes("vsys") ? "#fef3c7" : "#e0e7ff",
-                  color: name.toLowerCase().includes("vsys") ? "#92400e" : "#3730a3",
-                  borderRadius: "6px"
-                }}
-              />
-              <Typography variant="h6" sx={{ fontWeight: 700, color: m3.onSurface }}>
-                Routing Topology: {name}
-              </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              Virtual System <strong>{name}</strong> operates on cluster <strong>{clusterRef ?? "Cluster"}</strong>. No routing evidence collected yet.
-            </Typography>
-          </Box>
-        );
+    <Box
+      sx={{
+        p: 2.5,
+        bgcolor: m3.scLowest,
+        borderRadius: "16px",
+        border: `1px solid ${m3.outlineVar}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
       }}
-    />
+    >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+        <Chip
+          label={name.toLowerCase().includes("vsys") ? "VSYS" : "VSX"}
+          size="small"
+          sx={{
+            fontWeight: 700,
+            bgcolor: name.toLowerCase().includes("vsys") ? "#fef3c7" : "#e0e7ff",
+            color: name.toLowerCase().includes("vsys") ? "#92400e" : "#3730a3",
+            borderRadius: "6px"
+          }}
+        />
+        <Typography variant="h6" sx={{ fontWeight: 700, color: m3.onSurface }}>
+          Routing Topology: {name}
+        </Typography>
+      </Box>
+      <Typography variant="body2" color="text.secondary">
+        Virtual System <strong>{name}</strong> operates on cluster <strong>{clusterRef ?? "Cluster"}</strong>. No routing evidence collected yet.
+      </Typography>
+    </Box>
   );
 }
 
@@ -1444,7 +1486,7 @@ export function DeviceInventoryPanels({
           {
             label: "Interfaces",
             panel: isCluster
-              ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} />
+              ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
               : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} />,
           },
           {
@@ -1573,6 +1615,7 @@ export function ClusterDetailPanels({
   }
 
   const firstMember = members[0];
+  const isPaloAlto = firstMember?.vendor_hint === "palo_alto";
   const allContexts = clusterInventory?.contexts ?? [];
   const ifaceCount = allContexts.reduce((acc, c) => acc + c.interfaces.length, 0);
   const routeCount = allContexts.reduce((acc, c) => acc + c.routes.length, 0);
@@ -1746,7 +1789,7 @@ export function ClusterDetailPanels({
             </Box>
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
               <Chip
-                label="Physical / VS0"
+                label="All (Physical + VS)"
                 size="small"
                 clickable
                 onClick={() => setActiveVsContext(null)}
@@ -1802,6 +1845,7 @@ export function ClusterDetailPanels({
                 virtualSystems={virtualSystems}
                 activeContext={activeVsContext}
                 onSelectContext={setActiveVsContext}
+                isPaloAlto={isPaloAlto}
               />
             ),
           },
