@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class LocalAuthenticationConfigurationTest {
 
     @Test
-    void configuresFiveMinuteIdleTimeout() {
-        assertEquals(Duration.ofMinutes(5), LocalAuthenticationConfiguration.IDLE_TIMEOUT);
+    void configuresThirtyMinuteIdleTimeout() {
+        assertEquals(Duration.ofMinutes(30), LocalAuthenticationConfiguration.IDLE_TIMEOUT);
     }
 }
