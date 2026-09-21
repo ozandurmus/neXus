@@ -247,6 +247,14 @@ public final class InventoryCapabilityExecutor {
                     "[INVENTORY_VIP_STANDALONE_PARSE] target={0}:{1} standalone_len={2} standalone_addresses_found={3}",
                     target.host(), target.port(), vipStandalone.length(),
                     CheckPointClusterVirtualInterfaceParser.parse(vipStandalone).size());
+            // Temporary, bounded (cp_cluster_vip_never_observed_in_fleet): a short, fixed-length non-empty
+            // standalone result across unrelated devices looks like a shell rejection message rather than real
+            // command output. This prefix is never persisted and is only read from the live pod log for this
+            // one diagnosis; remove once the cause is found.
+            if (!vipStandalone.isBlank()) {
+                LOG.log(System.Logger.Level.INFO, "[INVENTORY_VIP_STANDALONE_PREFIX] target={0}:{1} prefix={2}",
+                        target.host(), target.port(), vipStandalone.substring(0, Math.min(80, vipStandalone.length())));
+            }
 
             List<InventoryContext> contexts = new ArrayList<>();
             contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
