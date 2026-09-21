@@ -993,11 +993,13 @@ export function InterfacesPanel({
   virtualSystems,
   activeContext,
   onSelectContext,
+  isPaloAlto = false,
 }: {
   readonly contexts: readonly InventoryContext[];
   readonly virtualSystems?: readonly string[] | string | null;
   readonly activeContext?: string | null;
   readonly onSelectContext?: (ctx: string) => void;
+  readonly isPaloAlto?: boolean;
 }) {
   if (contexts.length === 0) {
     return (
@@ -1016,6 +1018,29 @@ export function InterfacesPanel({
     () => buildUnifiedContextTabs(contexts, vsList),
     [contexts, vsList]
   );
+
+  // Check Point's VSX virtual systems stay their own tabbed contexts, Physical showing only the
+  // chassis's own interfaces; Palo Alto's vsys merges by default, matching the single-device
+  // reference view (see ClusterInterfacesPanel for the same vendor split on the cluster path).
+  if (!isPaloAlto) {
+    return (
+      <ContextTabs
+        contexts={tabs}
+        activeContext={activeContext}
+        onSelectContext={onSelectContext}
+        render={(name) => {
+          const context = resolveContext(name);
+          return (
+            <Stack spacing={1}>
+              <ContextHaBadge context={context} />
+              <InterfacesTable interfaces={context?.interfaces ?? []} />
+            </Stack>
+          );
+        }}
+      />
+    );
+  }
+
   if (!activeContext) {
     const merged = tabs.flatMap((tab) => {
       const found = resolveContext(tab.context);
@@ -1043,11 +1068,13 @@ export function RoutesPanel({
   virtualSystems,
   activeContext,
   onSelectContext,
+  isPaloAlto = false,
 }: {
   readonly contexts: readonly InventoryContext[];
   readonly virtualSystems?: readonly string[] | string | null;
   readonly activeContext?: string | null;
   readonly onSelectContext?: (ctx: string) => void;
+  readonly isPaloAlto?: boolean;
 }) {
   if (contexts.length === 0) {
     return (
@@ -1066,6 +1093,18 @@ export function RoutesPanel({
     () => buildUnifiedContextTabs(contexts, vsList),
     [contexts, vsList]
   );
+
+  if (!isPaloAlto) {
+    return (
+      <ContextTabs
+        contexts={tabs}
+        activeContext={activeContext}
+        onSelectContext={onSelectContext}
+        render={(name) => <RoutesTable routes={resolveContext(name)?.routes ?? []} />}
+      />
+    );
+  }
+
   if (!activeContext) {
     const merged = tabs.flatMap((tab) => {
       const found = resolveContext(tab.context);
@@ -1084,6 +1123,7 @@ export function ClusterInterfacesPanel({
   clusterRef,
   virtualSystems = [],
   activeContext,
+  onSelectContext,
   isPaloAlto = false,
 }: {
   readonly contexts: readonly ClusterContext[];
@@ -1103,26 +1143,8 @@ export function ClusterInterfacesPanel({
     return <EmptyPanel title="No interface evidence" body="No cluster member has been collected yet." />;
   }
 
-  // No VS chosen (the header's own "Virtual Systems" selector, or the sidebar's VS
-  // sub-navigation): show every collected context in one table, tagged by which VSYS/VS
-  // each row came from, matching the single-device reference view instead of forcing a
-  // per-VS tab click just to see what the cluster carries.
-  if (!activeContext) {
-    const merged = tabs.flatMap((tab) => {
-      const found = resolveContext(tab.context);
-      if (!found) return [];
-      return found.interfaces.map((iface) => ({ ...iface, vsysLabel: tab.label }));
-    });
-    return <ClusterInterfacesTable interfaces={merged} members={members} sharedAddressOnly={isPaloAlto} />;
-  }
-
-  const found = resolveContext(activeContext);
-  if (found) {
-    return <ClusterInterfacesTable interfaces={found.interfaces} members={members} sharedAddressOnly={isPaloAlto} />;
-  }
   const memberNames = members.map((m) => deviceNameLabel(m.hostname)).join(", ");
-  const name = activeContext;
-  return (
+  const renderUncollected = (name: string) => (
     <Box
       sx={{
         p: 2.5,
@@ -1171,6 +1193,40 @@ export function ClusterInterfacesPanel({
       </Box>
     </Box>
   );
+
+  // Check Point's VSX virtual systems are their own tabbed contexts -- Physical shows only the
+  // chassis's own interfaces, never merged with a virtual system's. Palo Alto's vsys genuinely
+  // shares the single-device reference view instead: merged by default, tagged by a VSYS column,
+  // exactly what a per-VS tab click would otherwise force just to see what the cluster carries.
+  if (!isPaloAlto) {
+    return (
+      <ContextTabs
+        contexts={tabs}
+        activeContext={activeContext}
+        onSelectContext={onSelectContext}
+        render={(name) => {
+          const found = resolveContext(name);
+          return found
+            ? <ClusterInterfacesTable interfaces={found.interfaces} members={members} />
+            : renderUncollected(name);
+        }}
+      />
+    );
+  }
+
+  if (!activeContext) {
+    const merged = tabs.flatMap((tab) => {
+      const found = resolveContext(tab.context);
+      if (!found) return [];
+      return found.interfaces.map((iface) => ({ ...iface, vsysLabel: tab.label }));
+    });
+    return <ClusterInterfacesTable interfaces={merged} members={members} sharedAddressOnly={isPaloAlto} />;
+  }
+
+  const found = resolveContext(activeContext);
+  return found
+    ? <ClusterInterfacesTable interfaces={found.interfaces} members={members} sharedAddressOnly={isPaloAlto} />
+    : renderUncollected(activeContext);
 }
 
 export function ClusterRoutesPanel({
@@ -1179,6 +1235,8 @@ export function ClusterRoutesPanel({
   clusterRef,
   virtualSystems = [],
   activeContext,
+  onSelectContext,
+  isPaloAlto = false,
 }: {
   readonly contexts: readonly ClusterContext[];
   readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
@@ -1186,6 +1244,7 @@ export function ClusterRoutesPanel({
   readonly virtualSystems?: readonly string[];
   readonly activeContext?: string | null;
   readonly onSelectContext?: (ctx: string) => void;
+  readonly isPaloAlto?: boolean;
 }) {
   const { tabs, resolveContext } = useMemo(
     () => buildUnifiedContextTabs(contexts, virtualSystems),
@@ -1196,21 +1255,7 @@ export function ClusterRoutesPanel({
     return <EmptyPanel title="No routing evidence" body="No cluster member has been collected yet." />;
   }
 
-  if (!activeContext) {
-    const merged = tabs.flatMap((tab) => {
-      const found = resolveContext(tab.context);
-      if (!found) return [];
-      return found.routes.map((route) => ({ ...route, vsysLabel: tab.label }));
-    });
-    return <ClusterRoutesTable routes={merged} members={members} />;
-  }
-
-  const found = resolveContext(activeContext);
-  if (found) {
-    return <ClusterRoutesTable routes={found.routes} members={members} />;
-  }
-  const name = activeContext;
-  return (
+  const renderUncollected = (name: string) => (
     <Box
       sx={{
         p: 2.5,
@@ -1242,6 +1287,34 @@ export function ClusterRoutesPanel({
       </Typography>
     </Box>
   );
+
+  if (!isPaloAlto) {
+    return (
+      <ContextTabs
+        contexts={tabs}
+        activeContext={activeContext}
+        onSelectContext={onSelectContext}
+        render={(name) => {
+          const found = resolveContext(name);
+          return found ? <ClusterRoutesTable routes={found.routes} members={members} /> : renderUncollected(name);
+        }}
+      />
+    );
+  }
+
+  if (!activeContext) {
+    const merged = tabs.flatMap((tab) => {
+      const found = resolveContext(tab.context);
+      if (!found) return [];
+      return found.routes.map((route) => ({ ...route, vsysLabel: tab.label }));
+    });
+    return <ClusterRoutesTable routes={merged} members={members} />;
+  }
+
+  const found = resolveContext(activeContext);
+  return found
+    ? <ClusterRoutesTable routes={found.routes} members={members} />
+    : renderUncollected(activeContext);
 }
 
 /** WORKER.md "Frontend": "a chip naming the members" -- the cluster row's own membership marker. */
@@ -1529,13 +1602,13 @@ export function DeviceInventoryPanels({
             label: "Interfaces",
             panel: isCluster
               ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
-              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} />,
+              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />,
           },
           {
             label: "Routing",
             panel: isCluster
-              ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} />
-              : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} />,
+              ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
+              : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />,
           },
           {
             label: "Cluster members",
@@ -1901,6 +1974,7 @@ export function ClusterDetailPanels({
                 virtualSystems={virtualSystems}
                 activeContext={activeVsContext}
                 onSelectContext={setActiveVsContext}
+                isPaloAlto={isPaloAlto}
               />
             ),
           },

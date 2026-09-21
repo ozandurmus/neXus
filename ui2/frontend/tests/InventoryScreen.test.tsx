@@ -248,7 +248,7 @@ describe("InventoryScreen device list", () => {
     expect(screen.getAllByText("GarantiBetaAA").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("merges every collected context into one interfaces table by default, and filters to one VS when selected", async () => {
+  it("keeps a Check Point cluster's Physical and VSX contexts as separate tabs, never merged", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((input: RequestInfo | URL) => {
@@ -320,13 +320,11 @@ describe("InventoryScreen device list", () => {
     await waitFor(() => expect(screen.getByText("Cluster FW-CKP-VSX-CLS")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Cluster FW-CKP-VSX-CLS"));
 
-    // Default view: both the physical and the VS interface appear together, each labelled.
+    // Default (Physical) tab shows only the chassis's own interface -- never merged with a VSX's.
     await waitFor(() => expect(screen.getByText("Mgmt")).toBeInTheDocument());
-    expect(screen.getByText("eth0.100")).toBeInTheDocument();
-    expect(screen.getByText("Physical / VS0")).toBeInTheDocument();
-    expect(screen.getByText("VS: GarantiBetaAA (VSID 1)")).toBeInTheDocument();
+    expect(screen.queryByText("eth0.100")).toBeNull();
 
-    // Selecting the VS from the sidebar filters down to only that context's own interface.
+    // Selecting the VS from the sidebar switches to that VSX's own tab, showing only its interface.
     fireEvent.click(screen.getByText("GarantiBetaAA"));
     await waitFor(() => expect(screen.getByText("eth0.100")).toBeInTheDocument());
     expect(screen.queryByText("Mgmt")).toBeNull();
