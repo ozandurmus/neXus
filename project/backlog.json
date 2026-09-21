@@ -702,6 +702,15 @@
       "priority": "P2",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "cp_vsx_interfaces_identical_to_physical",
+      "category": "discovery",
+      "title": "Check Point VSX per-VS interface/route reads return the physical member's data, not the virtual system's own",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }

@@ -126,7 +126,8 @@
     "pan_tls_trust_rejects_corporate_ca": "java_debt",
     "discovery_failure_summary_stores_certificate_subject": "java_debt",
     "orchestrator_worktree_lacks_frontend_dependencies": "agent_operations",
-    "cp_cluster_vip_never_observed_in_fleet": "java_debt"
+    "cp_cluster_vip_never_observed_in_fleet": "java_debt",
+    "cp_vsx_interfaces_identical_to_physical": "java_debt"
   },
   "converted_lessons": [
     {

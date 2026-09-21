@@ -1194,24 +1194,16 @@ export function ClusterInterfacesPanel({
     </Box>
   );
 
-  // Check Point's VSX virtual systems are their own tabbed contexts -- Physical shows only the
-  // chassis's own interfaces, never merged with a virtual system's. Palo Alto's vsys genuinely
-  // shares the single-device reference view instead: merged by default, tagged by a VSYS column,
-  // exactly what a per-VS tab click would otherwise force just to see what the cluster carries.
+  // Check Point's VSX virtual systems are their own contexts -- Physical shows only the chassis's
+  // own interfaces, never merged with a virtual system's. Selection is the sidebar's own VS
+  // sub-navigation under this cluster (already driving activeContext); no second tab strip is
+  // rendered here to pick the same thing again. Palo Alto's vsys genuinely shares the single-
+  // device reference view instead: merged by default, tagged by a VSYS column.
   if (!isPaloAlto) {
-    return (
-      <ContextTabs
-        contexts={tabs}
-        activeContext={activeContext}
-        onSelectContext={onSelectContext}
-        render={(name) => {
-          const found = resolveContext(name);
-          return found
-            ? <ClusterInterfacesTable interfaces={found.interfaces} members={members} />
-            : renderUncollected(name);
-        }}
-      />
-    );
+    const found = resolveContext(activeContext ?? "physical");
+    return found
+      ? <ClusterInterfacesTable interfaces={found.interfaces} members={members} />
+      : renderUncollected(activeContext ?? "physical");
   }
 
   if (!activeContext) {
@@ -1288,18 +1280,13 @@ export function ClusterRoutesPanel({
     </Box>
   );
 
+  // Same split as ClusterInterfacesPanel: Check Point's VS selection comes from the sidebar
+  // alone, no second tab strip here to pick the same context again.
   if (!isPaloAlto) {
-    return (
-      <ContextTabs
-        contexts={tabs}
-        activeContext={activeContext}
-        onSelectContext={onSelectContext}
-        render={(name) => {
-          const found = resolveContext(name);
-          return found ? <ClusterRoutesTable routes={found.routes} members={members} /> : renderUncollected(name);
-        }}
-      />
-    );
+    const found = resolveContext(activeContext ?? "physical");
+    return found
+      ? <ClusterRoutesTable routes={found.routes} members={members} />
+      : renderUncollected(activeContext ?? "physical");
   }
 
   if (!activeContext) {
@@ -1864,87 +1851,10 @@ export function ClusterDetailPanels({
           })}
         </Box>
 
-        {/* Virtual Systems Overview Card */}
-        {virtualSystems.length > 0 && (
-          <Box
-            sx={{
-              p: 1.5,
-              borderRadius: "12px",
-              bgcolor: m3.scLow,
-              border: `1px solid ${m3.outlineVar}`,
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-          >
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  fontWeight: 700,
-                  color: m3.onSurfaceVar,
-                  textTransform: "uppercase",
-                  fontSize: "0.72rem",
-                  letterSpacing: "0.04em",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.75,
-                }}
-              >
-                <span>Virtual Systems (VSX)</span>
-                <Chip
-                  size="small"
-                  label={virtualSystems.length}
-                  sx={{ height: 18, fontSize: "0.65rem", fontWeight: 700, bgcolor: m3.scHighest }}
-                />
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Select context to inspect
-              </Typography>
-            </Box>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-              <Chip
-                label="All (Physical + VS)"
-                size="small"
-                clickable
-                onClick={() => setActiveVsContext(null)}
-                sx={{
-                  borderRadius: "8px",
-                  fontWeight: activeVsContext === null ? 700 : 500,
-                  bgcolor: activeVsContext === null ? m3.primary : m3.scLowest,
-                  color: activeVsContext === null ? m3.onPrimary : m3.onSurface,
-                  border: "1px solid",
-                  borderColor: activeVsContext === null ? m3.primary : m3.outlineVar,
-                  "&:hover": { borderColor: m3.primary },
-                }}
-              />
-              {virtualSystems.map((vs) => {
-                const isSelected = activeVsContext === vs;
-                return (
-                  <Chip
-                    key={vs}
-                    label={`VS: ${vs}`}
-                    size="small"
-                    clickable
-                    onClick={() => setActiveVsContext(isSelected ? null : vs)}
-                    sx={{
-                      borderRadius: "8px",
-                      fontWeight: isSelected ? 700 : 500,
-                      bgcolor: isSelected ? m3.primaryContainer : m3.scLowest,
-                      color: isSelected ? m3.onPrimaryContainer : m3.onSurface,
-                      border: "1px solid",
-                      borderColor: isSelected ? m3.primary : m3.outlineVar,
-                      "&:hover": {
-                        bgcolor: isSelected ? m3.primaryContainer : "#f0f5ff",
-                        borderColor: m3.primary,
-                      },
-                    }}
-                  />
-                );
-              })}
-            </Box>
-          </Box>
-        )}
+        {/* No redundant VS selector here: the sidebar's own VS sub-navigation under this cluster
+            already sets activeVsContext, and duplicating that control here just for a second click
+            target -- next to a third one inside the panel below -- is exactly the confusing repetition
+            this screen must not have. */}
       </Box>
 
       <M3Tabs
