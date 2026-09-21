@@ -1401,6 +1401,9 @@ export function DeviceInventoryPanels({
               <Typography variant="h3" sx={{ fontWeight: 600 }}>
                 {deviceNameLabel(device.hostname)}
               </Typography>
+              <Typography variant="caption" sx={{ fontFamily: "monospace", color: m3.primary }}>
+                {device.device_id}
+              </Typography>
               <JobStatusIndicator
                 state={device.latest_job_state}
                 type={device.latest_job_type}
