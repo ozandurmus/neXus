@@ -181,7 +181,7 @@ gates:
     platform_role_scope: cp_gaia_gateway
     shell_context: expert
     transport_kind: SSH_EXEC
-    canonical_command_key: "cphaprob -a if"
+    canonical_command_key: "cphaprob -a -m if"
     action_class: read
     sign_off_state: SIGNED_OFF
     timeout_s: 30
@@ -289,7 +289,7 @@ gates:
     platform_role_scope: cp_gaia_gateway
     shell_context: expert
     transport_kind: SSH_EXEC
-    canonical_command_key: "bash -lc 'vsenv 0 && cphaprob -a if'"
+    canonical_command_key: "bash -lc 'vsenv 0 && cphaprob -a -m if'"
     action_class: read
     sign_off_state: SIGNED_OFF
     timeout_s: 30
@@ -330,7 +330,7 @@ gates:
     platform_role_scope: cp_gaia_gateway
     shell_context: expert
     transport_kind: SSH_EXEC
-    canonical_command_key: "bash -lc 'vsenv <VSID> && cphaprob -a if'"
+    canonical_command_key: "bash -lc 'vsenv <VSID> && cphaprob -a -m if'"
     action_class: read
     sign_off_state: SIGNED_OFF
     timeout_s: 30

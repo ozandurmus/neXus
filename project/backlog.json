@@ -693,6 +693,15 @@
       "priority": "P2",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "cp_cluster_vip_never_observed_in_fleet",
+      "category": "discovery",
+      "title": "Check Point cluster VIP (role=cluster_virtual) has never been observed anywhere in the fleet",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }
