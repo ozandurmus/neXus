@@ -124,7 +124,8 @@
     "top_app_bar_search_is_not_an_input": "java_debt",
     "regression_mapping_backend_trees_unmapped": "agent_operations",
     "pan_tls_trust_rejects_corporate_ca": "java_debt",
-    "discovery_failure_summary_stores_certificate_subject": "java_debt"
+    "discovery_failure_summary_stores_certificate_subject": "java_debt",
+    "orchestrator_worktree_lacks_frontend_dependencies": "agent_operations"
   },
   "converted_lessons": [
     {
