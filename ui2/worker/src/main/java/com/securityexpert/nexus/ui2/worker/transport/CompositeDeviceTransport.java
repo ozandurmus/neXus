@@ -56,6 +56,13 @@ public final class CompositeDeviceTransport implements DeviceTransport {
     }
 
     @Override
+    public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
+        return registry.find(TransportKind.SSH_EXEC)
+                .map(transport -> transport.execInteractive(session, spec, timeout))
+                .orElseGet(() -> new ExecResult.ChannelFailed(noAdapter(TransportKind.SSH_EXEC)));
+    }
+
+    @Override
     public FetchResult fetch(TransportSession session, FetchSpec spec, Duration timeout) {
         return registry.find(TransportKind.SSH_EXEC)
                 .map(transport -> transport.fetch(session, spec, timeout))

@@ -30,6 +30,7 @@ class CompositeDeviceTransportTest {
     private static final class RecordingTransport implements DeviceTransport {
         boolean connectCalled;
         boolean xmlApiCallCalled;
+        boolean execInteractiveCalled;
 
         @Override
         public ConnectResult connect(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
@@ -40,6 +41,12 @@ class CompositeDeviceTransportTest {
         @Override
         public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
             throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
+        public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
+            execInteractiveCalled = true;
+            return new ExecResult.Completed("interactive-output", 0);
         }
 
         @Override
@@ -71,6 +78,26 @@ class CompositeDeviceTransportTest {
 
         assertTrue(ssh.connectCalled, "connect must reach the registered ssh_exec adapter");
         assertTrue(result instanceof ConnectResult.TimedOut);
+    }
+
+    /** Regression: this method was added to DeviceTransport as a default (throwing) method after
+     * CompositeDeviceTransport already existed, and CompositeDeviceTransport was never updated to
+     * override and route it -- every execInteractive call silently fell to the interface's own
+     * "not implemented" default instead of reaching the registered ssh_exec adapter (measured
+     * live, 2026-09-21: the confirm's interactive-shell fallback never actually ran on a real
+     * device because of exactly this gap, though its own unit tests -- which construct
+     * SshExecTransport directly, never through this composite -- could not catch it). */
+    @Test
+    void execInteractiveRoutesToTheRegisteredSshExecAdapter() {
+        RecordingTransport ssh = new RecordingTransport();
+        TransportRegistry registry = new TransportRegistry();
+        registry.register(TransportKind.SSH_EXEC, ssh);
+        CompositeDeviceTransport composite = new CompositeDeviceTransport(registry);
+
+        ExecResult result = composite.execInteractive(() -> "session-1", new ExecSpec("show version all"), TIMEOUT);
+
+        assertTrue(ssh.execInteractiveCalled, "execInteractive must reach the registered ssh_exec adapter");
+        assertTrue(result instanceof ExecResult.Completed);
     }
 
     @Test
