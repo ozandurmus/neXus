@@ -16,6 +16,7 @@ final class SshTransportSession implements TransportSession {
 
     private final String sessionId;
     private final Session jschSession;
+    private InteractiveShellSession interactiveShell;
 
     SshTransportSession(String sessionId, Session jschSession) {
         this.sessionId = sessionId;
@@ -46,5 +47,21 @@ final class SshTransportSession implements TransportSession {
 
     Session jschSession() {
         return jschSession;
+    }
+
+    /** One persistent interactive shell, lazily opened and reused across every
+     * {@code execInteractive} call on this session (Gaia Embedded/Quantum Spark support). */
+    InteractiveShellSession interactiveShell() throws com.jcraft.jsch.JSchException, java.io.IOException {
+        if (interactiveShell == null || !interactiveShell.isConnected()) {
+            interactiveShell = new InteractiveShellSession(jschSession, 15000);
+        }
+        return interactiveShell;
+    }
+
+    void closeInteractiveShell() {
+        if (interactiveShell != null) {
+            interactiveShell.close();
+            interactiveShell = null;
+        }
     }
 }

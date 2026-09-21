@@ -37,6 +37,7 @@ final class ScriptedDeviceTransport implements DeviceTransport {
     private ConnectResult connectResultOverride;
     private boolean bareIdentityFormFails;
     private int blankIdentityFormCount;
+    private boolean execChannelRejectedEntirely;
 
     ScriptedDeviceTransport(Map<String, String> identityOutputByHost, Map<String, String> haPeerOutputByHost) {
         this.identityOutputByHost = identityOutputByHost;
@@ -55,6 +56,13 @@ final class ScriptedDeviceTransport implements DeviceTransport {
      * completed, exit 0, nothing useful -- so only a later form in the fallback chain answers. */
     void blankOutOnFirstIdentityForms(int count) {
         this.blankIdentityFormCount = count;
+    }
+
+    /** Simulates a device that rejects every exec-channel form outright (Gaia Embedded/Quantum
+     * Spark, measured live 2026-09-21) -- {@link #exec} fails every literal form, and only
+     * {@link #execInteractive} ever answers. */
+    void rejectExecChannelEntirely() {
+        this.execChannelRejectedEntirely = true;
     }
 
     void makeCredentialUnresolvable() {
@@ -87,6 +95,9 @@ final class ScriptedDeviceTransport implements DeviceTransport {
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
         String host = hostBySessionId.get(session.sessionId());
         String command = spec.command();
+        if (execChannelRejectedEntirely) {
+            return new ExecResult.ChannelFailed("simulated: exec channel request rejected outright");
+        }
         if (DeviceFirstContactCommandSet.CP_IDENTITY_READ.literalForms().contains(command)) {
             int formIndex = DeviceFirstContactCommandSet.CP_IDENTITY_READ.literalForms().indexOf(command);
             if (blankIdentityFormCount > 0 && formIndex < blankIdentityFormCount) {
@@ -95,6 +106,22 @@ final class ScriptedDeviceTransport implements DeviceTransport {
             if (bareIdentityFormFails && command.equals(DeviceFirstContactCommandSet.CP_IDENTITY_READ.literalForms().get(0))) {
                 return new ExecResult.ChannelFailed("simulated: bare Expert form not recognized in Clish");
             }
+            return new ExecResult.Completed(identityOutputByHost.getOrDefault(host, ""), 0);
+        }
+        if (DeviceFirstContactCommandSet.CP_HA_PEER_READ.literalForms().contains(command)) {
+            return new ExecResult.Completed(haPeerOutputByHost.getOrDefault(host, ""), 0);
+        }
+        throw new IllegalStateException("command outside the closed set: " + command);
+    }
+
+    @Override
+    public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
+        if (!execChannelRejectedEntirely) {
+            throw new IllegalStateException("execInteractive called without simulating an exec-rejecting device");
+        }
+        String host = hostBySessionId.get(session.sessionId());
+        String command = spec.command();
+        if (DeviceFirstContactCommandSet.CP_IDENTITY_READ.literalForms().contains(command)) {
             return new ExecResult.Completed(identityOutputByHost.getOrDefault(host, ""), 0);
         }
         if (DeviceFirstContactCommandSet.CP_HA_PEER_READ.literalForms().contains(command)) {

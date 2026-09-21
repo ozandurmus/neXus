@@ -1,0 +1,235 @@
+package com.securityexpert.nexus.ui2.worker.transport.ssh;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
+
+import com.jcraft.jsch.ChannelShell;
+import com.jcraft.jsch.JSchException;
+import com.jcraft.jsch.Session;
+
+/**
+ * One persistent, PTY-backed interactive shell channel, ported from the
+ * pre-Java product's own real-fleet-proven {@code InteractiveSshSession}
+ * (its Check Point configuration collector). Some
+ * Check Point Gaia Embedded / Quantum Spark appliances accept an
+ * interactive shell login but reject a bare {@code exec} channel request
+ * outright (measured live by the Product Owner, 2026-09-21: every literal
+ * form of a plain {@code exec} identity read ran out its full timeout on
+ * such a device, PTY or not) -- this mirrors a normal operator SSH session
+ * instead: open one shell, learn its prompt, then send each command and
+ * read until that prompt reappears.
+ *
+ * <p>Deliberately narrower than the Python original: no marker/exit-status
+ * framing mode, since the confirm's identity/HA reads never used it there
+ * either (only the prompt-synchronized path). One command at a time, never
+ * concurrent, matching the one-session-per-confirm rule.</p>
+ */
+final class InteractiveShellSession implements AutoCloseable {
+
+    private static final Pattern ANSI_ESCAPE = Pattern.compile("(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])");
+    private static final List<String> CLI_ERROR_PATTERNS = List.of(
+            "command not found", "unknown command", "invalid command", "syntax error",
+            "not a valid command", "permission denied", "not authorized", "authorization failed");
+
+    private final ChannelShell channel;
+    private final InputStream in;
+    private final OutputStream out;
+    private String prompt;
+
+    InteractiveShellSession(Session jschSession, int connectTimeoutMs) throws JSchException, IOException {
+        this.channel = (ChannelShell) jschSession.openChannel("shell");
+        this.channel.setPtyType("vt100");
+        this.channel.setPtySize(4096, 10000, 0, 0);
+        this.in = channel.getInputStream();
+        this.out = channel.getOutputStream();
+        this.channel.connect(connectTimeoutMs);
+        // Drain the login banner, then ask the shell to repaint its prompt (never a
+        // device command) and learn the prompt string from that repaint alone.
+        readUntilQuiet(5000, 350);
+        try {
+            out.write('\n');
+            out.flush();
+        } catch (IOException ignored) {
+            // handled by the caller's next read/write failing
+        }
+        String painted = readUntilQuiet(5000, 350);
+        this.prompt = promptCandidateOf(painted);
+    }
+
+    boolean isConnected() {
+        return channel.isConnected();
+    }
+
+    @Override
+    public void close() {
+        channel.disconnect();
+    }
+
+    /**
+     * Runs one command on this persistent shell. Returns the command's own
+     * output text on success, or {@code null} on timeout, a channel
+     * failure, blank output, or a recognized CLI error string -- the same
+     * "try the next form" contract {@code ConfirmCapabilityExecutor}'s
+     * exec-based fallback already uses.
+     */
+    String run(String command, int timeoutMs) {
+        String normalized = command == null ? "" : command.strip();
+        if (normalized.isEmpty() || normalized.contains("\n") || normalized.contains("\r")) {
+            return null;
+        }
+        drainReady();
+        try {
+            out.write((normalized + "\n").getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        } catch (IOException e) {
+            return null;
+        }
+
+        StringBuilder raw = new StringBuilder();
+        long deadline = System.currentTimeMillis() + Math.max(1000, timeoutMs);
+        long lastData = System.currentTimeMillis();
+        boolean sawData = false;
+        boolean completed = false;
+        byte[] buf = new byte[4096];
+        while (System.currentTimeMillis() < deadline) {
+            boolean got = false;
+            try {
+                while (in.available() > 0) {
+                    int n = in.read(buf);
+                    if (n < 0) {
+                        break;
+                    }
+                    raw.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+                    got = true;
+                    sawData = true;
+                }
+            } catch (IOException ignored) {
+                // treated as no data this iteration; the deadline still governs
+            }
+            if (got) {
+                lastData = System.currentTimeMillis();
+                String current = stripTerminalControl(raw.toString());
+                if (prompt != null && current.stripTrailing().endsWith(prompt)) {
+                    completed = true;
+                    break;
+                }
+            } else if (sawData && prompt == null && System.currentTimeMillis() - lastData >= 1250) {
+                // Fallback only when a stable prompt could not be learned at all.
+                completed = true;
+                break;
+            }
+            sleepQuietly(40);
+        }
+        if (!completed) {
+            return null;
+        }
+
+        String text = stripTerminalControl(raw.toString());
+        String observedPrompt = promptCandidateOf(text);
+        if (observedPrompt != null) {
+            prompt = observedPrompt;
+        }
+        List<String> lines = new ArrayList<>(List.of(text.split("\n", -1)));
+        if (!lines.isEmpty() && lines.get(0).strip().equals(normalized)) {
+            lines.remove(0);
+        }
+        if (prompt != null && !lines.isEmpty() && lines.get(lines.size() - 1).strip().equals(prompt)) {
+            lines.remove(lines.size() - 1);
+        }
+        String stdout = String.join("\n", lines).strip();
+        if (stdout.isEmpty() || looksLikeCliError(stdout)) {
+            return null;
+        }
+        return stdout;
+    }
+
+    private void drainReady() {
+        try {
+            byte[] buf = new byte[4096];
+            while (in.available() > 0) {
+                if (in.read(buf) < 0) {
+                    break;
+                }
+            }
+        } catch (IOException ignored) {
+            // nothing to drain, or the channel is already gone -- the next write/read reports that
+        }
+    }
+
+    private String readUntilQuiet(int timeoutMs, int quietMs) {
+        StringBuilder chunks = new StringBuilder();
+        long deadline = System.currentTimeMillis() + Math.max(1, timeoutMs);
+        long lastData = System.currentTimeMillis();
+        boolean sawData = false;
+        byte[] buf = new byte[4096];
+        while (System.currentTimeMillis() < deadline) {
+            boolean got = false;
+            try {
+                while (in.available() > 0) {
+                    int n = in.read(buf);
+                    if (n < 0) {
+                        break;
+                    }
+                    chunks.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+                    got = true;
+                    sawData = true;
+                }
+            } catch (IOException ignored) {
+                break;
+            }
+            if (got) {
+                lastData = System.currentTimeMillis();
+            } else if (sawData && System.currentTimeMillis() - lastData >= quietMs) {
+                break;
+            }
+            sleepQuietly(40);
+        }
+        return chunks.toString();
+    }
+
+    private static void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static String stripTerminalControl(String value) {
+        String text = ANSI_ESCAPE.matcher(value == null ? "" : value).replaceAll("");
+        return text.replace("\r\n", "\n").replace("\r", "\n");
+    }
+
+    /** The last plausible prompt line, for read framing only -- never used to decide Clish vs
+     * Expert; command success is the only capability evidence, matching the Python original. */
+    private static String promptCandidateOf(String value) {
+        String[] lines = stripTerminalControl(value).split("\n", -1);
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String line = lines[i].strip();
+            if (line.isEmpty() || line.length() > 240) {
+                continue;
+            }
+            char last = line.charAt(line.length() - 1);
+            if (last == '>' || last == '#' || last == '$') {
+                return line;
+            }
+        }
+        return null;
+    }
+
+    private static boolean looksLikeCliError(String stdout) {
+        String lower = stdout.toLowerCase(Locale.ROOT);
+        for (String pattern : CLI_ERROR_PATTERNS) {
+            if (lower.contains(pattern)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}

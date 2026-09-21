@@ -259,6 +259,44 @@ public final class SshExecTransport implements DeviceTransport {
         }
     }
 
+    /**
+     * Gaia Embedded/Quantum Spark support (2026-09-21): runs {@code spec.command()}
+     * on this session's one persistent interactive shell (opened lazily, reused
+     * across calls -- {@link SshTransportSession#interactiveShell()}), instead of
+     * a one-shot {@code exec} channel. Ported from the pre-Java product's own
+     * real-fleet-proven {@code InteractiveSshSession} (Python); see {@link
+     * InteractiveShellSession} for the read/prompt-matching mechanics.
+     */
+    @Override
+    public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
+        if (!(session instanceof SshTransportSession sshSession)) {
+            return new ExecResult.ChannelFailed("not an ssh_exec session");
+        }
+        long startMs = System.currentTimeMillis();
+        try {
+            InteractiveShellSession shell = sshSession.interactiveShell();
+            String output = shell.run(spec.command(), (int) timeout.toMillis());
+            long elapsedMs = System.currentTimeMillis() - startMs;
+            if (output == null) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" produced no usable output after {1}ms",
+                        spec.command(), elapsedMs);
+                return new ExecResult.TimedOut();
+            }
+            LOG.log(System.Logger.Level.INFO,
+                    "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" completed in {1}ms (length={2})",
+                    spec.command(), elapsedMs, output.length());
+            return new ExecResult.Completed(output, 0);
+        } catch (JSchException | IOException e) {
+            long elapsedMs = System.currentTimeMillis() - startMs;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" failed after {1}ms: {2}",
+                    spec.command(), elapsedMs, e.getMessage());
+            sshSession.closeInteractiveShell();
+            return new ExecResult.ChannelFailed(String.valueOf(e.getMessage()));
+        }
+    }
+
     @Override
     public FetchResult fetch(TransportSession session, FetchSpec spec, Duration timeout) {
         throw new TransportNotImplementedException("sftp_get/scp_get");
@@ -304,6 +342,7 @@ public final class SshExecTransport implements DeviceTransport {
     public void disconnect(TransportSession session) {
         if (session instanceof SshTransportSession sshSession) {
             LOG.log(System.Logger.Level.INFO, "[SSH_DISCONNECT] session disconnected: {0}", session.sessionId());
+            sshSession.closeInteractiveShell();
             sshSession.jschSession().disconnect();
         }
     }

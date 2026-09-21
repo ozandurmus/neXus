@@ -21,6 +21,23 @@ public interface DeviceTransport {
 
     ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout);
 
+    /**
+     * A persistent, PTY-backed interactive shell command -- for a Check Point
+     * Gaia Embedded/Quantum Spark device that accepts an interactive shell
+     * login but rejects a bare {@code exec} channel request outright (measured
+     * live, 2026-09-21: every literal form of {@link #exec} ran out its full
+     * timeout on such a device, {@code pty} true or not; the pre-Java
+     * product's own real-fleet-proven probe used an interactive shell for
+     * exactly this reason). A default method, not an abstract one, so every
+     * existing implementor and test double keeps compiling unchanged -- only
+     * {@code SshExecTransport} overrides it with a real implementation, the
+     * same shape {@link #fetchStreaming} already uses for a capability a
+     * transport does not support.
+     */
+    default ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
+        throw new TransportNotImplementedException("exec_interactive");
+    }
+
     /** {@code sftp_get}/{@code scp_get} -- declared, not implemented at this movement. */
     FetchResult fetch(TransportSession session, FetchSpec spec, Duration timeout);
 

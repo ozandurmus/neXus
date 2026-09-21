@@ -24,7 +24,7 @@ public enum DeviceFirstContactCommandSet {
     /** Gate entry 1: EC-11's identity read, Check Point Gaia over {@code ssh_exec}. Four literal
      * forms (2026-09-21 correction, DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md's own "may be
      * corrected at this one site without reopening the approval" clause): the pre-Java product's
-     * own real-fleet-proven probe ({@code checkpoint/direct_ssh_probe.py}) tries all four in this
+     * own real-fleet-proven Check Point direct-SSH probe tries all four in this
      * order on a Quantum Spark/Gaia Embedded device whose landing shell and exact CLI surface
      * cannot be assumed ahead of time (AGENTS.md Check Point: "some estate devices land directly
      * in Clish; treat this as a capability, not a platform identity"). */

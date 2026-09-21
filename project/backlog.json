@@ -711,6 +711,15 @@
       "priority": "P2",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "cp_spark_exec_channel_rejected",
+      "category": "confirm",
+      "title": "Check Point Gaia Embedded/Quantum Spark: exec channel rejected outright, needs interactive shell",
+      "status": "in_progress",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }

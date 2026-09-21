@@ -184,18 +184,59 @@ public final class ConfirmCapabilityExecutor {
      * form is tried on failure, timeout, or blank output -- previously dead code, only
      * literalForms().get(0) was ever sent, so such a device's identity read always ran out its
      * full timeout for nothing (Product Owner measured live, 2026-09-21). This mirrors the
-     * pre-Java product's own real-fleet-proven probe (checkpoint/direct_ssh_probe.py), including
+     * pre-Java product's own real-fleet-proven Check Point direct-SSH probe, including
      * its PTY allocation: Gaia/Gaia Embedded restricted shells were measured there to answer more
      * consistently, and not at all in some cases, without one. */
     private String execOutput(TransportSession session, DeviceFirstContactCommandSet entry) {
-        String output = null;
         for (String cmd : entry.literalForms()) {
-            output = execOneCommand(session, cmd);
+            String output = execOneCommand(session, cmd);
             if (output != null && !output.isBlank()) {
-                break;
+                return output;
             }
         }
-        return output;
+        // Every exec-channel form failed, timed out, or came back blank -- a Gaia Embedded/
+        // Quantum Spark device that rejects the exec channel outright (measured live,
+        // 2026-09-21) still answers over a persistent interactive shell, tried here with the
+        // same closed set of literals, never a different command.
+        String lastInteractive = null;
+        for (String cmd : entry.literalForms()) {
+            lastInteractive = execInteractiveCommand(session, cmd);
+            if (lastInteractive != null && !lastInteractive.isBlank()) {
+                return lastInteractive;
+            }
+        }
+        return lastInteractive;
+    }
+
+    private String execInteractiveCommand(TransportSession session, String cmd) {
+        long startMs = System.currentTimeMillis();
+        ExecResult result;
+        try {
+            result = transport.execInteractive(session, new ExecSpec(cmd), READ_TIMEOUT);
+        } catch (com.securityexpert.nexus.ui2.jobs.transport.TransportNotImplementedException notImplemented) {
+            return null;
+        }
+        long elapsedMs = System.currentTimeMillis() - startMs;
+        return switch (result) {
+            case ExecResult.Completed completed -> {
+                LOG.log(System.Logger.Level.INFO,
+                        "[CONFIRM_EXEC_INTERACTIVE] cmd=\"{0}\" completed in {1}ms (length={2})",
+                        cmd, elapsedMs, completed.output().length());
+                yield completed.output();
+            }
+            case ExecResult.TimedOut timedOut -> {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[CONFIRM_EXEC_INTERACTIVE_TIMEOUT] cmd=\"{0}\" TIMED OUT after {1}ms!",
+                        cmd, elapsedMs);
+                yield null;
+            }
+            case ExecResult.ChannelFailed failed -> {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[CONFIRM_EXEC_INTERACTIVE_FAILED] cmd=\"{0}\" failed after {1}ms: {2}",
+                        cmd, elapsedMs, failed.reason());
+                yield null;
+            }
+        };
     }
 
     private String execOneCommand(TransportSession session, String cmd) {

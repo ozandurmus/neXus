@@ -98,6 +98,26 @@ class ConfirmCapabilityExecutorTest {
         assertEquals("fw-a", completed.facts().hostname().orElse(null));
     }
 
+    /** Product Owner measured live, 2026-09-21, and confirmed by reading the pre-Java product's
+     * own real-fleet-proven probe: a Gaia Embedded/Quantum Spark device rejects the exec channel
+     * outright, no matter which literal form is sent -- only a persistent interactive shell
+     * answers. */
+    @Test
+    void fallsBackToAnInteractiveShellWhenTheExecChannelIsRejectedOutright() {
+        ScriptedDeviceTransport transport = new ScriptedDeviceTransport(
+                Map.of("fw-a-host", "Host Name: fw-a\nProduct version Check Point Gaia R81.10\n"),
+                Map.of("fw-a-host", "Standalone"));
+        transport.rejectExecChannelEntirely();
+        ConfirmCapabilityExecutor executor = new ConfirmCapabilityExecutor(transport, unresolvablePanResolver());
+
+        ConfirmResult result = executor.confirm(
+                ConfirmRequest.checkPoint(new ConnectionTarget("ep-a", "fw-a-host", 22), CRED, TRUST));
+
+        ConfirmResult.Completed completed = assertInstanceOf(ConfirmResult.Completed.class, result,
+                "the interactive-shell fallback must still be tried, not an immediate connect failure");
+        assertEquals("fw-a", completed.facts().hostname().orElse(null));
+    }
+
     @Test
     void peerFollowDialsExactlyTheReportedAddressNeverASubstitute() {
         String reportedPeerAddress = "fw-b-base";
