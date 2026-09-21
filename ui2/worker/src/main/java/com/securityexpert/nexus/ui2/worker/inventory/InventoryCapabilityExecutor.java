@@ -792,6 +792,18 @@ public final class InventoryCapabilityExecutor {
                 yield "";
             }
         };
+        // A Gaia Embedded/Quantum Spark device rejects the exec channel outright, for every
+        // command, not just the confirm's identity read (ConfirmCapabilityExecutor.execOutput
+        // carries the same fallback for that read) -- so inventory collection against such a
+        // device produced zero interface/route evidence despite a successful confirm (Product
+        // Owner, 2026-09-22: "Live gözüküyor ama cihazdan veri çekemiyorum"). Tried only when the
+        // exec channel itself was rejected, never for a command that merely printed nothing.
+        if (result instanceof ExecResult.ChannelFailed) {
+            String interactiveOutput = interactiveFallback(session, command);
+            if (interactiveOutput != null) {
+                return interactiveOutput;
+            }
+        }
         if ((command.startsWith("cphaprob") || command.startsWith("vsx") || command.contains("vsx"))
                 && (output.isBlank() || output.contains("not found") || output.contains("CLISH") || output.contains("Unknown command"))) {
             LOG.log(System.Logger.Level.INFO,
@@ -839,7 +851,7 @@ public final class InventoryCapabilityExecutor {
             return "";
         }
         long elapsedMs = System.currentTimeMillis() - startMs;
-        return switch (result) {
+        String output = switch (result) {
             case ExecResult.Completed completed -> {
                 LOG.log(System.Logger.Level.INFO,
                         "[INVENTORY_EXEC_PTY] cmd=\"{0}\" took {1}ms (exit={2}, length={3})",
@@ -858,6 +870,46 @@ public final class InventoryCapabilityExecutor {
                 yield "";
             }
         };
+        if (result instanceof ExecResult.ChannelFailed) {
+            String interactiveOutput = interactiveFallback(session, command);
+            if (interactiveOutput != null) {
+                return interactiveOutput;
+            }
+        }
+        return output;
+    }
+
+    /** The same interactive-shell fallback {@code ConfirmCapabilityExecutor} uses for a Gaia
+     * Embedded/Quantum Spark device's identity read, reused here for inventory collection --
+     * {@code null} (never blank) means "no answer from this channel either", so both callers
+     * fall through to their own existing empty-output handling unchanged. */
+    private String interactiveFallback(TransportSession session, String command) {
+        long startMs = System.currentTimeMillis();
+        ExecResult result;
+        try {
+            result = transport.execInteractive(session, new ExecSpec(command), READ_TIMEOUT);
+        } catch (Exception e) {
+            // Mirrors execOutput's/execOutputPty's own catch around the primary exec attempt --
+            // an unscripted or unexpected failure here (including TransportNotImplementedException,
+            // when no ssh_exec adapter is registered at all) must fall through to the caller's
+            // existing empty-output handling, never crash the whole inventory collection.
+            long elapsedMs = System.currentTimeMillis() - startMs;
+            LOG.log(System.Logger.Level.WARNING,
+                    "[INVENTORY_EXEC_INTERACTIVE_EXCEPTION] cmd=\"{0}\" threw exception after {1}ms: {2}",
+                    command, elapsedMs, e.getMessage());
+            return null;
+        }
+        long elapsedMs = System.currentTimeMillis() - startMs;
+        if (result instanceof ExecResult.Completed completed && !completed.output().isBlank()) {
+            LOG.log(System.Logger.Level.INFO,
+                    "[INVENTORY_EXEC_INTERACTIVE] cmd=\"{0}\" took {1}ms (length={2})",
+                    command, elapsedMs, completed.output().length());
+            return completed.output();
+        }
+        LOG.log(System.Logger.Level.WARNING,
+                "[INVENTORY_EXEC_INTERACTIVE_FAILED] cmd=\"{0}\" produced no usable output after {1}ms",
+                command, elapsedMs);
+        return null;
     }
 
     private String xmlApiOutput(ApiTarget target, String cmd, Map<String, String> headers) {

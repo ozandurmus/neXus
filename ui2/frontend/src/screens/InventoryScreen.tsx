@@ -95,6 +95,13 @@ function DeviceRow({
   readonly trailingExtra?: React.ReactNode;
 }) {
   const isEnrolled = device.enrollment_state === "ENROLLED";
+  // "Live" means identity-verified AND at least one interface has been read -- confirm and
+  // inventory collection are separate jobs (Evidence laws: "collection success != semantic
+  // correctness"), so an enrolled device with zero collected interfaces is not yet "live" in any
+  // sense a reader would expect from that word (Product Owner, 2026-09-22: "Live gözüküyor ama
+  // cihazdan veri çekemiyorum" -- confirmed but never collected read as fully live).
+  const hasCollectedEvidence = Boolean(device.ip_addresses && device.ip_addresses.trim().length > 0);
+  const isLive = isEnrolled && hasCollectedEvidence;
 
   return (
     <Box
@@ -152,8 +159,8 @@ function DeviceRow({
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <StatusChip
-              tone={enrollmentStateTone(device.enrollment_state)}
-              label={isEnrolled ? "Live" : enrollmentStateLabel(device.enrollment_state)}
+              tone={isLive ? "ok" : isEnrolled ? "neutral" : enrollmentStateTone(device.enrollment_state)}
+              label={isLive ? "Live" : isEnrolled ? "Confirmed · Not collected" : enrollmentStateLabel(device.enrollment_state)}
               dense
             />
             {trailingExtra}

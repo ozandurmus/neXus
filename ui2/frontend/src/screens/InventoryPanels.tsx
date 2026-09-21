@@ -1539,8 +1539,14 @@ export function DeviceInventoryPanels({
         </Box>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", pt: 0.5 }}>
           <StatusChip
-            tone={device.enrollment_state === "ENROLLED" ? "ok" : "warn"}
-            label={device.enrollment_state === "ENROLLED" ? "✓ Live" : device.enrollment_state}
+            tone={device.enrollment_state === "ENROLLED" && device.ip_addresses ? "ok" : "warn"}
+            label={
+              device.enrollment_state !== "ENROLLED"
+                ? device.enrollment_state
+                : device.ip_addresses
+                  ? "✓ Live"
+                  : "Confirmed · Not collected"
+            }
             dense
           />
           <StatusChip tone="ok" label="✓ Identity verified" dense />
@@ -1696,6 +1702,7 @@ export function ClusterDetailPanels({
   const ifaceCount = allContexts.reduce((acc, c) => acc + c.interfaces.length, 0);
   const routeCount = allContexts.reduce((acc, c) => acc + c.routes.length, 0);
   const isEnrolled = members.some((m) => m.enrollment_state === "ENROLLED");
+  const isLive = isEnrolled && ifaceCount > 0;
   const clusterTitle = deriveClusterTitle(clusterRef, members);
 
   // Collect all distinct virtual systems from members & clusterInventory
@@ -1757,8 +1764,8 @@ export function ClusterDetailPanels({
                   {clusterRef}
                 </Typography>
                 <StatusChip
-                  tone={isEnrolled ? "ok" : "warn"}
-                  label={isEnrolled ? "✓ Live" : "Not enrolled"}
+                  tone={isLive ? "ok" : "warn"}
+                  label={!isEnrolled ? "Not enrolled" : isLive ? "✓ Live" : "Confirmed · Not collected"}
                   dense
                 />
                 <StatusChip

@@ -23,9 +23,18 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
 
     private final Map<String, String> outputByCommand;
     private final Map<String, String> hostBySessionId = new HashMap<>();
+    private boolean execChannelRejectedEntirely;
 
     ScriptedCheckPointInventoryTransport(Map<String, String> outputByCommand) {
         this.outputByCommand = outputByCommand;
+    }
+
+    /** Simulates a Gaia Embedded/Quantum Spark device that rejects the exec channel outright for
+     * every command (measured live, 2026-09-21, for the confirm's identity read; Product Owner
+     * 2026-09-22: the same rejection also starves inventory collection of every interface/route
+     * read) -- {@link #exec} always fails and only {@link #execInteractive} ever answers. */
+    void rejectExecChannelEntirely() {
+        this.execChannelRejectedEntirely = true;
     }
 
     @Override
@@ -37,6 +46,21 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
 
     @Override
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
+        if (execChannelRejectedEntirely) {
+            return new ExecResult.ChannelFailed("simulated: exec channel request rejected outright");
+        }
+        String output = outputByCommand.get(spec.command());
+        if (output == null) {
+            throw new IllegalStateException("command outside this test's scripted set: " + spec.command());
+        }
+        return new ExecResult.Completed(output, 0);
+    }
+
+    @Override
+    public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
+        if (!execChannelRejectedEntirely) {
+            throw new IllegalStateException("execInteractive called without simulating an exec-rejecting device");
+        }
         String output = outputByCommand.get(spec.command());
         if (output == null) {
             throw new IllegalStateException("command outside this test's scripted set: " + spec.command());
