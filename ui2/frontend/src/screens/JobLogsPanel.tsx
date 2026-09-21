@@ -14,7 +14,7 @@ import Button from "@mui/material/Button";
 import Paper from "@mui/material/Paper";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
-import { listJobs, type JobEventView, type ApiError } from "../auth/adminApi";
+import { listDevices, listJobs, type JobEventView, type ApiError } from "../auth/adminApi";
 
 function formatDuration(ms?: number): string {
   if (ms === undefined || ms === null) return "-";
@@ -43,6 +43,7 @@ function stateColor(state: string): "default" | "primary" | "secondary" | "error
 
 export function JobLogsPanel() {
   const [jobs, setJobs] = useState<JobEventView[] | null>(null);
+  const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -59,12 +60,23 @@ export function JobLogsPanel() {
       });
   }, []);
 
+  const fetchDeviceNames = useCallback(() => {
+    listDevices()
+      .then(({ devices }) => {
+        setDeviceNames(Object.fromEntries((devices ?? []).map((device) => [device.device_id, device.hostname])));
+      })
+      // The identifier is the record; a name we could not read stays unknown
+      // rather than blanking the log or failing the panel.
+      .catch(() => setDeviceNames({}));
+  }, []);
+
   useEffect(() => {
     fetchJobs();
+    fetchDeviceNames();
     if (!autoRefresh) return;
     const interval = setInterval(fetchJobs, 4000);
     return () => clearInterval(interval);
-  }, [fetchJobs, autoRefresh]);
+  }, [fetchJobs, fetchDeviceNames, autoRefresh]);
 
   if (error && !jobs) return <EmptyPanel title="Job logs unavailable" body={error} />;
   if (jobs === null) return <EmptyPanel title="Job logs" body="Loading…" />;
@@ -134,7 +146,9 @@ export function JobLogsPanel() {
                     <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>
                       {job.job_id.slice(0, 8)}...
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 500 }}>{job.target_device_id}</TableCell>
+                    <TableCell sx={{ fontWeight: 500 }}>
+                      {deviceNames[job.target_device_id] ?? "Unknown device"} · {job.target_device_id}
+                    </TableCell>
                     <TableCell sx={{ fontSize: "0.8rem" }}>{job.job_type}</TableCell>
                     <TableCell>
                       <Chip label={job.state} size="small" color={stateColor(job.state)} variant="outlined" />

@@ -89,6 +89,7 @@ describe("InventoryScreen device selection and panels", () => {
 
     await waitFor(() => expect(screen.getByText("eth0")).toBeInTheDocument());
     expect(screen.getByText("198.51.100.5/24")).toBeInTheDocument();
+    expect(screen.getByText("dev-1")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Routing" }));
     await waitFor(() => expect(screen.getByText("0.0.0.0/0")).toBeInTheDocument());

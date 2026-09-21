@@ -51,7 +51,7 @@ function collectionOutcome(device: DeviceSummary): string {
   const state = device.latest_job_state?.toUpperCase();
   if (!state) return "Not yet collected";
   if (state === "FAILED") {
-    const reasonClass = device.latest_job_terminal_reason?.trim().toLowerCase() === "connect_failed"
+    const reasonClass = device.latest_job_terminal_reason?.trim().toLowerCase().split(":", 1)[0] === "connect_failed"
       ? "Connection failed"
       : "Recorded failure";
     return `Collection attempt failed · ${reasonClass}`;

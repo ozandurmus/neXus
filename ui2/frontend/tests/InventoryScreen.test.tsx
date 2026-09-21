@@ -91,7 +91,8 @@ describe("InventoryScreen device list", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, {
       devices: [
         { device_id: "done", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "done-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "COMPLETED" },
-        { device_id: "failed", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "failed-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "FAILED", latest_job_terminal_reason: "connect_failed" },
+        { device_id: "failed", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "failed-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "FAILED", latest_job_terminal_reason: "connect_failed: transport detail" },
+        { device_id: "unknown-failure", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "unknown-failure-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "FAILED", latest_job_terminal_reason: "unknown_class: transport detail" },
         { device_id: "new", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "new-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
       ],
     })));
@@ -99,19 +100,22 @@ describe("InventoryScreen device list", () => {
 
     await waitFor(() => expect(screen.getByText("Collection completed")).toBeInTheDocument());
     expect(screen.getByText("Collection attempt failed · Connection failed")).toBeInTheDocument();
+    expect(screen.getByText("Collection attempt failed · Recorded failure")).toBeInTheDocument();
     expect(screen.getByText("Not yet collected")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Failed 1 of 3" }));
+    fireEvent.click(screen.getByRole("button", { name: "Failed 2 of 4" }));
     expect(screen.getByText("failed-device")).toBeInTheDocument();
+    expect(screen.getByText("unknown-failure-device")).toBeInTheDocument();
     expect(screen.queryByText("done-device")).toBeNull();
     expect(screen.queryByText("new-device")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "All 3" }));
+    fireEvent.click(screen.getByRole("button", { name: "All 4" }));
     expect(screen.getByText("done-device")).toBeInTheDocument();
     expect(screen.getByText("new-device")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Draft 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Draft 3" }));
     expect(screen.getByText("failed-device")).toBeInTheDocument();
+    expect(screen.getByText("unknown-failure-device")).toBeInTheDocument();
     expect(screen.getByText("new-device")).toBeInTheDocument();
     expect(screen.queryByText("done-device")).toBeNull();
   });
