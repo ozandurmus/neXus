@@ -6,8 +6,6 @@ import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jooq.JooqAutoConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.FilterType;
 import org.springframework.core.env.Environment;
 
 /**
@@ -64,16 +62,9 @@ import org.springframework.core.env.Environment;
 // than leave it deferred. NXS-LOCAL-0158 wires DeviceRegistrationController's
 // own remaining collaborators (DeviceAddSingleService, DeviceQueryService,
 // DeviceCompositionConfiguration) and removes it from this exclusion.
-// SessionAdminController stays excluded: its own collaborator (a
-// session-admin service) is untouched by this movement and remains out of
-// scope. It is excluded, not deleted: a route that 404s because its
-// controller was never registered is honest, while one that 500s on every
-// call is not.
-@ComponentScan(
-        basePackages = "com.securityexpert.nexus.ui2.service",
-        excludeFilters = @ComponentScan.Filter(
-                type = FilterType.REGEX,
-                pattern = "com\\.securityexpert\\.nexus\\.ui2\\.service\\.api\\.SessionAdminController"))
+// NXS-LOCAL-0364 wires SessionAdminController's existing collaborators
+// (SessionRepository and LocalIdentityResolver) and removes the final
+// controller exclusion.
 public class Ui2Application {
 
     @Bean
