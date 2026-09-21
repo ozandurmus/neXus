@@ -59,6 +59,26 @@ class ConfirmCapabilityExecutorTest {
         assertTrue(completed.facts().haRole().isEmpty());
     }
 
+    /** Product Owner measured live, 2026-09-21: a Quantum Spark/Gaia Embedded device (1570/1590
+     * appliances) lands directly in Clish, so the bare Expert-mode identity read literal never
+     * answers -- previously the confirm never tried DeviceFirstContactCommandSet's own documented
+     * "clish -c ..." fallback at all, so this always ran out the full read timeout for nothing. */
+    @Test
+    void fallsBackToTheClishFormWhenTheBareExpertFormFails() {
+        ScriptedDeviceTransport transport = new ScriptedDeviceTransport(
+                Map.of("fw-a-host", "Host Name: fw-a\nProduct version Check Point Gaia R81.10\n"),
+                Map.of("fw-a-host", "Standalone"));
+        transport.failBareIdentityForm();
+        ConfirmCapabilityExecutor executor = new ConfirmCapabilityExecutor(transport, unresolvablePanResolver());
+
+        ConfirmResult result = executor.confirm(
+                ConfirmRequest.checkPoint(new ConnectionTarget("ep-a", "fw-a-host", 22), CRED, TRUST));
+
+        ConfirmResult.Completed completed = assertInstanceOf(ConfirmResult.Completed.class, result,
+                "the clish fallback must still be tried, not an immediate connect failure");
+        assertEquals("fw-a", completed.facts().hostname().orElse(null));
+    }
+
     @Test
     void peerFollowDialsExactlyTheReportedAddressNeverASubstitute() {
         String reportedPeerAddress = "fw-b-base";

@@ -178,9 +178,26 @@ public final class ConfirmCapabilityExecutor {
         return xml.contains("status=\"error\"") || xml.contains("status='error'");
     }
 
+    /** DeviceFirstContactCommandSet's own primary/fallback pair (gate entry 1's documented intent,
+     * PO-approved 2026-09-14): a Quantum Spark/Gaia Embedded device landing directly in Clish never
+     * answers the bare Expert-mode form, so the second literal ({@code clish -c "..."}) is tried
+     * when the first one fails or times out -- previously dead code, only literalForms().get(0)
+     * was ever sent, so such a device's identity read always ran out its full timeout for nothing
+     * (Product Owner measured live, 2026-09-21). Every literal tried is still one of the two the
+     * gate document names; no new command is introduced. */
     private String execOutput(TransportSession session, DeviceFirstContactCommandSet entry) {
+        String output = null;
+        for (String cmd : entry.literalForms()) {
+            output = execOneCommand(session, cmd);
+            if (output != null) {
+                break;
+            }
+        }
+        return output;
+    }
+
+    private String execOneCommand(TransportSession session, String cmd) {
         long startMs = System.currentTimeMillis();
-        String cmd = entry.literalForms().get(0);
         ExecResult result = transport.exec(session, new ExecSpec(cmd), READ_TIMEOUT);
         long elapsedMs = System.currentTimeMillis() - startMs;
         return switch (result) {

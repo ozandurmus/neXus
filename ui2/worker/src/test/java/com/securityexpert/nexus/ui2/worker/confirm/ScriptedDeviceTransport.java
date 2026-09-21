@@ -35,10 +35,18 @@ final class ScriptedDeviceTransport implements DeviceTransport {
     private final List<ConnectionTarget> connectedTargets = new ArrayList<>();
     private boolean credentialUnresolvable;
     private ConnectResult connectResultOverride;
+    private boolean bareIdentityFormFails;
 
     ScriptedDeviceTransport(Map<String, String> identityOutputByHost, Map<String, String> haPeerOutputByHost) {
         this.identityOutputByHost = identityOutputByHost;
         this.haPeerOutputByHost = haPeerOutputByHost;
+    }
+
+    /** Simulates a Quantum Spark/Gaia Embedded device landing directly in Clish: the bare
+     * Expert-mode identity read literal fails, so only DeviceFirstContactCommandSet's own
+     * documented {@code clish -c "..."} fallback ever answers. */
+    void failBareIdentityForm() {
+        this.bareIdentityFormFails = true;
     }
 
     void makeCredentialUnresolvable() {
@@ -72,6 +80,9 @@ final class ScriptedDeviceTransport implements DeviceTransport {
         String host = hostBySessionId.get(session.sessionId());
         String command = spec.command();
         if (DeviceFirstContactCommandSet.CP_IDENTITY_READ.literalForms().contains(command)) {
+            if (bareIdentityFormFails && command.equals(DeviceFirstContactCommandSet.CP_IDENTITY_READ.literalForms().get(0))) {
+                return new ExecResult.ChannelFailed("simulated: bare Expert form not recognized in Clish");
+            }
             return new ExecResult.Completed(identityOutputByHost.getOrDefault(host, ""), 0);
         }
         if (DeviceFirstContactCommandSet.CP_HA_PEER_READ.literalForms().contains(command)) {
