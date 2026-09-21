@@ -57,7 +57,7 @@ steps:
     gate_reference: cp_inventory_cphaprob_stat
   - kind: exec
     shell_context: expert
-    send: "cphaprob -a -m if"
+    send: "cphaprob -a if"
     gate_reference: cp_inventory_cphaprob_a_m_if
   - kind: exec
     shell_context: expert

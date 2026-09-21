@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
 
 /**
- * {@code cphaprob -a -m if} (14D CF-3, PR-3), cluster members only. Only
+ * {@code cphaprob -a if} (14D CF-3, PR-3), cluster members only. Only
  * the section after a {@code Virtual cluster interfaces: <n>} line
  * (case-insensitive, the row count tolerated) up to the next section is
  * read; first token interface name, first IPv4 literal the address; every

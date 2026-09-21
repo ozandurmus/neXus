@@ -5,7 +5,7 @@ import java.util.Objects;
 /**
  * One {@code device_interface_address} row (14C D-4). {@code role} is
  * either {@code "member"} or {@code "cluster_virtual"} -- 14C §3's rule
- * that a cluster virtual address (read from {@code cphaprob -a -m if}) and
+ * that a cluster virtual address (read from {@code cphaprob -a if}) and
  * a member address (read from {@code ip addr}) never mix is enforced by
  * the parser that builds this record, not by this type; this record only
  * carries whichever role the caller already decided.

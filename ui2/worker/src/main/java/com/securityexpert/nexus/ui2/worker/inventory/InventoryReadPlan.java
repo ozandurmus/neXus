@@ -55,12 +55,11 @@ public final class InventoryReadPlan {
     public static final String CP_IP_ADDR_SHOW_V6 = "ip -6 addr show";
     public static final String CP_IP_ROUTE_SHOW = "ip -4 route show table all";
     public static final String CP_CPHAPROB_STAT = "cphaprob stat";
-    /** {@code cphaprob -a -m if} matches Check Point's own "Viewing Cluster Interfaces" reference exactly.
-     * Measured live (2026-09-21): this command returns zero bytes on every device tried in this fleet, and a
-     * {@code cphaprob -a if} trial (without {@code -m}) also returned zero bytes on the same devices -- the
-     * flag was not the cause. Root cause is open: tracked as
-     * cp_cluster_vip_never_observed_in_fleet, not fixed by a flag change. */
-    public static final String CP_CPHAPROB_CLUSTER_IF = "cphaprob -a -m if";
+    /** Product Owner direction (2026-09-21): {@code cphaprob -a if} is the correct command. An earlier trial of
+     * this same literal, on four sampled devices, returned zero bytes -- identical to {@code cphaprob -a -m if}
+     * -- so the diagnostic log at the call site stays on to gather more devices before drawing a conclusion.
+     * Tracked as cp_cluster_vip_never_observed_in_fleet. */
+    public static final String CP_CPHAPROB_CLUSTER_IF = "cphaprob -a if";
     public static final String CP_VSX_STAT = "vsx stat -v";
 
     /** CF-3's exact physical read order: interfaces (v4, then v6), routes, HA state, cluster VIPs, then VSX enumeration. */

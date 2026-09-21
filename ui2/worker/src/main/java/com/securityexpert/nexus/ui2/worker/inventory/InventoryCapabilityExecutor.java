@@ -238,6 +238,16 @@ public final class InventoryCapabilityExecutor {
                     "[INVENTORY_VIP_PARSE] target={0}:{1} vip_output_len={2} vip_addresses_found={3}",
                     target.host(), target.port(), vipOutput.length(), physicalVips.size());
 
+            // Diagnostic only (cp_cluster_vip_never_observed_in_fleet): the same command, issued as its own
+            // standalone exec rather than chained with ; into the batched read, to isolate whether batching
+            // itself is why cphaprob's cluster-interface section never comes back through the compound read.
+            String vipStandalone = execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(
+                    InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
+            LOG.log(System.Logger.Level.INFO,
+                    "[INVENTORY_VIP_STANDALONE_PARSE] target={0}:{1} standalone_len={2} standalone_addresses_found={3}",
+                    target.host(), target.port(), vipStandalone.length(),
+                    CheckPointClusterVirtualInterfaceParser.parse(vipStandalone).size());
+
             List<InventoryContext> contexts = new ArrayList<>();
             contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
                     toInventoryInterfaces(mergeVirtualAddresses(physicalInterfaces, physicalVips)),
