@@ -65,6 +65,16 @@ class GateChainInterceptorSecurityTest {
     }
 
     @Test
+    void sessionListUsesTheExistingSecurityAdminRevokeAction() throws Exception {
+        var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
+        var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
+        method.setAccessible(true);
+        assertEquals(ActionRegistry.SESSION_REVOKE, method.invoke(interceptor, "GET", "/sessions"));
+        assertEquals(java.util.Optional.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN),
+                new ActionRegistry().find(ActionRegistry.SESSION_REVOKE).orElseThrow().requiredRoleToken());
+    }
+
+    @Test
     void theOriginalLastSegmentRouteStillResolvesOnItsFirstWildcardAttempt() throws Exception {
         assertEquals("device_read", actionIdFor("GET", "/devices/device-1"));
     }

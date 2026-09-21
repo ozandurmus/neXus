@@ -113,6 +113,23 @@ class SessionExpiryOnReadTest {
                 && statement.contains("absolute_expires_at > {1}")));
     }
 
+    @Test
+    void activeListRequiresBothDeadlinesToRemainInTheFuture() {
+        List<String> statements = new ArrayList<>();
+        TransactionBoundary boundary = new TransactionBoundary() {
+            @Override
+            public <T> T inTransaction(java.util.function.Function<org.jooq.DSLContext, T> work) {
+                return work.apply(recordingDsl(statements));
+            }
+        };
+
+        new JooqSessionRepository(boundary).findActive(NOW);
+
+        assertTrue(statements.stream().anyMatch(statement -> statement.contains("state = 'ACTIVE'")
+                && statement.contains("idle_deadline_at > {0}")
+                && statement.contains("absolute_expires_at > {0}")));
+    }
+
     private static SessionRecord session(String id, Instant idleDeadline, Instant absoluteDeadline) {
         return new SessionRecord(id, "actor", "csrf", SessionState.ACTIVE, NOW.minusSeconds(10), NOW.minusSeconds(10),
                 idleDeadline, absoluteDeadline, Optional.empty(), Optional.empty(), Optional.empty());

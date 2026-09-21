@@ -62,6 +62,34 @@ export function listLocalIdentities(): Promise<{ identities: LocalIdentityView[]
   return call("/local-identities", "GET");
 }
 
+export interface SessionView {
+  readonly session_id: string;
+  readonly actor_fingerprint: string;
+  readonly created_at: string;
+  readonly last_seen_at: string;
+  readonly idle_deadline_at: string;
+  readonly absolute_expires_at: string;
+  readonly state: string;
+  readonly end_reason: string | null;
+  readonly ended_by_actor_fingerprint: string | null;
+  readonly superseded_by_session_id: string | null;
+}
+
+export interface SessionsView {
+  readonly sessions: SessionView[];
+  readonly identity_labels: Record<string, string>;
+  readonly idle_timeout_seconds: number;
+  readonly absolute_lifetime_seconds: number;
+}
+
+export function listSessions(): Promise<SessionsView> {
+  return call("/sessions", "GET");
+}
+
+export function revokeSession(sessionId: string): Promise<{ ok: boolean }> {
+  return call("/sessions/revoke", "POST", { sessionId });
+}
+
 export interface BackupArtefact {
   readonly artefact_id: string;
   readonly device_id: string;

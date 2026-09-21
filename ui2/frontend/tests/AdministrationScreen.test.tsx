@@ -334,3 +334,71 @@ describe("AdministrationScreen Local identities tab", () => {
     await waitFor(() => expect(screen.getByText("ACTION_REFUSED")).toBeInTheDocument());
   });
 });
+
+describe("AdministrationScreen Sessions tab", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows active and per-identity counts, configured lifetimes, and refreshes after revoke", async () => {
+    let listCalls = 0;
+    const revokeBodies: unknown[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      const path = url.split("?")[0];
+      if (path === "/devices") return jsonResponse(200, { devices: [] });
+      if (path === "/session/status") return jsonResponse(200, { csrf_token: "csrf-fixture" });
+      if (path === "/sessions" && init?.method === "GET") {
+        listCalls += 1;
+        return jsonResponse(200, {
+          sessions: [
+            {
+              session_id: "session-1",
+              actor_fingerprint: "actor-a",
+              created_at: "2026-09-21T08:00:00Z",
+              last_seen_at: "2026-09-21T08:05:00Z",
+              idle_deadline_at: "2026-09-21T08:35:00Z",
+              absolute_expires_at: "2026-09-21T18:00:00Z",
+              state: "ACTIVE",
+              end_reason: null,
+              ended_by_actor_fingerprint: null,
+              superseded_by_session_id: null,
+            },
+            {
+              session_id: "session-2",
+              actor_fingerprint: "actor-a",
+              created_at: "2026-09-21T08:10:00Z",
+              last_seen_at: "2026-09-21T08:15:00Z",
+              idle_deadline_at: "2026-09-21T08:45:00Z",
+              absolute_expires_at: "2026-09-21T18:10:00Z",
+              state: "ACTIVE",
+              end_reason: null,
+              ended_by_actor_fingerprint: null,
+              superseded_by_session_id: null,
+            },
+          ],
+          identity_labels: { "session-1": "alice", "session-2": "alice" },
+          idle_timeout_seconds: 1800,
+          absolute_lifetime_seconds: 36000,
+        });
+      }
+      if (path === "/sessions/revoke" && init?.method === "POST") {
+        revokeBodies.push(JSON.parse(init.body as string));
+        return jsonResponse(200, { ok: true });
+      }
+      return jsonResponse(404, { error: `NOT_MOCKED:${path}` });
+    }));
+
+    render(withTheme(<AdministrationScreen />));
+    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+
+    await waitFor(() => expect(screen.getByText("2 active sessions")).toBeInTheDocument());
+    expect(screen.getAllByText("alice · 2 active")).toHaveLength(2);
+    expect(screen.getByText("Idle timeout: 30 minutes")).toBeInTheDocument();
+    expect(screen.getByText("Absolute lifetime: 10 hours")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Revoke" })[0]);
+    await waitFor(() => expect(revokeBodies).toEqual([{ sessionId: "session-1" }]));
+    await waitFor(() => expect(listCalls).toBe(2));
+  });
+});

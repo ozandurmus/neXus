@@ -404,6 +404,20 @@ class GateChainTest {
     }
 
     @Test
+    void sessionListActionRefusesACallerWithoutSecurityAdmin() {
+        FakeSessionRepository sessions = new FakeSessionRepository();
+        sessions.put(activeSession(SessionHasher.hash("session-list-cookie")));
+
+        GateOutcome outcome = newChain(sessions, new FakeRoleBindingRepository(), new FakeAuthzDecisionRepository())
+                .evaluate(new GateRequest("GET", Optional.of("session-list-cookie"), Optional.empty(), Optional.empty(),
+                        ActionRegistry.SESSION_REVOKE, Optional.empty()), NOW);
+
+        assertTrue(outcome instanceof GateOutcome.Refused);
+        assertEquals("E4", ((GateOutcome.Refused) outcome).gate());
+        assertEquals(403, ((GateOutcome.Refused) outcome).httpStatus());
+    }
+
+    @Test
     void e3NeverReevaluatedInsideE4() {
         // A class-1 action whose token would ALSO independently fail E4
         // (zero active bindings): the response must name only E3's
