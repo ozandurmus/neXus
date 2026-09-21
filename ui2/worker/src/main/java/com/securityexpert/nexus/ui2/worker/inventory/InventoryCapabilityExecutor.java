@@ -32,6 +32,7 @@ import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointClusterVirtual
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointClusterVirtualInterfaceParser.VirtualInterfaceAddress;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointHaStateParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointFwGetifsParser;
+import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpAddrParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpRouteParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsidCompositeOutputSplitter;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsxStatParser;
@@ -244,10 +245,21 @@ public final class InventoryCapabilityExecutor {
                     "[INVENTORY_VIP_PARSE] target={0}:{1} vip_output_len={2} vip_addresses_found={3}",
                     target.host(), target.port(), vipOutput.length(), physicalVips.size());
             // cp_vsx_interfaces_identical_to_physical (State column): "fw getifs" carries no up/down
-            // column at all (unlike the old "ip addr show" physical read it replaced), but this same
-            // cphaprob -a if call's own "Interface Name: Status:" table does -- apply it here so a
-            // monitored physical interface keeps its real state instead of falling to unknown.
-            Map<String, String> physicalStates = CheckPointClusterVirtualInterfaceParser.parseInterfaceStates(vipOutput);
+            // column at all (unlike the old "ip addr show" physical read it replaced). cphaprob -a
+            // if's own "Interface Name: Status:" table only lists a "Required interfaces" subset
+            // (measured live, 2026-09-21), so "ip -4 addr show" is read a second time here for its
+            // state flags alone, covering every physical interface, not just the monitored ones --
+            // its own address is never used (mergeVirtualAddresses/physicalInterfaces already carry
+            // the real address from fw getifs).
+            String physicalStateOnlyOutput =
+                    execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY, vsxHost));
+            Map<String, String> physicalStates = new java.util.LinkedHashMap<>(
+                    CheckPointClusterVirtualInterfaceParser.parseInterfaceStates(vipOutput));
+            for (ParsedInterface iface : CheckPointIpAddrParser.parse(physicalStateOnlyOutput, "")) {
+                if (!InventoryInterface.STATE_UNKNOWN.equals(iface.state())) {
+                    physicalStates.put(iface.name(), iface.state());
+                }
+            }
 
             List<InventoryContext> contexts = new ArrayList<>();
             contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
@@ -279,8 +291,20 @@ public final class InventoryCapabilityExecutor {
                         CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
                 if (clusterMember) {
                     String clusterIfOutput = execOutput(session, steps.get(1));
-                    vsInterfaces = toParsedInterfaces(CheckPointClusterVirtualInterfaceParser.parse(clusterIfOutput),
+                    // cphaprob's own status table only lists a "Required interfaces" subset (Product
+                    // Owner measured live, 2026-09-21); "ip -4 addr show" still carries a real
+                    // up/down flag for every interface, so it is read a second time here for that
+                    // flag alone -- its address is never used (that is the exact value measured
+                    // wrong on a VSX cluster member).
+                    String stateOnlyOutput = execOutput(session, InventoryReadPlan.checkPointVsidStateRead(vsid));
+                    Map<String, String> statesByName = new java.util.LinkedHashMap<>(
                             CheckPointClusterVirtualInterfaceParser.parseInterfaceStates(clusterIfOutput));
+                    for (ParsedInterface iface : CheckPointIpAddrParser.parse(stateOnlyOutput, "")) {
+                        if (!InventoryInterface.STATE_UNKNOWN.equals(iface.state())) {
+                            statesByName.put(iface.name(), iface.state());
+                        }
+                    }
+                    vsInterfaces = toParsedInterfaces(CheckPointClusterVirtualInterfaceParser.parse(clusterIfOutput), statesByName);
                 } else {
                     vsInterfaces = CheckPointFwGetifsParser.parse(halves.addrOutput());
                 }

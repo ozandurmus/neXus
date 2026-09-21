@@ -47,6 +47,10 @@ steps:
     gate_reference: cp_inventory_fw_getifs
   - kind: exec
     shell_context: expert
+    send: "ip -4 addr show"
+    gate_reference: cp_inventory_ip_addr_show_state_only
+  - kind: exec
+    shell_context: expert
     send: "ip -4 route show table all"
     gate_reference: cp_inventory_ip_route_show_table_all
   - kind: exec

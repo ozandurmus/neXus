@@ -419,6 +419,62 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 17 (2026-09-21 amendment)"
 
+  # cp_vsx_interfaces_identical_to_physical (State column, 2026-09-21 amendment): cphaprob -a if's
+  # "Interface Name: Status:" table only lists a "Required interfaces" subset -- "ip -4 addr show"
+  # is read a second time, for its header line's up/down flags alone (never its address, which is
+  # the value measured wrong on a VSX cluster member), on both a physical member and each virtual
+  # system.
+  - gate_id: cp_inventory_ip_addr_show_state_only
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "ip -4 addr show"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "no interfaces configured is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 18 (2026-09-21 amendment)"
+
+  - gate_id: cp_inventory_ip_addr_show_state_only_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && ip -4 addr show'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "no interfaces configured is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 19 (2026-09-21 amendment)"
+
+  - gate_id: cp_inventory_vsid_ip_addr_show_state_only
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && ip -4 addr show'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per virtual system per run"
+    session_reuse_rule: "one session per device per run, VS0 never re-entered"
+    unsupported_behavior_ref: "no interfaces configured is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 20 (2026-09-21 amendment)"
+
   # NXS-LOCAL-0164: 14E PF-1 requests. docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md.
   - gate_id: pan_inventory_show_system_info
     vendor: palo_alto

@@ -63,6 +63,12 @@ public final class InventoryReadPlan {
      * Tracked as cp_vsx_interfaces_identical_to_physical; supersedes {@link #CP_IP_ADDR_SHOW_V4}/{@link
      * #CP_IP_ADDR_SHOW_V6} for both the physical and per-VSID interface reads. */
     public static final String CP_FW_GETIFS = "fw getifs";
+    /** Product Owner correction (2026-09-21): {@code fw getifs} carries no up/down state column
+     * at all, and {@code cphaprob -a if}'s own "Interface Name: Status:" table only lists a
+     * "Required interfaces" subset, not every interface -- so on a cluster member, this bare
+     * {@code ip -4 addr show} is issued a second time per VSID for its state flags alone (never
+     * its address, which is the exact thing measured wrong on a VSX cluster member). */
+    public static final String CP_IP_ADDR_SHOW_STATE_ONLY = "ip -4 addr show";
     public static final String CP_IP_ROUTE_SHOW = "ip -4 route show table all";
     public static final String CP_CPHAPROB_STAT = "cphaprob stat";
     /** Product Owner direction (2026-09-21): {@code cphaprob -a if} is the correct command. An earlier trial of
@@ -76,7 +82,7 @@ public final class InventoryReadPlan {
      * ({@code fw getifs}, superseding the old v4/v6 {@code ip addr show} pair), routes, HA state, cluster
      * VIPs, then VSX enumeration. */
     public static final List<String> CHECK_POINT_PHYSICAL_READS = List.of(
-            CP_FW_GETIFS, CP_IP_ROUTE_SHOW, CP_CPHAPROB_STAT, CP_CPHAPROB_CLUSTER_IF, CP_VSX_STAT);
+            CP_FW_GETIFS, CP_IP_ADDR_SHOW_STATE_ONLY, CP_IP_ROUTE_SHOW, CP_CPHAPROB_STAT, CP_CPHAPROB_CLUSTER_IF, CP_VSX_STAT);
 
     private static final String CP_VSID_ADDR_AND_ROUTE_READS = "fw getifs && ip -4 route show";
 
@@ -105,6 +111,18 @@ public final class InventoryReadPlan {
                 vsenvWrap(validated, CP_VSID_ADDR_AND_ROUTE_READS),
                 vsenvWrap(validated, CP_CPHAPROB_CLUSTER_IF),
                 vsenvWrap(validated, CP_CPHAPROB_STAT));
+    }
+
+    /** {@code ip -4 addr show}, kept only for its header line's {@code <...,UP,LOWER_UP>} flags
+     * (Product Owner correction, 2026-09-21): on a cluster member this is the one read that still
+     * carries a real per-interface up/down state for every interface, not only the "Required
+     * interfaces" subset {@code cphaprob -a if}'s own status table lists. Its address is never
+     * used here -- that came back wrong on a VSX cluster member
+     * (cp_vsx_interfaces_identical_to_physical) -- only CheckPointIpAddrParser's own {@code state}
+     * field, parsed from this same output text. */
+    public static String checkPointVsidStateRead(String vsid) {
+        String validated = requireDigitsOnly(vsid);
+        return vsenvWrap(validated, CP_IP_ADDR_SHOW_STATE_ONLY);
     }
 
     private static String vsenvWrap(String vsid, String reads) {
