@@ -332,6 +332,63 @@ describe("InventoryScreen device list", () => {
     expect(screen.queryByText("Mgmt")).toBeNull();
   });
 
+  it("reads two members agreeing on a non-up/down state as that state, not Degraded, and hides loopback", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/devices") {
+          return Promise.resolve(
+            jsonResponse(200, {
+              devices: [
+                { device_id: "m-a", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "PA-A", model: "PA-440", software_version: "11.0", ha_role: "active", cluster_member_ref: "PA-PAIR" },
+                { device_id: "m-b", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "PA-B", model: "PA-440", software_version: "11.0", ha_role: "passive", cluster_member_ref: "PA-PAIR" },
+              ],
+            }),
+          );
+        }
+        if (url.includes("/clusters/PA-PAIR/inventory")) {
+          return Promise.resolve(
+            jsonResponse(200, {
+              cluster_member_ref: "PA-PAIR",
+              members: [{ device_id: "m-a", hostname: "PA-A" }, { device_id: "m-b", hostname: "PA-B" }],
+              contexts: [
+                {
+                  context: "physical",
+                  interfaces: [
+                    {
+                      name: "ethernet1/1", kind: "physical", addresses: [], presence: "all", differences: [],
+                      member_states: { "m-a": "unknown", "m-b": "unknown" },
+                    },
+                    {
+                      name: "ethernet1/2", kind: "physical", addresses: [], presence: "all", differences: [],
+                      member_states: { "m-a": "up", "m-b": "down" },
+                    },
+                    { name: "loopback", kind: "loopback", addresses: [], presence: "all", differences: [] },
+                  ],
+                  routes: [],
+                },
+              ],
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+      }),
+    );
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("Cluster PA-PAIR")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Cluster PA-PAIR"));
+
+    // Both members agreeing on "unknown" is agreement, not a difference -- reads as Unknown, not Degraded.
+    await waitFor(() => expect(screen.getByText("ethernet1/1")).toBeInTheDocument());
+    expect(screen.getByText("Unknown")).toBeInTheDocument();
+    // Members genuinely disagreeing (up vs down) is the only case that reads Degraded.
+    expect(screen.getByText("Degraded")).toBeInTheDocument();
+    // The loopback interface is collected evidence but never shown on this screen.
+    expect(screen.queryByText("loopback")).toBeNull();
+  });
+
   it("groups Palo Alto HA members and renders PAN-OS HA with VSYS chips", async () => {
     vi.stubGlobal(
       "fetch",
@@ -504,9 +561,11 @@ describe("InventoryScreen device list", () => {
     expect(screen.getByText("default (vsys1)")).toBeInTheDocument();
     expect(screen.getByText("CorpNet (vsys2)")).toBeInTheDocument();
 
-    // Clicking CorpNet selects the standalone device and activates the CorpNet context tab
+    // Clicking CorpNet selects the standalone device and filters to that one VS's own context --
+    // no second, redundant place names it now that the old per-VS tab strip is gone.
     fireEvent.click(screen.getByText("CorpNet (vsys2)"));
-    await waitFor(() => expect(screen.getAllByText(/CorpNet \(vsys2\)/).length).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(screen.getByText("No interface evidence")).toBeInTheDocument());
+    expect(screen.getAllByText(/CorpNet \(vsys2\)/)).toHaveLength(1);
   });
 
   it("shows an error state with a retry action when the fetch fails", async () => {

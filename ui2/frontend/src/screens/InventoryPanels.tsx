@@ -186,15 +186,25 @@ function AddressChip({ address }: { readonly address: InventoryAddress }) {
   );
 }
 
-function InterfacesTable({ interfaces }: { readonly interfaces: readonly InventoryInterface[] }) {
+function InterfacesTable({
+  interfaces,
+}: {
+  readonly interfaces: readonly (InventoryInterface & { readonly vsysLabel?: string })[];
+}) {
   const [upOnly, setUpOnly] = useState(true);
   const [search, setSearch] = useState("");
 
-  if (interfaces.length === 0) {
+  // The loopback interface is collected evidence but never operator-relevant on this screen,
+  // for either vendor -- present on every device, never carrying a difference worth surfacing.
+  const withoutLoopback = interfaces.filter((iface) => iface.kind !== "loopback");
+
+  if (withoutLoopback.length === 0) {
     return <EmptyPanel title="No interface evidence" body="This context has no collected interfaces yet." />;
   }
 
-  const filtered = interfaces.filter((iface) => {
+  const showVsysColumn = withoutLoopback.some((iface) => iface.vsysLabel !== undefined);
+
+  const filtered = withoutLoopback.filter((iface) => {
     if (upOnly && iface.state?.toLowerCase() === "down") {
       return false;
     }
@@ -212,7 +222,7 @@ function InterfacesTable({ interfaces }: { readonly interfaces: readonly Invento
     <Stack spacing={1.5}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          Interfaces · {filtered.length} {upOnly && interfaces.length > filtered.length && `(${interfaces.length - filtered.length} down hidden)`}
+          Interfaces · {filtered.length} {upOnly && withoutLoopback.length > filtered.length && `(${withoutLoopback.length - filtered.length} down hidden)`}
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center">
           <TextField
@@ -233,6 +243,7 @@ function InterfacesTable({ interfaces }: { readonly interfaces: readonly Invento
       <Table size="small">
         <TableHead>
           <TableRow>
+            {showVsysColumn && <TableCell>VSYS</TableCell>}
             <TableCell>Name</TableCell>
             <TableCell>Kind</TableCell>
             <TableCell>State</TableCell>
@@ -242,7 +253,12 @@ function InterfacesTable({ interfaces }: { readonly interfaces: readonly Invento
         </TableHead>
         <TableBody>
           {filtered.map((iface) => (
-            <TableRow key={iface.name}>
+            <TableRow key={`${iface.vsysLabel ?? ""}:${iface.name}`}>
+              {showVsysColumn && (
+                <TableCell>
+                  <StatusChip tone="neutral" label={iface.vsysLabel ?? "Physical"} dense />
+                </TableCell>
+              )}
               <TableCell>{iface.name}</TableCell>
               <TableCell>{iface.kind}</TableCell>
               <TableCell>
@@ -279,14 +295,20 @@ function ContextHaBadge({ context }: { readonly context: InventoryContext | unde
   );
 }
 
-function RoutesTable({ routes }: { readonly routes: readonly InventoryRoute[] }) {
+function RoutesTable({
+  routes,
+}: {
+  readonly routes: readonly (InventoryRoute & { readonly vsysLabel?: string })[];
+}) {
   if (routes.length === 0) {
     return <EmptyPanel title="No routing evidence" body="This context has no collected routes yet." />;
   }
+  const showVsysColumn = routes.some((route) => route.vsysLabel !== undefined);
   return (
     <Table size="small">
       <TableHead>
         <TableRow>
+          {showVsysColumn && <TableCell>VSYS</TableCell>}
           <TableCell>Destination</TableCell>
           <TableCell>Next hop</TableCell>
           <TableCell>Interface</TableCell>
@@ -295,7 +317,12 @@ function RoutesTable({ routes }: { readonly routes: readonly InventoryRoute[] })
       </TableHead>
       <TableBody>
         {routes.map((route, index) => (
-          <TableRow key={`${route.destination}-${route.next_hop ?? ""}-${route.interface ?? ""}-${index}`}>
+          <TableRow key={`${route.vsysLabel ?? ""}-${route.destination}-${route.next_hop ?? ""}-${route.interface ?? ""}-${index}`}>
+            {showVsysColumn && (
+              <TableCell>
+                <StatusChip tone="neutral" label={route.vsysLabel ?? "Physical"} dense />
+              </TableCell>
+            )}
             <TableCell>{route.destination}</TableCell>
             <TableCell>{route.next_hop ?? "—"}</TableCell>
             <TableCell>{route.interface ?? "—"}</TableCell>
@@ -361,15 +388,19 @@ function ClusterInterfacesTable({
   const [upOnly, setUpOnly] = useState(true);
   const [search, setSearch] = useState("");
 
-  if (interfaces.length === 0) {
+  // The loopback interface is collected evidence but never operator-relevant on this screen,
+  // for either vendor -- present on every device, never carrying a difference worth surfacing.
+  const withoutLoopback = interfaces.filter((iface) => iface.kind !== "loopback");
+
+  if (withoutLoopback.length === 0) {
     return <EmptyPanel title="No interface evidence" body="This context has no collected interfaces yet." />;
   }
 
   // A row carries vsysLabel only in the cluster's merged, all-VS default view; a single
   // selected VS's own table never needs it since every row already shares that context.
-  const showVsysColumn = interfaces.some((iface) => iface.vsysLabel !== undefined);
+  const showVsysColumn = withoutLoopback.some((iface) => iface.vsysLabel !== undefined);
 
-  const filtered = interfaces.filter((iface) => {
+  const filtered = withoutLoopback.filter((iface) => {
     if (upOnly) {
       const memberStates = iface.member_states ? Object.values(iface.member_states) : [];
       const allDown = memberStates.length > 0 && memberStates.every((s) => s.toLowerCase() === "down");
@@ -399,7 +430,7 @@ function ClusterInterfacesTable({
     <Stack spacing={1.5}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          Interfaces · {filtered.length} {upOnly && interfaces.length > filtered.length && `(${interfaces.length - filtered.length} down hidden)`}
+          Interfaces · {filtered.length} {upOnly && withoutLoopback.length > filtered.length && `(${withoutLoopback.length - filtered.length} down hidden)`}
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center">
           <TextField
@@ -457,10 +488,16 @@ function ClusterInterfacesTable({
             }
             const network = cidrAddress ? calculateNetwork(cidrAddress) : "—";
 
+            // Members agree or disagree with each other -- never "not literally up, not literally
+            // down" against two hardcoded values. Two members reporting the same "unknown" agree;
+            // Degraded means the members' own states genuinely differ from each other, nothing else.
             const memberStates = iface.member_states ? Object.values(iface.member_states) : [];
-            const allUp = memberStates.length > 0 && memberStates.every((s) => s.toLowerCase() === "up");
-            const allDown = memberStates.length > 0 && memberStates.every((s) => s.toLowerCase() === "down");
-            const isMixed = memberStates.length > 0 && !allUp && !allDown;
+            const normalizedStates = memberStates.map((s) => s.toLowerCase());
+            const distinctStates = new Set(normalizedStates);
+            const isMixed = memberStates.length > 0 && distinctStates.size > 1;
+            const sharedState = memberStates.length > 0 && distinctStates.size === 1 ? normalizedStates[0] : null;
+            const allUp = sharedState === "up";
+            const allDown = sharedState === "down";
 
             return (
               <TableRow key={`${iface.vsysLabel ?? ""}:${iface.name}`} hover>
@@ -535,6 +572,8 @@ function ClusterInterfacesTable({
                       <StatusChip tone="neutral" label="Down" dense />
                     ) : isMixed ? (
                       <StatusChip tone="warn" label="Degraded" dense />
+                    ) : sharedState ? (
+                      <StatusChip tone="neutral" label={sharedState.charAt(0).toUpperCase() + sharedState.slice(1)} dense />
                     ) : (
                       <StatusChip tone={iface.presence === "all" ? "ok" : "warn"} label={presenceLabel(iface.presence)} dense />
                     )}
@@ -977,21 +1016,25 @@ export function InterfacesPanel({
     () => buildUnifiedContextTabs(contexts, vsList),
     [contexts, vsList]
   );
+  if (!activeContext) {
+    const merged = tabs.flatMap((tab) => {
+      const found = resolveContext(tab.context);
+      if (!found) return [];
+      return found.interfaces.map((iface) => ({ ...iface, vsysLabel: tab.label }));
+    });
+    return (
+      <Stack spacing={1}>
+        <ContextHaBadge context={resolveContext("physical")} />
+        <InterfacesTable interfaces={merged} />
+      </Stack>
+    );
+  }
+  const context = resolveContext(activeContext);
   return (
-    <ContextTabs
-      contexts={tabs}
-      activeContext={activeContext}
-      onSelectContext={onSelectContext}
-      render={(name) => {
-        const context = resolveContext(name);
-        return (
-          <Stack spacing={1}>
-            <ContextHaBadge context={context} />
-            <InterfacesTable interfaces={context?.interfaces ?? []} />
-          </Stack>
-        );
-      }}
-    />
+    <Stack spacing={1}>
+      <ContextHaBadge context={context} />
+      <InterfacesTable interfaces={context?.interfaces ?? []} />
+    </Stack>
   );
 }
 
@@ -1023,17 +1066,16 @@ export function RoutesPanel({
     () => buildUnifiedContextTabs(contexts, vsList),
     [contexts, vsList]
   );
-  return (
-    <ContextTabs
-      contexts={tabs}
-      activeContext={activeContext}
-      onSelectContext={onSelectContext}
-      render={(name) => {
-        const context = resolveContext(name);
-        return <RoutesTable routes={context?.routes ?? []} />;
-      }}
-    />
-  );
+  if (!activeContext) {
+    const merged = tabs.flatMap((tab) => {
+      const found = resolveContext(tab.context);
+      if (!found) return [];
+      return found.routes.map((route) => ({ ...route, vsysLabel: tab.label }));
+    });
+    return <RoutesTable routes={merged} />;
+  }
+  const context = resolveContext(activeContext);
+  return <RoutesTable routes={context?.routes ?? []} />;
 }
 
 export function ClusterInterfacesPanel({

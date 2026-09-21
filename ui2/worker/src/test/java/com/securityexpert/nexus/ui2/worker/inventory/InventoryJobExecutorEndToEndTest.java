@@ -47,15 +47,11 @@ class InventoryJobExecutorEndToEndTest {
                         "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"
                                 + "    inet 203.0.113.2/29 brd 203.0.113.7 scope global eth0\n"
                                 + "default via 203.0.113.1 dev eth0 proto 7\n"),
-                Map.entry("bash -lc 'vsenv 2 && cphaprob -a if'",
-                        "Virtual cluster interfaces: 1\neth0        203.0.113.1\n"),
                 Map.entry("bash -lc 'vsenv 2 && cphaprob stat'", "1 (local) 203.0.113.2 100% ACTIVE gw-a\n"),
                 Map.entry("bash -lc 'vsenv 5 && ip -4 addr show && ip -4 route show'",
                         "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"
                                 + "    inet 198.51.100.2/29 brd 198.51.100.7 scope global eth0\n"
                                 + "198.51.100.0/29 dev eth0 proto kernel scope link src 198.51.100.2\n"),
-                Map.entry("bash -lc 'vsenv 5 && cphaprob -a if'",
-                        "Virtual cluster interfaces: 1\neth0        198.51.100.1\n"),
                 Map.entry("bash -lc 'vsenv 5 && cphaprob stat'", "1 (local) 198.51.100.2 100% ACTIVE gw-a\n"));
 
         ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
@@ -97,18 +93,21 @@ class InventoryJobExecutorEndToEndTest {
                 .anyMatch(a -> a.role().equals(InventoryAddress.ROLE_MEMBER) && a.address().equals("192.0.2.10/24")));
         assertEquals(1, physical.routes().size());
 
+        // cphaprob reports the physical member's own cluster interfaces; vsenv <VSID> does not scope it
+        // to that virtual system. A VS context therefore carries only its own member address -- no
+        // cluster-VIP merge, and no cphaprob call at this level at all (D-UI2: a virtual system carries
+        // no configuration or state of its own outside its interfaces/routes).
         InventoryContext vsid2 = contextNamed(run, "2");
         assertEquals(1, vsid2.interfaces().size());
-        assertEquals(2, vsid2.interfaces().get(0).addresses().size(), "member address plus this VS's own cluster VIP");
+        assertEquals(1, vsid2.interfaces().get(0).addresses().size(), "this VS's own member address only");
         assertEquals("203.0.113.2/29", vsid2.interfaces().get(0).addresses().get(0).address());
-        assertTrue(vsid2.interfaces().get(0).addresses().stream()
-                .anyMatch(a -> a.role().equals(InventoryAddress.ROLE_CLUSTER_VIRTUAL) && a.address().equals("203.0.113.1")));
+        assertEquals(InventoryAddress.ROLE_MEMBER, vsid2.interfaces().get(0).addresses().get(0).role());
         assertEquals(1, vsid2.routes().size());
 
         InventoryContext vsid5 = contextNamed(run, "5");
+        assertEquals(1, vsid5.interfaces().get(0).addresses().size(), "this VS's own member address only");
         assertEquals("198.51.100.2/29", vsid5.interfaces().get(0).addresses().get(0).address());
-        assertTrue(vsid5.interfaces().get(0).addresses().stream()
-                .anyMatch(a -> a.role().equals(InventoryAddress.ROLE_CLUSTER_VIRTUAL) && a.address().equals("198.51.100.1")));
+        assertEquals(InventoryAddress.ROLE_MEMBER, vsid5.interfaces().get(0).addresses().get(0).role());
         assertEquals(1, vsid5.routes().size());
     }
 

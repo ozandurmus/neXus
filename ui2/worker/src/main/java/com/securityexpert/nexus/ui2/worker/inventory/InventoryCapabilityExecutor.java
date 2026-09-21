@@ -267,13 +267,14 @@ public final class InventoryCapabilityExecutor {
                     addrAndRouteCombined = execOutput(session, steps.get(0));
                     execOutput(session, steps.get(2));
                 }
-                // cp_cluster_vip_never_observed_in_fleet: same pty requirement as the physical-context read.
-                String vsClusterIfOutput = execOutputPty(session, steps.get(1));
+                // cphaprob reports the physical member's own cluster interfaces; vsenv <VSID> does not
+                // scope it to that virtual system -- issuing it per VSID re-reads and re-merges the same
+                // physical VIP set into every virtual system's own context, which is not that VS's own
+                // evidence (D-UI2: a virtual system carries no configuration or state of its own outside
+                // its interfaces/routes). No cphaprob call, no VIP merge, at this per-VSID level.
                 CheckPointVsidCompositeOutputSplitter.Halves halves =
                         CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
-                List<ParsedInterface> vsInterfaces = mergeVirtualAddresses(
-                        CheckPointIpAddrParser.parse(halves.addrOutput(), ""),
-                        CheckPointClusterVirtualInterfaceParser.parse(vsClusterIfOutput));
+                List<ParsedInterface> vsInterfaces = CheckPointIpAddrParser.parse(halves.addrOutput(), "");
                 contexts.add(new InventoryContext(vsid,
                         toInventoryInterfaces(vsInterfaces),
                         toInventoryRoutes(CheckPointIpRouteParser.parse(halves.routeOutput()))));
