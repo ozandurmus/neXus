@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
@@ -116,6 +117,53 @@ class ConfirmCapabilityExecutorTest {
         ConfirmResult.Completed completed = assertInstanceOf(ConfirmResult.Completed.class, result,
                 "the interactive-shell fallback must still be tried, not an immediate connect failure");
         assertEquals("fw-a", completed.facts().hostname().orElse(null));
+    }
+
+    /** Product Owner directive, 2026-09-22: a device's discovery candidate can already carry a
+     * Check Point Management Server "hardware" model (joined in by {@code
+     * JooqDeviceRepository.DEVICE_SUMMARY_SELECT} before any confirm ever ran) -- when it names a
+     * Quantum Spark/Gaia Embedded appliance, the confirm must try the interactive shell first and
+     * skip the four exec-channel attempts that are doomed on that hardware (measured live,
+     * 2026-09-21: ~120s burned there before the interactive shell -- which always answered -- ever
+     * ran), rather than discovering the same fact the slow way on every single confirm. */
+    @Test
+    void aDiscoveryKnownSparkModelTriesTheInteractiveShellFirstSkippingTheDoomedExecAttempts() {
+        ScriptedDeviceTransport transport = new ScriptedDeviceTransport(
+                Map.of("fw-a-host", "Host Name: fw-a\nProduct version Check Point Gaia R81.10\n"),
+                Map.of("fw-a-host", "Standalone"));
+        transport.allowExecInteractiveWithoutRejection();
+        ConfirmCapabilityExecutor executor = new ConfirmCapabilityExecutor(transport, unresolvablePanResolver());
+
+        ConfirmResult result = executor.confirm(
+                ConfirmRequest.checkPoint(new ConnectionTarget("ep-a", "fw-a-host", 22), CRED, TRUST,
+                        Optional.of("Check Point 1570/1590 Appliances")));
+
+        ConfirmResult.Completed completed = assertInstanceOf(ConfirmResult.Completed.class, result);
+        assertEquals("fw-a", completed.facts().hostname().orElse(null));
+        assertEquals(0, transport.execCallCount(),
+                "a discovery-known Spark model must skip the doomed exec-channel attempts entirely");
+        assertTrue(transport.execInteractiveCallCount() > 0,
+                "the interactive shell must be tried first (and here, exclusively) for a known Spark model");
+    }
+
+    /** The same model hint must never change WHICH commands are sent (the closed set stays
+     * {@link DeviceFirstContactCommandSet}'s own four literal forms either way) -- only the order
+     * the two already-approved channels are tried in, and only for a model the hint actually
+     * names; an unrelated/unknown model keeps the original exec-first order. */
+    @Test
+    void anUnknownModelHintKeepsTheOriginalExecFirstOrder() {
+        ScriptedDeviceTransport transport = new ScriptedDeviceTransport(
+                Map.of("fw-a-host", "Host Name: fw-a\nProduct version Check Point Gaia R81.10\n"),
+                Map.of("fw-a-host", "Standalone"));
+        ConfirmCapabilityExecutor executor = new ConfirmCapabilityExecutor(transport, unresolvablePanResolver());
+
+        ConfirmResult result = executor.confirm(
+                ConfirmRequest.checkPoint(new ConnectionTarget("ep-a", "fw-a-host", 22), CRED, TRUST,
+                        Optional.of("Check Point 6500 Appliance")));
+
+        ConfirmResult.Completed completed = assertInstanceOf(ConfirmResult.Completed.class, result);
+        assertEquals("fw-a", completed.facts().hostname().orElse(null));
+        assertTrue(transport.execCallCount() > 0, "a non-Spark model hint must still try the exec channel first");
     }
 
     @Test

@@ -38,6 +38,9 @@ final class ScriptedDeviceTransport implements DeviceTransport {
     private boolean bareIdentityFormFails;
     private int blankIdentityFormCount;
     private boolean execChannelRejectedEntirely;
+    private boolean allowExecInteractiveAnyway;
+    private int execCallCount;
+    private int execInteractiveCallCount;
 
     ScriptedDeviceTransport(Map<String, String> identityOutputByHost, Map<String, String> haPeerOutputByHost) {
         this.identityOutputByHost = identityOutputByHost;
@@ -63,6 +66,21 @@ final class ScriptedDeviceTransport implements DeviceTransport {
      * {@link #execInteractive} ever answers. */
     void rejectExecChannelEntirely() {
         this.execChannelRejectedEntirely = true;
+    }
+
+    /** Lets a test observe the interactive-shell-first model-hint routing without also
+     * simulating a fully exec-rejecting device -- {@link #exec} still succeeds if called, so a
+     * count of zero on it is real proof the hint skipped it, not incidental to a rejection. */
+    void allowExecInteractiveWithoutRejection() {
+        this.allowExecInteractiveAnyway = true;
+    }
+
+    int execCallCount() {
+        return execCallCount;
+    }
+
+    int execInteractiveCallCount() {
+        return execInteractiveCallCount;
     }
 
     void makeCredentialUnresolvable() {
@@ -93,6 +111,7 @@ final class ScriptedDeviceTransport implements DeviceTransport {
 
     @Override
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
+        execCallCount++;
         String host = hostBySessionId.get(session.sessionId());
         String command = spec.command();
         if (execChannelRejectedEntirely) {
@@ -116,7 +135,8 @@ final class ScriptedDeviceTransport implements DeviceTransport {
 
     @Override
     public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
-        if (!execChannelRejectedEntirely) {
+        execInteractiveCallCount++;
+        if (!execChannelRejectedEntirely && !allowExecInteractiveAnyway) {
             throw new IllegalStateException("execInteractive called without simulating an exec-rejecting device");
         }
         String host = hostBySessionId.get(session.sessionId());

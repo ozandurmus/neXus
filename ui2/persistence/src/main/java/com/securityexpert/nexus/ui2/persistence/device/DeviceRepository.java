@@ -91,6 +91,17 @@ public interface DeviceRepository {
     /** GET /devices (DeviceSummary rows), newest first -- every device, its vendor and its observed facts. */
     List<DeviceSummaryRecord> listAll();
 
+    /**
+     * The same coalesced view {@link #listAll()} produces (device's own confirmed facts, falling
+     * back to its discovery candidate's, per {@code DEVICE_SUMMARY_SELECT}), narrowed to one
+     * device -- so a value such as {@code observedModel()} is available before that device has
+     * ever been confirmed, whenever its discovery candidate already carried one (e.g. a Check
+     * Point Management Server's own "hardware" field).
+     */
+    default Optional<DeviceSummaryRecord> findSummary(String deviceId) {
+        return listAll().stream().filter(summary -> summary.deviceId().equals(deviceId)).findFirst();
+    }
+
     /** Returns members of a specific cluster (by cluster_member_ref or candidate display name) directly without full scan. */
     default List<DeviceSummaryRecord> findMembersByClusterRef(String clusterMemberRef) {
         return listAll().stream()

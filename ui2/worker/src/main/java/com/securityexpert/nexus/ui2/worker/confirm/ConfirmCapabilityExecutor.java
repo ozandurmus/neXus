@@ -93,9 +93,11 @@ public final class ConfirmCapabilityExecutor {
             return new ConfirmResult.ConnectFailed(describeConnect(connectResult));
         }
         TransportSession session = authenticated.session();
+        boolean preferInteractiveShell = isKnownSparkModel(request.modelHint());
         try {
             String identityOutput = execOutput(session,
-                    DeviceFirstContactCommandSet.forStep(Vendor.CHECK_POINT, ContactStepKind.IDENTITY_READ));
+                    DeviceFirstContactCommandSet.forStep(Vendor.CHECK_POINT, ContactStepKind.IDENTITY_READ),
+                    preferInteractiveShell);
             if (identityOutput == null) {
                 long elapsed = System.currentTimeMillis() - overallStart;
                 LOG.log(System.Logger.Level.WARNING,
@@ -104,7 +106,8 @@ public final class ConfirmCapabilityExecutor {
                 return new ConfirmResult.ConnectFailed("command_failed: identity read timed out or failed (after " + elapsed + "ms)");
             }
             String haPeerOutput = execOutput(session,
-                    DeviceFirstContactCommandSet.forStep(Vendor.CHECK_POINT, ContactStepKind.HA_PEER_READ));
+                    DeviceFirstContactCommandSet.forStep(Vendor.CHECK_POINT, ContactStepKind.HA_PEER_READ),
+                    preferInteractiveShell);
             if (haPeerOutput == null) {
                 long elapsed = System.currentTimeMillis() - overallStart;
                 LOG.log(System.Logger.Level.WARNING,
@@ -178,6 +181,20 @@ public final class ConfirmCapabilityExecutor {
         return xml.contains("status=\"error\"") || xml.contains("status='error'");
     }
 
+    /** Discovery-known Check Point Quantum Spark/Gaia Embedded model tokens (ported verbatim from
+     * the pre-Java product's own evidence-driven classification) -- used only to choose which
+     * already-approved channel to try first below, never to alter the closed command set itself. */
+    private static final java.util.Set<String> SPARK_MODEL_TOKENS = java.util.Set.of(
+            "1500", "1530", "1550", "1570", "1590", "1600", "1800", "1900", "2000");
+
+    /** True when a discovery-sourced model hint (management-plane observation, never confirmed
+     * evidence -- see the Evidence laws) already names a Quantum Spark/Gaia Embedded appliance,
+     * e.g. from a Check Point Management Server's own "hardware" field, joined in before this
+     * confirm ever ran ({@code JooqDeviceRepository.DEVICE_SUMMARY_SELECT}'s {@code dc.model}). */
+    private static boolean isKnownSparkModel(Optional<String> modelHint) {
+        return modelHint.map(model -> SPARK_MODEL_TOKENS.stream().anyMatch(model::contains)).orElse(false);
+    }
+
     /** DeviceFirstContactCommandSet's own literal forms, tried in order (gate entry 1's documented
      * "may be corrected at this one site" clause): a Quantum Spark/Gaia Embedded device's landing
      * shell and CLI surface cannot be assumed ahead of time (AGENTS.md Check Point), so the next
@@ -186,26 +203,33 @@ public final class ConfirmCapabilityExecutor {
      * full timeout for nothing (Product Owner measured live, 2026-09-21). This mirrors the
      * pre-Java product's own real-fleet-proven Check Point direct-SSH probe, including
      * its PTY allocation: Gaia/Gaia Embedded restricted shells were measured there to answer more
-     * consistently, and not at all in some cases, without one. */
-    private String execOutput(TransportSession session, DeviceFirstContactCommandSet entry) {
+     * consistently, and not at all in some cases, without one.
+     *
+     * <p>When {@code preferInteractiveShell} is set (a discovery-known Spark/Gaia Embedded model,
+     * see {@link #isKnownSparkModel}), the two channels below are tried in the opposite order: the
+     * exec channel is doomed on these appliances (measured live, 2026-09-21: ~120s burned on four
+     * exec-channel timeouts before the interactive shell -- which always answered -- ever ran), so
+     * the interactive shell is tried first and the exec channel becomes the fallback, in case the
+     * hint is wrong. Same closed set of literals either way, only the trial order changes.</p> */
+    private String execOutput(TransportSession session, DeviceFirstContactCommandSet entry, boolean preferInteractiveShell) {
+        java.util.function.BiFunction<TransportSession, String, String> first =
+                preferInteractiveShell ? this::execInteractiveCommand : this::execOneCommand;
+        java.util.function.BiFunction<TransportSession, String, String> second =
+                preferInteractiveShell ? this::execOneCommand : this::execInteractiveCommand;
         for (String cmd : entry.literalForms()) {
-            String output = execOneCommand(session, cmd);
+            String output = first.apply(session, cmd);
             if (output != null && !output.isBlank()) {
                 return output;
             }
         }
-        // Every exec-channel form failed, timed out, or came back blank -- a Gaia Embedded/
-        // Quantum Spark device that rejects the exec channel outright (measured live,
-        // 2026-09-21) still answers over a persistent interactive shell, tried here with the
-        // same closed set of literals, never a different command.
-        String lastInteractive = null;
+        String lastFromSecond = null;
         for (String cmd : entry.literalForms()) {
-            lastInteractive = execInteractiveCommand(session, cmd);
-            if (lastInteractive != null && !lastInteractive.isBlank()) {
-                return lastInteractive;
+            lastFromSecond = second.apply(session, cmd);
+            if (lastFromSecond != null && !lastFromSecond.isBlank()) {
+                return lastFromSecond;
             }
         }
-        return lastInteractive;
+        return lastFromSecond;
     }
 
     private String execInteractiveCommand(TransportSession session, String cmd) {

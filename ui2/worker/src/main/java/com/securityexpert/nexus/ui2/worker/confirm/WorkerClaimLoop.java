@@ -191,8 +191,10 @@ public final class WorkerClaimLoop {
                 return true;
             }
 
+            Optional<String> modelHint = deviceRepository.findSummary(job.targetDeviceId())
+                    .flatMap(com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedModel);
             ConfirmRequest primaryRequest = buildRequest(job.capabilityId(), endpoint.endpointId(), endpoint.addressRef(),
-                    device.credentialReferenceId());
+                    device.credentialReferenceId(), modelHint);
             var peerRequestFactory = peerRequestFactoryFor(job.capabilityId(), device.credentialReferenceId());
 
             confirmJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), primaryRequest,
@@ -260,16 +262,16 @@ public final class WorkerClaimLoop {
                         credentialRef, trustRuleRef);
             };
         }
-        return managementAddress -> buildRequest(capabilityId, "peer", managementAddress, credentialRef);
+        return managementAddress -> buildRequest(capabilityId, "peer", managementAddress, credentialRef, Optional.empty());
     }
 
     private ConfirmRequest buildRequest(String capabilityId, String endpointId, String addressRef,
-            String credentialRef) {
+            String credentialRef, Optional<String> modelHint) {
         if (ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT.equals(capabilityId)) {
             String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
                     hostOf(addressRef), portOf(addressRef));
             return ConfirmRequest.checkPoint(new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef)),
-                    credentialRef, trustRuleRef);
+                    credentialRef, trustRuleRef, modelHint);
         }
         if (ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO.equals(capabilityId)) {
             return ConfirmRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
