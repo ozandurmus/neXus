@@ -96,11 +96,74 @@
       },
       "seq": 1,
       "timestamp": "2026-09-20T22:46:47Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/ci_regression_scope.py",
+          ".github/workflows/validation.yml",
+          "tests/test_ci_regression_scope.py",
+          "tests/test_ci_workflow_fast_pr_regression.py"
+        ],
+        "completed": [
+          "Added shell classification and closed frontend source/test tree mapping.",
+          "Added shell App test workflow selection.",
+          "Opened PR #438 without merging."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "UNCHANGED",
+          "ui": "UNCHANGED"
+        },
+        "integration": {
+          "branch": "feature/regression-mapping-shell-component",
+          "ci": "PENDING",
+          "head_sha": "dce22db791d4f70d5a312c9774cfe17e4d81dc94",
+          "merge_commit": null,
+          "merge_decision": "ORCHESTRATOR",
+          "merge_state": "OPEN",
+          "pr": 438,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/438"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0355",
+          "movement_type": "VALIDATION",
+          "objective": "Verify PR #438 checks and orchestrator merge.",
+          "status": "planned"
+        },
+        "preserved": [
+          "Inventory, discovery, and privacy classifications retain precedence.",
+          "Outside-product and empty scopes remain blocked.",
+          "No full-suite fallback was added."
+        ],
+        "recommended_reasoning": {
+          "reason": "Lightweight PR verification and merge orchestration.",
+          "tier": "Main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Local rebase could not update shared Git refs because packed-refs.lock creation is denied; the clean verified commit was pushed directly to the designated branch."
+        ],
+        "validation": {
+          "affected": "PASS: 23 targeted tests",
+          "diff_check": "PASS before commit",
+          "full_regression": "NOT_RUN: not required by dispatch",
+          "privacy": "PASS: 0 findings",
+          "real_environment": "NOT_APPLICABLE: CI mapping only",
+          "state_consistency": "NOT_RUN: no project state changed",
+          "targeted": "PASS: scope tests and workflow tests"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-20T22:55:33Z"
     }
   ],
   "id": "NXS-LOCAL-0355",
   "movement": "NXS-LOCAL-0355",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/PO_DECISION_RECORD_2026_09_15C_REGRESSION_GATE_RUNS_WHEN_THE_CORE_CHANGES.md",
     "scripts/ci_regression_scope.py",
@@ -108,6 +171,6 @@
     ".github/workflows/validation.yml"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-20T22:46:47Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-20T22:55:33Z"
 }

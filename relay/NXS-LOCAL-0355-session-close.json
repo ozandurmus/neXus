@@ -1,32 +1,13 @@
 {
-  "movement": "NXS-LOCAL-0355",
-  "movement_type": "IMPLEMENTATION",
-  "objective": "Map the application shell as its own component and close the frontend source/test tree.",
-  "status": "AUTOMATED_VALIDATED",
-  "outcome": "DONE",
-  "commit": "dce22db791d4f70d5a312c9774cfe17e4d81dc94",
-  "pull_request": 438,
-  "base": "main",
-  "branch": "feature/regression-mapping-shell-component",
-  "changed": [
-    "Added ordered shell fallback after discovery, inventory, and privacy so every frontend source/test path has one classification.",
-    "Added shell-targeted frontend App test selection to the PR workflow.",
-    "Added coverage for PR 437 shape, shell-only paths, future ordinary frontend paths, and the complete current frontend tree."
-  ],
-  "validation": [
-    "python3 -m pytest -q tests/test_ci_regression_scope.py tests/test_ci_workflow_fast_pr_regression.py: PASS (23 passed)",
-    "python3 main.py --repository-privacy-check: PASS (0 findings)",
-    "git diff --check origin/main: PASS before commit"
-  ],
-  "invariants": [
-    "Inventory, discovery, and privacy retain precedence and their existing classifications.",
-    "Paths outside the mapped product trees and empty scope remain blocked.",
-    "No full-suite fallback was added."
-  ],
-  "notes": [
-    "The local shared Git directory denied packed-refs.lock during rebase onto the latest origin/main. The verified commit was restored cleanly in detached HEAD and pushed directly to its designated branch; PR 438 is open.",
-    "Merge mode is orchestrator; no merge command was run."
-  ],
-  "next_movement": "VALIDATION",
-  "recommended_reasoning": "Lightweight verification of PR 438 checks and orchestrator merge."
+  "completed": ["Added shell classification and closed frontend source/test tree mapping.", "Added shell App test workflow selection.", "Opened PR #438 without merging."],
+  "changed": ["scripts/ci_regression_scope.py", ".github/workflows/validation.yml", "tests/test_ci_regression_scope.py", "tests/test_ci_workflow_fast_pr_regression.py"],
+  "continuation": "NEW_SESSION",
+  "effects": {"main_py": "UNCHANGED", "ui": "UNCHANGED"},
+  "integration": {"branch": "feature/regression-mapping-shell-component", "ci": "PENDING", "head_sha": "dce22db791d4f70d5a312c9774cfe17e4d81dc94", "merge_commit": null, "merge_decision": "ORCHESTRATOR", "merge_state": "OPEN", "pr": 438, "pr_url": "https://github.com/ozandurmus/neXus/pull/438"},
+  "next": {"movement": "NXS-LOCAL-0355", "movement_type": "VALIDATION", "objective": "Verify PR #438 checks and orchestrator merge.", "status": "planned"},
+  "preserved": ["Inventory, discovery, and privacy classifications retain precedence.", "Outside-product and empty scopes remain blocked.", "No full-suite fallback was added."],
+  "state_updates": [],
+  "unresolved_risks": ["Local rebase could not update shared Git refs because packed-refs.lock creation is denied; the clean verified commit was pushed directly to the designated branch."],
+  "validation": {"affected": "PASS: 23 targeted tests", "diff_check": "PASS before commit", "full_regression": "NOT_RUN: not required by dispatch", "privacy": "PASS: 0 findings", "real_environment": "NOT_APPLICABLE: CI mapping only", "state_consistency": "NOT_RUN: no project state changed", "targeted": "PASS: scope tests and workflow tests"},
+  "recommended_reasoning": {"tier": "Main engineer", "reason": "Lightweight PR verification and merge orchestration."}
 }

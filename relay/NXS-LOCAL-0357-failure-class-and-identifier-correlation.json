@@ -1,0 +1,111 @@
+{
+  "created_at": "2026-09-21T05:19:23Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "With the current data, the 47 failed rows state the connection-failure class rather than the generic one",
+          "A recorded reason carrying detail after its class still resolves to that class, proven by a test over a reason string of that shape",
+          "A recorded reason of an unknown class still reads as a recorded failure, proven by a test",
+          "A job log row shows the device name and the identifier together",
+          "The device detail header shows the identifier alongside the name",
+          "The identifier rendered is byte-identical to the one in the record, proven by a test",
+          "Frontend tests pass and the repository privacy gate reports zero findings"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md (FROZEN, 2026-09-20). Identity is stated rather than implied, and a reason shown to an operator comes from what was recorded.",
+          "engineering": "main carries NXS-LOCAL-0354 at 3a62de7. 107 devices: 60 completed, 47 failed, all on the same recorded class.",
+          "observed": "Two gaps found on the live deployment after NXS-LOCAL-0354 landed. First, the failure reason never resolves. The row renders 'Collection attempt failed - Recorded failure' for all 47 failed devices, although every one of them failed on the same recorded class. The comparison in InventoryScreen.tsx tests the whole terminal reason for exact equality with connect_failed, while the recorded value is a colon-delimited string whose first segment is that class and whose remainder carries transport detail. Measured in the database: split_part(terminal_reason, ':', 1) returns connect_failed for all 47 rows. Second, a name and an identifier never appear together. The inventory list and the device detail header show a hostname and no device identifier; JobLogsPanel shows target_device_id and no name. The identifier is deliberately left unmasked for replay-viewer sessions, so it is the stable handle that could correlate a screen with a log, but no screen presents both, and an operator reading a job log cannot tell which device on the inventory screen it belongs to."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "The backup, failover and discovery planes"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/failure-class-and-identifier-correlation"
+        },
+        "invariants": [
+          "Identifiers are opaque: the identifier is displayed as recorded and never parsed, shortened or normalised",
+          "A reason shown to an operator is one that was recorded; an unrecognised class is reported as unrecognised, never guessed",
+          "Collection failure is not a known-bad state: the wording says the attempt failed, not that the device is unhealthy",
+          "Presentation identity is never a join key"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "UI",
+        "objective": "Make the recorded failure class actually reach the operator, and give a name and its identifier one place where they appear together so a log line can be matched to a device.",
+        "output_contract": [
+          "Failed rows stating the recorded failure class",
+          "A name and its identifier visible together on the job log and on the device detail",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "Two bounded presentation fixes against a frozen design contract, with the data measured and the shape of the recorded reason already stated.",
+          "tier": "Main engineer"
+        },
+        "requirements": [
+          "The class is derived from the recorded reason rather than matched against it whole, so a reason that carries detail after its class still resolves to that class",
+          "A reason whose class is not one the screen knows still reads as a recorded failure rather than as an invented category",
+          "A device name and its identifier appear together in at least one place an operator lands on from a log, and in at least one place they land on from the inventory",
+          "The identifier shown is the one the logs carry, unmodified: not shortened, not reformatted, not derived",
+          "No transport detail, port, address or credential reaches a list row through this change"
+        ],
+        "risks": [
+          "The recorded reason is a transport string. Derive the class from its leading segment and show only that; do not widen what reaches the row.",
+          "Under a replay-viewer session the name is a pseudonym while the identifier is not, and that is intended: the pair is what makes correlation possible. Do not mask the identifier to make them look consistent.",
+          "Do not touch the Draft or Failed filters. Both work, and an earlier claim against the Draft filter was withdrawn as a false finding."
+        ],
+        "scope": {
+          "in": [
+            "The failure reason mapping in InventoryScreen.tsx: derive the class from the recorded reason rather than comparing the whole string",
+            "The job log rows: show the device name beside the identifier",
+            "The device detail header: show the device identifier beside the name",
+            "Tests for the class derivation and for both correlation points"
+          ],
+          "out": [
+            "Changing what is recorded on a job, or any collection behaviour",
+            "Printing the transport detail of a reason anywhere in a list: the class is what belongs there, and the detail stays in the device detail pane as it is today",
+            "The Draft and Failed filters, which work",
+            "The masking layer: the identifier is already deliberately unmasked and must stay that way"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-21T05:19:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0357",
+  "movement": "NXS-LOCAL-0357",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md",
+    "ui2/frontend/src/screens/InventoryScreen.tsx",
+    "ui2/frontend/src/screens/JobLogsPanel.tsx",
+    "ui2/frontend/src/screens/InventoryPanels.tsx"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-21T05:19:23Z"
+}

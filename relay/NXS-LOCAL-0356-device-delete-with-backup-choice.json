@@ -113,11 +113,74 @@
       },
       "seq": 1,
       "timestamp": "2026-09-20T22:53:54Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "Missing disposition with backups returns 422 BACKUP_DISPOSITION_REQUIRED with artefact_count.",
+          "RETAIN preserves manifest, retention ledger, and retrieval audit rows; REMOVE appends one removed ledger row per artefact before deleting manifest rows.",
+          "V34 relaxes manifest foreign keys so append-only ledger and retrieval audits outlive device and manifest deletion.",
+          "Registry UI presents the server-reported backup count and explicit Retain backups or Remove backups controls."
+        ],
+        "completed": [
+          "Implemented explicit retain/remove backup disposition through the device delete route.",
+          "Published SESSION_CLOSE with validation blocker; no PR opened and no merge performed."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "Device registry now asks the server for the backup artefact count and shows retain/remove choices before the deletion request with a disposition."
+        },
+        "integration": {
+          "branch": "feature/device-delete-with-backup-choice",
+          "ci": "NOT_RUN: local validation blocked before compilation.",
+          "head_sha": "56ad5852e2577a998a74d748e719be1cd74ae728",
+          "merge_commit": null,
+          "merge_decision": "orchestrator merge mode; no merge attempted.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0356",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Restore Gradle wrapper cache write access, run the four dispatch validation commands, resolve the pre-existing diff-check finding if still present, then re-review relay, commit, push, and open the PR.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Application grants still exclude DELETE on artefact_retention_ledger and backup_artefact_retrieval.",
+          "All ledger writes join the audited device deletion transaction.",
+          "Identifiers remain opaque; no raw device identity was added to UI or responses."
+        ],
+        "recommended_reasoning": {
+          "reason": "Resume with focused validation and only repair failures directly caused by this bounded deletion path.",
+          "tier": "Normal (strong)"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Physical vault-byte reclamation is not in the service process. REMOVE deletes the manifest after its ledger event, making bytes unreachable; a transaction-safe store cleanup workflow remains required to reclaim bytes.",
+          "Worktree remains uncommitted because validation and required diff check are blocked; PR is not authorized until the validation plan is green."
+        ],
+        "validation": {
+          "affected": "NOT_RUN: :persistence:test and npm test were not run after the required runtime failure.",
+          "diff_check": "BLOCKED: git diff --check origin/main reports pre-existing ui2/frontend/tests/InventoryScreen.test.tsx:380 new blank line at EOF.",
+          "full_regression": "NOT_RUN: dispatch did not require a full regression and execution stopped after the Gradle runtime failure.",
+          "privacy": "NOT_RUN: python3 main.py --repository-privacy-check was not run after the required runtime failure.",
+          "real_environment": "NOT_APPLICABLE: dispatch specifies local validation only.",
+          "state_consistency": "NOT_RUN: no durable state update is justified while validation is blocked.",
+          "targeted": "BLOCKED before compilation: ./gradlew :service:test could not create ~/.gradle wrapper lock (Operation not permitted)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-21T00:11:01Z"
     }
   ],
   "id": "NXS-LOCAL-0356",
   "movement": "NXS-LOCAL-0348",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "AGENTS.md",
     "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/JooqDeviceRepository.java",
@@ -125,6 +188,6 @@
     "ui2/service/src/main/resources/db/migration/V18__cp_gateway_backup.sql"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-20T22:53:54Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-21T00:11:01Z"
 }
