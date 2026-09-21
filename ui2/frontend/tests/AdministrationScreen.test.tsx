@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { AdministrationScreen } from "../src/screens/AdministrationScreen";
+import { CredentialsPanel } from "../src/screens/CredentialsPanel";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -75,6 +76,59 @@ const TABS = [
   { label: "Credentials", marker: "No credential stored" },
   { label: "Project plan", marker: "Declared roadmap completion" },
 ];
+
+function credential(kind: "ssh_password" | "ssh_private_key" | "api_password") {
+  return {
+    credential_id: "cred-1",
+    credential_reference_id: "ref-1",
+    display_name: "Synthetic credential",
+    kind,
+    username: "svc-account",
+    allows_check_point: true,
+    allows_palo_alto: false,
+    created_at: "2026-09-21T00:00:00Z",
+    secret_set_at: "2026-09-21T00:00:00Z",
+  };
+}
+
+describe("CredentialsPanel replace secret", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each(["ssh_password", "api_password"] as const)("hides passphrase for %s", async (kind) => {
+    vi.stubGlobal("fetch", routedFetch({ "/credentials": { body: { credentials: [credential(kind)] } } }));
+    render(withTheme(<CredentialsPanel />));
+
+    await waitFor(() => expect(screen.getByText("Synthetic credential")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Replace secret" }));
+
+    expect(screen.queryByLabelText("Passphrase (optional)")).toBeNull();
+  });
+
+  it("shows and sends a passphrase for ssh_private_key", async () => {
+    const requests: unknown[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") requests.push(JSON.parse(init.body as string));
+      return jsonResponse(200, init?.method === "POST"
+        ? credential("ssh_private_key")
+        : { credentials: [credential("ssh_private_key")] });
+    }));
+    render(withTheme(<CredentialsPanel />));
+
+    await waitFor(() => expect(screen.getByText("Synthetic credential")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Replace secret" }));
+    fireEvent.change(screen.getByLabelText("New secret"), { target: { value: "replacement-key" } });
+    fireEvent.change(screen.getByLabelText("Passphrase (optional)"), { target: { value: "key-passphrase" } });
+    fireEvent.click(screen.getByRole("button", { name: "Replace secret" }));
+
+    await waitFor(() => expect(requests).toEqual([{
+      credential_id: "cred-1",
+      secret: "replacement-key",
+      passphrase: "key-passphrase",
+    }]));
+  });
+});
 
 describe("AdministrationScreen tabs", () => {
   afterEach(() => {

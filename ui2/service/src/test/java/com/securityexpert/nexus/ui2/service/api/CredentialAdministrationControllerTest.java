@@ -39,6 +39,7 @@ class CredentialAdministrationControllerTest {
         private final List<CredentialView> views = new ArrayList<>();
         String lastSeenSecret;
         String lastSeenPassphrase;
+        boolean rejectPassphrase;
 
         @Override
         public CredentialView create(String actingAdminActorFingerprint, String displayName, CredentialKind kind,
@@ -61,6 +62,9 @@ class CredentialAdministrationControllerTest {
         @Override
         public ReplaceSecretResult replaceSecret(String actingAdminActorFingerprint, String credentialId,
                 char[] secret, Optional<char[]> passphrase) {
+            if (rejectPassphrase) {
+                return new ReplaceSecretResult.PassphraseNotAllowed();
+            }
             lastSeenSecret = new String(secret);
             passphrase.ifPresent(p -> lastSeenPassphrase = new String(p));
             CredentialView existing = views.get(0);
@@ -143,5 +147,18 @@ class CredentialAdministrationControllerTest {
                 "not_a_real_kind", "svc-account", true, false, "irrelevant".toCharArray(), null), fakeRequest());
 
         assertEquals(400, response.getStatusCode().value());
+    }
+
+    @Test
+    void passphraseNotAllowedIsReportedAsStableBadRequest() {
+        FakePort port = new FakePort();
+        port.rejectPassphrase = true;
+        CredentialAdministrationController controller = new CredentialAdministrationController(port);
+
+        var response = controller.replaceSecret(new CredentialAdministrationController.ReplaceSecretRequest(
+                "cred-1", "replacement-secret".toCharArray(), "not-allowed".toCharArray()), fakeRequest());
+
+        assertEquals(400, response.getStatusCode().value());
+        assertEquals("PASSPHRASE_NOT_ALLOWED_FOR_CREDENTIAL_KIND", response.getBody().get("error"));
     }
 }
