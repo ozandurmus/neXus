@@ -254,25 +254,31 @@ public final class InventoryCapabilityExecutor {
             haFacts.add(new InventoryHaFact(UUID.randomUUID().toString(), InventoryContext.PHYSICAL, haState.role(),
                     haState.clusterMode(), InventoryHaFact.SOURCE_CP_CPHAPROB_STAT));
 
+            boolean clusterMember = !"STANDALONE".equals(haState.role());
             for (String vsid : vsids) {
                 // cp_vsx_interfaces_identical_to_physical: measured live (Product Owner, 2026-09-21) that
                 // chaining multiple "vsenv <vsid> ...; <read>;" segments for different VSIDs inside one
                 // shared bash -lc process (the batch) does not reliably re-scope every later read to its
-                // own VSID -- some segments' addresses came back matching another VSID's, not that VS's
-                // own. The Product Owner's own manual reproduction issues one standalone "bash -lc 'vsenv
-                // <vsid> && ...'" process per VSID and gets correct, distinct output every time; do the
-                // same here instead of relying on the batch's per-VSID sections.
+                // own VSID. Issuing one standalone "bash -lc 'vsenv <vsid> && ...'" process per VSID (as
+                // the Product Owner's own manual reproduction does) fixes that, but on a genuine ClusterXL
+                // member "fw getifs"/"ip addr show" itself was then measured, still live by the Product
+                // Owner, to report an internal VSX addressing scheme for a virtual system, not its real
+                // configured address ("sanal IP dönüyor"): "cphaprob -a if", vsenv-scoped, is what actually
+                // reports that virtual system's real, distinct cluster-interface addresses on a cluster
+                // member. A standalone (non-clustered) VSX gateway has no such distinction -- cphaprob
+                // reports no cluster there -- so it keeps using "fw getifs" as measured earlier.
                 List<String> steps = InventoryReadPlan.checkPointVsidSteps(vsid);
                 String addrAndRouteCombined = execOutput(session, steps.get(0));
-                execOutput(session, steps.get(2));
-                // cphaprob reports the physical member's own cluster interfaces; vsenv <VSID> does not
-                // scope it to that virtual system -- issuing it per VSID re-reads and re-merges the same
-                // physical VIP set into every virtual system's own context, which is not that VS's own
-                // evidence (D-UI2: a virtual system carries no configuration or state of its own outside
-                // its interfaces/routes). No cphaprob call, no VIP merge, at this per-VSID level.
+                List<ParsedInterface> vsInterfaces;
                 CheckPointVsidCompositeOutputSplitter.Halves halves =
                         CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
-                List<ParsedInterface> vsInterfaces = CheckPointFwGetifsParser.parse(halves.addrOutput());
+                if (clusterMember) {
+                    String clusterIfOutput = execOutput(session, steps.get(1));
+                    vsInterfaces = toParsedInterfaces(CheckPointClusterVirtualInterfaceParser.parse(clusterIfOutput));
+                } else {
+                    vsInterfaces = CheckPointFwGetifsParser.parse(halves.addrOutput());
+                }
+                execOutput(session, steps.get(2));
                 contexts.add(new InventoryContext(vsid,
                         toInventoryInterfaces(vsInterfaces),
                         toInventoryRoutes(CheckPointIpRouteParser.parse(halves.routeOutput()))));
@@ -469,6 +475,21 @@ public final class InventoryCapabilityExecutor {
                     return new ParsedInterface(iface.name(), iface.parent(), iface.kind(), iface.state(), merged,
                             iface.vlanId());
                 })
+                .toList();
+    }
+
+    /** cp_vsx_interfaces_identical_to_physical: a cluster member's per-VSID interfaces, sourced from
+     * {@code cphaprob -a if}'s own "Virtual cluster interfaces" section rather than {@code fw getifs}
+     * (measured live to return an internal VSX addressing scheme on a cluster member, not the real
+     * configured one). That section carries no netmask and no up/down state, so the address is recorded
+     * bare and the state {@link InventoryInterface#STATE_UNKNOWN}, same fail-closed treatment as {@code
+     * fw getifs} on a standalone gateway. */
+    private static List<ParsedInterface> toParsedInterfaces(List<VirtualInterfaceAddress> clusterInterfaces) {
+        return clusterInterfaces.stream()
+                .map(vip -> new ParsedInterface(vip.interfaceName(), Optional.empty(),
+                        CheckPointFwGetifsParser.kindOf(vip.interfaceName()), InventoryInterface.STATE_UNKNOWN,
+                        List.of(new ParsedAddress(vip.address(), InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER)),
+                        Optional.empty()))
                 .toList();
     }
 

@@ -41,12 +41,14 @@ class InventoryJobExecutorEndToEndTest {
                 Map.entry(vsenvZeroFaultTolerant(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF),
                         "Virtual cluster interfaces: 1\neth0        192.0.2.1\n"),
                 Map.entry("bash -lc 'vsenv 2 && fw getifs && ip -4 route show'",
-                        "localhost eth0 203.0.113.2 255.255.255.248\n"
-                                + "default via 203.0.113.1 dev eth0 proto 7\n"),
+                        "default via 203.0.113.1 dev eth0 proto 7\n"),
+                Map.entry("bash -lc 'vsenv 2 && cphaprob -a if'",
+                        "Virtual cluster interfaces: 1\neth0        203.0.113.2\n"),
                 Map.entry("bash -lc 'vsenv 2 && cphaprob stat'", "1 (local) 203.0.113.2 100% ACTIVE gw-a\n"),
                 Map.entry("bash -lc 'vsenv 5 && fw getifs && ip -4 route show'",
-                        "localhost eth0 198.51.100.2 255.255.255.248\n"
-                                + "198.51.100.0/29 dev eth0 proto kernel scope link src 198.51.100.2\n"),
+                        "198.51.100.0/29 dev eth0 proto kernel scope link src 198.51.100.2\n"),
+                Map.entry("bash -lc 'vsenv 5 && cphaprob -a if'",
+                        "Virtual cluster interfaces: 1\neth0        198.51.100.2\n"),
                 Map.entry("bash -lc 'vsenv 5 && cphaprob stat'", "1 (local) 198.51.100.2 100% ACTIVE gw-a\n"));
 
         ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
@@ -88,22 +90,66 @@ class InventoryJobExecutorEndToEndTest {
                 .anyMatch(a -> a.role().equals(InventoryAddress.ROLE_MEMBER) && a.address().equals("192.0.2.10/24")));
         assertEquals(1, physical.routes().size());
 
-        // cphaprob reports the physical member's own cluster interfaces; vsenv <VSID> does not scope it
-        // to that virtual system. A VS context therefore carries only its own member address -- no
-        // cluster-VIP merge, and no cphaprob call at this level at all (D-UI2: a virtual system carries
-        // no configuration or state of its own outside its interfaces/routes).
+        // cp_vsx_interfaces_identical_to_physical: on a genuine cluster member (role != STANDALONE),
+        // a VS context's interfaces come from "cphaprob -a if"'s own "Virtual cluster interfaces"
+        // section, not "fw getifs" (measured live to return an internal VSX addressing scheme on a
+        // cluster member) -- bare address, no netmask, state unknown (that section carries neither).
         InventoryContext vsid2 = contextNamed(run, "2");
         assertEquals(1, vsid2.interfaces().size());
-        assertEquals(1, vsid2.interfaces().get(0).addresses().size(), "this VS's own member address only");
-        assertEquals("203.0.113.2/29", vsid2.interfaces().get(0).addresses().get(0).address());
+        assertEquals(1, vsid2.interfaces().get(0).addresses().size(), "this VS's own cluster-interface address only");
+        assertEquals("203.0.113.2", vsid2.interfaces().get(0).addresses().get(0).address());
         assertEquals(InventoryAddress.ROLE_MEMBER, vsid2.interfaces().get(0).addresses().get(0).role());
         assertEquals(1, vsid2.routes().size());
 
         InventoryContext vsid5 = contextNamed(run, "5");
-        assertEquals(1, vsid5.interfaces().get(0).addresses().size(), "this VS's own member address only");
-        assertEquals("198.51.100.2/29", vsid5.interfaces().get(0).addresses().get(0).address());
+        assertEquals(1, vsid5.interfaces().get(0).addresses().size(), "this VS's own cluster-interface address only");
+        assertEquals("198.51.100.2", vsid5.interfaces().get(0).addresses().get(0).address());
         assertEquals(InventoryAddress.ROLE_MEMBER, vsid5.interfaces().get(0).addresses().get(0).role());
         assertEquals(1, vsid5.routes().size());
+    }
+
+    /** cp_vsx_interfaces_identical_to_physical: a standalone (non-clustered) VSX gateway has no
+     * ClusterXL, so it keeps using "fw getifs" per VSID -- "cphaprob -a if" is never issued at that
+     * level (the fake transport throws on any command outside its scripted set, so this also proves
+     * the executor does not call it here). */
+    @Test
+    void checkPointStandaloneVsxHostUsesFwGetifsPerVsidNeverCphaprob() {
+        Map<String, String> outputByCommand = Map.ofEntries(
+                Map.entry(InventoryReadPlan.CP_VSX_STAT, "ID | Type | Name\n0 | S | VS0\n3 | S | vs-lab\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_FW_GETIFS), "localhost eth0 192.0.2.20 255.255.255.0\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ROUTE_SHOW), "default via 192.0.2.1 dev eth0 proto 7\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_CPHAPROB_STAT), "Cluster is not enabled\n"),
+                Map.entry(vsenvZeroFaultTolerant(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF), ""),
+                Map.entry("bash -lc 'vsenv 3 && fw getifs && ip -4 route show'",
+                        "localhost eth1 203.0.113.5 255.255.255.0\n"
+                                + "default via 203.0.113.1 dev eth1 proto 7\n"),
+                Map.entry("bash -lc 'vsenv 3 && cphaprob stat'", "Cluster is not enabled\n"));
+
+        ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
+        InventoryJobExecutorFakes.FakeLeaseRepository leaseRepo =
+                new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
+        InventoryJobExecutorFakes.FakeStepAttemptRepository attemptRepo = new InventoryJobExecutorFakes.FakeStepAttemptRepository();
+        InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort devicePort = new InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort();
+        InventoryJobExecutorFakes.FakeDeviceRepository deviceRepository = new InventoryJobExecutorFakes.FakeDeviceRepository();
+        InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository =
+                new InventoryJobExecutorFakes.FakeDeviceInventoryRepository();
+
+        InventoryCapabilityExecutor capabilityExecutor =
+                new InventoryCapabilityExecutor(transport, ref -> { throw new IllegalStateException("not used"); });
+        InventoryJobExecutor executor = new InventoryJobExecutor(leaseRepo, attemptRepo, devicePort, deviceRepository,
+                inventoryRepository, capabilityExecutor);
+
+        InventoryRequest request =
+                InventoryRequest.checkPoint(new ConnectionTarget("ep-1", "gw-a-host", 22), "cred-1", "trust-1");
+
+        JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request, false);
+
+        assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        InventoryRun run = inventoryRepository.lastRecordedRun;
+        InventoryContext vsid3 = contextNamed(run, "3");
+        assertEquals(1, vsid3.interfaces().size());
+        assertEquals("203.0.113.5/24", vsid3.interfaces().get(0).addresses().get(0).address());
+        assertEquals(InventoryAddress.ROLE_MEMBER, vsid3.interfaces().get(0).addresses().get(0).role());
     }
 
     private static String vsenvZero(String read) {

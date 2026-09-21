@@ -75,7 +75,10 @@ public final class CheckPointFwGetifsParser {
         return Optional.of(bits);
     }
 
-    private static String kindOf(String name) {
+    /** Exposed for {@code CheckPointClusterVirtualInterfaceParser}-sourced interfaces (cluster-member VSX
+     * contexts), which classify by the same bare interface name but never call this class's own {@link
+     * #parse}. */
+    public static String kindOf(String name) {
         if ("lo".equals(name)) {
             return InventoryInterface.KIND_LOOPBACK;
         }
