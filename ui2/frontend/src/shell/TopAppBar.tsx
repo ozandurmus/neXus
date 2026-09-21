@@ -107,23 +107,6 @@ export function TopAppBar() {
         <NexusWordmark height={26} color={m3.onSurface} />
       </Box>
       <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2, color: m3.onSurfaceVar }}>
-        <Box
-          sx={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 0.75,
-            px: 1.5,
-            py: 0.5,
-            borderRadius: "16px",
-            bgcolor: m3.successContainer,
-            color: m3.onSuccessContainer,
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "default",
-          }}
-        >
-          <span>✓</span> Checkpoint run-20260908-0640
-        </Box>
         <BuildBadge />
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <Icon name="bell" size={20} />

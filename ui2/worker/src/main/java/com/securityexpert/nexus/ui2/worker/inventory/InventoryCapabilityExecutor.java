@@ -174,7 +174,7 @@ public final class InventoryCapabilityExecutor {
 
             // Single-session compound batch read: all physical + VSID reads in one subshell
             Map<String, String> batchSections = Map.of();
-            String batchCmd = buildCheckPointBatchCommand(vsxHost, vsids);
+            String batchCmd = buildCheckPointBatchCommand(vsxHost);
             String batchOutput = execOutput(session, batchCmd);
             if (!batchOutput.isBlank() && batchOutput.contains(BATCH_TAG)) {
                 batchSections = parseBatchSections(batchOutput);
@@ -258,15 +258,16 @@ public final class InventoryCapabilityExecutor {
                     haState.clusterMode(), InventoryHaFact.SOURCE_CP_CPHAPROB_STAT));
 
             for (String vsid : vsids) {
-                String addrAndRouteCombined;
-                String vsAddrRouteKey = "vs_" + vsid + "_addr_route";
+                // cp_vsx_interfaces_identical_to_physical: measured live (Product Owner, 2026-09-21) that
+                // chaining multiple "vsenv <vsid> ...; <read>;" segments for different VSIDs inside one
+                // shared bash -lc process (the batch) does not reliably re-scope every later read to its
+                // own VSID -- some segments' addresses came back matching another VSID's, not that VS's
+                // own. The Product Owner's own manual reproduction issues one standalone "bash -lc 'vsenv
+                // <vsid> && ...'" process per VSID and gets correct, distinct output every time; do the
+                // same here instead of relying on the batch's per-VSID sections.
                 List<String> steps = InventoryReadPlan.checkPointVsidSteps(vsid);
-                if (batchSections.containsKey(vsAddrRouteKey)) {
-                    addrAndRouteCombined = batchSections.get(vsAddrRouteKey);
-                } else {
-                    addrAndRouteCombined = execOutput(session, steps.get(0));
-                    execOutput(session, steps.get(2));
-                }
+                String addrAndRouteCombined = execOutput(session, steps.get(0));
+                execOutput(session, steps.get(2));
                 // cphaprob reports the physical member's own cluster interfaces; vsenv <VSID> does not
                 // scope it to that virtual system -- issuing it per VSID re-reads and re-merges the same
                 // physical VIP set into every virtual system's own context, which is not that VS's own
@@ -823,15 +824,15 @@ public final class InventoryCapabilityExecutor {
 
     /**
      * cp_vsx_interfaces_identical_to_physical: {@code vsenv} is a shell function defined by the Expert
-     * profile, not a binary -- it only exists in a login shell. This batch used to be sent as a bare
-     * SSH exec command (no shell wrapper), so every {@code vsenv <VSID> || true} in it silently failed
-     * ("command not found", swallowed by {@code || true}), the context switch never happened, and every
-     * VSID section re-read the same physical context. {@code checkPointPhysicalCommand}/{@code
-     * checkPointVsidSteps} already wrap each of their reads in {@code bash -lc '...'} for exactly this
-     * reason; this batch now wraps its whole body in one {@code bash -lc} the same way, so {@code vsenv}
-     * is defined for every section including the per-VSID ones.
+     * profile, not a binary -- it only exists in a login shell, which is why this whole batch is wrapped
+     * in one {@code bash -lc '...'}. This batch now only carries the physical-context reads: chaining
+     * multiple {@code vsenv <vsid>} context switches for DIFFERENT VSIDs inside that same shared shell
+     * process was measured live (Product Owner, 2026-09-21) to not reliably re-scope every later read to
+     * its own VSID. Per-VSID reads run instead as their own standalone {@code bash -lc} process each
+     * (see {@link InventoryReadPlan#checkPointVsidSteps}), matching the Product Owner's own manual
+     * reproduction, which gets correct, distinct output per VSID every time.
      */
-    static String buildCheckPointBatchCommand(boolean vsxHost, List<String> vsids) {
+    static String buildCheckPointBatchCommand(boolean vsxHost) {
         StringBuilder sb = new StringBuilder();
         String prefix = vsxHost ? "vsenv 0 >/dev/null 2>&1 || true; " : "";
         sb.append("echo \"===NEXUS_SECTION:ipv4===\"; ").append(prefix).append(InventoryReadPlan.CP_IP_ADDR_SHOW_V4).append("; ");
@@ -839,13 +840,6 @@ public final class InventoryCapabilityExecutor {
         sb.append("echo \"===NEXUS_SECTION:route===\"; ").append(prefix).append(InventoryReadPlan.CP_IP_ROUTE_SHOW).append("; ");
         sb.append("echo \"===NEXUS_SECTION:ha===\"; ").append(prefix).append(InventoryReadPlan.CP_CPHAPROB_STAT).append("; ");
         sb.append("echo \"===NEXUS_SECTION:vip===\"; ").append(prefix).append(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF).append("; ");
-        for (String vsid : vsids) {
-            String vsPrefix = "vsenv " + vsid + " >/dev/null 2>&1 || true; ";
-            sb.append("echo \"===NEXUS_SECTION:vs_").append(vsid).append("_addr_route===\"; ")
-                    .append(vsPrefix).append("ip -4 addr show; ip -4 route show; ");
-            sb.append("echo \"===NEXUS_SECTION:vs_").append(vsid).append("_vip===\"; ")
-                    .append(vsPrefix).append(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF).append("; ");
-        }
         sb.append("echo \"===NEXUS_SECTION:END===\"");
         return "bash -lc '" + sb + "'";
     }
