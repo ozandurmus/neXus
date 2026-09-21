@@ -47,14 +47,14 @@ class InventoryJobExecutorEndToEndTest {
                         "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"
                                 + "    inet 203.0.113.2/29 brd 203.0.113.7 scope global eth0\n"
                                 + "default via 203.0.113.1 dev eth0 proto 7\n"),
-                Map.entry("bash -lc 'vsenv 2 && cphaprob -a -m if'",
+                Map.entry("bash -lc 'vsenv 2 && cphaprob -a if'",
                         "Virtual cluster interfaces: 1\neth0        203.0.113.1\n"),
                 Map.entry("bash -lc 'vsenv 2 && cphaprob stat'", "1 (local) 203.0.113.2 100% ACTIVE gw-a\n"),
                 Map.entry("bash -lc 'vsenv 5 && ip -4 addr show && ip -4 route show'",
                         "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"
                                 + "    inet 198.51.100.2/29 brd 198.51.100.7 scope global eth0\n"
                                 + "198.51.100.0/29 dev eth0 proto kernel scope link src 198.51.100.2\n"),
-                Map.entry("bash -lc 'vsenv 5 && cphaprob -a -m if'",
+                Map.entry("bash -lc 'vsenv 5 && cphaprob -a if'",
                         "Virtual cluster interfaces: 1\neth0        198.51.100.1\n"),
                 Map.entry("bash -lc 'vsenv 5 && cphaprob stat'", "1 (local) 198.51.100.2 100% ACTIVE gw-a\n"));
 

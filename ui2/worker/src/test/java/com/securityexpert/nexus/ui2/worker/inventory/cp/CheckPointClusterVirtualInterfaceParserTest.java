@@ -10,7 +10,7 @@ import com.securityexpert.nexus.ui2.worker.inventory.Fixtures;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointClusterVirtualInterfaceParser.VirtualInterfaceAddress;
 
 /**
- * AC-3: {@code cphaprob -a -m if} -- only the section after "Virtual
+ * AC-3: {@code cphaprob -a if} -- only the section after "Virtual
  * cluster interfaces: <n>" is read; a leading {@code vsid N:} header, a
  * row's {@code VMAC address:} trailer and an interleaved syslog/kernel
  * line are all tolerated (PR-3, PR-5).

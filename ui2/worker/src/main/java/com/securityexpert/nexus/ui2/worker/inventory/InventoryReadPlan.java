@@ -55,7 +55,10 @@ public final class InventoryReadPlan {
     public static final String CP_IP_ADDR_SHOW_V6 = "ip -6 addr show";
     public static final String CP_IP_ROUTE_SHOW = "ip -4 route show table all";
     public static final String CP_CPHAPROB_STAT = "cphaprob stat";
-    public static final String CP_CPHAPROB_CLUSTER_IF = "cphaprob -a -m if";
+    /** Check Point's own documented syntax is {@code cphaprob [-a] if}; there is no {@code -m} flag for this
+     * subcommand -- measured live: the earlier {@code -a -m if} form returned zero bytes of output on every
+     * device tried, so the parser downstream of it never had anything to read. */
+    public static final String CP_CPHAPROB_CLUSTER_IF = "cphaprob -a if";
     public static final String CP_VSX_STAT = "vsx stat -v";
 
     /** CF-3's exact physical read order: interfaces (v4, then v6), routes, HA state, cluster VIPs, then VSX enumeration. */

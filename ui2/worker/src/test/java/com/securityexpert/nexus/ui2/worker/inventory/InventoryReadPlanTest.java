@@ -23,7 +23,7 @@ class InventoryReadPlanTest {
                 "ip -6 addr show",
                 "ip -4 route show table all",
                 "cphaprob stat",
-                "cphaprob -a -m if",
+                "cphaprob -a if",
                 "vsx stat -v"),
                 InventoryReadPlan.CHECK_POINT_PHYSICAL_READS);
     }
@@ -35,7 +35,7 @@ class InventoryReadPlanTest {
                 "bash -lc 'vsenv 0 && ip -6 addr show'",
                 "bash -lc 'vsenv 0 && ip -4 route show table all'",
                 "bash -lc 'vsenv 0 && cphaprob stat'",
-                "bash -lc 'vsenv 0 && cphaprob -a -m if'",
+                "bash -lc 'vsenv 0 && cphaprob -a if'",
                 "bash -lc 'vsenv 0 && vsx stat -v'"),
                 InventoryReadPlan.checkPointPhysicalSteps(true));
     }
@@ -49,7 +49,7 @@ class InventoryReadPlanTest {
     void checkPointVsidStepsEqualCf2Cf3Literally() {
         assertEquals(List.of(
                 "bash -lc 'vsenv 2 && ip -4 addr show && ip -4 route show'",
-                "bash -lc 'vsenv 2 && cphaprob -a -m if'",
+                "bash -lc 'vsenv 2 && cphaprob -a if'",
                 "bash -lc 'vsenv 2 && cphaprob stat'"),
                 InventoryReadPlan.checkPointVsidSteps("2"));
     }
