@@ -148,26 +148,11 @@ public final class Ui2WorkerMain {
                 new StoreBackedSshCredentialResolver(resolverComponents.credentialReferenceRepository(),
                         resolverComponents.credentialRepository(), resolverComponents.cipher());
         SshExecTransport sshTransport = new SshExecTransport(sshCredentialResolver, trustRuleResolver);
-        // Same UI2_<TRUSTRULEREF>_FINGERPRINT env convention ssh_exec's
-        // trustRuleResolver above already reads (WORKER.md: "reads no new
-        // secret; trust-rule env names stay as they are") reinterpreted as a
-        // pinned TLS certificate fingerprint rather than an SSH host key one.
-        PanTrustRuleResolver panTrustRuleResolver = trustRuleRef -> {
-            String envName = "UI2_" + trustRuleRef.toUpperCase(java.util.Locale.ROOT).replace('.', '_') + "_FINGERPRINT";
-            String fingerprint = System.getenv(envName);
-            if (fingerprint != null && !fingerprint.isBlank()) {
-                return new TrustResolution.PinnedFingerprint(fingerprint.replace(":", "").trim().toLowerCase());
-            }
-            String caBundlePath = System.getenv("PAN_DISCOVERY_TRUST_CA_BUNDLE_PATH");
-            if (caBundlePath != null && !caBundlePath.isBlank()) {
-                return new TrustResolution.CaBundlePath(caBundlePath);
-            }
-            boolean allowDeviceTrust = !"false".equalsIgnoreCase(System.getenv("UI2_PAN_ALLOW_DEVICE_TRUST"));
-            if (allowDeviceTrust) {
-                return new TrustResolution.PaloAltoDeviceTrust(Optional.empty());
-            }
-            return EnvironmentPanTrustRuleResolver.INSTANCE.resolveTrust(trustRuleRef);
-        };
+        boolean allowDeviceTrust = !"false".equalsIgnoreCase(System.getenv("UI2_PAN_ALLOW_DEVICE_TRUST"));
+        PanTrustRuleResolver panTrustRuleResolver = new EnvironmentPanTrustRuleResolver(
+                new com.securityexpert.nexus.ui2.persistence.discovery.JooqManagementEndpointPanCertTrustRepository(
+                        transactionBoundary),
+                allowDeviceTrust);
         PanXmlApiTransport panTransport = new PanXmlApiTransport(paloAltoTrustRuleRef, panTrustRuleResolver);
 
         // WORKER.md "Both vendors in one worker": one composite DeviceTransport

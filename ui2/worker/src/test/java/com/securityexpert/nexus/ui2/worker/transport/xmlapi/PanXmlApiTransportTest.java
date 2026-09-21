@@ -18,6 +18,8 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
@@ -74,6 +76,21 @@ class PanXmlApiTransportTest {
     }
 
     @Test
+    void chainVerifiedCertificateDoesNotConsultEnrollment() throws Exception {
+        AtomicInteger lookups = new AtomicInteger();
+        var deviceTrust = new TrustResolution.PaloAltoDeviceTrust(() -> {
+            lookups.incrementAndGet();
+            return Optional.empty();
+        });
+        X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager(
+                deviceTrust, trustManager(certificate(ROOT)));
+
+        manager.checkServerTrusted(new X509Certificate[] { certificate(VALID), certificate(ROOT) }, "RSA");
+
+        assertEquals(0, lookups.get());
+    }
+
+    @Test
     void certificateOutsidePlatformTrustIsRejectedWithFingerprintAndNoDistinguishedName() throws Exception {
         X509Certificate leaf = certificate(VALID);
         X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager(
@@ -106,6 +123,22 @@ class PanXmlApiTransportTest {
                 Optional.of(fingerprint(leaf)), rejectingPlatform);
 
         manager.checkServerTrusted(new X509Certificate[] { leaf }, "RSA");
+    }
+
+    @Test
+    void selfSignedCertificateIsRejectedUntilItsExactFingerprintIsEnrolled() throws Exception {
+        X509Certificate leaf = certificate(VALID);
+        AtomicReference<Optional<String>> enrolled = new AtomicReference<>(Optional.empty());
+        X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager(
+                new TrustResolution.PaloAltoDeviceTrust(enrolled::get), trustManager(certificate(EXPIRED)));
+
+        assertThrows(CertificateException.class,
+                () -> manager.checkServerTrusted(new X509Certificate[] { leaf }, "RSA"));
+        enrolled.set(Optional.of(fingerprint(leaf)));
+        manager.checkServerTrusted(new X509Certificate[] { leaf }, "RSA");
+        enrolled.set(Optional.of("0".repeat(64)));
+        assertThrows(CertificateException.class,
+                () -> manager.checkServerTrusted(new X509Certificate[] { leaf }, "RSA"));
     }
 
     private static X509Certificate certificate(String base64Der) throws CertificateException {

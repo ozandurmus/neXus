@@ -87,6 +87,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // collect's own wildcard shape above).
             Map.entry("POST /discovery/ssh-trust/enroll", ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL),
             Map.entry("POST /discovery/ssh-trust/re-enroll", ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL),
+            Map.entry("POST /discovery/pan-trust/enroll", ActionRegistry.DISCOVERY_PAN_TRUST_ENROLL),
+            Map.entry("POST /discovery/pan-trust/re-enroll", ActionRegistry.DISCOVERY_PAN_TRUST_RE_ENROLL),
             Map.entry("POST /discovery/runs", ActionRegistry.DISCOVERY_RUN_START),
             Map.entry("GET /discovery/runs/*", ActionRegistry.DISCOVERY_RUN_READ),
             Map.entry("POST /discovery/runs/*/import", ActionRegistry.DISCOVERY_RUN_IMPORT),

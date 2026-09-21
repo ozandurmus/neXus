@@ -10,4 +10,9 @@ package com.securityexpert.nexus.ui2.worker.transport.xmlapi;
 public interface PanTrustRuleResolver {
 
     TrustResolution resolveTrust(String trustRuleRef);
+
+    /** Endpoint-aware resolution used by direct firewall calls; legacy resolvers keep their existing behavior. */
+    default TrustResolution resolveTrust(String trustRuleRef, String managementAddress, int managementPort) {
+        return resolveTrust(trustRuleRef);
+    }
 }
