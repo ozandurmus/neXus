@@ -1,28 +1,19 @@
 package com.securityexpert.nexus.ui2.worker.transport.xmlapi;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.security.KeyStore;
-import java.security.MessageDigest;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509ExtendedTrustManager;
 
 import org.junit.jupiter.api.Test;
@@ -63,82 +54,34 @@ class PanXmlApiTransportTest {
     @Test
     void paloAltoDeviceTrustResolvesUsableTransport() {
         PanXmlApiTransport transport = new PanXmlApiTransport("device-trust-ref",
-                ref -> new TrustResolution.PaloAltoDeviceTrust(Optional.empty()));
+                ref -> new TrustResolution.AcceptAnyValidCertificate());
         assertNotNull(transport);
     }
 
     @Test
-    void platformTrustedNonPaloAltoCertificateIsAccepted() throws Exception {
-        X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager(
-                Optional.empty(), trustManager(certificate(ROOT)));
+    void selfSignedAndUntrustedCertificatesAreAccepted() throws Exception {
+        X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager();
 
-        manager.checkServerTrusted(new X509Certificate[] { certificate(VALID), certificate(ROOT) }, "RSA");
-    }
-
-    @Test
-    void chainVerifiedCertificateDoesNotConsultEnrollment() throws Exception {
-        AtomicInteger lookups = new AtomicInteger();
-        var deviceTrust = new TrustResolution.PaloAltoDeviceTrust(() -> {
-            lookups.incrementAndGet();
-            return Optional.empty();
-        });
-        X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager(
-                deviceTrust, trustManager(certificate(ROOT)));
-
-        manager.checkServerTrusted(new X509Certificate[] { certificate(VALID), certificate(ROOT) }, "RSA");
-
-        assertEquals(0, lookups.get());
-    }
-
-    @Test
-    void certificateOutsidePlatformTrustIsRejectedWithFingerprintAndNoDistinguishedName() throws Exception {
-        X509Certificate leaf = certificate(VALID);
-        X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager(
-                Optional.empty(), trustManager(certificate(EXPIRED)));
-
-        CertificateException failure = assertThrows(CertificateException.class,
-                () -> manager.checkServerTrusted(new X509Certificate[] { leaf, certificate(ROOT) }, "RSA"));
-
-        assertEquals("server certificate unverifiable; fingerprint_sha256=" + fingerprint(leaf), failure.getMessage());
-        assertEquals(failure.getMessage(), PanXmlApiTransport.certificateFailureReason(new IOException(failure)));
-        assertFalse(failure.getMessage().contains("CN="));
-        assertFalse(failure.getMessage().contains("O="));
+        manager.checkServerTrusted(new X509Certificate[] { certificate(ROOT) }, "RSA");
+        manager.checkServerTrusted(new X509Certificate[] { certificate(VALID) }, "RSA");
     }
 
     @Test
     void expiredCertificateIsRejected() throws Exception {
-        X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager(
-                Optional.empty(), trustManager(certificate(ROOT)));
+        X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager();
 
         assertThrows(CertificateException.class,
-                () -> manager.checkServerTrusted(
-                        new X509Certificate[] { certificate(EXPIRED), certificate(ROOT) }, "RSA"));
+                () -> manager.checkServerTrusted(new X509Certificate[] { certificate(EXPIRED) }, "RSA"));
     }
 
     @Test
-    void matchingFingerprintStillShortCircuitsPlatformVerification() throws Exception {
-        X509Certificate leaf = certificate(VALID);
-        X509ExtendedTrustManager rejectingPlatform = trustManager(certificate(EXPIRED));
-        X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager(
-                Optional.of(fingerprint(leaf)), rejectingPlatform);
-
-        manager.checkServerTrusted(new X509Certificate[] { leaf }, "RSA");
-    }
-
-    @Test
-    void selfSignedCertificateIsRejectedUntilItsExactFingerprintIsEnrolled() throws Exception {
-        X509Certificate leaf = certificate(VALID);
-        AtomicReference<Optional<String>> enrolled = new AtomicReference<>(Optional.empty());
-        X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager(
-                new TrustResolution.PaloAltoDeviceTrust(enrolled::get), trustManager(certificate(EXPIRED)));
+    void missingOrStructurallyInvalidCertificateIsRejected() {
+        X509ExtendedTrustManager manager = PanXmlApiTransport.paloAltoDeviceTrustManager();
 
         assertThrows(CertificateException.class,
-                () -> manager.checkServerTrusted(new X509Certificate[] { leaf }, "RSA"));
-        enrolled.set(Optional.of(fingerprint(leaf)));
-        manager.checkServerTrusted(new X509Certificate[] { leaf }, "RSA");
-        enrolled.set(Optional.of("0".repeat(64)));
+                () -> manager.checkServerTrusted(new X509Certificate[0], "RSA"));
         assertThrows(CertificateException.class,
-                () -> manager.checkServerTrusted(new X509Certificate[] { leaf }, "RSA"));
+                () -> manager.checkServerTrusted(new X509Certificate[] { null }, "RSA"));
     }
 
     private static X509Certificate certificate(String base64Der) throws CertificateException {
@@ -146,23 +89,4 @@ class PanXmlApiTransportTest {
                 .generateCertificate(new ByteArrayInputStream(Base64.getDecoder().decode(base64Der)));
     }
 
-    private static X509ExtendedTrustManager trustManager(X509Certificate... trusted) throws Exception {
-        KeyStore store = KeyStore.getInstance(KeyStore.getDefaultType());
-        store.load(null, null);
-        for (int i = 0; i < trusted.length; i++) {
-            store.setCertificateEntry("trusted-" + i, trusted[i]);
-        }
-        TrustManagerFactory factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-        factory.init(store);
-        for (TrustManager manager : factory.getTrustManagers()) {
-            if (manager instanceof X509ExtendedTrustManager extended) {
-                return extended;
-            }
-        }
-        throw new IllegalStateException("test runtime did not provide an X.509 trust manager");
-    }
-
-    private static String fingerprint(X509Certificate certificate) throws Exception {
-        return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(certificate.getEncoded()));
-    }
 }

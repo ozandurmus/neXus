@@ -645,45 +645,23 @@ describe("C10 SSH trust enrollment", () => {
   });
 });
 
-describe("Palo Alto certificate trust enrollment", () => {
+describe("Palo Alto certificate trust", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("renders the exact observed fingerprint and requires explicit confirmation before submitting", async () => {
+  it("does not render certificate trust authorization", async () => {
     const panCredentials = { body: { credentials: [{
       credential_id: "pan-c-1", credential_reference_id: "pan-ref-1", display_name: "PAN API",
       kind: "api_key", username: "admin", allows_check_point: false, allows_palo_alto: true,
       created_at: "2026-09-01T00:00:00Z", secret_set_at: "2026-09-01T00:00:00Z",
     }] } };
-    const fetchMock = routedFetch({
+    vi.stubGlobal("fetch", routedFetch({
       "/credentials": panCredentials,
-      "/session/status": { body: { csrf_token: "test-csrf" } },
-      "/discovery/pan-trust/enroll": { body: { relationship: "MATCH" } },
-    });
-    vi.stubGlobal("fetch", fetchMock);
+    }));
     render(withTheme(<AddDeviceDialogTrigger />));
     fireEvent.click(screen.getByRole("button", { name: "Add device" }));
-    fireEvent.change(screen.getByLabelText("Address"), { target: { value: "192.0.2.10" } });
     fireEvent.mouseDown(screen.getByLabelText("Vendor"));
     fireEvent.click(await screen.findByRole("option", { name: "Palo Alto" }));
-    fireEvent.click(screen.getByRole("button", { name: "Certificate trust authorization" }));
 
-    const fingerprint = "a".repeat(64);
-    const authorize = screen.getByRole("button", { name: "Authorize certificate trust" });
-    fireEvent.change(screen.getByLabelText("Observed certificate SHA-256 fingerprint"),
-      { target: { value: fingerprint } });
-    fireEvent.change(screen.getByLabelText("Certificate observed at"),
-      { target: { value: "2026-09-01T10:00" } });
-    expect(screen.getByLabelText("Observed certificate SHA-256 fingerprint")).toHaveDisplayValue(fingerprint);
-    expect(authorize).toBeDisabled();
-    fireEvent.click(screen.getByLabelText("I confirm this exact observed certificate fingerprint"));
-    expect(authorize).not.toBeDisabled();
-    fireEvent.click(authorize);
-
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Certificate trust: MATCH"));
-    const call = fetchMock.mock.calls.find(([input]) => String(input) === "/discovery/pan-trust/enroll")!;
-    expect(JSON.parse((call[1] as RequestInit).body as string)).toMatchObject({
-      management_address: "192.0.2.10", management_port: 443,
-      fingerprint_sha256: fingerprint, explicitly_confirmed: true,
-    });
+    expect(screen.queryByRole("button", { name: "Certificate trust authorization" })).not.toBeInTheDocument();
   });
 });

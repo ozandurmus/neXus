@@ -44,7 +44,7 @@ class PanoramaEnumerationAdapterTest {
     private static final PanCredentialResolver ALWAYS_RESOLVES_CREDENTIAL =
             ref -> new PanCredentialMaterial(PanFixtures.FIXTURE_USERNAME, PanFixtures.FIXTURE_PASSWORD.toCharArray());
     private static final PanTrustRuleResolver ALWAYS_RESOLVES_TRUST =
-            ref -> new TrustResolution.CaBundlePath("/fixture/ca-bundle.pem");
+            ref -> new TrustResolution.AcceptAnyValidCertificate();
 
     private PanoramaEnumerationRequest request() {
         return new PanoramaEnumerationRequest(HOST, PORT, CREDENTIAL_REF, TRUST_RULE_REF);

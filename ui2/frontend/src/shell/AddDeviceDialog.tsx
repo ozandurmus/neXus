@@ -279,33 +279,6 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
     }
   };
 
-  const authorizePanTrust = async () => {
-    setTrustBusy(true);
-    setTrustRelationship(null);
-    try {
-      const status = await fetch("/session/status", { credentials: "same-origin" });
-      const session = await status.json() as { csrf_token?: string };
-      if (!status.ok || !session.csrf_token) throw new Error();
-      const response = await fetch(`/discovery/pan-trust/${trustReEnroll ? "re-enroll" : "enroll"}`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "X-CSRF-Token": session.csrf_token },
-        body: JSON.stringify({ management_address: address, management_port: 443,
-          fingerprint_sha256: trustFingerprint, observed_at: new Date(trustObservedAt).toISOString(),
-          explicitly_confirmed: trustVerified }),
-      });
-      const body = await response.json() as { relationship?: string };
-      setTrustRelationship(response.ok && body.relationship === "MATCH" ? "MATCH"
-        : response.status === 409 && body.relationship === "MISMATCH" ? "MISMATCH" : "NOT_EVALUABLE");
-    } catch {
-      setTrustRelationship("NOT_EVALUABLE");
-    } finally {
-      setTrustFingerprint("");
-      setTrustVerified(false);
-      setTrustBusy(false);
-    }
-  };
-
   const handleSubmit = async () => {
     setSubmitError(null);
     setValidationReason(null);
@@ -508,24 +481,6 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
     </Stack>}
   </>;
 
-  const panTrustAuthorization = vendor === "palo_alto" && <>
-    <Button onClick={() => setTrustFormOpen(!trustFormOpen)} disabled={trustBusy}>Certificate trust authorization</Button>
-    {trustFormOpen && <Stack spacing={1}>
-      <Typography variant="body2">Security administrator only. Confirm the exact certificate fingerprint observed on this endpoint before authorization.</Typography>
-      <TextField label="Observed certificate SHA-256 fingerprint" value={trustFingerprint} disabled={trustBusy}
-        onChange={(e) => setTrustFingerprint(e.target.value)} />
-      <TextField label="Certificate observed at" type="datetime-local" InputLabelProps={{ shrink: true }}
-        value={trustObservedAt} disabled={trustBusy} onChange={(e) => setTrustObservedAt(e.target.value)} />
-      <label><Checkbox checked={trustVerified} disabled={trustBusy} onChange={(e) => setTrustVerified(e.target.checked)} />I confirm this exact observed certificate fingerprint</label>
-      <label><Checkbox checked={trustReEnroll} disabled={trustBusy} onChange={(e) => setTrustReEnroll(e.target.checked)} />Explicitly re-enroll and supersede the existing authorization</label>
-      <Button onClick={authorizePanTrust} disabled={trustBusy || !address.trim() || !trustVerified
-        || !/^[0-9a-f]{64}$/.test(trustFingerprint) || !trustObservedAt}>
-        {trustReEnroll ? "Re-enroll certificate trust" : "Authorize certificate trust"}
-      </Button>
-      {trustRelationship && <Typography role="status">Certificate trust: {trustRelationship}</Typography>}
-    </Stack>}
-  </>;
-
   return (
     <Dialog open onClose={dialogBusy ? undefined : onClose} PaperProps={{ sx: { borderRadius: "28px", width: mode === "discovery" && discoveryPhase !== "form" ? 860 : 460, maxWidth: "95vw" } }}>
       <DialogContent sx={{ p: 3, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -593,7 +548,6 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
             </TextField>
             {credentialSelectorFragment}
             {sshTrustAuthorization}
-            {panTrustAuthorization}
             {validationReason && (
               <Typography variant="body2" color="error">
                 Validation failed: {formatValidationReason(validationReason)}
@@ -672,7 +626,6 @@ function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
             </TextField>
             {credentialSelectorFragment}
             {sshTrustAuthorization}
-            {panTrustAuthorization}
             {validationReason && (
               <Typography variant="body2" color="error">
                 Validation failed: {formatValidationReason(validationReason)}

@@ -22,7 +22,7 @@ class PanDiscoveryRunReportTest {
         PanoramaEnumerationAdapter adapter = new PanoramaEnumerationAdapter(transport,
                 ref -> new com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial(
                         PanFixtures.FIXTURE_USERNAME, PanFixtures.FIXTURE_PASSWORD.toCharArray()),
-                ref -> new com.securityexpert.nexus.ui2.worker.transport.xmlapi.TrustResolution.CaBundlePath("/fixture/ca-bundle.pem"));
+                ref -> new com.securityexpert.nexus.ui2.worker.transport.xmlapi.TrustResolution.AcceptAnyValidCertificate());
 
         PanoramaEnumerationResult result = adapter.run(new PanoramaEnumerationRequest(
                 "fixture-panorama-host", 4443, "fixture-credential-ref", "fixture-trust-rule-ref"));
