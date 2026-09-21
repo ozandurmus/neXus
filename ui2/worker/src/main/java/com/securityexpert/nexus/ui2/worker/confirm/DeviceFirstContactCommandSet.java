@@ -21,9 +21,15 @@ import java.util.stream.Collectors;
  */
 public enum DeviceFirstContactCommandSet {
 
-    /** Gate entry 1: EC-11's identity read, Check Point Gaia over {@code ssh_exec}. */
+    /** Gate entry 1: EC-11's identity read, Check Point Gaia over {@code ssh_exec}. Four literal
+     * forms (2026-09-21 correction, DEVICE_FIRST_CONTACT_COMMAND_GATE_ENTRIES.md's own "may be
+     * corrected at this one site without reopening the approval" clause): the pre-Java product's
+     * own real-fleet-proven probe ({@code checkpoint/direct_ssh_probe.py}) tries all four in this
+     * order on a Quantum Spark/Gaia Embedded device whose landing shell and exact CLI surface
+     * cannot be assumed ahead of time (AGENTS.md Check Point: "some estate devices land directly
+     * in Clish; treat this as a capability, not a platform identity"). */
     CP_IDENTITY_READ(Vendor.CHECK_POINT, ContactStepKind.IDENTITY_READ,
-            List.of("show version all", "clish -c \"show version all\"")),
+            List.of("show version all", "show version", "clish -c \"show version all\"", "clish -c \"show version\"")),
 
     /** Gate entry 2: PF-1's HA/cluster role and peer naming read, Check Point. */
     CP_HA_PEER_READ(Vendor.CHECK_POINT, ContactStepKind.HA_PEER_READ,

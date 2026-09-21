@@ -79,6 +79,25 @@ class ConfirmCapabilityExecutorTest {
         assertEquals("fw-a", completed.facts().hostname().orElse(null));
     }
 
+    /** The pre-Java product's own probe (checkpoint/direct_ssh_probe.py) also fell through on a
+     * "completed but empty" result, not only on a hard failure -- a device can accept a command
+     * and simply print nothing for it. */
+    @Test
+    void fallsBackPastACompletedButBlankForm() {
+        ScriptedDeviceTransport transport = new ScriptedDeviceTransport(
+                Map.of("fw-a-host", "Host Name: fw-a\nProduct version Check Point Gaia R81.10\n"),
+                Map.of("fw-a-host", "Standalone"));
+        transport.blankOutOnFirstIdentityForms(2);
+        ConfirmCapabilityExecutor executor = new ConfirmCapabilityExecutor(transport, unresolvablePanResolver());
+
+        ConfirmResult result = executor.confirm(
+                ConfirmRequest.checkPoint(new ConnectionTarget("ep-a", "fw-a-host", 22), CRED, TRUST));
+
+        ConfirmResult.Completed completed = assertInstanceOf(ConfirmResult.Completed.class, result,
+                "a completed-but-blank form must not be mistaken for a successful identity read");
+        assertEquals("fw-a", completed.facts().hostname().orElse(null));
+    }
+
     @Test
     void peerFollowDialsExactlyTheReportedAddressNeverASubstitute() {
         String reportedPeerAddress = "fw-b-base";

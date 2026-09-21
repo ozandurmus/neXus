@@ -36,6 +36,7 @@ final class ScriptedDeviceTransport implements DeviceTransport {
     private boolean credentialUnresolvable;
     private ConnectResult connectResultOverride;
     private boolean bareIdentityFormFails;
+    private int blankIdentityFormCount;
 
     ScriptedDeviceTransport(Map<String, String> identityOutputByHost, Map<String, String> haPeerOutputByHost) {
         this.identityOutputByHost = identityOutputByHost;
@@ -47,6 +48,13 @@ final class ScriptedDeviceTransport implements DeviceTransport {
      * documented {@code clish -c "..."} fallback ever answers. */
     void failBareIdentityForm() {
         this.bareIdentityFormFails = true;
+    }
+
+    /** Simulates the first {@code count} identity-read literal forms (in
+     * DeviceFirstContactCommandSet's own declared order) succeeding with blank output --
+     * completed, exit 0, nothing useful -- so only a later form in the fallback chain answers. */
+    void blankOutOnFirstIdentityForms(int count) {
+        this.blankIdentityFormCount = count;
     }
 
     void makeCredentialUnresolvable() {
@@ -80,6 +88,10 @@ final class ScriptedDeviceTransport implements DeviceTransport {
         String host = hostBySessionId.get(session.sessionId());
         String command = spec.command();
         if (DeviceFirstContactCommandSet.CP_IDENTITY_READ.literalForms().contains(command)) {
+            int formIndex = DeviceFirstContactCommandSet.CP_IDENTITY_READ.literalForms().indexOf(command);
+            if (blankIdentityFormCount > 0 && formIndex < blankIdentityFormCount) {
+                return new ExecResult.Completed("", 0);
+            }
             if (bareIdentityFormFails && command.equals(DeviceFirstContactCommandSet.CP_IDENTITY_READ.literalForms().get(0))) {
                 return new ExecResult.ChannelFailed("simulated: bare Expert form not recognized in Clish");
             }

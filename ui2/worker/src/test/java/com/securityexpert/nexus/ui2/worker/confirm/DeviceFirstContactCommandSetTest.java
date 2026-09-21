@@ -16,9 +16,12 @@ import org.junit.jupiter.api.Test;
 class DeviceFirstContactCommandSetTest {
 
     private static final Set<String> GATE_TABLE_LITERAL_FORMS = Set.of(
-            // Entry 1 -- Check Point identity read, primary and fallback form.
+            // Entry 1 -- Check Point identity read: primary, then three fallback forms (2026-09-21
+            // correction, matching the pre-Java product's own real-fleet-proven probe).
             "show version all",
+            "show version",
             "clish -c \"show version all\"",
+            "clish -c \"show version\"",
             // Entry 2 -- Check Point HA/cluster role and peer naming.
             "cphaprob stat",
             // Entry 3 -- Palo Alto identity read.

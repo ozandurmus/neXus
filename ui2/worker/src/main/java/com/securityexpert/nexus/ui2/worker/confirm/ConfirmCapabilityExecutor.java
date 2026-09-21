@@ -178,18 +178,20 @@ public final class ConfirmCapabilityExecutor {
         return xml.contains("status=\"error\"") || xml.contains("status='error'");
     }
 
-    /** DeviceFirstContactCommandSet's own primary/fallback pair (gate entry 1's documented intent,
-     * PO-approved 2026-09-14): a Quantum Spark/Gaia Embedded device landing directly in Clish never
-     * answers the bare Expert-mode form, so the second literal ({@code clish -c "..."}) is tried
-     * when the first one fails or times out -- previously dead code, only literalForms().get(0)
-     * was ever sent, so such a device's identity read always ran out its full timeout for nothing
-     * (Product Owner measured live, 2026-09-21). Every literal tried is still one of the two the
-     * gate document names; no new command is introduced. */
+    /** DeviceFirstContactCommandSet's own literal forms, tried in order (gate entry 1's documented
+     * "may be corrected at this one site" clause): a Quantum Spark/Gaia Embedded device's landing
+     * shell and CLI surface cannot be assumed ahead of time (AGENTS.md Check Point), so the next
+     * form is tried on failure, timeout, or blank output -- previously dead code, only
+     * literalForms().get(0) was ever sent, so such a device's identity read always ran out its
+     * full timeout for nothing (Product Owner measured live, 2026-09-21). This mirrors the
+     * pre-Java product's own real-fleet-proven probe (checkpoint/direct_ssh_probe.py), including
+     * its PTY allocation: Gaia/Gaia Embedded restricted shells were measured there to answer more
+     * consistently, and not at all in some cases, without one. */
     private String execOutput(TransportSession session, DeviceFirstContactCommandSet entry) {
         String output = null;
         for (String cmd : entry.literalForms()) {
             output = execOneCommand(session, cmd);
-            if (output != null) {
+            if (output != null && !output.isBlank()) {
                 break;
             }
         }
@@ -198,7 +200,7 @@ public final class ConfirmCapabilityExecutor {
 
     private String execOneCommand(TransportSession session, String cmd) {
         long startMs = System.currentTimeMillis();
-        ExecResult result = transport.exec(session, new ExecSpec(cmd), READ_TIMEOUT);
+        ExecResult result = transport.exec(session, new ExecSpec(cmd, true), READ_TIMEOUT);
         long elapsedMs = System.currentTimeMillis() - startMs;
         return switch (result) {
             case ExecResult.Completed completed -> {
