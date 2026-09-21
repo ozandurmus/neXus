@@ -359,6 +359,66 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 14"
 
+  # cp_vsx_interfaces_identical_to_physical (2026-09-21, Product Owner
+  # correction): "fw getifs" replaces "ip -details -4 addr show"/"ip -6 addr
+  # show" for the interface/address read, on both a physical member (bare)
+  # and a virtual system (vsenv-wrapped) -- chaining multiple vsenv context
+  # switches for different VSIDs inside one shared shell was measured to
+  # not reliably re-scope every "ip addr show" read to its own VSID; "fw
+  # getifs" is the Check Point-native read and does not have that failure
+  # mode. The superseded ip-addr-show rows above are kept (V15/append-only),
+  # never issued again.
+  - gate_id: cp_inventory_fw_getifs
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "fw getifs"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "no interfaces configured is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 15 (2026-09-21 amendment)"
+
+  - gate_id: cp_inventory_fw_getifs_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && fw getifs'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "no interfaces configured is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 16 (2026-09-21 amendment)"
+
+  - gate_id: cp_inventory_vsid_fw_getifs_and_route
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && fw getifs && ip -4 route show'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per virtual system per run"
+    session_reuse_rule: "one session per device per run, VS0 never re-entered"
+    unsupported_behavior_ref: "an address-less/route-less virtual system is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 17 (2026-09-21 amendment)"
+
   # NXS-LOCAL-0164: 14E PF-1 requests. docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md.
   - gate_id: pan_inventory_show_system_info
     vendor: palo_alto

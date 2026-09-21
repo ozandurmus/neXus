@@ -87,8 +87,7 @@ public class DeviceCompositionConfiguration {
     // exactly (14D CF-3, CF-2's bare/physical form) -- kept here only
     // because DIR-2 forbids importing that worker class from service.
     private static final List<String> CHECK_POINT_PHYSICAL_READS = List.of(
-            "ip -details -4 addr show", "ip -6 addr show", "ip -4 route show table all", "cphaprob stat",
-            "cphaprob -a if", "vsx stat -v");
+            "fw getifs", "ip -4 route show table all", "cphaprob stat", "cphaprob -a if", "vsx stat -v");
 
     // Mirrors worker.inventory.InventoryReadPlan.PALO_ALTO_BASE_STEPS exactly (14E PF-1).
     private static final List<String> PALO_ALTO_BASE_STEPS = List.of(

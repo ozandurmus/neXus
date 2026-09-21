@@ -31,7 +31,7 @@ import com.securityexpert.nexus.ui2.worker.confirm.PresentedIdentity;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointClusterVirtualInterfaceParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointClusterVirtualInterfaceParser.VirtualInterfaceAddress;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointHaStateParser;
-import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpAddrParser;
+import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointFwGetifsParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpRouteParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsidCompositeOutputSplitter;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsxStatParser;
@@ -183,12 +183,9 @@ public final class InventoryCapabilityExecutor {
                         target.host(), target.port(), batchSections.size());
             }
 
-            String ipv4 = batchSections.containsKey("ipv4")
-                    ? batchSections.get("ipv4")
-                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V4, vsxHost));
-            String ipv6 = batchSections.containsKey("ipv6")
-                    ? batchSections.get("ipv6")
-                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_V6, vsxHost));
+            String fwGetifsOutput = batchSections.containsKey("ifs")
+                    ? batchSections.get("ifs")
+                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_FW_GETIFS, vsxHost));
             String routeOutput = batchSections.containsKey("route")
                     ? batchSections.get("route")
                     : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ROUTE_SHOW, vsxHost));
@@ -197,12 +194,12 @@ public final class InventoryCapabilityExecutor {
                     : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost));
 
             long parseStart = System.currentTimeMillis();
-            List<ParsedInterface> physicalInterfaces = CheckPointIpAddrParser.parse(ipv4, ipv6);
+            List<ParsedInterface> physicalInterfaces = CheckPointFwGetifsParser.parse(fwGetifsOutput);
             List<ParsedRoute> physicalRoutes = CheckPointIpRouteParser.parse(routeOutput);
             long parseElapsed = System.currentTimeMillis() - parseStart;
             LOG.log(System.Logger.Level.INFO,
-                    "[INVENTORY_PARSE] target={0}:{1} parsed in {2}ms: interfaces={3}, routes={4} (ipv4_len={5}, route_len={6})",
-                    target.host(), target.port(), parseElapsed, physicalInterfaces.size(), physicalRoutes.size(), ipv4.length(), routeOutput.length());
+                    "[INVENTORY_PARSE] target={0}:{1} parsed in {2}ms: interfaces={3}, routes={4} (ifs_len={5}, route_len={6})",
+                    target.host(), target.port(), parseElapsed, physicalInterfaces.size(), physicalRoutes.size(), fwGetifsOutput.length(), routeOutput.length());
 
             // Quantum Spark / Gaia Embedded or restricted Clish shell fallback
             if (physicalInterfaces.isEmpty()) {
@@ -275,7 +272,7 @@ public final class InventoryCapabilityExecutor {
                 // its interfaces/routes). No cphaprob call, no VIP merge, at this per-VSID level.
                 CheckPointVsidCompositeOutputSplitter.Halves halves =
                         CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
-                List<ParsedInterface> vsInterfaces = CheckPointIpAddrParser.parse(halves.addrOutput(), "");
+                List<ParsedInterface> vsInterfaces = CheckPointFwGetifsParser.parse(halves.addrOutput());
                 contexts.add(new InventoryContext(vsid,
                         toInventoryInterfaces(vsInterfaces),
                         toInventoryRoutes(CheckPointIpRouteParser.parse(halves.routeOutput()))));
@@ -835,8 +832,7 @@ public final class InventoryCapabilityExecutor {
     static String buildCheckPointBatchCommand(boolean vsxHost) {
         StringBuilder sb = new StringBuilder();
         String prefix = vsxHost ? "vsenv 0 >/dev/null 2>&1 || true; " : "";
-        sb.append("echo \"===NEXUS_SECTION:ipv4===\"; ").append(prefix).append(InventoryReadPlan.CP_IP_ADDR_SHOW_V4).append("; ");
-        sb.append("echo \"===NEXUS_SECTION:ipv6===\"; ").append(prefix).append(InventoryReadPlan.CP_IP_ADDR_SHOW_V6).append("; ");
+        sb.append("echo \"===NEXUS_SECTION:ifs===\"; ").append(prefix).append(InventoryReadPlan.CP_FW_GETIFS).append("; ");
         sb.append("echo \"===NEXUS_SECTION:route===\"; ").append(prefix).append(InventoryReadPlan.CP_IP_ROUTE_SHOW).append("; ");
         sb.append("echo \"===NEXUS_SECTION:ha===\"; ").append(prefix).append(InventoryReadPlan.CP_CPHAPROB_STAT).append("; ");
         sb.append("echo \"===NEXUS_SECTION:vip===\"; ").append(prefix).append(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF).append("; ");

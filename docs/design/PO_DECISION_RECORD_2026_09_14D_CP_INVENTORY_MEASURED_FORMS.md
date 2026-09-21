@@ -2,7 +2,23 @@
 
 ## Status
 
-**FROZEN — PRODUCT OWNER MEASUREMENT APPLIED, 2026-09-14.** Successor to
+**FROZEN — PRODUCT OWNER MEASUREMENT APPLIED, 2026-09-14.**
+
+**Amendment (2026-09-21, PO APPROVED, cp_vsx_interfaces_identical_to_physical).**
+CF-3's interface/address reads (`ip -details -4 addr show` / `ip -6 addr
+show` physical; `ip -4 addr show` per virtual system) are superseded by
+`fw getifs` -- bare on a physical member, `vsenv <VSID> && fw getifs` per
+virtual system. Measured live by the Product Owner: chaining multiple
+`vsenv <vsid> ...` context switches for different VSIDs inside one shared
+non-interactive shell does not reliably re-scope every later `ip addr show`
+read to its own VSID (two different VSIDs on the same device returned the
+same address sequence from the same base); `fw getifs` does not have this
+failure mode. `fw getifs` also carries no up/down state column, so an
+interface parsed from it is recorded `unknown`, not guessed. `cphaprob -a
+if` (already amended once, see `InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF`'s
+own history) and the route/HA/VSX-enumeration reads are unaffected. See
+`docs/history/backlog/cp_vsx_interfaces_identical_to_physical.md` for the
+measurement trail. Successor to
 `PO_DECISION_RECORD_2026_09_14C_INVENTORY_AND_CONFIGURATION_COLLECTION_DESIGN.md`
 §3 (Check Point inventory command set) and §5 (M-1, M-2), which are not
 edited in place. The Product Owner ran the reduced measurement on one

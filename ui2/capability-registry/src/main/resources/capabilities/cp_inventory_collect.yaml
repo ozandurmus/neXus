@@ -1,7 +1,9 @@
 # cp_inventory_collect -- the Check Point half of inventory collection
-# (PO_DECISION_RECORD_2026_09_14D CF-1..CF-4, gate consequence). The six
-# steps below are the capability's own CF-3 physical read set in CF-2's
-# bare (non-VSX) literal form -- exactly worker.inventory.InventoryReadPlan.
+# (PO_DECISION_RECORD_2026_09_14D CF-1..CF-4, gate consequence; amended
+# 2026-09-21, cp_vsx_interfaces_identical_to_physical -- "fw getifs"
+# replaces the old ip-addr-show pair). The five steps below are the
+# capability's own CF-3 physical read set in CF-2's bare (non-VSX) literal
+# form -- exactly worker.inventory.InventoryReadPlan.
 # CHECK_POINT_PHYSICAL_READS, in that order, gated per docs/design/
 # CP_INVENTORY_COMMAND_GATE_ENTRIES.md entries 1-6 -- so C4 execution
 # eligibility is computed from real gate resolution rather than a
@@ -41,12 +43,8 @@ steps:
   - kind: connect
   - kind: exec
     shell_context: expert
-    send: "ip -details -4 addr show"
-    gate_reference: cp_inventory_ip_addr_show_v4
-  - kind: exec
-    shell_context: expert
-    send: "ip -6 addr show"
-    gate_reference: cp_inventory_ip_addr_show_v6
+    send: "fw getifs"
+    gate_reference: cp_inventory_fw_getifs
   - kind: exec
     shell_context: expert
     send: "ip -4 route show table all"

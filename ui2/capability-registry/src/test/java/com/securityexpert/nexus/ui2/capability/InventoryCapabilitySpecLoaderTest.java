@@ -37,7 +37,7 @@ class InventoryCapabilitySpecLoaderTest {
         assertEquals("cp_inventory_collect", spec.capabilityId());
         assertEquals(MaturityState.CAP_VALIDATED, spec.maturityState());
         assertEquals(TransportKind.SSH_EXEC, spec.transportKind());
-        assertEquals(8, spec.allSteps().size(), "connect + six CF-3 physical reads + disconnect");
+        assertEquals(7, spec.allSteps().size(), "connect + five CF-3 physical reads + disconnect");
 
         Capability capability = new CapabilityRegistryLoader(realFixtureGateRegistry()).load(spec);
         assertTrue(capability.executionEligible(), "every CF-3 physical read literal has a SIGNED_OFF gate row");

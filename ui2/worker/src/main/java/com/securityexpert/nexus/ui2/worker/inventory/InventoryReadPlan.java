@@ -51,8 +51,18 @@ public final class InventoryReadPlan {
 
     // -- Check Point (14D CF-1..CF-4) ---------------------------------------
 
+    /** Superseded 2026-09-21 by {@link #CP_FW_GETIFS} -- kept only as the literal three already-issued
+     * gate_registry rows (V15) still name; never issued again. */
     public static final String CP_IP_ADDR_SHOW_V4 = "ip -details -4 addr show";
     public static final String CP_IP_ADDR_SHOW_V6 = "ip -6 addr show";
+    /** Product Owner correction (2026-09-21): {@code ip addr show}/{@code ip -4 addr show} do not reliably
+     * re-scope to a virtual system when a later {@code vsenv <VSID>} switch shares a process with an earlier
+     * one (measured live: VS-1 and VS-2 both returned the same address sequence from the same base). {@code
+     * fw getifs} is the Check Point-native interface/address read, correct on both a physical member (bare)
+     * and a virtual system ({@code vsenv <VSID> && fw getifs}), per the Product Owner's own live reproduction.
+     * Tracked as cp_vsx_interfaces_identical_to_physical; supersedes {@link #CP_IP_ADDR_SHOW_V4}/{@link
+     * #CP_IP_ADDR_SHOW_V6} for both the physical and per-VSID interface reads. */
+    public static final String CP_FW_GETIFS = "fw getifs";
     public static final String CP_IP_ROUTE_SHOW = "ip -4 route show table all";
     public static final String CP_CPHAPROB_STAT = "cphaprob stat";
     /** Product Owner direction (2026-09-21): {@code cphaprob -a if} is the correct command. An earlier trial of
@@ -62,12 +72,13 @@ public final class InventoryReadPlan {
     public static final String CP_CPHAPROB_CLUSTER_IF = "cphaprob -a if";
     public static final String CP_VSX_STAT = "vsx stat -v";
 
-    /** CF-3's exact physical read order: interfaces (v4, then v6), routes, HA state, cluster VIPs, then VSX enumeration. */
+    /** Physical read order (amended 2026-09-21, cp_vsx_interfaces_identical_to_physical): interfaces
+     * ({@code fw getifs}, superseding the old v4/v6 {@code ip addr show} pair), routes, HA state, cluster
+     * VIPs, then VSX enumeration. */
     public static final List<String> CHECK_POINT_PHYSICAL_READS = List.of(
-            CP_IP_ADDR_SHOW_V4, CP_IP_ADDR_SHOW_V6, CP_IP_ROUTE_SHOW, CP_CPHAPROB_STAT, CP_CPHAPROB_CLUSTER_IF,
-            CP_VSX_STAT);
+            CP_FW_GETIFS, CP_IP_ROUTE_SHOW, CP_CPHAPROB_STAT, CP_CPHAPROB_CLUSTER_IF, CP_VSX_STAT);
 
-    private static final String CP_VSID_ADDR_AND_ROUTE_READS = "ip -4 addr show && ip -4 route show";
+    private static final String CP_VSID_ADDR_AND_ROUTE_READS = "fw getifs && ip -4 route show";
 
     /**
      * CF-2's login-shell wrapper: {@code bash -lc 'vsenv 0 && <read>'} on a
