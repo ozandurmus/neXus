@@ -86,7 +86,7 @@ RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
  && rm -rf /tmp/corp-ca
 
 COPY --from=build /build/service-boot.jar /app/service.jar
-COPY project/roadmap.json project/feature_registry.json project/backlog.json project/build_history.json project/java_product_plan.json /app/project/
+COPY project/roadmap.json project/feature_registry.json project/backlog.json project/build_history.json project/java_product_plan.json project/deploy_info.json /app/project/
 COPY project/archive/backlog_terminal.json project/archive/build_history_*.json /app/project/archive/
 
 ENV UI2_PROJECT_PLAN_DIRECTORY=/app/project
