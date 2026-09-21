@@ -14,6 +14,14 @@ import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
  */
 public interface DeviceRepository {
 
+    enum BackupDisposition {
+        KEEP,
+        REMOVE
+    }
+
+    record DeleteResult(boolean deleted, long backupArtefactCount, boolean dispositionRequired) {
+    }
+
     Optional<DeviceRecord> find(String deviceId);
 
     Optional<EndpointRecord> findEndpoint(String endpointId);
@@ -50,9 +58,10 @@ public interface DeviceRepository {
     /** Contract §3 {@code DRAFT -> deleted}: withdrawal before confirmation. */
     boolean withdrawDraft(String deviceId, String actorFingerprint, String actionId);
 
-    /** Deletes a device and every device-owned record in one audited transaction. */
-    default boolean deleteDevice(String deviceId, String actorFingerprint, String actionId) {
-        return false;
+    /** Deletes a device and its device-owned records in one audited transaction. */
+    default DeleteResult deleteDevice(String deviceId, BackupDisposition backupDisposition,
+            String actorFingerprint, String actionId) {
+        return new DeleteResult(false, 0, false);
     }
 
     /** Contract §3 {@code any -> disabled}: a separate boolean column, not a state. */

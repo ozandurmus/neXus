@@ -21,6 +21,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository.BackupDisposition;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository.DeleteResult;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRow;
 import com.securityexpert.nexus.ui2.service.device.DeviceAddSingleService;
 import com.securityexpert.nexus.ui2.service.device.DeviceDeletionService;
@@ -44,6 +46,9 @@ public final class DeviceRegistrationController {
             @JsonProperty("role") String role,
             @JsonProperty("vendor") String vendor,
             @JsonProperty("credential_reference_id") String credentialReferenceId) {
+    }
+
+    public record DeleteRequest(@JsonProperty("backup_disposition") BackupDisposition backupDisposition) {
     }
 
     private final DeviceAddSingleService deviceAddSingleService;
@@ -90,11 +95,23 @@ public final class DeviceRegistrationController {
 
     @PostMapping("/devices/{deviceId}/delete")
     public ResponseEntity<Map<String, Object>> deleteDevice(@PathVariable String deviceId,
+            @RequestBody(required = false) DeleteRequest request,
             HttpServletRequest servletRequest) {
-        if (!deviceDeletionService.deleteDevice(deviceId, actingUser(servletRequest), ActionRegistry.DEVICE_DELETE)) {
+        BackupDisposition disposition = request == null ? null : request.backupDisposition();
+        DeleteResult result = deviceDeletionService.deleteDevice(
+                deviceId, disposition, actingUser(servletRequest), ActionRegistry.DEVICE_DELETE);
+        if (result.dispositionRequired()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                    "error", "BACKUP_DISPOSITION_REQUIRED",
+                    "backup_artefact_count", result.backupArtefactCount()));
+        }
+        if (!result.deleted()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "NOT_FOUND"));
         }
-        return ResponseEntity.ok(Map.of("deleted", true, "device_id", deviceId));
+        return ResponseEntity.ok(Map.of(
+                "deleted", true,
+                "device_id", deviceId,
+                "backup_artefact_count", result.backupArtefactCount()));
     }
 
     @PostMapping("/devices/{deviceId}/confirm")

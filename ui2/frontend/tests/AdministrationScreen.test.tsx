@@ -181,6 +181,48 @@ describe("AdministrationScreen tabs", () => {
     await waitFor(() => expect(screen.getByText("Unknown")).toBeInTheDocument());
     expect(screen.queryByText("opaque-device-id")).toBeNull();
   });
+
+  it("reports the backup artefact count and requires keep or remove before deletion", async () => {
+    const deleteBodies: unknown[] = [];
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      const path = url.split("?")[0];
+      if (path === "/session/status") return jsonResponse(200, {});
+      if (path === "/devices" && (!init?.method || init.method === "GET")) {
+        return jsonResponse(200, {
+          devices: [{
+            device_id: "dev-1",
+            vendor_hint: "check_point",
+            enrollment_state: "ENROLLED",
+            hostname: "FW-TANGO-04",
+            model: "Quantum",
+            software_version: "R81.20",
+            ha_role: "active",
+            cluster_member_ref: null,
+          }],
+        });
+      }
+      if (path === "/devices/dev-1/delete") {
+        deleteBodies.push(init?.body ? JSON.parse(init.body as string) : undefined);
+        return deleteBodies.length === 1
+          ? jsonResponse(409, { error: "BACKUP_DISPOSITION_REQUIRED", backup_artefact_count: 3 })
+          : jsonResponse(200, { deleted: true, device_id: "dev-1", backup_artefact_count: 3 });
+      }
+      return jsonResponse(404, { error: `NOT_MOCKED:${path}` });
+    }));
+
+    render(withTheme(<AdministrationScreen />));
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(screen.getByText(/This device has 3 backup artefacts/)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Keep artefacts" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove artefacts" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep artefacts" }));
+    await waitFor(() => expect(deleteBodies).toEqual([undefined, { backup_disposition: "KEEP" }]));
+  });
 });
 
 describe("AdministrationScreen Local identities tab", () => {

@@ -4,11 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jooq.DSLContext;
+import org.jooq.Field;
 import org.jooq.Record;
+import org.jooq.Record1;
 import org.jooq.Result;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
@@ -19,6 +22,76 @@ import org.junit.jupiter.api.Test;
 import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
 
 class JooqDeviceRepositoryTest {
+
+    @Test
+    void missingBackupDispositionReportsCountWithoutDeletingAnything() {
+        List<String> sql = new ArrayList<>();
+        JooqDeviceRepository repository = deletionRepository(2, sql);
+
+        DeviceRepository.DeleteResult result = repository.deleteDevice(
+                "device-1", null, "actor", "device.delete");
+
+        assertFalse(result.deleted());
+        assertTrue(result.dispositionRequired());
+        assertEquals(2, result.backupArtefactCount());
+        assertFalse(sql.stream().anyMatch(statement -> statement.startsWith("delete ")));
+    }
+
+    @Test
+    void keepNeverDeletesBackupHistory() {
+        List<String> sql = new ArrayList<>();
+        JooqDeviceRepository repository = deletionRepository(1, sql);
+
+        DeviceRepository.DeleteResult result = repository.deleteDevice(
+                "device-1", DeviceRepository.BackupDisposition.KEEP, "actor", "device.delete");
+
+        assertTrue(result.deleted());
+        assertFalse(sql.stream().anyMatch(statement -> statement.contains("delete from backup_artefact")));
+        assertFalse(sql.stream().anyMatch(statement -> statement.contains("delete from artefact_retention_ledger")));
+    }
+
+    @Test
+    void noArtefactsNeedsNoDisposition() {
+        List<String> sql = new ArrayList<>();
+        JooqDeviceRepository repository = deletionRepository(0, sql);
+
+        DeviceRepository.DeleteResult result = repository.deleteDevice(
+                "device-1", null, "actor", "device.delete");
+
+        assertTrue(result.deleted());
+        assertFalse(result.dispositionRequired());
+        assertTrue(sql.stream().anyMatch(statement -> statement.startsWith("delete from devices ")));
+    }
+
+    @Test
+    void removeDeletesOnlyTheArtefactAndNotItsRecordedHistory() {
+        List<String> sql = new ArrayList<>();
+        JooqDeviceRepository repository = deletionRepository(1, sql);
+
+        DeviceRepository.DeleteResult result = repository.deleteDevice(
+                "device-1", DeviceRepository.BackupDisposition.REMOVE, "actor", "device.delete");
+
+        assertTrue(result.deleted());
+        assertEquals(1, sql.stream().filter(statement -> statement.startsWith("delete from backup_artefact ")).count());
+        assertFalse(sql.stream().anyMatch(statement -> statement.contains("delete from artefact_retention_ledger")));
+        assertFalse(sql.stream().anyMatch(statement -> statement.contains("delete from backup_artefact_retrieval")));
+        assertFalse(sql.stream().anyMatch(statement -> statement.contains("delete from backup_deviation_record")));
+    }
+
+    private static JooqDeviceRepository deletionRepository(int artefactCount, List<String> sql) {
+        DSLContext create = DSL.using(SQLDialect.POSTGRES);
+        Field<Integer> count = DSL.field("count", Integer.class);
+        Result<Record1<Integer>> countResult = create.newResult(count);
+        countResult.add(create.newRecord(count).values(artefactCount));
+        return new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
+                new MockConnection(context -> {
+                    sql.add(context.sql());
+                    if (context.sql().startsWith("select count(*) from backup_artefact")) {
+                        return new MockResult[] { new MockResult(1, countResult) };
+                    }
+                    return new MockResult[] { new MockResult(1, null) };
+                }), SQLDialect.POSTGRES)));
+    }
 
     @Test
     void summaryPrefersParentlessCandidateButStillAllowsClusterMembers() {
