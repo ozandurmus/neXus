@@ -2,9 +2,11 @@
 
 ## Status
 
-**DRAFT — 2026-09-22.** Written on the Product Owner's decision 2 in
+**FROZEN — 2026-09-22, Product Owner answered §4 the same day** (answers
+recorded in §4 and §6). Written on the Product Owner's decision 2 in
 `PO_DECISION_RECORD_2026_09_22_AUTOMATION_EDITOR_AND_SCRIPT_EXECUTION.md`.
-Freezes when the Product Owner accepts §4's decisions. Backlog
+§6 carries one item that needs a constitutional amendment before it can be
+built (device writes from a script); everything else is implementable. Backlog
 `script_execution_module` (P1). Not to be confused with the Task Executor /
 Automation module (device steps over gated commands): this module runs
 **operator-supplied programs on the neXus side**, firewall-independent.
@@ -123,14 +125,60 @@ read everyone with `job_log_read`.
 3. Notifications (syslog, SMTP) + Settings › Notifications.
 4. Screen (list, editor, run history).
 
-## 4. Decisions to ratify
+## 4. Decisions — ratified by the Product Owner, 2026-09-22
 
-| # | question | proposed | alternative |
-|---|---|---|---|
-| 1 | Where do scripts run? | Isolated runner pod in `ui2`, no cluster credentials, declared egress | On the worker pod (rejected: worker holds device credentials) |
-| 2 | Highest role a script may act as | `role:operator` | `security_admin` (rejected: a script could then change scripts) |
-| 3 | Output retention | Same as job artefacts (retention pruning) | Unbounded |
-| 4 | Kinds in first release | `sh`, `py`, `jar` | + `bat` (no Windows runner exists; "bat" from the PO's words is not runnable here and is refused at upload with that reason) |
+| # | question | decision |
+|---|---|---|
+| 1 | Where do scripts run? | **A new, dedicated pod.** The PO went further: backup, compliance, automation, operations, configuration and inventory each become their own pod (backlog `module_per_pod_split`, major work, PO-requested). |
+| 2 | Whom does a script act as? | **A chosen user/credential.** A security admin says "with this user, go and do this". A script run names a *neXus actor* (whose roles bound what it may do through `nexus-cli`) and, when it must reach a device, a *credential-store reference* (never a literal). Every run is audited under that actor. See §6 for the device-write consequence. |
+| 3 | Output retention | **One month**, on the understanding that a run's record is "which script version ran, when, exit code, captured output". Configurable later; 30 days is the default. |
+| 4 | Languages | **As many industry-standard scripting languages as the runner image can carry.** See §7. `.bat` cannot run on a Linux runner; PowerShell scripts (`.ps1`) can, through PowerShell Core, and that is the offered path for Windows-style scripts. |
+
+## 6. Scripts that touch devices — a contradiction reported, not reconciled
+
+The Product Owner's examples: "take the active member's configuration every
+week and push it to the DR device" (Cisco ASA, whose clustering does not
+replicate policy), and "run debug scripts periodically and mail the output".
+
+The second is a read and fits this contract as written. The first is a
+**network-device write from an unattended schedule**, which
+`AGENTS.md` "Network action taxonomy" prohibits at the current maturity ("no
+automatic (unscheduled-trigger, non-ledgered) network-device write/change
+operation is permitted"; class 1 writes only through `RB.x` contracts, never
+console-submittable). Per the authority hierarchy this contract cannot
+override that rule, so it is reported here as a contradiction between the
+Product Owner's direction and the constitution.
+
+What resolves it: a Product Owner amendment to `AGENTS.md` (the same way the
+2026-09-19 host-action amendment was made) that permits **scheduled,
+ledgered, per-target-authorized** device writes from a script run, with (a)
+the target device named in the script's record, not discovered at run time,
+(b) the credential a credential-store reference with write rights the PO
+granted for that target, (c) every write recorded in the job ledger with the
+script version, and (d) a per-vendor `RB.x`-style contract for the write
+command (for Cisco ASA: the configuration-replace mechanism, measured on a
+real device first). Until that amendment is recorded, a script run's device
+access through `nexus-cli` is read-only, and a script that reaches a device
+directly (its own SSH) has no gate at all -- which is why the declared egress
+list in §3.1 is the control, and why a device address in a script's egress
+list is refused until the amendment exists.
+
+## 7. Runner image — languages
+
+Base: the product image's Ubuntu runtime. Interpreters installed:
+
+| kind | runs with | note |
+|---|---|---|
+| `sh` / `bash` | bash 5 | |
+| `py` | python3 (3.12) + pip-installed `requests`, `paramiko`, `pyyaml` | no network install at run time |
+| `jar` | OpenJDK 21 JRE | `java -jar` |
+| `js` / `mjs` | Node.js 22 LTS | |
+| `pl` | perl 5 | |
+| `rb` | ruby 3 | |
+| `ps1` | PowerShell Core 7 (`pwsh`) | Windows-style scripts; `.bat`/`.cmd` do not run on Linux and are refused at upload with that reason |
+| `go` binary | none needed | a static binary uploaded as `bin`, executed directly |
+
+Image size is the cost; the runner is one pod, so it is paid once.
 
 ## 5. Tests that must exist before slice 2 ships
 

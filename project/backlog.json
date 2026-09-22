@@ -801,6 +801,24 @@
       "priority": "P2",
       "target": "PO reported twice on 2026-09-22 (a CP cluster; job 80eec289-...); parked by the PO",
       "note": ""
+    },
+    {
+      "id": "module_per_pod_split",
+      "category": "ui2",
+      "title": "PO 2026-09-22: every module its own pod -- backup, compliance, automation, script-execution, operations, configuration, inventory each a separate Deployment (own job types, own drain); one shared service API and database",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Major work; PO-requested ('ayır bunu'). Supersedes the deferred per_vendor_worker_split. Needs an architecture contract (module-per-pod topology, job-type routing per pod, shared secrets minimised per pod) before implementation.",
+      "note": ""
+    },
+    {
+      "id": "platform_identity_facts_on_configuration",
+      "category": "ui2",
+      "title": "PO 2026-09-22 'kesinlikle': serial number, software version, hotfix / jumbo take, content versions, uptime on the Configuration screen -- what industry-leading tools collect",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Contract docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md. PAN: parse-scope extension of the already-gated show system info (serial, sw-version, app/threat/av/wildfire/url versions, uptime, family). CP: new gate rows needed (show asset system for serial; jumbo take), PO sign-off before real-device use. Serial shown in the clear per PO; masked for the aiview persona.",
+      "note": ""
     }
   ]
 }

@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T17:35:06Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T18:28:53Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -40,8 +40,10 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T17:35:06Z
 - P1/planned gov_orch_budget_ceiling_not_persisted_or_enforced — The dispatch budget ceiling is neither recorded nor enforc (target: GOV.ORCH.13 DL-3 budget column; scripts/)
 - P1/planned inventory_row_does_not_say_why_a_device_is_unconfirmed — The inventory row shows Registered, not confirmed without (target: InventoryScreen row rendering; jobs.term)
 - P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a pr (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
+- P1/planned module_per_pod_split — PO 2026-09-22: every module its own pod -- backup, complia (target: Major work; PO-requested ('ayır bunu').)
 - P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP l (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
 - P1/planned pan_collection_contract_from_measurement — Write the Palo Alto collection contract from the PAN_COLLE (target: docs/design/PAN_COLLECTION_MEASUREMENT_B)
+- P1/planned platform_identity_facts_on_configuration — PO 2026-09-22 'kesinlikle': serial number, software versio (target: Contract docs/design/PLATFORM_IDENTITY_F)
 - P1/planned relay_id_reuse_when_record_uncommitted — local_relay _next_id reissues an id whose JSON was never c (target: GOV.ORCH successor or scripts/local_rela)
 - P1/planned script_execution_module — Script Execution: operator scripts (.sh/.py/.jar or inline (target: PO decision record 2026-09-22 (automatio)
 - P1/planned task_executor_automation_module — Task Executor / Automation module: operator-authored, orde (target: )

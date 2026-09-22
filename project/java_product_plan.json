@@ -144,7 +144,9 @@
     "jobs_screen_history_filter_pagination_export": "java_feature",
     "cp_backup_stale_device_archives_cleanup": "java_debt",
     "script_execution_module": "java_feature",
-    "cp_backup_sftp_fetch_failed_on_cluster_member": "java_debt"
+    "cp_backup_sftp_fetch_failed_on_cluster_member": "java_debt",
+    "module_per_pod_split": "java_feature",
+    "platform_identity_facts_on_configuration": "java_feature"
   },
   "converted_lessons": [
     {
