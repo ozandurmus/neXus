@@ -61,6 +61,10 @@ class InventoryJobExecutorEndToEndTest {
                 Map.entry("bash -lc 'vsenv 5 && cphaprob stat'", "1 (local) 198.51.100.2 100% ACTIVE gw-a\n"));
 
         ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
+        // cp_cluster_vip_never_observed_in_fleet: the cluster-VIP read ("cphaprob -a if", physical and
+        // per-VSID) starts on the interactive shell for every Check Point device (measured live,
+        // 2026-09-22: 0 VIPs over pty exec, 4 over the interactive shell), so this double answers it.
+        transport.allowExecInteractiveWithoutRejection();
         InventoryJobExecutorFakes.FakeLeaseRepository leaseRepo =
                 new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
         InventoryJobExecutorFakes.FakeStepAttemptRepository attemptRepo = new InventoryJobExecutorFakes.FakeStepAttemptRepository();
@@ -80,6 +84,8 @@ class InventoryJobExecutorEndToEndTest {
         JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request, false);
 
         assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        assertEquals(3, transport.execInteractiveCallCount(),
+                "physical cphaprob -a if plus one per VSID (2 and 5) go over the interactive shell; nothing else does");
         assertTrue(leaseRepo.transitions.contains("CLAIMED->EXECUTING"));
         assertTrue(leaseRepo.transitions.contains("EXECUTING->COMPLETED"));
         assertTrue(inventoryRepository.recordRunCalled);

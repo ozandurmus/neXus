@@ -27,6 +27,7 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
     private boolean execChannelTimesOutEntirely;
     private boolean allowExecInteractiveAnyway;
     private int execCallCount;
+    private int execInteractiveCallCount;
 
     ScriptedCheckPointInventoryTransport(Map<String, String> outputByCommand) {
         this.outputByCommand = outputByCommand;
@@ -41,6 +42,10 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
 
     int execCallCount() {
         return execCallCount;
+    }
+
+    int execInteractiveCallCount() {
+        return execInteractiveCallCount;
     }
 
     /** Simulates a Gaia Embedded/Quantum Spark device that rejects the exec channel outright for
@@ -84,6 +89,7 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
 
     @Override
     public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
+        execInteractiveCallCount++;
         if (!execChannelRejectedEntirely && !allowExecInteractiveAnyway) {
             throw new IllegalStateException("execInteractive called without simulating an exec-rejecting device");
         }

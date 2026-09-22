@@ -257,7 +257,12 @@ public final class InventoryCapabilityExecutor {
             // fails ("This is only supported on a VSX machine") -- short-circuits cphaprob entirely; it never
             // runs at all. The batch's own prefix already tolerates exactly this (vsenv ... || true; <read>);
             // this call now matches that fault-tolerant shape instead of checkPointPhysicalCommand's &&.
-            String vipOutput = execOutputPty(session, faultTolerantVsenv0(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost), preferInteractiveShell);
+            // cp_cluster_vip_never_observed_in_fleet, closed 2026-09-22 by measurement on a ClusterXL
+            // member: the same "cphaprob -a if" answers 40 bytes / 0 VIPs over a pty exec channel and
+            // 566 bytes / 4 VIPs over the persistent interactive shell (a real login terminal, which
+            // is what the Product Owner's own manual reproduction always was). So this one read
+            // starts on the interactive shell for every Check Point device, pty exec as the fallback.
+            String vipOutput = execOutputPty(session, faultTolerantVsenv0(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost), true);
             List<VirtualInterfaceAddress> physicalVips = CheckPointClusterVirtualInterfaceParser.parse(vipOutput);
             LOG.log(System.Logger.Level.INFO,
                     "[INVENTORY_VIP_PARSE] target={0}:{1} vip_output_len={2} vip_addresses_found={3}",
@@ -308,7 +313,9 @@ public final class InventoryCapabilityExecutor {
                 CheckPointVsidCompositeOutputSplitter.Halves halves =
                         CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
                 if (clusterMember) {
-                    String clusterIfOutput = execOutput(session, steps.get(1), preferInteractiveShell);
+                    // Same measurement as the physical VIP read above: cphaprob -a if only reports
+                    // in a real terminal, so the per-VSID read starts on the interactive shell too.
+                    String clusterIfOutput = execOutput(session, steps.get(1), true);
                     // cphaprob's own status table only lists a "Required interfaces" subset (Product
                     // Owner measured live, 2026-09-21); "ip -4 addr show" still carries a real
                     // up/down flag for every interface, so it is read a second time here for that
