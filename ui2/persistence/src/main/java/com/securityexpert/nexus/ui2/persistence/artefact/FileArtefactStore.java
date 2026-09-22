@@ -34,10 +34,19 @@ import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
  */
 public final class FileArtefactStore implements ArtefactStore {
 
+    /** Largest v1 file the store will still decrypt in memory (a 1 GiB pod keeps ~768 MiB of heap). */
+    static final long LEGACY_MAX_BYTES = 200L * 1024 * 1024;
+
     private final Path root;
     private final ArtefactStoreCipher cipher;
+    private final long legacyMaxBytes;
 
     public FileArtefactStore(Path root, ArtefactStoreCipher cipher) {
+        this(root, cipher, LEGACY_MAX_BYTES);
+    }
+
+    FileArtefactStore(Path root, ArtefactStoreCipher cipher, long legacyMaxBytes) {
+        this.legacyMaxBytes = legacyMaxBytes;
         this.root = Objects.requireNonNull(root, "root");
         this.cipher = Objects.requireNonNull(cipher, "cipher");
         try {
@@ -58,6 +67,20 @@ public final class FileArtefactStore implements ArtefactStore {
     @Override
     public InputStream retrieve(ArtefactRef ref, byte[] wrappedDataKey, boolean gzip) throws IOException {
         Path path = pathFor(ref);
+        // A v1 (pre-streaming) file is decrypted whole in memory by the JDK's GCM; above this size
+        // that is an OutOfMemoryError in a 1 GiB pod (measured live 2026-09-22), so it is refused with
+        // a reason instead. A v2 file streams at any size.
+        long size = Files.size(path);
+        if (size > legacyMaxBytes) {
+            byte[] head;
+            try (InputStream probe = Files.newInputStream(path)) {
+                head = probe.readNBytes(4);
+            }
+            if (!ArtefactStoreCipher.isStreamable(head)) {
+                throw new IOException("artefact was stored in the pre-streaming format and is larger than can be "
+                        + "decrypted in memory (" + size + " bytes); take a new backup of this device");
+            }
+        }
         SecretKeySpec dataKey = cipher.unwrapKey(wrappedDataKey);
         InputStream decrypted = cipher.decryptingStream(Files.newInputStream(path), dataKey);
         return gzip ? new GZIPInputStream(decrypted) : decrypted;

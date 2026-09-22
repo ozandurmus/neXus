@@ -107,4 +107,28 @@ class FileArtefactStoreTest {
             assertArrayEquals(plaintext, in.readAllBytes());
         }
     }
+
+    /** A v1 (pre-streaming) file above the in-memory budget is refused with a reason, never decrypted into an OutOfMemoryError. */
+    @Test
+    void aLargePreStreamingFileIsRefusedWithAReason(@TempDir Path root) throws Exception {
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(randomKeyBase64());
+        FileArtefactStore store = new FileArtefactStore(root, cipher, 64);
+        javax.crypto.spec.SecretKeySpec dataKey = cipher.generateDataKey();
+        byte[] nonce = new byte[12];
+        new SecureRandom().nextBytes(nonce);
+        Path legacy = root.resolve("check_point").resolve("dev").resolve("legacy.enc");
+        java.nio.file.Files.createDirectories(legacy.getParent());
+        try (var file = java.nio.file.Files.newOutputStream(legacy)) {
+            file.write(nonce);
+            javax.crypto.Cipher gcm = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+            gcm.init(javax.crypto.Cipher.ENCRYPT_MODE, dataKey, new javax.crypto.spec.GCMParameterSpec(128, nonce));
+            try (var out = new javax.crypto.CipherOutputStream(file, gcm)) {
+                out.write(new byte[200]);
+            }
+        }
+
+        java.io.IOException refused = org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class,
+                () -> store.retrieve(new ArtefactRef("check_point/dev/legacy.enc"), cipher.wrapKey(dataKey), false));
+        org.junit.jupiter.api.Assertions.assertTrue(refused.getMessage().contains("pre-streaming"), refused.getMessage());
+    }
 }
