@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -47,7 +47,13 @@ describe("ConfigurationScreen device list", () => {
     render(withTheme(<ConfigurationScreen />));
 
     await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
-    expect(screen.getByText("Changed 1")).toBeInTheDocument();
+    // Review §3: labelled filter rows, counts written "Label · n".
+    const state = screen.getByRole("group", { name: "State" });
+    expect(within(state).getByText("State:")).toBeInTheDocument();
+    expect(within(state).getByRole("button", { name: "Changed · 1" })).toBeInTheDocument();
+    expect(within(state).getByRole("button", { name: "First run · 0" })).toBeInTheDocument();
+    expect(within(state).getByRole("button", { name: "Not collected · 0" })).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Vendor" })).getByRole("button", { name: "All · 1" })).toBeInTheDocument();
     expect(screen.getByText("1 device collected")).toBeInTheDocument();
   });
 

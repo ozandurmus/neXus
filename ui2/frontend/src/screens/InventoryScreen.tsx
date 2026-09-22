@@ -7,8 +7,10 @@ import Typography from "@mui/material/Typography";
 
 import { ScreenHeader, ListDetail, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { Icon } from "../shell/Icon";
-import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
-import { m3 } from "../theme/m3Theme";
+import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { MONO, m3 } from "../theme/m3Theme";
+import { RoleChip } from "../shell/States";
+import { FilterRow, contentVersionText, downloadText, toCsv } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { requestBulkInventoryCollect, listDevices, type ApiError, type DeviceSummary, type ClusterInventory } from "../auth/adminApi";
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
@@ -88,7 +90,7 @@ function clusterHealthLabel(members: readonly DeviceSummary[]): string {
   if (anyFailed) return "Collection issue";
   const allEnrolled = members.every((m) => m.enrollment_state === "ENROLLED");
   if (!allEnrolled) return "Not enrolled";
-  return clusterHasCollectedEvidence(members) ? "✓ Live" : "Confirmed · Not collected";
+  return clusterHasCollectedEvidence(members) ? "Live" : "Confirmed · Not collected";
 }
 
 function DeviceRow({
@@ -110,9 +112,10 @@ function DeviceRow({
   // correctness"), so an enrolled device with zero collected interfaces is not yet "live" in any
   // sense a reader would expect from that word (Product Owner, 2026-09-22: "Live gözüküyor ama
   // cihazdan veri çekemiyorum" -- confirmed but never collected read as fully live).
-  const hasCollectedEvidence = Boolean(device.ip_addresses && device.ip_addresses.trim().length > 0);
-  const isLive = isEnrolled && hasCollectedEvidence;
+  const isLive = isDeviceLive(device);
 
+  // Review §3/§4: 44 px rows (two compact lines), the state chip only when the device is not Live -- when all
+  // are Live the chip is noise; the list caption carries the Live count.
   return (
     <Box
       role={onSelect ? "button" : undefined}
@@ -125,39 +128,31 @@ function DeviceRow({
             }
           : undefined
       }
+      data-row="device"
       sx={{
         display: "flex",
-        alignItems: "flex-start",
-        gap: 1.25,
-        p: 1.25,
+        alignItems: "center",
+        gap: 1,
+        height: 44,
+        boxSizing: "border-box",
+        px: 1,
         ml: indented ? 2.5 : 0,
-        bgcolor: selected ? "#f0f5ff" : m3.scLowest,
+        bgcolor: selected ? m3.primaryContainer : m3.scLowest,
         border: "1px solid",
         borderColor: selected ? m3.primary : m3.outlineVar,
-        borderRadius: "12px",
+        borderRadius: "8px",
         cursor: onSelect ? "pointer" : undefined,
-        transition: "all 0.15s ease-in-out",
-        "&:hover": {
-          borderColor: m3.primary,
-          boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
-        },
+        "&:hover": { borderColor: m3.primary },
       }}
     >
       <VendorAvatar vendorHint={device.vendor_hint} model={device.model} hostname={device.hostname} />
 
-      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.5 }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1, minHeight: 20 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
             <Typography
               variant="body2"
-              sx={{
-                fontWeight: 600,
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                color: m3.onSurface,
-              }}
+              sx={{ fontWeight: 600, fontSize: 13, lineHeight: "18px", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: m3.onSurface }}
             >
               {deviceNameLabel(device.hostname)}
             </Typography>
@@ -167,43 +162,67 @@ function DeviceRow({
               terminalReason={device.latest_job_terminal_reason}
             />
           </Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <StatusChip
-              tone={isLive ? "ok" : isEnrolled ? "neutral" : enrollmentStateTone(device.enrollment_state)}
-              label={isLive ? "Live" : isEnrolled ? "Confirmed · Not collected" : enrollmentStateLabel(device.enrollment_state)}
-              dense
-            />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+            {device.ha_role && <RoleChip role={device.ha_role} dense />}
+            {!isLive && (
+              <StatusChip
+                tone={isEnrolled ? "neutral" : enrollmentStateTone(device.enrollment_state)}
+                label={isEnrolled ? "Confirmed · Not collected" : enrollmentStateLabel(device.enrollment_state)}
+                dense
+              />
+            )}
             {trailingExtra}
           </Box>
         </Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-          <Typography variant="caption" color="text.secondary">
-            {collectionOutcome(device)}
-          </Typography>
-          <Typography
-            variant="caption"
-            sx={{
-              fontFamily: "monospace",
-              fontWeight: 600,
-              color: m3.primary,
-              bgcolor: m3.scHigh,
-              px: 0.75,
-              py: 0.2,
-              borderRadius: "4px",
-            }}
-          >
-            {device.management_ip ?? "No IP"}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {device.role === "management_server" ? "Management server" : vendorLabel(device.vendor_hint)}
-            {device.model ? ` · ${device.model}` : " · Unknown model"}
-            {device.software_version ? ` · ${device.software_version}` : " · Unknown version"}
-            {device.ha_role ? ` · ${device.ha_role}` : " · No HA role"}
-          </Typography>
-        </Box>
+        <Typography variant="caption" sx={{ fontSize: 11, lineHeight: "15px", color: m3.onSurfaceVar, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span>{collectionOutcome(device)}</span>
+          {" · "}
+          <Box component="span" sx={{ fontFamily: MONO }}>{device.management_ip ?? "No IP"}</Box>
+          {" · "}
+          {device.role === "management_server" ? "Management server" : vendorLabel(device.vendor_hint)}
+          {device.model ? ` · ${device.model}` : " · Unknown model"}
+          {device.software_version ? ` · ${device.software_version}` : " · Unknown version"}
+          {device.ha_role ? "" : " · No HA role"}
+        </Typography>
       </Box>
     </Box>
   );
+}
+
+/** The device list as shown (current filters and sort), names as the server returned them (masked for aiview). */
+export function inventoryCsv(devices: readonly DeviceSummary[]): string {
+  return toCsv([
+    ["hostname", "device_id", "vendor", "enrollment_state", "live", "model", "software_version", "ha_role", "cluster_ref",
+      "management_ip", "serial_number", "hotfix_level", "content_versions", "uptime", "platform_facts_observed_at",
+      "inventory_collected_at", "latest_job_state", "latest_job_terminal_reason"],
+    ...devices.map((d) => {
+      // A fact not read is written UNKNOWN (never blank or 0); a relation that does not exist stays empty.
+      const u = (v: string | null | undefined) => (v === null || v === undefined || v === "" ? "UNKNOWN" : v);
+      return [
+        u(d.hostname), d.device_id, d.vendor_hint, d.enrollment_state, isDeviceLive(d) ? "yes" : "no", u(d.model), u(d.software_version),
+        d.ha_role, d.cluster_member_ref, u(d.management_ip), u(d.serial_number),
+        d.vendor_hint === "palo_alto" ? "" : u(d.hotfix_level), d.vendor_hint === "palo_alto" ? u(contentVersionText(d.content_versions)) : "",
+        u(d.uptime_text), u(d.platform_facts_observed_at), u(d.inventory_collected_at), d.latest_job_state, d.latest_job_terminal_reason,
+      ];
+    }),
+  ]);
+}
+
+/** "Live" = identity-verified AND at least one interface read (see DeviceRow). */
+export function isDeviceLive(device: DeviceSummary): boolean {
+  return device.enrollment_state === "ENROLLED" && Boolean(device.ip_addresses && device.ip_addresses.trim().length > 0);
+}
+
+/** Distinct clusters in a device list: every cluster reference, and those with at least one ENROLLED member. */
+export function clusterCounts(devices: readonly DeviceSummary[]): { enrolled: number; active: number } {
+  const all = new Set<string>();
+  const active = new Set<string>();
+  for (const d of devices) {
+    if (!d.cluster_member_ref) continue;
+    all.add(d.cluster_member_ref);
+    if (d.enrollment_state === "ENROLLED") active.add(d.cluster_member_ref);
+  }
+  return { enrolled: all.size, active: active.size };
 }
 
 /** The Overview's inventory evidence age buckets, over the device's newest inventory run. */
@@ -309,18 +328,20 @@ export function DeviceList({
                   onSelectCluster(ref, members);
                 }
               }}
+              data-row="cluster"
               sx={{
                 display: "flex",
                 alignItems: "center",
-                gap: 1.25,
-                p: 1.25,
+                gap: 1,
+                height: 44,
+                boxSizing: "border-box",
+                px: 1,
                 cursor: "pointer",
-                bgcolor: isSelected ? "#ebf2ff" : m3.scHigh,
-                borderRadius: "12px",
+                bgcolor: isSelected ? m3.primaryContainer : m3.scLow,
+                borderRadius: "8px",
                 border: "1px solid",
                 borderColor: isSelected ? m3.primary : m3.outlineVar,
-                transition: "all 0.15s ease-in-out",
-                "&:hover": { bgcolor: isSelected ? "#ebf2ff" : m3.scHighest },
+                "&:hover": { borderColor: m3.primary },
               }}
             >
               <VendorAvatar
@@ -331,18 +352,20 @@ export function DeviceList({
               <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
                 <Typography
                   variant="body2"
-                  sx={{ fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  sx={{ fontWeight: 600, fontSize: 13, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                   title={clusterTitle}
                 >
                   {clusterTitle}
                 </Typography>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
                   <StatusChip tone="neutral" label="CLS" dense />
-                  <StatusChip
-                    tone={clusterHealthTone(members)}
-                    label={clusterHealthLabel(members)}
-                    dense
-                  />
+                  {clusterHealthLabel(members) !== "Live" && (
+                    <StatusChip
+                      tone={clusterHealthTone(members)}
+                      label={clusterHealthLabel(members)}
+                      dense
+                    />
+                  )}
                   {showVirtualSystems && (
                   <Box
                     component="span"
@@ -418,16 +441,11 @@ export function DeviceList({
                               gap: 1,
                               p: 1,
                               borderRadius: "8px",
-                              bgcolor: isVsSelected ? "#dbeafe" : m3.scLowest,
+                              bgcolor: isVsSelected ? m3.primaryContainer : m3.scLowest,
                               border: "1px solid",
                               borderColor: isVsSelected ? m3.primary : m3.outlineVar,
                               cursor: "pointer",
-                              transition: "all 0.15s ease-in-out",
-                              "&:hover": {
-                                borderColor: m3.primary,
-                                bgcolor: isVsSelected ? "#dbeafe" : "#f0f5ff",
-                                boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-                              },
+                              "&:hover": { borderColor: m3.primary },
                             }}
                           >
                             <Chip
@@ -437,8 +455,8 @@ export function DeviceList({
                                 height: 20,
                                 fontSize: "0.68rem",
                                 fontWeight: 700,
-                                bgcolor: isPaloAlto ? "#fef3c7" : "#e0e7ff",
-                                color: isPaloAlto ? "#92400e" : "#3730a3",
+                                bgcolor: m3.scHigh,
+                                color: m3.onSurface,
                                 borderRadius: "4px",
                               }}
                             />
@@ -572,16 +590,11 @@ export function DeviceList({
                           gap: 1,
                           p: 1,
                           borderRadius: "8px",
-                          bgcolor: isVsSelected ? "#dbeafe" : m3.scLowest,
+                          bgcolor: isVsSelected ? m3.primaryContainer : m3.scLowest,
                           border: "1px solid",
                           borderColor: isVsSelected ? m3.primary : m3.outlineVar,
                           cursor: "pointer",
-                          transition: "all 0.15s ease-in-out",
-                          "&:hover": {
-                            borderColor: m3.primary,
-                            bgcolor: isVsSelected ? "#dbeafe" : "#f0f5ff",
-                            boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-                          },
+                          "&:hover": { borderColor: m3.primary },
                         }}
                       >
                         <Chip
@@ -591,8 +604,8 @@ export function DeviceList({
                             height: 20,
                             fontSize: "0.68rem",
                             fontWeight: 700,
-                            bgcolor: isPaloAlto ? "#fef3c7" : "#e0e7ff",
-                            color: isPaloAlto ? "#92400e" : "#3730a3",
+                            bgcolor: m3.scHigh,
+                            color: m3.onSurface,
                             borderRadius: "4px",
                           }}
                         />
@@ -639,8 +652,14 @@ export function InventoryScreen() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterMode, setFilterMode] = useState<"all" | "cluster" | "check_point" | "palo_alto" | "stale" | "draft" | "failed">(
+  // Review §4: one chip row per filter dimension, each labelled; the dimensions combine.
+  const [vendorFilter, setVendorFilter] = useState<"all" | "check_point" | "palo_alto">(
     () => (urlParam("vendor") === "check_point" ? "check_point" : urlParam("vendor") === "palo_alto" ? "palo_alto" : "all"));
+  const [scopeFilter, setScopeFilter] = useState<"all" | "cluster">("all");
+  const [stateFilter, setStateFilter] = useState<"all" | "draft" | "failed" | "stale">("all");
+  // Cross-screen links (global search, cluster context strip): preselect a cluster or a device once the list is in.
+  const [pendingClusterRef, setPendingClusterRef] = useState<string | null>(() => urlParam("cluster_ref"));
+  const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(() => urlParam("device_id"));
   // Overview links (OVERVIEW_EXCEPTION_SCREEN_CONTRACT §4.2): inventory evidence age bucket and hotfix level.
   const [ageFilter, setAgeFilter] = useState<string | null>(() => urlParam("inventory_age"));
   const [hotfixFilter, setHotfixFilter] = useState<string | null>(() => urlParam("hotfix_level"));
@@ -653,7 +672,7 @@ export function InventoryScreen() {
 
   const devices = data;
   const total = devices?.length ?? 0;
-  const clusterCount = new Set((devices ?? []).map((d) => d.cluster_member_ref).filter(Boolean)).size;
+  const clusters = clusterCounts(devices ?? []);
   const checkPointCount = devices?.filter((d) => d.vendor_hint === "check_point").length ?? 0;
   const paloAltoCount = devices?.filter((d) => d.vendor_hint === "palo_alto").length ?? 0;
   const draftCount = devices?.filter((d) => d.enrollment_state === "DRAFT").length ?? 0;
@@ -690,13 +709,35 @@ export function InventoryScreen() {
     }
   }, [devices, selectedDevice]);
 
+  // `?cluster_ref=` / `?device_id=` open that cluster or device once the list is in (applied once).
+  useEffect(() => {
+    if (!devices) return;
+    if (pendingClusterRef) {
+      const members = devices.filter((d) => d.cluster_member_ref === pendingClusterRef);
+      if (members.length > 0) {
+        setSelectedCluster({ ref: pendingClusterRef, members });
+        setSelectedDevice(null);
+      }
+      setPendingClusterRef(null);
+      setPendingDeviceId(null);
+      return;
+    }
+    if (pendingDeviceId) {
+      const found = devices.find((d) => d.device_id === pendingDeviceId);
+      if (found) {
+        setSelectedDevice(found);
+        setSelectedCluster(null);
+      }
+      setPendingDeviceId(null);
+    }
+  }, [devices, pendingClusterRef, pendingDeviceId]);
+
   const filteredDevices = (devices ?? []).filter((device) => {
-    if (filterMode === "cluster" && !device.cluster_member_ref) return false;
-    if (filterMode === "check_point" && device.vendor_hint !== "check_point") return false;
-    if (filterMode === "palo_alto" && device.vendor_hint !== "palo_alto") return false;
-    if (filterMode === "draft" && device.enrollment_state !== "DRAFT") return false;
-    if (filterMode === "failed" && !hasFailedCollection(device)) return false;
-    if (filterMode === "stale" && device.enrollment_state !== "DEGRADED" && device.enrollment_state !== "UNREACHABLE") return false;
+    if (scopeFilter === "cluster" && !device.cluster_member_ref) return false;
+    if (vendorFilter !== "all" && device.vendor_hint !== vendorFilter) return false;
+    if (stateFilter === "draft" && device.enrollment_state !== "DRAFT") return false;
+    if (stateFilter === "failed" && !hasFailedCollection(device)) return false;
+    if (stateFilter === "stale" && device.enrollment_state !== "DEGRADED" && device.enrollment_state !== "UNREACHABLE") return false;
     if (ageFilter && !inAgeBucket(device, ageFilter)) return false;
     if (versionFilter) {
       const sw = device.software_version?.trim() || null;
@@ -723,6 +764,7 @@ export function InventoryScreen() {
   });
 
   const filteredCountLabel = `${filteredDevices.length} device${filteredDevices.length === 1 ? "" : "s"}`;
+  const liveCount = filteredDevices.filter(isDeviceLive).length;
   const sortedDevices = [...filteredDevices].sort((a, b) => {
     const nameCmp = deviceNameLabel(a.hostname).localeCompare(deviceNameLabel(b.hostname), undefined, { sensitivity: "base" });
     if (sortMode === "vendor") {
@@ -749,12 +791,15 @@ export function InventoryScreen() {
   return (
     <ScreenRoot>
       <ScreenHeader
-        title="Network inventory"
+        title="Devices"
         subtitle={devices === null ? "Loading…" : `${total} device${total === 1 ? "" : "s"} enrolled`}
         actions={
           <>
-            <M3Button emphasis="outlined" icon="download">Export inventory</M3Button>
-            <M3Button emphasis="outlined" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
+            <M3Button emphasis="tonal" icon="download" disabled={!devices || devices.length === 0}
+              onClick={() => downloadText(`devices-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`, inventoryCsv(sortedDevices))}>
+              Export inventory
+            </M3Button>
+            <M3Button emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
               {bulkBusy ? "Starting..." : "Bulk Collect"}
             </M3Button>
             <M3Button emphasis="filled" icon="plus" href="?screen=administration">Add device</M3Button>
@@ -775,7 +820,7 @@ export function InventoryScreen() {
             sx={{
               display: "flex",
               flexDirection: "column",
-              gap: 1.5,
+              gap: 1.25,
               minHeight: 0,
               maxHeight: "calc(100vh - 160px)",
               overflowY: "auto",
@@ -798,16 +843,15 @@ export function InventoryScreen() {
             )}
             <Box
               sx={{
-                height: 44,
+                height: 40,
                 display: "flex",
                 alignItems: "center",
                 gap: 1.25,
                 px: 2,
-                borderRadius: "24px",
+                borderRadius: "20px",
                 bgcolor: m3.scLowest,
                 border: `1px solid ${m3.outlineVar}`,
                 color: m3.onSurface,
-                boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
                 "&:focus-within": {
                   borderColor: m3.primary,
                   boxShadow: `0 0 0 2px ${m3.primaryContainer}`,
@@ -833,6 +877,7 @@ export function InventoryScreen() {
                 <Box
                   component="button"
                   onClick={() => setSearchTerm("")}
+                  aria-label="Clear search"
                   sx={{
                     border: "none",
                     bgcolor: "transparent",
@@ -846,125 +891,66 @@ export function InventoryScreen() {
                 </Box>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 0.75 }}>
-              <Typography variant="caption" color="text.secondary">
-                Sort
+            <FilterRow
+              dimension="Vendor"
+              value={vendorFilter}
+              onChange={setVendorFilter}
+              options={[
+                { value: "all", label: "All", count: total },
+                { value: "check_point", label: "Check Point", count: checkPointCount },
+                { value: "palo_alto", label: "Palo Alto", count: paloAltoCount },
+              ]}
+            />
+            <FilterRow
+              dimension="Scope"
+              value={scopeFilter}
+              onChange={setScopeFilter}
+              options={[
+                { value: "all", label: "All", count: total },
+                { value: "cluster", label: "Clusters", count: `${clusters.enrolled} enrolled · ${clusters.active} active` },
+              ]}
+            />
+            <FilterRow
+              dimension="State"
+              value={stateFilter}
+              onChange={setStateFilter}
+              options={[
+                { value: "all", label: "All", count: total },
+                { value: "draft", label: "Draft", count: draftCount },
+                { value: "failed", label: "Failed", count: failedCount },
+                { value: "stale", label: "Stale", count: staleCount },
+              ]}
+            />
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 0.75 }}>
+              <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+                {devices === null ? "" : `${filteredCountLabel} · ${liveCount} Live (the state chip shows only when a device is not Live)`}
               </Typography>
-              <Box
-                component="select"
-                value={sortMode}
-                onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
-                aria-label="Sort devices"
-                sx={{
-                  fontSize: "12px",
-                  color: m3.onSurface,
-                  bgcolor: m3.scLowest,
-                  border: `1px solid ${m3.outlineVar}`,
-                  borderRadius: "8px",
-                  px: 1,
-                  py: 0.4,
-                  cursor: "pointer",
-                }}
-              >
-                <option value="name_asc">Name (A→Z)</option>
-                <option value="name_desc">Name (Z→A)</option>
-                <option value="vendor">Vendor (A→Z)</option>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Sort
+                </Typography>
+                <Box
+                  component="select"
+                  value={sortMode}
+                  onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
+                  aria-label="Sort devices"
+                  sx={{
+                    fontSize: "12px",
+                    color: m3.onSurface,
+                    bgcolor: m3.scLowest,
+                    border: `1px solid ${m3.outlineVar}`,
+                    borderRadius: "6px",
+                    px: 1,
+                    py: 0.4,
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="name_asc">Name (A→Z)</option>
+                  <option value="name_desc">Name (Z→A)</option>
+                  <option value="vendor">Vendor (A→Z)</option>
+                </Box>
               </Box>
             </Box>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-              <Chip
-                size="small"
-                clickable
-                onClick={() => setFilterMode("all")}
-                label={`All ${total}`}
-                sx={{
-                  bgcolor: filterMode === "all" ? m3.primary : m3.scHigh,
-                  color: filterMode === "all" ? m3.onPrimary : m3.onSurface,
-                  fontWeight: filterMode === "all" ? 600 : 400,
-                  borderRadius: "8px",
-                }}
-              />
-              {clusterCount > 0 && (
-                <Chip
-                  size="small"
-                  clickable
-                  onClick={() => setFilterMode("cluster")}
-                  label={`Clusters ${clusterCount}`}
-                  sx={{
-                    bgcolor: filterMode === "cluster" ? m3.primary : m3.scHigh,
-                    color: filterMode === "cluster" ? m3.onPrimary : m3.onSurface,
-                    fontWeight: filterMode === "cluster" ? 600 : 400,
-                    borderRadius: "8px",
-                  }}
-                />
-              )}
-              <Chip
-                size="small"
-                clickable
-                onClick={() => setFilterMode("check_point")}
-                label={`Check Point ${checkPointCount}`}
-                sx={{
-                  bgcolor: filterMode === "check_point" ? m3.primary : m3.scHigh,
-                  color: filterMode === "check_point" ? m3.onPrimary : m3.onSurface,
-                  fontWeight: filterMode === "check_point" ? 600 : 400,
-                  borderRadius: "8px",
-                }}
-              />
-              <Chip
-                size="small"
-                clickable
-                onClick={() => setFilterMode("palo_alto")}
-                label={`Palo Alto ${paloAltoCount}`}
-                sx={{
-                  bgcolor: filterMode === "palo_alto" ? m3.primary : m3.scHigh,
-                  color: filterMode === "palo_alto" ? m3.onPrimary : m3.onSurface,
-                  fontWeight: filterMode === "palo_alto" ? 600 : 400,
-                  borderRadius: "8px",
-                }}
-              />
-              {draftCount > 0 && (
-                <Chip
-                  size="small"
-                  clickable
-                  onClick={() => setFilterMode("draft")}
-                  label={`Draft ${draftCount}`}
-                  sx={{
-                    bgcolor: filterMode === "draft" ? m3.primary : m3.scHigh,
-                    color: filterMode === "draft" ? m3.onPrimary : m3.onSurface,
-                    fontWeight: filterMode === "draft" ? 600 : 400,
-                    borderRadius: "8px",
-                  }}
-                />
-              )}
-              {failedCount > 0 && (
-                <Chip
-                  size="small"
-                  clickable
-                  onClick={() => setFilterMode("failed")}
-                  label={`Failed ${failedCount} of ${total}`}
-                  sx={{
-                    bgcolor: filterMode === "failed" ? m3.primary : m3.scHigh,
-                    color: filterMode === "failed" ? m3.onPrimary : m3.onSurface,
-                    fontWeight: filterMode === "failed" ? 600 : 400,
-                    borderRadius: "8px",
-                  }}
-                />
-              )}
-              {staleCount > 0 && (
-                <Chip
-                  size="small"
-                  clickable
-                  onClick={() => setFilterMode("stale")}
-                  label={`Stale ${staleCount}`}
-                  sx={{
-                    bgcolor: filterMode === "stale" ? m3.primary : m3.scHigh,
-                    color: filterMode === "stale" ? m3.onPrimary : m3.onSurface,
-                    fontWeight: filterMode === "stale" ? 600 : 400,
-                    borderRadius: "8px",
-                  }}
-                />
-              )}
-            </Stack>
             {error && (
               <EmptyPanel title="Inventory unavailable" body={error}>
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -985,7 +971,7 @@ export function InventoryScreen() {
                 selectedDeviceId={selectedDevice?.device_id ?? null}
                 selectedClusterRef={selectedCluster?.ref ?? null}
                 selectedVs={selectedCluster ? selectedCluster.initialVs : selectedDeviceVs}
-                clusterOnly={filterMode === "cluster"}
+                clusterOnly={scopeFilter === "cluster"}
                 onSelectDevice={(dev, vsName) => {
                   setSelectedDevice(dev);
                   setSelectedDeviceVs(vsName ?? null);
@@ -1019,53 +1005,13 @@ export function InventoryScreen() {
                 onDeviceStateChange={refresh}
               />
             ) : (
-              <M3Tabs
-                ariaLabel="Device detail"
-                tabs={[
-                  {
-                    label: "Interfaces",
-                    panel: (
-                      <Stack spacing={1.5}>
-                        <EmptyPanel
-                          title={(devices?.length ?? 0) === 0 ? "No interface evidence" : "Select a device or cluster"}
-                          body={(devices?.length ?? 0) === 0
-                            ? "Enrol a device from Administration to see its interfaces here; none is enrolled yet."
-                            : `${devices?.length ?? 0} devices are enrolled. Choose one on the left to see its interfaces.`}
-                        />
-                        <Typography variant="body2">
-                          Interface evidence is read over SSH or HTTPS. Values are observed, never written.
-                        </Typography>
-                      </Stack>
-                    ),
-                  },
-                  {
-                    label: "Routing",
-                    panel: (
-                      <EmptyPanel
-                        title="No routing evidence"
-                        body="Routing tables are read directly from an enrolled device; no device has been enrolled or read yet."
-                      />
-                    ),
-                  },
-                  {
-                    label: "Cluster members",
-                    panel: (
-                      <EmptyPanel
-                        title="No cluster membership evidence"
-                        body="Membership needs an identity-verified read from each peer; none has been collected yet."
-                      />
-                    ),
-                  },
-                  {
-                    label: "Identity & provenance",
-                    panel: (
-                      <EmptyPanel
-                        title="No identity or provenance evidence"
-                        body="Identity requires a direct, verified device read; none has occurred yet."
-                      />
-                    ),
-                  },
-                ]}
+              // Review §3: the detail tabs (Interfaces, Routing, Cluster members, Backup, Identity & provenance)
+              // appear once a device or cluster is chosen; before that there is nothing for them to show.
+              <EmptyPanel
+                title={(devices?.length ?? 0) === 0 ? "No device to show" : "Select a device or cluster"}
+                body={(devices?.length ?? 0) === 0
+                  ? "Enrol a device from Administration; its interfaces, routing, cluster members and identity appear here once it is read."
+                  : `${devices?.length ?? 0} devices are enrolled. Choose one on the left to see its interfaces, routing, cluster members, backups and identity. Interface evidence is read over SSH or HTTPS; values are observed, never written.`}
               />
             )}
           </Box>

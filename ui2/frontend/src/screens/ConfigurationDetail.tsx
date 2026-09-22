@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import InputBase from "@mui/material/InputBase";
+import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
 import Switch from "@mui/material/Switch";
 import Table from "@mui/material/Table";
@@ -14,8 +15,9 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { Icon } from "../shell/Icon";
-import { M3Tabs, StatusChip } from "../shell/M3Widgets";
-import { m3 } from "../theme/m3Theme";
+import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
+import { RoleChip, Ts, Unknown } from "../shell/States";
+import { MONO, m3 } from "../theme/m3Theme";
 import {
   getDeviceConfiguration,
   getDeviceConfigurationText,
@@ -25,15 +27,27 @@ import {
 import { InventoryEntityHeader, deriveClusterTitle } from "./InventoryPanels";
 import { DeviceConfigurationPanels } from "./ConfigurationPanels";
 import {
+  ClusterContextStrip,
+  ContentVersions,
+  DeviceIdentityTable,
+  downloadText,
+  orderMembers,
+  toCsv,
+  vsListOf,
+} from "./DeviceShared";
+import {
   filterProjection,
   projectCheckPoint,
   projectCluster,
   projectPaloAlto,
   type ClusterProjection,
+  type MemberRow,
   type Origin,
   type Projection,
   type Section,
 } from "./configurationProjection";
+
+export { contentVersionText } from "./DeviceShared";
 
 function vendorLabel(vendorHint: string | null | undefined): string {
   if (vendorHint === "check_point") return "Check Point";
@@ -53,6 +67,16 @@ function originTone(origin: Origin): "neutral" | "ok" | "mem" | "warn" | "attn" 
       return "neutral";
   }
 }
+
+/** A cluster row's ORIGIN word as shown on screen and in the export: MEMBER for a member-specific setting. */
+function originWord(row: MemberRow): string {
+  return row.memberSpecific ? "MEMBER" : row.origin;
+}
+
+/** configurationProjection writes "—" for a setting absent on one member: it was read, and it is not there. */
+const ABSENT = "—";
+
+const CARD = { borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, boxShadow: "none" } as const;
 
 interface Loaded {
   readonly configuration: DeviceConfiguration | null;
@@ -91,7 +115,7 @@ function useProjection(device: DeviceSummary | null): Loaded & { loading: boolea
 
 function FilterBox({ value, onChange }: { readonly value: string; readonly onChange: (v: string) => void }) {
   return (
-    <Box sx={{ height: 40, display: "flex", alignItems: "center", gap: 1, px: 1.5, borderRadius: "20px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, minWidth: 280 }}>
+    <Box sx={{ height: 36, display: "flex", alignItems: "center", gap: 1, px: 1.5, borderRadius: "18px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, minWidth: 260 }}>
       <Icon name="search" size={18} />
       <InputBase placeholder="Filter setting or value…" value={value} onChange={(e) => onChange(e.target.value)} sx={{ flex: 1, fontSize: 13, color: "inherit" }} />
     </Box>
@@ -101,7 +125,7 @@ function FilterBox({ value, onChange }: { readonly value: string; readonly onCha
 function SnapshotTiles({ projection }: { readonly projection: Projection }) {
   if (projection.snapshot.length === 0) return null;
   return (
-    <Card sx={{ p: 2, borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
+    <Card sx={{ p: 2, ...CARD }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", mb: 1.5 }}>
         <Box>
           <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Basic configuration</Typography>
@@ -111,13 +135,13 @@ function SnapshotTiles({ projection }: { readonly projection: Projection }) {
       </Box>
       <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
         {projection.snapshot.map((tile) => (
-          <Box key={`${tile.group}-${tile.label}`} sx={{ p: 1.5, borderRadius: "12px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLow }}>
+          <Box key={`${tile.group}-${tile.label}`} sx={{ p: 1.5, borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLow }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
               <Typography variant="caption" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.06em" }}>{tile.group}</Typography>
               <StatusChip tone={originTone(tile.origin)} label={tile.origin} dense />
             </Box>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>{tile.label}</Typography>
-            <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: 12.5, wordBreak: "break-all" }}>{tile.value}</Typography>
+            <Typography variant="body2" sx={{ fontFamily: MONO, fontSize: 12.5, wordBreak: "break-all" }}>{tile.value}</Typography>
           </Box>
         ))}
       </Box>
@@ -125,65 +149,63 @@ function SnapshotTiles({ projection }: { readonly projection: Projection }) {
   );
 }
 
-function SectionCard({ section }: { readonly section: Section }) {
+/** One accordion row: "Section · n settings · n diff", expanded when it holds a difference (review §3). */
+function SectionAccordion({ id, label, settings, diff, expanded, onToggle, children }: {
+  readonly id: string;
+  readonly label: string;
+  readonly settings: number;
+  readonly diff: number | null;
+  readonly expanded: boolean;
+  readonly onToggle: () => void;
+  readonly children: ReactNode;
+}) {
   return (
-    <Card sx={{ borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <Box sx={{ px: 2, pt: 1.5, pb: 1, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <Box>
-          <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Current configuration</Typography>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: -0.5 }}>{section.label}</Typography>
+    <Box id={id} data-section={label} sx={{ borderBottom: `1px solid ${m3.outlineVar}`, "&:last-of-type": { borderBottom: "none" } }}>
+      <Box component="button" type="button" aria-expanded={expanded} onClick={onToggle}
+        sx={{ width: "100%", height: 44, display: "flex", alignItems: "center", gap: 1, px: 2, border: "none", bgcolor: expanded ? m3.scLow : "transparent",
+              font: "inherit", cursor: "pointer", color: m3.onSurface, textAlign: "left" }}>
+        <Box component="span" sx={{ color: m3.onSurfaceVar, width: 12 }}>{expanded ? "▾" : "▸"}</Box>
+        <Box component="span" sx={{ fontWeight: 600, fontSize: 13.5, flex: 1, minWidth: 0 }}>{label}</Box>
+        <Box component="span" sx={{ fontSize: 12, color: m3.onSurfaceVar, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+          {settings} setting{settings === 1 ? "" : "s"}
+          {diff !== null && <> · <Box component="span" sx={{ color: diff > 0 ? m3.criticalInk : m3.onSurfaceVar, fontWeight: diff > 0 ? 600 : 400 }}>{diff} diff</Box></>}
         </Box>
-        <Typography variant="caption" color="text.secondary">{section.rows.length} visible</Typography>
       </Box>
-      <TableContainer sx={{ maxHeight: 420 }}>
-        <Table size="small" stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontSize: 11, letterSpacing: "0.06em" }}>SETTING</TableCell>
-              <TableCell sx={{ fontSize: 11, letterSpacing: "0.06em" }}>CURRENT VALUE</TableCell>
-              <TableCell sx={{ fontSize: 11, letterSpacing: "0.06em" }}>ORIGIN</TableCell>
-              <TableCell sx={{ fontSize: 11, letterSpacing: "0.06em" }}>CONTEXT</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {section.rows.map((row) => (
-              <TableRow key={row.key} hover>
-                <TableCell sx={{ fontWeight: 600, fontSize: 12.5 }}>{row.setting}</TableCell>
-                <TableCell sx={{ fontFamily: "monospace", fontSize: 12, wordBreak: "break-all" }}>{row.value}</TableCell>
-                <TableCell><StatusChip tone={originTone(row.origin)} label={row.origin} dense /></TableCell>
-                <TableCell sx={{ color: m3.onSurfaceVar }}>{row.context ?? "—"}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Card>
+      {expanded && <Box sx={{ pb: 1 }}>{children}</Box>}
+    </Box>
   );
 }
 
-function vsListOf(device: DeviceSummary): string[] {
-  return device.virtual_systems ? device.virtual_systems.split(/,\s*/).filter(Boolean) : [];
-}
-
-function haLabel(role: string | null | undefined): string {
-  if (!role) return "UNKNOWN";
-  const r = role.toLowerCase();
-  if (r === "active" || r === "master") return "ACTIVE";
-  if (r === "passive" || r === "standby" || r === "backup") return "PASSIVE";
-  return role.toUpperCase();
-}
-
-function haTone(role: string | null | undefined): "neutral" | "ok" | "mem" | "warn" {
-  const label = haLabel(role);
-  if (label === "ACTIVE") return "ok";
-  if (label === "PASSIVE") return "mem";
-  if (label === "UNKNOWN") return "warn";
-  return "neutral";
+function DeviceSectionTable({ section }: { readonly section: Section }) {
+  return (
+    <TableContainer sx={{ maxHeight: 420 }}>
+      <Table size="small" stickyHeader>
+        <TableHead>
+          <TableRow>
+            <TableCell sx={{ fontSize: 11, letterSpacing: "0.04em" }}>SETTING</TableCell>
+            <TableCell sx={{ fontSize: 11, letterSpacing: "0.04em" }}>CURRENT VALUE</TableCell>
+            <TableCell sx={{ fontSize: 11, letterSpacing: "0.04em" }}>ORIGIN</TableCell>
+            <TableCell sx={{ fontSize: 11, letterSpacing: "0.04em" }}>CONTEXT</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {section.rows.map((row) => (
+            <TableRow key={row.key} hover>
+              <TableCell sx={{ fontWeight: 600, fontSize: 12.5 }}>{row.setting}</TableCell>
+              <TableCell sx={{ fontFamily: MONO, fontSize: 12, wordBreak: "break-all" }}>{row.value}</TableCell>
+              <TableCell><StatusChip tone={originTone(row.origin)} label={row.origin} dense /></TableCell>
+              <TableCell sx={{ color: m3.onSurfaceVar }}>{row.context ?? "none"}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
 }
 
 interface IdentityTile {
   readonly label: string;
-  readonly value: string | null;
+  readonly value: ReactNode | null;
   /** Shown when the value is null: why it is not there. */
   readonly absent?: string;
   readonly mono?: boolean;
@@ -193,48 +215,33 @@ interface IdentityTile {
  * Platform identity: what a security administrator checks first and what a
  * compliance review asks for -- vendor, model, software version, hotfix level,
  * serial number, HA role, virtual systems. A value the product has not read
- * says so ("not collected"); nothing is inferred.
+ * says so (UNKNOWN, with the reason); nothing is inferred.
  */
-const CONTENT_VERSION_LABELS: ReadonlyArray<readonly [string, string]> = [
-  ["app", "Applications"],
-  ["threat", "Threats"],
-  ["av", "Antivirus"],
-  ["wildfire", "WildFire"],
-  ["url", "URL filtering"],
-];
-
-export function contentVersionText(versions: Readonly<Record<string, string>> | null | undefined): string | null {
-  if (!versions) return null;
-  const parts = CONTENT_VERSION_LABELS.filter(([key]) => versions[key]).map(([key, label]) => `${label} ${versions[key]}`);
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
 function identityTiles(device: DeviceSummary, collectedAt: string | null): IdentityTile[] {
   const vs = vsListOf(device);
   const isPaloAlto = device.vendor_hint === "palo_alto";
   const needsGate = "not collected -- needs its own gated read";
-  const observed = device.platform_facts_observed_at ? new Date(device.platform_facts_observed_at).toLocaleString() : null;
   return [
     { label: "Vendor", value: device.platform_family ? `${vendorLabel(device.vendor_hint)} · ${device.platform_family}` : vendorLabel(device.vendor_hint) },
     { label: "Model", value: device.model, absent: "not read at first contact" },
     { label: "Serial number", value: device.serial_number ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate, mono: true },
     { label: "Software version", value: device.software_version, absent: "not read at first contact" },
     isPaloAlto
-      ? { label: "Content versions", value: contentVersionText(device.content_versions), absent: "not read yet -- run Inventory collect" }
+      ? { label: "Content versions", value: device.content_versions ? <ContentVersions versions={device.content_versions} /> : null, absent: "not read yet -- run Inventory collect" }
       : { label: "Hotfix / Jumbo take", value: device.hotfix_level ?? null, absent: needsGate },
     { label: "Uptime", value: device.uptime_text ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate },
-    { label: "HA role", value: haLabel(device.ha_role) },
+    { label: "HA role", value: device.ha_role ? <RoleChip role={device.ha_role} dense /> : null, absent: device.cluster_member_ref ? "not reported" : "standalone" },
     { label: isPaloAlto ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },
     { label: "Management address", value: device.management_ip ?? null, absent: "not recorded", mono: true },
-    { label: "Enrollment", value: device.enrollment_state },
-    { label: "Platform facts read", value: observed, absent: "never" },
-    { label: "Last configuration read", value: collectedAt, absent: "never" },
+    { label: "Enrollment", value: device.enrollment_state || null, absent: "not recorded" },
+    { label: "Platform facts read", value: device.platform_facts_observed_at ? <Ts at={device.platform_facts_observed_at} /> : null, absent: "never" },
+    { label: "Last configuration read", value: collectedAt ? <Ts at={collectedAt} /> : null, absent: "never" },
   ];
 }
 
 function IdentityCard({ title, tiles }: { readonly title: string; readonly tiles: readonly IdentityTile[] }) {
   return (
-    <Card sx={{ p: 2, borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
+    <Card sx={{ p: 2, ...CARD }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", mb: 1.5 }}>
         <Box>
           <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Platform identity</Typography>
@@ -244,13 +251,13 @@ function IdentityCard({ title, tiles }: { readonly title: string; readonly tiles
       </Box>
       <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
         {tiles.map((tile) => (
-          <Box key={tile.label} sx={{ p: 1.5, borderRadius: "12px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLow }}>
+          <Box key={tile.label} sx={{ p: 1.5, borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLow }}>
             <Typography variant="caption" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.06em", display: "block", mb: 0.5 }}>{tile.label.toUpperCase()}</Typography>
-            {tile.value !== null ? (
-              <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: tile.mono ? "monospace" : undefined, wordBreak: "break-word" }}>{tile.value}</Typography>
+            {tile.value !== null && tile.value !== undefined ? (
+              <Typography component="div" variant="body2" sx={{ fontWeight: 600, fontFamily: tile.mono ? MONO : undefined, wordBreak: "break-word" }}>{tile.value}</Typography>
             ) : (
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
-                <StatusChip tone="warn" label="UNKNOWN" dense />
+                <Unknown />
                 <Typography variant="caption" color="text.secondary">{tile.absent}</Typography>
               </Box>
             )}
@@ -261,87 +268,59 @@ function IdentityCard({ title, tiles }: { readonly title: string; readonly tiles
   );
 }
 
-/** A cluster's members as one row each -- model, version, HA role, address, virtual systems -- so the two sides are compared at a glance. */
+/**
+ * A cluster's members as one row each -- the same identity table the Devices screen's Identity & provenance tab
+ * renders. The platform identity line above it keeps the full virtual-system list; the table collapses it.
+ */
 function ClusterMembersCard({ members }: { readonly members: readonly DeviceSummary[] }) {
   const isPaloAlto = members[0]?.vendor_hint === "palo_alto";
   const vsUnion = Array.from(new Set(members.flatMap(vsListOf))).sort();
   return (
-    <Card sx={{ borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
+    <Card sx={CARD}>
       <Box sx={{ px: 2, pt: 1.5, pb: 1, display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 1 }}>
         <Box>
           <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Platform identity</Typography>
           <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>Members</Typography>
         </Box>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" color="text.secondary" data-testid="platform-identity-line">
           {vsUnion.length === 0
             ? `No ${isPaloAlto ? "virtual systems (VSYS)" : "virtual systems (VSX)"} recorded`
             : `${vsUnion.length} ${isPaloAlto ? "virtual system(s) (VSYS)" : "virtual system(s) (VSX)"}: ${vsUnion.join(", ")}`}
         </Typography>
       </Box>
-      <TableContainer>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              {["MEMBER", "MODEL", "SERIAL", "SOFTWARE VERSION", isPaloAlto ? "CONTENT VERSIONS" : "HOTFIX / JUMBO", "UPTIME", "HA ROLE", "MANAGEMENT ADDRESS", isPaloAlto ? "VSYS" : "VSX", "ENROLLMENT"].map((h) => (
-                <TableCell key={h} sx={{ fontSize: 11, letterSpacing: "0.06em" }}>{h}</TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {members.map((m) => {
-              const vs = vsListOf(m);
-              const unknown = <StatusChip tone="warn" label="UNKNOWN" dense />;
-              // A version or hotfix level that differs between members is a compliance finding in its own right.
-              const distinct = (pick: (d: DeviceSummary) => string | null | undefined) =>
-                new Set(members.map(pick).filter((v): v is string => Boolean(v))).size > 1;
-              const versionDiff = distinct((d) => d.software_version);
-              const levelDiff = distinct((d) => (isPaloAlto ? contentVersionText(d.content_versions) : d.hotfix_level));
-              return (
-                <TableRow key={m.device_id} hover>
-                  <TableCell sx={{ fontWeight: 600, fontSize: 12.5 }}>{m.hostname ?? m.device_id}</TableCell>
-                  <TableCell>{m.model ?? unknown}</TableCell>
-                  <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{m.serial_number ?? unknown}</TableCell>
-                  <TableCell sx={{ fontFamily: "monospace", fontSize: 12, bgcolor: versionDiff ? m3.errorContainer : undefined }}>
-                    {m.software_version ?? unknown}{versionDiff && <StatusChip tone="bad" label="DIFF" dense />}
-                  </TableCell>
-                  <TableCell sx={{ fontFamily: "monospace", fontSize: 12, bgcolor: levelDiff ? m3.errorContainer : undefined }}>
-                    {(isPaloAlto ? contentVersionText(m.content_versions) : m.hotfix_level) ?? unknown}{levelDiff && <StatusChip tone="bad" label="DIFF" dense />}
-                  </TableCell>
-                  <TableCell>{m.uptime_text ?? unknown}</TableCell>
-                  <TableCell><StatusChip tone={haTone(m.ha_role)} label={haLabel(m.ha_role)} dense /></TableCell>
-                  <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{m.management_ip ?? "—"}</TableCell>
-                  <TableCell>{vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none"}</TableCell>
-                  <TableCell>{m.enrollment_state}</TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <DeviceIdentityTable devices={members} ariaLabel="Member identity" />
     </Card>
   );
 }
 
-function headerChips(device: DeviceSummary, extra: React.ReactNode = null) {
+function headerChips(device: DeviceSummary, extra: ReactNode = null) {
   return (
     <>
       <StatusChip tone="neutral" label={vendorLabel(device.vendor_hint)} dense />
       {device.model && <StatusChip tone="neutral" label={device.model} dense />}
       {device.software_version && <StatusChip tone="neutral" label={device.software_version} dense />}
       {device.management_ip && <StatusChip tone="neutral" label={device.management_ip} dense />}
-      {device.ha_role && <StatusChip tone="mem" label={device.ha_role.toUpperCase()} dense />}
+      {device.ha_role && <RoleChip role={device.ha_role} dense />}
       {extra}
     </>
   );
 }
 
-/** One device: header, summary bar, operator snapshot, section tables; the old detail (changes, overrides, native text) stays under Details. */
+/** One device: header, summary bar, operator snapshot, section accordion; the old detail (changes, overrides, native text) stays under Details. */
 export function DeviceConfigurationDetail({ device }: { readonly device: DeviceSummary }) {
   const { configuration, projection, error, loading } = useProjection(device);
   const [query, setQuery] = useState("");
-  useEffect(() => setQuery(""), [device.device_id]);
+  const [open, setOpen] = useState<ReadonlySet<string> | null>(null);
+  useEffect(() => { setQuery(""); setOpen(null); }, [device.device_id]);
   const sections = useMemo(() => (projection ? filterProjection(projection.sections, query) : []), [projection, query]);
-  const collected = configuration?.collected_at ? new Date(configuration.collected_at).toLocaleString() : null;
+  const collectedAt = configuration?.collected_at ?? null;
+  // A single device has no peer to differ from: every section starts collapsed except the first, one click away.
+  const isOpen = (label: string) => (open === null ? sections[0]?.label === label || query.trim() !== "" : open.has(label));
+  const toggle = (label: string) => setOpen((prev) => {
+    const next = new Set(prev ?? sections.filter((s) => isOpen(s.label)).map((s) => s.label));
+    if (next.has(label)) next.delete(label); else next.add(label);
+    return next;
+  });
 
   const configurationTab = (
     <Stack spacing={2}>
@@ -352,7 +331,7 @@ export function DeviceConfigurationDetail({ device }: { readonly device: DeviceS
         </Box>
         <FilterBox value={query} onChange={setQuery} />
       </Box>
-      <IdentityCard title={device.hostname ?? device.device_id} tiles={identityTiles(device, collected)} />
+      <IdentityCard title={device.hostname ?? device.device_id} tiles={identityTiles(device, collectedAt)} />
       {error && <EmptyPanel title="Configuration unavailable" body={error} />}
       {!error && loading && <EmptyPanel title="Configuration" body="Reading the device's configuration…" />}
       {!error && !loading && !projection && (
@@ -360,11 +339,11 @@ export function DeviceConfigurationDetail({ device }: { readonly device: DeviceS
       )}
       {projection && (
         <>
-          <Card sx={{ px: 2, py: 1.25, borderRadius: "12px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
+          <Card sx={{ px: 2, py: 1.25, ...CARD, display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
             <StatusChip tone="ok" label="CURRENT ACTUAL" dense />
             <Typography variant="body2" sx={{ fontWeight: 600 }}>{projection.settingCount} projected settings</Typography>
             <Typography variant="caption" color="text.secondary">Source plane: {projection.sourcePlane}</Typography>
-            {collected && <Typography variant="caption" color="text.secondary">Collected {collected}</Typography>}
+            {collectedAt && <Typography variant="caption" color="text.secondary">Collected <Ts at={collectedAt} relative /></Typography>}
             <Box sx={{ flexGrow: 1 }} />
             <Typography variant="caption" color="text.secondary">
               {projection.withheldCount} secret-bearing setting{projection.withheldCount === 1 ? "" : "s"} withheld
@@ -374,9 +353,14 @@ export function DeviceConfigurationDetail({ device }: { readonly device: DeviceS
           {sections.length === 0 ? (
             <EmptyPanel title="No setting matches" body={`Nothing in ${projection.settingCount} settings matches "${query}".`} />
           ) : (
-            <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fit, minmax(460px, 1fr))" }}>
-              {sections.map((section) => <SectionCard key={section.label} section={section} />)}
-            </Box>
+            <Card sx={CARD}>
+              {sections.map((section) => (
+                <SectionAccordion key={section.label} id={`cfg-section-${slug(section.label)}`} label={section.label}
+                  settings={section.rows.length} diff={null} expanded={isOpen(section.label)} onToggle={() => toggle(section.label)}>
+                  <DeviceSectionTable section={section} />
+                </SectionAccordion>
+              ))}
+            </Card>
           )}
         </>
       )}
@@ -405,16 +389,57 @@ export function DeviceConfigurationDetail({ device }: { readonly device: DeviceS
   );
 }
 
+function slug(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+/**
+ * The per-cluster configuration evidence export (review §6): every setting of every member as shown on screen --
+ * names as displayed (masked for aiview by the server), the ORIGIN word, and whether it is a difference -- built
+ * in the browser from the data already loaded. No request is made; full-precision UTC time of the export.
+ */
+export function clusterEvidenceCsv(input: {
+  readonly clusterTitle: string;
+  readonly clusterRef: string;
+  readonly members: ReadonlyArray<{ readonly id: string; readonly name: string; readonly role: string | null }>;
+  readonly cluster: ClusterProjection;
+  readonly exportedAt: string;
+}): string {
+  const { clusterTitle, clusterRef, members, cluster, exportedAt } = input;
+  const header = ["cluster", "cluster_ref", "section", "setting", ...members.map((m) => `${m.name}${m.role ? ` (${m.role.toUpperCase()})` : ""}`), "origin", "difference", "exported_at_utc"];
+  const rows = cluster.sections.flatMap((section) => section.rows.map((row) => [
+    clusterTitle,
+    clusterRef,
+    section.label,
+    row.setting,
+    ...members.map((m) => {
+      const v = row.values[m.id];
+      return v === undefined || v === ABSENT ? "not present on this member" : v;
+    }),
+    originWord(row),
+    row.diff ? "DIFF" : "",
+    exportedAt,
+  ]));
+  return toCsv([header, ...rows]);
+}
+
 /** A cluster: every member's configuration side by side; a real difference is a DIFF row, a member-specific one is marked MEMBER. */
-export function ClusterConfigurationDetail({ clusterRef, members }: { readonly clusterRef: string; readonly members: readonly DeviceSummary[] }) {
+export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembers }: { readonly clusterRef: string; readonly members: readonly DeviceSummary[] }) {
+  // Review §3: members always M1, M2 (by name) -- in the header, the identity table and the setting columns.
+  const members = useMemo(() => orderMembers(unorderedMembers), [unorderedMembers]);
   const [state, setState] = useState<{ cluster: ClusterProjection | null; missing: string[]; error: string | null; loading: boolean }>({ cluster: null, missing: [], error: null, loading: true });
   const [query, setQuery] = useState("");
+  // Review §3: "Differences only" is ON by default when the cluster has differences (set once per load).
   const [diffOnly, setDiffOnly] = useState(false);
+  const [open, setOpen] = useState<ReadonlySet<string> | null>(null);
+  const [pendingJump, setPendingJump] = useState<string | null>(null);
+  const defaultedFor = useRef<ClusterProjection | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setState({ cluster: null, missing: [], error: null, loading: true });
     setQuery("");
+    setOpen(null);
     (async () => {
       const loaded: Array<{ id: string; projection: Projection }> = [];
       const missing: string[] = [];
@@ -441,20 +466,65 @@ export function ClusterConfigurationDetail({ clusterRef, members }: { readonly c
     };
   }, [clusterRef, members.map((m) => m.device_id).join(",")]);
 
+  const cluster = state.cluster;
+  useEffect(() => {
+    if (!cluster || defaultedFor.current === cluster) return;
+    defaultedFor.current = cluster;
+    setDiffOnly(cluster.diffCount > 0);
+  }, [cluster]);
+
   const nameOf = (id: string) => members.find((m) => m.device_id === id)?.hostname ?? id;
   const first = members[0];
-  const cluster = state.cluster;
+  const clusterTitle = deriveClusterTitle(clusterRef, members);
+
+  // Every section with its full counts (the accordion row says "n settings · n diff"), then the visible rows.
+  const allSections = useMemo(() => (cluster ? cluster.sections.map((s) => ({
+    label: s.label,
+    total: s.rows.length,
+    diff: s.rows.filter((r) => r.diff).length,
+    rows: s.rows,
+  })) : []), [cluster]);
   const visibleSections = useMemo(() => {
-    if (!cluster) return [];
     const q = query.trim().toLowerCase();
-    return cluster.sections
+    return allSections
       .map((s) => ({
-        label: s.label,
+        ...s,
         rows: s.rows.filter((r) => (!diffOnly || r.diff) && (!q || r.setting.toLowerCase().includes(q) || s.label.toLowerCase().includes(q)
           || Object.values(r.values).some((v) => v.toLowerCase().includes(q)))),
       }))
       .filter((s) => s.rows.length > 0);
-  }, [cluster, query, diffOnly]);
+  }, [allSections, query, diffOnly]);
+  const differences = useMemo(() => allSections.flatMap((s) => s.rows.filter((r) => r.diff).map((r) => ({ section: s.label, row: r }))), [allSections]);
+
+  const isOpen = (label: string, diff: number) => (open === null ? diff > 0 || query.trim() !== "" : open.has(label));
+  const toggle = (label: string) => setOpen((prev) => {
+    const next = new Set(prev ?? visibleSections.filter((s) => isOpen(s.label, s.diff)).map((s) => s.label));
+    if (next.has(label)) next.delete(label); else next.add(label);
+    return next;
+  });
+  const jumpTo = (section: string, key: string) => {
+    setOpen((prev) => new Set([...(prev ?? visibleSections.filter((s) => isOpen(s.label, s.diff)).map((s) => s.label)), section]));
+    setPendingJump(`cfg-row-${slug(key)}`);
+  };
+  useEffect(() => {
+    if (!pendingJump) return;
+    const el = document.getElementById(pendingJump);
+    el?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    setPendingJump(null);
+  }, [pendingJump, open]);
+
+  const exportCsv = () => {
+    if (!cluster) return;
+    const exportedAt = new Date().toISOString();
+    const csv = clusterEvidenceCsv({
+      clusterTitle,
+      clusterRef,
+      members: cluster.memberIds.map((id) => ({ id, name: nameOf(id), role: members.find((m) => m.device_id === id)?.ha_role ?? null })),
+      cluster,
+      exportedAt,
+    });
+    downloadText(`configuration-evidence-${slug(clusterTitle) || "cluster"}-${exportedAt.replace(/[:.]/g, "-")}.csv`, csv);
+  };
 
   return (
     <Stack spacing={2}>
@@ -462,16 +532,25 @@ export function ClusterConfigurationDetail({ clusterRef, members }: { readonly c
         vendorHint={first?.vendor_hint ?? "check_point"}
         model={first?.model}
         titlePrefix={`Configuration · ${vendorLabel(first?.vendor_hint)} cluster`}
-        title={deriveClusterTitle(clusterRef, members)}
+        title={clusterTitle}
         // A Palo Alto HA pair's reference is the two serials joined; the members table below shows each
         // serial in its own column, so the chip would only repeat them (PO, 2026-09-22).
         reference={first?.vendor_hint === "palo_alto" ? "" : clusterRef}
         referenceTitle="Cluster reference"
+        action={
+          <M3Button emphasis="tonal" icon="download" disabled={!cluster} onClick={exportCsv}>
+            Export evidence (CSV)
+          </M3Button>
+        }
         chips={
           <>
             <StatusChip tone="neutral" label={`${members.length} members`} dense />
             {members.map((m) => (
-              <StatusChip key={m.device_id} tone="mem" label={`${m.hostname ?? m.device_id} · ${haLabel(m.ha_role)}`} dense />
+              <Box key={m.device_id} component="span" data-member-chip={m.device_id}
+                sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: 12, fontWeight: 600 }}>
+                {m.hostname ?? m.device_id}
+                <RoleChip role={m.ha_role} dense />
+              </Box>
             ))}
             {(() => {
               const vs = Array.from(new Set(members.flatMap(vsListOf)));
@@ -484,7 +563,9 @@ export function ClusterConfigurationDetail({ clusterRef, members }: { readonly c
               : state.missing.length === 0 ? <StatusChip tone="ok" label="Members agree" dense /> : <StatusChip tone="warn" label="UNKNOWN" dense />)}
           </>
         }
-      />
+      >
+        <ClusterContextStrip clusterRef={clusterRef} current="configuration" />
+      </InventoryEntityHeader>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <Box>
           <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Current actual state · members side by side</Typography>
@@ -492,7 +573,7 @@ export function ClusterConfigurationDetail({ clusterRef, members }: { readonly c
         </Box>
         <Stack direction="row" spacing={1.5} alignItems="center">
           <Stack direction="row" spacing={0.5} alignItems="center">
-            <Switch size="small" checked={diffOnly} onChange={(e) => setDiffOnly(e.target.checked)} />
+            <Switch size="small" checked={diffOnly} onChange={(e) => setDiffOnly(e.target.checked)} inputProps={{ "aria-label": "Differences only" }} />
             <Typography variant="body2">Differences only</Typography>
           </Stack>
           <FilterBox value={query} onChange={setQuery} />
@@ -508,59 +589,70 @@ export function ClusterConfigurationDetail({ clusterRef, members }: { readonly c
       {state.loading && <EmptyPanel title="Cluster configuration" body="Reading every member's configuration…" />}
       {cluster && (
         <>
-          <Card sx={{ px: 2, py: 1.25, borderRadius: "12px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
+          <Card sx={{ px: 2, py: 1.25, ...CARD, display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
             <StatusChip tone="ok" label="CURRENT ACTUAL" dense />
             <Typography variant="body2" sx={{ fontWeight: 600 }}>{cluster.settingCount} settings across {cluster.memberIds.length} members</Typography>
-            <Typography variant="body2" sx={{ color: cluster.diffCount > 0 ? m3.error : m3.onSurfaceVar, fontWeight: 600 }}>
+            <Typography variant="body2" sx={{ color: cluster.diffCount > 0 ? m3.criticalInk : m3.onSurfaceVar, fontWeight: 600 }}>
               {cluster.diffCount === 0 ? "no differences" : `${cluster.diffCount} difference${cluster.diffCount === 1 ? "" : "s"}`}
             </Typography>
             <Typography variant="caption" color="text.secondary">Hostnames and member addresses are expected to differ (MEMBER) and are not counted.</Typography>
           </Card>
+          {differences.length > 0 && (
+            <Box component="nav" aria-label="Differences" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", px: 0.5 }}>
+              <Typography component="span" sx={{ fontSize: 12, fontWeight: 600, color: m3.criticalInk }}>Differences:</Typography>
+              {differences.map(({ section, row }, i) => (
+                <Box component="span" key={row.key} sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
+                  <Link component="button" type="button" underline="hover" onClick={() => jumpTo(section, row.key)} sx={{ fontSize: 12.5 }}>
+                    {section} › {row.setting}
+                  </Link>
+                  {i < differences.length - 1 && <Box component="span" sx={{ color: m3.outline }}>·</Box>}
+                </Box>
+              ))}
+            </Box>
+          )}
           {visibleSections.length === 0 ? (
             <EmptyPanel title={diffOnly ? "No differences" : "No setting matches"} body={diffOnly ? "Every setting that is not member-specific holds the same value on every member." : `Nothing matches "${query}".`} />
           ) : (
-            <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))" }}>
+            <Card sx={CARD}>
               {visibleSections.map((section) => (
-                <Card key={section.label} sx={{ borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
-                  <Box sx={{ px: 2, pt: 1.5, pb: 1, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <Box>
-                      <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Current configuration</Typography>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: -0.5 }}>{section.label}</Typography>
-                    </Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {section.rows.length} visible · {section.rows.filter((r) => r.diff).length} diff
-                    </Typography>
-                  </Box>
+                <SectionAccordion key={section.label} id={`cfg-section-${slug(section.label)}`} label={section.label}
+                  settings={section.total} diff={section.diff} expanded={isOpen(section.label, section.diff)} onToggle={() => toggle(section.label)}>
                   <TableContainer sx={{ maxHeight: 440 }}>
                     <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ fontSize: 11, letterSpacing: "0.06em" }}>SETTING</TableCell>
+                          <TableCell sx={{ fontSize: 11, letterSpacing: "0.04em" }}>SETTING</TableCell>
                           {cluster.memberIds.map((id) => (
-                            <TableCell key={id} sx={{ fontSize: 11, letterSpacing: "0.06em" }}>{nameOf(id).toUpperCase()}</TableCell>
+                            <TableCell key={id} sx={{ fontSize: 11, letterSpacing: "0.04em" }}>{nameOf(id).toUpperCase()}</TableCell>
                           ))}
-                          <TableCell sx={{ fontSize: 11, letterSpacing: "0.06em" }}>ORIGIN</TableCell>
+                          <TableCell sx={{ fontSize: 11, letterSpacing: "0.04em" }}>ORIGIN</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {section.rows.map((row) => (
-                          <TableRow key={row.key} hover sx={row.diff ? { bgcolor: m3.errorContainer } : undefined}>
+                          <TableRow key={row.key} id={`cfg-row-${slug(row.key)}`} hover sx={row.diff ? { bgcolor: m3.errorContainer } : undefined}>
                             <TableCell sx={{ fontWeight: 600, fontSize: 12.5 }}>
-                              {row.setting}
-                              {row.diff && <StatusChip tone="bad" label="DIFF" dense />}
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                                {row.setting}
+                                {row.diff && <StatusChip tone="bad" label="DIFF" dense />}
+                              </Box>
                             </TableCell>
                             {cluster.memberIds.map((id) => (
-                              <TableCell key={id} sx={{ fontFamily: "monospace", fontSize: 12, wordBreak: "break-all" }}>{row.values[id]}</TableCell>
+                              <TableCell key={id} sx={{ fontFamily: MONO, fontSize: 12, wordBreak: "break-all" }}>
+                                {row.values[id] === undefined || row.values[id] === ABSENT
+                                  ? <Box component="span" sx={{ color: m3.onSurfaceVar, fontFamily: "inherit" }} title="Read, and not present on this member">not present</Box>
+                                  : row.values[id]}
+                              </TableCell>
                             ))}
-                            <TableCell><StatusChip tone={originTone(row.origin)} label={row.memberSpecific ? "MEMBER" : row.origin} dense /></TableCell>
+                            <TableCell><StatusChip tone={originTone(row.origin)} label={originWord(row)} dense /></TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </TableContainer>
-                </Card>
+                </SectionAccordion>
               ))}
-            </Box>
+            </Card>
           )}
         </>
       )}

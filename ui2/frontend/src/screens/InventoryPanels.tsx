@@ -13,7 +13,9 @@ import Typography from "@mui/material/Typography";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel } from "../shell/deviceCopy";
-import { m3 } from "../theme/m3Theme";
+import { MONO, m3 } from "../theme/m3Theme";
+import { RoleChip, Ts, VendorBadge } from "../shell/States";
+import { ClusterContextStrip, DeviceIdentityTable, orderMembers } from "./DeviceShared";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import {
   getDevice,
@@ -126,6 +128,7 @@ export function deriveClusterTitle(clusterRef: string, members: readonly DeviceS
   return clusterRef;
 }
 
+/** The vendor monogram (review §4: one vendor identity everywhere); VSX when the model or name says so. */
 export function VendorAvatar({
   vendorHint,
   model,
@@ -135,46 +138,9 @@ export function VendorAvatar({
   readonly model?: string | null;
   readonly hostname?: string | null;
 }) {
-  let label = "DEV";
-  let bg: string = m3.outline;
-
-  const isVsx =
-    (model && model.toUpperCase().includes("VSX")) ||
-    (hostname && hostname.toUpperCase().includes("VSX"));
-
-  if (vendorHint === "check_point") {
-    if (isVsx) {
-      label = "VSX";
-      bg = m3.vsx;
-    } else {
-      label = "CP";
-      bg = m3.cp;
-    }
-  } else if (vendorHint === "palo_alto") {
-    label = "PAN";
-    bg = m3.pan;
-  }
-
-  return (
-    <Box
-      sx={{
-        width: 32,
-        height: 32,
-        borderRadius: "8px",
-        bgcolor: bg,
-        color: "#ffffff",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontWeight: 700,
-        fontSize: 11,
-        letterSpacing: 0.5,
-        flexShrink: 0,
-      }}
-    >
-      {label}
-    </Box>
-  );
+  const isVsx = vendorHint === "check_point"
+    && Boolean((model && model.toUpperCase().includes("VSX")) || (hostname && hostname.toUpperCase().includes("VSX")));
+  return <VendorBadge vendor={vendorHint} vsx={isVsx} />;
 }
 
 /** device_inventory_ha (migration V17): the selected context's own HA role, shown above its interfaces. */
@@ -184,7 +150,7 @@ function ContextHaBadge({ context }: { readonly context: InventoryContext | unde
   return (
     <Stack direction="row" spacing={1} alignItems="center">
       <Typography variant="body2" color="text.secondary">HA role:</Typography>
-      <StatusChip tone={ha.role === "ACTIVE" ? "ok" : "neutral"} label={ha.role} dense />
+      <RoleChip role={ha.role} dense />
       {ha.cluster_mode && (
         <Typography variant="body2" color="text.secondary">
           {ha.cluster_mode}
@@ -382,7 +348,7 @@ function ClusterInterfacesTable({
     <Stack spacing={1.5}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          Interfaces · {filtered.length} {upOnly && withoutLoopback.length > filtered.length && `(${withoutLoopback.length - filtered.length} down hidden)`}
+          Interfaces · {filtered.length} of {withoutLoopback.length} shown{upOnly ? " · Active only" : ""}
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center">
           <TextField
@@ -511,22 +477,12 @@ function ClusterInterfacesTable({
                       return (
                         <TableCell key={m.device_id}>
                           {mAddrs.length > 0 ? (
-                            <Stack direction="row" spacing={0.75} alignItems="center">
-                              <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
-                                {mAddrs.map((a) => a.address).join(", ")}
-                              </Typography>
-                              {mState && (
-                                <Box
-                                  sx={{
-                                    width: 7,
-                                    height: 7,
-                                    borderRadius: "50%",
-                                    bgcolor: mState.toLowerCase() === "up" ? m3.success : m3.outline,
-                                  }}
-                                  title={`State: ${mState}`}
-                                />
-                              )}
-                            </Stack>
+                            // Review §3: the coloured dot after the address carried the member's link state by colour
+                            // alone; the word is now on hover here and, when members differ, in the State column.
+                            <Typography variant="body2" title={mState ? `${deviceNameLabel(m.hostname)} link state: ${mState}` : undefined}
+                              sx={{ fontFamily: MONO, fontSize: "0.8125rem" }}>
+                              {mAddrs.map((a) => a.address).join(", ")}
+                            </Typography>
                           ) : (
                             <Typography variant="body2" color="text.secondary">—</Typography>
                           )}
@@ -545,7 +501,14 @@ function ClusterInterfacesTable({
                     ) : allDown ? (
                       <StatusChip tone="neutral" label="Down" dense />
                     ) : isMixed ? (
-                      <StatusChip tone="warn" label="Degraded" dense />
+                      <Stack spacing={0.25}>
+                        <StatusChip tone="warn" label="Degraded" dense />
+                        {members.map((m) => iface.member_states?.[m.device_id] ? (
+                          <Typography key={m.device_id} variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>
+                            {deviceNameLabel(m.hostname)}: {iface.member_states[m.device_id]}
+                          </Typography>
+                        ) : null)}
+                      </Stack>
                     ) : sharedState ? (
                       <StatusChip tone="neutral" label={sharedState.charAt(0).toUpperCase() + sharedState.slice(1)} dense />
                     ) : (
@@ -621,7 +584,7 @@ function ClusterRoutesTable({
                 py: 0.5,
                 borderRadius: "8px",
                 cursor: "pointer",
-                bgcolor: !diffOnly ? "#ffffff" : "transparent",
+                bgcolor: !diffOnly ? m3.scLowest : "transparent",
                 boxShadow: !diffOnly ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                 fontWeight: !diffOnly ? 600 : 500,
                 fontSize: "0.8125rem",
@@ -640,7 +603,7 @@ function ClusterRoutesTable({
                 py: 0.5,
                 borderRadius: "8px",
                 cursor: "pointer",
-                bgcolor: diffOnly ? "#ffffff" : "transparent",
+                bgcolor: diffOnly ? m3.scLowest : "transparent",
                 boxShadow: diffOnly ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                 fontWeight: diffOnly ? 600 : 500,
                 fontSize: "0.8125rem",
@@ -659,8 +622,8 @@ function ClusterRoutesTable({
                     px: 0.6,
                     py: 0.1,
                     borderRadius: "10px",
-                    bgcolor: "#fee2e2",
-                    color: "#991b1b",
+                    bgcolor: m3.errorContainer,
+                    color: m3.onErrorContainer,
                     fontSize: "0.75rem",
                     fontWeight: 700,
                   }}
@@ -682,8 +645,8 @@ function ClusterRoutesTable({
       </Box>
 
       {diffOnly && diffCount === 0 ? (
-        <Box sx={{ p: 2.5, bgcolor: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "10px", textAlign: "center" }}>
-          <Typography variant="body2" sx={{ color: "#065f46", fontWeight: 600 }}>
+        <Box sx={{ p: 2.5, bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", textAlign: "center" }}>
+          <Typography variant="body2" sx={{ color: m3.goodInk, fontWeight: 600 }}>
             ✓ All routes are identical across cluster members. No routing drift detected.
           </Typography>
         </Box>
@@ -718,7 +681,7 @@ function ClusterRoutesTable({
                   key={`${route.vsysLabel ?? ""}-${route.destination}-${route.next_hop ?? ""}-${route.interface ?? ""}-${index}`}
                   hover
                   sx={{
-                    bgcolor: isDiff ? "#fffbeb" : "inherit",
+                    bgcolor: isDiff ? m3.errorContainer : "inherit",
                   }}
                 >
                   {showVsysColumn && (
@@ -748,9 +711,9 @@ function ClusterRoutesTable({
                             px: 1,
                             py: 0.25,
                             borderRadius: "6px",
-                            bgcolor: "#fef3c7",
-                            border: "1px solid #f59e0b",
-                            color: "#92400e",
+                            bgcolor: m3.errorContainer,
+                            border: `1px solid ${m3.criticalInk}`,
+                            color: m3.onErrorContainer,
                             fontWeight: 700,
                             fontSize: "0.75rem",
                             fontFamily: "monospace",
@@ -1134,8 +1097,8 @@ export function ClusterInterfacesPanel({
             size="small"
             sx={{
               fontWeight: 700,
-              bgcolor: name.toLowerCase().includes("vsys") ? "#fef3c7" : "#e0e7ff",
-              color: name.toLowerCase().includes("vsys") ? "#92400e" : "#3730a3",
+              bgcolor: m3.scHigh,
+              color: m3.onSurface,
               borderRadius: "6px"
             }}
           />
@@ -1236,8 +1199,8 @@ export function ClusterRoutesPanel({
           size="small"
           sx={{
             fontWeight: 700,
-            bgcolor: name.toLowerCase().includes("vsys") ? "#fef3c7" : "#e0e7ff",
-            color: name.toLowerCase().includes("vsys") ? "#92400e" : "#3730a3",
+            bgcolor: m3.scHigh,
+            color: m3.onSurface,
             borderRadius: "6px"
           }}
         />
@@ -1486,9 +1449,9 @@ export function InventoryEntityHeader({
         gap: 1.5,
         p: 2,
         bgcolor: m3.scLowest,
-        borderRadius: "16px",
+        borderRadius: "10px",
         border: `1px solid ${m3.outlineVar}`,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        boxShadow: "none",
       }}
     >
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
@@ -1503,7 +1466,7 @@ export function InventoryEntityHeader({
               <Typography
                 variant="caption"
                 sx={{
-                  fontFamily: "monospace",
+                  fontFamily: MONO,
                   fontSize: "0.75rem",
                   color: m3.primary,
                   bgcolor: m3.scHigh,
@@ -1599,7 +1562,7 @@ export function DeviceInventoryPanels({
             />
             <StatusChip
               tone={isLiveDevice ? "ok" : "warn"}
-              label={!isEnrolledDevice ? enrollmentStateLabel(device.enrollment_state) : isLiveDevice ? "✓ Live" : "Confirmed · Not collected"}
+              label={!isEnrolledDevice ? enrollmentStateLabel(device.enrollment_state) : isLiveDevice ? "Live" : "Confirmed · Not collected"}
               dense
             />
             {isEnrolledDevice && <StatusChip tone="ok" label="✓ Identity verified" dense />}
@@ -1616,6 +1579,7 @@ export function DeviceInventoryPanels({
               <StatusChip tone="neutral" label={`${device.software_version} · ${isPaloAlto ? "PAN-OS" : "Gaia"}`} dense />
             )}
             {device.model && <StatusChip tone="neutral" label={device.model} dense />}
+            {device.ha_role && <RoleChip role={device.ha_role} dense />}
             <StatusChip tone="neutral" label={`${deviceIfaceCount} interfaces · ${deviceRouteCount} routes`} dense />
             {isCluster && clusterInventory && <ClusterMembersMarker inventory={clusterInventory} />}
           </>
@@ -1624,7 +1588,7 @@ export function DeviceInventoryPanels({
       >
         {isCluster && clusterInventory && clusterInventory.members.length > 0 ? (
           <Typography variant="caption" color="text.secondary">
-            Members: {clusterInventory.members.map((m) => deviceNameLabel(m.hostname)).join(" · ")}
+            Members: {orderMembers(clusterInventory.members).map((m) => deviceNameLabel(m.hostname)).join(" · ")}
           </Typography>
         ) : null}
       </InventoryEntityHeader>
@@ -1635,13 +1599,13 @@ export function DeviceInventoryPanels({
           {
             label: "Interfaces",
             panel: isCluster
-              ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
+              ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory ? orderMembers(clusterInventory.members) : undefined} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
               : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} />,
           },
           {
             label: "Routing",
             panel: isCluster
-              ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory?.members} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
+              ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory ? orderMembers(clusterInventory.members) : undefined} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
               : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} />,
           },
           {
@@ -1658,10 +1622,10 @@ export function DeviceInventoryPanels({
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {clusterInventory.members.map((member) => (
+                      {orderMembers(clusterInventory.members).map((member) => (
                         <TableRow key={member.device_id}>
                           <TableCell sx={{ fontWeight: 500 }}>{deviceNameLabel(member.hostname)}</TableCell>
-                          <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{member.device_id}</TableCell>
+                          <TableCell sx={{ fontFamily: MONO, fontSize: 12 }}>{member.device_id}</TableCell>
                           <TableCell>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                               <JobStatusIndicator
@@ -1696,10 +1660,12 @@ export function DeviceInventoryPanels({
           {
             label: "Identity & provenance",
             panel: (
-              <EmptyPanel
-                title="No identity or provenance evidence"
-                body="Identity requires a direct, verified device read; none has occurred yet."
-              />
+              <Stack spacing={1}>
+                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+                  Platform identity as read from the device itself; a value not read is UNKNOWN.
+                </Typography>
+                <DeviceIdentityTable devices={[device]} ariaLabel="Device identity" />
+              </Stack>
             ),
           },
         ]}
@@ -1763,7 +1729,10 @@ export function ClusterDetailPanels({
     );
   }
 
-  const firstMember = members[0];
+  // Review §3: members always M1, M2 (by name); the role chip says which one is active.
+  const orderedMembers = orderMembers(members);
+  const inventoryMembers = clusterInventory ? orderMembers(clusterInventory.members) : orderedMembers;
+  const firstMember = orderedMembers[0];
   const isPaloAlto = firstMember?.vendor_hint === "palo_alto";
   const allContexts = clusterInventory?.contexts ?? [];
   const ifaceCount = allContexts.reduce((acc, c) => acc + c.interfaces.length, 0);
@@ -1801,7 +1770,7 @@ export function ClusterDetailPanels({
           <>
             <StatusChip
               tone={isLive ? "ok" : "warn"}
-              label={!isEnrolled ? "Not enrolled" : isLive ? "✓ Live" : "Confirmed · Not collected"}
+              label={!isEnrolled ? "Not enrolled" : isLive ? "Live" : "Confirmed · Not collected"}
               dense
             />
             <StatusChip
@@ -1818,22 +1787,22 @@ export function ClusterDetailPanels({
         }
       >
         {/* 2 Member Cards Sub-row */}
+        <ClusterContextStrip clusterRef={clusterRef} current="inventory" />
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5, pt: 0.5 }}>
-          {members.map((m) => {
-            const isActive = m.ha_role?.toUpperCase() === "ACTIVE";
+          {orderedMembers.map((m) => {
             return (
               <Box
                 key={m.device_id}
+                data-member-card={m.device_id}
                 sx={{
                   p: 1.5,
-                  borderRadius: "12px",
-                  bgcolor: isActive ? "#f0fdf4" : m3.scLow,
+                  borderRadius: "10px",
+                  bgcolor: m3.scLow,
                   border: "1px solid",
-                  borderColor: isActive ? "#86efac" : m3.outlineVar,
+                  borderColor: m3.outlineVar,
                   display: "flex",
                   flexDirection: "column",
                   gap: 0.75,
-                  transition: "all 0.15s ease-in-out",
                 }}
               >
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1847,11 +1816,7 @@ export function ClusterDetailPanels({
                       terminalReason={m.latest_job_terminal_reason}
                     />
                   </Box>
-                  <StatusChip
-                    tone={isActive ? "ok" : "mem"}
-                    label={m.ha_role ? m.ha_role.toUpperCase() : "MEMBER"}
-                    dense
-                  />
+                  <RoleChip role={m.ha_role} dense />
                 </Box>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -1878,7 +1843,7 @@ export function ClusterDetailPanels({
             panel: (
               <ClusterInterfacesPanel
                 contexts={allContexts}
-                members={clusterInventory?.members ?? members}
+                members={inventoryMembers}
                 clusterRef={clusterTitle}
                 virtualSystems={virtualSystems}
                 activeContext={activeVsContext}
@@ -1892,7 +1857,7 @@ export function ClusterDetailPanels({
             panel: (
               <ClusterRoutesPanel
                 contexts={allContexts}
-                members={clusterInventory?.members ?? members}
+                members={inventoryMembers}
                 clusterRef={clusterTitle}
                 virtualSystems={virtualSystems}
                 activeContext={activeVsContext}
@@ -1917,18 +1882,14 @@ export function ClusterDetailPanels({
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {members.map((m) => (
+                    {orderedMembers.map((m) => (
                       <TableRow key={m.device_id} hover>
                         <TableCell sx={{ fontWeight: 600 }}>{deviceNameLabel(m.hostname)}</TableCell>
-                        <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{m.device_id}</TableCell>
+                        <TableCell sx={{ fontFamily: MONO, fontSize: 12 }}>{m.device_id}</TableCell>
                         <TableCell>
-                          <StatusChip
-                            tone={m.ha_role === "ACTIVE" || m.ha_role === "active" ? "ok" : "neutral"}
-                            label={m.ha_role ?? "—"}
-                            dense
-                          />
+                          <RoleChip role={m.ha_role} dense />
                         </TableCell>
-                        <TableCell>{m.model ?? "—"} · {m.software_version ?? "—"}</TableCell>
+                        <TableCell>{m.model ?? "UNKNOWN"} · {m.software_version ?? "UNKNOWN"}</TableCell>
                         <TableCell>
                           <Stack direction="row" spacing={1} alignItems="center">
                             <StatusChip tone={m.enrollment_state === "ENROLLED" ? "ok" : "warn"} label={m.enrollment_state} dense />
@@ -1948,10 +1909,14 @@ export function ClusterDetailPanels({
           {
             label: "Identity & provenance",
             panel: (
-              <EmptyPanel
-                title="Identity and cluster provenance"
-                body={`Cluster identity verified across ${members.length} members. Observed from active ${firstMember?.vendor_hint === "palo_alto" ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"} runtime topology.`}
-              />
+              <Stack spacing={1}>
+                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+                  {orderedMembers.length} members · {firstMember?.vendor_hint === "palo_alto" ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"}
+                  {virtualSystems.length > 0 ? ` · ${virtualSystems.length} ${isPaloAlto ? "VSYS" : "VSX"}: ${virtualSystems.join(", ")}` : ""}
+                  {" "}· each value is read from that member itself; a value not read is UNKNOWN.
+                </Typography>
+                <DeviceIdentityTable devices={orderedMembers} ariaLabel="Member identity" />
+              </Stack>
             ),
           },
         ]}
@@ -2093,7 +2058,7 @@ export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
             <TableBody>
               {backups.map((b) => (
                 <TableRow key={b.artefact_id}>
-                  <TableCell>{b.collected_at}</TableCell>
+                  <TableCell><Ts at={b.collected_at} /></TableCell>
                   <TableCell>{b.size_bytes}</TableCell>
                   <TableCell>{b.digest_prefix}</TableCell>
                   <TableCell>{b.validation_level}</TableCell>

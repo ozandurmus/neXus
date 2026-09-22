@@ -9,6 +9,7 @@ import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { deleteDevice, getDeviceWorkspace, type DeviceWorkspaceView, type ActionAffordance, type TransportSummary, type ApiError } from "../auth/adminApi";
 import { enrollmentStateLabel } from "../shell/deviceCopy";
+import { Ts } from "../shell/States";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -102,7 +103,7 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
               <Stack spacing={1}>
                 <Typography variant="body2"><strong>Device ID:</strong> {device.device_id}</Typography>
                 <Typography variant="body2"><strong>Vendor:</strong> {vendorLabel(device.vendor_hint)} <em>(hint)</em></Typography>
-                <Typography variant="body2"><strong>Registered:</strong> {new Date(device.created_at).toLocaleString()}</Typography>
+                <Typography variant="body2"><strong>Registered:</strong> <Ts at={device.created_at} /></Typography>
                 <Typography variant="body2"><strong>Source:</strong> {device.registration_source}</Typography>
                 <Typography variant="body2"><strong>Test Target:</strong> {device.is_test_target ? "Yes" : "No"}</Typography>
                 <Typography variant="body2"><strong>Credential:</strong> {device.credential_configured ? "Configured" : "Not configured"}</Typography>
