@@ -54,6 +54,12 @@ class BackupCollectServiceTest {
             return this;
         }
 
+        StubDeviceRepository putBackupTarget(String deviceId, String vendorHint) {
+            devices.put(deviceId, new DeviceRecord(deviceId, "gateway", vendorHint, "manual", Instant.now(), false,
+                    DeviceEnrollmentState.ENROLLED, false, "cred-collection-1", true));
+            return this;
+        }
+
         StubDeviceRepository putManagementServer(String deviceId, String vendorHint) {
             devices.put(deviceId, new DeviceRecord(deviceId, "management_server", vendorHint, "manual", Instant.now(), false,
                     DeviceEnrollmentState.ENROLLED, false, "cred-collection-1"));
@@ -163,6 +169,19 @@ class BackupCollectServiceTest {
                 new InMemoryAdmissionRepository());
     }
 
+    /** Product Owner, 2026-09-22: a device switched on under Backups > Backup targets is admitted
+     * without any env allowlist -- targets are chosen in the product, not by hand. */
+    @Test
+    void aBackupTargetDeviceIsAdmittedWithoutTheEnvAllowlist() {
+        BackupCollectService service = new BackupCollectService(
+                new StubDeviceRepository().putBackupTarget("dev-target", "check_point"), admissionService(), Set.of(), true);
+
+        BackupCollectService.Outcome outcome =
+                service.requestCollect("dev-target", "actor", "Scheduled weekly backup", Optional.empty());
+
+        assertTrue(outcome instanceof BackupCollectService.Outcome.Admitted, "expected Admitted, got " + outcome);
+    }
+
     @Test
     void refusesAReasonShorterThanEightCharacters() {
         BackupCollectService service = new BackupCollectService(new StubDeviceRepository().put(PILOT_DEVICE, "check_point"),
@@ -221,8 +240,8 @@ class BackupCollectServiceTest {
 
         assertTrue(outcome instanceof BackupCollectService.Outcome.AdmissionRefused, "expected AdmissionRefused, got " + outcome);
         BackupCollectService.Outcome.AdmissionRefused refused = (BackupCollectService.Outcome.AdmissionRefused) outcome;
-        assertEquals("DEVICE_NOT_IN_BACKUP_PILOT_ALLOWLIST", refused.code());
-        assertTrue(refused.reason().contains("allowlist"), "the reason must name the allowlist");
+        assertEquals("DEVICE_NOT_A_BACKUP_TARGET", refused.code());
+        assertTrue(refused.reason().contains("Backup targets"), "the reason must name where a target is chosen");
     }
 
     @Test
@@ -234,7 +253,7 @@ class BackupCollectServiceTest {
                 service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());
 
         assertTrue(outcome instanceof BackupCollectService.Outcome.AdmissionRefused);
-        assertEquals("DEVICE_NOT_IN_BACKUP_PILOT_ALLOWLIST",
+        assertEquals("DEVICE_NOT_A_BACKUP_TARGET",
                 ((BackupCollectService.Outcome.AdmissionRefused) outcome).code());
     }
 

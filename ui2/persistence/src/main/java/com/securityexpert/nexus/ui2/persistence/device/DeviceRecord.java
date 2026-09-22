@@ -21,7 +21,14 @@ public record DeviceRecord(
         boolean isTestTarget,
         DeviceEnrollmentState enrollmentState,
         boolean disabled,
-        String credentialReferenceId) {
+        String credentialReferenceId,
+        boolean backupTarget) {
+
+    public DeviceRecord(String deviceId, String role, String vendorHint, String registrationSource, Instant createdAt,
+            boolean isTestTarget, DeviceEnrollmentState enrollmentState, boolean disabled, String credentialReferenceId) {
+        this(deviceId, role, vendorHint, registrationSource, createdAt, isTestTarget, enrollmentState, disabled,
+                credentialReferenceId, false);
+    }
 
     /** Contract §3: eligible for read-class collection, and not disabled. */
     public boolean permitsReadCollection() {

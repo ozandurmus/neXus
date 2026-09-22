@@ -82,6 +82,7 @@ public final class ActionRegistry {
     public static final String DEVICE_BACKUP_COLLECT = "device_backup_collect";
     /** NXS-LOCAL-0175: {@code GET /devices/{id}/backups} and {@code GET /backups} -- posture only (BK-14: never a path, never bytes), open to any authenticated session like {@link #DEVICE_READ}. */
     public static final String DEVICE_BACKUP_READ = "device_backup_read";
+    public static final String DEVICE_BACKUP_TARGET_SET = "device_backup_target_set";
 
     /**
      * WORKER.md (movement NXS-LOCAL-0174): {@code GET /project-plan} -- any
@@ -153,6 +154,7 @@ public final class ActionRegistry {
         // BackupCollectService, not here -- E4 only evaluates the role).
         register(new ActionDescriptor(DEVICE_BACKUP_COLLECT, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(DEVICE_BACKUP_READ, true, Optional.empty()));
+        register(new ActionDescriptor(DEVICE_BACKUP_TARGET_SET, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         // WORKER.md: same open-to-any-authenticated-session gate as DEVICE_READ.
         register(new ActionDescriptor(PROJECT_PLAN_READ, true, Optional.empty()));
         register(new ActionDescriptor(RBAC_ROLE_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));

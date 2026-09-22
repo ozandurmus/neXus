@@ -27,7 +27,7 @@ async function csrfToken(): Promise<string | undefined> {
   }
 }
 
-async function call<T>(path: string, method: "GET" | "POST", body?: unknown): Promise<T> {
+async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unknown): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (method === "POST") {
     const token = await csrfToken();
@@ -327,6 +327,7 @@ export interface DeviceSummary {
   readonly virtual_systems?: string | null;
   readonly management_ip?: string | null;
   readonly ip_addresses?: string | null;
+  readonly backup_target?: boolean;
 }
 
 export type DeviceRole = "gateway" | "management_server";
@@ -347,6 +348,14 @@ export function addDeviceSingle(
 
 export function getDevice(deviceId: string): Promise<DeviceDetail> {
   return call(`/devices/${encodeURIComponent(deviceId)}`, "GET");
+}
+
+export function setBackupTarget(deviceId: string, enabled: boolean): Promise<{ device_id: string; backup_target: boolean; changed: boolean }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/backup-target`, "PUT", { enabled });
+}
+
+export function requestFleetBackup(reason: string): Promise<{ targets: number; admitted: number; refused: number }> {
+  return call("/backups/collect-all", "POST", { reason });
 }
 
 export function listDevices(): Promise<{ devices: DeviceSummary[] }> {

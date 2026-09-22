@@ -89,9 +89,11 @@ public final class BackupCollectService {
             return new Outcome.AdmissionRefused("VENDOR_UNSUPPORTED", "device " + deviceId + " vendor_hint="
                     + vendorHint + " has no registered backup capability (14H BK-9: Check Point gateway only)");
         }
-        if (!pilotAllowlist.contains(deviceId)) {
-            return new Outcome.AdmissionRefused("DEVICE_NOT_IN_BACKUP_PILOT_ALLOWLIST",
-                    "device " + deviceId + " is not on the backup pilot allowlist (14H BK-1) -- refused, never a "
+        // Product Owner, 2026-09-22: targets are chosen on the Backups screen (devices.backup_target);
+        // the env allowlist stays honoured for an operator who still sets it, never as the only door.
+        if (!device.get().backupTarget() && !pilotAllowlist.contains(deviceId)) {
+            return new Outcome.AdmissionRefused("DEVICE_NOT_A_BACKUP_TARGET",
+                    "device " + deviceId + " is not a backup target (Backups > Backup targets) -- refused, never a "
                             + "silent skip");
         }
         if ("check_point".equals(vendorHint) && !backupCredentialConfigured) {
@@ -119,6 +121,27 @@ public final class BackupCollectService {
             case AdmissionResult.Deduplicated deduplicated -> new Outcome.Admitted(deduplicated.jobId());
             case AdmissionResult.Refused refused -> new Outcome.AdmissionRefused(refused.code(), refused.reason());
         };
+    }
+
+    /** Counts only, so a bulk request does not return a fleet's opaque device identifiers. */
+    public record BulkOutcome(int targets, int admitted, int refused) {
+    }
+
+    /** "Run Fleet Backup": one backup per enrolled, non-disabled backup target -- nothing else is touched. */
+    public BulkOutcome requestCollectAll(String actorFingerprint, String reason) {
+        int targets = 0;
+        int admitted = 0;
+        for (var device : deviceRepository.listAll()) {
+            if (!device.backupTarget()
+                    || device.enrollmentState() != com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.ENROLLED) {
+                continue;
+            }
+            targets++;
+            if (requestCollect(device.deviceId(), actorFingerprint, reason, Optional.empty()) instanceof Outcome.Admitted) {
+                admitted++;
+            }
+        }
+        return new BulkOutcome(targets, admitted, targets - admitted);
     }
 
     private String minuteBucket() {

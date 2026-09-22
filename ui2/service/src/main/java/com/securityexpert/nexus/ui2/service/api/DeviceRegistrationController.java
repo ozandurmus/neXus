@@ -214,6 +214,7 @@ public final class DeviceRegistrationController {
         body.put("device_id", summary.deviceId());
         body.put("role", summary.role());
         body.put("vendor_hint", summary.vendorHint());
+        body.put("backup_target", summary.backupTarget());
         body.put("enrollment_state", summary.enrollmentState().name());
         body.put("hostname", summary.observedHostname().orElse(null));
         body.put("model", summary.observedModel().orElse(null));

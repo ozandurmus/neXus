@@ -99,6 +99,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /devices/*/backup/collect", ActionRegistry.DEVICE_BACKUP_COLLECT),
             Map.entry("GET /devices/*/backups", ActionRegistry.DEVICE_BACKUP_READ),
             Map.entry("GET /backups", ActionRegistry.DEVICE_BACKUP_READ),
+            Map.entry("POST /backups/collect-all", ActionRegistry.DEVICE_BACKUP_COLLECT),
+            Map.entry("PUT /devices/*/backup-target", ActionRegistry.DEVICE_BACKUP_TARGET_SET),
             // Measured live (2026-09-22): both routes answered 403 ACTION_MAPPING_REQUIRED, so the
             // Backups screen read "Policy unavailable" -- the routes existed, their mapping did not.
             Map.entry("GET /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_READ),

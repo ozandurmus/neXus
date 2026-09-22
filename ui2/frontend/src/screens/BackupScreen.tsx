@@ -18,10 +18,15 @@ import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 
+import Switch from "@mui/material/Switch";
 import {
   getBackupDeviations,
   getBackupPolicy,
+  listDevices,
   listFleetBackups,
+  requestFleetBackup,
+  setBackupTarget,
+  type DeviceSummary,
   type BackupArtefact,
   type BackupDeviations,
   type BackupPolicy,
@@ -107,6 +112,30 @@ export function BackupScreen() {
 
   const [policy, setPolicy] = useState<BackupPolicy | null>(null);
   const [deviations, setDeviations] = useState<BackupDeviations | null>(null);
+  const [fleetOpen, setFleetOpen] = useState(false);
+  const [fleetReason, setFleetReason] = useState("");
+  const [fleetBusy, setFleetBusy] = useState(false);
+  const [fleetError, setFleetError] = useState<string | null>(null);
+  const [targetsVersion, setTargetsVersion] = useState(0);
+
+  const handleFleetBackup = async () => {
+    setFleetBusy(true);
+    setFleetError(null);
+    try {
+      const outcome = await requestFleetBackup(fleetReason.trim());
+      setSuccessMessage(
+        `Fleet backup: ${outcome.admitted} of ${outcome.targets} backup target${outcome.targets === 1 ? "" : "s"} admitted` +
+          (outcome.refused > 0 ? ` (${outcome.refused} refused -- see Administration > Job Logs).` : "."),
+      );
+      setFleetOpen(false);
+      setFleetReason("");
+      void loadFleet();
+    } catch (error) {
+      setFleetError(error instanceof Error ? error.message : "Fleet backup could not be requested.");
+    } finally {
+      setFleetBusy(false);
+    }
+  };
 
   const loadFleet = useCallback(async () => {
     try {
@@ -197,7 +226,7 @@ export function BackupScreen() {
             <M3Button emphasis="outlined" onClick={() => setPolicyOpen(true)}>
               Retention & Policies
             </M3Button>
-            <M3Button emphasis="filled" onClick={() => handleBackupNow(devices[0], "standard")}>
+            <M3Button emphasis="filled" onClick={() => setFleetOpen(true)}>
               Run Fleet Backup
             </M3Button>
           </Stack>
@@ -284,6 +313,38 @@ export function BackupScreen() {
           </Typography>
         </Card>
       </MetricGrid>
+
+      <Dialog open={fleetOpen} onClose={() => (fleetBusy ? undefined : setFleetOpen(false))} fullWidth maxWidth="sm">
+        <DialogTitle>Run Fleet Backup</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              One backup is admitted per enrolled device in the backup targets below; nothing outside that list is touched.
+              A backup needs an operator justification (BK-12).
+            </Typography>
+            <TextField
+              label="Reason"
+              placeholder="e.g. Weekly scheduled backup before change window"
+              value={fleetReason}
+              onChange={(e) => setFleetReason(e.target.value)}
+              fullWidth
+              size="small"
+            />
+            {fleetError && <Alert severity="error">{fleetError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <M3Button emphasis="text" onClick={() => setFleetOpen(false)} disabled={fleetBusy}>Cancel</M3Button>
+          <M3Button emphasis="filled" onClick={handleFleetBackup} disabled={fleetBusy || fleetReason.trim().length < 8}>
+            {fleetBusy ? "Requesting…" : "Run"}
+          </M3Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Backup targets: which devices the product may back up at all. */}
+      <Box sx={{ mt: 3 }}>
+        <BackupTargetsSection version={targetsVersion} onChanged={() => setTargetsVersion((v) => v + 1)} />
+      </Box>
 
       {/* Fleet Backups Table */}
       <Box sx={{ mt: 3 }}>
@@ -613,5 +674,119 @@ export function BackupScreen() {
         </DialogActions>
       </Dialog>
     </ScreenRoot>
+  );
+}
+
+
+/**
+ * Backups > Backup targets (Product Owner, 2026-09-22): the devices the product is allowed to
+ * back up -- singly or by "Run Fleet Backup" -- chosen here, never by hand in the database. Every
+ * enrolled gateway is listed; the switch is an audited devices UPDATE.
+ */
+function BackupTargetsSection({ version, onChanged }: { readonly version: number; readonly onChanged: () => void }) {
+  const [devices, setDevices] = useState<DeviceSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [targetsOnly, setTargetsOnly] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listDevices()
+      .then((r) => {
+        if (!cancelled) {
+          setDevices(r.devices.filter((d) => d.enrollment_state === "ENROLLED" && (d.role === undefined || d.role === "gateway" || d.role === "firewall")));
+          setError(null);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Devices could not be read.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
+
+  const toggle = async (device: DeviceSummary, enabled: boolean) => {
+    setBusyId(device.device_id);
+    try {
+      await setBackupTarget(device.device_id, enabled);
+      setDevices((prev) => prev?.map((d) => (d.device_id === device.device_id ? { ...d, backup_target: enabled } : d)) ?? prev);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The backup target could not be changed.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const targetCount = devices?.filter((d) => d.backup_target).length ?? 0;
+  const shown = (devices ?? []).filter((d) => {
+    if (targetsOnly && !d.backup_target) return false;
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (d.hostname ?? "").toLowerCase().includes(q) || (d.model ?? "").toLowerCase().includes(q) || d.device_id.toLowerCase().includes(q);
+  });
+
+  return (
+    <Card sx={{ p: 2.5, borderRadius: "16px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, boxShadow: "none" }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1.5, mb: 1.5 }}>
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: m3.onSurface }}>
+            Backup targets · {targetCount}
+          </Typography>
+          <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+            Only devices switched on here are ever backed up. Enrolled gateways are listed; each change is audited.
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <TextField size="small" placeholder="Filter devices…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <M3Button emphasis={targetsOnly ? "filled" : "outlined"} onClick={() => setTargetsOnly(!targetsOnly)}>
+            {targetsOnly ? "✓ Targets only" : "All enrolled"}
+          </M3Button>
+        </Stack>
+      </Box>
+      {error && <Alert severity="warning" sx={{ mb: 1.5 }}>{error}</Alert>}
+      {devices === null ? (
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Loading devices…</Typography>
+      ) : shown.length === 0 ? (
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+          {devices.length === 0 ? "No enrolled gateway to choose from yet." : "No device matches the filter."}
+        </Typography>
+      ) : (
+        <TableContainer sx={{ maxHeight: 360 }}>
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Device</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Vendor</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Model · Version</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Cluster</TableCell>
+                <TableCell sx={{ fontWeight: 600 }} align="right">Backup target</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {shown.map((d) => (
+                <TableRow key={d.device_id} hover>
+                  <TableCell sx={{ fontWeight: 600 }}>{d.hostname ?? d.device_id}</TableCell>
+                  <TableCell>{d.vendor_hint === "palo_alto" ? "Palo Alto" : "Check Point"}</TableCell>
+                  <TableCell sx={{ color: m3.onSurfaceVar }}>{d.model ?? "—"}{d.software_version ? ` · ${d.software_version}` : ""}</TableCell>
+                  <TableCell sx={{ color: m3.onSurfaceVar }}>{d.cluster_member_ref ?? "—"}</TableCell>
+                  <TableCell align="right">
+                    <Switch
+                      size="small"
+                      checked={Boolean(d.backup_target)}
+                      disabled={busyId === d.device_id}
+                      onChange={(e) => void toggle(d, e.target.checked)}
+                      inputProps={{ "aria-label": `Backup target ${d.hostname ?? d.device_id}` }}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </Card>
   );
 }

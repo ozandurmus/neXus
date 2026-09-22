@@ -101,9 +101,9 @@ class JooqDeviceRepositoryTest {
                 new String[] { "device_id", "role", "vendor_hint", "enrollment_state", "observed_hostname",
                         "observed_model", "observed_software_version", "observed_ha_role", "cluster_member_ref",
                         "virtual_systems", "latest_job_state", "latest_job_type", "latest_job_terminal_reason",
-                        "management_ip", "ip_addresses" },
+                        "management_ip", "ip_addresses", "backup_target" },
                 new String[] { "device-1", "gateway", "check_point", "DRAFT", "member-1", "Quantum",
-                        "R81.20", null, "cluster-1", null, null, null, null, "192.0.2.10", null });
+                        "R81.20", null, "cluster-1", null, null, null, null, "192.0.2.10", null, "false" });
         var repository = new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
                 new MockConnection(context -> {
                     sql.set(context.sql());
@@ -127,9 +127,9 @@ class JooqDeviceRepositoryTest {
                 new String[] { "device_id", "role", "vendor_hint", "enrollment_state", "observed_hostname",
                         "observed_model", "observed_software_version", "observed_ha_role", "cluster_member_ref",
                         "virtual_systems", "latest_job_state", "latest_job_type", "latest_job_terminal_reason",
-                        "management_ip", "ip_addresses" },
+                        "management_ip", "ip_addresses", "backup_target" },
                 new String[] { "device-2", "gateway", "check_point", "DRAFT", null, null, null, null, null,
-                        null, null, null, null, "192.0.2.11", null });
+                        null, null, null, null, "192.0.2.11", null, "false" });
         var repository = new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
                 new MockConnection(context -> {
                     sql.set(context.sql());

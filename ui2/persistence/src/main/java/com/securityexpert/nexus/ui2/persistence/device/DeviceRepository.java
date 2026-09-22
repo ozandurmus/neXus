@@ -91,6 +91,11 @@ public interface DeviceRepository {
     /** GET /devices (DeviceSummary rows), newest first -- every device, its vendor and its observed facts. */
     List<DeviceSummaryRecord> listAll();
 
+    /** Backups > Backup targets: an audited devices UPDATE; false when the row is absent or already in that state. */
+    default boolean setBackupTarget(String deviceId, boolean backupTarget, String actorFingerprint, String actionId) {
+        throw new UnsupportedOperationException("setBackupTarget");
+    }
+
     /**
      * The same coalesced view {@link #listAll()} produces (device's own confirmed facts, falling
      * back to its discovery candidate's, per {@code DEVICE_SUMMARY_SELECT}), narrowed to one

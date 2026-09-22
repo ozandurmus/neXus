@@ -24,14 +24,14 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 public final class JooqDeviceRepository implements DeviceRepository {
 
     private static final String DEVICE_COLUMNS = "device_id, role, vendor_hint, registration_source, created_at, "
-            + "is_test_target, enrollment_state, disabled, credential_reference_id";
+            + "is_test_target, enrollment_state, disabled, credential_reference_id, backup_target";
     private static final String ENDPOINT_COLUMNS = "endpoint_id, device_id, transport_kind, address_ref, created_at";
     private static final String CONFIRM_FACT_COLUMNS = "observed_hostname, observed_model, observed_software_version, "
             + "observed_ha_role, recorded_identity_primary, recorded_identity_secondary, identity_mismatch_state, "
             + "identity_mismatch_presented_primary, identity_mismatch_presented_secondary, cluster_member_ref, "
             + "virtual_system_ref, peer_follow_outcome, peer_follow_reason";
     private static final String DEVICE_SUMMARY_SELECT =
-            "select d.device_id, d.role, d.vendor_hint, d.enrollment_state, "
+            "select d.device_id, d.role, d.vendor_hint, d.enrollment_state, d.backup_target, "
             + "coalesce(d.observed_hostname, dc.display_name) as observed_hostname, "
             + "coalesce(d.observed_model, dc.model, c_parent.model) as observed_model, "
             + "coalesce(d.observed_software_version, dc.software_version, c_parent.software_version) as observed_software_version, "
@@ -218,6 +218,14 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public boolean setBackupTarget(String deviceId, boolean backupTarget, String actorFingerprint, String actionId) {
+        int updated = auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> dsl.execute(
+                "update devices set backup_target = {0} where device_id = {1} and backup_target <> {0}",
+                backupTarget, deviceId));
+        return updated == 1;
+    }
+
+    @Override
     public boolean recordConfirmSuccess(String deviceId, DeviceConfirmFacts facts, String actorFingerprint,
             String actionId) {
         Timestamp now = Timestamp.from(Instant.now());
@@ -272,6 +280,10 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 .toList());
     }
 
+    private static boolean backupTargetOf(Record row) {
+        return row.field("backup_target") != null && Boolean.TRUE.equals(row.get("backup_target", Boolean.class));
+    }
+
     private static DeviceRecord toDeviceRecord(Record row) {
         return new DeviceRecord(
                 row.get("device_id", String.class),
@@ -282,7 +294,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 row.get("is_test_target", Boolean.class),
                 DeviceEnrollmentState.fromColumnValue(row.get("enrollment_state", String.class)),
                 row.get("disabled", Boolean.class),
-                row.get("credential_reference_id", String.class));
+                row.get("credential_reference_id", String.class),
+                backupTargetOf(row));
     }
 
     private static DeviceConfirmFacts toConfirmFacts(Record row) {
@@ -318,7 +331,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 Optional.ofNullable(row.get("latest_job_terminal_reason", String.class)),
                 Optional.ofNullable(row.get("virtual_systems", String.class)),
                 Optional.ofNullable(row.get("management_ip", String.class)),
-                Optional.ofNullable(row.get("ip_addresses", String.class)));
+                Optional.ofNullable(row.get("ip_addresses", String.class)),
+                backupTargetOf(row));
     }
 
     private static EndpointRecord toEndpointRecord(Record row) {

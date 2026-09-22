@@ -125,6 +125,32 @@ public final class BackupController {
         };
     }
 
+    public record CollectAllRequest(@JsonProperty("reason") String reason) {
+    }
+
+    /** "Run Fleet Backup": every enrolled backup target, each admitted through the same single-device path. */
+    @PostMapping("/backups/collect-all")
+    public ResponseEntity<Map<String, Object>> collectAll(@RequestBody(required = false) CollectAllRequest request,
+            HttpServletRequest servletRequest) {
+        String actorFingerprint = actingUser(servletRequest);
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (actorFingerprint == null || actorFingerprint.isBlank()) {
+            body.put("error", "ACTOR_REQUIRED");
+            body.put("reason", "An authenticated actor fingerprint is required for backup operations (Plane 3 Security Gate)");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+        }
+        if (request == null || request.reason() == null || request.reason().strip().length() < 8) {
+            body.put("error", "REASON_REQUIRED");
+            body.put("reason", "A backup operation requires an explicit operator justification of at least 8 characters (BK-12)");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        }
+        BackupCollectService.BulkOutcome outcome = backupCollectService.requestCollectAll(actorFingerprint, request.reason().strip());
+        body.put("targets", outcome.targets());
+        body.put("admitted", outcome.admitted());
+        body.put("refused", outcome.refused());
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(body);
+    }
+
     @GetMapping("/devices/{deviceId}/backups")
     public ResponseEntity<Map<String, Object>> deviceBackups(@PathVariable String deviceId) {
         if (deviceId == null || deviceId.isBlank() || deviceId.contains("..") || deviceId.contains("/") || deviceId.contains("\\")) {
