@@ -93,7 +93,8 @@ public final class ConfirmCapabilityExecutor {
             return new ConfirmResult.ConnectFailed(describeConnect(connectResult));
         }
         TransportSession session = authenticated.session();
-        boolean preferInteractiveShell = isKnownSparkModel(request.modelHint());
+        boolean preferInteractiveShell =
+                com.securityexpert.nexus.ui2.worker.transport.CheckPointSparkModelHint.isKnownSparkModel(request.modelHint());
         try {
             String identityOutput = execOutput(session,
                     DeviceFirstContactCommandSet.forStep(Vendor.CHECK_POINT, ContactStepKind.IDENTITY_READ),
@@ -181,20 +182,6 @@ public final class ConfirmCapabilityExecutor {
         return xml.contains("status=\"error\"") || xml.contains("status='error'");
     }
 
-    /** Discovery-known Check Point Quantum Spark/Gaia Embedded model tokens (ported verbatim from
-     * the pre-Java product's own evidence-driven classification) -- used only to choose which
-     * already-approved channel to try first below, never to alter the closed command set itself. */
-    private static final java.util.Set<String> SPARK_MODEL_TOKENS = java.util.Set.of(
-            "1500", "1530", "1550", "1570", "1590", "1600", "1800", "1900", "2000");
-
-    /** True when a discovery-sourced model hint (management-plane observation, never confirmed
-     * evidence -- see the Evidence laws) already names a Quantum Spark/Gaia Embedded appliance,
-     * e.g. from a Check Point Management Server's own "hardware" field, joined in before this
-     * confirm ever ran ({@code JooqDeviceRepository.DEVICE_SUMMARY_SELECT}'s {@code dc.model}). */
-    private static boolean isKnownSparkModel(Optional<String> modelHint) {
-        return modelHint.map(model -> SPARK_MODEL_TOKENS.stream().anyMatch(model::contains)).orElse(false);
-    }
-
     /** DeviceFirstContactCommandSet's own literal forms, tried in order (gate entry 1's documented
      * "may be corrected at this one site" clause): a Quantum Spark/Gaia Embedded device's landing
      * shell and CLI surface cannot be assumed ahead of time (AGENTS.md Check Point), so the next
@@ -206,7 +193,7 @@ public final class ConfirmCapabilityExecutor {
      * consistently, and not at all in some cases, without one.
      *
      * <p>When {@code preferInteractiveShell} is set (a discovery-known Spark/Gaia Embedded model,
-     * see {@link #isKnownSparkModel}), the two channels below are tried in the opposite order: the
+     * see {@code CheckPointSparkModelHint.isKnownSparkModel}), the two channels below are tried in the opposite order: the
      * exec channel is doomed on these appliances (measured live, 2026-09-21: ~120s burned on four
      * exec-channel timeouts before the interactive shell -- which always answered -- ever ran), so
      * the interactive shell is tried first and the exec channel becomes the fallback, in case the

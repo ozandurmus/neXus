@@ -25,9 +25,22 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
     private final Map<String, String> hostBySessionId = new HashMap<>();
     private boolean execChannelRejectedEntirely;
     private boolean execChannelTimesOutEntirely;
+    private boolean allowExecInteractiveAnyway;
+    private int execCallCount;
 
     ScriptedCheckPointInventoryTransport(Map<String, String> outputByCommand) {
         this.outputByCommand = outputByCommand;
+    }
+
+    /** Lets a test observe the interactive-shell-first model-hint routing without also
+     * simulating an exec-rejecting/timing-out device -- {@link #exec} still succeeds if called,
+     * so a count of zero on it is real proof the hint skipped it. */
+    void allowExecInteractiveWithoutRejection() {
+        this.allowExecInteractiveAnyway = true;
+    }
+
+    int execCallCount() {
+        return execCallCount;
     }
 
     /** Simulates a Gaia Embedded/Quantum Spark device that rejects the exec channel outright for
@@ -55,6 +68,7 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
 
     @Override
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
+        execCallCount++;
         if (execChannelTimesOutEntirely) {
             return new ExecResult.TimedOut();
         }
@@ -70,7 +84,7 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
 
     @Override
     public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
-        if (!execChannelRejectedEntirely) {
+        if (!execChannelRejectedEntirely && !allowExecInteractiveAnyway) {
             throw new IllegalStateException("execInteractive called without simulating an exec-rejecting device");
         }
         String output = outputByCommand.get(spec.command());

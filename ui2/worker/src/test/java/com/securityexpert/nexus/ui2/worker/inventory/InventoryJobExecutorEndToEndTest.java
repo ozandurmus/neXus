@@ -267,6 +267,80 @@ class InventoryJobExecutorEndToEndTest {
         assertEquals("203.0.113.5/24", vsid3.interfaces().get(0).addresses().get(0).address());
     }
 
+    /** Product Owner, 2026-09-22: "discovery'den sonra inventory pull bir metod değil mi. Cihaz
+     * tipini biliyorsak neden en başta doğru yöntemle çekemiyoruz?" -- once a device's discovery
+     * candidate already names a Spark/Gaia Embedded model (the same {@code
+     * JooqDeviceRepository.DEVICE_SUMMARY_SELECT} join confirm's own model-hint routing uses),
+     * inventory collection must try the interactive shell FIRST and skip the exec attempts
+     * entirely, rather than discovering the same rejection the slow way on every single command. */
+    @Test
+    void aDiscoveryKnownSparkModelTriesTheInteractiveShellFirstSkippingExecEntirely() {
+        // Every read below has real, non-blank scripted output (the same fixture as
+        // checkPointVsxHostWithTwoVsidsRecordsOneRunWithThreeContexts above) -- a blank result is
+        // treated as "no answer" on either channel and legitimately falls back to the other one,
+        // so proving a clean, zero-exec-calls run needs a device that never produces a blank read.
+        Map<String, String> outputByCommand = Map.ofEntries(
+                Map.entry(InventoryReadPlan.CP_VSX_STAT,
+                        "ID | Type | Name\n0 | S | VS0\n2 | S | vs-finance\n5 | S | vs-hr\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_FW_GETIFS), "localhost eth0 192.0.2.10 255.255.255.0\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ROUTE_SHOW), "default via 192.0.2.1 dev eth0 proto 7\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_CPHAPROB_STAT), "1 (local) 192.0.2.10 100% ACTIVE gw-a\n"),
+                Map.entry(vsenvZeroFaultTolerant(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF),
+                        "Virtual cluster interfaces: 1\neth0        192.0.2.1\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY),
+                        "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 198.51.100.99/24 scope global eth0\n"),
+                // The batch command's own scripted output carries no BATCH_TAG, so the code falls
+                // back to the individual reads above exactly as it does when this same command
+                // fails over exec elsewhere in this file -- it still answers over the interactive
+                // shell, so this test never has to reach exec() for it either.
+                Map.entry("bash -lc 'echo \"===NEXUS_SECTION:ifs===\"; vsenv 0 >/dev/null 2>&1 || true; fw getifs; "
+                                + "echo \"===NEXUS_SECTION:route===\"; vsenv 0 >/dev/null 2>&1 || true; ip -4 route show table all; "
+                                + "echo \"===NEXUS_SECTION:ha===\"; vsenv 0 >/dev/null 2>&1 || true; cphaprob stat; "
+                                + "echo \"===NEXUS_SECTION:vip===\"; vsenv 0 >/dev/null 2>&1 || true; cphaprob -a if; "
+                                + "echo \"===NEXUS_SECTION:END===\"'",
+                        "batch format not scripted here on purpose"),
+                Map.entry("bash -lc 'vsenv 2 && fw getifs && ip -4 route show'",
+                        "default via 203.0.113.1 dev eth0 proto 7\n"),
+                Map.entry("bash -lc 'vsenv 2 && cphaprob -a if'",
+                        "Interface Name:  Status:\neth0        UP\n\nVirtual cluster interfaces: 1\neth0        203.0.113.2\n"),
+                Map.entry("bash -lc 'vsenv 2 && ip -4 addr show'",
+                        "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 198.51.100.99/24 scope global eth0\n"),
+                Map.entry("bash -lc 'vsenv 2 && cphaprob stat'", "1 (local) 203.0.113.2 100% ACTIVE gw-a\n"),
+                Map.entry("bash -lc 'vsenv 5 && fw getifs && ip -4 route show'",
+                        "198.51.100.0/29 dev eth0 proto kernel scope link src 198.51.100.2\n"),
+                Map.entry("bash -lc 'vsenv 5 && cphaprob -a if'",
+                        "Virtual cluster interfaces: 1\neth0        198.51.100.2\n"),
+                Map.entry("bash -lc 'vsenv 5 && ip -4 addr show'",
+                        "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 198.51.100.99/24 scope global eth0\n"),
+                Map.entry("bash -lc 'vsenv 5 && cphaprob stat'", "1 (local) 198.51.100.2 100% ACTIVE gw-a\n"));
+
+        ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
+        transport.allowExecInteractiveWithoutRejection();
+        InventoryJobExecutorFakes.FakeLeaseRepository leaseRepo =
+                new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
+        InventoryJobExecutorFakes.FakeStepAttemptRepository attemptRepo = new InventoryJobExecutorFakes.FakeStepAttemptRepository();
+        InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort devicePort = new InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort();
+        InventoryJobExecutorFakes.FakeDeviceRepository deviceRepository = new InventoryJobExecutorFakes.FakeDeviceRepository();
+        InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository =
+                new InventoryJobExecutorFakes.FakeDeviceInventoryRepository();
+
+        InventoryCapabilityExecutor capabilityExecutor =
+                new InventoryCapabilityExecutor(transport, ref -> { throw new IllegalStateException("not used"); });
+        InventoryJobExecutor executor = new InventoryJobExecutor(leaseRepo, attemptRepo, devicePort, deviceRepository,
+                inventoryRepository, capabilityExecutor);
+
+        InventoryRequest request = InventoryRequest.checkPoint(new ConnectionTarget("ep-1", "gw-a-host", 22), "cred-1",
+                "trust-1", Optional.of("Check Point 1570/1590 Appliances"));
+
+        JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request, false);
+
+        assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        assertEquals(0, transport.execCallCount(),
+                "a discovery-known Spark model must skip the exec channel entirely, trying the interactive shell first");
+        InventoryRun run = inventoryRepository.lastRecordedRun;
+        assertEquals(3, run.contexts().size(), "physical + VSID 2 + VSID 5");
+    }
+
     private static String vsenvZero(String read) {
         return "bash -lc 'vsenv 0 && " + read + "'";
     }

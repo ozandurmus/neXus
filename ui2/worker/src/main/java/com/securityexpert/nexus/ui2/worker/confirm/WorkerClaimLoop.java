@@ -165,8 +165,10 @@ public final class WorkerClaimLoop {
 
         try {
             if (InventoryCapabilityIds.isInventoryCapability(job.capabilityId())) {
+                Optional<String> inventoryModelHint = deviceRepository.findSummary(job.targetDeviceId())
+                        .flatMap(com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedModel);
                 InventoryRequest inventoryRequest = buildInventoryRequest(job.capabilityId(), endpoint.endpointId(),
-                        endpoint.addressRef(), device.credentialReferenceId());
+                        endpoint.addressRef(), device.credentialReferenceId(), inventoryModelHint);
                 inventoryJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), inventoryRequest,
                         false);
                 return true;
@@ -223,12 +225,12 @@ public final class WorkerClaimLoop {
     }
 
     private InventoryRequest buildInventoryRequest(String capabilityId, String endpointId, String addressRef,
-            String credentialRef) {
+            String credentialRef, Optional<String> modelHint) {
         if (InventoryCapabilityIds.CP_INVENTORY_COLLECT.equals(capabilityId)) {
             String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
                     hostOf(addressRef), portOf(addressRef));
             return InventoryRequest.checkPoint(new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef)),
-                    credentialRef, trustRuleRef);
+                    credentialRef, trustRuleRef, modelHint);
         }
         if (InventoryCapabilityIds.PAN_INVENTORY_COLLECT.equals(capabilityId)) {
             return InventoryRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);

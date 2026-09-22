@@ -116,6 +116,8 @@ public final class InventoryCapabilityExecutor {
             boolean strictRefuseEnabled) {
         ConnectionTarget target = request.connectionTarget()
                 .orElseThrow(() -> new IllegalArgumentException("check_point inventory requires a connectionTarget"));
+        boolean preferInteractiveShell =
+                com.securityexpert.nexus.ui2.worker.transport.CheckPointSparkModelHint.isKnownSparkModel(request.modelHint());
         long overallStart = System.currentTimeMillis();
         LOG.log(System.Logger.Level.INFO, "[INVENTORY_COLLECT_START] Check Point target={0}:{1}", target.host(), target.port());
         ConnectSpec spec = new ConnectSpec(request.credentialRef(), request.trustRuleRef(), Optional.empty());
@@ -147,7 +149,7 @@ public final class InventoryCapabilityExecutor {
             }
 
             // Executor order (14D §3): detect VSX first, bare, before any other read's form is chosen.
-            String vsxProbeOutput = execOutput(session, InventoryReadPlan.CP_VSX_STAT);
+            String vsxProbeOutput = execOutput(session, InventoryReadPlan.CP_VSX_STAT, preferInteractiveShell);
             CheckPointVsxStatParser.VsxStatResult vsxStat = CheckPointVsxStatParser.parse(vsxProbeOutput);
             boolean vsxHost = vsxStat.vsx();
             LOG.log(System.Logger.Level.INFO,
@@ -176,7 +178,7 @@ public final class InventoryCapabilityExecutor {
             // Single-session compound batch read: all physical + VSID reads in one subshell
             Map<String, String> batchSections = Map.of();
             String batchCmd = buildCheckPointBatchCommand(vsxHost);
-            String batchOutput = execOutput(session, batchCmd);
+            String batchOutput = execOutput(session, batchCmd, preferInteractiveShell);
             if (!batchOutput.isBlank() && batchOutput.contains(BATCH_TAG)) {
                 batchSections = parseBatchSections(batchOutput);
                 LOG.log(System.Logger.Level.INFO,
@@ -186,13 +188,13 @@ public final class InventoryCapabilityExecutor {
 
             String fwGetifsOutput = batchSections.containsKey("ifs")
                     ? batchSections.get("ifs")
-                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_FW_GETIFS, vsxHost));
+                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_FW_GETIFS, vsxHost), preferInteractiveShell);
             String routeOutput = batchSections.containsKey("route")
                     ? batchSections.get("route")
-                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ROUTE_SHOW, vsxHost));
+                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ROUTE_SHOW, vsxHost), preferInteractiveShell);
             String haStatOutput = batchSections.containsKey("ha")
                     ? batchSections.get("ha")
-                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost));
+                    : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost), preferInteractiveShell);
 
             long parseStart = System.currentTimeMillis();
             List<ParsedInterface> physicalInterfaces = CheckPointFwGetifsParser.parse(fwGetifsOutput);
@@ -204,24 +206,24 @@ public final class InventoryCapabilityExecutor {
 
             // Quantum Spark / Gaia Embedded or restricted Clish shell fallback
             if (physicalInterfaces.isEmpty()) {
-                String clishIf = execOutput(session, "show interfaces all");
+                String clishIf = execOutput(session, "show interfaces all", preferInteractiveShell);
                 if (clishIf.isBlank()) {
-                    clishIf = execOutput(session, "show interfaces table");
+                    clishIf = execOutput(session, "show interfaces table", preferInteractiveShell);
                 }
                 if (clishIf.isBlank()) {
-                    clishIf = execOutput(session, "clish -c 'show interfaces all'");
+                    clishIf = execOutput(session, "clish -c 'show interfaces all'", preferInteractiveShell);
                 }
                 if (!clishIf.isBlank()) {
                     physicalInterfaces = parseClishInterfaces(clishIf);
                 }
             }
             if (physicalRoutes.isEmpty()) {
-                String clishRoutes = execOutput(session, "show route all");
+                String clishRoutes = execOutput(session, "show route all", preferInteractiveShell);
                 if (clishRoutes.isBlank()) {
-                    clishRoutes = execOutput(session, "show route");
+                    clishRoutes = execOutput(session, "show route", preferInteractiveShell);
                 }
                 if (clishRoutes.isBlank()) {
-                    clishRoutes = execOutput(session, "clish -c 'show route all'");
+                    clishRoutes = execOutput(session, "clish -c 'show route all'", preferInteractiveShell);
                 }
                 if (!clishRoutes.isBlank()) {
                     physicalRoutes = parseClishRoutes(clishRoutes);
@@ -239,7 +241,7 @@ public final class InventoryCapabilityExecutor {
             // fails ("This is only supported on a VSX machine") -- short-circuits cphaprob entirely; it never
             // runs at all. The batch's own prefix already tolerates exactly this (vsenv ... || true; <read>);
             // this call now matches that fault-tolerant shape instead of checkPointPhysicalCommand's &&.
-            String vipOutput = execOutputPty(session, faultTolerantVsenv0(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost));
+            String vipOutput = execOutputPty(session, faultTolerantVsenv0(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost), preferInteractiveShell);
             List<VirtualInterfaceAddress> physicalVips = CheckPointClusterVirtualInterfaceParser.parse(vipOutput);
             LOG.log(System.Logger.Level.INFO,
                     "[INVENTORY_VIP_PARSE] target={0}:{1} vip_output_len={2} vip_addresses_found={3}",
@@ -252,7 +254,7 @@ public final class InventoryCapabilityExecutor {
             // its own address is never used (mergeVirtualAddresses/physicalInterfaces already carry
             // the real address from fw getifs).
             String physicalStateOnlyOutput =
-                    execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY, vsxHost));
+                    execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY, vsxHost), preferInteractiveShell);
             Map<String, String> physicalStates = new java.util.LinkedHashMap<>(
                     CheckPointClusterVirtualInterfaceParser.parseInterfaceStates(vipOutput));
             for (ParsedInterface iface : CheckPointIpAddrParser.parse(physicalStateOnlyOutput, "")) {
@@ -285,18 +287,18 @@ public final class InventoryCapabilityExecutor {
                 // member. A standalone (non-clustered) VSX gateway has no such distinction -- cphaprob
                 // reports no cluster there -- so it keeps using "fw getifs" as measured earlier.
                 List<String> steps = InventoryReadPlan.checkPointVsidSteps(vsid);
-                String addrAndRouteCombined = execOutput(session, steps.get(0));
+                String addrAndRouteCombined = execOutput(session, steps.get(0), preferInteractiveShell);
                 List<ParsedInterface> vsInterfaces;
                 CheckPointVsidCompositeOutputSplitter.Halves halves =
                         CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
                 if (clusterMember) {
-                    String clusterIfOutput = execOutput(session, steps.get(1));
+                    String clusterIfOutput = execOutput(session, steps.get(1), preferInteractiveShell);
                     // cphaprob's own status table only lists a "Required interfaces" subset (Product
                     // Owner measured live, 2026-09-21); "ip -4 addr show" still carries a real
                     // up/down flag for every interface, so it is read a second time here for that
                     // flag alone -- its address is never used (that is the exact value measured
                     // wrong on a VSX cluster member).
-                    String stateOnlyOutput = execOutput(session, InventoryReadPlan.checkPointVsidStateRead(vsid));
+                    String stateOnlyOutput = execOutput(session, InventoryReadPlan.checkPointVsidStateRead(vsid), preferInteractiveShell);
                     Map<String, String> statesByName = new java.util.LinkedHashMap<>(
                             CheckPointClusterVirtualInterfaceParser.parseInterfaceStates(clusterIfOutput));
                     for (ParsedInterface iface : CheckPointIpAddrParser.parse(stateOnlyOutput, "")) {
@@ -308,7 +310,7 @@ public final class InventoryCapabilityExecutor {
                 } else {
                     vsInterfaces = CheckPointFwGetifsParser.parse(halves.addrOutput());
                 }
-                execOutput(session, steps.get(2));
+                execOutput(session, steps.get(2), preferInteractiveShell);
                 contexts.add(new InventoryContext(vsid,
                         toInventoryInterfaces(vsInterfaces),
                         toInventoryRoutes(CheckPointIpRouteParser.parse(halves.routeOutput()))));
@@ -759,7 +761,23 @@ public final class InventoryCapabilityExecutor {
         return routes;
     }
 
-    private String execOutput(TransportSession session, String command) {
+    /**
+     * @param preferInteractiveShell true when this device's discovery-known model already names a
+     * Quantum Spark/Gaia Embedded appliance ({@link
+     * com.securityexpert.nexus.ui2.worker.transport.CheckPointSparkModelHint#isKnownSparkModel}) --
+     * the interactive shell is tried first (Product Owner, 2026-09-22: "discovery'den sonra
+     * inventory pull bir metod değil mi. Cihaz tipini biliyorsak neden en başta doğru yöntemle
+     * çekemiyoruz?"), skipping the exec attempt that is otherwise doomed to run out its full
+     * {@link #READ_TIMEOUT} first; the exec channel is still tried as a fallback if the
+     * interactive shell itself does not answer, in case the hint is wrong.
+     */
+    private String execOutput(TransportSession session, String command, boolean preferInteractiveShell) {
+        if (preferInteractiveShell) {
+            String interactiveOutput = interactiveFallback(session, command);
+            if (interactiveOutput != null) {
+                return interactiveOutput;
+            }
+        }
         long startMs = System.currentTimeMillis();
         ExecResult result;
         try {
@@ -798,8 +816,9 @@ public final class InventoryCapabilityExecutor {
         // ChannelFailed at all, so gating the interactive-shell fallback on ChannelFailed alone
         // (as first shipped) never triggered here and inventory collection just spun. Both
         // failure shapes get the same fallback (confirm's own ConfirmCapabilityExecutor.execOutput
-        // does not distinguish them either), never for a command that merely printed nothing.
-        if (result instanceof ExecResult.ChannelFailed || result instanceof ExecResult.TimedOut) {
+        // does not distinguish them either), never for a command that merely printed nothing. Only
+        // reached when the interactive shell was not already tried first above.
+        if (!preferInteractiveShell && (result instanceof ExecResult.ChannelFailed || result instanceof ExecResult.TimedOut)) {
             String interactiveOutput = interactiveFallback(session, command);
             if (interactiveOutput != null) {
                 return interactiveOutput;
@@ -839,7 +858,13 @@ public final class InventoryCapabilityExecutor {
      * requests a pseudo-terminal -- some vendor report commands (measured: cphaprob's cluster-interface read)
      * produce nothing at all without one. No bash-lc fallback here: a pty-requiring command that still fails
      * under a pty is not helped by a plain, non-pty bash retry. */
-    private String execOutputPty(TransportSession session, String command) {
+    private String execOutputPty(TransportSession session, String command, boolean preferInteractiveShell) {
+        if (preferInteractiveShell) {
+            String interactiveOutput = interactiveFallback(session, command);
+            if (interactiveOutput != null) {
+                return interactiveOutput;
+            }
+        }
         long startMs = System.currentTimeMillis();
         ExecResult result;
         try {
@@ -871,7 +896,7 @@ public final class InventoryCapabilityExecutor {
                 yield "";
             }
         };
-        if (result instanceof ExecResult.ChannelFailed || result instanceof ExecResult.TimedOut) {
+        if (!preferInteractiveShell && (result instanceof ExecResult.ChannelFailed || result instanceof ExecResult.TimedOut)) {
             String interactiveOutput = interactiveFallback(session, command);
             if (interactiveOutput != null) {
                 return interactiveOutput;
