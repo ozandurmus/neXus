@@ -248,6 +248,9 @@ public final class DeviceRegistrationController {
         body.put("content_versions", facts.map(DevicePlatformFacts::contentVersions).filter(m -> !m.isEmpty()).orElse(null));
         body.put("uptime_text", facts.flatMap(DevicePlatformFacts::uptimeText).orElse(null));
         body.put("platform_facts_observed_at", facts.flatMap(DevicePlatformFacts::observedAt).map(Object::toString).orElse(null));
+        // Amendment A-2026-09-23 (PLATFORM_IDENTITY_FACTS_CONTRACT §2): which read produced these facts -- a read-kind
+        // token such as cp_show_asset_system_cpinfo_hotfixes_uptime, never device output.
+        body.put("platform_facts_source", facts.map(DevicePlatformFacts::sourceRead).orElse(null));
     }
 
     private static Map<String, Object> toSummaryBody(DeviceSummaryRecord summary) {

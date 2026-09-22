@@ -451,6 +451,8 @@ export interface DeviceSummary {
   readonly content_versions?: Readonly<Record<string, string>> | null;
   readonly uptime_text?: string | null;
   readonly platform_facts_observed_at?: string | null;
+  /** Which read produced the platform facts (read-kind token; amendment A-2026-09-23). */
+  readonly platform_facts_source?: string | null;
   /** Newest inventory run of the device (Overview "inventory evidence age" filters). */
   readonly inventory_collected_at?: string | null;
 }

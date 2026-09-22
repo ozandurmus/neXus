@@ -254,7 +254,9 @@ export function DeviceIdentityTable({ devices, ariaLabel = "Member identity" }: 
               <TableCell><Ts at={m.platform_facts_observed_at} /></TableCell>
               <TableCell><Ts at={m.inventory_collected_at} /></TableCell>
               <TableCell>
-                <Unknown reason="The service records which read produced the platform facts (source_read), but GET /devices does not return it yet." />
+                {m.platform_facts_source
+                  ? <Box component="span" title="The read that produced the platform facts" sx={{ fontFamily: MONO, fontSize: 11.5 }}>{m.platform_facts_source}</Box>
+                  : <Unknown reason="No platform-facts read has been recorded for this member." />}
               </TableCell>
             </TableRow>
           ))}

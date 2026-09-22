@@ -66,3 +66,13 @@ extracted, on one gateway and one VSX member.
 1. Palo Alto parse-scope extension + V46 + API + UI card (no new gate).
 2. Check Point gate rows signed off → measurement → parser → same table/UI.
 3. Cluster DIFF on version / hotfix.
+
+## Amendment A-2026-09-23 — evidence source on the device endpoints (Product Owner approval)
+
+Source: the UI review (`docs/design/UI_VISUAL_REVIEW_2026_09_23_FABLE.md` §3 Devices, "Identity & provenance ...
+evidence source") and the Product Owner's approval on 2026-09-23 ("onay verdim devam et").
+`GET /devices` and `GET /devices/{id}` additionally carry `platform_facts_source`: the stored `source_read` of the
+device's platform-facts row -- a read-kind token naming which read produced the facts (e.g.
+`cp_show_asset_system_cpinfo_hotfixes_uptime`), never device output. `null` when no facts row exists; the screen then
+writes UNKNOWN. No masking is needed (it names a product read, not an estate value); it still passes the response
+advice like every field. Nothing else in §1–§4 changes.
