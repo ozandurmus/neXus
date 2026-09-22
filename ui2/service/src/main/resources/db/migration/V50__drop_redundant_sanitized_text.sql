@@ -5,6 +5,9 @@
 -- either. Loading them drove the service out of heap. Every artefact stays in
 -- the encrypted artefact store; only the redundant in-row text is released.
 -- The repository now keeps text on the newest run of each read kind only.
+SELECT set_config('app.actor_fingerprint', 'migration:V50_drop_redundant_sanitized_text', true);
+SELECT set_config('app.action_id', 'configuration_text_release_by_migration', true);
+
 UPDATE device_configuration_run SET sanitized_text = NULL
  WHERE read_kind = 'effective_running' AND sanitized_text IS NOT NULL;
 
