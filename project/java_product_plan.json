@@ -139,7 +139,9 @@
     "vendor_cp_provider1_mds_backup": "java_feature",
     "vendor_bluecoat_proxysg_backup": "java_feature",
     "pan_backup_include_set_format_config": "java_feature",
-    "cli_parity_for_every_ui_action": "java_feature"
+    "cli_parity_for_every_ui_action": "java_feature",
+    "backup_screen_backbox_model": "java_feature",
+    "jobs_screen_history_filter_pagination_export": "java_feature"
   },
   "converted_lessons": [
     {

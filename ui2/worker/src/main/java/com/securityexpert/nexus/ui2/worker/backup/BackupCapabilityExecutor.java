@@ -145,7 +145,13 @@ public final class BackupCapabilityExecutor {
         }
         String name = archivePath.orElse("<unnamed>");
         if (status == BackupStatus.FAILED) {
-            return new BackupResult.SubmitRefused("show backup status reported a failed backup for " + name);
+            // The device's own words, digits masked, so a refusal ("backup already in progress", a full
+            // disk) can be told apart from a run the device really failed -- the run's reason carries
+            // the same shape, never the archive name's hostname.
+            String shape = maskedShape(poll.lastOutput());
+            LOG.log(System.Logger.Level.WARNING, "[BACKUP_STATUS_FAILED] status_shape=" + shape);
+            return new BackupResult.SubmitRefused("show backup status reported a failed backup; status said: "
+                    + shape.replaceAll("[A-Za-z0-9._-]+\\.tgz", "<archive>"));
         }
         if (status != BackupStatus.SUCCEEDED) {
             return new BackupResult.OutcomeUnknown("show backup status never reported a terminal state for " + name
@@ -165,7 +171,12 @@ public final class BackupCapabilityExecutor {
                     handle.sink());
         } catch (RuntimeException e) {
             closeQuietly(handle);
-            return new BackupResult.ArtefactStoreFailed("sftp fetch failed: " + e.getMessage());
+            // Measured live 2026-09-22: three runs ended "sftp fetch failed: " with nothing after the colon --
+            // an exception with no message. The class name is the reason then, and the stack goes to the log.
+            LOG.log(System.Logger.Level.WARNING, "[BACKUP] sftp fetch threw " + e.getClass().getName(), e);
+            String message = e.getMessage() == null || e.getMessage().isBlank() ? e.getClass().getSimpleName()
+                    : e.getClass().getSimpleName() + ": " + e.getMessage();
+            return new BackupResult.ArtefactStoreFailed("sftp fetch failed: " + message);
         }
         if (!(fetchResult instanceof FetchStreamResult.Fetched)) {
             closeQuietly(handle);

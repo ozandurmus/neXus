@@ -39,7 +39,9 @@ spec:
           effect: "NoSchedule"
       # EP-4: the process must terminate on SIGTERM within this window
       # without leaving in-flight work mid-step.
-      terminationGracePeriodSeconds: 30
+      # A rollout must let a running backup finish: the worker drains on SIGTERM
+      # (Ui2WorkerMain, UI2_WORKER_DRAIN_SECONDS=840) and this window covers it.
+      terminationGracePeriodSeconds: 900
       containers:
         - name: worker
           # BP-7/OS-10: an immutable reference. Same image as the service

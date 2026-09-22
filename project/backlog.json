@@ -801,6 +801,24 @@
       "priority": "P1",
       "target": "PO directive 2026-09-22; ui2/cli CliEntryPoint is the seed",
       "note": ""
+    },
+    {
+      "id": "backup_screen_backbox_model",
+      "category": "ui2",
+      "title": "Backup screen on the Backbox model: per-device history, schedule, baseline, run-now, download, compare in one view",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO directive 2026-09-22 (Backbox standard); download/contents/compare shipped 2026-09-22, history/schedule/baseline remain",
+      "note": ""
+    },
+    {
+      "id": "jobs_screen_history_filter_pagination_export",
+      "category": "ui2",
+      "title": "Jobs screen: full history (not only recent), top filters (state/type/device/time), numbered pagination, export",
+      "status": "planned",
+      "priority": "P0",
+      "target": "PO directive 2026-09-22, after the backup pass",
+      "note": ""
     }
   ]
 }

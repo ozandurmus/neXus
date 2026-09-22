@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T11:31:30Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T11:53:03Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -15,6 +15,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T11:31:30Z
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every c (target: JooqDeviceRepository DEVICE_SELECT later)
 - P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason a (target: jobs.outcome/terminal_reason/finished_at)
+- P0/planned jobs_screen_history_filter_pagination_export — Jobs screen: full history (not only recent), top filters ( (target: PO directive 2026-09-22, after the backu)
 - P0/planned pan_backup_include_set_format_config — PAN backup bundle: add the SSH 'show' (set-format) running (target: )
 - P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices ( (target: )
 - P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner vs DeviceComposit)
@@ -25,6 +26,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T11:31:30Z
 - P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, s (target: workflow §5 B1-4)
 - P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
 - P1/planned backup_plane_separate_service — Deliver the backup plane as the independent service the re (target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITEC)
+- P1/planned backup_screen_backbox_model — Backup screen on the Backbox model: per-device history, sc (target: PO directive 2026-09-22 (Backbox standar)
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
 - P1/planned cli_parity_for_every_ui_action — Every UI action has a CLI counterpart (the product must no (target: PO directive 2026-09-22; ui2/cli CliEntr)
 - P1/planned cluster_member_model_needs_second_query — Cluster members carry no hardware field in the gateway enu (target: Check Point management plane enumeration)

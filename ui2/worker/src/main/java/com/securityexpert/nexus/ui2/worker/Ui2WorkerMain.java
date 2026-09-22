@@ -244,13 +244,36 @@ public final class Ui2WorkerMain {
 
         JobRecordDao jobRecordDao = new JooqJobRecordDao(transactionBoundary);
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
+        java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         for (int i = 0; i < 10; i++) {
             WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
                     confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
                     backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofMinutes(10), checkPointTrustRuleRef,
                     paloAltoTrustRuleRef, backupCredentialRef);
+            claimLoops.add(claimLoop);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));
         }
+
+        // Graceful drain on SIGTERM (a rollout): stop claiming, finish what is running, up to
+        // UI2_WORKER_DRAIN_SECONDS (default 840 s -- the deployment's terminationGracePeriodSeconds
+        // is 900). Measured live 2026-09-22: without this, a rollout mid fleet-backup left jobs
+        // EXECUTING on a dead lease until the reconciler requeued them and failed others with a
+        // closed SSH session.
+        long drainSeconds = Long.parseLong(System.getenv().getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.Logger log = System.getLogger(Ui2WorkerMain.class.getName());
+            log.log(System.Logger.Level.INFO, "[WORKER_DRAIN] stop requested; finishing in-flight jobs (up to "
+                    + drainSeconds + " s)");
+            claimLoops.forEach(WorkerClaimLoop::requestStop);
+            executor.shutdown();
+            try {
+                boolean drained = executor.awaitTermination(drainSeconds, java.util.concurrent.TimeUnit.SECONDS);
+                log.log(System.Logger.Level.INFO, "[WORKER_DRAIN] " + (drained ? "all in-flight jobs finished"
+                        : "drain window elapsed with jobs still running; the reconciler will requeue them"));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, "worker-drain"));
 
         com.securityexpert.nexus.ui2.jobs.executor.JobReconciler reconciler =
                 new com.securityexpert.nexus.ui2.jobs.executor.JobReconciler(leaseRepository);

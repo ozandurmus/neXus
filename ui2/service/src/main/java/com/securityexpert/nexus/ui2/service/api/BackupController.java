@@ -76,7 +76,8 @@ public final class BackupController {
      * hostname or an address.
      */
     @PostMapping("/backups/{artefactId}/download")
-    public ResponseEntity<?> download(@PathVariable String artefactId,
+    public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> download(
+            @PathVariable String artefactId,
             @RequestBody(required = false) DownloadRequest request, HttpServletRequest servletRequest) {
         if (artefactId == null || !ARTEFACT_ID.matcher(artefactId).matches()) {
             return refusal(HttpStatus.BAD_REQUEST, "INVALID_ARTEFACT_ID", "MALFORMED_IDENTIFIER",
@@ -134,12 +135,28 @@ public final class BackupController {
 
     private static final java.util.regex.Pattern ARTEFACT_ID = java.util.regex.Pattern.compile("[A-Za-z0-9-]{8,64}");
 
-    private static ResponseEntity<Map<String, Object>> refusal(HttpStatus status, String error, String code, String reason) {
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /**
+     * A refusal on the download route, written as a streaming JSON body. The route's declared
+     * return type must be {@code ResponseEntity<StreamingResponseBody>} for Spring to stream the
+     * archive at all (measured live 2026-09-22: declared as {@code ResponseEntity<?>}, every
+     * download answered 500 "No converter"), so the refusals share that body type.
+     */
+    private static ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> refusal(
+            HttpStatus status, String error, String code, String reason) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("error", error);
         body.put("code", code);
         body.put("reason", reason);
-        return ResponseEntity.status(status).body(body);
+        byte[] json;
+        try {
+            json = JSON.writeValueAsBytes(body);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            json = ("{\"error\":\"" + error + "\"}").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        }
+        byte[] payload = json;
+        return ResponseEntity.status(status).header("Content-Type", "application/json").body(out -> out.write(payload));
     }
 
     @PostMapping({"/devices/{deviceId}/backup/collect", "/api/v2/backups/{deviceId}/run"})

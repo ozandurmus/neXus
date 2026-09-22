@@ -86,9 +86,21 @@ public final class WorkerClaimLoop {
 
     private static final System.Logger LOGGER = System.getLogger(WorkerClaimLoop.class.getName());
 
-    /** Runs until the thread is interrupted, sleeping {@code pollInterval} whenever the queue was empty. */
+    /**
+     * Drain flag: once set, this loop claims nothing more but finishes the job it is on.
+     * Measured live (2026-09-22): a rollout that killed the worker mid fleet-backup left three
+     * jobs EXECUTING on a dead lease and failed two more with a closed SSH session. The pod's
+     * shutdown hook sets this, then waits for the in-flight jobs (Ui2WorkerMain).
+     */
+    private volatile boolean stopRequested;
+
+    public void requestStop() {
+        stopRequested = true;
+    }
+
+    /** Runs until the thread is interrupted or {@link #requestStop()} was called, sleeping {@code pollInterval} whenever the queue was empty. */
     public void runUntilInterrupted(Duration pollInterval) {
-        while (!Thread.currentThread().isInterrupted()) {
+        while (!Thread.currentThread().isInterrupted() && !stopRequested) {
             try {
                 boolean claimed = claimAndExecuteOnce();
                 if (!claimed) {

@@ -325,7 +325,12 @@ public final class SshExecTransport implements DeviceTransport {
             channel.get(spec.remotePath(), bounded);
             return new FetchStreamResult.Fetched(bounded.count());
         } catch (JSchException | SftpException e) {
-            return new FetchStreamResult.Failed(String.valueOf(e.getMessage()));
+            // A closed session surfaces as an SftpException with an empty message (measured live
+            // 2026-09-22, three runs "sftp fetch failed: "): the class and, for SFTP, the status id
+            // are the reason then.
+            String detail = e.getMessage() == null || e.getMessage().isBlank() ? "no message" : e.getMessage();
+            String id = e instanceof SftpException sftp ? " id=" + sftp.id : "";
+            return new FetchStreamResult.Failed(e.getClass().getSimpleName() + id + ": " + detail);
         } finally {
             if (channel != null) {
                 channel.disconnect();
