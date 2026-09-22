@@ -24,7 +24,7 @@ export function JobStatusIndicator({
     return (
       <Tooltip title={`In progress: ${type ?? "Job"} is running...`} arrow>
         <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: dimension, height: dimension }}>
-          <CircularProgress size={size === "small" ? 13 : 16} thickness={5} sx={{ color: "#1976d2" }} />
+          <CircularProgress size={size === "small" ? 13 : 16} thickness={5} sx={{ color: m3.primary }} />
         </Box>
       </Tooltip>
     );
