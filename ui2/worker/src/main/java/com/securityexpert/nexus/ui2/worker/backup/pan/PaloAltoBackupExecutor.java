@@ -10,6 +10,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
+import com.securityexpert.nexus.ui2.jobs.transport.ConnectionTarget;
+import com.securityexpert.nexus.ui2.persistence.artefact.content.TarWriter;
 import com.securityexpert.nexus.ui2.jobs.transport.DeviceTransport;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
@@ -119,14 +121,10 @@ public final class PaloAltoBackupExecutor {
         SemanticDeviationEngine.DeviationOutcome deviationOutcome =
                 deviationEngine.evaluate("palo_alto", previousConfigXml, currentConfigXml);
 
-        // 2. Stream device-state bundle directly into envelope-encrypted storage
-        ArtefactStore.ArtefactHandle handle;
-        try {
-            handle = artefactStore.open(deviceId, jobId, "palo_alto", false);
-        } catch (IOException e) {
-            return new PanBackupResult(false, null, null, deviationOutcome, "Failed to open artefact store");
-        }
-
+        // 2. Device-state export, validated, held in a bounded buffer: the bundle written below needs
+        //    each member's size up front (tar), and a firewall's device-state is a few MB (measured
+        //    0.6-2.9 MB live) -- MAX_BUFFERED_DEVICE_STATE_BYTES refuses anything absurd.
+        java.io.ByteArrayOutputStream deviceState = new java.io.ByteArrayOutputStream(4 << 20);
         XmlApiSpec exportSpec = new XmlApiSpec(
                 "POST",
                 "export",
@@ -138,32 +136,54 @@ public final class PaloAltoBackupExecutor {
                 ),
                 Map.of("X-PAN-KEY", apiKey)
         );
-
+        XmlApiStreamOutcome<StreamedExport> streamOutcome;
         try {
-            XmlApiStreamOutcome<StreamedExport> streamOutcome = transport.xmlApiCallStreaming(
-                    target,
-                    exportSpec,
-                    EXPORT_TIMEOUT,
-                    is -> copyValidatedExport(is, handle.sink())
-            );
+            streamOutcome = transport.xmlApiCallStreaming(target, exportSpec, EXPORT_TIMEOUT,
+                    is -> copyValidatedExport(is, new BoundedOutputStream(deviceState, MAX_BUFFERED_DEVICE_STATE_BYTES)));
+        } catch (Exception e) {
+            return new PanBackupResult(false, null, null, deviationOutcome, "Device state export failed: stream transfer error");
+        }
+        if (!(streamOutcome instanceof XmlApiStreamOutcome.Completed<StreamedExport> completed)) {
+            String why = streamOutcome instanceof XmlApiStreamOutcome.Failed<StreamedExport> failed ? failed.reason() : "transport stream incomplete";
+            return new PanBackupResult(false, null, null, deviationOutcome, "Streaming export failed: " + why);
+        }
+        StreamedExport export = completed.handled();
+        // A device-state export is a gzip archive; anything else (an XML <response status="error">
+        // for a wrong key, a role without export rights, an unknown category...) is a refusal and
+        // is never stored as a backup (measured live, 2026-09-22: 108-byte XML errors stored as V1).
+        if (completed.httpStatus() != 200 || export.xmlErrorSnippet() != null || !export.gzip() || export.bytes() <= 0) {
+            String why = export.xmlErrorSnippet() != null
+                    ? describeXmlError(export.xmlErrorSnippet(), "HTTP " + completed.httpStatus())
+                    : "HTTP " + completed.httpStatus() + ", " + export.bytes() + " bytes, gzip=" + export.gzip();
+            return new PanBackupResult(false, null, null, deviationOutcome, "device-state export refused by the device: " + why);
+        }
 
-            if (!(streamOutcome instanceof XmlApiStreamOutcome.Completed<StreamedExport> completed)) {
-                handle.close();
-                String why = streamOutcome instanceof XmlApiStreamOutcome.Failed<StreamedExport> failed ? failed.reason() : "transport stream incomplete";
-                return new PanBackupResult(false, null, null, deviationOutcome, "Streaming export failed: " + why);
-            }
-            StreamedExport export = completed.handled();
-            // A device-state export is a gzip archive; anything else (an XML <response status="error">
-            // for a wrong key, a role without export rights, an unknown category...) is a refusal and
-            // is never stored as a backup (measured live, 2026-09-22: 108-byte XML errors stored as V1).
-            if (completed.httpStatus() != 200 || export.xmlErrorSnippet() != null || !export.gzip() || export.bytes() <= 0) {
-                handle.close();
-                String why = export.xmlErrorSnippet() != null
-                        ? describeXmlError(export.xmlErrorSnippet(), "HTTP " + completed.httpStatus())
-                        : "HTTP " + completed.httpStatus() + ", " + export.bytes() + " bytes, gzip=" + export.gzip();
-                return new PanBackupResult(false, null, null, deviationOutcome, "device-state export refused by the device: " + why);
-            }
+        // 3. The set-format running configuration over the CLI (Product Owner P0, 2026-09-22: "PAN'daki
+        //    show kısmını da bu backupun içine ekleyelim"). Part of the bundle, so its absence fails the
+        //    run with its reason -- a backup that silently lacks half its content is not a backup.
+        String sshHost = target.baseUrl().replaceFirst("^https?://", "").replaceFirst("/.*$", "").replaceFirst(":\\d+$", "");
+        ConnectionTarget sshTarget = new ConnectionTarget(target.endpointId(), sshHost, SSH_PORT);
+        String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver
+                .scopeRef(sshHost, SSH_PORT);
+        PanSetConfigReader.Outcome setConfig = new PanSetConfigReader(transport).read(sshTarget, credentialRef, trustRuleRef);
+        if (!(setConfig instanceof PanSetConfigReader.Outcome.Read read)) {
+            String why = ((PanSetConfigReader.Outcome.Unavailable) setConfig).reason();
+            return new PanBackupResult(false, null, null, deviationOutcome, "pan_set_config_unavailable: " + why);
+        }
 
+        // 4. One bundle artefact: a gzip tar holding both members, so the download is one file, the
+        //    listing shows both and a compare tells which of the two changed.
+        ArtefactStore.ArtefactHandle handle;
+        try {
+            handle = artefactStore.open(deviceId, jobId, "palo_alto", false);
+        } catch (IOException e) {
+            return new PanBackupResult(false, null, null, deviationOutcome, "Failed to open artefact store");
+        }
+        try {
+            try (TarWriter tar = new TarWriter(new java.util.zip.GZIPOutputStream(handle.sink()))) {
+                tar.file(BUNDLE_DEVICE_STATE, deviceState.toByteArray());
+                tar.file(BUNDLE_RUNNING_CONFIG_SET, read.setFormatText().getBytes(StandardCharsets.UTF_8));
+            }
             ArtefactStore.ArtefactMetadata metadata = handle.finish();
             return new PanBackupResult(true, metadata.ref().value(), metadata, deviationOutcome, null);
         } catch (Exception e) {
@@ -171,7 +191,37 @@ public final class PaloAltoBackupExecutor {
                 handle.close();
             } catch (IOException ignored) {
             }
-            return new PanBackupResult(false, null, null, deviationOutcome, "Device state export failed: stream transfer error");
+            return new PanBackupResult(false, null, null, deviationOutcome, "bundle could not be stored: " + e.getClass().getSimpleName());
+        }
+    }
+
+    public static final String BUNDLE_DEVICE_STATE = "device-state.tgz";
+    public static final String BUNDLE_RUNNING_CONFIG_SET = "running-config.set";
+    private static final int SSH_PORT = 22;
+    private static final long MAX_BUFFERED_DEVICE_STATE_BYTES = 256L * 1024 * 1024;
+
+    /** Refuses, mid-stream, a body larger than the bundle is willing to hold in memory. */
+    private static final class BoundedOutputStream extends java.io.FilterOutputStream {
+        private final long limit;
+        private long written;
+
+        BoundedOutputStream(OutputStream out, long limit) {
+            super(out);
+            this.limit = limit;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            write(new byte[] {(byte) b}, 0, 1);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            written += len;
+            if (written > limit) {
+                throw new IOException("device-state export exceeds " + limit + " bytes");
+            }
+            out.write(b, off, len);
         }
     }
 

@@ -129,8 +129,42 @@ public final class WorkerClaimLoop {
         if (claim.isEmpty()) {
             return false;
         }
-        long claimMs = System.currentTimeMillis();
         ClaimedJob claimed = claim.get();
+        // C2 "lease, heartbeat, execute, release": the lease is renewed while the job runs. Measured
+        // live 2026-09-22: a 1.4 GB Gaia backup outlived the 10-minute lease, the reconciler requeued
+        // it while it was still running, a second thread started the same backup on the same device,
+        // and the pair looped until the fifth epoch failed it.
+        java.util.concurrent.ScheduledFuture<?> heartbeat = scheduleHeartbeat(claimed);
+        try {
+            return executeClaimed(claimed);
+        } finally {
+            heartbeat.cancel(false);
+        }
+    }
+
+    private static final java.util.concurrent.ScheduledExecutorService HEARTBEATS =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "job-lease-heartbeat");
+                t.setDaemon(true);
+                return t;
+            });
+
+    private java.util.concurrent.ScheduledFuture<?> scheduleHeartbeat(ClaimedJob claimed) {
+        long periodSeconds = Math.max(5, leaseDuration.toSeconds() / 3);
+        return HEARTBEATS.scheduleAtFixedRate(() -> {
+            try {
+                if (!leaseRepository.heartbeat(claimed.jobId(), claimed.leaseEpoch(), leaseDuration)) {
+                    LOGGER.log(System.Logger.Level.WARNING, "[WORKER_HEARTBEAT] lease for job {0} epoch {1} is no longer "
+                            + "ours; the run continues only until its next fenced write", claimed.jobId(), claimed.leaseEpoch());
+                }
+            } catch (RuntimeException e) {
+                LOGGER.log(System.Logger.Level.WARNING, "[WORKER_HEARTBEAT] renewal failed: " + e.getMessage());
+            }
+        }, periodSeconds, periodSeconds, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private boolean executeClaimed(ClaimedJob claimed) {
+        long claimMs = System.currentTimeMillis();
         Optional<JobRow> jobOpt = jobRecordDao.find(claimed.jobId());
         if (jobOpt.isEmpty()) {
             LOGGER.log(System.Logger.Level.WARNING, "Claimed job has no row: " + claimed.jobId());

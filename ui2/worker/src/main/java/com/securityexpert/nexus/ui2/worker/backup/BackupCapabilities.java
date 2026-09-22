@@ -63,8 +63,26 @@ public final class BackupCapabilities {
         return new CapabilityRegistryLoader(gateRegistry).load(spec);
     }
 
+    /**
+     * The CLI half of the PAN bundle (V43 gate rows): four interactive reads in operational mode,
+     * run by {@code PaloAltoBackupExecutor} inside every {@code pan_device_state_backup} run --
+     * never a job of its own. Registered so the gate alignment holds for its literals.
+     */
+    public static Capability paloAltoSetConfig(GateRegistryPort gateRegistry) {
+        List<CapabilityStep> steps = new java.util.ArrayList<>();
+        steps.add(connectStep());
+        for (String command : com.securityexpert.nexus.ui2.worker.backup.pan.PanSetConfigReader.COMMANDS) {
+            steps.add(new CapabilityStep(StepKind.EXEC, "operational", command, false, Optional.empty(),
+                    Optional.empty(), Optional.empty()));
+        }
+        CapabilitySpec spec = new CapabilitySpec(BackupCapabilityIds.PAN_SET_CONFIG_READ, "palo_alto",
+                "pan_firewall", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, List.copyOf(steps),
+                List.of(disconnectStep()), "14H", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistry).load(spec);
+    }
+
     public static List<Capability> all(GateRegistryPort gateRegistry) {
-        return List.of(checkPoint(gateRegistry), paloAlto(gateRegistry));
+        return List.of(checkPoint(gateRegistry), paloAlto(gateRegistry), paloAltoSetConfig(gateRegistry));
     }
 
     private static CapabilityStep xmlApiCallStep(String send) {

@@ -47,7 +47,23 @@ class PaloAltoBackupExecutorTest {
         byte[] exportBody = GZIP_HEADER_ARCHIVE;
         int exportStatus = 200;
 
-        @Override public ConnectResult connect(ConnectionTarget t, ConnectSpec s, Duration d) { throw new UnsupportedOperationException(); }
+        boolean sshReachable = true;
+        final List<String> shellCommands = new ArrayList<>();
+        String setFormatText = "set deviceconfig system hostname fw\nset deviceconfig system dns-setting servers primary 192.0.2.53\n"
+                + "set network interface ethernet ethernet1/1 layer3 ip 192.0.2.1/24\nset vsys vsys1 zone trust\n"
+                + "set rulebase security rules allow-out from trust\nset mgt-config users admin permissions role-based superuser yes\n";
+
+        @Override public ConnectResult connect(ConnectionTarget t, ConnectSpec s, Duration d) {
+            assertEquals(22, t.port(), "the set-format read opens the device's own SSH port");
+            assertEquals("fw", t.host(), "the SSH host is the API host without scheme");
+            assertEquals("cred-ref-1", s.credentialRef(), "the device's collection credential opens the CLI");
+            return sshReachable ? new ConnectResult.Authenticated(() -> "ssh-1") : new ConnectResult.AuthenticationFailed("NO_ROUTE");
+        }
+        @Override public ExecResult execInteractive(TransportSession s, ExecSpec e, Duration d) {
+            shellCommands.add(e.command());
+            return "show config running".equals(e.command()) ? new ExecResult.Completed(setFormatText, 0)
+                    : new ExecResult.ChannelFailed("empty output");
+        }
         @Override public ExecResult exec(TransportSession s, ExecSpec e, Duration d) { throw new UnsupportedOperationException(); }
         @Override public FetchResult fetch(TransportSession s, FetchSpec f, Duration d) { throw new UnsupportedOperationException(); }
         @Override public void disconnect(TransportSession s) { }
@@ -101,7 +117,7 @@ class PaloAltoBackupExecutorTest {
     }
 
     @Test
-    void generatesAKeyFromTheResolvedCredentialAndStoresAGzipExport() {
+    void generatesAKeyFromTheResolvedCredentialAndStoresAGzipExport() throws IOException {
         FakeTransport transport = new FakeTransport();
         MemoryStore store = new MemoryStore();
 
@@ -109,9 +125,16 @@ class PaloAltoBackupExecutorTest {
 
         assertTrue(result.success(), String.valueOf(result.errorMessage()));
         assertTrue(store.finished);
-        assertEquals(GZIP_HEADER_ARCHIVE.length, store.sink.size(), "the whole archive, gzip magic included, reaches the store");
         assertEquals("keygen", transport.calls.get(0).type());
         assertNotNull(result.artefactId());
+        assertEquals(PanSetConfigReader.COMMANDS, transport.shellCommands, "the four gated CLI reads, in order, once");
+        // The stored artefact is one gzip tar bundle: the device-state export, byte for byte, and the set-format text.
+        List<com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactEntryRepository.Entry> members =
+                com.securityexpert.nexus.ui2.persistence.artefact.content.TarEntryLister.list(new ByteArrayInputStream(store.sink.toByteArray()));
+        assertEquals(List.of(PaloAltoBackupExecutor.BUNDLE_DEVICE_STATE, PaloAltoBackupExecutor.BUNDLE_RUNNING_CONFIG_SET),
+                members.stream().map(m -> m.path()).toList());
+        assertEquals(GZIP_HEADER_ARCHIVE.length, members.get(0).bytes(), "the whole archive, gzip magic included, is the first member");
+        assertEquals(transport.setFormatText.getBytes(StandardCharsets.UTF_8).length, members.get(1).bytes());
     }
 
     @Test
@@ -125,7 +148,6 @@ class PaloAltoBackupExecutorTest {
 
         assertFalse(result.success());
         assertFalse(store.finished, "nothing is finished into the store");
-        assertTrue(store.closed);
         assertTrue(result.errorMessage().contains("code 403"), result.errorMessage());
         assertTrue(result.errorMessage().contains("not authorized"), result.errorMessage());
     }
@@ -139,5 +161,30 @@ class PaloAltoBackupExecutorTest {
 
         assertFalse(result.success());
         assertTrue(transport.calls.isEmpty());
+    }
+
+    @Test
+    void anUnreachableCliFailsTheRunWithItsReasonAndStoresNothing() {
+        FakeTransport transport = new FakeTransport();
+        transport.sshReachable = false;
+        MemoryStore store = new MemoryStore();
+
+        var result = executor(transport, store).executeBackup(new ApiTarget("ep-1", "https://fw"), "cred-ref-1", "dev-1", "job-1", "");
+
+        assertFalse(result.success());
+        assertFalse(store.finished, "half a bundle is never stored");
+        assertTrue(result.errorMessage().startsWith("pan_set_config_unavailable:"), result.errorMessage());
+    }
+
+    @Test
+    void aCliAnswerThatIsNotAConfigurationFailsTheRun() {
+        FakeTransport transport = new FakeTransport();
+        transport.setFormatText = "Unknown command: show config running\n";
+        MemoryStore store = new MemoryStore();
+
+        var result = executor(transport, store).executeBackup(new ApiTarget("ep-1", "https://fw"), "cred-ref-1", "dev-1", "job-1", "");
+
+        assertFalse(result.success());
+        assertTrue(result.errorMessage().contains("set-lines"), result.errorMessage());
     }
 }

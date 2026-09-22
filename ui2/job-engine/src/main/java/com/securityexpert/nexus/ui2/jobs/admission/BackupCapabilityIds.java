@@ -15,6 +15,8 @@ public final class BackupCapabilityIds {
     public static final String CP_GAIA_BACKUP_LOCAL = "cp_gateway_backup";
     public static final String CP_GAIA_SNAPSHOT = "cp_gaia_snapshot";
     public static final String PAN_DEVICE_STATE_BACKUP = "pan_device_state_backup";
+    /** The CLI half of the PAN bundle (V43); registered for gate alignment, run inside PAN_DEVICE_STATE_BACKUP, never submitted alone (hence not in ALL). */
+    public static final String PAN_SET_CONFIG_READ = "pan_set_config_read";
 
     public static final Set<String> ALL = Set.of(CP_GAIA_BACKUP_LOCAL, CP_GAIA_SNAPSHOT, PAN_DEVICE_STATE_BACKUP);
 

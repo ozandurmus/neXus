@@ -1,0 +1,40 @@
+# pan_set_config_read -- the CLI half of the Palo Alto backup bundle
+# (backlog pan_backup_include_set_format_config, Product Owner P0 2026-09-22).
+# Registered programmatically by worker.backup.BackupCapabilities.paloAltoSetConfig
+# and DeviceCompositionConfiguration (service); never submitted as a job of its
+# own -- worker.backup.pan.PaloAltoBackupExecutor runs it inside every
+# pan_device_state_backup run and stores both members in one bundle.
+capability_id: pan_set_config_read
+vendor: palo_alto
+platform_role_scope: pan_firewall
+maturity_state: CAP_VALIDATED
+transport:
+  kind: ssh_exec
+  trust_rule_ref: utils.pan_ssh_trust
+steps:
+  - kind: connect
+  - kind: exec
+    shell_context: operational
+    send: "set cli scripting-mode on"
+    gate_reference: pan_backup_ssh_scripting_mode_on
+  - kind: exec
+    shell_context: operational
+    send: "set cli pager off"
+    gate_reference: pan_backup_ssh_pager_off
+  - kind: exec
+    shell_context: operational
+    send: "set cli config-output-format set"
+    gate_reference: pan_backup_ssh_config_output_format_set
+  - kind: exec
+    shell_context: operational
+    send: "show config running"
+    gate_reference: pan_backup_ssh_show_config_running
+finally_steps:
+  - kind: disconnect
+parser_ref:
+  parser_version: "14H"
+  semantics_doc_ref: "docs/design/PAN_BACKUP_COMMAND_GATE_ENTRIES.md"
+source_pointers:
+  - "worker.backup.pan.PanSetConfigReader (four interactive reads, one session)"
+validation_status: FIXTURE_ONLY
+revalidation_plan_ref: "first live run against a PAN backup target (Product Owner, 2026-09-22)"

@@ -150,6 +150,7 @@ public class DeviceCompositionConfiguration {
                 paloAltoConfigurationCapability(gateRegistryPort),
                 checkPointBackupCapability(gateRegistryPort),
                 paloAltoBackupCapability(gateRegistryPort),
+                paloAltoSetConfigCapability(gateRegistryPort),
                 // 14F DR-1: admitted through JobAdmissionService#submitForRun
                 // against a discovery_run row, never a device -- same
                 // gate-free placeholder shape (StepExecutor never runs
@@ -254,6 +255,25 @@ public class DeviceCompositionConfiguration {
      * gate_not_applicable} per C4 section 2.3's sftp_get/prior-step rule,
      * not looped from the literal list.
      */
+    /** Mirrors {@code worker.backup.BackupCapabilities.paloAltoSetConfig} exactly (V43 gate rows). */
+    private static Capability paloAltoSetConfigCapability(GateRegistryPort gateRegistryPort) {
+        CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        List<CapabilityStep> steps = new java.util.ArrayList<>();
+        steps.add(connect);
+        for (String command : List.of("set cli scripting-mode on", "set cli pager off",
+                "set cli config-output-format set", "show config running")) {
+            steps.add(new CapabilityStep(StepKind.EXEC, "operational", command, false, Optional.empty(),
+                    Optional.empty(), Optional.empty()));
+        }
+        CapabilitySpec spec = new CapabilitySpec(BackupCapabilityIds.PAN_SET_CONFIG_READ, "palo_alto",
+                "pan_firewall", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, List.copyOf(steps),
+                List.of(disconnect), "14H", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
+    }
+
     /** Mirrors {@code worker.backup.BackupCapabilities.paloAlto} exactly (V40 gate rows). */
     private static Capability paloAltoBackupCapability(GateRegistryPort gateRegistryPort) {
         CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,

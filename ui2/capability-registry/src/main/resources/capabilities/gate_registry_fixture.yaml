@@ -830,3 +830,67 @@ gates:
     secret_output_risk: none
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md entry 7"
+  - gate_id: pan_backup_ssh_scripting_mode_on
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: operational
+    transport_kind: SSH_EXEC
+    canonical_command_key: 'set cli scripting-mode on'
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 20
+    retry_rule: none
+    max_frequency: "once per run, first command of the session"
+    session_reuse_rule: "one interactive session held for the four reads"
+    unsupported_behavior_ref: "a CLI session setting (no device state changes); answers with the prompt only"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_BACKUP_COMMAND_GATE_ENTRIES.md entry 1 -- Backbox trail 34411050"
+  - gate_id: pan_backup_ssh_pager_off
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: operational
+    transport_kind: SSH_EXEC
+    canonical_command_key: 'set cli pager off'
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 20
+    retry_rule: none
+    max_frequency: "once per run"
+    session_reuse_rule: "one interactive session held for the four reads"
+    unsupported_behavior_ref: "a CLI session setting; without it the show output stops at --more--"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_BACKUP_COMMAND_GATE_ENTRIES.md entry 2 -- Backbox trail 34411050"
+  - gate_id: pan_backup_ssh_config_output_format_set
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: operational
+    transport_kind: SSH_EXEC
+    canonical_command_key: 'set cli config-output-format set'
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 20
+    retry_rule: none
+    max_frequency: "once per run"
+    session_reuse_rule: "one interactive session held for the four reads"
+    unsupported_behavior_ref: "a CLI session setting; selects the set-format rendering for the read that follows"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_BACKUP_COMMAND_GATE_ENTRIES.md entry 3 -- Backbox trail 34411050"
+  - gate_id: pan_backup_ssh_show_config_running
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: operational
+    transport_kind: SSH_EXEC
+    canonical_command_key: 'show config running'
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 180
+    retry_rule: none
+    max_frequency: "once per run"
+    session_reuse_rule: "one interactive session held for the four reads"
+    unsupported_behavior_ref: "the whole running configuration in set format: carries password hashes and keys (secret-bearing); stored only inside the envelope-encrypted bundle, never parsed, never surfaced"
+    secret_output_risk: high
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PAN_BACKUP_COMMAND_GATE_ENTRIES.md entry 4 -- neXus deviation from Backbox (running, not candidate)"
