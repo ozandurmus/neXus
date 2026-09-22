@@ -93,6 +93,9 @@ export function revokeSession(sessionId: string): Promise<{ ok: boolean }> {
 export interface BackupArtefact {
   readonly artefact_id: string;
   readonly device_id: string;
+  /** From the artefact manifest itself (backup_artefact.vendor), never assumed. */
+  readonly vendor?: string;
+  readonly artefact_class?: string;
   readonly collected_at: string;
   readonly size_bytes: number;
   readonly digest_prefix: string;

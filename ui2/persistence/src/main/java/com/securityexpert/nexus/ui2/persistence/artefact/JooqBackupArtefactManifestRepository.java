@@ -69,7 +69,7 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
     public List<BackupArtefactSummary> findByDevice(String deviceId, String artefactClass) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 "select artefact_id, device_id, created_at, plaintext_bytes, plaintext_sha256, "
-                        + "validation->>'level_reached' as validation_level, deviation_state "
+                        + "validation->>'level_reached' as validation_level, deviation_state, vendor, artefact_class "
                         + "from backup_artefact where device_id = {0} and artefact_class = {1} "
                         + "order by created_at desc",
                 deviceId, artefactClass)
@@ -80,7 +80,7 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
     public List<BackupArtefactSummary> findAll(String artefactClass) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 "select artefact_id, device_id, created_at, plaintext_bytes, plaintext_sha256, "
-                        + "validation->>'level_reached' as validation_level, deviation_state "
+                        + "validation->>'level_reached' as validation_level, deviation_state, vendor, artefact_class "
                         + "from backup_artefact where artefact_class = {0} order by created_at desc",
                 artefactClass)
                 .stream().map(JooqBackupArtefactManifestRepository::toSummary).toList());
@@ -100,6 +100,7 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
                 row.get("created_at", java.sql.Timestamp.class).toInstant(),
                 row.get("plaintext_bytes", Long.class), row.get("plaintext_sha256", String.class),
                 row.get("validation_level", String.class),
-                Optional.ofNullable(row.get("deviation_state", String.class)));
+                Optional.ofNullable(row.get("deviation_state", String.class)),
+                row.get("vendor", String.class), row.get("artefact_class", String.class));
     }
 }

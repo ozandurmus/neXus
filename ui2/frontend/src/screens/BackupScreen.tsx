@@ -39,7 +39,7 @@ export interface BackupDeviceItem {
   readonly deviceId: string;
   readonly name: string;
   readonly ip: string;
-  readonly vendor: "check_point" | "palo_alto";
+  readonly vendor: string;
   readonly role: string;
   readonly lastBackupTime: string;
   readonly backupType: "standard" | "snapshot";
@@ -58,7 +58,7 @@ export interface BackupDeviceItem {
  * as recorded, never normalised upward: the whole point of the V1-V4 ladder is that
  * "verified" on its own is not a claim anyone may make.
  */
-export function toFleetRows(artefacts: readonly BackupArtefact[]): BackupDeviceItem[] {
+export function toFleetRows(artefacts: readonly BackupArtefact[], nameByDeviceId: ReadonlyMap<string, string> = new Map()): BackupDeviceItem[] {
   const newestByDevice = new Map<string, BackupArtefact>();
   for (const artefact of artefacts) {
     const seen = newestByDevice.get(artefact.device_id);
@@ -71,9 +71,11 @@ export function toFleetRows(artefacts: readonly BackupArtefact[]): BackupDeviceI
     .sort((a, b) => b.collected_at.localeCompare(a.collected_at))
     .map((artefact) => ({
       deviceId: artefact.device_id,
-      name: artefact.device_id,
+      name: nameByDeviceId.get(artefact.device_id) ?? artefact.device_id,
       ip: "",
-      vendor: "check_point" as const,
+      // Product Owner, 2026-09-22: every row read "Check Point" -- the vendor was a constant here.
+      // It comes from the artefact manifest now; "unknown" when the API did not carry it.
+      vendor: artefact.vendor ?? "unknown",
       role: "",
       lastBackupTime: artefact.collected_at,
       backupType: "standard" as const,
@@ -139,8 +141,11 @@ export function BackupScreen() {
 
   const loadFleet = useCallback(async () => {
     try {
-      const response = await listFleetBackups();
-      setDevices(toFleetRows(response.backups ?? []));
+      const [response, names] = await Promise.all([
+        listFleetBackups(),
+        listDevices().then((r) => new Map(r.devices.map((d) => [d.device_id, d.hostname ?? d.device_id] as const))).catch(() => new Map<string, string>()),
+      ]);
+      setDevices(toFleetRows(response.backups ?? [], names));
       setListError(null);
     } catch (error) {
       setDevices([]);
@@ -391,7 +396,7 @@ export function BackupScreen() {
                   <TableCell>
                     <Chip
                       size="small"
-                      label={device.vendor === "palo_alto" ? "Palo Alto" : "Check Point"}
+                      label={device.vendor === "palo_alto" ? "Palo Alto" : device.vendor === "check_point" ? "Check Point" : "Unknown vendor"}
                       sx={{
                         bgcolor: device.vendor === "palo_alto" ? "#e0f2fe" : "#fce7f3",
                         color: device.vendor === "palo_alto" ? "#0369a1" : "#be185d",

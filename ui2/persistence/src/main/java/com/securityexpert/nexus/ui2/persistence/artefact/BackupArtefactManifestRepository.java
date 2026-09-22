@@ -43,6 +43,12 @@ public interface BackupArtefactManifestRepository {
     }
 
     record BackupArtefactSummary(String artefactId, String deviceId, Instant createdAt, long plaintextBytes,
-            String plaintextSha256, String validationLevel, Optional<String> deviationState) {
+            String plaintextSha256, String validationLevel, Optional<String> deviationState, String vendor,
+            String artefactClass) {
+        public BackupArtefactSummary(String artefactId, String deviceId, Instant createdAt, long plaintextBytes,
+                String plaintextSha256, String validationLevel, Optional<String> deviationState) {
+            this(artefactId, deviceId, createdAt, plaintextBytes, plaintextSha256, validationLevel, deviationState,
+                    "unknown", "unknown");
+        }
     }
 }

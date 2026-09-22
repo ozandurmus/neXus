@@ -212,6 +212,8 @@ public final class BackupController {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("artefact_id", summary.artefactId());
         body.put("device_id", summary.deviceId());
+        body.put("vendor", summary.vendor());
+        body.put("artefact_class", summary.artefactClass());
         body.put("collected_at", TIMESTAMP.format(summary.createdAt()));
         body.put("size_bytes", summary.plaintextBytes());
         String sha = summary.plaintextSha256();
