@@ -223,6 +223,8 @@ const PAN_RULES: readonly PanRule[] = [
   { test: /\/telemetry|\/statistics-service/, section: "Telemetry" },
 ];
 
+const PAN_MEMBER_SPECIFIC = /\/deviceconfig\/system\/(hostname|ip-address|ipv6-address)$|\/high-availability\/interface\/[^/]+\/(ip-address|ipv6-address)$|\/high-availability\/.*peer-ip[^/]*$/;
+
 function panLabel(path: string, names: readonly string[]): string {
   // "/config/devices/entry[localhost.localdomain]/deviceconfig/system/dns-setting/servers/primary"
   const parts = path.split("/").filter((p) => p && p !== "config" && p !== "devices" && p !== "response" && p !== "result");
@@ -264,8 +266,12 @@ export function projectPaloAlto(xml: string, overridePaths: readonly string[] = 
       }
       const rule = PAN_RULES.find((r) => r.test.test(here));
       const section = rule?.section ?? "Other";
-      const origin: Origin = overridePaths.some((p) => here.includes(p)) ? "OVERRIDE" : "EFFECTIVE";
-      push(bySection, counters, { section, setting: panLabel(here, nextNames), value: value || "present", origin, context: null });
+      // A member's own name and addresses -- system hostname / ip-address, the HA link addresses -- differ by
+      // nature between cluster members (MEMBER), like a Check Point hostname or interface address.
+      const memberSpecific = PAN_MEMBER_SPECIFIC.test(here);
+      const origin: Origin = memberSpecific ? "MEMBER" : overridePaths.some((p) => here.includes(p)) ? "OVERRIDE" : "EFFECTIVE";
+      // An element with no text is a switch or an empty container: say so, rather than a value that reads like one.
+      push(bySection, counters, { section, setting: panLabel(here, nextNames), value: value || "(set, no value)", origin, context: null });
       return;
     }
     for (const child of children) walk(child, here, nextNames);

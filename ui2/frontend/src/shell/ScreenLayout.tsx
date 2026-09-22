@@ -27,12 +27,13 @@ export function ScreenHeader({
   );
 }
 
-export function MetricCard({ title, note }: { readonly title: string; readonly note: string }) {
+/** The headline figure is what the caller counted; "—" when the read failed, never a literal zero standing in for it. */
+export function MetricCard({ title, value, note }: { readonly title: string; readonly value?: number | string | null; readonly note: string }) {
   return (
     <Card sx={{ bgcolor: m3.scLowest, boxShadow: m3.e1, borderRadius: "16px", p: 2.5,
                 display: "flex", flexDirection: "column", gap: 1.25 }}>
       <Typography sx={{ fontSize: 16, fontWeight: 500, letterSpacing: "0.15px" }}>{title}</Typography>
-      <Typography variant="h1">0</Typography>
+      <Typography variant="h1">{value === null || value === undefined ? "—" : value}</Typography>
       <Typography variant="body2">{note}</Typography>
     </Card>
   );

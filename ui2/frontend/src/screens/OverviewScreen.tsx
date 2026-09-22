@@ -175,16 +175,19 @@ export function OverviewScreen() {
       <MetricGrid>
         <MetricCard
           title="Network inventory"
+          value={figures.withInventory}
           note={figures.devicesTotal === 0
             ? "none enrolled"
             : `${figures.withInventory} of ${figures.devicesTotal} with collected interfaces` + (figures.devicesDraft ? ` · ${figures.devicesDraft} unconfirmed` : "") + (figures.devicesDisabled ? ` · ${figures.devicesDisabled} disabled` : "")}
         />
         <MetricCard
           title="Configuration"
+          value={figures.withConfiguration}
           note={figures.withConfiguration === null ? "read failed" : figures.withConfiguration === 0 ? "no evidence yet" : `${figures.withConfiguration} devices with a configuration read`}
         />
         <MetricCard
           title="Backups"
+          value={figures.withBackup}
           note={figures.withBackup === null
             ? "read failed"
             : figures.withBackup === 0
@@ -193,6 +196,7 @@ export function OverviewScreen() {
         />
         <MetricCard
           title="Jobs"
+          value={figures.jobsTotal}
           note={figures.jobsTotal === null
             ? "read failed"
             : `${figures.jobsTotal} on record · ${readFailed(figures.jobsRunning)} in flight · ${readFailed(figures.jobsFailed24h)} failed in 24 h`}

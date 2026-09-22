@@ -134,7 +134,12 @@ read everyone with `job_log_read`.
 | 3 | Output retention | **One month**, on the understanding that a run's record is "which script version ran, when, exit code, captured output". Configurable later; 30 days is the default. |
 | 4 | Languages | **As many industry-standard scripting languages as the runner image can carry.** See §7. `.bat` cannot run on a Linux runner; PowerShell scripts (`.ps1`) can, through PowerShell Core, and that is the offered path for Windows-style scripts. |
 
-## 6. Scripts that touch devices — a contradiction reported, not reconciled
+## 6. Scripts that touch devices — contradiction resolved by PO amendment (2026-09-22)
+
+**Resolved:** `PO_DECISION_RECORD_2026_09_22_SCHEDULED_DEVICE_WRITES_FROM_SCRIPTS.md`
+(RATIFIED) amends `AGENTS.md` with the five conditions below; the text that
+follows is the report as it stood before the amendment and the conditions the
+amendment adopted.
 
 The Product Owner's examples: "take the active member's configuration every
 week and push it to the DR device" (Cisco ASA, whose clustering does not

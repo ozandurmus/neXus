@@ -176,6 +176,43 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 4"
 
+  # Platform identity facts (PLATFORM_IDENTITY_FACTS_CONTRACT §3): the Product Owner ran
+  # both commands by hand on an R81.20 management server on 2026-09-22 and supplied the
+  # output -- docs/design/CP_PLATFORM_IDENTITY_MEASUREMENTS.md. Issued once per inventory run.
+  - gate_id: cp_identity_cpinfo_hotfixes
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "cpinfo -y all"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 60
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the inventory session"
+    unsupported_behavior_ref: "a device with no jumbo line reports no hotfix level, which is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md §3 -- measured 2026-09-22"
+
+  - gate_id: cp_identity_uptime
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "uptime"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 15
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the inventory session"
+    unsupported_behavior_ref: none
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md §3 -- measured 2026-09-22"
+
   - gate_id: cp_inventory_cphaprob_a_m_if
     vendor: check_point
     platform_role_scope: cp_gaia_gateway

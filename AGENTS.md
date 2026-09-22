@@ -448,6 +448,16 @@ permitted only through their `RB.x` contracts, are never console-submittable,
 and are not "the product is read-only" — that shorthand stopped being true
 once `RB.x` shipped and must not be restored anywhere in this repository.
 
+**PO Amendment (2026-09-22, scheduled device writes from a script run).**
+Per `docs/design/PO_DECISION_RECORD_2026_09_22_SCHEDULED_DEVICE_WRITES_FROM_SCRIPTS.md`
+(RATIFIED), a network-device write may run from a scheduled Script Execution
+run when every one of its five conditions holds — named target on the script
+record, named actor and credential-store reference with write rights for that
+target, ledgered before and after the command, a gated write command with its
+own `RB.x`-kind per-vendor contract, and an explicit per-target `writes:
+allowed` set by a `security_admin`. A write missing any condition is refused
+before the command is issued. Class 2+ stays outside this amendment.
+
 New/changed device commands require the network-device command gate
 (`docs/AI_DEVELOPMENT_PROTOCOL.md`) before implementation — vendor,
 read/write class, shell/context, timeout, retry, frequency, session reuse,

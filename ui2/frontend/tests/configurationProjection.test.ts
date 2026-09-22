@@ -100,3 +100,25 @@ describe("Palo Alto projection", () => {
     expect(p.snapshot.find((t) => t.label === "Group ID")?.value).toBe("20");
   });
 });
+
+describe("Palo Alto cluster member-specific settings", () => {
+  const member = (host: string, ip: string, ha1: string, ntp: string) => `<response status="success"><result><config>
+    <devices><entry name="localhost.localdomain">
+      <deviceconfig><system><hostname>${host}</hostname><ip-address>${ip}</ip-address>
+        <ntp-servers><primary-ntp-server><ntp-server-address>${ntp}</ntp-server-address></primary-ntp-server></ntp-servers></system>
+      <high-availability><enabled>yes</enabled><interface><ha1><ip-address>${ha1}</ip-address><port>ha1-a</port></ha1></interface></high-availability>
+      </deviceconfig>
+    </entry></devices></config></result></response>`;
+
+  it("marks hostname, management address and HA link address MEMBER, and a real difference DIFF", () => {
+    const a = projectPaloAlto(member("FW-ZULU-05-M1", "192.0.2.10", "192.0.2.101", "192.0.2.53"));
+    const b = projectPaloAlto(member("FW-ZULU-05-M2", "192.0.2.11", "192.0.2.102", "192.0.2.54"));
+    const c = projectCluster([{ id: "m1", projection: a }, { id: "m2", projection: b }]);
+    const rows = c.sections.flatMap((s) => s.rows);
+    expect(rows.find((r) => r.setting.endsWith("Hostname"))?.memberSpecific).toBe(true);
+    expect(rows.find((r) => r.setting === "System · IP Address")?.memberSpecific).toBe(true);
+    expect(rows.find((r) => r.setting === "Interface · Ha1 · IP Address")?.memberSpecific).toBe(true);
+    expect(rows.find((r) => r.setting === "Primary NTP Server")?.diff).toBe(true);
+    expect(c.diffCount).toBe(1);
+  });
+});

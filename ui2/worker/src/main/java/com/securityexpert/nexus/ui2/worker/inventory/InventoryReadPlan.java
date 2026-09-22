@@ -77,6 +77,9 @@ public final class InventoryReadPlan {
      * Tracked as cp_cluster_vip_never_observed_in_fleet. */
     public static final String CP_CPHAPROB_CLUSTER_IF = "cphaprob -a if";
     public static final String CP_VSX_STAT = "vsx stat -v";
+    /** Platform identity facts (PLATFORM_IDENTITY_FACTS_CONTRACT §3), bare Expert reads, never vsenv-wrapped. */
+    public static final String CP_CPINFO_HOTFIXES = "cpinfo -y all";
+    public static final String CP_UPTIME = "uptime";
 
     /** Physical read order (amended 2026-09-21, cp_vsx_interfaces_identical_to_physical): interfaces
      * ({@code fw getifs}, superseding the old v4/v6 {@code ip addr show} pair), routes, HA state, cluster

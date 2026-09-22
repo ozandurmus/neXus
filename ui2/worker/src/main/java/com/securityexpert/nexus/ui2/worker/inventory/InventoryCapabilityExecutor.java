@@ -350,12 +350,22 @@ public final class InventoryCapabilityExecutor {
                         target.host(), target.port(), totalElapsed);
                 return new InventoryResult.ConnectFailed("no_interfaces_or_routes_discovered: device returned no interface or route data (took " + totalElapsed + "ms)");
             }
+            // Platform identity facts (contract §3): two bare Expert reads over the same session; an empty
+            // answer leaves the fact UNKNOWN and never fails the inventory.
+            PlatformFactsRead platformFacts = new PlatformFactsRead(Optional.empty(),
+                    com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.jumboTake(
+                            identityReadOutput(session, InventoryReadPlan.CP_CPINFO_HOTFIXES, preferInteractiveShell)),
+                    Optional.empty(), java.util.Map.of(),
+                    com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.uptime(
+                            identityReadOutput(session, InventoryReadPlan.CP_UPTIME, preferInteractiveShell)),
+                    "cp_cpinfo_hotfixes_and_uptime");
             long totalElapsed = System.currentTimeMillis() - overallStart;
             LOG.log(System.Logger.Level.INFO,
                     "[INVENTORY_COLLECT_COMPLETE] target={0}:{1} completed in {2}ms, totalContexts={3}, totalInterfaces={4}",
                     target.host(), target.port(), totalElapsed, contexts.size(),
                     contexts.stream().mapToInt(c -> c.interfaces().size()).sum());
-            return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString));
+            return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
+                    Optional.of(platformFacts));
         } finally {
             transport.disconnect(session);
         }
@@ -947,6 +957,15 @@ public final class InventoryCapabilityExecutor {
      * {@link #READ_TIMEOUT} first; the exec channel is still tried as a fallback if the
      * interactive shell itself does not answer, in case the hint is wrong.
      */
+    /** A platform-identity read: over the interactive shell on a host that prefers it (no exec fallback -- that host was told to skip exec), plain exec otherwise; empty when the read failed. */
+    private String identityReadOutput(TransportSession session, String command, boolean preferInteractiveShell) {
+        if (preferInteractiveShell) {
+            String interactiveOutput = interactiveFallback(session, command);
+            return interactiveOutput == null ? "" : interactiveOutput;
+        }
+        return execOutput(session, command, false);
+    }
+
     private String execOutput(TransportSession session, String command, boolean preferInteractiveShell) {
         if (preferInteractiveShell) {
             String interactiveOutput = interactiveFallback(session, command);

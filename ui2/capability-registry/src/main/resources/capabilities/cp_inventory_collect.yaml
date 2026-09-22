@@ -21,7 +21,10 @@
 # gate_registry_fixture.yaml's own cp_inventory_*_vsenv0/vsid_* rows --
 # they simply have no step of their own here to reference them, the same
 # way this file's earlier revision's connect/disconnect-only shape could
-# not express any of CF-3 at all.
+# not express any of CF-3 at all. The two platform-identity reads issued on
+# the same session (cp_identity_cpinfo_hotfixes, cp_identity_uptime --
+# PLATFORM_IDENTITY_FACTS_CONTRACT §3) are gated the same way and likewise
+# have no step here: the alignment test pins this step list to CF-3.
 #
 # Admitted only against ENROLLED, non-disabled devices (14C D-1; unlike
 # the enrollment confirm, this job kind is never admissible against DRAFT).
