@@ -140,10 +140,11 @@ public final class BackupJobExecutor {
         BackupResult result;
         if ((com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP.equals(capabilityId)
                 || "palo_alto".equals(vendor)) && panBackupExecutor != null) {
-            String apiKey = deviceRecord.map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::credentialReferenceId).orElse("");
+            // The device's credential reference; PaloAltoBackupExecutor resolves it and generates the key.
+            String credentialRef = deviceRecord.map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::credentialReferenceId).orElse("");
             com.securityexpert.nexus.ui2.jobs.transport.ApiTarget target =
                     new com.securityexpert.nexus.ui2.jobs.transport.ApiTarget(targetDeviceId, request.connectionTarget().host());
-            var panResult = panBackupExecutor.executeBackup(target, apiKey, targetDeviceId, jobId, "");
+            var panResult = panBackupExecutor.executeBackup(target, credentialRef, targetDeviceId, jobId, "");
             if (panResult.success() && panResult.metadata() != null) {
                 result = new BackupResult.Completed(panResult.metadata(), panResult.artefactId(), Optional.empty(), Optional.empty());
             } else {

@@ -221,7 +221,7 @@ public final class Ui2WorkerMain {
                 new com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor(compositeTransport,
                         artefactStore, backupFreeSpaceThresholdBytes, backupPollInterval, backupRunDeadline);
         com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor paloAltoBackupExecutor =
-                new com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor(compositeTransport, artefactStore);
+                new com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor(compositeTransport, artefactStore, panCredentialResolver);
         com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine deviationEngine =
                 new com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine();
 
