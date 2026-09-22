@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-21T21:24:54Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T09:19:34Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -44,6 +44,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-21T21:24:54Z
 - P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP l (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
 - P1/planned pan_collection_contract_from_measurement — Write the Palo Alto collection contract from the PAN_COLLE (target: docs/design/PAN_COLLECTION_MEASUREMENT_B)
 - P1/planned relay_id_reuse_when_record_uncommitted — local_relay _next_id reissues an id whose JSON was never c (target: GOV.ORCH successor or scripts/local_rela)
+- P1/planned task_executor_automation_module — Task Executor / Automation module: operator-authored, orde (target: )
 - P1/planned top_app_bar_search_is_not_an_input — The top app bar search is a styled box containing static t (target: ui2/frontend/src/shell/TopAppBar.tsx)
 - P1/planned ui2_audit_logging — Audit logging for device and user management (target: ui2)
 - P1/planned ui2_auth_placement_second_authenticated_surface — UI2 AUTH-PLACEMENT: where session and RBAC enforcement liv (target: PO_DECISION_RECORD_2026_09_13D section 3)
@@ -129,7 +130,6 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-21T21:24:54Z
 - D-V8 — CP hotfix parity command (optional check). Does not block OP.0b.0 freeze
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
-- po_cp_backup_async_semantics — CP R81.20 backup is asynchronous, contradicting the blocking-backup assu
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
 - NXS-LOCAL-0346 (automated_validated)

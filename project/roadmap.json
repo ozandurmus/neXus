@@ -555,11 +555,13 @@
     {
       "id": "po_cp_backup_async_semantics",
       "area": "backup",
-      "status": "open",
+      "status": "decided",
       "question": "CP R81.20 backup is asynchronous, contradicting the blocking-backup assumption the contracts were written against. Which semantics does the product implement?",
       "options": "",
       "recommendation": "implement against the documented asynchronous semantics; poll for completion",
-      "decide_by": "before any CP backup implementation"
+      "decide_by": "before any CP backup implementation",
+      "decision": "Product Owner, 2026-09-22: implement the documented asynchronous semantics. The product keeps the SSH session open after 'add backup local', watches 'show backup status' on a fixed interval until the device reports completion (or the run deadline), then fetches the archive, verifies its SHA-256 and deletes it from the device -- the submit/poll/fetch/verify/delete machine BackupCapabilityExecutor already implements. No blocking-backup assumption remains.",
+      "decided_on": "2026-09-22"
     },
     {
       "id": "po_ldap_tls_trust_policy",

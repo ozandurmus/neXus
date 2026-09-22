@@ -720,6 +720,15 @@
       "priority": "P2",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "task_executor_automation_module",
+      "category": "UI 2.0 (Java product line)",
+      "title": "Task Executor / Automation module: operator-authored, ordered command runbooks per firewall (Backbox-style)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }
