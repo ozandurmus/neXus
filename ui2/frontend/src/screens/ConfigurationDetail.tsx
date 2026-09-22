@@ -161,6 +161,135 @@ function SectionCard({ section }: { readonly section: Section }) {
   );
 }
 
+function vsListOf(device: DeviceSummary): string[] {
+  return device.virtual_systems ? device.virtual_systems.split(/,\s*/).filter(Boolean) : [];
+}
+
+function haLabel(role: string | null | undefined): string {
+  if (!role) return "UNKNOWN";
+  const r = role.toLowerCase();
+  if (r === "active" || r === "master") return "ACTIVE";
+  if (r === "passive" || r === "standby" || r === "backup") return "PASSIVE";
+  return role.toUpperCase();
+}
+
+function haTone(role: string | null | undefined): "neutral" | "ok" | "mem" | "warn" {
+  const label = haLabel(role);
+  if (label === "ACTIVE") return "ok";
+  if (label === "PASSIVE") return "mem";
+  if (label === "UNKNOWN") return "warn";
+  return "neutral";
+}
+
+interface IdentityTile {
+  readonly label: string;
+  readonly value: string | null;
+  /** Shown when the value is null: why it is not there. */
+  readonly absent?: string;
+  readonly mono?: boolean;
+}
+
+/**
+ * Platform identity: what a security administrator checks first and what a
+ * compliance review asks for -- vendor, model, software version, hotfix level,
+ * serial number, HA role, virtual systems. A value the product has not read
+ * says so ("not collected"); nothing is inferred.
+ */
+function identityTiles(device: DeviceSummary, collectedAt: string | null): IdentityTile[] {
+  const vs = vsListOf(device);
+  return [
+    { label: "Vendor", value: vendorLabel(device.vendor_hint) },
+    { label: "Model", value: device.model, absent: "not read at first contact" },
+    { label: "Software version", value: device.software_version, absent: "not read at first contact" },
+    { label: "Hotfix / Jumbo take", value: null, absent: "not collected -- needs its own gated read" },
+    { label: "Serial number", value: null, absent: device.vendor_hint === "palo_alto" ? "read as identity; not shown here yet" : "not collected -- needs its own gated read" },
+    { label: "HA role", value: haLabel(device.ha_role) },
+    { label: device.vendor_hint === "palo_alto" ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },
+    { label: "Management address", value: device.management_ip ?? null, absent: "not recorded", mono: true },
+    { label: "Enrollment", value: device.enrollment_state },
+    { label: "Last configuration read", value: collectedAt, absent: "never" },
+  ];
+}
+
+function IdentityCard({ title, tiles }: { readonly title: string; readonly tiles: readonly IdentityTile[] }) {
+  return (
+    <Card sx={{ p: 2, borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", mb: 1.5 }}>
+        <Box>
+          <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Platform identity</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>{title}</Typography>
+        </Box>
+        <Typography variant="caption" color="text.secondary">What an audit asks for first</Typography>
+      </Box>
+      <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+        {tiles.map((tile) => (
+          <Box key={tile.label} sx={{ p: 1.5, borderRadius: "12px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLow }}>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.06em", display: "block", mb: 0.5 }}>{tile.label.toUpperCase()}</Typography>
+            {tile.value !== null ? (
+              <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: tile.mono ? "monospace" : undefined, wordBreak: "break-word" }}>{tile.value}</Typography>
+            ) : (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
+                <StatusChip tone="warn" label="UNKNOWN" dense />
+                <Typography variant="caption" color="text.secondary">{tile.absent}</Typography>
+              </Box>
+            )}
+          </Box>
+        ))}
+      </Box>
+    </Card>
+  );
+}
+
+/** A cluster's members as one row each -- model, version, HA role, address, virtual systems -- so the two sides are compared at a glance. */
+function ClusterMembersCard({ members }: { readonly members: readonly DeviceSummary[] }) {
+  const isPaloAlto = members[0]?.vendor_hint === "palo_alto";
+  const vsUnion = Array.from(new Set(members.flatMap(vsListOf))).sort();
+  return (
+    <Card sx={{ borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
+      <Box sx={{ px: 2, pt: 1.5, pb: 1, display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 1 }}>
+        <Box>
+          <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Platform identity</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>Members</Typography>
+        </Box>
+        <Typography variant="caption" color="text.secondary">
+          {vsUnion.length === 0
+            ? `No ${isPaloAlto ? "virtual systems (VSYS)" : "virtual systems (VSX)"} recorded`
+            : `${vsUnion.length} ${isPaloAlto ? "virtual system(s) (VSYS)" : "virtual system(s) (VSX)"}: ${vsUnion.join(", ")}`}
+        </Typography>
+      </Box>
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              {["MEMBER", "MODEL", "SOFTWARE VERSION", "HOTFIX / JUMBO", "SERIAL", "HA ROLE", "MANAGEMENT ADDRESS", isPaloAlto ? "VSYS" : "VSX", "ENROLLMENT"].map((h) => (
+                <TableCell key={h} sx={{ fontSize: 11, letterSpacing: "0.06em" }}>{h}</TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {members.map((m) => {
+              const vs = vsListOf(m);
+              return (
+                <TableRow key={m.device_id} hover>
+                  <TableCell sx={{ fontWeight: 600, fontSize: 12.5 }}>{m.hostname ?? m.device_id}</TableCell>
+                  <TableCell>{m.model ?? <StatusChip tone="warn" label="UNKNOWN" dense />}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{m.software_version ?? <StatusChip tone="warn" label="UNKNOWN" dense />}</TableCell>
+                  <TableCell><StatusChip tone="warn" label="not collected" dense /></TableCell>
+                  <TableCell><StatusChip tone="warn" label="not collected" dense /></TableCell>
+                  <TableCell><StatusChip tone={haTone(m.ha_role)} label={haLabel(m.ha_role)} dense /></TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{m.management_ip ?? "—"}</TableCell>
+                  <TableCell>{vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none"}</TableCell>
+                  <TableCell>{m.enrollment_state}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Card>
+  );
+}
+
 function headerChips(device: DeviceSummary, extra: React.ReactNode = null) {
   return (
     <>
@@ -191,6 +320,7 @@ export function DeviceConfigurationDetail({ device }: { readonly device: DeviceS
         </Box>
         <FilterBox value={query} onChange={setQuery} />
       </Box>
+      <IdentityCard title={device.hostname ?? device.device_id} tiles={identityTiles(device, collected)} />
       {error && <EmptyPanel title="Configuration unavailable" body={error} />}
       {!error && loading && <EmptyPanel title="Configuration" body="Reading the device's configuration…" />}
       {!error && !loading && !projection && (
@@ -307,8 +437,14 @@ export function ClusterConfigurationDetail({ clusterRef, members }: { readonly c
           <>
             <StatusChip tone="neutral" label={`${members.length} members`} dense />
             {members.map((m) => (
-              <StatusChip key={m.device_id} tone="mem" label={`${m.hostname ?? m.device_id}${m.ha_role ? ` · ${m.ha_role.toUpperCase()}` : ""}`} dense />
+              <StatusChip key={m.device_id} tone="mem" label={`${m.hostname ?? m.device_id} · ${haLabel(m.ha_role)}`} dense />
             ))}
+            {(() => {
+              const vs = Array.from(new Set(members.flatMap(vsListOf)));
+              return vs.length > 0
+                ? <StatusChip tone="neutral" label={`${vs.length} ${first?.vendor_hint === "palo_alto" ? "VSYS" : "VSX"}`} dense />
+                : null;
+            })()}
             {cluster && (cluster.diffCount > 0
               ? <StatusChip tone="bad" label={`Config diff · ${cluster.diffCount}`} dense />
               : state.missing.length === 0 ? <StatusChip tone="ok" label="Members agree" dense /> : <StatusChip tone="warn" label="UNKNOWN" dense />)}
@@ -328,6 +464,7 @@ export function ClusterConfigurationDetail({ clusterRef, members }: { readonly c
           <FilterBox value={query} onChange={setQuery} />
         </Stack>
       </Box>
+      <ClusterMembersCard members={members} />
       {state.missing.length > 0 && (
         <EmptyPanel
           title={cluster ? "One side has no configuration read" : "No member has a configuration read"}

@@ -792,6 +792,15 @@
       "priority": "P1",
       "target": "PO decision record 2026-09-22 (automation editor and script execution); contract SCRIPT_EXECUTION_CONTRACT.md to write first",
       "note": ""
+    },
+    {
+      "id": "cp_backup_sftp_fetch_failed_on_cluster_member",
+      "category": "ui2",
+      "title": "PARKED (PO 2026-09-22 'bu dursun kenarda'): Check Point cluster member backup fails at the artefact-store SFTP fetch step ('sftp fetch failed'); reproduce on the member, read the SftpException id, fix the fetch or the fallback",
+      "status": "planned",
+      "priority": "P2",
+      "target": "PO reported twice on 2026-09-22 (a CP cluster; job 80eec289-...); parked by the PO",
+      "note": ""
     }
   ]
 }

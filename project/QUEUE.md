@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T16:49:56Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T17:35:06Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -75,6 +75,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T16:49:56Z
 - P2/planned antigravity_provider_adapter
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
+- P2/planned cp_backup_sftp_fetch_failed_on_cluster_member
 - P2/planned cp_cluster_vip_never_observed_in_fleet
 - P2/planned cp_vsx_config_collected_without_vs_context
 - P2/planned device_admin_accounts_and_privileges

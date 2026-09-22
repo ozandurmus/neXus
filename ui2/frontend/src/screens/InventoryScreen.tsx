@@ -211,6 +211,7 @@ export function DeviceList({
   selectedClusterRef,
   selectedVs = null,
   clusterOnly = false,
+  showVirtualSystems = true,
   onSelectDevice,
   onSelectCluster,
 }: {
@@ -219,6 +220,8 @@ export function DeviceList({
   readonly selectedClusterRef: string | null;
   readonly selectedVs?: string | null;
   readonly clusterOnly?: boolean;
+  /** False (Configuration): virtual systems are not tree nodes; the entity's own detail lists them. */
+  readonly showVirtualSystems?: boolean;
   readonly onSelectDevice: (device: DeviceSummary, selectedVs?: string) => void;
   readonly onSelectCluster: (ref: string, members: DeviceSummary[], selectedVs?: string) => void;
 }) {
@@ -324,6 +327,7 @@ export function DeviceList({
                     label={clusterHealthLabel(members)}
                     dense
                   />
+                  {showVirtualSystems && (
                   <Box
                     component="span"
                     onClick={(e) => {
@@ -341,6 +345,7 @@ export function DeviceList({
                   >
                     {isCollapsed ? "▼" : "▲"}
                   </Box>
+                  )}
                 </Box>
               </Box>
             </Box>
@@ -351,7 +356,7 @@ export function DeviceList({
                     line above already names every member, and its detail header repeats them
                     with IP/serial/version. Nothing here loses that information; it only stops
                     duplicating each member as its own selectable row. */}
-                {clusterVsList.length > 0 && (
+                {showVirtualSystems && clusterVsList.length > 0 && (
                   <Box sx={{ pl: 2.5, display: "flex", flexDirection: "column", gap: 0.75, mt: 0.5 }}>
                     <Typography
                       variant="caption"
@@ -458,13 +463,16 @@ export function DeviceList({
         const isDeviceSelected = device.device_id === selectedDeviceId;
         const isExpanded = !collapsedRefs.has(device.device_id);
 
-        if (standaloneVsList.length === 0) {
+        if (standaloneVsList.length === 0 || !showVirtualSystems) {
           return (
             <DeviceRow
               key={device.device_id}
               device={device}
               selected={isDeviceSelected && !selectedVs}
               onSelect={(dev) => onSelectDevice(dev)}
+              trailingExtra={standaloneVsList.length > 0
+                ? <StatusChip tone="neutral" label={`${standaloneVsList.length} ${isPaloAlto ? "VSYS" : "VS"}`} dense />
+                : undefined}
             />
           );
         }

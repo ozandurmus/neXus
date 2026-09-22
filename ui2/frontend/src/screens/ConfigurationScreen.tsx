@@ -347,6 +347,7 @@ export function ConfigurationScreen() {
                 {summaries !== null && treeDevices.length === 0 && <EmptyPanel title="No device matches" body="No device matches the filters." />}
                 {summaries !== null && treeDevices.length > 0 && (
                   <DeviceList
+                showVirtualSystems={false}
                     devices={treeDevices}
                     selectedDeviceId={selectedDeviceId}
                     selectedClusterRef={selectedCluster?.ref ?? null}
