@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T15:03:54Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T16:49:56Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -43,6 +43,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T15:03:54Z
 - P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP l (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
 - P1/planned pan_collection_contract_from_measurement — Write the Palo Alto collection contract from the PAN_COLLE (target: docs/design/PAN_COLLECTION_MEASUREMENT_B)
 - P1/planned relay_id_reuse_when_record_uncommitted — local_relay _next_id reissues an id whose JSON was never c (target: GOV.ORCH successor or scripts/local_rela)
+- P1/planned script_execution_module — Script Execution: operator scripts (.sh/.py/.jar or inline (target: PO decision record 2026-09-22 (automatio)
 - P1/planned task_executor_automation_module — Task Executor / Automation module: operator-authored, orde (target: )
 - P1/planned top_app_bar_search_is_not_an_input — The top app bar search is a styled box containing static t (target: ui2/frontend/src/shell/TopAppBar.tsx)
 - P1/planned ui2_audit_logging — Audit logging for device and user management (target: ui2)

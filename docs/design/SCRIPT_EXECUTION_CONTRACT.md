@@ -1,0 +1,142 @@
+# Script Execution module — contract
+
+## Status
+
+**DRAFT — 2026-09-22.** Written on the Product Owner's decision 2 in
+`PO_DECISION_RECORD_2026_09_22_AUTOMATION_EDITOR_AND_SCRIPT_EXECUTION.md`.
+Freezes when the Product Owner accepts §4's decisions. Backlog
+`script_execution_module` (P1). Not to be confused with the Task Executor /
+Automation module (device steps over gated commands): this module runs
+**operator-supplied programs on the neXus side**, firewall-independent.
+
+## 1. What it is, in one paragraph
+
+The operator adds a script — a `.sh`, `.py` or `.jar`, uploaded or written in
+the product's editor — gives it a cron schedule, and neXus runs it at that
+time in an isolated runner, records the run (version, exit code, duration,
+captured output) on the Jobs screen, and notifies over syslog and/or an SMTP
+relay. Typical uses: a nightly report that calls `nexus-cli`, a check against
+a third-party system, an export to a file share. Backbox calls this the
+"script" side of Automations; here it is a separate module because its
+security shape is different from a device step.
+
+## 2. What the constitution already fixes
+
+- **Host action boundary.** A script is code the product runs on the host's
+  cluster; it is neither a device command (network action taxonomy) nor an
+  agent's host action (host register). It gets its own authorization form:
+  this contract, ratified by the decision record.
+- **Secrets only through the credential store**; a script never contains a
+  credential literal (the upload is scanned for the same secret patterns the
+  repository privacy gate uses, and refused with the line number).
+- **Raw-evidence law** applies to captured output: bounded, masked, discarded
+  after retention.
+- **No browser → device path** is untouched: a script cannot reach a device
+  except through `nexus-cli`, which goes through the service's gates.
+
+## 3. The design
+
+### 3.1 Script record
+
+`script` table: `script_id`, `name`, `kind` (`sh` | `py` | `jar`), `version`
+(monotonic), `sha256`, `body` (text for sh/py; jar as an artefact-store
+object, class `script_binary`), `schedule` (five-field cron, normalized as
+the backup scheduler does), `enabled`, `timeout_s` (≤ 3600), `egress`
+(list of `host:port` the runner may reach; empty = none), `notify`
+(`syslog` | `smtp` | both | none), `created_by_actor_fingerprint`,
+`created_at`. Every save is a new version; the run records which version ran.
+
+### 3.2 Runner
+
+A dedicated `ui2-script-runner` Deployment (one pod, scale 1) in the `ui2`
+namespace:
+
+- image: the product image's runtime plus `python3`, `bash`, a JRE and
+  `nexus-cli`; **no** `kubectl`, no cluster ServiceAccount token
+  (`automountServiceAccountToken: false`), no artefact-store, credential-
+  store or database mounts, no host paths;
+- runs as a non-root uid with a read-only root filesystem and an `emptyDir`
+  scratch volume per run (wiped after);
+- NetworkPolicy: egress only to `ui2-service` (for `nexus-cli`) and to the
+  script's declared `egress` list, resolved at run time; ingress none;
+- resources: `limits` 1 CPU / 1 GiB by default; a run beyond `timeout_s` is
+  killed and recorded `TIMED_OUT`.
+
+The runner claims `script_run` jobs from the same job table as the worker
+(its own job type, lease with heartbeat, drain on rollout), so the Jobs
+screen, filters and CSV export cover script runs without new UI.
+
+### 3.3 Run
+
+`script_run` job: `target_kind = script`, `target_ref = script_id@version`.
+The runner writes the body to scratch, runs it with a clean environment
+(`NEXUS_SCRIPT_ID`, `NEXUS_RUN_ID`, `NEXUS_CLI=/app/nexus-cli`, `HOME=scratch`,
+`PATH` minimal), captures stdout and stderr up to 256 KiB each (masked through
+the same masker as job output), records exit code and duration, and sets the
+job outcome `SUCCESS` (exit 0) / `FAILURE` / `TIMED_OUT`. The captured output
+is stored as a job artefact (class `script_output`) and downloaded through
+the audited download route; the Jobs screen shows the last 4 KiB inline.
+
+`nexus-cli` inside a script authenticates with a **script session**: a
+short-lived token minted per run for the script's `run_as` role (default
+`role:operator`; never `security_admin`), revoked when the run ends. What the
+script can read or trigger through neXus is exactly what that role can.
+
+### 3.4 Schedule
+
+`ScriptScheduler`, the backup scheduler's pattern: `@Scheduled` tick every
+60 s, fenced slot claim on `(script_id, slot)`, catch-up window 1 h (a
+missed nightly run is not replayed six times after a long outage), one
+`script_run` job per fire, `enabled=false` fires nothing. "Run now" from the
+screen or `nexus-cli script-run <id>` submits the same job.
+
+### 3.5 Notifications
+
+- **syslog**: RFC 5424 over UDP or TCP to the host:port in Settings ›
+  Notifications; one message per run end with script name, version, outcome,
+  exit code, duration, run id (never output content).
+- **SMTP relay**: host, port, STARTTLS on/off, from, to-list in Settings;
+  relay credential (if any) as a credential-store reference; one mail per run
+  end (or "on failure only" per script) with the same fields and the first
+  4 KiB of masked output.
+- Both are best-effort: a notification failure is recorded on the run, never
+  fails the run.
+
+### 3.6 Screen and CLI
+
+Operations › Script Execution: list (name, kind, version, schedule, last run
+outcome, next fire), editor (CodeMirror-style text area with the kind's
+syntax; or upload), schedule field with "next five fires" preview, egress
+list, notify choice, "Run now", run history (the Jobs screen filtered on the
+script). Every action has its CLI form: `nexus-cli script-list / script-add
+<file> / script-set <id> --schedule … / script-run <id> / script-runs <id>`.
+
+Roles: create/edit/enable `role:security_admin`; run now `role:operator`;
+read everyone with `job_log_read`.
+
+### 3.7 Slices
+
+1. Script record + versioning + secret scan + routes + CLI (`script-add /
+   script-list / script-set`).
+2. Runner Deployment + NetworkPolicy + `script_run` job type + scheduler +
+   `script-run` + Jobs screen visibility.
+3. Notifications (syslog, SMTP) + Settings › Notifications.
+4. Screen (list, editor, run history).
+
+## 4. Decisions to ratify
+
+| # | question | proposed | alternative |
+|---|---|---|---|
+| 1 | Where do scripts run? | Isolated runner pod in `ui2`, no cluster credentials, declared egress | On the worker pod (rejected: worker holds device credentials) |
+| 2 | Highest role a script may act as | `role:operator` | `security_admin` (rejected: a script could then change scripts) |
+| 3 | Output retention | Same as job artefacts (retention pruning) | Unbounded |
+| 4 | Kinds in first release | `sh`, `py`, `jar` | + `bat` (no Windows runner exists; "bat" from the PO's words is not runnable here and is refused at upload with that reason) |
+
+## 5. Tests that must exist before slice 2 ships
+
+- A script containing a credential literal is refused at upload with the line number, never stored.
+- The runner pod has no ServiceAccount token, no writable root, no volumes beyond scratch (manifest test).
+- A script that tries an undeclared egress fails to connect (NetworkPolicy fixture test).
+- A run beyond `timeout_s` is killed and recorded `TIMED_OUT`; its scratch is wiped.
+- The per-run `nexus-cli` token is revoked at run end; a later use is 401.
+- A `script_run` job heartbeats its lease and survives a rollout (drain).

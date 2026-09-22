@@ -2,11 +2,14 @@
 
 ## Status
 
-**FROZEN — 2026-09-22, on the Product Owner's directive ("write the contracts");
-the recommendation in §4 is the frozen design.** Backlog
-`task_executor_automation_module` (P1). Backbox "Automations" is the reference
-shape. If the Product Owner later wants the alternative in any §4 item, that
-is a decision record, not a silent edit here.
+**FROZEN — 2026-09-22, amended the same day by
+`PO_DECISION_RECORD_2026_09_22_AUTOMATION_EDITOR_AND_SCRIPT_EXECUTION.md`:**
+steps are authored **in the product** (Operations › Automation), each step
+choosing a registered, gated command and filling its declared variable
+positions; the pack in §3.1 is the stored form of what the editor saves. §3.2
+and §4 row 1 read accordingly. Backlog `task_executor_automation_module` (P1).
+A separate, firewall-independent Script Execution module is decision 2 of the
+same record and has its own contract.
 
 ## 1. What this module is, in one paragraph
 

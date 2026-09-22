@@ -142,7 +142,8 @@
     "cli_parity_for_every_ui_action": "java_feature",
     "backup_screen_backbox_model": "java_feature",
     "jobs_screen_history_filter_pagination_export": "java_feature",
-    "cp_backup_stale_device_archives_cleanup": "java_debt"
+    "cp_backup_stale_device_archives_cleanup": "java_debt",
+    "script_execution_module": "java_feature"
   },
   "converted_lessons": [
     {

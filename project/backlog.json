@@ -783,6 +783,15 @@
       "priority": "P1",
       "target": "PO directive 2026-09-22 (Backbox standard); download/contents/compare shipped 2026-09-22, history/schedule/baseline remain",
       "note": ""
+    },
+    {
+      "id": "script_execution_module",
+      "category": "ui2",
+      "title": "Script Execution: operator scripts (.sh/.py/.jar or inline) on a cron schedule in an isolated runner; report on Jobs, notify via syslog/SMTP relay",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO decision record 2026-09-22 (automation editor and script execution); contract SCRIPT_EXECUTION_CONTRACT.md to write first",
+      "note": ""
     }
   ]
 }
