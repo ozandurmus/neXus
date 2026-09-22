@@ -200,7 +200,7 @@ export function ComplianceScreen() {
           title="Assured Compliance"
           count={overview ? `${overview.assured_compliance_pct}%` : "0%"}
           badge={{
-            label: overview && overview.assured_compliance_pct >= 70 ? "High Assurance" : "Improvement Needed",
+            label: !overview ? "Loading" : overview.assured_compliance_pct >= 70 ? "High Assurance" : "Improvement Needed",
             tone: overview && overview.assured_compliance_pct >= 70 ? "ok" : "warn",
           }}
           note="PASS / Total Assigned Controls"
@@ -218,7 +218,7 @@ export function ComplianceScreen() {
           title="Critical Deficiencies"
           count={overview ? String(overview.critical_deficiencies) : "0"}
           badge={{
-            label: overview?.critical_deficiencies === 0 ? "Zero Critical" : "Immediate Action",
+            label: !overview ? "Loading" : overview.critical_deficiencies === 0 ? "Zero Critical" : "Immediate Action",
             tone: overview?.critical_deficiencies === 0 ? "ok" : "bad",
           }}
           note="High priority failing controls"
@@ -227,7 +227,7 @@ export function ComplianceScreen() {
           title="Data Gaps"
           count={overview ? String(overview.data_gaps) : "0"}
           badge={{
-            label: overview && overview.data_gaps > 0 ? "Missing Commands" : "Full Coverage",
+            label: !overview ? "Loading" : overview.data_gaps > 0 ? "Missing Commands" : "Full Coverage",
             tone: overview && overview.data_gaps > 0 ? "warn" : "ok",
           }}
           note="Controls awaiting evidence collection"

@@ -41,7 +41,7 @@ public final class ComplianceService {
     // Cache of device evaluation results to enable instant UI responsiveness
     private final Map<String, CachedEvaluation> evaluationCache = new ConcurrentHashMap<>();
 
-    private record CachedEvaluation(Instant timestamp, String configHash, Map<String, Object> result) {
+    private record CachedEvaluation(Instant timestamp, String configHash, String canonicalHash, Map<String, Object> result) {
     }
 
     public ComplianceService(ConfigurationQueryService configurationQueryService,
@@ -100,7 +100,7 @@ public final class ComplianceService {
         frameworkStats.put("Financial Baseline", new int[]{0, 0, 0, 0});
 
         for (var dev : evaluated) {
-            Map<String, Object> eval = evaluateDevice(dev.deviceId());
+            Map<String, Object> eval = evaluateDevice(dev.deviceId(), dev.latestRun().map(r -> r.canonicalHash()));
             if (eval == null || eval.containsKey("error")) {
                 continue;
             }
@@ -176,6 +176,18 @@ public final class ComplianceService {
                 .filter(d -> d.latestRun().isPresent() && ("check_point".equalsIgnoreCase(d.vendor()) || "palo_alto".equalsIgnoreCase(d.vendor())))
                 .toList();
 
+        // One evaluation per device, computed before the catalog loop. Measured live (2026-09-22): the
+        // per-control loop below used to call evaluateDevice() for every control x every device, and
+        // each call read and decrypted that device's sanitized artefact before consulting the cache --
+        // ~50 controls x ~90 collected devices, several minutes per GET, so the screen never loaded.
+        Map<String, Map<String, Object>> evaluationByDevice = new LinkedHashMap<>();
+        for (var dev : evaluated) {
+            Map<String, Object> eval = evaluateDevice(dev.deviceId(), dev.latestRun().map(r -> r.canonicalHash()));
+            if (eval != null) {
+                evaluationByDevice.put(dev.deviceId(), eval);
+            }
+        }
+
         List<Map<String, Object>> result = new ArrayList<>();
 
         for (Map<String, Object> c : catalog) {
@@ -194,7 +206,7 @@ public final class ComplianceService {
             String missingReason = null;
 
             for (var dev : evaluated) {
-                Map<String, Object> eval = evaluateDevice(dev.deviceId());
+                Map<String, Object> eval = evaluationByDevice.get(dev.deviceId());
                 if (eval == null) continue;
 
                 List<Map<String, Object>> items = getItems(eval);
@@ -270,13 +282,27 @@ public final class ComplianceService {
     }
 
     public Map<String, Object> evaluateDevice(String deviceId) {
+        return evaluateDevice(deviceId, Optional.empty());
+    }
+
+    /**
+     * @param knownCanonicalHash the latest configuration run's canonical hash when the caller already
+     *     holds it -- lets a fresh cached evaluation be returned without reading and decrypting the
+     *     sanitized artefact at all; the artefact is read only when the cache cannot answer.
+     */
+    public Map<String, Object> evaluateDevice(String deviceId, Optional<String> knownCanonicalHash) {
+        CachedEvaluation cached = evaluationCache.get(deviceId);
+        if (cached != null && knownCanonicalHash.isPresent() && knownCanonicalHash.get().equals(cached.canonicalHash())
+                && Duration.between(cached.timestamp(), Instant.now()).toMinutes() < 10) {
+            return cached.result();
+        }
+
         Optional<DeviceRecord> device = deviceRepository.find(deviceId);
         String vendor = device.map(DeviceRecord::vendorHint).orElse("check_point");
 
         Optional<String> sanitizedConfig = configurationQueryService.sanitizedText(deviceId);
         String configText = sanitizedConfig.orElse("");
 
-        CachedEvaluation cached = evaluationCache.get(deviceId);
         if (cached != null && cached.configHash().equals(String.valueOf(configText.hashCode()))) {
             if (Duration.between(cached.timestamp(), Instant.now()).toMinutes() < 10) {
                 return cached.result();
@@ -295,7 +321,8 @@ public final class ComplianceService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
                 Map<String, Object> parsed = mapper.readValue(response.body(), new TypeReference<Map<String, Object>>() {});
-                evaluationCache.put(deviceId, new CachedEvaluation(Instant.now(), String.valueOf(configText.hashCode()), parsed));
+                evaluationCache.put(deviceId, new CachedEvaluation(Instant.now(), String.valueOf(configText.hashCode()),
+                        knownCanonicalHash.orElse(null), parsed));
                 return parsed;
             }
         } catch (Exception ignored) {
