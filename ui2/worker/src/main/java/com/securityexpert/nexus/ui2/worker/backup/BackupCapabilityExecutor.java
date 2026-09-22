@@ -127,15 +127,23 @@ public final class BackupCapabilityExecutor {
             // BK-8: a vendor refusal (snapshot in progress, an open management client) is the failure reason.
             return new BackupResult.SubmitRefused("add backup local was refused: " + submit.output());
         }
-        Optional<String> archiveName = parseArchiveName(submit.output());
-        if (archiveName.isEmpty()) {
-            return new BackupResult.SubmitOutputUnparseable(
-                    "add backup local's own output did not name an archive; refusing rather than guessing");
-        }
-        String name = archiveName.get();
+        // Measured live (2026-09-22) and in the reference backup trail: a non-interactive
+        // "add backup local" only announces that the package is being created -- the archive is
+        // named by "show backup status" ("Backup file location: /var/log/CPbackup/backups/<name>")
+        // once it succeeds. The submit's own output is still honoured when it does name one.
+        Optional<String> archivePath = parseArchiveName(submit.output());
 
         // Entry 3 (BK-5): poll until terminal or the run's own deadline.
-        BackupStatus status = pollUntilTerminalOrDeadline(session);
+        Poll poll = pollUntilTerminalOrDeadline(session);
+        BackupStatus status = poll.status();
+        if (archivePath.isEmpty()) {
+            archivePath = parseBackupLocation(poll.lastOutput());
+        }
+        if (status == BackupStatus.SUCCEEDED && archivePath.isEmpty()) {
+            return new BackupResult.SubmitOutputUnparseable(
+                    "neither add backup local nor show backup status named the archive; refusing rather than guessing");
+        }
+        String name = archivePath.orElse("<unnamed>");
         if (status == BackupStatus.FAILED) {
             return new BackupResult.SubmitRefused("show backup status reported a failed backup for " + name);
         }
@@ -183,9 +191,9 @@ public final class BackupCapabilityExecutor {
 
         // Entry 7 (BK-7): delete the exact archive name this run created --
         // may be retried once, never a pattern, never a listing.
-        ExecOutcome delete = exec(session, BackupReadPlan.deleteBackupCommand(name), DELETE_TIMEOUT);
+        ExecOutcome delete = exec(session, BackupReadPlan.deleteBackupCommand(archiveBaseName(name)), DELETE_TIMEOUT);
         if (!delete.succeeded()) {
-            delete = exec(session, BackupReadPlan.deleteBackupCommand(name), DELETE_TIMEOUT);
+            delete = exec(session, BackupReadPlan.deleteBackupCommand(archiveBaseName(name)), DELETE_TIMEOUT);
         }
         if (!delete.succeeded()) {
             return new BackupResult.CleanupFailed(metadata, name,
@@ -195,19 +203,39 @@ public final class BackupCapabilityExecutor {
         return new BackupResult.Completed(metadata, name, Optional.empty(), Optional.empty());
     }
 
-    private BackupStatus pollUntilTerminalOrDeadline(TransportSession session) {
+    private record Poll(BackupStatus status, String lastOutput) {
+    }
+
+    private Poll pollUntilTerminalOrDeadline(TransportSession session) {
         Instant deadline = Instant.now().plus(runDeadline);
         while (true) {
             ExecOutcome statusOutcome = exec(session, BackupReadPlan.CP_SHOW_BACKUP_STATUS, POLL_TIMEOUT);
             BackupStatus status = classifyStatus(statusOutcome.output());
             if (status == BackupStatus.SUCCEEDED || status == BackupStatus.FAILED) {
-                return status;
+                return new Poll(status, statusOutcome.output());
             }
             if (!Instant.now().plus(pollInterval).isBefore(deadline)) {
-                return BackupStatus.IN_PROGRESS; // never reached terminal before the deadline -> OUTCOME_UNKNOWN
+                return new Poll(BackupStatus.IN_PROGRESS, statusOutcome.output()); // never terminal before the deadline -> OUTCOME_UNKNOWN
             }
             sleep(pollInterval);
         }
+    }
+
+    private static final Pattern BACKUP_LOCATION = Pattern.compile("(?i)backup file location:\\s*(\\S+\\.tgz)");
+
+    /** "show backup status" names the archive by full path once the backup succeeded. */
+    static Optional<String> parseBackupLocation(String statusOutput) {
+        if (statusOutput == null) {
+            return Optional.empty();
+        }
+        Matcher matcher = BACKUP_LOCATION.matcher(statusOutput);
+        return matcher.find() ? Optional.of(matcher.group(1)) : Optional.empty();
+    }
+
+    /** clish "delete backup" takes the file name, never a path. */
+    static String archiveBaseName(String archivePathOrName) {
+        int slash = archivePathOrName.lastIndexOf('/');
+        return slash >= 0 ? archivePathOrName.substring(slash + 1) : archivePathOrName;
     }
 
     private ExecOutcome exec(TransportSession session, String command, Duration timeout) {

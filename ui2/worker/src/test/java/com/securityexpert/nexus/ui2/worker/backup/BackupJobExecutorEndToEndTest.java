@@ -99,6 +99,36 @@ class BackupJobExecutorEndToEndTest {
         }
     }
 
+    /** Measured live on a Gaia R81.20 gateway (2026-09-22) and in the reference trail: a
+     * non-interactive "add backup local" only announces "Creating backup package..."; the archive
+     * is named -- by full path -- in "show backup status" once it succeeds. The fetch and the digest
+     * use that path; "delete backup" takes the bare file name. */
+    @Test
+    void takesTheArchivePathFromShowBackupStatusWhenTheSubmitDoesNotNameIt(@TempDir Path tempDir) throws Exception {
+        String fullPath = "/var/log/CPbackup/backups/" + ARCHIVE_NAME;
+        ScriptedBackupTransport transport = new ScriptedBackupTransport();
+        transport.execOutputs.put(BackupReadPlan.CP_SHOW_DISKSPACE, "1000000\n");
+        transport.execOutputs.put(BackupReadPlan.CP_ADD_BACKUP_LOCAL,
+                "Creating backup package. Use the command 'show backup status' to monitor creation progress.\n");
+        transport.statusSequence.add("Performing backup\nCreating Compressed Backup File [41%]\n");
+        transport.statusSequence.add("Local backup succeeded.\nBackup file location: " + fullPath
+                + "\nBackup process finished in 00:04 seconds\nBackup Date: 16-Sep-2026 03:01:05\n");
+        transport.fetchedContent = "archive-bytes-content";
+        String digestHex = sha256Hex(transport.fetchedContent);
+        transport.execOutputs.put(BackupReadPlan.archiveDigestCommand(fullPath), digestHex + "  " + fullPath + "\n");
+        transport.execOutputs.put(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME), "");
+
+        Harness harness = new Harness(transport, newArtefactStore(tempDir), Duration.ofMillis(5), Duration.ofSeconds(5),
+                tempDir);
+        JobOutcome outcome = harness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request());
+
+        assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        assertTrue(harness.transport.commandsIssued.contains(BackupReadPlan.archiveDigestCommand(fullPath)),
+                "the digest is taken over the full path the status named");
+        assertTrue(harness.transport.commandsIssued.contains(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME)),
+                "delete backup takes the bare file name");
+    }
+
     @Test
     void happyPathSubmitsPollsFetchesVerifiesAndDeletesInOrder(@TempDir Path tempDir) throws Exception {
         ScriptedBackupTransport transport = happyPathTransportUpTo("succeeded");
