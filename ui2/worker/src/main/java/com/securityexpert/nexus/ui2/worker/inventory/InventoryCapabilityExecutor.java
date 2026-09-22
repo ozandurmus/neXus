@@ -352,13 +352,16 @@ public final class InventoryCapabilityExecutor {
             }
             // Platform identity facts (contract §3): two bare Expert reads over the same session; an empty
             // answer leaves the fact UNKNOWN and never fails the inventory.
-            PlatformFactsRead platformFacts = new PlatformFactsRead(Optional.empty(),
+            String assetOutput = identityReadOutput(session, InventoryReadPlan.CP_SHOW_ASSET_SYSTEM, preferInteractiveShell);
+            PlatformFactsRead platformFacts = new PlatformFactsRead(
+                    com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.assetSerial(assetOutput),
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.jumboTake(
                             identityReadOutput(session, InventoryReadPlan.CP_CPINFO_HOTFIXES, preferInteractiveShell)),
-                    Optional.empty(), java.util.Map.of(),
+                    com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.assetFamily(assetOutput),
+                    java.util.Map.of(),
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.uptime(
                             identityReadOutput(session, InventoryReadPlan.CP_UPTIME, preferInteractiveShell)),
-                    "cp_cpinfo_hotfixes_and_uptime");
+                    "cp_show_asset_system_cpinfo_hotfixes_uptime");
             long totalElapsed = System.currentTimeMillis() - overallStart;
             LOG.log(System.Logger.Level.INFO,
                     "[INVENTORY_COLLECT_COMPLETE] target={0}:{1} completed in {2}ms, totalContexts={3}, totalInterfaces={4}",

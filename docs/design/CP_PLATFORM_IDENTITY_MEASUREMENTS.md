@@ -53,7 +53,22 @@ kept. Output length on this server: ~150 lines; timeout 60 s.
 Field extracted: **uptime** = the text between `up ` and the user count →
 `237 days, 21:10`. Load average not kept.
 
-## Not measured
+## `clish -c "show asset system"` (gate `cp_identity_show_asset_system`)
 
-`show asset system` (Clish) for the serial number — needed on a gateway
-appliance; an open server may report none. Pending.
+Measured on a Smart-1 5150 appliance (management), 2026-09-22; the serial
+below is a placeholder, the real value is withheld:
+
+```
+Platform: ST-4150-00
+Model: Smart-1 5150
+Serial Number: 0000000
+CPU Model: Intel(R) Xeon(R) Gold 5118 CPU
+CPU Frequency: 2300.000 Mhz
+Number of Cores: 24
+CPU Hyperthreading: Disabled
+```
+
+Fields extracted: **serial number** = `Serial Number:` (an open server's
+`N/A` is treated as none), **platform family** = `Model (Platform)` →
+`Smart-1 5150 (ST-4150-00)`. CPU lines not kept. A gateway appliance has
+not been measured separately; the line shape is Gaia's, not the model's.

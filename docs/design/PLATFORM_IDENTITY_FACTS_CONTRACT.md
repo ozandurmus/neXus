@@ -2,12 +2,12 @@
 
 ## Status
 
-**FROZEN for §1 Palo Alto column and §2 (Product Owner directive 2026-09-22:
-"I definitely want serial number and version information on the Configuration
-screen; whatever industry leaders collect and whatever is meaningful must all
-be there"). §3 Check Point: `cpinfo -y all` and `uptime` SIGNED OFF by measurement
-(the PO ran them by hand on 2026-09-22, `CP_PLATFORM_IDENTITY_MEASUREMENTS.md`);
-`show asset system` (serial) PENDING measurement on a gateway.** Backlog
+**FROZEN — 2026-09-22.** Product Owner directive: "I definitely want serial
+number and version information on the Configuration screen; whatever industry
+leaders collect and whatever is meaningful must all be there." All three
+Check Point reads in §3 are SIGNED OFF by measurement: the PO ran them by hand
+on 2026-09-22 (`CP_PLATFORM_IDENTITY_MEASUREMENTS.md`).
+Backlog
 `platform_identity_facts_on_configuration` (P1).
 
 ## 1. The facts
@@ -53,7 +53,7 @@ Every Check Point fact marked *new gate* needs its row signed off first.
 
 | gate_id | command | shell | class | timeout | frequency | secret risk |
 |---|---|---|---|---|---|---|
-| `cp_identity_show_asset_system` | `clish -c 'show asset system'` | expert | read | 30 s | once per device per run | none |
+| `cp_identity_show_asset_system` | `clish -c 'show asset system'` -- measured 2026-09-22, SIGNED_OFF (V48) | expert | read | 30 s | once per device per run | none |
 | `cp_identity_cpinfo_hotfixes` | `cpinfo -y all` -- measured 2026-09-22, SIGNED_OFF (V47) | expert | read | 60 s | once per device per run | none (hotfix names and takes only) |
 | `cp_identity_uptime` | `uptime` -- measured 2026-09-22, SIGNED_OFF (V47) | expert | read | 15 s | once per device per run | none |
 

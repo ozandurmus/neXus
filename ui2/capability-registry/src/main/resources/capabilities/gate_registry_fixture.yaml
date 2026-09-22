@@ -196,6 +196,23 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md §3 -- measured 2026-09-22"
 
+  - gate_id: cp_identity_show_asset_system
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "clish -c 'show asset system'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the inventory session"
+    unsupported_behavior_ref: "an open server may report no serial (N/A) -- a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md §3 -- measured 2026-09-22"
+
   - gate_id: cp_identity_uptime
     vendor: check_point
     platform_role_scope: cp_gaia_gateway

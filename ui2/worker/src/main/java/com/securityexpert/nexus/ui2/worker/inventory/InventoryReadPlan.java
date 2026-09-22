@@ -80,6 +80,7 @@ public final class InventoryReadPlan {
     /** Platform identity facts (PLATFORM_IDENTITY_FACTS_CONTRACT §3), bare Expert reads, never vsenv-wrapped. */
     public static final String CP_CPINFO_HOTFIXES = "cpinfo -y all";
     public static final String CP_UPTIME = "uptime";
+    public static final String CP_SHOW_ASSET_SYSTEM = "clish -c 'show asset system'";
 
     /** Physical read order (amended 2026-09-21, cp_vsx_interfaces_identical_to_physical): interfaces
      * ({@code fw getifs}, superseding the old v4/v6 {@code ip addr show} pair), routes, HA state, cluster
