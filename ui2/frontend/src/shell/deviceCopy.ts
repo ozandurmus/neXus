@@ -40,6 +40,16 @@ export function deviceNameLabel(hostname: string | null | undefined): string {
   return hostname?.trim() || "Unknown";
 }
 
+/**
+ * Why a row has no hostname evidence yet (review §3, Administration: "A device named 'Unknown' is listed as
+ * Enrolled" should read "UNKNOWN hostname" with a chip explaining why). Only meaningful when the hostname is
+ * actually missing -- the caller decides that separately and only renders this chip in that case.
+ */
+export function missingHostnameReason(enrollmentState: string): string {
+  if (enrollmentState === "DRAFT") return "draft";
+  return "never read";
+}
+
 const TERMINAL_JOB_STATES = new Set([
   "COMPLETED",
   "FAILED",

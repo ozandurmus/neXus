@@ -7,6 +7,7 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { RestrictedPanel, StatePanel, Ts, isRestricted } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import {
@@ -452,20 +453,17 @@ function WarningsAndNotesSection({ warnings, notes }: { readonly warnings: strin
 
 /** Java product scope, delivery gates and separately labeled historical lessons. */
 export function ProjectPlanPanel() {
-  const { data: plan, error, refresh } = useFetchOnMount(() => getProjectPlan(), describeApiError);
+  const { data: plan, error, rawError, refresh } = useFetchOnMount(() => getProjectPlan(), describeApiError);
 
-  if (error) {
-    return (
-      <EmptyPanel title="Project plan unavailable" body={error}>
-        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-          <M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>
-        </Box>
-      </EmptyPanel>
-    );
+  if (error && plan === null) {
+    return isRestricted(rawError)
+      ? <RestrictedPanel area="Delivery plan" />
+      : <StatePanel variant="error" title="Delivery plan unavailable" body="The delivery plan could not be read." code={error}
+          action={<M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>} />;
   }
 
   if (plan === null) {
-    return <EmptyPanel title="Project plan" body="Loading…" />;
+    return <StatePanel variant="empty" title="Delivery plan" body="Loading…" />;
   }
 
   if (plan.metadata_warnings.includes("No project-plan source is configured.")) {
@@ -476,7 +474,7 @@ export function ProjectPlanPanel() {
     <Stack spacing={3}>
       <Section title="Java UI2 product roadmap">
         <Typography variant="body2">Current recorded product build: {plan.current_product_build ?? "UNKNOWN"}. Deployed software version: UNKNOWN.</Typography>
-        <Typography variant="body2">Source review: {plan.source_metadata?.reviewed_at ?? "UNKNOWN"} · Freshness: {plan.source_metadata?.freshness ?? "UNKNOWN"}</Typography>
+        <Typography variant="body2" component="div">Source review: <Ts at={plan.source_metadata?.reviewed_at} /> · Freshness: {plan.source_metadata?.freshness ?? "UNKNOWN"}</Typography>
         <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>Source revision: {plan.source_metadata?.revision ?? "UNKNOWN"}</Typography>
         <Typography variant="body2">{plan.source_metadata?.update_policy}</Typography>
         <M3Button emphasis="outlined" onClick={refresh}>Refresh project plan</M3Button>

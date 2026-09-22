@@ -22,6 +22,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
 import { M3Button } from "../shell/M3Widgets";
+import { RestrictedPanel, Ts, isRestricted } from "../shell/States";
 import {
   listRoleBindings,
   createDirectoryRoleBinding,
@@ -48,17 +49,36 @@ export function CustomRolesPanel() {
   const [creatingRole, setCreatingRole] = useState(false);
   const [mappingGroup, setMappingGroup] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [restricted, setRestricted] = useState(false);
+  // Set once the server has actually refused a create/map attempt (never guessed from a role token) -- from
+  // then on the button is rendered outlined and explained instead of a filled primary the account cannot use
+  // (review §4: "Buttons the role cannot use are rendered outlined with the reason beneath").
+  const [createRefusedReason, setCreateRefusedReason] = useState<string | null>(null);
+  const [mapRefusedReason, setMapRefusedReason] = useState<string | null>(null);
 
   const refreshRoles = () =>
     fetch("/roles")
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((res) => setRoles(Array.isArray(res) ? res : []))
-      .catch(() => setError("Unable to load roles."));
+      .then((response) => {
+        if (response.status === 403) {
+          setRestricted(true);
+          return Promise.reject("restricted");
+        }
+        return response.ok ? response.json() : Promise.reject("failed");
+      })
+      .then((res) => {
+        setRestricted(false);
+        setRoles(Array.isArray(res) ? res : []);
+      })
+      .catch((reason) => {
+        if (reason !== "restricted") setError("Unable to load roles.");
+      });
 
   const refreshBindings = () =>
     listRoleBindings()
       .then((res) => setBindings(Array.isArray(res) ? res : []))
-      .catch(() => setError("Unable to load directory group role bindings."));
+      .catch((err) => {
+        if (!isRestricted(err)) setError("Unable to load directory group role bindings.");
+      });
 
   useEffect(() => {
     void refreshRoles();
@@ -78,6 +98,10 @@ export function CustomRolesPanel() {
     (b) => b.binding_kind === "DIRECTORY_GROUP" || (!b.binding_kind && b.directory_profile_id)
   );
 
+  if (restricted) {
+    return <RestrictedPanel area="Roles & Permissions" role="Security Admin" />;
+  }
+
   return (
     <Box sx={{ p: 2 }}>
       <Stack spacing={4}>
@@ -90,9 +114,16 @@ export function CustomRolesPanel() {
                 Configured product plane permissions for directory and local identities.
               </Typography>
             </Box>
-            <M3Button emphasis="filled" onClick={() => setCreatingRole(true)}>
-              Create role
-            </M3Button>
+            {createRefusedReason ? (
+              <Stack alignItems="flex-end" spacing={0.25}>
+                <M3Button emphasis="outlined" disabled>Create role</M3Button>
+                <Typography variant="caption" color="text.secondary">{createRefusedReason}</Typography>
+              </Stack>
+            ) : (
+              <M3Button emphasis="filled" onClick={() => setCreatingRole(true)}>
+                Create role
+              </M3Button>
+            )}
           </Stack>
 
           {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
@@ -159,9 +190,16 @@ export function CustomRolesPanel() {
                 Map LDAP / Active Directory security groups directly to product roles.
               </Typography>
             </Box>
-            <M3Button emphasis="filled" onClick={() => setMappingGroup(true)}>
-              Map directory group
-            </M3Button>
+            {mapRefusedReason ? (
+              <Stack alignItems="flex-end" spacing={0.25}>
+                <M3Button emphasis="outlined" disabled>Map directory group</M3Button>
+                <Typography variant="caption" color="text.secondary">{mapRefusedReason}</Typography>
+              </Stack>
+            ) : (
+              <M3Button emphasis="filled" onClick={() => setMappingGroup(true)}>
+                Map directory group
+              </M3Button>
+            )}
           </Stack>
 
           <TableContainer component={Paper} variant="outlined">
@@ -183,9 +221,7 @@ export function CustomRolesPanel() {
                     </TableCell>
                     <TableCell sx={{ fontFamily: "monospace" }}>{binding.role_token}</TableCell>
                     <TableCell>{binding.directory_profile_id || "default"}</TableCell>
-                    <TableCell>
-                      {binding.created_at ? new Date(binding.created_at).toLocaleString() : "—"}
-                    </TableCell>
+                    <TableCell><Ts at={binding.created_at} /></TableCell>
                     <TableCell align="right">
                       <M3Button
                         emphasis="text"
@@ -216,12 +252,20 @@ export function CustomRolesPanel() {
             setCreatingRole(false);
             void refreshRoles();
           }}
+          onRefused={(reason) => {
+            setCreatingRole(false);
+            setCreateRefusedReason(reason);
+          }}
         />
       )}
 
       {mappingGroup && (
         <MapDirectoryGroupDialog
           roles={roles}
+          onRefused={(reason) => {
+            setMappingGroup(false);
+            setMapRefusedReason(reason);
+          }}
           onClose={() => setMappingGroup(false)}
           onMapped={() => {
             setMappingGroup(false);
@@ -236,9 +280,11 @@ export function CustomRolesPanel() {
 function CreateRoleDialog({
   onClose,
   onCreated,
+  onRefused,
 }: {
   readonly onClose: () => void;
   readonly onCreated: () => void;
+  readonly onRefused: (reason: string) => void;
 }) {
   const [name, setName] = useState("");
   const [token, setToken] = useState("");
@@ -261,7 +307,14 @@ function CreateRoleDialog({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, token_string: token, description, permissions }),
     })
-      .then((response) => (response.ok ? onCreated() : Promise.reject()))
+      .then((response) => {
+        if (response.status === 403) {
+          onRefused("Needs a role that can create roles.");
+          return;
+        }
+        if (!response.ok) return Promise.reject();
+        onCreated();
+      })
       .catch(() => setError("Unable to create role."));
   };
 
@@ -329,10 +382,12 @@ function MapDirectoryGroupDialog({
   roles,
   onClose,
   onMapped,
+  onRefused,
 }: {
   readonly roles: Role[];
   readonly onClose: () => void;
   readonly onMapped: () => void;
+  readonly onRefused: (reason: string) => void;
 }) {
   const [selectedRoleToken, setSelectedRoleToken] = useState(
     roles.length > 0 ? roles[0].token_string || roles[0].tokenString || "" : ""
@@ -353,7 +408,11 @@ function MapDirectoryGroupDialog({
         directoryProfileId: directoryProfileId.trim() || "default",
       });
       onMapped();
-    } catch {
+    } catch (err) {
+      if (isRestricted(err)) {
+        onRefused("Needs a role that can map directory groups.");
+        return;
+      }
       setError("Failed to map directory group to role.");
     }
   };

@@ -9,6 +9,8 @@ import Paper from "@mui/material/Paper";
 import TableContainer from "@mui/material/TableContainer";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
+import { M3Button } from "../shell/M3Widgets";
+import { RestrictedPanel, StatePanel, Ts, isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { listAuditEvents, type ApiError } from "../auth/adminApi";
 
@@ -20,7 +22,7 @@ export function AuditLogsPanel() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  const { data, error } = useFetchOnMount(
+  const { data, error, rawError, refresh } = useFetchOnMount(
     () => listAuditEvents().then((result) => result.events ?? []),
     (err) => describeError(err as ApiError),
   );
@@ -34,8 +36,13 @@ export function AuditLogsPanel() {
     setPage(0);
   };
 
-  if (error) return <EmptyPanel title="Audit logs unavailable" body={error} />;
-  if (data === null) return <EmptyPanel title="Audit logs" body="Loading…" />;
+  if (error && data === null) {
+    return isRestricted(rawError)
+      ? <RestrictedPanel area="Audit Logs" role="Security Admin" />
+      : <StatePanel variant="error" title="Audit logs unavailable" body="Audit events could not be read." code={error}
+          action={<M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>} />;
+  }
+  if (data === null) return <StatePanel variant="empty" title="Audit logs" body="Loading…" />;
   if (data.length === 0) return <EmptyPanel title="No audit events" body="No audited management action has been recorded." />;
 
   const displayedRows = data.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
@@ -56,7 +63,7 @@ export function AuditLogsPanel() {
           <TableBody>
             {displayedRows.map((event) => (
               <TableRow key={event.id} hover>
-                <TableCell>{event.occurred_at}</TableCell>
+                <TableCell><Ts at={event.occurred_at} /></TableCell>
                 <TableCell>{event.actor}</TableCell>
                 <TableCell>{event.action}</TableCell>
                 <TableCell>{event.target}</TableCell>

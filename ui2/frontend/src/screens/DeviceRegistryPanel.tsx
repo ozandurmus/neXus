@@ -11,9 +11,11 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { CapabilityMenu, M3Button, StatusChip } from "../shell/M3Widgets";
+import { RestrictedPanel, StatePanel, Ts, VendorBadge, isRestricted } from "../shell/States";
+import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { deleteDevice, listDevices, type ApiError, type BackupDisposition, type DeviceSummary } from "../auth/adminApi";
-import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
+import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone, missingHostnameReason } from "../shell/deviceCopy";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -30,6 +32,25 @@ function requiredBackupDisposition(err: unknown): number | null {
     : null;
 }
 
+/** The device/hostname cell: the plain name, or "UNKNOWN hostname" with a chip naming why (review §3). */
+function HostnameCell({ device }: { readonly device: DeviceSummary }) {
+  const hostname = device.hostname?.trim();
+  if (hostname) {
+    return (
+      <Typography variant="body2" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>
+        {hostname}
+      </Typography>
+    );
+  }
+  const reason = missingHostnameReason(device.enrollment_state);
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+      <Typography variant="body2" sx={{ color: m3.neutralInk, fontWeight: 600, whiteSpace: "nowrap" }}>UNKNOWN hostname</Typography>
+      <StatusChip tone="neutral" label={reason} dense />
+    </Box>
+  );
+}
+
 /**
  * The Administration screen's "Device management" tab, backed by a real
  * `GET /devices` fetch. Lighter than `InventoryScreen`'s own listing --
@@ -37,7 +58,7 @@ function requiredBackupDisposition(err: unknown): number | null {
  * full inventory view is the canonical place to browse the registry.
  */
 export function DeviceManagementPane() {
-  const { data: devices, error, refresh } = useFetchOnMount(
+  const { data: devices, error, rawError, refresh } = useFetchOnMount(
     () => listDevices().then((result) => result.devices ?? []),
     describeApiError,
   );
@@ -45,7 +66,6 @@ export function DeviceManagementPane() {
   const [pendingDelete, setPendingDelete] = useState<{ deviceId: string; artefactCount: number } | null>(null);
 
   const onDelete = async (deviceId: string) => {
-    if (!window.confirm("Delete this device and all of its collected records? This cannot be undone.")) return;
     try {
       await deleteDevice(deviceId);
       setDeleteError(null);
@@ -62,7 +82,6 @@ export function DeviceManagementPane() {
 
   const onBulkDelete = async (deviceIds: string[]): Promise<boolean> => {
     if (deviceIds.length === 0) return false;
-    if (!window.confirm(`Delete ${deviceIds.length} selected device(s) and all of their collected records? This cannot be undone.`)) return false;
     try {
       for (const id of deviceIds) {
         try {
@@ -99,9 +118,20 @@ export function DeviceManagementPane() {
     }
   };
 
+  if (error && devices === null) {
+    return isRestricted(rawError)
+      ? <RestrictedPanel area="Device registry" />
+      : <StatePanel variant="error" title="Device registry unavailable" body="The registry could not be read." code={error}
+          action={<M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>} />;
+  }
+
   const total = devices?.length ?? 0;
   const enrolledCount = devices?.filter((d) => d.enrollment_state === "ENROLLED").length ?? 0;
-  // Enrolled devices whose most recent collection job failed -- the evidence the store has for "degraded".
+  // Enrolled devices whose most recent collection job failed -- the evidence the store has for "degraded". Note
+  // this denominator is narrower than the Devices screen's "Failed N of 105" chip, which counts every device
+  // (drafts included) with `latest_job_state === "FAILED""; here only an already-ENROLLED device counts, plus a
+  // device the store itself marked DEGRADED/UNREACHABLE. The two figures answer different questions and can
+  // legitimately differ -- see the final report for the exact predicates.
   const degradedCount = devices?.filter((d) => d.enrollment_state === "DEGRADED" || d.enrollment_state === "UNREACHABLE"
     || (d.enrollment_state === "ENROLLED" && d.latest_job_state === "FAILED")).length ?? 0;
   const backupTargetCount = devices?.filter((d) => d.backup_target).length ?? 0;
@@ -126,11 +156,9 @@ export function DeviceManagementPane() {
       <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 2 }}>
       <DeviceRegistryCard
         devices={devices}
-        error={error}
         deleteError={deleteError}
         onDelete={onDelete}
         onBulkDelete={onBulkDelete}
-        onRetry={refresh}
         total={total}
       />
       <Stack spacing={2}>
@@ -141,8 +169,8 @@ export function DeviceManagementPane() {
               <StatusChip tone="ok" label={`${enrolledCount} device${enrolledCount === 1 ? "" : "s"}`} dense />
             </Box>
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="body2">Last collection failed</Typography>
-              <StatusChip tone="warn" label={`${degradedCount} device${degradedCount === 1 ? "" : "s"}`} dense />
+              <Typography variant="body2">Last collection failed (enrolled)</Typography>
+              <StatusChip tone={degradedCount === 0 ? "neutral" : "warn"} label={`${degradedCount} device${degradedCount === 1 ? "" : "s"}`} dense />
             </Box>
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
               <Typography variant="body2">Draft · not collected</Typography>
@@ -160,38 +188,63 @@ export function DeviceManagementPane() {
   );
 }
 
+/** Confirmation dialog for both the row menu's single Delete and the bulk bar's Delete -- names the device(s). */
+function ConfirmDeleteDialog({
+  names,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  readonly names: readonly string[];
+  readonly busy: boolean;
+  readonly onCancel: () => void;
+  readonly onConfirm: () => void;
+}) {
+  const shown = names.slice(0, 5);
+  const more = names.length - shown.length;
+  return (
+    <Dialog open onClose={onCancel} aria-labelledby="confirm-delete-title">
+      <DialogTitle id="confirm-delete-title">
+        Delete {names.length === 1 ? "this device" : `${names.length} devices`}?
+      </DialogTitle>
+      <DialogContent>
+        <Typography sx={{ mb: 1 }}>
+          {shown.join(", ")}{more > 0 ? `, and ${more} more` : ""}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          This deletes the device{names.length === 1 ? "" : "s"} and all of its collected records. This cannot be undone.
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <M3Button emphasis="text" onClick={onCancel} disabled={busy}>Cancel</M3Button>
+        <M3Button emphasis="filled" onClick={onConfirm} disabled={busy}>{busy ? "Deleting…" : "Delete"}</M3Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function DeviceRegistryCard({
   devices,
-  error,
   deleteError,
   onDelete,
   onBulkDelete,
-  onRetry,
   total,
 }: {
   readonly devices: DeviceSummary[] | null;
-  readonly error: string | null;
   readonly deleteError: string | null;
   readonly onDelete: (deviceId: string) => void;
   readonly onBulkDelete: (deviceIds: string[]) => Promise<boolean>;
-  readonly onRetry: () => void;
   readonly total: number;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
-
-  if (error) {
-    return (
-      <EmptyPanel title="Device registry unavailable" body={error}>
-        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-          <M3Button emphasis="outlined" onClick={onRetry}>Retry</M3Button>
-        </Box>
-      </EmptyPanel>
-    );
-  }
+  // Ids pending a named confirmation dialog -- either one row's Delete (from its overflow menu) or the bulk
+  // bar's Delete for the current selection. The capability and its API call are unchanged; only the click a
+  // stray tap can no longer trigger moved off the row (review "shows a filled Delete button on every row").
+  const [confirmIds, setConfirmIds] = useState<string[] | null>(null);
 
   if (devices === null) {
-    return <EmptyPanel title="Device registry" body="Loading…" />;
+    return <StatePanel variant="empty" title="Device registry" body="Loading…" />;
   }
 
   const isAllSelected = total > 0 && selectedIds.size === total;
@@ -221,10 +274,19 @@ function DeviceRegistryCard({
     setSelectedIds(new Set(drafts));
   };
 
-  const handleBulkDelete = async () => {
+  const confirmNames = (confirmIds ?? []).map((id) => deviceNameLabel(devices.find((d) => d.device_id === id)?.hostname));
+
+  const handleConfirmedDelete = async () => {
+    if (!confirmIds) return;
     setIsDeleting(true);
     try {
-      if (await onBulkDelete(Array.from(selectedIds))) setSelectedIds(new Set());
+      if (confirmIds.length === 1) {
+        onDelete(confirmIds[0]);
+        setConfirmIds(null);
+      } else if (await onBulkDelete(confirmIds)) {
+        setSelectedIds(new Set());
+        setConfirmIds(null);
+      }
     } finally {
       setIsDeleting(false);
     }
@@ -235,6 +297,14 @@ function DeviceRegistryCard({
       title={`Device registry · ${total} ${total === 1 ? "entry" : "entries"}`}
       body={total === 0 ? "No device has been enrolled yet." : `${total} device${total === 1 ? "" : "s"} in the registry.`}
     >
+      {confirmIds && (
+        <ConfirmDeleteDialog
+          names={confirmNames}
+          busy={isDeleting}
+          onCancel={() => setConfirmIds(null)}
+          onConfirm={() => void handleConfirmedDelete()}
+        />
+      )}
       <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
         <CapabilityMenu
           ariaLabel="Device registry capabilities"
@@ -279,20 +349,14 @@ function DeviceRegistryCard({
               </M3Button>
             )}
           </Stack>
-          <Box sx={{ "& button": { bgcolor: "error.main", color: "error.contrastText", "&:hover": { bgcolor: "error.dark" } } }}>
-            <M3Button
-              emphasis="filled"
-              onClick={handleBulkDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? "Deleting..." : `Delete selected (${selectedIds.size})`}
-            </M3Button>
-          </Box>
+          <M3Button emphasis="tonal" onClick={() => setConfirmIds(Array.from(selectedIds))}>
+            Delete selected ({selectedIds.size})
+          </M3Button>
         </Box>
       )}
       {total > 0 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
-          <Box sx={{ display: "grid", gridTemplateColumns: "36px 1fr 200px 90px", px: 2, py: 0.5, color: "text.secondary", fontSize: "0.75rem", fontWeight: 600, alignItems: "center" }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "36px 34px 1fr 150px 150px 40px", px: 2, py: 0.5, color: "text.secondary", fontSize: "0.75rem", fontWeight: 600, alignItems: "center" }}>
             <Box>
               <Checkbox
                 checked={isAllSelected}
@@ -303,9 +367,11 @@ function DeviceRegistryCard({
                 inputProps={{ "aria-label": "Select all devices" }}
               />
             </Box>
+            <Box>VENDOR</Box>
             <Box>DEVICE / HOSTNAME</Box>
-            <Box sx={{ textAlign: "center" }}>STATUS</Box>
-            <Box sx={{ textAlign: "right" }}>ACTIONS</Box>
+            <Box>ENROLMENT STATE</Box>
+            <Box>LAST COLLECTION</Box>
+            <Box sx={{ textAlign: "right" }}>&nbsp;</Box>
           </Box>
           <Stack spacing={1} sx={{ maxHeight: "calc(100vh - 340px)", overflowY: "auto", pr: 0.5 }}>
             {devices.map((device) => (
@@ -313,7 +379,7 @@ function DeviceRegistryCard({
                 key={device.device_id}
                 sx={{
                   display: "grid",
-                  gridTemplateColumns: "36px 1fr 200px 90px",
+                  gridTemplateColumns: "36px 34px 1fr 150px 150px 40px",
                   alignItems: "center",
                   gap: 1,
                   px: 2,
@@ -334,14 +400,19 @@ function DeviceRegistryCard({
                     inputProps={{ "aria-label": `Select ${deviceNameLabel(device.hostname)}` }}
                   />
                 </Box>
-                <Typography variant="body2" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>
-                  {deviceNameLabel(device.hostname)}
-                </Typography>
-                <Box sx={{ display: "flex", justifyContent: "center" }}>
+                <VendorBadge vendor={device.vendor_hint} size={24} />
+                <HostnameCell device={device} />
+                <Box>
                   <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />
                 </Box>
+                <Ts at={device.inventory_collected_at} relative />
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                  <M3Button emphasis="outlined" onClick={() => onDelete(device.device_id)}>Delete</M3Button>
+                  <CapabilityMenu
+                    ariaLabel={`${deviceNameLabel(device.hostname)} actions`}
+                    items={[
+                      { label: "Delete", destructive: true, onSelect: () => setConfirmIds([device.device_id]) },
+                    ]}
+                  />
                 </Box>
               </Box>
             ))}
@@ -350,4 +421,32 @@ function DeviceRegistryCard({
       )}
     </EmptyPanel>
   );
+}
+
+/**
+ * Administration › Registry › Inventory exclusions. There is no exclusion capability or store yet in this
+ * build -- this stays an empty state -- but its copy read "no device has been excluded yet, because no device
+ * has been enrolled yet" even once the registry held enrolled devices (review §3 copy bug). The second clause
+ * is only ever true when the registry is actually empty; this component reads the real device count (the same
+ * `GET /devices` the registry tab uses) so the copy states the reason that is actually true.
+ */
+export function InventoryExclusionsPanel() {
+  const { data: devices, error, rawError, refresh } = useFetchOnMount(
+    () => listDevices().then((result) => result.devices ?? []),
+    describeApiError,
+  );
+
+  if (error && devices === null) {
+    return isRestricted(rawError)
+      ? <RestrictedPanel area="Inventory exclusions" />
+      : <StatePanel variant="error" title="Inventory exclusions unavailable" body="The device registry could not be read." code={error}
+          action={<M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>} />;
+  }
+  if (devices === null) return <StatePanel variant="empty" title="Inventory exclusions" body="Loading…" />;
+
+  const enrolledCount = devices.filter((d) => d.enrollment_state !== "DRAFT").length;
+  const body = enrolledCount > 0
+    ? "Excluding a device removes it from inventory collection while it stays enrolled for configuration evidence. No device has been excluded yet."
+    : "Excluding a device removes it from inventory collection while it stays enrolled for configuration evidence. No device has been excluded yet, because no device has been enrolled yet.";
+  return <EmptyPanel title="No device excluded" body={body} />;
 }

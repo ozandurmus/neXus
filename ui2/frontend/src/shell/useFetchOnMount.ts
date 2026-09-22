@@ -4,6 +4,12 @@ export interface FetchOnMountResult<T> {
   /** `null` until the first successful response lands. */
   readonly data: T | null;
   readonly error: string | null;
+  /**
+   * The unmodified rejection this generation's fetch threw (usually an `ApiError`), so a caller can run
+   * `isRestricted()` on it directly instead of pattern-matching the already-humanised `error` string.
+   * `null` while there is no error, or before this field existed for an older caller that ignores it.
+   */
+  readonly rawError: unknown;
   /** Re-runs the fetch. Safe to call while a previous run is still in flight. */
   readonly refresh: () => void;
 }
@@ -28,6 +34,7 @@ export function useFetchOnMount<T>(
 ): FetchOnMountResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rawError, setRawError] = useState<unknown>(null);
   const [generation, setGeneration] = useState(0);
 
   const refresh = useCallback(() => setGeneration((g) => g + 1), []);
@@ -39,10 +46,12 @@ export function useFetchOnMount<T>(
         if (cancelled) return;
         setData(result);
         setError(null);
+        setRawError(null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         setError(describeError(err));
+        setRawError(err);
       });
     return () => {
       cancelled = true;
@@ -53,5 +62,5 @@ export function useFetchOnMount<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generation]);
 
-  return { data, error, refresh };
+  return { data, error, rawError, refresh };
 }

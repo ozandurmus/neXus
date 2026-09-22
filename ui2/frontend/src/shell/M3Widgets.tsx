@@ -230,11 +230,18 @@ export interface CapabilityMenuItem {
   readonly selected?: boolean;
   /** Renders a divider above this item, matching the canvas's grouping. */
   readonly dividerBefore?: boolean;
+  /** Fired when the item is clicked (and it has no `disabledReason`). Omit for a display-only entry. */
+  readonly onSelect?: () => void;
+  /** A destructive action (e.g. Delete): rendered in the error colour. */
+  readonly destructive?: boolean;
 }
 
 /**
  * The canvas's device overflow menu. Opening it never contacts a device;
- * every entry is either a read-evidence action or an explained no-op.
+ * every entry is either a read-evidence action, an explained no-op, or (with
+ * `onSelect`) a real action the caller wires up itself -- e.g. Delete moved
+ * off the row and into this menu (review "Device registry shows a filled
+ * Delete button on every row" finding).
  */
 export function CapabilityMenu({
   ariaLabel,
@@ -256,8 +263,11 @@ export function CapabilityMenu({
               key={item.label}
               disabled={Boolean(item.disabledReason)}
               selected={item.selected}
-              onClick={() => setAnchor(null)}
-              sx={{ fontSize: 14, letterSpacing: "0.1px", gap: 1.5, minWidth: 240 }}
+              onClick={() => {
+                setAnchor(null);
+                item.onSelect?.();
+              }}
+              sx={{ fontSize: 14, letterSpacing: "0.1px", gap: 1.5, minWidth: 240, color: item.destructive ? m3.criticalInk : undefined }}
             >
               <Box sx={{ flex: 1 }}>{item.label}</Box>
               {item.disabledReason ? (

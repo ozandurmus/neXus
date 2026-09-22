@@ -11,7 +11,8 @@ import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 
 import { listSessions, revokeSession, type ApiError } from "../auth/adminApi";
-import { EmptyPanel } from "../shell/ScreenLayout";
+import { M3Button } from "../shell/M3Widgets";
+import { RestrictedPanel, StatePanel, Ts, isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 
 function duration(seconds: number): string {
@@ -25,10 +26,15 @@ function describeError(error: ApiError): string {
 }
 
 export function SessionsPanel() {
-  const { data, error, refresh } = useFetchOnMount(listSessions, (value) => describeError(value as ApiError));
+  const { data, error, rawError, refresh } = useFetchOnMount(listSessions, (value) => describeError(value as ApiError));
 
-  if (error) return <EmptyPanel title="Sessions unavailable" body={error} />;
-  if (data === null) return <EmptyPanel title="Sessions" body="Loading…" />;
+  if (error && data === null) {
+    return isRestricted(rawError)
+      ? <RestrictedPanel area="Sessions" role="Security Admin" />
+      : <StatePanel variant="error" title="Sessions unavailable" body="Active sessions could not be read." code={error}
+          action={<M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>} />;
+  }
+  if (data === null) return <StatePanel variant="empty" title="Sessions" body="Loading…" />;
 
   const counts = data.sessions.reduce<Record<string, number>>((result, session) => {
     result[session.actor_fingerprint] = (result[session.actor_fingerprint] ?? 0) + 1;
@@ -60,10 +66,10 @@ export function SessionsPanel() {
                 <TableCell>
                   {data.identity_labels[session.session_id] ?? "Identity unavailable"} · {counts[session.actor_fingerprint]} active
                 </TableCell>
-                <TableCell>{session.created_at}</TableCell>
-                <TableCell>{session.last_seen_at}</TableCell>
-                <TableCell>{session.idle_deadline_at}</TableCell>
-                <TableCell>{session.absolute_expires_at}</TableCell>
+                <TableCell><Ts at={session.created_at} /></TableCell>
+                <TableCell><Ts at={session.last_seen_at} /></TableCell>
+                <TableCell><Ts at={session.idle_deadline_at} /></TableCell>
+                <TableCell><Ts at={session.absolute_expires_at} /></TableCell>
                 <TableCell align="right">
                   <Button size="small" color="error" onClick={() => revokeSession(session.session_id).then(refresh)}>
                     Revoke
