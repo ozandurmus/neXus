@@ -13,43 +13,27 @@ function withTheme(node: React.ReactElement) {
   return <ThemeProvider theme={m3Theme}>{node}</ThemeProvider>;
 }
 
-const TABS = [
-  { label: "Interfaces", marker: "No interface evidence" },
-  { label: "Routing", marker: "No routing evidence" },
-  { label: "Cluster members", marker: "No cluster membership evidence" },
-  { label: "Identity & provenance", marker: "No identity or provenance evidence" },
-];
-
-describe("InventoryScreen detail tabs", () => {
+describe("InventoryScreen detail before a selection", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("renders each tab's own panel, and no other tab's panel, tab by tab", async () => {
+  // Review §3: the detail tabs stay hidden until a device or cluster is chosen.
+  it("shows no detail tabs until a device or cluster is selected", async () => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, { devices: [] }))));
     render(withTheme(<InventoryScreen />));
-    // Let the list panel's own GET /devices settle before driving the
-    // unrelated detail tabs, so its state update isn't left dangling
-    // outside of React's act() once the test's synchronous body returns.
     await waitFor(() => expect(screen.getByText("No devices")).toBeInTheDocument());
-    const tablist = screen.getByRole("tablist", { name: "Device detail" });
-
-    for (const tab of TABS) {
-      fireEvent.click(within(tablist).getByRole("tab", { name: tab.label }));
-      expect(screen.getByText(tab.marker)).toBeInTheDocument();
-      for (const other of TABS) {
-        if (other.label === tab.label) continue;
-        expect(screen.queryByText(other.marker)).toBeNull();
-      }
-    }
+    expect(screen.queryByRole("tablist", { name: "Device detail" })).toBeNull();
+    expect(screen.getByText("No device to show")).toBeInTheDocument();
+    expect(screen.queryByText("No routing evidence")).toBeNull();
   });
 
-  it("defaults to the Interfaces tab, empty", async () => {
+  it("titles the page Devices, as the rail does", async () => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, { devices: [] }))));
     render(withTheme(<InventoryScreen />));
     await waitFor(() => expect(screen.getByText("No devices")).toBeInTheDocument());
-    expect(screen.getByText("No interface evidence")).toBeInTheDocument();
-    expect(screen.queryByText("No routing evidence")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Devices" })).toBeInTheDocument();
+    expect(screen.queryByText("Network inventory")).toBeNull();
   });
 });
 
@@ -127,17 +111,23 @@ describe("InventoryScreen device list", () => {
     expect(screen.getByText("Collection attempt failed · Recorded failure")).toBeInTheDocument();
     expect(screen.getByText("Not yet collected")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Failed 2 of 4" }));
+    // Review §4: each chip row is labelled with its dimension and counts read "Label · n".
+    const stateRow = screen.getByRole("group", { name: "State" });
+    expect(within(stateRow).getByText("State:")).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Vendor" })).getByRole("button", { name: "Check Point · 4" })).toBeInTheDocument();
+
+    fireEvent.click(within(stateRow).getByRole("button", { name: "Failed · 2" }));
+    expect(within(stateRow).getByRole("button", { name: "Failed · 2" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("failed-device")).toBeInTheDocument();
     expect(screen.getByText("unknown-failure-device")).toBeInTheDocument();
     expect(screen.queryByText("done-device")).toBeNull();
     expect(screen.queryByText("new-device")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "All 4" }));
+    fireEvent.click(within(stateRow).getByRole("button", { name: "All · 4" }));
     expect(screen.getByText("done-device")).toBeInTheDocument();
     expect(screen.getByText("new-device")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Draft 3" }));
+    fireEvent.click(within(stateRow).getByRole("button", { name: "Draft · 3" }));
     expect(screen.getByText("failed-device")).toBeInTheDocument();
     expect(screen.getByText("unknown-failure-device")).toBeInTheDocument();
     expect(screen.getByText("new-device")).toBeInTheDocument();

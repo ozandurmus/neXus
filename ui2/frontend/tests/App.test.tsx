@@ -9,7 +9,7 @@ import { DESTINATIONS, DRAWER_GROUPS } from "../src/shell/NavigationRail";
 // unambiguous.
 const PRODUCT_MARKERS: Record<string, string> = {
   overview: "Operational posture",
-  inventory: "Network inventory",
+  inventory: "No device to show",
   configuration: "Configuration",
   compliance: "No framework assigned · nothing assessed yet",
   operations: "No HA pair or cluster enrolled",

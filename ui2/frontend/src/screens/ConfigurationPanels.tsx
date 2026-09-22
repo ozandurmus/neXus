@@ -11,7 +11,9 @@ import Typography from "@mui/material/Typography";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { jobPhaseLabel, isTerminalJobState } from "../shell/deviceCopy";
-import { m3 } from "../theme/m3Theme";
+import { MONO, m3 } from "../theme/m3Theme";
+import { RoleChip } from "../shell/States";
+import { formatUtc } from "../shell/time";
 import {
   getDevice,
   getDeviceConfiguration,
@@ -84,7 +86,7 @@ function IndexTable({
               <TableCell sx={{ fontSize: 13 }}>{entry.context}</TableCell>
               <TableCell sx={{ fontSize: 13, fontWeight: 500 }}>{entry.section}</TableCell>
               <TableCell sx={{ fontSize: 13, color: "text.secondary" }}>{entry.source ?? "—"}</TableCell>
-              <TableCell align="right" sx={{ fontSize: 13, fontFamily: "monospace" }}>{entry.entry_count}</TableCell>
+              <TableCell align="right" sx={{ fontSize: 13, fontFamily: MONO, fontVariantNumeric: "tabular-nums" }}>{entry.entry_count}</TableCell>
               <TableCell>
                 {entry.has_override && <StatusChip tone="warn" label="override" dense />}
               </TableCell>
@@ -295,8 +297,9 @@ export function DeviceConfigurationPanels({
   const vendor = configuration?.vendor ?? device?.vendor_hint ?? vendorHint ?? "check_point";
   const isPaloAlto = vendor === "palo_alto";
   const displayName = hostname ?? device?.facts?.hostname ?? deviceId;
-  const collected = configuration?.collected_at ? new Date(configuration.collected_at) : null;
-  const collectedLabel = collected ? collected.toISOString().slice(0, 16).replace("T", " ") + " UTC" : null;
+  const collected = configuration?.collected_at ?? null;
+  // One timestamp format (review §4): `2026-09-22 22:57:54`, UTC (declared in the top bar).
+  const collectedLabel = collected ? formatUtc(collected) : null;
   const withheld = configuration?.withheld_line_count ?? 0;
 
   return (
@@ -315,7 +318,7 @@ export function DeviceConfigurationPanels({
               <StatusChip tone="neutral" label={`${device.facts.software_version} · ${isPaloAlto ? "PAN-OS" : "Gaia"}`} dense />
             )}
             {device?.facts?.model && <StatusChip tone="neutral" label={device.facts.model} dense />}
-            {device?.facts?.ha_role && <StatusChip tone="neutral" label={`HA: ${device.facts.ha_role}`} dense />}
+            {device?.facts?.ha_role && <RoleChip role={device.facts.ha_role} dense />}
           </>
         }
         action={<ConfigurationCollectNowButton deviceId={deviceId} onCollected={configurationFetch.refresh} />}
@@ -324,7 +327,7 @@ export function DeviceConfigurationPanels({
         <Stack spacing={0.5}>
           <Typography variant="body2" color="text.secondary">
             {collectedLabel
-              ? `Collected ${collectedLabel} · Primary source: ${configuration?.read_kind ?? "unknown"} · Current actual`
+              ? `Collected ${collectedLabel} · Primary source: ${configuration?.read_kind ?? "UNKNOWN"} · Current actual`
               : "Not collected yet -- nothing below is device evidence until the first configuration run lands."}
           </Typography>
           {collected && (
@@ -453,8 +456,8 @@ function DeviationPanel({
               <TableCell sx={{ fontWeight: 600 }}>Context</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Section</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Change</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Previous</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Now</TableCell>
+              <TableCell sx={{ fontWeight: 600 }} align="right">Previous</TableCell>
+              <TableCell sx={{ fontWeight: 600 }} align="right">Now</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -463,8 +466,8 @@ function DeviationPanel({
                 <TableCell><StatusChip tone="neutral" label={e.context === "physical" ? "Physical" : e.context} dense /></TableCell>
                 <TableCell sx={{ fontFamily: "monospace" }}>{e.section}</TableCell>
                 <TableCell><StatusChip tone="warn" label={e.kind} dense /></TableCell>
-                <TableCell>{e.old_count ?? "—"}</TableCell>
-                <TableCell>{e.new_count ?? "—"}</TableCell>
+                <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>{e.old_count ?? "none"}</TableCell>
+                <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>{e.new_count ?? "none"}</TableCell>
               </TableRow>
             ))}
           </TableBody>

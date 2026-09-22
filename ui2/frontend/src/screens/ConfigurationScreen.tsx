@@ -12,8 +12,8 @@ import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { listConfigurations, listDevices, requestBulkConfigurationCollect, type ApiError, type ConfigurationDeviceListEntry, type DeviceSummary } from "../auth/adminApi";
-import { VendorAvatar } from "./InventoryPanels";
-import { DeviceList } from "./InventoryScreen";
+import { DeviceList, isDeviceLive } from "./InventoryScreen";
+import { FilterRow } from "./DeviceShared";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
 
 function describeApiError(err: unknown): string {
@@ -21,28 +21,6 @@ function describeApiError(err: unknown): string {
   const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
   if (serverError) return serverError;
   return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
-}
-
-const VENDOR_LABEL: Record<string, string> = {
-  check_point: "Check Point",
-  palo_alto: "Palo Alto",
-};
-
-function vendorLabel(vendorHint: string): string {
-  return VENDOR_LABEL[vendorHint] ?? vendorHint;
-}
-
-function changeStateTone(state: string | null): "ok" | "warn" | "neutral" | "bad" {
-  if (state === "changed") return "bad";
-  if (state === "unchanged") return "ok";
-  return "neutral";
-}
-
-function changeStateLabel(state: string | null): string {
-  if (state === null) return "Not collected";
-  if (state === "first_run") return "First run";
-  if (state === "changed") return "Changed";
-  return "Aligned";
 }
 
 /**
@@ -92,118 +70,6 @@ export function groupByCluster(entries: readonly ConfigurationDeviceListEntry[])
     }
     return { kind: "cluster", group: { ...row.group, agreement } };
   });
-}
-
-function ClusterRow({
-  group,
-  selectedDeviceId,
-  onSelect,
-}: {
-  readonly group: ClusterGroup;
-  readonly selectedDeviceId: string | null;
-  readonly onSelect: (device: ConfigurationDeviceListEntry) => void;
-}) {
-  const vendor = group.members[0]?.vendor ?? "unknown";
-  const tone = group.agreement === "agree" ? "ok" : group.agreement === "differ" ? "bad" : "warn";
-  const label = group.agreement === "agree" ? "Members agree" : group.agreement === "differ" ? "Config diff" : "UNKNOWN";
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 1,
-        p: 1.25,
-        bgcolor: m3.scLowest,
-        border: "1px solid",
-        borderColor: group.members.some((m) => m.device_id === selectedDeviceId) ? m3.primary : m3.outlineVar,
-        borderRadius: "12px",
-      }}
-    >
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>{group.clusterRef}</Typography>
-        <StatusChip tone={tone} label={label} dense />
-      </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
-        {vendorLabel(vendor)} · cluster · {group.members.length} members
-      </Typography>
-      <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-        {group.members.map((member) => (
-          <Box
-            key={member.device_id}
-            role="button"
-            tabIndex={0}
-            onClick={() => onSelect(member)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onSelect(member);
-            }}
-            sx={{
-              display: "flex", alignItems: "center", gap: 0.75, px: 1, py: 0.5, borderRadius: "8px", cursor: "pointer",
-              border: "1px solid", borderColor: member.device_id === selectedDeviceId ? m3.primary : m3.outlineVar,
-              bgcolor: member.device_id === selectedDeviceId ? "#f0f5ff" : "transparent",
-            }}
-          >
-            <Typography variant="caption" sx={{ fontWeight: 600 }}>{member.hostname ?? member.device_id}</Typography>
-            <StatusChip tone={changeStateTone(member.change_state)} label={changeStateLabel(member.change_state)} dense />
-            {member.projected_settings !== null && member.projected_settings !== undefined && (
-              <Typography variant="caption" color="text.secondary">{member.projected_settings} settings</Typography>
-            )}
-          </Box>
-        ))}
-      </Stack>
-    </Box>
-  );
-}
-
-function DeviceRow({
-  device,
-  selected,
-  onSelect,
-}: {
-  readonly device: ConfigurationDeviceListEntry;
-  readonly selected: boolean;
-  readonly onSelect: (device: ConfigurationDeviceListEntry) => void;
-}) {
-  return (
-    <Box
-      role="button"
-      tabIndex={0}
-      onClick={() => onSelect(device)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onSelect(device);
-      }}
-      sx={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 1.25,
-        p: 1.25,
-        bgcolor: selected ? "#f0f5ff" : m3.scLowest,
-        border: "1px solid",
-        borderColor: selected ? m3.primary : m3.outlineVar,
-        borderRadius: "12px",
-        cursor: "pointer",
-        transition: "all 0.15s ease-in-out",
-        "&:hover": {
-          borderColor: m3.primary,
-          boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
-        },
-      }}
-    >
-      <VendorAvatar vendorHint={device.vendor} hostname={device.hostname} />
-      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.5 }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-          <Typography variant="body2" sx={{ fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {device.hostname ?? device.device_id}
-          </Typography>
-          <StatusChip tone={changeStateTone(device.change_state)} label={changeStateLabel(device.change_state)} dense />
-        </Box>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 0.5 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
-            {vendorLabel(device.vendor)} · {device.last_collected_at ? `collected ${device.last_collected_at.slice(0, 10)}` : "never collected"}
-          </Typography>
-        </Box>
-      </Box>
-    </Box>
-  );
 }
 
 /** M3Configuration, backed by a real `GET /configuration` fetch (movement NXS-LOCAL-0165). */
@@ -296,7 +162,7 @@ export function ConfigurationScreen() {
         subtitle={devices === null ? "Loading…" : `${collectedCount} device${collectedCount === 1 ? "" : "s"} collected${uncollectedCount > 0 ? ` · ${uncollectedCount} not collected` : ""}`}
         actions={
           <Stack direction="row" spacing={1.5}>
-            <M3Button emphasis="outlined" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
+            <M3Button emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
               {bulkBusy ? "Starting..." : "Collect All"}
             </M3Button>
           </Stack>
@@ -319,8 +185,8 @@ export function ConfigurationScreen() {
                 <Box component="span" role="button" tabIndex={0} sx={{ cursor: "pointer", fontSize: 12, color: m3.primary }} onClick={() => setDiffRefs(null)}>clear</Box>
               </Box>
             )}
-            <Box sx={{ height: 48, display: "flex", alignItems: "center", gap: 1.5, px: 2,
-                       borderRadius: "24px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, fontSize: 14 }}>
+            <Box sx={{ height: 40, display: "flex", alignItems: "center", gap: 1.5, px: 2,
+                       borderRadius: "20px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, fontSize: 14 }}>
               <Icon name="search" size={20} />
               <InputBase
                 placeholder="Device, serial or model"
@@ -329,29 +195,32 @@ export function ConfigurationScreen() {
                 sx={{ flex: 1, fontSize: 14, color: "inherit" }}
               />
             </Box>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-              {([
-                ["all", `All ${summaries?.length ?? total}`],
-                ["check_point", `Check Point ${vendorCount("check_point")}`],
-                ["palo_alto", `Palo Alto ${vendorCount("palo_alto")}`],
-              ] as const).map(([vendor, label]) => (
-                <Box key={vendor} role="button" tabIndex={0} onClick={() => setVendorFilter(vendor)} sx={{ cursor: "pointer", opacity: vendorFilter === vendor ? 1 : 0.7 }}>
-                  <StatusChip tone={vendorFilter === vendor ? "ok" : "neutral"} label={label} />
-                </Box>
-              ))}
-            </Stack>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-              {([
-                ["all", `All ${total}`, "neutral"],
-                ["changed", `Changed ${changedCount}`, changedCount > 0 ? "bad" : "neutral"],
-                ["first_run", `First run ${firstRunCount}`, "neutral"],
-                ["uncollected", `Not collected ${uncollectedCount}`, uncollectedCount > 0 ? "warn" : "neutral"],
-              ] as const).map(([mode, label, tone]) => (
-                <Box key={mode} role="button" tabIndex={0} onClick={() => setFilterMode(mode)} sx={{ cursor: "pointer", opacity: filterMode === mode ? 1 : 0.7 }}>
-                  <StatusChip tone={tone} label={label} />
-                </Box>
-              ))}
-            </Stack>
+            <FilterRow
+              dimension="Vendor"
+              value={vendorFilter}
+              onChange={setVendorFilter}
+              options={[
+                { value: "all", label: "All", count: summaries?.length ?? total },
+                { value: "check_point", label: "Check Point", count: vendorCount("check_point") },
+                { value: "palo_alto", label: "Palo Alto", count: vendorCount("palo_alto") },
+              ]}
+            />
+            <FilterRow
+              dimension="State"
+              value={filterMode}
+              onChange={setFilterMode}
+              options={[
+                { value: "all", label: "All", count: total },
+                { value: "changed", label: "Changed", count: changedCount },
+                { value: "first_run", label: "First run", count: firstRunCount },
+                { value: "uncollected", label: "Not collected", count: uncollectedCount },
+              ]}
+            />
+            {summaries !== null && (
+              <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+                {treeDevices.length} shown · {treeDevices.filter(isDeviceLive).length} Live (the state chip shows only when a device is not Live)
+              </Typography>
+            )}
             {error && (
               <EmptyPanel title="Configuration unavailable" body={error}>
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -364,7 +233,7 @@ export function ConfigurationScreen() {
               <EmptyPanel title="No devices" body="Nothing is enrolled yet." />
             )}
             {!error && devices !== null && devices.length > 0 && (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25, maxHeight: "calc(100vh - 300px)", overflowY: "auto", pr: 0.5 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: "calc(100vh - 300px)", overflowY: "auto", pr: 0.5 }}>
                 {summaries === null && !summariesFetch.error && <EmptyPanel title="Devices" body="Loading…" />}
                 {summariesFetch.error && <EmptyPanel title="Devices unavailable" body={summariesFetch.error} />}
                 {summaries !== null && treeDevices.length === 0 && <EmptyPanel title="No device matches" body="No device matches the filters." />}
