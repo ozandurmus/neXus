@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { m3 } from "../theme/m3Theme";
 import { Icon, type IconName } from "./Icon";
@@ -139,14 +140,16 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
         <Box sx={{ mb: 1 }}>
           <NexusMark size={44} />
         </Box>
-        <IconButton
-          aria-label="Expand navigation"
-          onClick={() => setExpanded(true)}
-          sx={{ width: 56, height: 56, borderRadius: "16px", bgcolor: m3.scLow, boxShadow: m3.e1,
-                color: m3.primary, mb: 1.5 }}
-        >
-          <Icon name="menu" size={24} />
-        </IconButton>
+        <Tooltip title="Expand navigation: every screen and its sections" placement="right">
+          <IconButton
+            aria-label="Expand navigation"
+            onClick={() => setExpanded(true)}
+            sx={{ width: 48, height: 48, borderRadius: "10px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`,
+                  color: m3.primary, mb: 1.5 }}
+          >
+            <Icon name="menu" size={22} />
+          </IconButton>
+        </Tooltip>
         {allowedDestinations.map((d) => {
           const on = d.screen === active;
           return (

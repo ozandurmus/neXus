@@ -18,7 +18,16 @@ export type IconName =
   | "menu"
   | "more"
   | "plus"
-  | "download";
+  | "download"
+  | "info"
+  | "clock"
+  | "lock"
+  | "warning"
+  | "moon"
+  | "sun"
+  | "rows"
+  | "close"
+  | "external";
 
 const common: SVGProps<SVGSVGElement> = {
   viewBox: "0 0 24 24",
@@ -124,6 +133,65 @@ export function Icon({ name, size = 20 }: { readonly name: IconName; readonly si
       return (
         <svg {...props}>
           <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />
+        </svg>
+      );
+    case "info":
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 11v5M12 8h.01" />
+        </svg>
+      );
+    case "clock":
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+      );
+    case "lock":
+      return (
+        <svg {...props}>
+          <rect x="5" y="11" width="14" height="10" rx="2" />
+          <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+        </svg>
+      );
+    case "warning":
+      return (
+        <svg {...props}>
+          <path d="M12 3l10 18H2z" />
+          <path d="M12 10v4M12 17h.01" />
+        </svg>
+      );
+    case "moon":
+      return (
+        <svg {...props}>
+          <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
+        </svg>
+      );
+    case "sun":
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5" />
+        </svg>
+      );
+    case "rows":
+      return (
+        <svg {...props}>
+          <path d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+        </svg>
+      );
+    case "close":
+      return (
+        <svg {...props}>
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      );
+    case "external":
+      return (
+        <svg {...props}>
+          <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
         </svg>
       );
   }

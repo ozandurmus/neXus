@@ -1,7 +1,13 @@
+import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
+import IconButton from "@mui/material/IconButton";
+import Link from "@mui/material/Link";
 import Typography from "@mui/material/Typography";
 import Tooltip from "@mui/material/Tooltip";
-import { m3 } from "../theme/m3Theme";
+import { MONO, m3 } from "../theme/m3Theme";
+import { useDisplayMode } from "./displayMode";
+import { GlobalSearch } from "./GlobalSearch";
+import { formatUtc } from "./time";
 import { Icon } from "./Icon";
 import { M3Button, StatusChip } from "./M3Widgets";
 import { useSession } from "../auth/SessionContext";
@@ -62,8 +68,8 @@ function BuildBadge() {
     return null;
   }
   const label = data.commit
-    ? `${data.commit.slice(0, 12)}${data.builtAt ? ` · ${relativeTimeFromNow(data.builtAt)}` : ""}`
-    : data.fallback;
+    ? `Build ${data.commit.slice(0, 7)}${data.builtAt ? ` · deployed ${relativeTimeFromNow(data.builtAt)}` : ""}`
+    : `Build ${data.fallback}`;
   const tooltip = data.commit
     ? `Deployed commit ${data.commit}${data.builtAt ? ` at ${data.builtAt}` : ""}`
     : `neXus Active Build: ${data.fallback}`;
@@ -90,8 +96,68 @@ function BuildBadge() {
  * block at all only when a session is present (useSession() is non-null
  * inside AuthGate, null in App's own standalone tests/preview rendering).
  */
+/** The as-of clock the wall display shows (review §6): UTC, ticking every 30 s. */
+function AsOfClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(t); }, []);
+  return <Typography sx={{ fontFamily: MONO, fontSize: 15, color: m3.onSurface }}>as of {formatUtc(now.toISOString(), false)} UTC</Typography>;
+}
+
+/** Colour mode, density and wall display -- per-viewer preferences only. */
+function DisplayControls() {
+  const { mode, density, setMode, setDensity } = useDisplayMode();
+  const wallHref = (() => {
+    if (typeof window === "undefined") return "?screen=overview&wall=1";
+    const p = new URLSearchParams(window.location.search);
+    p.set("screen", "overview");
+    p.set("wall", "1");
+    return `?${p.toString()}`;
+  })();
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+      <Tooltip title={mode === "dark" ? "Light mode" : "Dark mode"}>
+        <IconButton aria-label={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"} size="small"
+          onClick={() => setMode(mode === "dark" ? "light" : "dark")} sx={{ color: m3.onSurfaceVar }}>
+          <Icon name={mode === "dark" ? "sun" : "moon"} size={18} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title={density === "compact" ? "Comfortable rows" : "Compact rows"}>
+        <IconButton aria-label={density === "compact" ? "Switch to comfortable rows" : "Switch to compact rows"} size="small"
+          aria-pressed={density === "compact"} onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}
+          sx={{ color: density === "compact" ? m3.primary : m3.onSurfaceVar }}>
+          <Icon name="rows" size={18} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Wall display: the Overview for an unattended screen, dark, refreshed every 60 s">
+        <IconButton aria-label="Open the wall display" size="small" href={wallHref} sx={{ color: m3.onSurfaceVar }}>
+          <Icon name="external" size={18} />
+        </IconButton>
+      </Tooltip>
+    </Box>
+  );
+}
+
 export function TopAppBar() {
   const session = useSession();
+  const { wall } = useDisplayMode();
+
+  if (wall) {
+    const exit = (() => {
+      if (typeof window === "undefined") return "?screen=overview";
+      const p = new URLSearchParams(window.location.search);
+      p.delete("wall");
+      return `?${p.toString()}`;
+    })();
+    return (
+      <Box sx={{ height: 56, flex: "none", display: "flex", alignItems: "center", gap: 2, px: 3 }}>
+        <NexusWordmark height={24} color={m3.onSurface} />
+        <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2 }}>
+          <AsOfClock />
+          <Link href={exit} sx={{ fontSize: 12, color: m3.onSurfaceVar }}>Exit wall display</Link>
+        </Box>
+      </Box>
+    );
+  }
 
   let displayedRoles: string[] = [];
   if (session) {
@@ -122,8 +188,8 @@ export function TopAppBar() {
             width: 34,
             height: 34,
             borderRadius: "8px",
-            bgcolor: "#DBEAFE",
-            color: "#1E3A8A",
+            bgcolor: m3.primaryContainer,
+            color: m3.onPrimaryContainer,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -138,8 +204,11 @@ export function TopAppBar() {
         </Box>
         <NexusWordmark height={26} color={m3.onSurface} />
       </Box>
+      <Box sx={{ ml: 3 }}><GlobalSearch /></Box>
       <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2, color: m3.onSurfaceVar }}>
+        <Tooltip title="Every time on every screen is UTC"><Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>Times in UTC</Typography></Tooltip>
         <BuildBadge />
+        <DisplayControls />
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <Icon name="bell" size={20} />
           {session ? <NotificationBadge /> : null}
@@ -151,8 +220,8 @@ export function TopAppBar() {
                 width: 34,
                 height: 34,
                 borderRadius: "50%",
-                bgcolor: "#E0E7FF",
-                color: "#1E3A8A",
+                bgcolor: m3.primaryContainer,
+                color: m3.onPrimaryContainer,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

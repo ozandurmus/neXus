@@ -18,8 +18,11 @@ export const SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#
 /** "Other" (folded slices) and UNKNOWN (not evidenced) are neutral, never a series colour. */
 export const OTHER = "#b4b2aa";
 export const UNKNOWN_COLOR = "#8f8d85";
-/** Status palette -- state only, always with a label. */
+/** Status palette -- state only, always with a label. Fills; text uses STATUS_INK (the fills fail as text). */
 export const STATUS = { good: "#0ca30c", warning: "#fab219", serious: "#ec835a", critical: "#d03b3b", neutral: "#94A3B8" } as const;
+export const STATUS_INK = { good: m3.goodInk, warning: m3.warningInk, serious: m3.seriousInk, critical: m3.criticalInk, neutral: m3.neutralInk } as const;
+/** UNKNOWN is neutral and hatched (review §2), so "many small groups" (Other, flat) never reads as "we do not know". */
+export const UNKNOWN_HATCH_CSS = `repeating-linear-gradient(45deg, ${UNKNOWN_COLOR} 0 2px, transparent 2px 4px)`;
 
 export interface Slice {
   readonly label: string | null;
@@ -73,6 +76,12 @@ export function Donut({ title, slices, size = 132, centerLabel, stacked = false 
       {stacked && heading}
       <Box sx={{ position: "relative", width: size, height: size, flexShrink: 0, alignSelf: stacked ? "center" : undefined }}>
         <svg width={size} height={size} role="img" aria-label={`${title}: ${slices.map((s) => `${s.display} ${s.count}`).join(", ")}`}>
+          <defs>
+            <pattern id="nx-unknown-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <rect width="5" height="5" fill={m3.sc} />
+              <rect width="2.2" height="5" fill={UNKNOWN_COLOR} />
+            </pattern>
+          </defs>
           <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={m3.sc} strokeWidth={stroke} />
           {total > 0 && slices.map((s, i) => {
             const sweep = (2 * Math.PI * s.count) / total;
@@ -82,10 +91,10 @@ export function Donut({ title, slices, size = 132, centerLabel, stacked = false 
               ? null
               : arc(size / 2, size / 2, r, start + 0.012, start + sweep - 0.012);
             return path === null ? (
-              <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={s.color} strokeWidth={hover === i ? stroke + 4 : stroke}
+              <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={s.display === "UNKNOWN" ? "url(#nx-unknown-hatch)" : s.color} strokeWidth={hover === i ? stroke + 4 : stroke}
                 onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />
             ) : (
-              <path key={i} d={path} fill="none" stroke={s.color} strokeWidth={hover === i ? stroke + 4 : stroke}
+              <path key={i} d={path} fill="none" stroke={s.display === "UNKNOWN" ? "url(#nx-unknown-hatch)" : s.color} strokeWidth={hover === i ? stroke + 4 : stroke}
                 style={{ cursor: s.href ? "pointer" : "default", transition: "stroke-width 120ms" }}
                 onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
                 onClick={() => { if (s.href) window.location.href = s.href; }} />
@@ -107,7 +116,7 @@ export function Donut({ title, slices, size = 132, centerLabel, stacked = false 
           const row = (
             <Box key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} title={s.label ?? s.display}
               sx={{ display: "flex", alignItems: "center", gap: 1, py: 0.25, px: 0.5, borderRadius: "6px", bgcolor: hover === i ? m3.sc : "transparent" }}>
-              <Box sx={{ width: 10, height: 10, borderRadius: "3px", bgcolor: s.color, flexShrink: 0 }} />
+              <Box sx={{ width: 10, height: 10, borderRadius: "3px", flexShrink: 0, ...(s.display === "UNKNOWN" ? { background: UNKNOWN_HATCH_CSS, border: `1px solid ${UNKNOWN_COLOR}` } : { bgcolor: s.color }) }} />
               <Typography noWrap sx={{ fontSize: 12.5, fontFamily: s.display === "UNKNOWN" || s.display.startsWith("Other") ? undefined : "monospace", flex: 1, minWidth: 0, color: m3.onSurface }}>{s.display}</Typography>
               <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: m3.onSurface }}>{s.count}</Typography>
               <Typography sx={{ fontSize: 11.5, color: m3.onSurfaceVar, width: 36, textAlign: "right" }}>{pct}%</Typography>

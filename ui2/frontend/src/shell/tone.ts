@@ -14,7 +14,7 @@ export const TONE_COLORS: Record<Tone, { readonly bg: string; readonly fg: strin
   ok: { bg: m3.successContainer, fg: m3.onSuccessContainer },
   mem: { bg: m3.memberContainer, fg: m3.onMemberContainer },
   warn: { bg: m3.warningContainer, fg: m3.onWarningContainer },
-  attn: { bg: m3.attentionContainer, fg: "#2b1700" },
+  attn: { bg: m3.attentionContainer, fg: m3.onAttentionContainer },
   bad: { bg: m3.errorContainer, fg: m3.onErrorContainer },
 };
 

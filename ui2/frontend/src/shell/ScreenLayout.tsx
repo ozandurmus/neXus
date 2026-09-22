@@ -27,14 +27,27 @@ export function ScreenHeader({
   );
 }
 
-/** The headline figure is what the caller counted; "—" when the read failed, never a literal zero standing in for it. */
-export function MetricCard({ title, value, note }: { readonly title: string; readonly value?: number | string | null; readonly note: string }) {
+/**
+ * A headline figure. What the caller counted, or the word for why there is none (review §3): `UNKNOWN` when the
+ * read failed or nothing is evidenced, `NOT EVALUATED` when the evaluation has not run -- never "0" or "—"
+ * standing in for either.
+ */
+export function MetricCard({ title, value, note, state, reason }: {
+  readonly title: string;
+  readonly value?: number | string | null;
+  readonly note: string;
+  readonly state?: "ok" | "unknown" | "not_evaluated";
+  readonly reason?: string;
+}) {
+  const word = state === "not_evaluated" ? "NOT EVALUATED" : (state === "unknown" || value === null || value === undefined) ? "UNKNOWN" : null;
   return (
-    <Card sx={{ bgcolor: m3.scLowest, boxShadow: m3.e1, borderRadius: "16px", p: 2.5,
-                display: "flex", flexDirection: "column", gap: 1.25 }}>
-      <Typography sx={{ fontSize: 16, fontWeight: 500, letterSpacing: "0.15px" }}>{title}</Typography>
-      <Typography variant="h1">{value === null || value === undefined ? "—" : value}</Typography>
-      <Typography variant="body2">{note}</Typography>
+    <Card sx={{ bgcolor: m3.scLowest, boxShadow: "none", border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2.25,
+                display: "flex", flexDirection: "column", gap: 1 }}>
+      <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>{title}</Typography>
+      {word
+        ? <Typography title={reason} sx={{ fontSize: 22, lineHeight: "32px", fontWeight: 650, color: m3.neutralInk, letterSpacing: "0.02em" }}>{word}</Typography>
+        : <Typography variant="h1">{value}</Typography>}
+      <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{note}</Typography>
     </Card>
   );
 }
@@ -49,7 +62,7 @@ export function EmptyPanel({
   readonly children?: ReactNode;
 }) {
   return (
-    <Card sx={{ bgcolor: m3.scLow, borderRadius: "16px", p: 2.5, boxShadow: "none",
+    <Card sx={{ bgcolor: m3.scLow, borderRadius: "10px", p: 2.25, boxShadow: "none",
                 border: `1px solid ${m3.outlineVar}`, display: "flex", flexDirection: "column", gap: 1 }}>
       <Typography variant="h4">{title}</Typography>
       <Typography variant="body2" sx={{ maxWidth: 640 }}>{body}</Typography>

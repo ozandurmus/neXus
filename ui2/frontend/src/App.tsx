@@ -1,7 +1,5 @@
 import { Suspense, lazy, type ComponentType } from "react";
 import Box from "@mui/material/Box";
-import CssBaseline from "@mui/material/CssBaseline";
-import { ThemeProvider } from "@mui/material/styles";
 
 import { NavigationRail } from "./shell/NavigationRail";
 import { TopAppBar } from "./shell/TopAppBar";
@@ -20,7 +18,7 @@ import { CompliancePreview } from "./preview/CompliancePreview";
 import { BackupPreview } from "./preview/BackupPreview";
 import { OperationsPreview } from "./preview/OperationsPreview";
 import { AdministrationPreview } from "./preview/AdministrationPreview";
-import { m3Theme } from "./theme/m3Theme";
+import { DisplayModeProvider, isWall } from "./shell/displayMode";
 import { isScreenId, type ScreenId } from "./shell/types";
 
 /**
@@ -73,8 +71,7 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
     const deviceId = pathname.substring("/devices/".length);
     if (deviceId !== "") {
       return (
-        <ThemeProvider theme={m3Theme}>
-          <CssBaseline />
+        <DisplayModeProvider search={search}>
           <Box sx={{ display: "flex", minHeight: "100vh" }}>
             <NavigationRail active="inventory" />
             <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -82,7 +79,7 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
               <DeviceWorkspaceScreen deviceId={deviceId} />
             </Box>
           </Box>
-        </ThemeProvider>
+        </DisplayModeProvider>
       );
     }
   }
@@ -97,16 +94,15 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
   const Preview = PREVIEW_SCREENS[screen];
 
   return (
-    <ThemeProvider theme={m3Theme}>
-      <CssBaseline />
+    <DisplayModeProvider search={search}>
       <Box sx={{ display: "flex", minHeight: "100vh" }}>
-        <NavigationRail active={screen} />
+        {isWall(search) ? null : <NavigationRail active={screen} />}
         <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
           <TopAppBar />
           {preview && <PreviewBanner />}
           <Suspense fallback={null}>{preview ? <Preview /> : <Product />}</Suspense>
         </Box>
       </Box>
-    </ThemeProvider>
+    </DisplayModeProvider>
   );
 }
