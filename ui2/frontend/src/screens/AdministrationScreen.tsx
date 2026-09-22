@@ -11,6 +11,8 @@ import { CustomRolesPanel } from "./CustomRolesPanel";
 import { AuditLogsPanel } from "./AuditLogsPanel";
 import { JobLogsPanel } from "./JobLogsPanel";
 import { DirectorySettingsPanel } from "../components/settings/DirectorySettingsPanel";
+import { NotificationSettingsPanel } from "../components/settings/NotificationSettingsPanel";
+import { SystemStatusPanel } from "./SystemStatusPanel";
 
 /** M3Administration with an empty registry. Enrollment is the one place a device enters the product. */
 export function AdministrationScreen() {
@@ -67,6 +69,14 @@ export function AdministrationScreen() {
           {
             label: "LDAP Settings",
             panel: <DirectorySettingsPanel />,
+          },
+          {
+            label: "Notifications",
+            panel: <NotificationSettingsPanel />,
+          },
+          {
+            label: "System",
+            panel: <SystemStatusPanel />,
           },
           {
             label: "Audit Logs",

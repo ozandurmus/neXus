@@ -45,6 +45,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public final class GateChainInterceptor implements HandlerInterceptor {
 
+    private record ReplayViewerAnswer(boolean value, Instant until) {
+    }
+
+    private final java.util.concurrent.ConcurrentHashMap<Object, ReplayViewerAnswer> replayViewerBySession =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+
     public static final String ACTOR_FINGERPRINT_ATTRIBUTE = "ui2.gate.actorFingerprint";
     public static final String SESSION_ID_ATTRIBUTE = "ui2.gate.sessionId";
     public static final String IS_REPLAY_VIEWER_ATTRIBUTE = "ui2.gate.isReplayViewer";
@@ -116,15 +123,30 @@ public final class GateChainInterceptor implements HandlerInterceptor {
             request.setAttribute(ACTOR_FINGERPRINT_ATTRIBUTE, proceed.actorFingerprint());
             request.setAttribute(SESSION_ID_ATTRIBUTE, proceed.sessionId());
             if (localIdentityResolver != null && localRoleTokenResolver != null) {
-                try {
-                    var identity = localIdentityResolver.resolve(proceed.actorFingerprint());
-                    if (identity.isPresent()) {
-                        var roles = localRoleTokenResolver.resolve(identity.get().localIdentityId());
-                        if (roles.contains(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER)) {
-                            request.setAttribute(IS_REPLAY_VIEWER_ATTRIBUTE, true);
+                // The replay-viewer answer per session, kept 60 s: two lookups on every request otherwise.
+                ReplayViewerAnswer cached = replayViewerBySession.get(proceed.sessionId());
+                boolean replayViewer;
+                if (cached != null && cached.until().isAfter(Instant.now())) {
+                    replayViewer = cached.value();
+                } else {
+                    replayViewer = false;
+                    try {
+                        var identity = localIdentityResolver.resolve(proceed.actorFingerprint());
+                        if (identity.isPresent()) {
+                            replayViewer = localRoleTokenResolver.resolve(identity.get().localIdentityId())
+                                    .contains(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER);
                         }
+                        if (replayViewerBySession.size() > 10_000) {
+                            replayViewerBySession.clear();
+                        }
+                        replayViewerBySession.put(proceed.sessionId(), new ReplayViewerAnswer(replayViewer, Instant.now().plusSeconds(60)));
+                    } catch (Exception ignored) {
+                        // fail toward masking: an unresolvable identity is treated as a replay viewer
+                        replayViewer = true;
                     }
-                } catch (Exception ignored) {
+                }
+                if (replayViewer) {
+                    request.setAttribute(IS_REPLAY_VIEWER_ATTRIBUTE, true);
                 }
             }
             return true;

@@ -60,6 +60,8 @@ final class NexusSessionCli {
         System.out.println("  logout | session");
         System.out.println("  api <GET|POST|PUT> <path> [jsonBody|@file]     the general form: any route the screen calls");
         System.out.println("  devices");
+        System.out.println("  system-pods | storage                          service view (pods, CPU, memory) and storage use");
+        System.out.println("  notifications | notifications-test <syslog|mail>  remote logging / SMTP relay settings and a test send");
         System.out.println("  backups [deviceId]                             fleet or one device's history (with baseline)");
         System.out.println("  backup-run <deviceId> <reason> [backup|snapshot]");
         System.out.println("  backup-run-all <reason>");
@@ -83,6 +85,13 @@ final class NexusSessionCli {
                 case "session" -> print(call("GET", "/session/status", null));
                 case "api" -> api(args);
                 case "devices" -> print(call("GET", "/devices", null));
+                case "system-pods" -> print(call("GET", "/api/v2/system/pods", null));
+                case "storage" -> print(call("GET", "/api/v2/system/storage", null));
+                case "notifications" -> print(call("GET", "/api/v2/config/notifications", null));
+                case "notifications-test" -> {
+                    require(args, 2, "notifications-test <syslog|mail>");
+                    yield print(call("POST", "/api/v2/config/notifications/test-" + ("mail".equals(args[1]) ? "mail" : "syslog"), "{}"));
+                }
                 case "backups" -> print(call("GET", args.length > 1 ? "/devices/" + args[1] + "/backups" : "/backups", null));
                 case "backup-run" -> {
                     require(args, 3, "backup-run <deviceId> <reason> [backup|snapshot]");

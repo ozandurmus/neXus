@@ -175,7 +175,10 @@
     "cp_backup_sftp_fetch_failed_on_cluster_member": "java_debt",
     "module_per_pod_split": "java_feature",
     "platform_identity_facts_on_configuration": "java_feature",
-    "operations_readiness_panel_ignores_enrolled_clusters": "java_debt"
+    "operations_readiness_panel_ignores_enrolled_clusters": "java_debt",
+    "ui2_pod_memory_limits_2gi": "java_debt",
+    "storage_usage_view": "java_feature",
+    "service_view_screen": "java_feature"
   },
   "converted_lessons": [
     {

@@ -828,6 +828,33 @@
       "priority": "P2",
       "target": "Point the readiness panel at the inventory's cluster list or state plainly what it needs",
       "note": ""
+    },
+    {
+      "id": "ui2_pod_memory_limits_2gi",
+      "category": "ui2",
+      "title": "Raise ui2-service and ui2-worker memory limits from 1 GiB to 2 GiB (requests stay 512 MiB); node has 62 GiB, neXus limits total 4 GiB",
+      "status": "planned",
+      "priority": "P1",
+      "target": "deploy/ui2/50-service-deployment.yaml, 52-worker-deployment.yaml; PO 2026-09-22",
+      "note": ""
+    },
+    {
+      "id": "storage_usage_view",
+      "category": "ui2",
+      "title": "Show how much space backups and configuration evidence take: artefact store bytes per vendor/device/kind, database size, trend; Backups and Configuration screens + CLI",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO 2026-09-22",
+      "note": ""
+    },
+    {
+      "id": "service_view_screen",
+      "category": "ui2",
+      "title": "Service view: every neXus pod, its state, restarts, CPU and memory use (top-like), version, last rollout -- read-only, Administration; CLI counterpart",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO 2026-09-22; needs a read-only metrics path from the service to the cluster (no kubectl in the browser)",
+      "note": ""
     }
   ]
 }

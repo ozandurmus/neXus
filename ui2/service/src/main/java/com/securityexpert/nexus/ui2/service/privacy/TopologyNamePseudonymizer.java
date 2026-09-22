@@ -117,19 +117,54 @@ public class TopologyNamePseudonymizer {
         return hex.toString();
     }
 
+    /**
+     * One compiled alternation of every known raw name (longest first, so a VS name wins over its host's
+     * prefix), rebuilt only when the dictionary grew. Measured 2026-09-22: copying and sorting the whole
+     * dictionary and replacing name by name for every string field made an aiview /devices response
+     * ~4x slower than the same response unmasked.
+     */
+    private volatile java.util.regex.Pattern knownNames;
+    private volatile int knownNamesSize = -1;
+
+    private java.util.regex.Pattern knownNamesPattern() {
+        int size = rawNameToPseudonym.size();
+        java.util.regex.Pattern current = knownNames;
+        if (current != null && size == knownNamesSize) {
+            return current;
+        }
+        synchronized (this) {
+            if (knownNames != null && rawNameToPseudonym.size() == knownNamesSize) {
+                return knownNames;
+            }
+            java.util.List<String> names = rawNameToPseudonym.keySet().stream().filter(k -> !k.isBlank())
+                    .sorted((a, b) -> Integer.compare(b.length(), a.length())).toList();
+            knownNamesSize = rawNameToPseudonym.size();
+            knownNames = names.isEmpty() ? null
+                    : java.util.regex.Pattern.compile(names.stream().map(java.util.regex.Pattern::quote)
+                            .collect(java.util.stream.Collectors.joining("|")));
+            return knownNames;
+        }
+    }
+
     public String maskText(String text) {
         if (text == null || text.isBlank()) {
             return text;
         }
-        String result = text;
-        java.util.List<Map.Entry<String, String>> sorted = new java.util.ArrayList<>(rawNameToPseudonym.entrySet());
-        sorted.sort((a, b) -> Integer.compare(b.getKey().length(), a.getKey().length()));
-        for (Map.Entry<String, String> entry : sorted) {
-            if (!entry.getKey().isBlank()) {
-                result = result.replace(entry.getKey(), entry.getValue());
-            }
+        java.util.regex.Pattern pattern = knownNamesPattern();
+        if (pattern == null) {
+            return text;
         }
-        return result;
+        java.util.regex.Matcher matcher = pattern.matcher(text);
+        if (!matcher.find()) {
+            return text;
+        }
+        StringBuilder out = new StringBuilder();
+        do {
+            String replacement = rawNameToPseudonym.getOrDefault(matcher.group(), matcher.group());
+            matcher.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(replacement));
+        } while (matcher.find());
+        matcher.appendTail(out);
+        return out.toString();
     }
 
     private String computeClusterName(String raw) {

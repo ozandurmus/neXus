@@ -10,7 +10,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
-import { CapabilityMenu, M3Button, StatusChip, ToggleRow } from "../shell/M3Widgets";
+import { CapabilityMenu, M3Button, StatusChip } from "../shell/M3Widgets";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { deleteDevice, listDevices, type ApiError, type BackupDisposition, type DeviceSummary } from "../auth/adminApi";
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
@@ -101,7 +101,10 @@ export function DeviceManagementPane() {
 
   const total = devices?.length ?? 0;
   const enrolledCount = devices?.filter((d) => d.enrollment_state === "ENROLLED").length ?? 0;
-  const degradedCount = devices?.filter((d) => d.enrollment_state === "DEGRADED" || d.enrollment_state === "UNREACHABLE").length ?? 0;
+  // Enrolled devices whose most recent collection job failed -- the evidence the store has for "degraded".
+  const degradedCount = devices?.filter((d) => d.enrollment_state === "DEGRADED" || d.enrollment_state === "UNREACHABLE"
+    || (d.enrollment_state === "ENROLLED" && d.latest_job_state === "FAILED")).length ?? 0;
+  const backupTargetCount = devices?.filter((d) => d.backup_target).length ?? 0;
   const draftCount = devices?.filter((d) => d.enrollment_state === "DRAFT").length ?? 0;
 
   return (
@@ -138,7 +141,7 @@ export function DeviceManagementPane() {
               <StatusChip tone="ok" label={`${enrolledCount} device${enrolledCount === 1 ? "" : "s"}`} dense />
             </Box>
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="body2">Degraded or unreachable</Typography>
+              <Typography variant="body2">Last collection failed</Typography>
               <StatusChip tone="warn" label={`${degradedCount} device${degradedCount === 1 ? "" : "s"}`} dense />
             </Box>
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
@@ -147,17 +150,10 @@ export function DeviceManagementPane() {
             </Box>
           </Stack>
         </EmptyPanel>
-        <EmptyPanel title="Collection scope" body="No collection scope is configured yet.">
-          <Stack spacing={1.25}>
-            <ToggleRow label="Inventory collection" checked={false} />
-            <ToggleRow label="Configuration collection" checked={false} />
-            <ToggleRow
-              label="Backup creation · class 1"
-              checked={false}
-              helperText="Backup creation is a controlled recovery write. It stays off until a device is inside the pilot allowlist."
-            />
-          </Stack>
-        </EmptyPanel>
+        <EmptyPanel
+          title="Collection scope"
+          body={`Inventory and configuration are read from every enrolled device (Bulk Collect, Collect All). Backups run only for the ${backupTargetCount} device${backupTargetCount === 1 ? "" : "s"} switched on as backup targets on the Backups screen.`}
+        />
       </Stack>
       </Box>
     </>

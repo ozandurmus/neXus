@@ -95,7 +95,12 @@ public final class GateChain {
                 return refuse("E1", 401, "SESSION_INVALID", "request origin missing on a state-changing method");
             }
         }
-        sessionRepository.heartbeat(sessionId, now, Duration.between(session.lastSeenAt(), session.idleDeadlineAt()));
+        // The idle window is minutes long; writing last-seen on every request (several per screen) was
+        // one of the per-request database round trips (2026-09-22). Once per 30 s keeps the window exact
+        // to within 30 s.
+        if (!now.isBefore(session.lastSeenAt().plusSeconds(30))) {
+            sessionRepository.heartbeat(sessionId, now, Duration.between(session.lastSeenAt(), session.idleDeadlineAt()));
+        }
         String actorFingerprint = session.actorFingerprint();
 
         // Must-change-password gate (NXS-LOCAL-0152, WORKER.md "Server

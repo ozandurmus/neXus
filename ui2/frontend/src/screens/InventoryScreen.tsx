@@ -977,8 +977,10 @@ export function InventoryScreen() {
                     panel: (
                       <Stack spacing={1.5}>
                         <EmptyPanel
-                          title="No interface evidence"
-                          body="Enrol a device from Administration to see its interfaces here; none is enrolled yet."
+                          title={(devices?.length ?? 0) === 0 ? "No interface evidence" : "Select a device or cluster"}
+                          body={(devices?.length ?? 0) === 0
+                            ? "Enrol a device from Administration to see its interfaces here; none is enrolled yet."
+                            : `${devices?.length ?? 0} devices are enrolled. Choose one on the left to see its interfaces.`}
                         />
                         <Typography variant="body2">
                           Interface evidence is read over SSH or HTTPS. Values are observed, never written.

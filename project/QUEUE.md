@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T19:10:49Z
+Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T20:25:57Z
 
 ## Now
 - NXS-LOCAL-0366 — Automation editor, Script Execution and scheduled device-write decisions; vendor and test contracts (automated_validated)
@@ -46,6 +46,8 @@ Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T19:10:49Z
 - P1/planned platform_identity_facts_on_configuration — PO 2026-09-22 'kesinlikle': serial number, software versio (target: Contract docs/design/PLATFORM_IDENTITY_F)
 - P1/planned relay_id_reuse_when_record_uncommitted — local_relay _next_id reissues an id whose JSON was never c (target: GOV.ORCH successor or scripts/local_rela)
 - P1/planned script_execution_module — Script Execution: operator scripts (.sh/.py/.jar or inline (target: PO decision record 2026-09-22 (automatio)
+- P1/planned service_view_screen — Service view: every neXus pod, its state, restarts, CPU an (target: PO 2026-09-22; needs a read-only metrics)
+- P1/planned storage_usage_view — Show how much space backups and configuration evidence tak (target: PO 2026-09-22)
 - P1/planned task_executor_automation_module — Task Executor / Automation module: operator-authored, orde (target: )
 - P1/planned top_app_bar_search_is_not_an_input — The top app bar search is a styled box containing static t (target: ui2/frontend/src/shell/TopAppBar.tsx)
 - P1/planned ui2_audit_logging — Audit logging for device and user management (target: ui2)
@@ -60,6 +62,7 @@ Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T19:10:49Z
 - P1/planned ui2_ldap_config — LDAP Configuration Screen (target: ui2)
 - P1/planned ui2_networkpolicy_in_cluster_db_reach — NetworkPolicy restricting in-cluster reach to PostgreSQL (target: UI2_0_B1_01C successor)
 - P1/planned ui2_pan_transport_no_credentials_in_url — UI2 Palo Alto transport: no credential ever appears in a U (target: PAN_DISCOVERY_CONTRACT.md T-1/T-5; the P)
+- P1/planned ui2_pod_memory_limits_2gi — Raise ui2-service and ui2-worker memory limits from 1 GiB (target: deploy/ui2/50-service-deployment.yaml, 5)
 - P1/planned ui2_private_play_and_mockup_view — Private Play & Mockup View integration (target: )
 - P1/planned ui2_reproducible_in_cluster_image_build — UI2 reproducible in-cluster image build and release assura (target: UI2_0_B1_01C in-cluster OCI build; 13D B)
 - P1/planned vault_has_no_enforced_quota_on_a_shared_host — The artefact/recovery store has no enforced quota: local-p (target: deploy/ui2/35-artefact-store-pvc.yaml; s)

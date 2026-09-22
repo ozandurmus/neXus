@@ -13,7 +13,7 @@ import Typography from "@mui/material/Typography";
 import { M3Button } from "../../shell/M3Widgets";
 
 type DirectoryProfile = {
-  id: string; profileName: string; host: string; port: number; transport: "LDAP" | "LDAPS"; trustFormat: "PEM" | "PKCS12";
+  id: string; profileName: string; host: string; port: number; transport: "LDAPS" | "STARTTLS"; trustFormat: "PEM" | "PKCS12";
   trustMaterialPem: string; storePinEncrypted: string; bindDnTemplate: string; groupSearchBaseDn: string; accessGroupReference: string; isActive: boolean;
 };
 
@@ -29,7 +29,7 @@ function newProfileId(): string {
 }
 
 const emptyProfile = (): DirectoryProfile => ({
-  id: newProfileId(), profileName: "Default LDAP", host: "", port: 389, transport: "LDAP", trustFormat: "PEM", trustMaterialPem: "", storePinEncrypted: "", bindDnTemplate: "", groupSearchBaseDn: "", accessGroupReference: "", isActive: true,
+  id: newProfileId(), profileName: "Default LDAP", host: "", port: 636, transport: "LDAPS", trustFormat: "PEM", trustMaterialPem: "", storePinEncrypted: "", bindDnTemplate: "", groupSearchBaseDn: "", accessGroupReference: "", isActive: true,
 });
 
 export function DirectorySettingsPanel() {
@@ -44,7 +44,7 @@ export function DirectorySettingsPanel() {
       const text = await response.text();
       return text.trim() ? JSON.parse(text) : null;
     })
-      .then((saved) => setProfile(saved ?? emptyProfile())).catch(() => {
+      .then((saved) => setProfile(saved ? { ...saved, transport: saved.transport === "STARTTLS" ? "STARTTLS" : "LDAPS" } : emptyProfile())).catch(() => {
         setProfile(emptyProfile());
         setMessage({ text: "Unable to load LDAP settings; enter values to create a profile.", type: "error" });
       });
@@ -66,7 +66,7 @@ export function DirectorySettingsPanel() {
     {message && <Alert severity={message.type}>{message.text}</Alert>}
     <Card variant="outlined"><CardContent><Stack spacing={2}><Typography variant="h6">Connection</Typography>
       <TextField label="Profile name" value={profile.profileName} onChange={(e) => change("profileName", e.target.value)} fullWidth />
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}><TextField required label="Directory host" value={profile.host} onChange={(e) => change("host", e.target.value)} fullWidth autoComplete="off" /><TextField required label="Port" type="number" value={profile.port} onChange={(e) => change("port", Number(e.target.value))} inputProps={{ min: 1, max: 65535 }} sx={{ width: { sm: 150 } }} /><TextField select label="Transport" value={profile.transport} onChange={(e) => change("transport", e.target.value as DirectoryProfile["transport"])} sx={{ width: { sm: 150 } }}><MenuItem value="LDAP">LDAP</MenuItem><MenuItem value="LDAPS">LDAPS</MenuItem></TextField></Stack>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}><TextField required label="Directory host" value={profile.host} onChange={(e) => change("host", e.target.value)} fullWidth autoComplete="off" /><TextField required label="Port" type="number" value={profile.port} onChange={(e) => change("port", Number(e.target.value))} inputProps={{ min: 1, max: 65535 }} sx={{ width: { sm: 150 } }} /><TextField select label="Transport" value={profile.transport} onChange={(e) => change("transport", e.target.value as DirectoryProfile["transport"])} sx={{ width: { sm: 150 } }}><MenuItem value="LDAPS">LDAPS (636)</MenuItem><MenuItem value="STARTTLS">StartTLS (389)</MenuItem></TextField></Stack>
       <FormControlLabel control={<Switch checked={profile.isActive} onChange={(e) => change("isActive", e.target.checked)} />} label="Use this directory for sign-in" />
     </Stack></CardContent></Card>
     <Card variant="outlined"><CardContent><Stack spacing={2}><Typography variant="h6">Directory lookup</Typography><TextField label="Bind DN template" value={profile.bindDnTemplate} onChange={(e) => change("bindDnTemplate", e.target.value)} helperText="Example: uid={0},ou=people,dc=example,dc=com" fullWidth /><TextField label="Group search base DN" value={profile.groupSearchBaseDn} onChange={(e) => change("groupSearchBaseDn", e.target.value)} fullWidth /><TextField label="Access group reference" value={profile.accessGroupReference} onChange={(e) => change("accessGroupReference", e.target.value)} helperText="Only members of this group can receive directory roles." fullWidth /></Stack></CardContent></Card>

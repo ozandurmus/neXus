@@ -1126,3 +1126,76 @@ export function getDeviceCompliance(deviceId: string): Promise<DeviceComplianceR
 export function triggerComplianceEvaluation(deviceId?: string): Promise<ComplianceOverview> {
   return call<ComplianceOverview>("/compliance/evaluate", "POST", deviceId ? { device_id: deviceId } : {});
 }
+
+// ---------------------------------------------------------------------------------------------
+// Administration › Notifications and System (2026-09-22)
+// ---------------------------------------------------------------------------------------------
+
+export interface NotificationSettingsView {
+  syslog_enabled: boolean;
+  syslog_host: string | null;
+  syslog_port: number;
+  syslog_protocol: "udp" | "tcp";
+  syslog_facility: number;
+  smtp_enabled: boolean;
+  smtp_host: string | null;
+  smtp_port: number;
+  smtp_starttls: boolean;
+  smtp_from: string | null;
+  smtp_to: string | null;
+  forward_audit_to_syslog: boolean;
+  notify_job_failure: boolean;
+  updated_at?: string | null;
+}
+
+export function getNotificationSettings(): Promise<NotificationSettingsView> {
+  return call("/api/v2/config/notifications", "GET");
+}
+
+export function saveNotificationSettings(settings: NotificationSettingsView): Promise<NotificationSettingsView> {
+  return call("/api/v2/config/notifications", "PUT", settings);
+}
+
+export function testNotification(kind: "syslog" | "mail"): Promise<{ sent: boolean; detail: string }> {
+  return call(`/api/v2/config/notifications/test-${kind}`, "POST", {});
+}
+
+export interface PodStatusView {
+  readonly name: string;
+  readonly component: string;
+  readonly phase: string;
+  readonly state: string;
+  readonly ready: string;
+  readonly restarts: number;
+  readonly started_at: string | null;
+  readonly image_digest: string | null;
+  readonly cpu_millicores: number | null;
+  readonly cpu_limit_millicores: number | null;
+  readonly memory_bytes: number | null;
+  readonly memory_limit_bytes: number | null;
+}
+
+export interface PodsView {
+  readonly available: boolean;
+  readonly reason?: string;
+  readonly metrics_note?: string | null;
+  readonly read_at: string;
+  readonly pods: readonly PodStatusView[];
+}
+
+export function getSystemPods(): Promise<PodsView> {
+  return call("/api/v2/system/pods", "GET");
+}
+
+export interface StorageView {
+  readonly read_at: string;
+  readonly backups: ReadonlyArray<{ vendor: string; class: string; artefacts: number; devices: number; stored_bytes: number; original_bytes: number; oldest: string | null; newest: string | null }>;
+  readonly top_devices: ReadonlyArray<{ device_id: string; hostname: string | null; artefacts: number; stored_bytes: number }>;
+  readonly configuration: { artefacts: number; stored_bytes: number; text_in_database_bytes: number };
+  readonly database_bytes: number;
+  readonly artefact_volume: { total_bytes?: number; usable_bytes?: number; note?: string };
+}
+
+export function getSystemStorage(): Promise<StorageView> {
+  return call("/api/v2/system/storage", "GET");
+}

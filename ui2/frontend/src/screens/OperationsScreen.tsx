@@ -466,6 +466,13 @@ export function OperationsScreen() {
               </M3Button>
             </Box>
           </Card>
+        ) : checks.length === 0 ? (
+          <Card sx={{ bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "12px", p: 2 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>NOT EVALUATED</Typography>
+            <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+              The preflight API returned no checks for this cluster, so nothing is claimed about its readiness. Run the pre-flight battery to evaluate it.
+            </Typography>
+          </Card>
         ) : (
           <Card sx={{ bgcolor: "#e8f5e9", border: "1px solid #a5d6a7", borderRadius: "12px", p: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1050,9 +1057,10 @@ export function OperationsScreen() {
         }
       />
       <MetricGrid>
-        <MetricCard title="Jobs run (24 h)" note={jobStats ? `${jobStats.total24h} submitted · ${jobStats.running} in flight` : "read failed"} />
+        <MetricCard title="Jobs run (24 h)" value={jobStats ? jobStats.total24h : null} note={jobStats ? `${jobStats.total24h} submitted · ${jobStats.running} in flight` : "read failed"} />
         <MetricCard
           title="Success rate (24 h)"
+          value={jobStats && jobStats.completed24h + jobStats.failed24h > 0 ? `${Math.round((100 * jobStats.completed24h) / (jobStats.completed24h + jobStats.failed24h))}%` : null}
           note={jobStats
             ? jobStats.completed24h + jobStats.failed24h === 0
               ? "no finished run in 24 h"
@@ -1060,7 +1068,7 @@ export function OperationsScreen() {
             : "read failed"}
         />
         <MetricCard title="Readiness checks" value={selectedCluster ? checks.length : null} note={selectedCluster ? (apiChecks ? `${checks.length} evaluated` : "not evaluated yet") : clusters && clusters.length > 0 ? `${clusters.length} clusters enrolled · choose one` : "no cluster enrolled"} />
-        <MetricCard title="Failed (24 h)" note={jobStats ? (jobStats.failed24h === 0 ? "none" : `${jobStats.failed24h} failed jobs`) : "read failed"} />
+        <MetricCard title="Failed (24 h)" value={jobStats ? jobStats.failed24h : null} note={jobStats ? (jobStats.failed24h === 0 ? "none" : `${jobStats.failed24h} failed jobs`) : "read failed"} />
       </MetricGrid>
       <M3Tabs
         ariaLabel="Operations sections"

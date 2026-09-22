@@ -526,7 +526,13 @@ class GateChainTest {
 
         assertTrue(outcome instanceof GateOutcome.Proceed);
         assertEquals(ACTOR, ((GateOutcome.Proceed) outcome).actorFingerprint());
-        assertEquals(NOW, sessions.findBySessionId(sessionId).orElseThrow().lastSeenAt());
+        // Last seen 10 s ago: within the 30 s heartbeat window, the session row is not rewritten.
+        assertEquals(NOW.minusSeconds(10), sessions.findBySessionId(sessionId).orElseThrow().lastSeenAt());
+
+        // 31 s after it was last seen, the request refreshes it.
+        GateOutcome later = chain.evaluate(request, NOW.plusSeconds(21));
+        assertTrue(later instanceof GateOutcome.Proceed);
+        assertEquals(NOW.plusSeconds(21), sessions.findBySessionId(sessionId).orElseThrow().lastSeenAt());
     }
     @Test
     void mustChangeGateIsOffByDefaultPosture() {

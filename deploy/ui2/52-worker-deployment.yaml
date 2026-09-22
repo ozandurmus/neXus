@@ -143,7 +143,7 @@ spec:
               memory: 512Mi
             limits:
               cpu: "1"
-              memory: 1Gi
+              memory: 2Gi
           # OS-8/FS-4: the root filesystem is read only and each declared
           # writable path of FS-3 — the JVM temporary directory and the
           # declared HOME — is supplied as an emptyDir. An image-layer path
