@@ -17,8 +17,19 @@ type DirectoryProfile = {
   trustMaterialPem: string; storePinEncrypted: string; bindDnTemplate: string; groupSearchBaseDn: string; accessGroupReference: string; isActive: boolean;
 };
 
+/** crypto.randomUUID exists only in a secure context; the console is also served over plain HTTP. */
+function newProfileId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 const emptyProfile = (): DirectoryProfile => ({
-  id: crypto.randomUUID(), profileName: "Default LDAP", host: "", port: 389, transport: "LDAP", trustFormat: "PEM", trustMaterialPem: "", storePinEncrypted: "", bindDnTemplate: "", groupSearchBaseDn: "", accessGroupReference: "", isActive: true,
+  id: newProfileId(), profileName: "Default LDAP", host: "", port: 389, transport: "LDAP", trustFormat: "PEM", trustMaterialPem: "", storePinEncrypted: "", bindDnTemplate: "", groupSearchBaseDn: "", accessGroupReference: "", isActive: true,
 });
 
 export function DirectorySettingsPanel() {
@@ -27,7 +38,12 @@ export function DirectorySettingsPanel() {
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
-    fetch("/api/v2/config/ldap").then(async (response) => response.ok ? response.json() : Promise.reject())
+    // No saved profile yet is a 200 with an empty body: that is "start a new profile", not an error.
+    fetch("/api/v2/config/ldap").then(async (response) => {
+      if (!response.ok) return Promise.reject();
+      const text = await response.text();
+      return text.trim() ? JSON.parse(text) : null;
+    })
       .then((saved) => setProfile(saved ?? emptyProfile())).catch(() => {
         setProfile(emptyProfile());
         setMessage({ text: "Unable to load LDAP settings; enter values to create a profile.", type: "error" });
