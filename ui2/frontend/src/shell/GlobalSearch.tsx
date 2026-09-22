@@ -63,7 +63,8 @@ function grouped(local: readonly Hit[], remote: GlobalSearchResponse | null): Di
     if (existing < 0) out.push(hit); else out[existing] = hit;
   }
   for (const s of remote?.settings ?? []) out.push({ group: "Settings", label: s.setting,
-    sub: [s.device, s.cluster, s.section, s.value_excerpt].filter(Boolean).join(" · "), href: s.href });
+    sub: [s.device_count && s.device_count > 1 ? `${s.device_count} devices (e.g. ${s.device})` : s.device, s.section, s.value_excerpt].filter(Boolean).join(" · "),
+    href: s.href });
   for (const e of remote?.evidence ?? []) out.push({ group: "Evidence", label: e.label, sub: e.detail, href: e.href });
   const order = ["Screens", "Devices", "Settings", "Evidence"];
   return out.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));

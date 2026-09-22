@@ -1014,7 +1014,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                 <TableCell align="right">Size</TableCell>
                 <TableCell>Validation</TableCell>
                 <TableCell>Deviation</TableCell>
-                <TableCell align="right" sx={{ width: 470 }}>Actions</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1027,13 +1027,13 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                     <TableCell>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <VendorBadge vendor={vendor} size={24} />
-                        <Typography sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600 }}>{name}</Typography>
+                        <Typography sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" }}>{name}</Typography>
                       </Box>
                     </TableCell>
-                    <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 12.5 }}>
-                      {summary ? `${summary.model ?? "UNKNOWN"}${summary.software_version ? ` · ${summary.software_version}` : ""}` : "UNKNOWN"}
+                    <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 12, lineHeight: 1.3 }}>
+                      {summary ? <>{summary.model ?? "UNKNOWN"}<br />{summary.software_version ?? ""}</> : "UNKNOWN"}
                     </TableCell>
-                    <TableCell sx={{ fontFamily: MONO, fontSize: 12, color: m3.onSurfaceVar }}>{summary?.cluster_member_ref ?? "standalone"}</TableCell>
+                    <TableCell sx={{ fontFamily: MONO, fontSize: 12, color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>{summary?.cluster_member_ref ?? "standalone"}</TableCell>
                     <TableCell align="center">
                       {summary ? (
                         <Switch size="small" checked={Boolean(summary.backup_target)} disabled={busyId === id}
@@ -1041,12 +1041,12 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                           inputProps={{ "aria-label": `Backup target ${name}` }} />
                       ) : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>not enrolled</Typography>}
                     </TableCell>
-                    <TableCell sx={{ fontSize: 12.5 }}>
+                    <TableCell sx={{ fontSize: 12.5, whiteSpace: "nowrap" }}>
                       {item ? <Ts at={item.lastBackupTime} relative />
                         : summary?.backup_target ? <StatusChip tone="warn" label="No archive" dense />
                         : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>No archive</Typography>}
                     </TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12.5 }}>{item ? formatBytes(item.sizeBytes) : ""}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12.5, whiteSpace: "nowrap" }}>{item ? formatBytes(item.sizeBytes) : ""}</TableCell>
                     <TableCell>{item ? <ValidationChip level={item.validationLevel} /> : null}</TableCell>
                     <TableCell>{item ? <DeviationChip state={item.deviationState} /> : null}</TableCell>
                     <TableCell align="right">

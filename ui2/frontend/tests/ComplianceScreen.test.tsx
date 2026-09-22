@@ -72,3 +72,14 @@ describe("Compliance -- UI review 2026-09-23", () => {
     expect(text).toContain("command not in the collection scope");
   });
 });
+
+describe("control families", () => {
+  it("groups by the NIST SP 800-53 family when the catalog carries no category", async () => {
+    const { familyOf } = await import("../src/screens/ComplianceScreen");
+    const base = { control_id: "x", title: "t", description: "d", severity: "HIGH", status: "PASS", compliance_pct: 0, target_device_count: 0,
+      pass_count: 0, fail_count: 0, data_unavailable_count: 0, affected_devices: [] } as const;
+    expect(familyOf({ ...base, category: "null", frameworks: [{ framework: "CIS", reference: "2.1.1" }, { framework: "NIST_800_53", reference: "IA-5(1)" }] } as never))
+      .toBe("IA · Identification and Authentication");
+    expect(familyOf({ ...base, category: null, frameworks: [{ framework: "CIS", reference: "2.1.1" }] } as never)).toBe("Unmapped");
+  });
+});

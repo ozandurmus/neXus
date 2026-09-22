@@ -43,6 +43,25 @@ import {
 
 type StatusFilter = "ALL" | "FAILING" | "UNAVAILABLE" | "PASSING";
 
+/** NIST SP 800-53 Rev. 5 control families. */
+const NIST_FAMILIES: Record<string, string> = {
+  AC: "Access Control", AT: "Awareness and Training", AU: "Audit and Accountability", CA: "Assessment, Authorization and Monitoring",
+  CM: "Configuration Management", CP: "Contingency Planning", IA: "Identification and Authentication", IR: "Incident Response",
+  MA: "Maintenance", MP: "Media Protection", PE: "Physical and Environmental Protection", PL: "Planning", PM: "Program Management",
+  PS: "Personnel Security", PT: "PII Processing and Transparency", RA: "Risk Assessment", SA: "System and Services Acquisition",
+  SC: "System and Communications Protection", SI: "System and Information Integrity", SR: "Supply Chain Risk Management",
+};
+
+export function familyOf(c: ComplianceControlItem): string {
+  if (c.category && c.category !== "null") return c.category;
+  for (const f of c.frameworks ?? []) {
+    if (!/NIST/i.test(f.framework)) continue;
+    const m = /^([A-Z]{2})-/.exec((f.reference || f.clauseId || "").trim());
+    if (m) return `${m[1]} · ${NIST_FAMILIES[m[1]] ?? "NIST family"}`;
+  }
+  return "Unmapped";
+}
+
 function ComplianceMetricCard({
   title,
   count,
@@ -188,11 +207,14 @@ export function ComplianceScreen() {
   const unavailCount = useMemo(() => controls.filter((c) => c.status === "DATA_UNAVAILABLE").length, [controls]);
   const passingCount = useMemo(() => controls.filter((c) => c.status === "PASS").length, [controls]);
 
-  /** Control families (the product's own control category): controls, checks, coverage, findings (review §3). */
+  /**
+   * Control families (review §3): the NIST SP 800-53 family of each control's NIST mapping (AC, IA, AU, ...), the
+   * grouping an auditor already uses; the product's own category when the catalog carries one; else "Unmapped".
+   */
   const families = useMemo(() => {
     const by = new Map<string, { controls: number; pass: number; fail: number; unavailable: number }>();
     for (const c of controls) {
-      const key = c.category || "Uncategorised";
+      const key = familyOf(c);
       const f = by.get(key) ?? { controls: 0, pass: 0, fail: 0, unavailable: 0 };
       f.controls++; f.pass += c.pass_count; f.fail += c.fail_count; f.unavailable += c.data_unavailable_count;
       by.set(key, f);
@@ -333,7 +355,7 @@ export function ComplianceScreen() {
         <Card sx={{ bgcolor: m3.scLowest, borderRadius: "10px", boxShadow: "none", border: "1px solid", borderColor: m3.outlineVar, overflow: "hidden" }}>
           <Box sx={{ px: 2, pt: 1.75, pb: 0.5 }}>
             <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Control families</Typography>
-            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>coverage = checks with evidence; findings = failing checks · click a family to filter the list</Typography>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>grouped by NIST SP 800-53 family · coverage = checks with evidence · findings = failing checks · click a family to filter the list</Typography>
           </Box>
           <Table size="small">
             <TableHead>
@@ -348,7 +370,7 @@ export function ComplianceScreen() {
             </TableHead>
             <TableBody>
               {families.map((f) => (
-                <TableRow key={f.name} hover sx={{ cursor: "pointer" }} onClick={() => setSearchQuery(f.name === "Uncategorised" ? "" : f.name)}>
+                <TableRow key={f.name} hover sx={{ cursor: "pointer" }} onClick={() => setSearchQuery(f.name === "Unmapped" ? "" : f.name.split(" · ")[0] + "-")}>
                   <TableCell sx={{ fontWeight: 600 }}>{f.name}</TableCell>
                   <TableCell align="right">{f.controls}</TableCell>
                   <TableCell align="right">{f.checks}</TableCell>

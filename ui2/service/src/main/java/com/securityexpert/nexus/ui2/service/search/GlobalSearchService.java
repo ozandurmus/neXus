@@ -87,8 +87,11 @@ public final class GlobalSearchService {
                 + "order by collected_at desc limit 1) a on p.vendor = 'palo_alto'")
                 .map(r -> new RunRef(r.get("device_id", String.class), r.get("run_id", String.class), r.get("vendor", String.class))));
         loadRows(runs);
-        List<Map<String, Object>> settings = new ArrayList<>();
-        settingsLoop: for (RunRef run : runs) {
+        // One hit per (section, setting): the same setting on 38 members is one answer with a device count, not 38
+        // rows from the first device (live check 2026-09-23). The sample is the first device in list order.
+        Map<String, Map<String, Object>> settingGroups = new LinkedHashMap<>();
+        Map<String, java.util.Set<String>> devicesBySetting = new HashMap<>();
+        for (RunRef run : runs) {
             if (run.runId() == null) continue;
             Map<String, Object> identity = identityById.get(run.deviceId());
             if (identity == null) continue;
@@ -101,16 +104,25 @@ public final class GlobalSearchService {
                 if (!matches(term, Map.of("device", Objects.toString(identity.get("hostname"), ""),
                         "cluster", Objects.toString(identity.get("cluster_member_ref"), ""),
                         "section", section, "setting", setting, "value", value))) continue;
-                Map<String, Object> hit = new LinkedHashMap<>();
-                hit.put("device", identity.get("hostname"));
-                hit.put("cluster", identity.get("cluster_member_ref"));
-                hit.put("section", section);
-                hit.put("setting", setting);
-                hit.put("value_excerpt", value.length() > 80 ? value.substring(0, 80) : value);
-                hit.put("href", "?screen=configuration&device_id=" + url(run.deviceId()));
-                settings.add(hit);
-                if (settings.size() == limit) break settingsLoop;
+                String key = section + " \u203a " + setting;
+                devicesBySetting.computeIfAbsent(key, k -> new java.util.LinkedHashSet<>()).add(run.deviceId());
+                if (!settingGroups.containsKey(key)) {
+                    if (settingGroups.size() == limit) continue;
+                    Map<String, Object> hit = new LinkedHashMap<>();
+                    hit.put("device", identity.get("hostname"));
+                    hit.put("cluster", identity.get("cluster_member_ref"));
+                    hit.put("section", section);
+                    hit.put("setting", setting);
+                    hit.put("value_excerpt", value.length() > 80 ? value.substring(0, 80) : value);
+                    hit.put("href", "?screen=configuration&device_id=" + url(run.deviceId()));
+                    settingGroups.put(key, hit);
+                }
             }
+        }
+        List<Map<String, Object>> settings = new ArrayList<>();
+        for (Map.Entry<String, Map<String, Object>> e : settingGroups.entrySet()) {
+            e.getValue().put("device_count", devicesBySetting.get(e.getKey()).size());
+            settings.add(e.getValue());
         }
 
         List<Map<String, Object>> evidence = transactions.inTransaction(dsl -> {

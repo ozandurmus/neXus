@@ -208,7 +208,8 @@ public final class ComplianceService {
             String title = String.valueOf(c.get("title"));
             String desc = String.valueOf(c.get("description"));
             String severity = String.valueOf(c.get("severity"));
-            String category = String.valueOf(c.get("category"));
+            // The catalog carries no category today; never turn its absence into the text "null".
+            String category = c.get("category") == null ? null : String.valueOf(c.get("category"));
             Object frameworks = c.get("frameworks");
 
             int targetDevices = 0;

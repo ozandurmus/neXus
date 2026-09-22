@@ -42,7 +42,7 @@ function HostnameCell({ device }: { readonly device: DeviceSummary }) {
       </Typography>
     );
   }
-  const reason = missingHostnameReason(device.enrollment_state);
+  const reason = missingHostnameReason(device.enrollment_state, Boolean(device.inventory_collected_at || device.latest_job_state));
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
       <Typography variant="body2" sx={{ color: m3.neutralInk, fontWeight: 600, whiteSpace: "nowrap" }}>UNKNOWN hostname</Typography>
@@ -356,7 +356,7 @@ function DeviceRegistryCard({
       )}
       {total > 0 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
-          <Box sx={{ display: "grid", gridTemplateColumns: "36px 34px 1fr 150px 150px 40px", px: 2, py: 0.5, color: "text.secondary", fontSize: "0.75rem", fontWeight: 600, alignItems: "center" }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "36px 64px minmax(0, 1fr) 140px 230px 40px", px: 2, py: 0.5, color: "text.secondary", fontSize: "0.75rem", fontWeight: 600, alignItems: "center" }}>
             <Box>
               <Checkbox
                 checked={isAllSelected}
@@ -379,7 +379,7 @@ function DeviceRegistryCard({
                 key={device.device_id}
                 sx={{
                   display: "grid",
-                  gridTemplateColumns: "36px 34px 1fr 150px 150px 40px",
+                  gridTemplateColumns: "36px 64px minmax(0, 1fr) 140px 230px 40px",
                   alignItems: "center",
                   gap: 1,
                   px: 2,

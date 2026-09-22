@@ -473,11 +473,11 @@ export function ProjectPlanPanel() {
   return (
     <Stack spacing={3}>
       <Section title="Java UI2 product roadmap">
-        <Typography variant="body2">Current recorded product build: {plan.current_product_build ?? "UNKNOWN"}. Deployed software version: UNKNOWN.</Typography>
+        <Typography variant="body2" component="div">Current recorded product build: {plan.current_product_build ?? "UNKNOWN"}. Deployed software version: {plan.deployed_commit ? <>{plan.deployed_commit.slice(0, 12)}{plan.deployed_at ? <> · deployed <Ts at={plan.deployed_at} /></> : null}</> : "UNKNOWN"}.</Typography>
         <Typography variant="body2" component="div">Source review: <Ts at={plan.source_metadata?.reviewed_at} /> · Freshness: {plan.source_metadata?.freshness ?? "UNKNOWN"}</Typography>
         <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>Source revision: {plan.source_metadata?.revision ?? "UNKNOWN"}</Typography>
         <Typography variant="body2">{plan.source_metadata?.update_policy}</Typography>
-        <M3Button emphasis="outlined" onClick={refresh}>Refresh project plan</M3Button>
+        <Box sx={{ alignSelf: "flex-start" }}><M3Button emphasis="outlined" onClick={refresh}>Refresh project plan</M3Button></Box>
       </Section>
       <HeroCards plan={plan} />
       <Section title="Now / Next / Upcoming">

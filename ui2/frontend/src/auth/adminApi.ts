@@ -35,6 +35,8 @@ export interface GlobalSearchSetting {
   readonly section: string;
   readonly setting: string;
   readonly value_excerpt: string;
+  /** How many devices carry a matching value for this setting (one hit per section/setting). */
+  readonly device_count?: number;
   readonly href: string;
 }
 

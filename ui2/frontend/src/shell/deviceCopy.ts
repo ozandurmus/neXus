@@ -45,9 +45,10 @@ export function deviceNameLabel(hostname: string | null | undefined): string {
  * Enrolled" should read "UNKNOWN hostname" with a chip explaining why). Only meaningful when the hostname is
  * actually missing -- the caller decides that separately and only renders this chip in that case.
  */
-export function missingHostnameReason(enrollmentState: string): string {
+/** Why a device has no hostname: a draft, never read, or read but the device did not report one. */
+export function missingHostnameReason(enrollmentState: string, collected?: boolean): string {
   if (enrollmentState === "DRAFT") return "draft";
-  return "never read";
+  return collected ? "hostname not reported" : "never read";
 }
 
 const TERMINAL_JOB_STATES = new Set([

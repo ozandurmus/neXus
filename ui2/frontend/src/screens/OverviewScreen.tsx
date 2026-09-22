@@ -409,7 +409,7 @@ export function OverviewScreen() {
   );
 
   const tiles = (
-    <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(3, 1fr)", xl: "repeat(6, 1fr)" } }}>
+    <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))" }}>
       <PostureTile big={wall} icon="operations" severity="critical" title="Failed jobs, 24 h" count={failed} of={a.failed_jobs_24h?.terminal_24h}
         unknown={tileUnknown(a.failed_jobs_24h)} previous={a.failed_jobs_24h?.previous}
         context={a.failed_jobs_24h?.last_at ? `latest ${relativeAge(a.failed_jobs_24h.last_at)}` : "no failure in 24 h"}
