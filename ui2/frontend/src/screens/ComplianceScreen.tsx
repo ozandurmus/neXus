@@ -16,7 +16,6 @@ import Chip from "@mui/material/Chip";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
 import InputBase from "@mui/material/InputBase";
-import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -29,7 +28,11 @@ import Typography from "@mui/material/Typography";
 import { ScreenHeader, MetricGrid, ScreenRoot } from "../shell/ScreenLayout";
 import { Icon } from "../shell/Icon";
 import { M3Button } from "../shell/M3Widgets";
-import { m3 } from "../theme/m3Theme";
+import { StackedBar, STATUS } from "../shell/Charts";
+import { StatePanel, isRestricted } from "../shell/States";
+import { formatUtc } from "../shell/time";
+import { MONO, m3 } from "../theme/m3Theme";
+import { responsesAreMasked } from "../auth/adminApi";
 import {
   getComplianceOverview,
   getComplianceControls,
@@ -47,7 +50,7 @@ function ComplianceMetricCard({
   badge,
 }: {
   readonly title: string;
-  readonly count: string;
+  readonly count: string | null;
   readonly note: string;
   readonly badge?: { readonly label: string; readonly tone: "ok" | "warn" | "bad" | "neutral" };
 }) {
@@ -72,18 +75,18 @@ function ComplianceMetricCard({
     <Card
       sx={{
         bgcolor: m3.scLowest,
-        boxShadow: m3.e1,
-        borderRadius: "16px",
-        p: 2.5,
+        boxShadow: "none",
+        borderRadius: "10px",
+        p: 2.25,
         display: "flex",
         flexDirection: "column",
-        gap: 1.25,
+        gap: 1,
         border: "1px solid",
         borderColor: m3.outlineVar,
       }}
     >
       <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography sx={{ fontSize: 14, fontWeight: 500, color: m3.onSurfaceVar }}>{title}</Typography>
+        <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>{title}</Typography>
         {badge && (
           <Chip
             size="small"
@@ -92,7 +95,9 @@ function ComplianceMetricCard({
           />
         )}
       </Stack>
-      <Typography variant="h1" sx={{ color: m3.onSurface }}>{count}</Typography>
+      {count === null
+        ? <Typography sx={{ fontSize: 22, lineHeight: "40px", fontWeight: 650, color: m3.neutralInk }}>UNKNOWN</Typography>
+        : <Typography variant="h1" sx={{ color: m3.onSurface }}>{count}</Typography>}
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{note}</Typography>
     </Card>
   );
@@ -109,6 +114,7 @@ export function ComplianceScreen() {
   const [severityFilter, setSeverityFilter] = useState<string>(() => (urlParam("severity") ? urlParam("severity")!.toUpperCase() : "ALL"));
   const [frameworkFilter, setFrameworkFilter] = useState<string>(() => frameworkFromUrl(urlParam("framework")));
   const [selectedControl, setSelectedControl] = useState<ComplianceControlItem | null>(null);
+  const [loadError, setLoadError] = useState<{ message: string; restricted: boolean } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -119,8 +125,10 @@ export function ComplianceScreen() {
       ]);
       setOverview(ov);
       setControls(ctrlRes.controls ?? []);
+      setLoadError(null);
     } catch (e) {
-      console.error("Failed to load compliance data", e);
+      const err = e as { status?: number; message?: string };
+      setLoadError({ message: err?.message ?? `status ${err?.status ?? "?"}`, restricted: isRestricted(e) });
     } finally {
       setLoading(false);
     }
@@ -149,7 +157,7 @@ export function ComplianceScreen() {
       if (q) {
         const inTitle = c.title.toLowerCase().includes(q);
         const inId = c.control_id.toLowerCase().includes(q);
-        const inDesc = c.description.toLowerCase().includes(q);
+        const inDesc = c.description.toLowerCase().includes(q) || (c.category ?? "").toLowerCase().includes(q);
         const inFw = c.frameworks?.some((f) => {
           const ref = f.reference || f.clauseId || "";
           const fw = f.framework || "";
@@ -180,6 +188,51 @@ export function ComplianceScreen() {
   const unavailCount = useMemo(() => controls.filter((c) => c.status === "DATA_UNAVAILABLE").length, [controls]);
   const passingCount = useMemo(() => controls.filter((c) => c.status === "PASS").length, [controls]);
 
+  /** Control families (the product's own control category): controls, checks, coverage, findings (review §3). */
+  const families = useMemo(() => {
+    const by = new Map<string, { controls: number; pass: number; fail: number; unavailable: number }>();
+    for (const c of controls) {
+      const key = c.category || "Uncategorised";
+      const f = by.get(key) ?? { controls: 0, pass: 0, fail: 0, unavailable: 0 };
+      f.controls++; f.pass += c.pass_count; f.fail += c.fail_count; f.unavailable += c.data_unavailable_count;
+      by.set(key, f);
+    }
+    return [...by.entries()].map(([name, f]) => ({ name, ...f, checks: f.pass + f.fail + f.unavailable }))
+      .sort((a, b) => b.fail - a.fail || a.name.localeCompare(b.name));
+  }, [controls]);
+
+  /**
+   * Export Audit Report (review §6): a cover section (as-of time, frameworks, device scope, mask state) and one row
+   * per control with its per-firewall counts and the firewalls it fails on, then the data gaps with their reason.
+   * Built from exactly what this screen read; nothing is re-evaluated.
+   */
+  const exportAuditReport = () => {
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const now = new Date().toISOString();
+    const lines: string[] = [];
+    lines.push(`# neXus compliance audit report`);
+    lines.push(`# as of,${esc(now)} (UTC)`);
+    lines.push(`# frameworks evaluated,${esc((overview?.frameworks ?? []).map((f) => f.framework).join("; "))}`);
+    lines.push(`# device scope,${esc(overview ? `${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls evaluated` : "UNKNOWN")}`);
+    lines.push(`# assured / observed / coverage,${esc(overview ? `${overview.assured_compliance_pct}% / ${overview.observed_compliance_pct}% / ${overview.evidence_coverage_pct}%` : "UNKNOWN")}`);
+    lines.push(`# names,${esc(responsesAreMasked() ? "masked (aiview pseudonyms)" : "as recorded")}`);
+    lines.push("");
+    lines.push(["control_id", "title", "category", "severity", "status", "framework_references", "firewalls", "pass", "fail", "unavailable", "failing_firewalls", "data_gap_reason"].join(","));
+    for (const c of controls) {
+      lines.push([c.control_id, c.title, c.category, c.severity, c.status,
+        (c.frameworks ?? []).map((f) => `${f.framework} ${f.reference || f.clauseId || ""}`.trim()).join("; "),
+        c.target_device_count, c.pass_count, c.fail_count, c.data_unavailable_count,
+        (c.affected_devices ?? []).join("; "), c.data_unavailable_count > 0 ? (c.missing_reason ?? "evidence not collected") : ""].map(esc).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `nexus-compliance-audit-${formatUtc(now, false).replace(/[: ]/g, "-")}Z.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const subtitle =
     overview && overview.evaluated_firewalls > 0
       ? "CIS Benchmark · PCI-DSS v4.0.1 · NIST SP 800-53 · Financial Baseline"
@@ -188,7 +241,7 @@ export function ComplianceScreen() {
   return (
     <ScreenRoot>
       <ScreenHeader
-        title="Compliance & Security Posture"
+        title="Compliance"
         subtitle={subtitle}
         actions={
           <Stack direction="row" spacing={1.5}>
@@ -199,7 +252,7 @@ export function ComplianceScreen() {
             >
               {reEvaluating ? "Evaluating..." : "Re-evaluate"}
             </M3Button>
-            <M3Button emphasis="filled" icon="download">
+            <M3Button emphasis="filled" icon="download" onClick={exportAuditReport} disabled={loading || controls.length === 0}>
               Export Audit Report
             </M3Button>
           </Stack>
@@ -210,111 +263,118 @@ export function ComplianceScreen() {
       <MetricGrid>
         <ComplianceMetricCard
           title="Assured Compliance"
-          count={overview ? `${overview.assured_compliance_pct}%` : "0%"}
+          count={overview ? `${overview.assured_compliance_pct}%` : null}
           badge={{
-            label: !overview ? "Loading" : overview.assured_compliance_pct >= 70 ? "High Assurance" : "Improvement Needed",
-            tone: overview && overview.assured_compliance_pct >= 70 ? "ok" : "warn",
+            label: !overview ? "UNKNOWN" : overview.assured_compliance_pct >= 70 ? "High Assurance" : "Improvement Needed",
+            tone: !overview ? "neutral" : overview.assured_compliance_pct >= 70 ? "ok" : "warn",
           }}
-          note="PASS / Total Assigned Controls"
+          note="Passing checks among all assigned checks (a check without evidence counts against)"
         />
         <ComplianceMetricCard
           title="Evidence Coverage"
-          count={overview ? `${overview.evidence_coverage_pct}%` : "0%"}
+          count={overview ? `${overview.evidence_coverage_pct}%` : null}
           badge={{
-            label: overview ? `${overview.evaluated_firewalls} Firewalls` : "0 Firewalls",
+            label: overview ? `${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls` : "UNKNOWN",
             tone: "neutral",
           }}
-          note="Controls with collected evidence"
+          note={overview ? `Checks with collected evidence · observed ${overview.observed_compliance_pct}% (pass among judged checks)` : "Checks with collected evidence"}
         />
         <ComplianceMetricCard
           title="Critical Deficiencies"
-          count={overview ? String(overview.critical_deficiencies) : "0"}
+          count={overview ? String(overview.critical_deficiencies) : null}
           badge={{
-            label: !overview ? "Loading" : overview.critical_deficiencies === 0 ? "Zero Critical" : "Immediate Action",
-            tone: overview?.critical_deficiencies === 0 ? "ok" : "bad",
+            label: !overview ? "UNKNOWN" : overview.critical_deficiencies === 0 ? "Zero Critical" : "Immediate Action",
+            tone: !overview || overview.critical_deficiencies === 0 ? "neutral" : "bad",
           }}
           note="High priority failing controls"
         />
         <ComplianceMetricCard
           title="Data Gaps"
-          count={overview ? String(overview.data_gaps) : "0"}
+          count={overview ? String(overview.data_gaps) : null}
           badge={{
-            label: !overview ? "Loading" : overview.data_gaps > 0 ? "Missing Commands" : "Full Coverage",
-            tone: overview && overview.data_gaps > 0 ? "warn" : "ok",
+            label: !overview ? "UNKNOWN" : overview.data_gaps > 0 ? "Evidence not collected" : "Full Coverage",
+            tone: !overview ? "neutral" : overview.data_gaps > 0 ? "warn" : "ok",
           }}
-          note="Controls awaiting evidence collection"
+          note="Checks awaiting evidence: the command a control needs is not in the collection scope yet"
         />
       </MetricGrid>
 
-      {/* 4 Framework Cards */}
+      {loadError && (loadError.restricted
+        ? <StatePanel variant="restricted" title="Compliance" body="This account can not view compliance results." />
+        : <StatePanel variant="error" title="Compliance could not be read" body="The results below may be missing." code={loadError.message}
+            action={<M3Button emphasis="text" onClick={loadData}>Retry</M3Button>} />)}
+
+      {/* Framework cards: the same stacked Pass / Fail / Unavailable bar as the Overview (review §3) */}
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
         {overview?.frameworks.map((f) => (
-          <Card
-            key={f.framework}
-            sx={{
-              bgcolor: m3.scLowest,
-              boxShadow: m3.e1,
-              borderRadius: "16px",
-              p: 2.25,
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-              border: "1px solid",
-              borderColor: m3.outlineVar,
-            }}
-          >
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography sx={{ fontSize: 15, fontWeight: 600, color: m3.onSurface }}>
-                {f.framework}
-              </Typography>
-              <Chip
-                size="small"
-                label={`${f.score_pct}%`}
-                sx={{
-                  bgcolor: f.score_pct >= 70 ? m3.successContainer : m3.warningContainer,
-                  color: f.score_pct >= 70 ? m3.onSuccessContainer : m3.onWarningContainer,
-                  fontWeight: 600,
-                  fontSize: 12,
-                }}
-              />
+          <Card key={f.framework} sx={{ bgcolor: m3.scLowest, boxShadow: "none", borderRadius: "10px", p: 2, display: "flex",
+                                         flexDirection: "column", gap: 1, border: "1px solid", borderColor: m3.outlineVar }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="baseline">
+              <Typography sx={{ fontSize: 14, fontWeight: 600, color: m3.onSurface }}>{f.framework}</Typography>
+              <Typography sx={{ fontSize: 15, fontWeight: 700, color: m3.onSurface }}>{f.score_pct}%</Typography>
             </Stack>
-
-            <LinearProgress
-              variant="determinate"
-              value={f.score_pct}
-              sx={{
-                height: 8,
-                borderRadius: 4,
-                bgcolor: m3.scHigh,
-                "& .MuiLinearProgress-bar": {
-                  bgcolor: f.score_pct >= 70 ? m3.success : m3.warning,
-                  borderRadius: 4,
-                },
-              }}
-            />
-
-            <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
-              <Typography variant="body2" sx={{ color: m3.success, fontWeight: 500 }}>
-                ✓ {f.pass_count} Passing
-              </Typography>
-              <Typography variant="body2" sx={{ color: m3.error, fontWeight: 500 }}>
-                ✕ {f.fail_count} Failing
-              </Typography>
-              <Typography variant="body2" sx={{ color: m3.warning, fontWeight: 500 }}>
-                ? {f.data_unavailable_count} Unavailable
-              </Typography>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{f.total_controls} control checks (control × firewall)</Typography>
+            <StackedBar parts={[
+              { label: "Pass", count: f.pass_count, color: STATUS.good },
+              { label: "Fail", count: f.fail_count, color: STATUS.critical },
+              { label: "Unavailable (no evidence)", count: f.data_unavailable_count, color: STATUS.neutral },
+            ]} />
+            <Stack direction="row" spacing={2} sx={{ mt: 0.25 }}>
+              <Typography variant="body2" sx={{ color: m3.goodInk, fontWeight: 500 }}>{f.pass_count} pass</Typography>
+              <Typography variant="body2" sx={{ color: m3.criticalInk, fontWeight: 500 }}>{f.fail_count} fail</Typography>
+              <Typography variant="body2" sx={{ color: m3.neutralInk, fontWeight: 500 }}>{f.data_unavailable_count} unavailable</Typography>
             </Stack>
           </Card>
         ))}
       </Box>
 
+      {/* Control families (review §3, from the M3 study): where an audit reviewer starts */}
+      {families.length > 0 && (
+        <Card sx={{ bgcolor: m3.scLowest, borderRadius: "10px", boxShadow: "none", border: "1px solid", borderColor: m3.outlineVar, overflow: "hidden" }}>
+          <Box sx={{ px: 2, pt: 1.75, pb: 0.5 }}>
+            <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Control families</Typography>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>coverage = checks with evidence; findings = failing checks · click a family to filter the list</Typography>
+          </Box>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Family</TableCell>
+                <TableCell align="right">Controls</TableCell>
+                <TableCell align="right">Checks</TableCell>
+                <TableCell sx={{ width: 220 }}>Pass · Fail · Unavailable</TableCell>
+                <TableCell align="right">Coverage</TableCell>
+                <TableCell align="right">Findings</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {families.map((f) => (
+                <TableRow key={f.name} hover sx={{ cursor: "pointer" }} onClick={() => setSearchQuery(f.name === "Uncategorised" ? "" : f.name)}>
+                  <TableCell sx={{ fontWeight: 600 }}>{f.name}</TableCell>
+                  <TableCell align="right">{f.controls}</TableCell>
+                  <TableCell align="right">{f.checks}</TableCell>
+                  <TableCell>
+                    <StackedBar height={8} parts={[
+                      { label: "Pass", count: f.pass, color: STATUS.good },
+                      { label: "Fail", count: f.fail, color: STATUS.critical },
+                      { label: "Unavailable", count: f.unavailable, color: STATUS.neutral },
+                    ]} />
+                  </TableCell>
+                  <TableCell align="right">{f.checks > 0 ? `${Math.round((100 * (f.pass + f.fail)) / f.checks)}%` : "UNKNOWN"}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, color: f.fail > 0 ? m3.criticalInk : m3.onSurfaceVar }}>{f.fail}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
       {/* Filter and Search Bar */}
       <Card
         sx={{
           bgcolor: m3.scLowest,
-          borderRadius: "16px",
+          borderRadius: "10px",
           p: 2,
-          boxShadow: m3.e1,
+          boxShadow: "none",
           border: "1px solid",
           borderColor: m3.outlineVar,
         }}
@@ -401,7 +461,7 @@ export function ComplianceScreen() {
           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
             <Chip
               clickable
-              label={`All (${controls.length})`}
+              label={`All · ${controls.length}`}
               onClick={() => setStatusFilter("ALL")}
               sx={{
                 bgcolor: statusFilter === "ALL" ? m3.primaryContainer : m3.scLow,
@@ -411,7 +471,7 @@ export function ComplianceScreen() {
             />
             <Chip
               clickable
-              label={`Failing (${failingCount})`}
+              label={`Failing · ${failingCount}`}
               onClick={() => setStatusFilter("FAILING")}
               sx={{
                 bgcolor: statusFilter === "FAILING" ? m3.errorContainer : m3.scLow,
@@ -421,7 +481,7 @@ export function ComplianceScreen() {
             />
             <Chip
               clickable
-              label={`Data Gaps (${unavailCount})`}
+              label={`Data gaps · ${unavailCount}`}
               onClick={() => setStatusFilter("UNAVAILABLE")}
               sx={{
                 bgcolor: statusFilter === "UNAVAILABLE" ? m3.warningContainer : m3.scLow,
@@ -431,7 +491,7 @@ export function ComplianceScreen() {
             />
             <Chip
               clickable
-              label={`Passing (${passingCount})`}
+              label={`Passing · ${passingCount}`}
               onClick={() => setStatusFilter("PASSING")}
               sx={{
                 bgcolor: statusFilter === "PASSING" ? m3.successContainer : m3.scLow,
@@ -447,8 +507,8 @@ export function ComplianceScreen() {
       <Card
         sx={{
           bgcolor: m3.scLowest,
-          borderRadius: "16px",
-          boxShadow: m3.e1,
+          borderRadius: "10px",
+          boxShadow: "none",
           border: "1px solid",
           borderColor: m3.outlineVar,
           overflow: "hidden",
@@ -458,12 +518,12 @@ export function ComplianceScreen() {
           <Table size="medium">
             <TableHead sx={{ bgcolor: m3.scLow }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13 }}>Control Code & Title</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 110 }}>Severity</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 100 }}>Firewalls</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 170 }}>Posture Breakdown</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 140 }}>Outcome</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: 13, width: 90 }} align="right">Action</TableCell>
+                <TableCell>Control · code & title</TableCell>
+                <TableCell sx={{ width: 110 }}>Severity</TableCell>
+                <TableCell sx={{ width: 100 }} align="right">Firewalls</TableCell>
+                <TableCell sx={{ width: 190 }}>Pass · Fail · Unavailable</TableCell>
+                <TableCell sx={{ width: 150 }}>Outcome</TableCell>
+                <TableCell sx={{ width: 70 }} align="right">Detail</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -497,7 +557,7 @@ export function ComplianceScreen() {
                           {c.title}
                         </Typography>
                         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 0.5 }}>
-                          <Typography variant="body2" sx={{ fontFamily: "monospace", color: m3.onSurfaceVar, fontSize: 11.5 }}>
+                          <Typography variant="body2" sx={{ fontFamily: MONO, color: m3.onSurfaceVar, fontSize: 11.5 }}>
                             {c.control_id}
                           </Typography>
                           {c.frameworks?.slice(0, 3).map((f, idx) => (
@@ -550,28 +610,20 @@ export function ComplianceScreen() {
                       />
                     </TableCell>
 
-                    <TableCell>
-                      <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
-                        {c.target_device_count} {c.target_device_count === 1 ? "Firewall" : "Firewalls"}
-                      </Typography>
+                    <TableCell align="right">
+                      <Typography sx={{ fontSize: 13, fontWeight: 500 }}>{c.target_device_count}</Typography>
                     </TableCell>
 
                     <TableCell>
                       {/* Segmented Stacked Bar (Green / Red / Amber) */}
                       <Stack spacing={0.5}>
-                        <Box sx={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", bgcolor: m3.scHigh }}>
-                          {c.pass_count > 0 && (
-                            <Box sx={{ flex: c.pass_count, bgcolor: m3.success }} title={`${c.pass_count} Passing`} />
-                          )}
-                          {c.fail_count > 0 && (
-                            <Box sx={{ flex: c.fail_count, bgcolor: m3.error }} title={`${c.fail_count} Failing`} />
-                          )}
-                          {c.data_unavailable_count > 0 && (
-                            <Box sx={{ flex: c.data_unavailable_count, bgcolor: m3.warning }} title={`${c.data_unavailable_count} Data Unavailable`} />
-                          )}
-                        </Box>
+                        <StackedBar height={8} parts={[
+                          { label: "Pass", count: c.pass_count, color: STATUS.good },
+                          { label: "Fail", count: c.fail_count, color: STATUS.critical },
+                          { label: "Unavailable (no evidence)", count: c.data_unavailable_count, color: STATUS.neutral },
+                        ]} />
                         <Typography variant="body2" sx={{ fontSize: 11, color: m3.onSurfaceVar }}>
-                          {c.compliance_pct}% Assurance
+                          {c.pass_count} · {c.fail_count} · {c.data_unavailable_count} · {c.compliance_pct}% assured
                         </Typography>
                       </Stack>
                     </TableCell>
@@ -584,7 +636,7 @@ export function ComplianceScreen() {
                             ? "Compliant"
                             : c.status === "FAIL"
                             ? "Non-Compliant"
-                            : "Data Unavailable"
+                            : "Evidence not collected"
                         }
                         sx={{
                           fontWeight: 600,
@@ -594,13 +646,13 @@ export function ComplianceScreen() {
                               ? m3.successContainer
                               : c.status === "FAIL"
                               ? m3.errorContainer
-                              : m3.warningContainer,
+                              : m3.scHigh,
                           color:
                             c.status === "PASS"
                               ? m3.onSuccessContainer
                               : c.status === "FAIL"
                               ? m3.onErrorContainer
-                              : m3.onWarningContainer,
+                              : m3.neutralInk,
                         }}
                       />
                     </TableCell>
@@ -751,7 +803,7 @@ export function ComplianceScreen() {
                   <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
                     {selectedControl.affected_devices?.length > 0
                       ? selectedControl.affected_devices.join(", ")
-                      : "FW-JULIET-06 (c154432c-1e28-4a20-aa26-ab4a05c0d9af)"}
+                      : "No firewall listed for this control"}
                   </Typography>
                   <Chip
                     size="small"

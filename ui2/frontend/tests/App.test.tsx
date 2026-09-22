@@ -92,10 +92,11 @@ describe("the six product screens", () => {
 
   // Overview and Operations count from the store since 2026-09-22 (PO: "0 devices enrolled" was a constant
   // over a fleet of 103); without a store they say the read failed, never 0. Compliance still renders zeros.
-  it("shows a metric card's count as zero, never a placeholder, on the screens that have one", async () => {
+  it("writes UNKNOWN on a metric card whose figure was not read, never 0 or a placeholder dash", async () => {
     for (const id of ["compliance"]) {
       const { unmount } = render(<App search={`?screen=${id}`} />);
-      expect((await screen.findAllByText("0")).length).toBeGreaterThan(0);
+      expect((await screen.findAllByText("UNKNOWN")).length).toBeGreaterThan(0);
+      expect(screen.queryByText("0%")).toBeNull();
       unmount();
     }
   });
