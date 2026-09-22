@@ -22,6 +22,7 @@ import Switch from "@mui/material/Switch";
 import {
   getBackupDeviations,
   getBackupPolicy,
+  collectDeviceBackup,
   listDevices,
   listFleetBackups,
   requestFleetBackup,
@@ -177,35 +178,17 @@ export function BackupScreen() {
     setLoading(true);
     const label = type === "snapshot" ? "Snapshot" : "Backup";
     try {
-      const response = await fetch(`/api/v2/backups/${device.deviceId}/run`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reason: `Operator manual trigger for ${type} via console`,
-          type: type === "snapshot" ? "snapshot" : "backup",
-        }),
-      });
-
-      // This call submits a request. It does not run the backup, and it certainly does
-      // not validate one. The message used to announce "Verification V2 passed;
-      // deviation checked: UNCHANGED" on every outcome, including a network failure --
-      // a verification verdict invented for a run that had not happened yet. The
-      // validation level appears in the row once the store records it.
-      if (response.ok) {
-        setSuccessMessage(`${label} requested for ${device.name}. Validation level will appear once the run is recorded.`);
-        await loadFleet();
-      } else {
-        setListError(`${label} request for ${device.name} was refused by the service (HTTP ${response.status}).`);
-      }
+      // Through the API client: the CSRF token and the mapped /devices/{id}/backup/collect route.
+      // The raw fetch to the /api/v2/backups/{id}/run alias went out without a token to a route
+      // outside the action map, so every click was refused 403 (Product Owner, 2026-09-22).
+      await collectDeviceBackup(device.deviceId, `Operator manual trigger for ${type} via console`, type === "snapshot" ? "snapshot" : "backup");
+      setSuccessMessage(`${label} requested for ${device.name}. Validation level will appear once the run is recorded.`);
+      await loadFleet();
     } catch (error) {
-      setListError(
-        `${label} request for ${device.name} could not be submitted: `
-        + (error instanceof Error ? error.message : "the service could not be reached.")
-      );
+      setListError(`${label} request for ${device.name} was refused: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
       setTriggeringId(null);
-      setTimeout(() => setSuccessMessage(null), 6000);
     }
   };
 

@@ -43,9 +43,12 @@ public final class CredentialStoreComposition {
         return new ResolverComponents(credentialReferenceRepository, credentialRepository, cipher);
     }
 
+    /** DataSource-backed, one connection per transaction. {@code DSL.using(url, user, password)} opens a
+     * single shared Connection, and every worker thread resolving a credential concurrently raced on
+     * it -- measured live (2026-09-22): two Check Point backups claimed in the same second both died
+     * with "Cannot commit when autoCommit is enabled" inside JooqCredentialReferenceRepository.find. */
     private static TransactionBoundary transactionBoundary(String jdbcUrl, String user, String password) {
-        DSLContext dsl = DSL.using(jdbcUrl, user, password);
-        return new JooqTransactionBoundary(dsl);
+        return com.securityexpert.nexus.ui2.persistence.TransactionBoundaryFactory.fromJdbc(jdbcUrl, user, password);
     }
 
     public record ResolverComponents(CredentialReferenceRepository credentialReferenceRepository,
