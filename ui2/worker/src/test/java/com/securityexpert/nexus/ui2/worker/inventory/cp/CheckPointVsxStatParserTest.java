@@ -25,6 +25,18 @@ class CheckPointVsxStatParserTest {
         assertEquals(List.of("0", "2", "5"), CheckPointVsxStatParser.parseVsids(Fixtures.read("cp/vsx_stat_v.txt")));
     }
 
+    /** Measured live, 2026-09-22: a Quantum Spark appliance's Clish answers {@code vsx stat -v}
+     * with a short CLI error, not CF-4's "not supported" text -- and a VSX gateway always lists at
+     * least VS0, so output with no parsable row must never count as VSX (it made every later read
+     * get wrapped in "vsenv 0 &&", which that shell cannot run). */
+    @Test
+    void outputWithNoVirtualDeviceRowIsNotVsxEvenWithoutTheNotSupportedText() {
+        VsxStatResult result = CheckPointVsxStatParser.parse("Invalid command: vsx stat -v\n");
+
+        assertFalse(result.vsx());
+        assertEquals(List.of(), result.devices());
+    }
+
     @Test
     void nonVsxTextYieldsNotVsxWithoutError() {
         VsxStatResult result = CheckPointVsxStatParser.parse(Fixtures.read("cp/vsx_stat_v_not_vsx.txt"));

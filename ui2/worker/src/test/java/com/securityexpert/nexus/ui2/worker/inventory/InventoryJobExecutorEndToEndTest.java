@@ -275,44 +275,24 @@ class InventoryJobExecutorEndToEndTest {
      * entirely, rather than discovering the same rejection the slow way on every single command. */
     @Test
     void aDiscoveryKnownSparkModelTriesTheInteractiveShellFirstSkippingExecEntirely() {
-        // Every read below has real, non-blank scripted output (the same fixture as
-        // checkPointVsxHostWithTwoVsidsRecordsOneRunWithThreeContexts above) -- a blank result is
-        // treated as "no answer" on either channel and legitimately falls back to the other one,
-        // so proving a clean, zero-exec-calls run needs a device that never produces a blank read.
+        // A Spark/Gaia Embedded appliance is never VSX (measured live, 2026-09-22: its Clish answers
+        // "vsx stat -v" with a CLI error), so the executor skips that probe outright for a known
+        // Spark model and issues every physical read bare -- no vsenv wrap, no per-VSID pass. Every
+        // read below has real, non-blank scripted output: a blank result is treated as "no answer"
+        // on either channel and legitimately falls back to the other, so a clean zero-exec-calls
+        // run needs a device that never produces a blank read. "vsx stat -v" is deliberately NOT
+        // scripted: had it been sent, it would have fallen through to exec() and been counted.
         Map<String, String> outputByCommand = Map.ofEntries(
-                Map.entry(InventoryReadPlan.CP_VSX_STAT,
-                        "ID | Type | Name\n0 | S | VS0\n2 | S | vs-finance\n5 | S | vs-hr\n"),
-                Map.entry(vsenvZero(InventoryReadPlan.CP_FW_GETIFS), "localhost eth0 192.0.2.10 255.255.255.0\n"),
-                Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ROUTE_SHOW), "default via 192.0.2.1 dev eth0 proto 7\n"),
-                Map.entry(vsenvZero(InventoryReadPlan.CP_CPHAPROB_STAT), "1 (local) 192.0.2.10 100% ACTIVE gw-a\n"),
-                Map.entry(vsenvZeroFaultTolerant(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF),
-                        "Virtual cluster interfaces: 1\neth0        192.0.2.1\n"),
-                Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY),
-                        "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 198.51.100.99/24 scope global eth0\n"),
-                // The batch command's own scripted output carries no BATCH_TAG, so the code falls
-                // back to the individual reads above exactly as it does when this same command
-                // fails over exec elsewhere in this file -- it still answers over the interactive
-                // shell, so this test never has to reach exec() for it either.
-                Map.entry("bash -lc 'echo \"===NEXUS_SECTION:ifs===\"; vsenv 0 >/dev/null 2>&1 || true; fw getifs; "
-                                + "echo \"===NEXUS_SECTION:route===\"; vsenv 0 >/dev/null 2>&1 || true; ip -4 route show table all; "
-                                + "echo \"===NEXUS_SECTION:ha===\"; vsenv 0 >/dev/null 2>&1 || true; cphaprob stat; "
-                                + "echo \"===NEXUS_SECTION:vip===\"; vsenv 0 >/dev/null 2>&1 || true; cphaprob -a if; "
-                                + "echo \"===NEXUS_SECTION:END===\"'",
-                        "batch format not scripted here on purpose"),
-                Map.entry("bash -lc 'vsenv 2 && fw getifs && ip -4 route show'",
-                        "default via 203.0.113.1 dev eth0 proto 7\n"),
-                Map.entry("bash -lc 'vsenv 2 && cphaprob -a if'",
-                        "Interface Name:  Status:\neth0        UP\n\nVirtual cluster interfaces: 1\neth0        203.0.113.2\n"),
-                Map.entry("bash -lc 'vsenv 2 && ip -4 addr show'",
-                        "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 198.51.100.99/24 scope global eth0\n"),
-                Map.entry("bash -lc 'vsenv 2 && cphaprob stat'", "1 (local) 203.0.113.2 100% ACTIVE gw-a\n"),
-                Map.entry("bash -lc 'vsenv 5 && fw getifs && ip -4 route show'",
-                        "198.51.100.0/29 dev eth0 proto kernel scope link src 198.51.100.2\n"),
-                Map.entry("bash -lc 'vsenv 5 && cphaprob -a if'",
-                        "Virtual cluster interfaces: 1\neth0        198.51.100.2\n"),
-                Map.entry("bash -lc 'vsenv 5 && ip -4 addr show'",
-                        "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 198.51.100.99/24 scope global eth0\n"),
-                Map.entry("bash -lc 'vsenv 5 && cphaprob stat'", "1 (local) 198.51.100.2 100% ACTIVE gw-a\n"));
+                Map.entry(InventoryReadPlan.CP_FW_GETIFS, "localhost LAN1 192.0.2.10 255.255.255.0\n"),
+                Map.entry(InventoryReadPlan.CP_IP_ROUTE_SHOW, "default via 192.0.2.1 dev LAN1 proto 7\n"),
+                Map.entry(InventoryReadPlan.CP_CPHAPROB_STAT, "Cluster is not enabled\n"),
+                Map.entry(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, "Cluster is not enabled\n"),
+                Map.entry(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY,
+                        "1: LAN1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 192.0.2.10/24 scope global LAN1\n"),
+                // The bare (non-VSX) batch command; its scripted output carries no BATCH_TAG, so the
+                // code falls back to the individual reads above, still over the interactive shell.
+                Map.entry(InventoryCapabilityExecutor.buildCheckPointBatchCommand(false),
+                        "batch format not scripted here on purpose"));
 
         ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
         transport.allowExecInteractiveWithoutRejection();
@@ -336,9 +316,14 @@ class InventoryJobExecutorEndToEndTest {
 
         assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
         assertEquals(0, transport.execCallCount(),
-                "a discovery-known Spark model must skip the exec channel entirely, trying the interactive shell first");
+                "a discovery-known Spark model must skip the exec channel entirely (and never send vsx stat -v)");
         InventoryRun run = inventoryRepository.lastRecordedRun;
-        assertEquals(3, run.contexts().size(), "physical + VSID 2 + VSID 5");
+        assertEquals(1, run.contexts().size(), "physical only -- a Spark appliance has no virtual systems");
+        InventoryContext physical = contextNamed(run, InventoryContext.PHYSICAL);
+        assertEquals(1, physical.interfaces().size());
+        assertEquals("192.0.2.10/24", physical.interfaces().get(0).addresses().get(0).address());
+        assertEquals(InventoryInterface.STATE_UP, physical.interfaces().get(0).state());
+        assertEquals(1, physical.routes().size());
     }
 
     private static String vsenvZero(String read) {

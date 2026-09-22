@@ -52,7 +52,12 @@ public final class CheckPointVsxStatParser {
                 devices.add(new VsxDevice(vsid, type, name));
             }
         }
-        return new VsxStatResult(true, devices);
+        // A VSX gateway always lists at least VS0 in its Virtual Devices Status table, so output
+        // with no parsable row at all is not VSX -- measured live, 2026-09-22, on a Quantum Spark
+        // appliance whose Clish answered "vsx stat -v" with a short CLI error (not CF-4's "not
+        // supported" text): treating that as vsx=true wrapped every later read in "vsenv 0 &&",
+        // which that shell cannot run, so the whole collection returned junk.
+        return new VsxStatResult(!devices.isEmpty(), devices);
     }
 
     /** The VSIDs alone, in row order, for callers that only need the id set (the executor's own use). */

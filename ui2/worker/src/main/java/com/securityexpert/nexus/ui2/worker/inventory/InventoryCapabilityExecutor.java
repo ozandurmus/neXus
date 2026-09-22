@@ -149,7 +149,10 @@ public final class InventoryCapabilityExecutor {
             }
 
             // Executor order (14D §3): detect VSX first, bare, before any other read's form is chosen.
-            String vsxProbeOutput = execOutput(session, InventoryReadPlan.CP_VSX_STAT, preferInteractiveShell);
+            // VSX is not a Quantum Spark/Gaia Embedded capability (the pre-Java product's own
+            // collector keeps VSX context out of its Spark path), so a discovery-known Spark model
+            // skips the probe outright rather than sending a command its Clish cannot answer.
+            String vsxProbeOutput = preferInteractiveShell ? "" : execOutput(session, InventoryReadPlan.CP_VSX_STAT, false);
             CheckPointVsxStatParser.VsxStatResult vsxStat = CheckPointVsxStatParser.parse(vsxProbeOutput);
             boolean vsxHost = vsxStat.vsx();
             LOG.log(System.Logger.Level.INFO,
@@ -215,6 +218,16 @@ public final class InventoryCapabilityExecutor {
                 }
                 if (!clishIf.isBlank()) {
                     physicalInterfaces = parseClishInterfaces(clishIf);
+                    if (physicalInterfaces.isEmpty()) {
+                        // The device answered but the parser understood none of it (measured live,
+                        // 2026-09-22: 2,599 chars from a Quantum Spark "show interfaces all", zero
+                        // interfaces). Log the output's structure only -- every digit run and MAC
+                        // masked, no address or identity value survives -- so the parser can be
+                        // corrected from real evidence (Raw-evidence law: in memory, never persisted).
+                        LOG.log(System.Logger.Level.WARNING,
+                                "[INVENTORY_CLISH_IF_UNPARSED] target={0}:{1} len={2} masked_shape={3}",
+                                target.host(), target.port(), clishIf.length(), maskedShape(clishIf, 40));
+                    }
                 }
             }
             if (physicalRoutes.isEmpty()) {
@@ -677,6 +690,34 @@ public final class InventoryCapabilityExecutor {
             result.add(new ParsedInterface(b.name, parent, kind, b.state, addrs, vlanId));
         }
         return result;
+    }
+
+    /** Structure-only projection of device output for a diagnostic log line: MACs become
+     * {@code xx:xx:...}, every digit run becomes {@code #}, whitespace collapses, lines are
+     * joined with {@code " | "} and capped at {@code maxLines} -- no address, serial, hostname
+     * digit or other identity value survives (Sensitive identity reporting law). */
+    static String maskedShape(String output, int maxLines) {
+        StringBuilder sb = new StringBuilder();
+        int lines = 0;
+        for (String rawLine : output.split("\\R")) {
+            String line = rawLine.trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            if (lines++ >= maxLines) {
+                sb.append(" | ...");
+                break;
+            }
+            String masked = line
+                    .replaceAll("(?i)\\b[0-9a-f]{2}(?::[0-9a-f]{2}){5}\\b", "xx:xx:xx:xx:xx:xx")
+                    .replaceAll("\\d+", "#")
+                    .replaceAll("\\s+", " ");
+            if (sb.length() > 0) {
+                sb.append(" | ");
+            }
+            sb.append(masked);
+        }
+        return sb.toString();
     }
 
     private static class ClishInterfaceBuilder {
