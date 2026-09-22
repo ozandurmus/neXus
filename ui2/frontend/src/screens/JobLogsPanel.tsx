@@ -13,7 +13,9 @@ import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import Paper from "@mui/material/Paper";
 import Pagination from "@mui/material/Pagination";
-import { EmptyPanel } from "../shell/ScreenLayout";
+import { StatePanel, RestrictedPanel, isRestricted, Ts } from "../shell/States";
+import { formatDuration } from "../shell/time";
+import { MONO, m3 } from "../theme/m3Theme";
 import {
   downloadJobsCsv,
   jobFacets,
@@ -24,15 +26,6 @@ import {
   type JobFacetsView,
   type JobQueryParams,
 } from "../auth/adminApi";
-
-function formatDuration(ms?: number): string {
-  if (ms === undefined || ms === null) return "-";
-  if (ms < 1000) return `${ms} ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)} s`;
-  const mins = Math.floor(ms / 60000);
-  const secs = Math.floor((ms % 60000) / 1000);
-  return `${mins}m ${secs}s`;
-}
 
 function stateColor(state: string): "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" {
   switch (state) {
@@ -72,13 +65,28 @@ function hoursAgoLocal(hours: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function JobLogsPanel({ initialState = "", initialJobType = "", initialSinceHours, initialText = "" }: {
-  readonly initialState?: string; readonly initialJobType?: string; readonly initialSinceHours?: number; readonly initialText?: string;
+export function JobLogsPanel({
+  initialState = "",
+  initialJobType = "",
+  initialSinceHours,
+  initialText = "",
+  emptyTitle,
+  emptyBody,
+}: {
+  readonly initialState?: string;
+  readonly initialJobType?: string;
+  readonly initialSinceHours?: number;
+  readonly initialText?: string;
+  /** Overrides the generic empty-result message while the filter is unchanged from this panel's own default
+      (e.g. the Queue tab's "Queue empty · 0 requested · 0 claimed · 0 executing", review §3) -- never shown
+      once the viewer narrows the filter further, since the breakdown would no longer be provably zero. */
+  readonly emptyTitle?: string;
+  readonly emptyBody?: string;
 } = {}) {
   const [page, setPage] = useState<{ items: readonly JobEventView[]; total: number } | null>(null);
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
   const [facets, setFacets] = useState<JobFacetsView>({ states: [], job_types: [] });
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
@@ -111,9 +119,7 @@ export function JobLogsPanel({ initialState = "", initialJobType = "", initialSi
         setPage({ items: data.items ?? [], total: data.total ?? 0 });
         setError(null);
       })
-      .catch((err: ApiError) => {
-        setError(typeof err.body?.error === "string" ? err.body.error : `Request failed (status ${err.status})`);
-      });
+      .catch((err: ApiError) => setError(err));
   }, [paramsKey]);
 
   const fetchDeviceNames = useCallback(() => {
@@ -159,17 +165,32 @@ export function JobLogsPanel({ initialState = "", initialJobType = "", initialSi
       anchor.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Export refused${(err as ApiError).status ? ` (status ${(err as ApiError).status})` : ""}`);
+      setError(err as ApiError);
     } finally {
       setExportBusy(false);
     }
   };
 
-  if (error && !page) return <EmptyPanel title="Job logs unavailable" body={error} />;
-  if (page === null) return <EmptyPanel title="Job logs" body="Loading…" />;
+  /** A human sentence for an error/restriction StatePanel; the raw status stays in the mono code line. */
+  function errorMessage(err: ApiError | string): string {
+    if (typeof err === "string") return err;
+    return typeof err.body?.error === "string" ? err.body.error : "The job log read failed.";
+  }
+  function errorCode(err: ApiError | string): string | undefined {
+    return typeof err === "string" ? undefined : err.status ? `HTTP ${err.status}` : undefined;
+  }
+
+  if (error && !page) {
+    return isRestricted(error)
+      ? <RestrictedPanel area="Job logs" />
+      : <StatePanel variant="error" title="Job logs unavailable" body={errorMessage(error)} code={errorCode(error)}
+          action={<Button size="small" variant="outlined" onClick={fetchJobs} sx={{ textTransform: "none" }}>Retry</Button>} />;
+  }
+  if (page === null) return <StatePanel variant="empty" title="Job logs" body="Loading…" />;
 
   const pageCount = Math.max(1, Math.ceil(page.total / pageSize));
   const deviceOptions = Object.entries(deviceNames).sort((a, b) => a[1].localeCompare(b[1]));
+  const isDefaultFilter = state === initialState && !jobType && !deviceId && !sinceLocal && !untilLocal && !text.trim();
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -241,6 +262,14 @@ export function JobLogsPanel({ initialState = "", initialJobType = "", initialSi
           sx={{ minWidth: 260 }}
         />
         <Box sx={{ flexGrow: 1 }} />
+        {/* One order everywhere this panel is used -- Jobs, History and Admin Job Logs (review §3/§4):
+            Refresh, Export CSV, then Live polling. */}
+        <Button size="small" variant="outlined" onClick={fetchJobs} sx={{ textTransform: "none" }}>
+          Refresh
+        </Button>
+        <Button size="small" variant="outlined" disabled={exportBusy} onClick={() => void handleExport()} sx={{ textTransform: "none" }}>
+          {exportBusy ? "Exporting…" : "Export CSV"}
+        </Button>
         <Button
           size="small"
           variant={autoRefresh ? "contained" : "outlined"}
@@ -249,108 +278,115 @@ export function JobLogsPanel({ initialState = "", initialJobType = "", initialSi
         >
           {autoRefresh ? "Live polling: ON" : "Live polling: OFF"}
         </Button>
-        <Button size="small" variant="outlined" onClick={fetchJobs} sx={{ textTransform: "none" }}>
-          Refresh
-        </Button>
-        <Button size="small" variant="outlined" disabled={exportBusy} onClick={() => void handleExport()} sx={{ textTransform: "none" }}>
-          {exportBusy ? "Exporting…" : "Export CSV"}
-        </Button>
       </Stack>
 
-      {error && <Typography variant="body2" color="error">{error}</Typography>}
-
-      {page.items.length === 0 ? (
-        <EmptyPanel title="No jobs matching filter" body="No background jobs matched your criteria." />
-      ) : (
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small" aria-label="Job logs">
-            <TableHead>
-              <TableRow sx={{ bgcolor: "action.hover" }}>
-                <TableCell sx={{ fontWeight: 600 }}>Job ID</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Target Device</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Duration</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Terminal Reason / Error</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Submitted At</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {page.items.map((job) => {
-                const isExpanded = expandedJobId === job.job_id;
-                return (
-                  <TableRow
-                    key={job.job_id}
-                    hover
-                    onClick={() => setExpandedJobId(isExpanded ? null : job.job_id)}
-                    sx={{ cursor: "pointer" }}
-                  >
-                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>
-                      {isExpanded ? job.job_id : `${job.job_id.slice(0, 8)}...`}
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 500 }}>
-                      {job.device_name ?? deviceNames[job.target_device_id] ?? "Unknown device"} · {job.target_device_id}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: "0.8rem" }}>{job.job_type}</TableCell>
-                    <TableCell>
-                      <Chip label={job.state} size="small" color={stateColor(job.state)} variant="outlined" />
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: (job.duration_ms || 0) > 20000 ? "error.main" : "text.primary" }}>
-                      {formatDuration(job.duration_ms)}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        maxWidth: 360,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: isExpanded ? "normal" : "nowrap",
-                        color: job.state === "FAILED" ? "error.main" : "text.secondary",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      {job.terminal_reason || "-"}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: "0.75rem", color: "text.secondary", whiteSpace: "nowrap" }}>
-                      {job.submitted_at ? new Date(job.submitted_at).toLocaleString() : "-"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+      {error && (
+        isRestricted(error)
+          ? <RestrictedPanel area="Job logs" />
+          : <StatePanel variant="error" title="Job logs read failed" body={errorMessage(error)} code={errorCode(error)}
+              action={<Button size="small" variant="outlined" onClick={fetchJobs} sx={{ textTransform: "none" }}>Retry</Button>} />
       )}
 
-      <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
-        <Typography variant="body2" color="text.secondary">
-          {page.total === 0
-            ? "0 jobs"
-            : `${(pageNumber - 1) * pageSize + 1}–${Math.min(pageNumber * pageSize, page.total)} of ${page.total} jobs`}
-        </Typography>
-        <Stack direction="row" spacing={2} alignItems="center">
-          <TextField
-            select
-            size="small"
-            label="Per page"
-            value={pageSize}
-            onChange={(e) => { setPageSize(Number(e.target.value)); resetToFirstPage(); }}
-            SelectProps={{ native: true }}
-            InputLabelProps={{ shrink: true }}
-            sx={{ width: 110 }}
-          >
-            {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
-          </TextField>
-          <Pagination
-            count={pageCount}
-            page={Math.min(pageNumber, pageCount)}
-            onChange={(_e, value) => setPageNumber(value)}
-            color="primary"
-            showFirstButton
-            showLastButton
-            size="small"
-          />
-        </Stack>
-      </Stack>
+      {page.items.length === 0 ? (
+        emptyTitle && isDefaultFilter
+          ? <StatePanel variant="empty" title={emptyTitle} body={emptyBody} />
+          : <StatePanel variant="empty" title="No jobs match this filter" body="No background job matched the current filter." />
+      ) : (
+        <>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small" aria-label="Job logs">
+              <TableHead>
+                <TableRow sx={{ bgcolor: "action.hover" }}>
+                  <TableCell sx={{ fontWeight: 600 }}>Job ID</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Target Device</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Duration</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Terminal Reason / Error</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Submitted At</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {page.items.map((job) => {
+                  const isExpanded = expandedJobId === job.job_id;
+                  // The API's terminal_reason repeats the terminal state on a clean run (review §3); a
+                  // completed job has nothing to explain, so the column reads "--" there and keeps the
+                  // reason only where it is one -- a failure, rejection or unknown outcome.
+                  const reasonText = job.state === "COMPLETED" ? "—" : (job.terminal_reason || "—");
+                  return (
+                    <TableRow
+                      key={job.job_id}
+                      hover
+                      onClick={() => setExpandedJobId(isExpanded ? null : job.job_id)}
+                      sx={{ cursor: "pointer" }}
+                    >
+                      <TableCell sx={{ fontFamily: MONO, fontSize: "0.8rem" }}>
+                        {isExpanded ? job.job_id : `${job.job_id.slice(0, 8)}...`}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 500 }}>
+                        {job.device_name ?? deviceNames[job.target_device_id] ?? "Unknown device"} · {job.target_device_id}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: "0.8rem" }}>{job.job_type}</TableCell>
+                      <TableCell>
+                        <Chip label={job.state} size="small" color={stateColor(job.state)} variant="outlined" />
+                      </TableCell>
+                      {/* Duration is neutral -- never red; red is reserved for the state word, shown in the
+                          State column above (review §3 "Duration is red on every completed job"). */}
+                      <TableCell sx={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums", color: m3.onSurface }}>
+                        {formatDuration(job.duration_ms)}
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          maxWidth: 360,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: isExpanded ? "normal" : "nowrap",
+                          color: job.state === "FAILED" ? "error.main" : "text.secondary",
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        {reasonText}
+                      </TableCell>
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                        <Ts at={job.submitted_at} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
+            <Typography variant="body2" color="text.secondary">
+              {`${(pageNumber - 1) * pageSize + 1}–${Math.min(pageNumber * pageSize, page.total)} of ${page.total} jobs`}
+            </Typography>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <TextField
+                select
+                size="small"
+                label="Per page"
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); resetToFirstPage(); }}
+                SelectProps={{ native: true }}
+                InputLabelProps={{ shrink: true }}
+                sx={{ width: 110 }}
+              >
+                {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+              </TextField>
+              <Pagination
+                count={pageCount}
+                page={Math.min(pageNumber, pageCount)}
+                onChange={(_e, value) => setPageNumber(value)}
+                color="primary"
+                showFirstButton
+                showLastButton
+                size="small"
+              />
+            </Stack>
+          </Stack>
+        </>
+      )}
     </Box>
   );
 }
