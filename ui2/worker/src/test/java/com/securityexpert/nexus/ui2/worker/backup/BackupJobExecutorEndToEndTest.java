@@ -230,5 +230,9 @@ class BackupJobExecutorEndToEndTest {
         assertTrue(outcome instanceof JobOutcome.Failed, "expected Failed, got " + outcome);
         assertTrue(((JobOutcome.Failed) outcome).terminalReason().contains("backup_artefact_version_unresolvable"));
         assertEquals(0, harness.manifestRepo.recorded.size(), "C7 section 3.3: zero rows on an unresolvable version");
+        try (var files = java.nio.file.Files.walk(tempDir)) {
+            assertEquals(0, files.filter(p -> p.toString().endsWith(".enc")).count(),
+                    "zero rows must also mean zero bytes: the refused run's archive is not left on the volume");
+        }
     }
 }

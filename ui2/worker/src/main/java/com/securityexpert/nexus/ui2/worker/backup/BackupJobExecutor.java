@@ -44,6 +44,7 @@ import com.securityexpert.nexus.ui2.platform.WorkerActor;
  */
 public final class BackupJobExecutor {
 
+    private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(BackupJobExecutor.class.getName());
     private static final String ACTOR = WorkerActor.RESERVED_ACTOR_FINGERPRINT;
     private static final String ACTION_CLAIM_TO_EXECUTING = "job_backup_claim_to_executing";
     private static final String ACTION_CLAIM_TIME_DEVICE_CHECK = "job_backup_claim_time_device_check";
@@ -190,6 +191,11 @@ public final class BackupJobExecutor {
                 completed.observedSoftwareVersion());
         if (!recorded) {
             // AC-3 / C7 section 3.3: an unresolvable Check Point software version refuses the store with zero rows.
+            // "Zero rows" must also mean zero bytes: the archive was already streamed onto the recovery
+            // volume before the manifest was refused, and a file no manifest row names is unreachable by
+            // every read path (retrieval, retention pruning), i.e. an orphan that only ever grows the volume.
+            // Measured live (2026-09-22): one refused run left two ~150 MB orphans behind.
+            discardStoredArtefact(completed.artefact());
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
                     ACTION_FAILED, "backup_artefact_version_unresolvable: an unresolvable Check Point "
                     + "software version refuses the store with zero rows (C7 section 3.3)");
@@ -263,6 +269,22 @@ public final class BackupJobExecutor {
             return true;
         } catch (IllegalStateException versionUnresolvable) {
             return false;
+        }
+    }
+
+    /** Best-effort: a store file that no manifest row will ever name is removed so a refused run leaves nothing behind. */
+    private void discardStoredArtefact(ArtefactStore.ArtefactMetadata artefact) {
+        java.nio.file.Path root = java.nio.file.Path.of(recoveryVolumePath).toAbsolutePath().normalize();
+        java.nio.file.Path file = root.resolve(artefact.ref().value()).normalize();
+        if (!file.startsWith(root)) {
+            LOG.warning("[BACKUP] refusing to discard an artefact ref outside the store root");
+            return;
+        }
+        try {
+            boolean deleted = java.nio.file.Files.deleteIfExists(file);
+            LOG.info("[BACKUP] discarded unmanifested artefact (" + artefact.ciphertextBytes() + " bytes): " + deleted);
+        } catch (java.io.IOException e) {
+            LOG.warning("[BACKUP] could not discard unmanifested artefact: " + e.getMessage());
         }
     }
 
