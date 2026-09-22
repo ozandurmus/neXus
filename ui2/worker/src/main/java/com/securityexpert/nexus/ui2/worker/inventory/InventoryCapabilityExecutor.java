@@ -226,7 +226,7 @@ public final class InventoryCapabilityExecutor {
                         // corrected from real evidence (Raw-evidence law: in memory, never persisted).
                         LOG.log(System.Logger.Level.WARNING,
                                 "[INVENTORY_CLISH_IF_UNPARSED] target={0}:{1} len={2} masked_shape={3}",
-                                target.host(), target.port(), clishIf.length(), maskedShape(clishIf, 40));
+                                target.host(), target.port(), clishIf.length(), maskedShape(clishIf, 120));
                     }
                 }
             }
@@ -242,6 +242,9 @@ public final class InventoryCapabilityExecutor {
                     physicalRoutes = parseClishRoutes(clishRoutes);
                 }
             }
+            // A Spark/Gaia Embedded "show interfaces all" address carries no prefix; the same
+            // pass's connected routes ("C <net>/<bits> is directly connected, <iface>") do.
+            physicalInterfaces = applyConnectedRoutePrefixes(physicalInterfaces, physicalRoutes);
 
             // cp_cluster_vip_never_observed_in_fleet: measured live that cphaprob -a if / -a -m if return
             // nothing over a plain exec channel, on the same session where ip/route/cphaprob stat all work
@@ -591,8 +594,56 @@ public final class InventoryCapabilityExecutor {
         Map<String, ClishInterfaceBuilder> builders = new LinkedHashMap<>();
 
         boolean isBlockFormat = Pattern.compile("(?im)^interface\\s+[a-zA-Z0-9_.-]+\\s*$").matcher(output).find();
+        // Quantum Spark / Gaia Embedded "show interfaces all" (measured live, 2026-09-22, as a
+        // structure-only projection): key/value blocks, each opened by "name: <iface>", then
+        // "ipv4-address: <addr or blank>", "status: off|disconnected|...", "mac-address:",
+        // "description:". No subnet-mask line was observed, so an address here is recorded bare
+        // (no prefix) and the caller derives the prefix from the connected routes -- never a
+        // default guessed here (Evidence laws: absence of evidence is not evidence of a /24).
+        boolean isKeyValueFormat = !isBlockFormat && Pattern.compile("(?im)^name:\\s*\\S+").matcher(output).find();
 
-        if (isBlockFormat) {
+        if (isKeyValueFormat) {
+            ClishInterfaceBuilder current = null;
+            for (String rawLine : output.split("\\R")) {
+                String line = rawLine.trim();
+                int colon = line.indexOf(':');
+                if (line.isEmpty() || colon <= 0) {
+                    continue;
+                }
+                String key = line.substring(0, colon).trim().toLowerCase();
+                String value = line.substring(colon + 1).trim();
+                switch (key) {
+                    case "name" -> current = value.isEmpty() ? null : builders.computeIfAbsent(value, ClishInterfaceBuilder::new);
+                    case "status" -> {
+                        if (current != null) {
+                            current.state = switch (value.toLowerCase()) {
+                                case "on", "up", "connected" -> InventoryInterface.STATE_UP;
+                                case "off", "down", "disconnected" -> InventoryInterface.STATE_DOWN;
+                                default -> InventoryInterface.STATE_UNKNOWN;
+                            };
+                        }
+                    }
+                    case "ipv4-address", "ip-address", "ipv4 address" -> {
+                        if (current != null && !value.isEmpty() && !value.startsWith("0.0.0.0")) {
+                            Matcher m = Pattern.compile("^(\\d{1,3}(?:\\.\\d{1,3}){3})(?:/(\\d{1,2}))?").matcher(value);
+                            if (m.find()) {
+                                current.ip = m.group(1);
+                                if (m.group(2) != null) {
+                                    current.prefix = Integer.parseInt(m.group(2));
+                                }
+                                current.prefixUnknownIsBare = true;
+                            }
+                        }
+                    }
+                    case "subnet-mask", "netmask", "mask" -> {
+                        if (current != null && value.matches("^\\d{1,3}(?:\\.\\d{1,3}){3}$")) {
+                            current.mask = value;
+                        }
+                    }
+                    default -> { }
+                }
+            }
+        } else if (isBlockFormat) {
             ClishInterfaceBuilder current = null;
             for (String rawLine : output.split("\\R")) {
                 String line = rawLine.trim();
@@ -675,8 +726,14 @@ public final class InventoryCapabilityExecutor {
             }
             List<ParsedAddress> addrs = new ArrayList<>();
             if (b.ip != null && !b.ip.equals("0.0.0.0")) {
-                int prefix = b.prefix > 0 ? b.prefix : (b.mask != null ? maskToPrefix(b.mask) : 24);
-                addrs.add(new ParsedAddress(b.ip + "/" + prefix, InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER));
+                if (b.prefix > 0 || b.mask != null) {
+                    int prefix = b.prefix > 0 ? b.prefix : maskToPrefix(b.mask);
+                    addrs.add(new ParsedAddress(b.ip + "/" + prefix, InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER));
+                } else if (b.prefixUnknownIsBare) {
+                    addrs.add(new ParsedAddress(b.ip, InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER));
+                } else {
+                    addrs.add(new ParsedAddress(b.ip + "/24", InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER));
+                }
             }
             String kind = b.name.contains(".") ? InventoryInterface.KIND_VLAN
                     : (b.name.startsWith("bond") ? InventoryInterface.KIND_BOND : InventoryInterface.KIND_PHYSICAL);
@@ -720,12 +777,68 @@ public final class InventoryCapabilityExecutor {
         return sb.toString();
     }
 
+    /** For an interface address recorded bare (no prefix in the device's own output), take the
+     * prefix from a connected route on that same interface whose network contains the address --
+     * real evidence from the same collection pass, never a default. Left bare when no such route
+     * exists. */
+    static List<ParsedInterface> applyConnectedRoutePrefixes(List<ParsedInterface> interfaces, List<ParsedRoute> routes) {
+        List<ParsedInterface> result = new ArrayList<>();
+        for (ParsedInterface iface : interfaces) {
+            List<ParsedAddress> addrs = new ArrayList<>();
+            for (ParsedAddress addr : iface.addresses()) {
+                if (addr.address().contains("/") || !InventoryAddress.FAMILY_IPV4.equals(addr.family())) {
+                    addrs.add(addr);
+                    continue;
+                }
+                Optional<Integer> prefix = routes.stream()
+                        .filter(r -> InventoryRoute.PROTOCOL_CONNECTED.equals(r.protocol()))
+                        .filter(r -> r.interfaceName().map(n -> n.equalsIgnoreCase(iface.name())).orElse(false))
+                        .filter(r -> r.destination().contains("/"))
+                        .filter(r -> ipv4InNetwork(addr.address(), r.destination()))
+                        .map(r -> Integer.parseInt(r.destination().substring(r.destination().indexOf('/') + 1)))
+                        .findFirst();
+                addrs.add(prefix.map(p -> new ParsedAddress(addr.address() + "/" + p, addr.family(), addr.role())).orElse(addr));
+            }
+            result.add(new ParsedInterface(iface.name(), iface.parent(), iface.kind(), iface.state(), addrs, iface.vlanId()));
+        }
+        return result;
+    }
+
+    private static boolean ipv4InNetwork(String address, String cidr) {
+        try {
+            String[] net = cidr.split("/");
+            int bits = Integer.parseInt(net[1]);
+            if (bits < 0 || bits > 32) {
+                return false;
+            }
+            long a = ipv4ToLong(address);
+            long n = ipv4ToLong(net[0]);
+            long mask = bits == 0 ? 0 : (0xFFFFFFFFL << (32 - bits)) & 0xFFFFFFFFL;
+            return (a & mask) == (n & mask);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static long ipv4ToLong(String ip) {
+        String[] p = ip.split("\\.");
+        if (p.length != 4) {
+            throw new IllegalArgumentException(ip);
+        }
+        long v = 0;
+        for (String part : p) {
+            v = (v << 8) | (Integer.parseInt(part) & 0xFF);
+        }
+        return v;
+    }
+
     private static class ClishInterfaceBuilder {
         final String name;
         String state = InventoryInterface.STATE_UP;
         String ip;
         String mask;
         int prefix = 0;
+        boolean prefixUnknownIsBare = false;
 
         ClishInterfaceBuilder(String name) {
             this.name = name;

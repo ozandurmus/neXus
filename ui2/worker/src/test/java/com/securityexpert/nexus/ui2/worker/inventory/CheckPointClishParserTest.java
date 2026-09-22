@@ -42,6 +42,56 @@ class CheckPointClishParserTest {
         assertEquals("10.0.0.1/24", eth1.addresses().get(0).address());
     }
 
+    /** Quantum Spark / Gaia Embedded "show interfaces all", measured live 2026-09-22 as a
+     * structure-only projection (values here are documentation-range placeholders): key/value
+     * blocks opened by "name:", a blank "ipv4-address:" for unaddressed ports, "status:
+     * off|disconnected|connected", and no subnet-mask line at all -- so the address is recorded
+     * bare and the prefix comes from the connected routes, never a guessed default. */
+    @Test
+    void testParseClishInterfacesSparkKeyValueFormatAndConnectedRoutePrefix() {
+        String output = """
+                name: DMZ
+                ipv4-address:
+                status: off
+                mac-address: 00:1c:7f:20:11:22
+                description:
+                name: LAN1
+                ipv4-address: 192.0.2.1
+                status: connected
+                mac-address: 00:1c:7f:20:11:23
+                description: office
+                name: WAN
+                ipv4-address: 198.51.100.7
+                status: disconnected
+                mac-address: 00:1c:7f:20:11:24
+                description:
+                """;
+
+        List<ParsedInterface> ifaces = InventoryCapabilityExecutor.parseClishInterfaces(output);
+        assertEquals(3, ifaces.size());
+
+        ParsedInterface dmz = ifaces.stream().filter(i -> i.name().equals("DMZ")).findFirst().orElseThrow();
+        assertEquals(InventoryInterface.STATE_DOWN, dmz.state());
+        assertTrue(dmz.addresses().isEmpty(), "a blank ipv4-address is no address at all");
+
+        ParsedInterface lan1 = ifaces.stream().filter(i -> i.name().equals("LAN1")).findFirst().orElseThrow();
+        assertEquals(InventoryInterface.STATE_UP, lan1.state());
+        assertEquals("192.0.2.1", lan1.addresses().get(0).address(), "bare: the device gave no prefix, none is invented");
+
+        ParsedInterface wan = ifaces.stream().filter(i -> i.name().equals("WAN")).findFirst().orElseThrow();
+        assertEquals(InventoryInterface.STATE_DOWN, wan.state());
+
+        List<ParsedRoute> routes = InventoryCapabilityExecutor.parseClishRoutes("""
+                C        192.0.2.0/24 is directly connected, LAN1
+                S        0.0.0.0/0 via 198.51.100.1, WAN
+                """);
+        List<ParsedInterface> enriched = InventoryCapabilityExecutor.applyConnectedRoutePrefixes(ifaces, routes);
+        ParsedInterface lan1Enriched = enriched.stream().filter(i -> i.name().equals("LAN1")).findFirst().orElseThrow();
+        assertEquals("192.0.2.1/24", lan1Enriched.addresses().get(0).address(), "prefix from LAN1's own connected route");
+        ParsedInterface wanEnriched = enriched.stream().filter(i -> i.name().equals("WAN")).findFirst().orElseThrow();
+        assertEquals("198.51.100.7", wanEnriched.addresses().get(0).address(), "no connected route for WAN: stays bare");
+    }
+
     @Test
     void testParseClishInterfacesTabularFormat() {
         String output = """
