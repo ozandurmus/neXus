@@ -1011,7 +1011,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
         </Typography>
       ) : (
         <TableContainer sx={{ maxHeight: 640 }}>
-          <Table size="small" stickyHeader>
+          <Table size="small" stickyHeader sx={{ "& td, & th": { px: 1 }, "& td:first-of-type, & th:first-of-type": { pl: 2 }, "& td:last-of-type, & th:last-of-type": { pr: 2 } }}>
             <TableHead>
               <TableRow>
                 <TableCell>Device</TableCell>
