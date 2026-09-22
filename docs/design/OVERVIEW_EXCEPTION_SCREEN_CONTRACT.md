@@ -8,6 +8,7 @@
 Drafted by Fable (`OVERVIEW_EXCEPTION_SCREEN_CONTRACT_FABLE_DRAFT.md`, kept unaltered); frozen by the
 engineering session with the five corrections of `OVERVIEW_EXCEPTION_SCREEN_CONTRACT_ENGINEERING_NOTES.md`
 and the population rule of §5.1 applied. Backlog `overview_exception_and_evidence_screen` (P0).
+**Amended** A-2026-09-23 (§8, Product Owner directive: executive summary, version pie charts, colour).
 
 **Basis:** `docs/design/OVERVIEW_COUNCIL_2026_09_22_ASTRA.md` and `docs/design/OVERVIEW_COUNCIL_2026_09_22_FABLE.md`, converged on the minimal first release both answers name.
 
@@ -233,3 +234,43 @@ Population: the service ports the browser comparison (`ui2/frontend/src/screens/
 | Change intent (planned vs unplanned) | ticket/maintenance-window reference recorded by Script Execution |
 | True changed-section delta per device | stored per-section hash per configuration run |
 | Stale threshold per device instead of fixed 24 h | expected collection interval recorded by the scheduler per target |
+
+## 8. Amendment A-2026-09-23 — executive visual pass (Product Owner directive)
+
+**Source.** The Product Owner, 2026-09-23, after reviewing the first release under `aiview`: the Overview
+"is acceptable but still a low-profile page; I expected it to be more appealing and an executive summary.
+Per vendor, major and minor version information could be pie charts. This screen could use more colour."
+Recorded here because the directive overrides a §2 rule; the first implementation of it (commit `bfa08bd`)
+shipped before this record was written — that ordering was an engineering error, corrected by this amendment.
+
+**What changes (supersedes the named §2 / §3 / §4 text only).**
+
+1. §2 "no gauges, no charts except one stacked bar" is replaced by: part-to-whole **donuts** are permitted for
+   the per-vendor software and hardware distribution and for inventory evidence age; horizontal **meters** and
+   bars are permitted for ratios and counts. Each donut shows at most five named slices, the rest folded into
+   `Other (n)`, and `UNKNOWN` as its own neutral slice — never dropped, never coloured as a value. Colours follow
+   a fixed categorical order; status colours (good / warning / serious / critical) are used only for state and
+   always paired with a word. Still prohibited: dial gauges, a composite score, "outdated" version judgments,
+   green for zero, `0` for UNKNOWN.
+2. **Executive band** above the tiles: one headline sentence composed only of figures already in this
+   response, the six evidence chips, and four ratios — evidence current (fresh / active), backup targets
+   protected (targets − without archive / targets), compliance evidence coverage (the stored percentage,
+   as read), clusters in agreement (comparable − with DIFF / clusters). No new query.
+3. **Software and hardware** (replaces the hotfix histogram): per vendor, three donuts.
+   Check Point — major = `observed_software_version`, minor = `device_platform_facts.hotfix_level`,
+   appliance = `device_platform_facts.platform_family`. Palo Alto — major = the leading `x.y` of the PAN-OS
+   version, minor = the full version, model = `observed_model`. Values are opaque strings grouped by equality.
+   Response: `platform.versions.{check_point|palo_alto}.{major|minor|model}: [{label|null, count}]`.
+   Click: Inventory with `vendor` plus `sw_major`, `sw_version`, `hotfix_level` or `hw_model` (`unknown` for the
+   UNKNOWN slice); the Inventory filter chip shows the resulting device count.
+4. **Failed jobs** are grouped by cause before the list: `exceptions.failed_jobs.reasons` — at most six groups,
+   largest first, each `{reason, count, devices, job_types, last_at}`. The group key is the reason code plus the
+   head of its detail, digits folded to `N`, cut before ` (`, a nested `:` or a ` for <target>` tail, so no
+   target name enters the key; `reason` passes `TopologyNamePseudonymizer.maskText` for `role:replay_viewer`,
+   as does `terminal_reason`. The contract's list (§2 `Failed jobs`) follows as the three latest rows.
+   The tile gains `attention.failed_jobs_24h.last_at` (latest failure) in its subtitle.
+
+**Unchanged.** Every figure is a stored-evidence query with its evidence time; the endpoint, cache, masking,
+population rule, click targets of §3 and the non-goals of §1 other than the chart rule stand as frozen.
+Tests: `tests/OverviewScreen.test.tsx` (donut links, cause grouping, coverage as read),
+`OverviewFailureReasonsTest` (grouping key, target tail dropped, cap of six).

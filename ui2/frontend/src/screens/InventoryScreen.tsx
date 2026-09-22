@@ -647,6 +647,8 @@ export function InventoryScreen() {
   // Overview version donuts: an exact software version, or a Palo Alto major (x.y) / Check Point version.
   const [versionFilter, setVersionFilter] = useState<{ kind: "exact" | "major"; value: string } | null>(() =>
     urlParam("sw_version") ? { kind: "exact", value: urlParam("sw_version")! } : urlParam("sw_major") ? { kind: "major", value: urlParam("sw_major")! } : null);
+  // Overview model donuts: Check Point appliance family (show asset system) or Palo Alto model.
+  const [modelFilter, setModelFilter] = useState<string | null>(() => urlParam("hw_model"));
   const [sortMode, setSortMode] = useState<"name_asc" | "name_desc" | "vendor">("name_asc");
 
   const devices = data;
@@ -703,6 +705,10 @@ export function InventoryScreen() {
         : !(sw === versionFilter.value || (device.vendor_hint === "palo_alto" && sw !== null && (sw === versionFilter.value || sw.startsWith(`${versionFilter.value}.`))))) return false;
     }
     if (hotfixFilter && (hotfixFilter === "unknown" ? Boolean(device.hotfix_level) || device.role === "management_server" : device.hotfix_level !== hotfixFilter)) return false;
+    if (modelFilter) {
+      const model = (device.vendor_hint === "check_point" ? device.platform_family : device.model)?.trim() || null;
+      if (modelFilter === "unknown" ? model !== null : model !== modelFilter) return false;
+    }
 
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase().trim();
@@ -716,6 +722,7 @@ export function InventoryScreen() {
     return Boolean(matchHostname || matchId || matchModel || matchVersion || matchCluster || matchMgmtIp || matchIps);
   });
 
+  const filteredCountLabel = `${filteredDevices.length} device${filteredDevices.length === 1 ? "" : "s"}`;
   const sortedDevices = [...filteredDevices].sort((a, b) => {
     const nameCmp = deviceNameLabel(a.hostname).localeCompare(deviceNameLabel(b.hostname), undefined, { sensitivity: "base" });
     if (sortMode === "vendor") {
@@ -777,14 +784,16 @@ export function InventoryScreen() {
               pr: 0.5,
             }}
           >
-            {(ageFilter || hotfixFilter || versionFilter) && (
+            {(ageFilter || hotfixFilter || versionFilter || modelFilter) && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, flexWrap: "wrap" }}>
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>From Overview:</Typography>
                 {ageFilter && <StatusChip tone="attn" label={`inventory ${({ stale: "older than 24 h or never", lt24h: "under 24 h", "24h_72h": "24–72 h", gt72h: "over 72 h", never: "never collected" } as Record<string, string>)[ageFilter] ?? ageFilter}`} dense />}
                 {hotfixFilter && <StatusChip tone="attn" label={`hotfix ${hotfixFilter === "unknown" ? "UNKNOWN" : hotfixFilter}`} dense />}
                 {versionFilter && <StatusChip tone="attn" label={`version ${versionFilter.value === "unknown" ? "UNKNOWN" : versionFilter.value}${versionFilter.kind === "major" ? " (major)" : ""}`} dense />}
+                {modelFilter && <StatusChip tone="attn" label={`model ${modelFilter === "unknown" ? "UNKNOWN" : modelFilter}`} dense />}
+                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{filteredCountLabel}</Typography>
                 <Box component="span" role="button" tabIndex={0} sx={{ cursor: "pointer", fontSize: 12, color: m3.primary }}
-                  onClick={() => { setAgeFilter(null); setHotfixFilter(null); setVersionFilter(null); }}>clear</Box>
+                  onClick={() => { setAgeFilter(null); setHotfixFilter(null); setVersionFilter(null); setModelFilter(null); }}>clear</Box>
               </Box>
             )}
             <Box

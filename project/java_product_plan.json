@@ -208,7 +208,10 @@
     "aiview_masking_leak_audit": "java_debt",
     "cluster_diff_member_specific_tuning": "java_debt",
     "legacy_python_separation": "java_debt",
-    "github_open_pr_triage": "java_debt"
+    "github_open_pr_triage": "java_debt",
+    "cp_platform_facts_empty_on_nine_gateways": "java_debt",
+    "cp_backup_free_space_parse_refusal": "java_debt",
+    "pan_keygen_no_usable_key_under_load": "java_debt"
   },
   "converted_lessons": [
     {

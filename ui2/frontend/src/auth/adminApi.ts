@@ -1208,7 +1208,9 @@ export function getSystemStorage(): Promise<StorageView> {
 
 export type EvidenceState = "OK" | "UNKNOWN" | "READ_FAILED";
 export interface EvidenceChip { readonly at: string | null; readonly state: EvidenceState }
-export interface CountTile { readonly count: number; readonly of?: number; readonly unknown?: number; readonly terminal_24h?: number; readonly state: EvidenceState }
+export interface CountTile { readonly count: number; readonly of?: number; readonly unknown?: number; readonly terminal_24h?: number; readonly last_at?: string | null; readonly state: EvidenceState }
+export interface FailureReason { readonly reason: string; readonly count: number; readonly devices: number; readonly job_types: readonly string[]; readonly last_at: string | null }
+export interface VersionSlice { readonly label: string | null; readonly count: number }
 export interface OverviewView {
   readonly generated_at: string;
   readonly masked: boolean;
@@ -1219,7 +1221,7 @@ export interface OverviewView {
     state?: EvidenceState;
   };
   readonly exceptions: {
-    failed_jobs: { total: number; rows: Array<{ job_id: string; job_type: string; device_id: string; label: string | null; cluster?: string | null; terminal_reason: string | null; finished_at: string }> };
+    failed_jobs: { total: number; rows: Array<{ job_id: string; job_type: string; device_id: string; label: string | null; cluster?: string | null; terminal_reason: string | null; finished_at: string }>; reasons?: FailureReason[] };
     config_changes: { total: number; rows: Array<{ device_id: string; label: string | null; cluster?: string | null; run_id: string; sections_latest: number; collected_at: string }> };
     cluster_diff: { total: number; unknown: number; all_refs: string[]; rows: Array<{ cluster_ref: string; diff_section_count: number; diff_setting_count: number; diff_sections: string[]; computed_at: string }> };
     state?: EvidenceState;
@@ -1234,7 +1236,7 @@ export interface OverviewView {
     devices: number; check_point: number; palo_alto: number; clusters: number;
     hotfix_levels: Array<{ level: string | null; count: number }>; evidence_at: string | null; state?: EvidenceState;
     /** Per vendor: major (CP software version / PAN x.y) and minor (CP jumbo take / PAN full version); null label = UNKNOWN. */
-    versions?: Record<"check_point" | "palo_alto", { major: Array<{ label: string | null; count: number }>; minor: Array<{ label: string | null; count: number }> }>;
+    versions?: Record<"check_point" | "palo_alto", { major: VersionSlice[]; minor: VersionSlice[]; model?: VersionSlice[] }>;
   };
   readonly nexus: { completed_24h: number; running: number; oldest_running_submitted_at: string | null; last_inventory: { check_point: string | null; palo_alto: string | null }; state?: EvidenceState };
 }

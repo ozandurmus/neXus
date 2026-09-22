@@ -86,6 +86,17 @@ public final class OverviewController {
                     if (cluster instanceof String c) {
                         row.put("cluster", pseudonymizer.maskClusterName(c));
                     }
+                    if (row.get("terminal_reason") instanceof String reason) {
+                        row.put("terminal_reason", pseudonymizer.maskText(reason));
+                    }
+                }
+            }
+        }
+        if (exceptions.get("failed_jobs") instanceof Map<?, ?> failed && failed.get("reasons") instanceof List<?> reasons) {
+            for (Object o : reasons) {
+                Map<String, Object> row = (Map<String, Object>) o;
+                if (row.get("reason") instanceof String reason) {
+                    row.put("reason", pseudonymizer.maskText(reason));
                 }
             }
         }

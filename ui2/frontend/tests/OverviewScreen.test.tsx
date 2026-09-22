@@ -28,6 +28,10 @@ function overview(partial: Partial<OverviewView> = {}): OverviewView {
       failed_jobs: {
         total: 7,
         rows: Array.from({ length: 5 }, (_, i) => ({ job_id: `job-${i}`, job_type: "cp_inventory_collect", device_id: `dev-${i}`, label: `FW-TANGO-0${i}`, terminal_reason: "connect_failed", finished_at: NOW })),
+        reasons: [
+          { reason: "connect_failed: palo alto key generation did not return a usable key", count: 5, devices: 3, job_types: ["pan_inventory_collect"], last_at: NOW },
+          { reason: "unhandled_exception: Java heap space", count: 2, devices: 2, job_types: ["cp_gateway_backup", "pan_configuration_collect"], last_at: NOW },
+        ],
       },
       config_changes: { total: 0, rows: [] },
       cluster_diff: { total: 3, unknown: 8, all_refs: ["CLS-ROMEO-01"], rows: [{ cluster_ref: "CLS-ROMEO-01", diff_section_count: 2, diff_setting_count: 9, diff_sections: ["Interfaces", "AAA"], computed_at: NOW }] },
@@ -65,18 +69,45 @@ describe("Overview -- exception-and-evidence screen (OVERVIEW_EXCEPTION_SCREEN_C
     expect(screen.getByText("UNKNOWN — no stored evidence")).toBeInTheDocument();
   });
 
-  it("caps an exception list at five rows and links to the whole list", async () => {
+  it("groups failed jobs by cause, shows the three latest and links to the whole list", async () => {
     stub(overview());
     render(<OverviewScreen />);
     expect(await screen.findByText("Show all (7)")).toBeInTheDocument();
-    expect(screen.getAllByText("connect_failed")).toHaveLength(5);
+    const cause = screen.getByText("connect_failed: palo alto key generation did not return a usable key").closest("a")!;
+    expect(cause.textContent).toContain("3 devices");
+    expect(cause.getAttribute("href")).toBe("?screen=operations&tab=jobs&state=FAILED&since_hours=24&q=connect_failed%3A+palo+alto+key+generation+did+not+return+a+usable+key");
+    expect(screen.getByText("unhandled_exception: Java heap space").closest("a")!.textContent).toContain("cp_gateway_backup, pan_configuration_collect");
+    expect(screen.getAllByText("connect_failed")).toHaveLength(3);
     expect(screen.getByText("No configuration change in the latest collections.")).toBeInTheDocument();
+  });
+
+  it("shows major, minor and hardware donuts per vendor, each slice linked to the filtered device list", async () => {
+    stub(overview({ platform: { ...overview().platform, versions: {
+      check_point: { major: [{ label: "R81.20", count: 55 }, { label: null, count: 1 }], minor: [{ label: "R81.20 Jumbo Take 119", count: 30 }],
+        model: [{ label: "Check Point 29200 (RH-20-00)", count: 17 }, { label: null, count: 7 }] },
+      palo_alto: { major: [{ label: "11.1", count: 40 }], minor: [{ label: "11.1.10-h7", count: 21 }], model: [{ label: "PA-5445", count: 10 }] },
+    } } }));
+    render(<OverviewScreen />);
+    const appliance = (await screen.findByText("29200 (RH-20-00)")).closest("a")!;
+    expect(appliance.getAttribute("href")).toBe("?screen=inventory&vendor=check_point&hw_model=Check+Point+29200+%28RH-20-00%29");
+    expect(screen.getByText("R81.20 · Take 119").closest("a")!.getAttribute("href")).toBe("?screen=inventory&vendor=check_point&hotfix_level=R81.20+Jumbo+Take+119");
+    expect(screen.getByText("PA-5445").closest("a")!.getAttribute("href")).toBe("?screen=inventory&vendor=palo_alto&hw_model=PA-5445");
+    expect(screen.getByText("APPLIANCE")).toBeInTheDocument();
+  });
+
+  it("shows compliance evidence coverage as the stored one-decimal percentage", async () => {
+    stub(overview({ compliance: { state: "OK", reason: null, evaluated: 102, of_firewalls: 105, observed_pct: 34.7, assured_pct: 28.9, coverage_pct: 82.5,
+      critical_deficiencies: 172, data_gaps: 428, frameworks: [] } }));
+    render(<OverviewScreen />);
+    const kpi = (await screen.findByText("COMPLIANCE EVIDENCE COVERAGE")).closest("a")!;
+    expect(kpi.textContent).toContain("82.5%");
+    expect(kpi.textContent).not.toContain("of 100");
   });
 
   it("keeps an UNKNOWN row in the hotfix histogram and never calls a level outdated", async () => {
     stub(overview());
     render(<OverviewScreen />);
-    expect(await screen.findByText("R81.20 Jumbo Take 119")).toBeInTheDocument();
+    expect(await screen.findByText("R81.20 · Take 119")).toBeInTheDocument();
     expect(screen.getAllByText("UNKNOWN").length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toMatch(/outdated/i);
   });

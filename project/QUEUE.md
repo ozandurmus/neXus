@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T21:22:50Z
+Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T21:53:56Z
 
 ## Now
 - NXS-LOCAL-0368 — Overview rebuilt as an exception-and-evidence screen; collision-free aiview pseudonyms (automated_validated)
@@ -29,8 +29,10 @@ Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T21:22:50Z
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
 - P1/planned cluster_diff_member_specific_tuning — Cluster DIFF: 38 of 39 clusters show member differences (2 (target: Overview contract; configurationProjecti)
 - P1/planned cluster_member_model_needs_second_query — Cluster members carry no hardware field in the gateway enu (target: Check Point management plane enumeration)
+- P1/planned cp_backup_free_space_parse_refusal — Check Point backup refused on 7 gateways (2026-09-22): nei (target: )
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
+- P1/planned cp_platform_facts_empty_on_nine_gateways — Check Point platform facts: 9 of 62 gateways have a facts (target: )
 - P1/planned discovery_connection_state_never_populated — Check Point discovery never records the management plane's (target: MgmtCliEnumerationAdapter candidate cons)
 - P1/planned discovery_failure_summary_stores_certificate_subject — A failed Palo Alto discovery stores the presented certific (target: PanXmlApiTransport certificate exception)
 - P1/planned failover_p0_closure_set — Failover Engine: close the eight-item P0 set both external (target: docs/design/CODEX_FAILOVER_ENGINE_FINAL_)
@@ -90,6 +92,7 @@ Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T21:22:50Z
 - P2/planned java_product_plan_build_selection_is_stale
 - P2/planned orchestrator_worktree_lacks_frontend_dependencies
 - P2/planned pan_ha_serial_identity_hardening
+- P2/planned pan_keygen_no_usable_key_under_load
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
 - P2/planned project_plan_crypto_placeholder_sentinel_lost
 - P2/planned regression_mapping_backend_trees_unmapped

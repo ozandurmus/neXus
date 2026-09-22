@@ -50,12 +50,16 @@ function arc(cx: number, cy: number, r: number, start: number, end: number): str
   return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
 }
 
-/** Part-to-whole donut, <= 6 named slices + Other + UNKNOWN, with a hover readout in the centre and a legend. */
-export function Donut({ title, slices, size = 132, centerLabel }: {
+/**
+ * Part-to-whole donut, <= 6 named slices + Other + UNKNOWN, with a hover readout in the centre and a legend.
+ * {@code stacked}: title, ring and legend in one column (for three donuts side by side in a card).
+ */
+export function Donut({ title, slices, size = 132, centerLabel, stacked = false }: {
   readonly title: string;
   readonly slices: ReadonlyArray<Slice & { color: string; display: string }>;
   readonly size?: number;
   readonly centerLabel?: string;
+  readonly stacked?: boolean;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const total = slices.reduce((n, s) => n + s.count, 0);
@@ -63,9 +67,11 @@ export function Donut({ title, slices, size = 132, centerLabel }: {
   const stroke = 18;
   let angle = 0;
   const active = hover !== null ? slices[hover] : null;
+  const heading = <Typography variant="caption" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.06em", fontWeight: 600, display: "block" }}>{title.toUpperCase()}</Typography>;
   return (
-    <Box sx={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
-      <Box sx={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+    <Box sx={{ display: "flex", gap: stacked ? 1.25 : 2, alignItems: stacked ? "stretch" : "center", flexDirection: stacked ? "column" : "row", flexWrap: stacked ? "nowrap" : "wrap", minWidth: 0 }}>
+      {stacked && heading}
+      <Box sx={{ position: "relative", width: size, height: size, flexShrink: 0, alignSelf: stacked ? "center" : undefined }}>
         <svg width={size} height={size} role="img" aria-label={`${title}: ${slices.map((s) => `${s.display} ${s.count}`).join(", ")}`}>
           <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={m3.sc} strokeWidth={stroke} />
           {total > 0 && slices.map((s, i) => {
@@ -93,16 +99,16 @@ export function Donut({ title, slices, size = 132, centerLabel }: {
           </Typography>
         </Box>
       </Box>
-      <Box sx={{ minWidth: 150, flex: 1 }}>
-        <Typography variant="caption" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.06em", fontWeight: 600 }}>{title.toUpperCase()}</Typography>
+      <Box sx={{ minWidth: stacked ? 0 : 150, flex: 1 }}>
+        {!stacked && heading}
         {slices.length === 0 && <Typography variant="body2" color="text.secondary">UNKNOWN — nothing read yet</Typography>}
         {slices.map((s, i) => {
           const pct = total > 0 ? Math.round((100 * s.count) / total) : 0;
           const row = (
-            <Box key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
+            <Box key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} title={s.label ?? s.display}
               sx={{ display: "flex", alignItems: "center", gap: 1, py: 0.25, px: 0.5, borderRadius: "6px", bgcolor: hover === i ? m3.sc : "transparent" }}>
               <Box sx={{ width: 10, height: 10, borderRadius: "3px", bgcolor: s.color, flexShrink: 0 }} />
-              <Typography sx={{ fontSize: 12.5, fontFamily: s.display === "UNKNOWN" || s.display.startsWith("Other") ? undefined : "monospace", flex: 1, color: m3.onSurface }}>{s.display}</Typography>
+              <Typography noWrap sx={{ fontSize: 12.5, fontFamily: s.display === "UNKNOWN" || s.display.startsWith("Other") ? undefined : "monospace", flex: 1, minWidth: 0, color: m3.onSurface }}>{s.display}</Typography>
               <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: m3.onSurface }}>{s.count}</Typography>
               <Typography sx={{ fontSize: 11.5, color: m3.onSurfaceVar, width: 36, textAlign: "right" }}>{pct}%</Typography>
             </Box>

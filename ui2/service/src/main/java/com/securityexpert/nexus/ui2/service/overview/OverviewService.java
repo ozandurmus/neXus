@@ -148,7 +148,16 @@ public class OverviewService {
         // 1. failed jobs, 24 h
         Record jobs = q(dsl -> dsl.fetchOne("select count(*) filter (where state = 'FAILED') as failed, count(*) as terminal "
                 + "from jobs where state in ('COMPLETED','FAILED') and finished_at >= now() - interval '24 hours'"));
-        tiles.put("failed_jobs_24h", Map.of("count", jobs.get("failed", Long.class), "terminal_24h", jobs.get("terminal", Long.class), "state", "OK"));
+        List<FailedJob> failedAll = q(dsl -> dsl.fetch("select job_type, target_device_id, terminal_reason, finished_at from jobs "
+                + "where state = 'FAILED' and finished_at >= now() - interval '24 hours'")).map(r -> new FailedJob(
+                r.get("job_type", String.class), r.get("target_device_id", String.class),
+                r.get("terminal_reason", String.class), r.get("finished_at", Timestamp.class)));
+        Map<String, Object> failedTile = new LinkedHashMap<>();
+        failedTile.put("count", jobs.get("failed", Long.class));
+        failedTile.put("terminal_24h", jobs.get("terminal", Long.class));
+        failedTile.put("last_at", iso(failedAll.stream().map(FailedJob::finishedAt).filter(Objects::nonNull).max(Timestamp::compareTo).orElse(null)));
+        failedTile.put("state", "OK");
+        tiles.put("failed_jobs_24h", failedTile);
         List<Map<String, Object>> failedRows = new ArrayList<>();
         for (Record r : q(dsl -> dsl.fetch("select job_id, job_type, target_device_id, terminal_reason, finished_at from jobs "
                 + "where state = 'FAILED' and finished_at >= now() - interval '24 hours' order by finished_at desc limit 5"))) {
@@ -163,7 +172,7 @@ public class OverviewService {
             row.put("finished_at", iso(r.get("finished_at", Timestamp.class)));
             failedRows.add(row);
         }
-        exceptions.put("failed_jobs", Map.of("total", jobs.get("failed", Long.class), "rows", failedRows));
+        exceptions.put("failed_jobs", Map.of("total", jobs.get("failed", Long.class), "rows", failedRows, "reasons", failureReasons(failedAll)));
 
         // 2. devices without inventory in 24 h
         Map<String, Timestamp> latestInv = latestInventory(ids);
@@ -256,6 +265,60 @@ public class OverviewService {
     }
 
     /** Every device's newest inventory run, for the device list ({@code inventory_collected_at}). */
+    record FailedJob(String jobType, String deviceId, String reason, Timestamp finishedAt) {
+    }
+
+    /**
+     * Failed jobs of the last 24 h grouped by why they failed (amendment A-2026-09-23): the reason code plus the
+     * stable head of its detail, numbers folded, cut before a parenthesis, a nested colon or a "for <target>"
+     * tail, so one cause is one row and no target name reaches the key. Largest group first, at most six.
+     */
+    static List<Map<String, Object>> failureReasons(List<FailedJob> failed) {
+        Map<String, List<FailedJob>> groups = new LinkedHashMap<>();
+        for (FailedJob f : failed) {
+            groups.computeIfAbsent(reasonKey(f.reason()), k -> new ArrayList<>()).add(f);
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        groups.entrySet().stream()
+                .sorted((a, b) -> Integer.compare(b.getValue().size(), a.getValue().size()))
+                .limit(6)
+                .forEach(e -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("reason", e.getKey());
+                    row.put("count", e.getValue().size());
+                    row.put("devices", e.getValue().stream().map(FailedJob::deviceId).filter(Objects::nonNull).distinct().count());
+                    row.put("job_types", e.getValue().stream().map(FailedJob::jobType).filter(Objects::nonNull).distinct().sorted().toList());
+                    row.put("last_at", iso(e.getValue().stream().map(FailedJob::finishedAt).filter(Objects::nonNull).max(Timestamp::compareTo).orElse(null)));
+                    out.add(row);
+                });
+        return out;
+    }
+
+    static String reasonKey(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return "no reason recorded";
+        }
+        String s = reason.strip();
+        int colon = s.indexOf(':');
+        String code = colon > 0 ? s.substring(0, colon).strip() : s;
+        String detail = colon > 0 ? s.substring(colon + 1).strip() : "";
+        int cut = detail.length();
+        for (String stop : List.of(":", " (", " for ")) {
+            int i = detail.indexOf(stop);
+            if (i >= 0 && i < cut) {
+                cut = i;
+            }
+        }
+        detail = detail.substring(0, cut).replaceAll("\\d+", "N").strip();
+        if (detail.length() > 72) {
+            detail = detail.substring(0, 72).strip() + "…";
+        }
+        if (code.length() > 48) {
+            code = code.substring(0, 48).strip() + "…";
+        }
+        return detail.isEmpty() ? code : code + ": " + detail;
+    }
+
     public Map<String, Instant> latestInventoryAll() {
         Map<String, Instant> out = new HashMap<>();
         for (Record r : q(dsl -> dsl.fetch("select device_id, max(collected_at) as at from device_inventory_run group by device_id"))) {
@@ -390,20 +453,26 @@ public class OverviewService {
      * software version (R81.20), minor = the jumbo hotfix take; Palo Alto major = the first two numbers of
      * PAN-OS (11.1), minor = the full version (11.1.10-h7). Unread values count under a null label (UNKNOWN).
      * Versions are opaque strings: grouped by equality, never parsed beyond the Palo Alto major prefix.
+     * Hardware model (amendment A-2026-09-23): Check Point = the appliance family from {@code show asset system},
+     * Palo Alto = the model {@code show system info} reports.
      */
     private Map<String, Object> versions(Fleet fleet) {
         String[] ids = fleet.active().stream().map(DeviceSummaryRecord::deviceId).toArray(String[]::new);
         Map<String, String> hotfix = new HashMap<>();
-        for (Record r : q(dsl -> dsl.fetch("select device_id, hotfix_level from device_platform_facts where device_id = any({0})",
+        Map<String, String> family = new HashMap<>();
+        for (Record r : q(dsl -> dsl.fetch("select device_id, hotfix_level, platform_family from device_platform_facts where device_id = any({0})",
                 (Object) ids))) {
             hotfix.put(r.get("device_id", String.class), r.get("hotfix_level", String.class));
+            family.put(r.get("device_id", String.class), r.get("platform_family", String.class));
         }
         Map<String, Object> out = new LinkedHashMap<>();
         for (String vendor : List.of("check_point", "palo_alto")) {
             Map<String, Long> major = new TreeMap<>();
             Map<String, Long> minor = new TreeMap<>();
+            Map<String, Long> model = new TreeMap<>();
             long unknownMajor = 0;
             long unknownMinor = 0;
+            long unknownModel = 0;
             for (DeviceSummaryRecord d : fleet.active()) {
                 if (!vendor.equals(d.vendorHint())) {
                     continue;
@@ -429,10 +498,18 @@ public class OverviewService {
                 } else {
                     minor.merge(min, 1L, Long::sum);
                 }
+                String mdl = "check_point".equals(vendor) ? family.get(d.deviceId()) : d.observedModel().orElse(null);
+                mdl = mdl == null || mdl.isBlank() ? null : mdl.strip();
+                if (mdl == null) {
+                    unknownModel++;
+                } else {
+                    model.merge(mdl, 1L, Long::sum);
+                }
             }
             Map<String, Object> v = new LinkedHashMap<>();
             v.put("major", slices(major, unknownMajor));
             v.put("minor", slices(minor, unknownMinor));
+            v.put("model", slices(model, unknownModel));
             out.put(vendor, v);
         }
         return out;

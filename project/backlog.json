@@ -855,6 +855,33 @@
       "priority": "P1",
       "target": "docs/operations/OPEN_PR_TRIAGE_2026_09_23.md",
       "note": ""
+    },
+    {
+      "id": "cp_platform_facts_empty_on_nine_gateways",
+      "category": "inventory",
+      "title": "Check Point platform facts: 9 of 62 gateways have a facts row but no jumbo take (7 of them no appliance family or serial either) -- find why the read parses nothing on these (Clish-landing shell, VSX context, or no jumbo installed) and say UNKNOWN with a reason",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "cp_backup_free_space_parse_refusal",
+      "category": "backup",
+      "title": "Check Point backup refused on 7 gateways (2026-09-22): neither 'show diskspace' nor 'df -P /var/log' parsed to a free-space value, so the fail-closed precheck refused -- measure the real output shape on one of them and extend the parser; likely part of the 19 targets without an archive",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "pan_keygen_no_usable_key_under_load",
+      "category": "inventory",
+      "title": "Palo Alto keygen returned no usable key after ~8 s on 3 devices in the same minute (2026-09-22 bulk collect) -- check whether it follows concurrency; retry once with backoff before failing the inventory job",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }
