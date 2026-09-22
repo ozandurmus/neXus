@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T09:19:34Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T09:24:34Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -62,6 +62,12 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T09:19:34Z
 - P1/planned ui2_reproducible_in_cluster_image_build — UI2 reproducible in-cluster image build and release assura (target: UI2_0_B1_01C in-cluster OCI build; 13D B)
 - P1/planned ui_overview_operations_show_stale_or_empty_state — UNVERIFIED claim: Overview and Operations render empty sta (target: verify against a running deployment befo)
 - P1/planned vault_has_no_enforced_quota_on_a_shared_host — The artefact/recovery store has no enforced quota: local-p (target: deploy/ui2/35-artefact-store-pvc.yaml; s)
+- P1/planned vendor_cisco_asa_backup — Cisco ASA: running/startup config + native backup tar over (target: )
+- P1/planned vendor_fortinet_fortigate_backup — Fortinet FortiGate: full configuration backup over SSH inc (target: )
+- P1/planned vendor_infoblox_grid_backup — Infoblox Grid Manager: grid backup via WAPI fileop getgrid (target: )
+- P1/planned vendor_panorama_backup — Palo Alto Panorama: device-bundle export + running config (target: )
+- P1/planned vendor_pulse_secure_backup — Pulse Secure (Ivanti) Secure Access: system/users/IVS conf (target: )
+- P1/planned vendor_radware_defensepro_backup — Radware DefensePro: configuration backup (HTTPS) (target: )
 - P2/in_progress cp_spark_exec_channel_rejected
 - P2/in_progress cp_vsx_interfaces_identical_to_physical
 - P2/in_progress ui2_m3_design_transfer_pass

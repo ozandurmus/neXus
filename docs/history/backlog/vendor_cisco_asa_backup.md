@@ -1,0 +1,5 @@
+# Cisco ASA: running/startup config + native backup tar over SSH/SCP (priv 15)
+
+status: planned · target: 
+
+Product Owner, 2026-09-22: add as P1 with the Backbox trail as the measured reference. Backbox reference (trail 34409263, 2026-09-22): 'Cisco Systems Inc -> ASA -> 9.4 and above -> SSH / SCP (Requires Privilege 15 User)' -- SSH, enable (second secret), terminal pager 0, conf t / changeto system, 'more system:running-config', 'show startup-config', 'show version', 'show running-config | include ^context' to enumerate contexts, then 'backup /noconfirm location disk0:<name>.backup.tar.gz' fetched over SCP. The enable secret is a second credential material (credential store), and 'backup' writes to device flash: a write-class step needing its own gate entry, like Check Point's add backup local. Every new device command goes through the network-device command gate before implementation (AGENTS.md); credentials only via the credential store; outputs stored as artefacts through the existing backup plane.

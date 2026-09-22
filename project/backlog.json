@@ -729,6 +729,60 @@
       "priority": "P1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "vendor_radware_defensepro_backup",
+      "category": "collection",
+      "title": "Radware DefensePro: configuration backup (HTTPS)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "vendor_pulse_secure_backup",
+      "category": "collection",
+      "title": "Pulse Secure (Ivanti) Secure Access: system/users/IVS config export (HTTPS)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "vendor_panorama_backup",
+      "category": "collection",
+      "title": "Palo Alto Panorama: device-bundle export + running config (HTTPS + SSH)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "vendor_infoblox_grid_backup",
+      "category": "collection",
+      "title": "Infoblox Grid Manager: grid backup via WAPI fileop getgriddata (HTTPS)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "vendor_fortinet_fortigate_backup",
+      "category": "collection",
+      "title": "Fortinet FortiGate: full configuration backup over SSH incl. VDOMs",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "vendor_cisco_asa_backup",
+      "category": "collection",
+      "title": "Cisco ASA: running/startup config + native backup tar over SSH/SCP (priv 15)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }

@@ -129,7 +129,13 @@
     "cp_cluster_vip_never_observed_in_fleet": "java_debt",
     "cp_vsx_interfaces_identical_to_physical": "java_debt",
     "cp_spark_exec_channel_rejected": "java_debt",
-    "task_executor_automation_module": "java_feature"
+    "task_executor_automation_module": "java_feature",
+    "vendor_radware_defensepro_backup": "java_feature",
+    "vendor_pulse_secure_backup": "java_feature",
+    "vendor_panorama_backup": "java_feature",
+    "vendor_infoblox_grid_backup": "java_feature",
+    "vendor_fortinet_fortigate_backup": "java_feature",
+    "vendor_cisco_asa_backup": "java_feature"
   },
   "converted_lessons": [
     {
