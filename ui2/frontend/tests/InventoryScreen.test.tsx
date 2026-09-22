@@ -271,7 +271,7 @@ describe("InventoryScreen device list", () => {
     expect(screen.getAllByText("GarantiBetaAA").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("merges a Check Point cluster's Physical and VSX contexts by default like Palo Alto, filters on VS selection, and resets on re-selecting the cluster", async () => {
+  it("shows a Check Point cluster's own physical context by default, filters to a VS on sidebar selection, and resets on re-selecting the cluster", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((input: RequestInfo | URL) => {
@@ -343,21 +343,22 @@ describe("InventoryScreen device list", () => {
     await waitFor(() => expect(screen.getByText("FW-CKP-VSX-CLS")).toBeInTheDocument());
     fireEvent.click(screen.getAllByText("FW-CKP-VSX-CLS")[0]);
 
-    // Default (no VS selected) merges every collected context, physical included, into one table --
-    // matching Palo Alto's own reference view, per the Product Owner's explicit direction.
+    // Default (no VS selected) is the cluster's own physical context only -- a virtual system is
+    // its own sidebar node with its own view (Product Owner, 2026-09-22, reversing the earlier
+    // merged-by-default direction for Check Point; Palo Alto keeps its merged vsys view).
     await waitFor(() => expect(screen.getByText("Mgmt")).toBeInTheDocument());
-    expect(screen.getByText("eth0.100")).toBeInTheDocument();
+    expect(screen.queryByText("eth0.100")).toBeNull();
 
     // Selecting the VS from the sidebar filters to that VS's own interface only.
     fireEvent.click(screen.getByText("GarantiBetaAA"));
     await waitFor(() => expect(screen.queryByText("Mgmt")).toBeNull());
     expect(screen.getByText("eth0.100")).toBeInTheDocument();
 
-    // Re-clicking the cluster's own row resets back to the merged view -- this must not stay
+    // Re-clicking the cluster's own row resets back to the physical view -- this must not stay
     // stuck showing the previously selected VS (the bug the Product Owner reported live).
     fireEvent.click(screen.getAllByText("FW-CKP-VSX-CLS")[0]);
     await waitFor(() => expect(screen.getByText("Mgmt")).toBeInTheDocument());
-    expect(screen.getByText("eth0.100")).toBeInTheDocument();
+    expect(screen.queryByText("eth0.100")).toBeNull();
   });
 
   it("keeps a standalone Check Point VSX device's Physical and VS contexts separate and sidebar-driven, never merged or double-selectable", async () => {

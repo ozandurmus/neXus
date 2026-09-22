@@ -259,6 +259,52 @@ export function toClusterContexts(contexts: readonly InventoryContext[], deviceI
   }));
 }
 
+function ipv4InCidr(address: string, cidr: string): boolean {
+  const [net, bitsStr] = cidr.split("/");
+  const bits = Number(bitsStr);
+  const toNum = (ip: string) => {
+    const parts = ip.split(".").map(Number);
+    if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return null;
+    return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  };
+  const a = toNum(address);
+  const n = toNum(net);
+  if (a === null || n === null || Number.isNaN(bits) || bits < 0 || bits > 32) return false;
+  const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+  return ((a & mask) >>> 0) === ((n & mask) >>> 0);
+}
+
+/** A virtual system's "cphaprob -a if" addresses carry no prefix (Product Owner, 2026-09-22: the
+ * Network column stayed empty for every VS). The same context's own routes do: a route on that
+ * interface whose destination contains the address gives the prefix -- evidence from the same
+ * collection pass, never a default. Left bare when no such route exists. */
+function withRoutePrefixes(context: ClusterContext): ClusterContext {
+  const prefixFor = (ifaceName: string, address: string): string | null => {
+    if (address.includes("/")) return null;
+    for (const r of context.routes) {
+      if (!r.destination.includes("/")) continue;
+      if (r.interface && r.interface.toLowerCase() !== ifaceName.toLowerCase()) continue;
+      if (r.next_hop && r.next_hop !== "0.0.0.0" && r.next_hop !== "—") continue;
+      if (ipv4InCidr(address, r.destination)) return r.destination.split("/")[1];
+    }
+    return null;
+  };
+  const fix = (ifaceName: string, a: InventoryAddress): InventoryAddress => {
+    const p = prefixFor(ifaceName, a.address);
+    return p ? { ...a, address: `${a.address}/${p}` } : a;
+  };
+  return {
+    ...context,
+    interfaces: context.interfaces.map((iface) => ({
+      ...iface,
+      addresses: iface.addresses.map((a) => fix(iface.name, a)),
+      member_addresses: iface.member_addresses
+        ? Object.fromEntries(Object.entries(iface.member_addresses).map(([id, list]) => [id, list.map((a) => fix(iface.name, a))]))
+        : iface.member_addresses,
+    })),
+  };
+}
+
 function vlanLabel(iface: { readonly name: string; readonly kind: string; readonly vlan_id?: number | null }): string {
   if (iface.vlan_id !== undefined && iface.vlan_id !== null) return String(iface.vlan_id);
   if (iface.kind === "vlan" && iface.name.includes(".")) return iface.name.slice(iface.name.lastIndexOf(".") + 1);
@@ -284,7 +330,15 @@ function ClusterInterfacesTable({
   // simply "Addresses", and a cluster-virtual address can only ever appear on a real cluster.
   const singleMember = members.length <= 1;
   const anyVip = interfaces.some((iface) => iface.addresses.some((a) => a.role === "cluster_virtual"));
-  const showVipColumn = !sharedAddressOnly && !singleMember && anyVip;
+  // Design language §3 / D-UI1: when every member reports the same addresses on every row, render
+  // one view -- one Address column, no per-member repetition (Product Owner, 2026-09-22: a VSX
+  // virtual system's two members always agree, two identical columns said nothing).
+  const membersAgree = !singleMember && interfaces.length > 0 && interfaces.every((iface) => {
+    const lists = members.map((m) => (iface.member_addresses?.[m.device_id] ?? []).map((a) => a.address).sort().join(","));
+    return lists.every((l) => l === lists[0]) && iface.differences.length === 0;
+  });
+  const oneAddressColumn = sharedAddressOnly || singleMember || membersAgree;
+  const showVipColumn = !oneAddressColumn && anyVip;
 
   // The loopback interface is collected evidence but never operator-relevant on this screen,
   // for either vendor -- present on every device, never carrying a difference worth surfacing.
@@ -354,7 +408,7 @@ function ClusterInterfacesTable({
             <TableCell sx={{ fontWeight: 600 }}>Interface</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>Kind</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>VLAN</TableCell>
-            {sharedAddressOnly || singleMember ? (
+            {oneAddressColumn ? (
               <TableCell sx={{ fontWeight: 600 }}>Address</TableCell>
             ) : (
               <>
@@ -409,11 +463,15 @@ function ClusterInterfacesTable({
                 <TableCell sx={{ fontWeight: 600, fontFamily: "monospace" }}>{iface.name}</TableCell>
                 <TableCell>{iface.kind}</TableCell>
                 <TableCell>{vlanLabel(iface)}</TableCell>
-                {sharedAddressOnly || singleMember ? (
+                {oneAddressColumn ? (
                   <TableCell>
                     {(() => {
-                      const all = Object.values(iface.member_addresses ?? {}).flat();
-                      const shown = sharedAddressOnly ? (cidrAddress ? [{ address: cidrAddress }] : []) : all;
+                      const firstMember = members[0]?.device_id;
+                      const agreed = firstMember ? (iface.member_addresses?.[firstMember] ?? []) : [];
+                      const all = agreed.length > 0 ? agreed : Object.values(iface.member_addresses ?? {}).flat();
+                      const shown = sharedAddressOnly && !singleMember && !membersAgree
+                        ? (cidrAddress ? [{ address: cidrAddress }] : [])
+                        : all;
                       return shown.length > 0 || vips.length > 0 ? (
                         <Stack spacing={0.25}>
                           {shown.map((a) => (
@@ -1112,18 +1170,25 @@ export function ClusterInterfacesPanel({
   // cluster picks one -- no second tab strip is rendered here to pick the same thing again.
   // sharedAddressOnly still separates Check Point's own per-member address columns (plus Cluster
   // VIP) from Palo Alto's single shared Address column; only the merge/filter structure is shared.
+  // Product Owner, 2026-09-22: a Check Point cluster's own view carries only the physical
+  // context -- its virtual systems are their own nodes in the sidebar, each with its own view.
+  // Palo Alto keeps the merged vsys view (a vsys is not a separate node there).
   if (!activeContext) {
+    if (!isPaloAlto) {
+      const physical = resolveContext("physical");
+      return <ClusterInterfacesTable interfaces={physical ? withRoutePrefixes(physical).interfaces : []} members={members} />;
+    }
     const merged = tabs.flatMap((tab) => {
       const found = resolveContext(tab.context);
       if (!found) return [];
-      return found.interfaces.map((iface) => ({ ...iface, vsysLabel: tab.label }));
+      return withRoutePrefixes(found).interfaces.map((iface) => ({ ...iface, vsysLabel: tab.label }));
     });
     return <ClusterInterfacesTable interfaces={merged} members={members} sharedAddressOnly={isPaloAlto} />;
   }
 
   const found = resolveContext(activeContext);
   return found
-    ? <ClusterInterfacesTable interfaces={found.interfaces} members={members} sharedAddressOnly={isPaloAlto} />
+    ? <ClusterInterfacesTable interfaces={withRoutePrefixes(found).interfaces} members={members} sharedAddressOnly={isPaloAlto} />
     : renderUncollected(activeContext);
 }
 
@@ -1189,6 +1254,10 @@ export function ClusterRoutesPanel({
   // Same merge/filter structure as ClusterInterfacesPanel, for both vendors: merged by default,
   // filtered to one context when the sidebar's own VS sub-navigation picks one.
   if (!activeContext) {
+    if (!isPaloAlto) {
+      const physical = resolveContext("physical");
+      return <ClusterRoutesTable routes={physical?.routes ?? []} members={members} />;
+    }
     const merged = tabs.flatMap((tab) => {
       const found = resolveContext(tab.context);
       if (!found) return [];
