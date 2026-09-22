@@ -783,6 +783,24 @@
       "priority": "P1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "vendor_cp_provider1_mds_backup",
+      "category": "collection",
+      "title": "Check Point Provider-1 (MDS): mds_backup over SSH",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "vendor_bluecoat_proxysg_backup",
+      "category": "collection",
+      "title": "Blue Coat / Symantec ProxySG: configuration backup",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }

@@ -135,7 +135,9 @@
     "vendor_panorama_backup": "java_feature",
     "vendor_infoblox_grid_backup": "java_feature",
     "vendor_fortinet_fortigate_backup": "java_feature",
-    "vendor_cisco_asa_backup": "java_feature"
+    "vendor_cisco_asa_backup": "java_feature",
+    "vendor_cp_provider1_mds_backup": "java_feature",
+    "vendor_bluecoat_proxysg_backup": "java_feature"
   },
   "converted_lessons": [
     {
