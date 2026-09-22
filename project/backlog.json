@@ -801,6 +801,15 @@
       "priority": "P1",
       "target": "PO directive 2026-09-22 (Backbox standard); download/contents/compare shipped 2026-09-22, history/schedule/baseline remain",
       "note": ""
+    },
+    {
+      "id": "cp_backup_stale_device_archives_cleanup",
+      "category": "backup",
+      "title": "CP backup: remove device-side archives left by interrupted runs (show backups / delete backup <old>, gated), as Backbox does",
+      "status": "planned",
+      "priority": "P1",
+      "target": "measured 2026-09-22: three requeued runs each ran 'add backup local' without reaching 'delete backup'",
+      "note": ""
     }
   ]
 }

@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T12:18:22Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T12:18:58Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -28,6 +28,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T12:18:22Z
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
 - P1/planned cli_parity_for_every_ui_action — Every UI action has a CLI counterpart (the product must no (target: PO directive 2026-09-22; ui2/cli CliEntr)
 - P1/planned cluster_member_model_needs_second_query — Cluster members carry no hardware field in the gateway enu (target: Check Point management plane enumeration)
+- P1/planned cp_backup_stale_device_archives_cleanup — CP backup: remove device-side archives left by interrupted (target: measured 2026-09-22: three requeued runs)
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
 - P1/planned discovery_connection_state_never_populated — Check Point discovery never records the management plane's (target: MgmtCliEnumerationAdapter candidate cons)
