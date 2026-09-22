@@ -22,8 +22,10 @@ import {
   type ConfigurationOverride,
   type DeviceConfiguration,
   type DeviceDetail,
+  ConfigurationDeviationSummary,
 } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
+import { InventoryEntityHeader } from "./InventoryPanels";
 
 const POLL_INTERVAL_MS = 1750;
 
@@ -50,283 +52,6 @@ function changeStateLabel(state: string | null): string {
 /** WORKER.md "Configuration screen": "hash prefix" -- the first 12 hex characters, never the whole hash inline. */
 function hashPrefix(hash: string | null): string {
   return hash ? hash.slice(0, 12) : "—";
-}
-
-interface SettingAlignmentRow {
-  readonly setting: string;
-  readonly expected: string;
-  readonly effective01: string;
-  readonly effective02: string;
-  readonly state: "Aligned" | "Member-specific" | "Local override" | "Difference observed" | "Effective drift";
-  readonly subtext?: string;
-}
-
-const DEFAULT_ALIGNMENT_SETTINGS: readonly SettingAlignmentRow[] = [
-  {
-    setting: "Cluster VIP · eth0",
-    expected: "192.0.2.1/24",
-    effective01: "192.0.2.1/24",
-    effective02: "192.0.2.1/24",
-    state: "Aligned",
-  },
-  {
-    setting: "Hostname",
-    expected: "fw-ist-core-{member}",
-    effective01: "fw-ist-core-01",
-    effective02: "fw-ist-core-02",
-    state: "Member-specific",
-  },
-  {
-    setting: "Member IP · eth0",
-    expected: "192.0.2.{2,3}/24",
-    effective01: "192.0.2.2/24",
-    effective02: "192.0.2.3/24",
-    state: "Member-specific",
-  },
-  {
-    setting: "NTP · server 1",
-    expected: "192.0.2.12",
-    effective01: "192.0.2.12",
-    effective02: "192.0.2.12",
-    state: "Aligned",
-  },
-  {
-    setting: "NTP · server 2",
-    expected: "192.0.2.13",
-    effective01: "192.0.2.13",
-    effective02: "192.0.2.99",
-    state: "Effective drift",
-    subtext: "Unexplained since 2026-09-06 · no local-override record",
-  },
-  {
-    setting: "DNS · primary",
-    expected: "198.51.100.53",
-    effective01: "198.51.100.53",
-    effective02: "198.51.100.53",
-    state: "Aligned",
-  },
-  {
-    setting: "SNMP · trap receiver",
-    expected: "198.51.100.10",
-    effective01: "198.51.100.11",
-    effective02: "198.51.100.11",
-    state: "Local override",
-    subtext: "Recorded CHG-4471 · monitoring migration",
-  },
-  {
-    setting: "Syslog · target",
-    expected: "203.0.113.20:514",
-    effective01: "203.0.113.20:514",
-    effective02: "203.0.113.20:514",
-    state: "Aligned",
-  },
-  {
-    setting: "Login banner",
-    expected: "— not in intent",
-    effective01: "Authorized use only…",
-    effective02: "Authorized use only…",
-    state: "Difference observed",
-    subtext: "Unclassified · not yet mapped to intent",
-  },
-  {
-    setting: "SSH · ciphers",
-    expected: "aes256-gcm, aes128-gcm",
-    effective01: "aes256-gcm, aes128-gcm",
-    effective02: "aes256-gcm, aes128-gcm",
-    state: "Aligned",
-  },
-];
-
-function alignmentTone(state: SettingAlignmentRow["state"]): "ok" | "mem" | "warn" | "attn" | "bad" {
-  switch (state) {
-    case "Aligned":
-      return "ok";
-    case "Member-specific":
-      return "mem";
-    case "Local override":
-      return "warn";
-    case "Difference observed":
-      return "attn";
-    case "Effective drift":
-      return "bad";
-  }
-}
-
-function AlignmentTable({
-  settings,
-  onOpenEvidence,
-}: {
-  readonly settings: readonly SettingAlignmentRow[];
-  readonly onOpenEvidence?: () => void;
-}) {
-  return (
-    <Box sx={{ bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px", overflow: "hidden" }}>
-      <Table size="small">
-        <TableHead sx={{ bgcolor: m3.scLow }}>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>Setting</TableCell>
-            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>Expected · CMA intent</TableCell>
-            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>Effective · member 01</TableCell>
-            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>Effective · member 02</TableCell>
-            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>State</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {settings.map((row, idx) => (
-            <TableRow key={`${row.setting}-${idx}`} sx={{ "&:hover": { bgcolor: m3.scLow } }}>
-              <TableCell sx={{ fontWeight: 600, fontSize: 13, color: m3.onSurface, py: 1 }}>{row.setting}</TableCell>
-              <TableCell sx={{ fontFamily: "monospace", fontSize: 12, color: m3.onSurfaceVar, py: 1 }}>{row.expected}</TableCell>
-              <TableCell sx={{ fontFamily: "monospace", fontSize: 12, color: m3.onSurfaceVar, py: 1 }}>{row.effective01}</TableCell>
-              <TableCell sx={{ fontFamily: "monospace", fontSize: 12, color: m3.onSurfaceVar, py: 1 }}>{row.effective02}</TableCell>
-              <TableCell sx={{ py: 1 }}>
-                <StatusChip tone={alignmentTone(row.state)} label={row.state} dense />
-                {row.subtext && (
-                  <Typography variant="caption" sx={{ display: "block", mt: 0.5, fontSize: 11, color: "text.secondary", fontStyle: "italic" }}>
-                    {row.subtext}
-                  </Typography>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 1.5, bgcolor: m3.scLow, borderTop: `1px solid ${m3.outlineVar}` }}>
-        <Typography variant="caption" color="text.secondary">
-          Showing 10 of 26 settings. Red is reserved for unexplained drift and failure; expected member differences carry no warning.
-        </Typography>
-        {onOpenEvidence && (
-          <M3Button emphasis="text" onClick={onOpenEvidence}>
-            Open evidence
-          </M3Button>
-        )}
-      </Box>
-    </Box>
-  );
-}
-
-export interface PanSettingAlignmentRow {
-  readonly setting: string;
-  readonly expected: string;
-  readonly effective: string;
-  readonly state: "Aligned" | "Local override" | "Difference observed" | "Effective drift";
-  readonly subtext?: string;
-}
-
-export const DEFAULT_PAN_ALIGNMENT_SETTINGS: readonly PanSettingAlignmentRow[] = [
-  {
-    setting: "Panorama Server · primary",
-    expected: "198.51.100.71",
-    effective: "198.51.100.71",
-    state: "Aligned",
-    subtext: "Connected & managed via Panorama common template",
-  },
-  {
-    setting: "DNS · primary",
-    expected: "198.51.100.53",
-    effective: "198.51.100.53",
-    state: "Aligned",
-  },
-  {
-    setting: "DNS · secondary",
-    expected: "198.51.100.54",
-    effective: "198.51.100.54",
-    state: "Aligned",
-  },
-  {
-    setting: "NTP · server 1",
-    expected: "192.0.2.12",
-    effective: "192.0.2.12",
-    state: "Aligned",
-  },
-  {
-    setting: "NTP · server 2",
-    expected: "192.0.2.13",
-    effective: "192.0.2.99",
-    state: "Effective drift",
-    subtext: "Unexplained difference · device running 192.0.2.99 vs template 192.0.2.13",
-  },
-  {
-    setting: "Syslog · target",
-    expected: "203.0.113.20:514",
-    effective: "203.0.113.20:514",
-    state: "Aligned",
-  },
-  {
-    setting: "Timezone",
-    expected: "Europe/Istanbul",
-    effective: "Europe/Istanbul",
-    state: "Aligned",
-  },
-  {
-    setting: "Login banner",
-    expected: "— not in template intent",
-    effective: "Authorized use only…",
-    state: "Difference observed",
-    subtext: "Device-local banner · unmanaged by Panorama template",
-  },
-  {
-    setting: "HA Peer Link · MTU",
-    expected: "1500",
-    effective: "9000",
-    state: "Local override",
-    subtext: "Local override · Jumbo frame enabled for HA transport",
-  },
-  {
-    setting: "Management · permitted IPs",
-    expected: "192.0.2.0/24",
-    effective: "192.0.2.0/24",
-    state: "Aligned",
-  },
-];
-
-function PanAlignmentTable({
-  settings,
-  onOpenEvidence,
-}: {
-  readonly settings: readonly PanSettingAlignmentRow[];
-  readonly onOpenEvidence?: () => void;
-}) {
-  return (
-    <Box sx={{ bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px", overflow: "hidden" }}>
-      <Table size="small">
-        <TableHead sx={{ bgcolor: m3.scLow }}>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>Setting</TableCell>
-            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>Expected · Panorama template</TableCell>
-            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>Effective · live firewall</TableCell>
-            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: m3.onSurfaceVar, py: 1.25 }}>State</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {settings.map((row, idx) => (
-            <TableRow key={`${row.setting}-${idx}`} sx={{ "&:hover": { bgcolor: m3.scLow } }}>
-              <TableCell sx={{ fontWeight: 600, fontSize: 13, color: m3.onSurface, py: 1 }}>{row.setting}</TableCell>
-              <TableCell sx={{ fontFamily: "monospace", fontSize: 12, color: m3.onSurfaceVar, py: 1 }}>{row.expected}</TableCell>
-              <TableCell sx={{ fontFamily: "monospace", fontSize: 12, color: m3.onSurfaceVar, py: 1 }}>{row.effective}</TableCell>
-              <TableCell sx={{ py: 1 }}>
-                <StatusChip tone={alignmentTone(row.state)} label={row.state} dense />
-                {row.subtext && (
-                  <Typography variant="caption" sx={{ display: "block", mt: 0.5, fontSize: 11, color: "text.secondary", fontStyle: "italic" }}>
-                    {row.subtext}
-                  </Typography>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 1.5, bgcolor: m3.scLow, borderTop: `1px solid ${m3.outlineVar}` }}>
-        <Typography variant="caption" color="text.secondary">
-          Comparing live PAN-OS effective running configuration with Panorama common template intent.
-        </Typography>
-        {onOpenEvidence && (
-          <M3Button emphasis="text" onClick={onOpenEvidence}>
-            Open evidence
-          </M3Button>
-        )}
-      </Box>
-    </Box>
-  );
 }
 
 function IndexTable({
@@ -519,7 +244,16 @@ export function ConfigurationCollectNowButton({
  * The detail panels for one selected device's configuration:
  * Renders the full 7-tab design specification matching PDF Page 3 and Page 7.
  */
-export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: string }) {
+export function DeviceConfigurationPanels({
+  deviceId,
+  hostname,
+  vendorHint,
+}: {
+  readonly deviceId: string;
+  /** The same name the list shows, so list and detail never name one device two ways. */
+  readonly hostname?: string | null;
+  readonly vendorHint?: string | null;
+}) {
   const configurationFetch = useFetchOnMount<DeviceConfiguration>(
     () => getDeviceConfiguration(deviceId),
     describeApiError,
@@ -533,7 +267,6 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
   const device = deviceFetch.data;
   const [sanitizedText, setSanitizedText] = useState<string | null>(null);
   const [textError, setTextError] = useState<string | null>(null);
-  const [activeTabIndex, setActiveTabIndex] = useState<number>(0);
 
   useEffect(() => {
     setSanitizedText(null);
@@ -558,132 +291,64 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
 
   const index = configuration?.index ?? [];
   const overrides = configuration?.overrides ?? [];
-  const isChanged = configuration?.change_state === "changed";
-  const deviceName = device?.facts?.hostname ?? configuration?.device_id ?? deviceId;
-  const isPaloAlto = configuration?.vendor === "palo_alto" || device?.facts?.model?.toLowerCase().includes("pa-") || device?.vendor_hint === "palo_alto";
-  const vendorLabel = isPaloAlto ? "Palo Alto Networks" : "Check Point ClusterXL";
-  const collectedDate = configuration?.collected_at ? configuration.collected_at.slice(0, 10) : "2026-09-05";
-  const collectedTime = configuration?.collected_at ? configuration.collected_at.slice(11, 16) : "06:41";
+  const deviation = configuration?.change_deviation_summary ?? null;
+  const vendor = configuration?.vendor ?? device?.vendor_hint ?? vendorHint ?? "check_point";
+  const isPaloAlto = vendor === "palo_alto";
+  const displayName = hostname ?? device?.facts?.hostname ?? deviceId;
+  const collected = configuration?.collected_at ? new Date(configuration.collected_at) : null;
+  const collectedLabel = collected ? collected.toISOString().slice(0, 16).replace("T", " ") + " UTC" : null;
+  const withheld = configuration?.withheld_line_count ?? 0;
 
   return (
     <Stack spacing={2}>
-      {/* Top Detail Header matching PDF Page 3 */}
-      <Box sx={{ p: 2.5, bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "16px" }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-            <Typography variant="caption" sx={{ color: "text.secondary", fontSize: 12, fontWeight: 500 }}>
-              Configuration · {vendorLabel}
-            </Typography>
-            <Typography variant="h2" sx={{ fontSize: 24, fontWeight: 700, color: m3.onSurface, letterSpacing: "-0.5px" }}>
-              {deviceName}
-            </Typography>
-            <Typography variant="body2" sx={{ color: "text.secondary", fontSize: 12 }}>
-              {isPaloAlto
-                ? `Panorama Common Template (Stack: STACK-IST-CORP) · effective evidence ${collectedTime}`
-                : `Policy IST-Core-Standard installed ${collectedDate} · intent snapshot cma-ist 06:40 · effective evidence ${collectedTime}`}
-            </Typography>
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
-            {isChanged ? (
-              <Box
-                sx={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 0.75,
-                  px: 1.5,
-                  py: 0.75,
-                  borderRadius: "16px",
-                  bgcolor: m3.errorContainer,
-                  color: m3.onErrorContainer,
-                  fontSize: 13,
-                  fontWeight: 600,
-                }}
-              >
-                <span>⚠</span> 1 effective drift · needs review
-              </Box>
-            ) : (
-              <Box
-                sx={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 0.75,
-                  px: 1.5,
-                  py: 0.75,
-                  borderRadius: "16px",
-                  bgcolor: m3.successContainer,
-                  color: m3.onSuccessContainer,
-                  fontSize: 13,
-                  fontWeight: 600,
-                }}
-              >
-                <span>✓</span> Aligned · 0 drift
-              </Box>
+      <InventoryEntityHeader
+        vendorHint={vendor}
+        model={device?.facts?.model ?? null}
+        title={displayName}
+        reference={deviceId}
+        referenceTitle={`Device ID: ${deviceId}`}
+        chips={
+          <>
+            <StatusChip tone={changeStateTone(configuration?.change_state ?? null)} label={changeStateLabel(configuration?.change_state ?? null)} dense />
+            <StatusChip tone="neutral" label={isPaloAlto ? "Palo Alto" : "Check Point"} dense />
+            {device?.facts?.software_version && (
+              <StatusChip tone="neutral" label={`${device.facts.software_version} · ${isPaloAlto ? "PAN-OS" : "Gaia"}`} dense />
             )}
-            <M3Button emphasis="outlined" icon="download">Export evidence</M3Button>
-            <ConfigurationCollectNowButton deviceId={deviceId} onCollected={configurationFetch.refresh} />
-          </Box>
-        </Box>
-      </Box>
+            {device?.facts?.model && <StatusChip tone="neutral" label={device.facts.model} dense />}
+            {device?.facts?.ha_role && <StatusChip tone="neutral" label={`HA: ${device.facts.ha_role}`} dense />}
+          </>
+        }
+        action={<ConfigurationCollectNowButton deviceId={deviceId} onCollected={configurationFetch.refresh} />}
+      >
+        {/* Provenance and honest withholding (design language §7): where the value came from, and what was withheld. */}
+        <Stack spacing={0.5}>
+          <Typography variant="body2" color="text.secondary">
+            {collectedLabel
+              ? `Collected ${collectedLabel} · Primary source: ${configuration?.read_kind ?? "unknown"} · Current actual`
+              : "Not collected yet -- nothing below is device evidence until the first configuration run lands."}
+          </Typography>
+          {collected && (
+            <Typography variant="body2" color="text.secondary">
+              {withheld > 0
+                ? `${withheld} secret-bearing line(s) withheld from the sanitized view.`
+                : "No secret-bearing lines were withheld."}
+              {configuration?.canonical_hash ? ` · Canonical hash ${hashPrefix(configuration.canonical_hash)}` : ""}
+            </Typography>
+          )}
+        </Stack>
+      </InventoryEntityHeader>
 
-      {/* Tabs matching PDF Page 3 */}
       <M3Tabs
         ariaLabel="Configuration detail"
-        value={activeTabIndex}
-        onChange={setActiveTabIndex}
         tabs={[
           {
-            label: "Alignment",
-            panel: (
-              <Stack spacing={2}>
-                {/* Summary State Pills Bar matching PDF Page 3 */}
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                  <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-                    <StatusChip tone="ok" label={isPaloAlto ? "Aligned 24" : "Aligned 21"} />
-                    {!isPaloAlto && <StatusChip tone="mem" label="Member-specific 2" />}
-                    <StatusChip tone="warn" label="Local override 1" />
-                    <StatusChip tone="attn" label="Difference observed 1" />
-                    <StatusChip tone="bad" label="Effective drift 1" />
-                  </Stack>
-                  <M3Button emphasis="text">≡ All classifications</M3Button>
-                </Box>
-
-                {/* Main Settings Alignment Table matching PDF Page 3 */}
-                {isPaloAlto ? (
-                  <PanAlignmentTable
-                    settings={DEFAULT_PAN_ALIGNMENT_SETTINGS}
-                    onOpenEvidence={() => setActiveTabIndex(1)}
-                  />
-                ) : (
-                  <AlignmentTable
-                    settings={DEFAULT_ALIGNMENT_SETTINGS}
-                    onOpenEvidence={() => setActiveTabIndex(2)}
-                  />
-                )}
-
-                {/* Section Index Summary Breakdown */}
-                <Box sx={{ mt: 1 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                    {isPaloAlto
-                      ? `${index.length} XML configuration categories parsed from PAN-OS effective running tree.`
-                      : `${configuration?.withheld_line_count ?? 0} secret-bearing line(s) withheld from the sanitized view.`}
-                  </Typography>
-                  <IndexTable
-                    index={index}
-                    emptyTitle="No configuration index"
-                    emptyBody="This device has not been collected yet. Use Collect now to read its configuration."
-                  />
-                </Box>
-              </Stack>
-            ),
-          },
-          {
-            label: "Index",
+            label: "Sections",
             panel: (
               <Stack spacing={1}>
                 <Typography variant="body2" color="text.secondary">
-                  {isPaloAlto
-                    ? `${index.length} XML categories parsed from PAN-OS effective running tree.`
-                    : `${configuration?.withheld_line_count ?? 0} secret-bearing line(s) withheld from the sanitized view.`}
+                  {index.length === 0
+                    ? "No sections indexed."
+                    : `${index.length} section${index.length === 1 ? "" : "s"} indexed from the ${isPaloAlto ? "PAN-OS effective-running tree" : "Check Point show configuration read"}.`}
                 </Typography>
                 <IndexTable
                   index={index}
@@ -694,24 +359,24 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
             ),
           },
           {
+            label: "Changes",
+            panel: <DeviationPanel changeState={configuration?.change_state ?? null} deviation={deviation} />,
+          },
+          {
+            label: "Overrides",
+            panel: <OverridesNote overrides={overrides} />,
+          },
+          {
             label: isPaloAlto ? "XML Configuration" : "Sanitized text",
             panel: isPaloAlto ? (
-              <Box sx={{ p: 2.5, bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px" }}>
-                <Typography variant="h3" sx={{ fontSize: 16, fontWeight: 600, mb: 1 }}>
-                  PAN-OS XML Configuration Artefact
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  PAN-OS effective running, active, and merged configurations are streamed directly into the encrypted AES-256-GCM artefact store (Canonical SHA-256: {hashPrefix(configuration?.canonical_hash ?? null)}). XML AST categories and local override markers are indexed under the Index and Overrides tabs.
-                </Typography>
-                <Stack spacing={1}>
-                  <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "8px" }}>
-                    <Typography variant="caption" color="text.secondary">Artefact Storage Status</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      ✓ Encrypted with cluster envelope key · Primary read: effective-running
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Box>
+              <EmptyPanel
+                title="PAN-OS XML Configuration Artefact"
+                body={
+                  configuration?.canonical_hash
+                    ? `The effective-running configuration is held as an encrypted artefact (canonical hash ${hashPrefix(configuration.canonical_hash)}). Its categories are indexed under Sections; local override markers under Overrides.`
+                    : "No artefact recorded yet."
+                }
+              />
             ) : configuration?.sanitized_text_available ? (
               textError ? (
                 <EmptyPanel title="Sanitized text unavailable" body={textError} />
@@ -732,50 +397,15 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
             ),
           },
           {
-            label: "Overrides",
-            panel: <OverridesNote overrides={overrides} />,
-          },
-          {
-            label: "Overview",
-            panel: (
-              <Stack spacing={2}>
-                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 2 }}>
-                  <Box sx={{ p: 2, bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px" }}>
-                    <Typography variant="caption" color="text.secondary">Configuration State</Typography>
-                    <Typography variant="h3" sx={{ mt: 0.5 }}>{changeStateLabel(configuration?.change_state ?? null)}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      Hash: {hashPrefix(configuration?.canonical_hash ?? null)}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ p: 2, bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px" }}>
-                    <Typography variant="caption" color="text.secondary">{isPaloAlto ? "Local Overrides" : "Withheld Secrets"}</Typography>
-                    <Typography variant="h3" sx={{ mt: 0.5 }}>{isPaloAlto ? overrides.length : (configuration?.withheld_line_count ?? 0)}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{isPaloAlto ? "src=local XML attributes detected" : "Keywords masked server-side"}</Typography>
-                  </Box>
-                  <Box sx={{ p: 2, bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px" }}>
-                    <Typography variant="caption" color="text.secondary">Index Sections</Typography>
-                    <Typography variant="h3" sx={{ mt: 0.5 }}>{index.length}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{isPaloAlto ? "PAN-OS XML categories" : "Governed Gaia AST groups"}</Typography>
-                  </Box>
-                </Box>
-              </Stack>
-            ),
-          },
-          {
-            label: "History",
+            label: "Alignment",
             panel: (
               <EmptyPanel
-                title="Configuration history"
-                body="Previous revisions collected across active verification cycles. Revisions are immutable."
-              />
-            ),
-          },
-          {
-            label: "Backup",
-            panel: (
-              <EmptyPanel
-                title="Recovery artifacts"
-                body="Class 1 controlled backup snapshot references for this target."
+                title="Expected-versus-actual alignment is not collected in this build"
+                body={
+                  isPaloAlto
+                    ? "Panorama intent is not read yet, so no setting can be compared against an expected value. Only device-side evidence (sections, changes between runs, local overrides) is shown."
+                    : "Management-server intent is not read yet, so no setting can be compared against an expected value. Only device-side evidence (sections, changes between runs, sanitized text) is shown."
+                }
               />
             ),
           },
@@ -785,3 +415,61 @@ export function DeviceConfigurationPanels({ deviceId }: { readonly deviceId: str
   );
 }
 
+/** V22 deviation summary between this run and the previous one -- real recounts by section, or an
+ * honest statement of why there is nothing to compare. */
+function DeviationPanel({
+  changeState,
+  deviation,
+}: {
+  readonly changeState: DeviceConfiguration["change_state"];
+  readonly deviation: ConfigurationDeviationSummary | null;
+}) {
+  if (changeState === null) {
+    return <EmptyPanel title="No changes to show" body="This device has not been collected yet." />;
+  }
+  if (changeState === "first_run") {
+    return <EmptyPanel title="First run" body="There is no previous run to compare against yet." />;
+  }
+  if (changeState === "unchanged") {
+    return <EmptyPanel title="Unchanged" body="The canonical hash matches the previous run; nothing changed." />;
+  }
+  if (!deviation || deviation.entries.length === 0) {
+    return (
+      <EmptyPanel
+        title="Changed"
+        body={`The canonical hash differs from the previous run${deviation ? ` (summary status: ${deviation.status})` : ""}, but no per-section recount was recorded.`}
+      />
+    );
+  }
+  return (
+    <Stack spacing={1}>
+      <Typography variant="body2" color="text.secondary">
+        {deviation.entries.length} section{deviation.entries.length === 1 ? "" : "s"} differ from the previous run (summary status: {deviation.status}).
+      </Typography>
+      <Box sx={{ bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px", overflow: "hidden" }}>
+        <Table size="small">
+          <TableHead sx={{ bgcolor: m3.scLow }}>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600 }}>Context</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Section</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Change</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Previous</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Now</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {deviation.entries.map((e, i) => (
+              <TableRow key={`${e.context}-${e.section}-${i}`} hover>
+                <TableCell><StatusChip tone="neutral" label={e.context === "physical" ? "Physical" : e.context} dense /></TableCell>
+                <TableCell sx={{ fontFamily: "monospace" }}>{e.section}</TableCell>
+                <TableCell><StatusChip tone="warn" label={e.kind} dense /></TableCell>
+                <TableCell>{e.old_count ?? "—"}</TableCell>
+                <TableCell>{e.new_count ?? "—"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Box>
+    </Stack>
+  );
+}

@@ -1388,7 +1388,7 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
 /** One header for every inventory entity (standalone device or cluster): avatar, title, opaque
  * reference badge, status chips, an optional action on the right and optional body rows below
  * (member cards) -- so a standalone device and a cluster read the same way. */
-function InventoryEntityHeader({
+export function InventoryEntityHeader({
   vendorHint,
   model,
   titlePrefix,

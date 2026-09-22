@@ -51,9 +51,6 @@ function DeviceRow({
   readonly selected: boolean;
   readonly onSelect: (device: ConfigurationDeviceListEntry) => void;
 }) {
-  const isChanged = device.change_state === "changed";
-  const isCluster = (device.hostname ?? "").toUpperCase().includes("CLS") || (device.hostname ?? "").toUpperCase().includes("CLUSTER");
-
   return (
     <Box
       role="button"
@@ -89,9 +86,8 @@ function DeviceRow({
         </Box>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 0.5 }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
-            {isCluster ? "ClusterXL · 2 members" : vendorLabel(device.vendor)} · {device.last_collected_at ? `collected ${device.last_collected_at.slice(0, 10)}` : "never collected"}
+            {vendorLabel(device.vendor)} · {device.last_collected_at ? `collected ${device.last_collected_at.slice(0, 10)}` : "never collected"}
           </Typography>
-          {isChanged && <StatusChip tone="bad" label="1 drift" dense />}
         </Box>
       </Box>
     </Box>
@@ -106,7 +102,7 @@ export function ConfigurationScreen() {
   );
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterMode, setFilterMode] = useState<"all" | "drift" | "override">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "changed" | "first_run" | "uncollected">("all");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
 
@@ -126,8 +122,10 @@ export function ConfigurationScreen() {
 
   const devices = data;
   const total = devices?.length ?? 0;
+  const collectedCount = devices?.filter((d) => d.change_state !== null).length ?? 0;
   const changedCount = devices?.filter((d) => d.change_state === "changed").length ?? 0;
-  const overrideCount = devices?.filter((d) => (d.hostname ?? "").includes("VSX") || (d.hostname ?? "").includes("CLS")).length ?? 0;
+  const firstRunCount = devices?.filter((d) => d.change_state === "first_run").length ?? 0;
+  const uncollectedCount = total - collectedCount;
 
   const filteredDevices = useMemo(() => {
     if (!devices) return [];
@@ -137,24 +135,25 @@ export function ConfigurationScreen() {
         (d.hostname ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         d.device_id.toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchSearch) return false;
-      if (filterMode === "drift") return d.change_state === "changed";
-      if (filterMode === "override") return (d.hostname ?? "").includes("VSX") || (d.hostname ?? "").includes("CLS");
+      if (filterMode === "changed") return d.change_state === "changed";
+      if (filterMode === "first_run") return d.change_state === "first_run";
+      if (filterMode === "uncollected") return d.change_state === null;
       return true;
     });
   }, [devices, searchQuery, filterMode]);
+
+  const selectedDevice = devices?.find((d) => d.device_id === selectedDeviceId) ?? null;
 
   return (
     <ScreenRoot>
       <ScreenHeader
         title="Configuration"
-        subtitle={devices === null ? "Loading…" : `${total} device${total === 1 ? "" : "s"} collected`}
+        subtitle={devices === null ? "Loading…" : `${collectedCount} device${collectedCount === 1 ? "" : "s"} collected${uncollectedCount > 0 ? ` · ${uncollectedCount} not collected` : ""}`}
         actions={
           <Stack direction="row" spacing={1.5}>
             <M3Button emphasis="outlined" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
               {bulkBusy ? "Starting..." : "Collect All"}
             </M3Button>
-            <M3Button emphasis="outlined" icon="download">Export evidence</M3Button>
-            <M3Button emphasis="filled">Compare revisions</M3Button>
           </Stack>
         }
       />
@@ -180,39 +179,16 @@ export function ConfigurationScreen() {
               />
             </Box>
             <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-              <Box
-                role="button"
-                tabIndex={0}
-                onClick={() => setFilterMode("all")}
-                sx={{ cursor: "pointer" }}
-              >
-                <StatusChip
-                  tone={filterMode === "all" ? "neutral" : "neutral"}
-                  label={`All ${total}`}
-                />
-              </Box>
-              <Box
-                role="button"
-                tabIndex={0}
-                onClick={() => setFilterMode("drift")}
-                sx={{ cursor: "pointer" }}
-              >
-                <StatusChip
-                  tone="bad"
-                  label={`Drift ${changedCount}`}
-                />
-              </Box>
-              <Box
-                role="button"
-                tabIndex={0}
-                onClick={() => setFilterMode("override")}
-                sx={{ cursor: "pointer" }}
-              >
-                <StatusChip
-                  tone="warn"
-                  label={`Override ${overrideCount || 6}`}
-                />
-              </Box>
+              {([
+                ["all", `All ${total}`, "neutral"],
+                ["changed", `Changed ${changedCount}`, changedCount > 0 ? "bad" : "neutral"],
+                ["first_run", `First run ${firstRunCount}`, "neutral"],
+                ["uncollected", `Not collected ${uncollectedCount}`, uncollectedCount > 0 ? "warn" : "neutral"],
+              ] as const).map(([mode, label, tone]) => (
+                <Box key={mode} role="button" tabIndex={0} onClick={() => setFilterMode(mode)} sx={{ cursor: "pointer", opacity: filterMode === mode ? 1 : 0.7 }}>
+                  <StatusChip tone={tone} label={label} />
+                </Box>
+              ))}
             </Stack>
             {error && (
               <EmptyPanel title="Configuration unavailable" body={error}>
@@ -242,7 +218,7 @@ export function ConfigurationScreen() {
         detail={
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
             {selectedDeviceId ? (
-              <DeviceConfigurationPanels key={selectedDeviceId} deviceId={selectedDeviceId} />
+              <DeviceConfigurationPanels key={selectedDeviceId} deviceId={selectedDeviceId} hostname={selectedDevice?.hostname} vendorHint={selectedDevice?.vendor} />
             ) : (
               <EmptyPanel
                 title="No device selected"

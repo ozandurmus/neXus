@@ -627,6 +627,20 @@ export interface ConfigurationSupplementaryRun {
   readonly change_state: "changed" | "unchanged" | "first_run";
 }
 
+/** V22 configuration_run_deviation_summary: what changed between this run and the previous one, by section. */
+export interface ConfigurationDeviationEntry {
+  readonly context: string;
+  readonly section: string;
+  readonly kind: string;
+  readonly old_count: number | null;
+  readonly new_count: number | null;
+}
+
+export interface ConfigurationDeviationSummary {
+  readonly status: string;
+  readonly entries: ConfigurationDeviationEntry[];
+}
+
 export interface DeviceConfiguration {
   readonly device_id: string;
   readonly collected_at: string | null;
@@ -634,6 +648,7 @@ export interface DeviceConfiguration {
   readonly read_kind: string | null;
   readonly canonical_hash: string | null;
   readonly change_state: "changed" | "unchanged" | "first_run" | null;
+  readonly change_deviation_summary?: ConfigurationDeviationSummary | null;
   readonly withheld_line_count: number;
   readonly sanitized_text_available: boolean;
   readonly index: ConfigurationIndexEntry[];
