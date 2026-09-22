@@ -801,6 +801,15 @@
       "priority": "P1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "pan_backup_include_set_format_config",
+      "category": "backup",
+      "title": "PAN backup bundle: add the SSH 'show' (set-format) running configuration alongside the device-state export",
+      "status": "planned",
+      "priority": "P0",
+      "target": "",
+      "note": ""
     }
   ]
 }

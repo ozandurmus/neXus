@@ -1,0 +1,5 @@
+# PAN backup bundle: add the SSH 'show' (set-format) running configuration alongside the device-state export
+
+status: planned · target: 
+
+Product Owner, 2026-09-22: P0, one of the next backup items. The PAN backup today is the XML API device-state export (running-config XML, Panorama template/push state, certificate and licence metadata -- the same archive Backbox's 'cURL (Device-State)' takes, ~0.6-1.7 MB). Backbox additionally opens SSH and records 'set cli config-output-format set', 'configure', 'show' -- the set-format running configuration, human-readable and diff-friendly. Add that read to the pan_device_state_backup run as a second artefact (or a companion file in the same manifest), over the interactive shell the worker already has, gated as a new PAN SSH read (network-device command gate entry: 'set cli config-output-format set', 'set cli pager off', 'configure', 'show', 'exit'). Depends on nothing else; pairs naturally with the retrieval/compare work (backup_artefact_id_opaque_not_storage_path, backup_retrieval_audit_fail_closed_and_reason_persists).
