@@ -62,8 +62,9 @@ describe("ConfigurationScreen device selection and panels", () => {
 
     await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
     fireEvent.click(screen.getByText("fw-edge-1"));
+    fireEvent.click(await screen.findByRole("tab", { name: "Details" }));
 
-    await waitFor(() => expect(screen.getByText("interface")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("interface")).toBeInTheDocument(), { timeout: 4000 });
     expect(screen.getByText(/3 secret-bearing line\(s\) withheld/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Sanitized text" }));
@@ -101,8 +102,9 @@ describe("ConfigurationScreen device selection and panels", () => {
 
     await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
     fireEvent.click(screen.getByText("fw-edge-1"));
+    fireEvent.click(await screen.findByRole("tab", { name: "Details" }));
 
-    await waitFor(() => expect(screen.getByText("override")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("override")).toBeInTheDocument(), { timeout: 4000 });
     fireEvent.click(screen.getByRole("tab", { name: "XML Configuration" }));
     expect(screen.getByText("PAN-OS XML Configuration Artefact")).toBeInTheDocument();
 
@@ -165,6 +167,7 @@ describe("ConfigurationScreen device selection and panels", () => {
 
     await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
     fireEvent.click(screen.getByText("fw-edge-1"));
+    fireEvent.click(await screen.findByRole("tab", { name: "Details" }));
 
     const collectButton = await screen.findByRole("button", { name: "Collect now" });
     fireEvent.click(collectButton);

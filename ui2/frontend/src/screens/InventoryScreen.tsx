@@ -205,7 +205,7 @@ function DeviceRow({
   );
 }
 
-function DeviceList({
+export function DeviceList({
   devices,
   selectedDeviceId,
   selectedClusterRef,

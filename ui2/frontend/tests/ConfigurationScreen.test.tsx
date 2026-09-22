@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -47,7 +47,7 @@ describe("ConfigurationScreen device list", () => {
     render(withTheme(<ConfigurationScreen />));
 
     await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
-    expect(screen.getByText("Changed")).toBeInTheDocument();
+    expect(screen.getByText("Changed 1")).toBeInTheDocument();
     expect(screen.getByText("1 device collected")).toBeInTheDocument();
   });
 
@@ -81,16 +81,29 @@ describe("the configuration list presents the cluster as the unit (design langua
       .toEqual(["cluster:CLS-ROMEO-01:agree", "device:s1", "cluster:CLS-JULIET-02:differ", "cluster:CLS-TANGO-03:unknown"]);
   });
 
-  it("renders a cluster row with its members as chips and a Config diff badge when they disagree", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, { devices: [
-      entry("x1", { cluster_member_ref: "CLS-JULIET-02", canonical_hash: "a", projected_settings: 352 }),
-      entry("x2", { cluster_member_ref: "CLS-JULIET-02", canonical_hash: "b", projected_settings: 354, change_state: "changed" }),
-    ] }))));
+  it("renders the cluster as one tree row and opens the members-side-by-side view on click", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/devices") {
+        return Promise.resolve(jsonResponse(200, { devices: [
+          { device_id: "x1", hostname: "FW-x1", vendor_hint: "check_point", enrollment_state: "ENROLLED", model: null, software_version: null, ha_role: "active", cluster_member_ref: "CLS-JULIET-02" },
+          { device_id: "x2", hostname: "FW-x2", vendor_hint: "check_point", enrollment_state: "ENROLLED", model: null, software_version: null, ha_role: "standby", cluster_member_ref: "CLS-JULIET-02" },
+        ] }));
+      }
+      if (url === "/configuration") {
+        return Promise.resolve(jsonResponse(200, { devices: [
+          entry("x1", { cluster_member_ref: "CLS-JULIET-02", canonical_hash: "a", projected_settings: 352 }),
+          entry("x2", { cluster_member_ref: "CLS-JULIET-02", canonical_hash: "b", projected_settings: 354, change_state: "changed" }),
+        ] }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    }));
     render(withTheme(<ConfigurationScreen />));
 
-    await waitFor(() => expect(screen.getByText("CLS-JULIET-02")).toBeInTheDocument());
-    expect(screen.getByText("Config diff")).toBeInTheDocument();
-    expect(screen.getByText("FW-x1")).toBeInTheDocument();
-    expect(screen.getByText("354 settings")).toBeInTheDocument();
+    const clusterRow = await screen.findByText(/JULIET-02/);
+    expect(screen.getByText("CLS")).toBeInTheDocument();
+    fireEvent.click(clusterRow);
+    await waitFor(() => expect(screen.getByText("Cluster configuration")).toBeInTheDocument());
+    expect(screen.getByText(/No member has a configuration read/)).toBeInTheDocument();
   });
 });

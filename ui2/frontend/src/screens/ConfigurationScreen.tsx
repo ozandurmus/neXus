@@ -9,9 +9,10 @@ import { Icon } from "../shell/Icon";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { listConfigurations, requestBulkConfigurationCollect, type ApiError, type ConfigurationDeviceListEntry } from "../auth/adminApi";
-import { DeviceConfigurationPanels } from "./ConfigurationPanels";
+import { listConfigurations, listDevices, requestBulkConfigurationCollect, type ApiError, type ConfigurationDeviceListEntry, type DeviceSummary } from "../auth/adminApi";
 import { VendorAvatar } from "./InventoryPanels";
+import { DeviceList } from "./InventoryScreen";
+import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -210,8 +211,18 @@ export function ConfigurationScreen() {
     describeApiError,
   );
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [selectedCluster, setSelectedCluster] = useState<{ ref: string; members: DeviceSummary[] } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "changed" | "first_run" | "uncollected">("all");
+  const [vendorFilter, setVendorFilter] = useState<"all" | "check_point" | "palo_alto">("all");
+  // Design language section 2: the list is the inventory's own tree (cluster -> virtual systems),
+  // read from /devices; /configuration only supplies each device's change state and filters.
+  const summariesFetch = useFetchOnMount<DeviceSummary[]>(() => listDevices().then((r) => r.devices ?? []), describeApiError);
+  // When /devices cannot be read the tree still stands on what /configuration knows (hostname,
+  // vendor, cluster reference) -- less detail, never an empty list over a populated store.
+  const summaries: DeviceSummary[] | null = summariesFetch.data ?? (summariesFetch.error && data
+    ? data.map((d) => ({ device_id: d.device_id, vendor_hint: d.vendor, enrollment_state: "", hostname: d.hostname, model: null, software_version: null, ha_role: null, cluster_member_ref: d.cluster_member_ref ?? null }))
+    : null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
 
@@ -253,6 +264,14 @@ export function ConfigurationScreen() {
 
   const selectedDevice = devices?.find((d) => d.device_id === selectedDeviceId) ?? null;
 
+  const treeDevices = useMemo(() => {
+    if (!summaries) return [];
+    const allowed = new Set(filteredDevices.map((d) => d.device_id));
+    return summaries.filter((d) => allowed.has(d.device_id) && (vendorFilter === "all" || d.vendor_hint === vendorFilter));
+  }, [summaries, filteredDevices, vendorFilter]);
+  const selectedSummary = summaries?.find((d) => d.device_id === selectedDeviceId) ?? null;
+  const vendorCount = (vendor: string) => summaries?.filter((d) => d.vendor_hint === vendor).length ?? 0;
+
   return (
     <ScreenRoot>
       <ScreenHeader
@@ -289,6 +308,17 @@ export function ConfigurationScreen() {
             </Box>
             <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
               {([
+                ["all", `All ${summaries?.length ?? total}`],
+                ["check_point", `Check Point ${vendorCount("check_point")}`],
+                ["palo_alto", `Palo Alto ${vendorCount("palo_alto")}`],
+              ] as const).map(([vendor, label]) => (
+                <Box key={vendor} role="button" tabIndex={0} onClick={() => setVendorFilter(vendor)} sx={{ cursor: "pointer", opacity: vendorFilter === vendor ? 1 : 0.7 }}>
+                  <StatusChip tone={vendorFilter === vendor ? "ok" : "neutral"} label={label} />
+                </Box>
+              ))}
+            </Stack>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+              {([
                 ["all", `All ${total}`, "neutral"],
                 ["changed", `Changed ${changedCount}`, changedCount > 0 ? "bad" : "neutral"],
                 ["first_run", `First run ${firstRunCount}`, "neutral"],
@@ -311,23 +341,18 @@ export function ConfigurationScreen() {
               <EmptyPanel title="No devices" body="Nothing is enrolled yet." />
             )}
             {!error && devices !== null && devices.length > 0 && (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25, maxHeight: "calc(100vh - 240px)", overflowY: "auto", pr: 0.5 }}>
-                {groupByCluster(filteredDevices).map((row) =>
-                  row.kind === "cluster" ? (
-                    <ClusterRow
-                      key={`cluster:${row.group.clusterRef}`}
-                      group={row.group}
-                      selectedDeviceId={selectedDeviceId}
-                      onSelect={(d) => setSelectedDeviceId(d.device_id)}
-                    />
-                  ) : (
-                    <DeviceRow
-                      key={row.device.device_id}
-                      device={row.device}
-                      selected={row.device.device_id === selectedDeviceId}
-                      onSelect={(d) => setSelectedDeviceId(d.device_id)}
-                    />
-                  ),
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25, maxHeight: "calc(100vh - 300px)", overflowY: "auto", pr: 0.5 }}>
+                {summaries === null && !summariesFetch.error && <EmptyPanel title="Devices" body="Loading…" />}
+                {summariesFetch.error && <EmptyPanel title="Devices unavailable" body={summariesFetch.error} />}
+                {summaries !== null && treeDevices.length === 0 && <EmptyPanel title="No device matches" body="No device matches the filters." />}
+                {summaries !== null && treeDevices.length > 0 && (
+                  <DeviceList
+                    devices={treeDevices}
+                    selectedDeviceId={selectedDeviceId}
+                    selectedClusterRef={selectedCluster?.ref ?? null}
+                    onSelectDevice={(d) => { setSelectedCluster(null); setSelectedDeviceId(d.device_id); }}
+                    onSelectCluster={(ref, members) => { setSelectedDeviceId(null); setSelectedCluster({ ref, members }); }}
+                  />
                 )}
               </Box>
             )}
@@ -335,12 +360,19 @@ export function ConfigurationScreen() {
         }
         detail={
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
-            {selectedDeviceId ? (
-              <DeviceConfigurationPanels key={selectedDeviceId} deviceId={selectedDeviceId} hostname={selectedDevice?.hostname} vendorHint={selectedDevice?.vendor} />
+            {selectedCluster ? (
+              <ClusterConfigurationDetail key={selectedCluster.ref} clusterRef={selectedCluster.ref} members={selectedCluster.members} />
+            ) : selectedSummary ? (
+              <DeviceConfigurationDetail key={selectedSummary.device_id} device={selectedSummary} />
+            ) : selectedDeviceId && selectedDevice ? (
+              <DeviceConfigurationDetail
+                key={selectedDeviceId}
+                device={{ device_id: selectedDevice.device_id, vendor_hint: selectedDevice.vendor, enrollment_state: "", hostname: selectedDevice.hostname, model: null, software_version: null, ha_role: null, cluster_member_ref: selectedDevice.cluster_member_ref ?? null }}
+              />
             ) : (
               <EmptyPanel
                 title="No device selected"
-                body="Select a device from the list to see its configuration index, sanitized text and overrides."
+                body="Select a device or a cluster from the list. A device shows its operator snapshot and every configuration section; a cluster shows its members side by side with every difference marked."
               />
             )}
           </Box>
