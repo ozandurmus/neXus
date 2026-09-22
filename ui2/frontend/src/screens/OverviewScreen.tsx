@@ -138,10 +138,10 @@ function PostureTile({ title, count, of, unknown, severity, icon, context, previ
   return (
     <Link href={href} underline="none" sx={{ color: "inherit", display: "block" }} aria-label={`${title}: ${unknown ? "UNKNOWN" : count}${of !== undefined ? ` of ${of}` : ""}, ${word}`}>
       <Card sx={{ ...CARD, p: big ? 2.5 : 2, height: "100%", display: "flex", flexDirection: "column", gap: 0.75, "&:hover": { borderColor: m3.outline } }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, color: ink, minWidth: 0 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.75, color: ink, minWidth: 0 }}>
             <Icon name={icon} size={16} />
-            <Typography noWrap sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>{title}</Typography>
+            <Typography sx={{ fontSize: 11, lineHeight: "14px", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar, minHeight: 28 }}>{title}</Typography>
           </Box>
           <Box sx={{ px: 1, py: 0.2, borderRadius: "6px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
                      bgcolor: active ? `${fill}26` : m3.sc, color: ink }}>{word}</Box>

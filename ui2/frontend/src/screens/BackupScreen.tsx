@@ -1,6 +1,7 @@
 import { urlParam } from "../shell/urlParams";
 import { useCallback, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
 import Dialog from "@mui/material/Dialog";
@@ -1038,7 +1039,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                       </Box>
                     </TableCell>
                     <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 12, lineHeight: 1.3 }}>
-                      {summary ? <>{summary.model ?? "UNKNOWN"}<br />{summary.software_version ?? ""}</> : "UNKNOWN"}
+                      {summary ? <><Box component="span" sx={{ whiteSpace: "nowrap" }}>{(summary.model ?? "UNKNOWN").replace(/^Check Point\s+/, "")}</Box><br />{summary.software_version ?? ""}</> : "UNKNOWN"}
                     </TableCell>
                     <TableCell sx={{ fontFamily: MONO, fontSize: 12, color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>{summary?.cluster_member_ref ?? "standalone"}</TableCell>
                     <TableCell align="center">
@@ -1057,20 +1058,23 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                     <TableCell>{item ? <ValidationChip level={item.validationLevel} /> : null}</TableCell>
                     <TableCell>{item ? <DeviationChip state={item.deviationState} /> : null}</TableCell>
                     <TableCell align="right">
-                      <Stack direction="row" spacing={0.25} justifyContent="flex-end" alignItems="center" sx={{ whiteSpace: "nowrap" }}>
+                      {/* Compact actions: all six stay visible in the row (the full-size buttons clipped Compare and Download). */}
+                      <Stack direction="row" spacing={0} justifyContent="flex-end" alignItems="center" sx={{ whiteSpace: "nowrap",
+                        "& .MuiButton-root": { minWidth: 0, px: 0.9, py: 0.25, fontSize: 12.5, textTransform: "none", borderRadius: "6px" } }}>
                         {item || summary?.backup_target ? (
-                          <M3Button emphasis="tonal" disabled={busy || !summary?.backup_target}
+                          <Button size="small" variant="contained" disableElevation disabled={busy || !summary?.backup_target}
+                            sx={{ bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, "&:hover": { bgcolor: m3.secondaryContainer }, mr: 0.5 }}
                             onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "standard")}>
-                            {busy ? <CircularProgress size={14} /> : "Backup Now"}
-                          </M3Button>
+                            {busy ? <CircularProgress size={12} /> : "Backup Now"}
+                          </Button>
                         ) : null}
                         {vendor === "check_point" && item ? (
-                          <M3Button emphasis="text" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</M3Button>
+                          <Button size="small" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</Button>
                         ) : null}
-                        <M3Button emphasis="text" disabled={!item} onClick={() => item && onHistory(item)}>History{baselines[id] ? " ★" : ""}</M3Button>
-                        <M3Button emphasis="text" disabled={!item?.artefactId} onClick={() => item && onContents(item)}>Contents</M3Button>
-                        <M3Button emphasis="text" disabled={!item?.artefactId} onClick={() => item && onCompare(item)}>Compare</M3Button>
-                        <M3Button emphasis="text" disabled={!item?.artefactId} onClick={() => item && onDownload(item)}>Download</M3Button>
+                        <Button size="small" disabled={!item} onClick={() => item && onHistory(item)}>History{baselines[id] ? " ★" : ""}</Button>
+                        <Button size="small" disabled={!item?.artefactId} onClick={() => item && onContents(item)}>Contents</Button>
+                        <Button size="small" disabled={!item?.artefactId} onClick={() => item && onCompare(item)}>Compare</Button>
+                        <Button size="small" disabled={!item?.artefactId} onClick={() => item && onDownload(item)}>Download</Button>
                       </Stack>
                     </TableCell>
                   </TableRow>
