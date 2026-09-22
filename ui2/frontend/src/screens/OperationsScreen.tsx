@@ -18,8 +18,9 @@ import DialogActions from "@mui/material/DialogActions";
 import Tooltip from "@mui/material/Tooltip";
 import TextField from "@mui/material/TextField";
 
-import { ScreenHeader, MetricGrid, MetricCard, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
+import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
+import { StatePanel, Ts, RoleChip, VendorBadge, Unknown } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel } from "./JobLogsPanel";
 import { urlParam } from "../shell/urlParams";
@@ -70,6 +71,26 @@ export function OperationsScreen() {
   const [isRunning, setIsRunning] = useState(false);
   const [apiChecks, setApiChecks] = useState<PreflightCheckItem[] | null>(null);
   const [apiVerdict, setApiVerdict] = useState<string | null>(null);
+
+  // Which enrolled clusters have had a preflight read/run in this session, and what it said (review §3
+  // "Readiness checks" KPI and the HA table's "last evaluated" / "readiness" columns). There is no product
+  // capability that reports "evaluated" as a passive fleet-wide count -- reading a cluster's preflight is
+  // what evaluates it -- so this is exactly what this browser session has observed, never a guess at the
+  // other clusters' state.
+  const [clusterCache, setClusterCache] = useState<Record<string, { verdict: string; checksCount: number; generatedAt: string | null }>>({});
+  const evaluatedCount = Object.values(clusterCache).filter((r) => r.checksCount > 0).length;
+
+  const [tab, setTab] = useState(urlParam("tab") === "jobs" ? 1 : 0);
+
+  // A cluster header elsewhere in the product links here as ?screen=operations&cluster_ref=<ref>; preselect it.
+  useEffect(() => {
+    if (!clusters || clusters.length === 0 || selectedCluster) return;
+    const ref = urlParam("cluster_ref");
+    if (ref && clusters.some((c) => c.ref === ref)) {
+      setSelectedCluster(ref);
+      setTab(0);
+    }
+  }, [clusters, selectedCluster]);
 
   // Phase B / C 4-Eyes Failover and Execution states
   const [showFailoverModal, setShowFailoverModal] = useState(false);
@@ -130,6 +151,7 @@ export function OperationsScreen() {
           }));
           setApiChecks(mapped);
           setApiVerdict(data.overall_verdict);
+          setClusterCache((prev) => ({ ...prev, [selectedCluster]: { verdict: data.overall_verdict, checksCount: mapped.length, generatedAt: data.generated_at ?? null } }));
         }
       })
       .catch(() => {
@@ -177,6 +199,7 @@ export function OperationsScreen() {
           }));
           setApiChecks(mapped);
           setApiVerdict(data.overall_verdict);
+          setClusterCache((prev) => ({ ...prev, [selectedCluster]: { verdict: data.overall_verdict, checksCount: mapped.length, generatedAt: data.generated_at ?? null } }));
         }
       }
     } catch {
@@ -349,23 +372,70 @@ export function OperationsScreen() {
   const renderHaPanel = () => {
     if (!selectedCluster) {
       const count = clusters?.length ?? 0;
+      if (clusters === null) {
+        return <StatePanel variant="empty" title="Reading the enrolled clusters…" />;
+      }
+      if (count === 0) {
+        return (
+          <StatePanel
+            variant="empty"
+            title="No HA pair or cluster enrolled"
+            body="Readiness needs enrolled cluster members and a current health read from each one; none is enrolled, so no cluster can be assessed."
+          />
+        );
+      }
+      const roleOfMembers = (members: DeviceSummary[], role: string) =>
+        members.filter((m) => (m.ha_role ?? "").toLowerCase() === role).map((m) => m.hostname ?? m.device_id).join(", ") || null;
       return (
         <Box>
-          <EmptyPanel
-            title={clusters === null ? "Reading the enrolled clusters…" : count === 0 ? "No HA pair or cluster enrolled" : `${count} clusters enrolled`}
-            body={count === 0
-              ? "Readiness needs enrolled cluster members and a current health read from each one; none is enrolled, so no cluster can be assessed."
-              : "Choose a cluster to read its preflight checks. Readiness is observed only; nothing is inferred and no class 2 action exists in this build."}
-          />
-          {count > 0 && (
-            <Box sx={{ mt: 2, display: "flex", gap: 1, flexWrap: "wrap" }}>
-              {clusters!.map((c) => (
-                <M3Button key={c.ref} emphasis="outlined" onClick={() => setSelectedCluster(c.ref)}>
-                  {c.title} ({c.members[0]?.vendor_hint === "palo_alto" ? "PAN" : "CP"})
-                </M3Button>
-              ))}
-            </Box>
-          )}
+          <Typography variant="h4" sx={{ mb: 0.5 }}>{count} clusters enrolled</Typography>
+          <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 2 }}>
+            Choose a cluster to read its preflight checks. Readiness is observed only; nothing is inferred and no class 2 action exists in this build.
+          </Typography>
+          <TableContainer component={Paper} sx={{ borderRadius: "10px", border: `1px solid ${m3.outlineVar}`, boxShadow: "none" }}>
+            <Table size="small">
+              <TableHead sx={{ bgcolor: m3.scLow }}>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Cluster</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Vendor</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Active member</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Standby member</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Last evaluated</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Readiness</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {clusters!.map((c) => {
+                  const active = roleOfMembers(c.members, "active");
+                  const standby = roleOfMembers(c.members, "standby") ?? roleOfMembers(c.members, "passive");
+                  const report = clusterCache[c.ref];
+                  const evaluated = report && report.checksCount > 0;
+                  return (
+                    <TableRow key={c.ref} hover onClick={() => setSelectedCluster(c.ref)} sx={{ cursor: "pointer" }}>
+                      <TableCell sx={{ fontWeight: 500 }}>{c.title}</TableCell>
+                      <TableCell><VendorBadge vendor={c.members[0]?.vendor_hint} /></TableCell>
+                      <TableCell sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        {active ? <Box component="span" sx={{ fontFamily: "inherit" }}>{active}</Box> : <Unknown />}
+                        {active ? <RoleChip role="ACTIVE" dense /> : null}
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          {standby ? <Box component="span">{standby}</Box> : <Unknown />}
+                          {standby ? <RoleChip role="STANDBY" dense /> : null}
+                        </Box>
+                      </TableCell>
+                      <TableCell><Ts at={report?.generatedAt ?? null} /></TableCell>
+                      <TableCell>
+                        {evaluated
+                          ? <StatusChip tone={report!.verdict === "NO_BLOCKING_CONDITIONS_OBSERVED" ? "ok" : report!.verdict === "ADVISORY_CONDITIONS_PRESENT" ? "warn" : "bad"} label={report!.verdict} dense />
+                          : <Unknown word="NOT EVALUATED" reason="No preflight has been read for this cluster in this session." />}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </Box>
       );
     }
@@ -468,12 +538,12 @@ export function OperationsScreen() {
             </Box>
           </Card>
         ) : checks.length === 0 ? (
-          <Card sx={{ bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "12px", p: 2 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>NOT EVALUATED</Typography>
-            <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-              The preflight API returned no checks for this cluster, so nothing is claimed about its readiness. Run the pre-flight battery to evaluate it.
-            </Typography>
-          </Card>
+          <StatePanel
+            variant="not_evaluated"
+            title="The preflight API returned no checks for this cluster"
+            body="Nothing is claimed about its readiness. Run the pre-flight battery to evaluate it."
+            action={<M3Button emphasis="tonal" onClick={handleRunBattery} disabled={isRunning}>{isRunning ? "Evaluating..." : "Run Pre-Flight Battery"}</M3Button>}
+          />
         ) : (
           <Card sx={{ bgcolor: "#e8f5e9", border: "1px solid #a5d6a7", borderRadius: "12px", p: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -497,75 +567,80 @@ export function OperationsScreen() {
           </Card>
         )}
 
-        {/* Filter Bar */}
-        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          <Typography variant="body2" sx={{ fontWeight: 500, color: m3.onSurfaceVar, mr: 1 }}>
-            Filter:
-          </Typography>
-          <Chip
-            label={`All Checks (${checks.length})`}
-            onClick={() => setFilter("ALL")}
-            color={filter === "ALL" ? "primary" : "default"}
-            variant={filter === "ALL" ? "filled" : "outlined"}
-          />
-          <Chip
-            label="Blocking Only"
-            onClick={() => setFilter("BLOCKING")}
-            color={filter === "BLOCKING" ? "primary" : "default"}
-            variant={filter === "BLOCKING" ? "filled" : "outlined"}
-          />
-          <Chip
-            label="Advisory Only"
-            onClick={() => setFilter("ADVISORY")}
-            color={filter === "ADVISORY" ? "primary" : "default"}
-            variant={filter === "ADVISORY" ? "filled" : "outlined"}
-          />
-        </Box>
+        {/* Filter Bar and Pre-Flight Checklist Table -- hidden with the header when there are no rows to filter
+            (review §3 "Cluster detail shows an empty table header"); the NOT EVALUATED panel above is the
+            empty state. */}
+        {checks.length > 0 && (
+          <>
+            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              <Typography variant="body2" sx={{ fontWeight: 500, color: m3.onSurfaceVar, mr: 1 }}>
+                Filter:
+              </Typography>
+              <Chip
+                label={`All Checks (${checks.length})`}
+                onClick={() => setFilter("ALL")}
+                color={filter === "ALL" ? "primary" : "default"}
+                variant={filter === "ALL" ? "filled" : "outlined"}
+              />
+              <Chip
+                label="Blocking Only"
+                onClick={() => setFilter("BLOCKING")}
+                color={filter === "BLOCKING" ? "primary" : "default"}
+                variant={filter === "BLOCKING" ? "filled" : "outlined"}
+              />
+              <Chip
+                label="Advisory Only"
+                onClick={() => setFilter("ADVISORY")}
+                color={filter === "ADVISORY" ? "primary" : "default"}
+                variant={filter === "ADVISORY" ? "filled" : "outlined"}
+              />
+            </Box>
 
-        {/* Pre-Flight Checklist Table */}
-        <TableContainer component={Paper} sx={{ borderRadius: "12px", border: `1px solid ${m3.outlineVar}` }}>
-          <Table size="small">
-            <TableHead sx={{ bgcolor: m3.scLow }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Check Name</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Enforcement</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Summary</TableCell>
-                <TableCell sx={{ fontWeight: 600, textAlign: "right" }}>Action</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredChecks.map((chk) => (
-                <TableRow key={chk.id} hover>
-                  <TableCell sx={{ fontWeight: 500 }}>{chk.name}</TableCell>
-                  <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 13 }}>{chk.category}</TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={chk.enforcement}
-                      sx={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        bgcolor: chk.enforcement === "BLOCKING" ? m3.errorContainer : m3.scHighest,
-                        color: chk.enforcement === "BLOCKING" ? m3.onErrorContainer : m3.onSurfaceVar,
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <StatusChip tone={chk.status === "PASS" ? "ok" : chk.status === "WARNING" ? "warn" : "bad"} label={chk.status} dense />
-                  </TableCell>
-                  <TableCell sx={{ fontSize: 13, color: m3.onSurface }}>{chk.summary}</TableCell>
-                  <TableCell sx={{ textAlign: "right" }}>
-                    <M3Button emphasis="text" onClick={() => setSelectedCheck(chk)}>
-                      Details
-                    </M3Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            <TableContainer component={Paper} sx={{ borderRadius: "12px", border: `1px solid ${m3.outlineVar}` }}>
+              <Table size="small">
+                <TableHead sx={{ bgcolor: m3.scLow }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600 }}>Check Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Enforcement</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Summary</TableCell>
+                    <TableCell sx={{ fontWeight: 600, textAlign: "right" }}>Action</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredChecks.map((chk) => (
+                    <TableRow key={chk.id} hover>
+                      <TableCell sx={{ fontWeight: 500 }}>{chk.name}</TableCell>
+                      <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 13 }}>{chk.category}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={chk.enforcement}
+                          sx={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            bgcolor: chk.enforcement === "BLOCKING" ? m3.errorContainer : m3.scHighest,
+                            color: chk.enforcement === "BLOCKING" ? m3.onErrorContainer : m3.onSurfaceVar,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <StatusChip tone={chk.status === "PASS" ? "ok" : chk.status === "WARNING" ? "warn" : "bad"} label={chk.status} dense />
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 13, color: m3.onSurface }}>{chk.summary}</TableCell>
+                      <TableCell sx={{ textAlign: "right" }}>
+                        <M3Button emphasis="text" onClick={() => setSelectedCheck(chk)}>
+                          Details
+                        </M3Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
+        )}
 
         {/* Phase D Scheduled Maintenance Windows Table */}
         {schedulesList.length > 0 && (
@@ -644,14 +719,26 @@ export function OperationsScreen() {
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
             Readiness assessment is observed. Device mutation actions require Phase B 4-Eyes authorization & Phase C command gate.
           </Typography>
-          <Box sx={{ display: "flex", gap: 1.5 }}>
-            <M3Button
-              emphasis="filled"
-              disabled={overallVerdict !== "NO_BLOCKING_CONDITIONS_OBSERVED" || quarantined}
-              onClick={() => setShowFailoverModal(true)}
-            >
-              Authorize Failover (4-Eyes)
-            </M3Button>
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}>
+            {checks.length === 0 ? (
+              // Whether this control is enabled today depends on an evaluated readiness verdict the API has not
+              // produced for this cluster (review §3): an explained outlined control, not a filled primary that
+              // implies it can be pressed.
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                <M3Button emphasis="outlined" disabled onClick={() => setShowFailoverModal(true)}>
+                  Authorize Failover (4-Eyes)
+                </M3Button>
+                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Needs an evaluated readiness run</Typography>
+              </Box>
+            ) : (
+              <M3Button
+                emphasis="filled"
+                disabled={overallVerdict !== "NO_BLOCKING_CONDITIONS_OBSERVED" || quarantined}
+                onClick={() => setShowFailoverModal(true)}
+              >
+                Authorize Failover (4-Eyes)
+              </M3Button>
+            )}
             <Tooltip title="Disabled — Requires Phase B 4-Eyes Authorization & Phase C Gate Approval">
               <span>
                 <M3Button emphasis="outlined" disabled>
@@ -1050,12 +1137,7 @@ export function OperationsScreen() {
       <ScreenHeader
         title="Operations"
         subtitle="Cluster HA readiness preflight evaluations and controlled failover operations."
-        actions={
-          <>
-            <M3Button emphasis="outlined">Job history</M3Button>
-            <M3Button emphasis="filled">Schedule collection</M3Button>
-          </>
-        }
+        actions={<M3Button emphasis="filled">Schedule collection</M3Button>}
       />
       <MetricGrid>
         <MetricCard title="Jobs run (24 h)" value={jobStats ? jobStats.total24h : null} note={jobStats ? `${jobStats.total24h} submitted · ${jobStats.running} in flight` : "read failed"} />
@@ -1068,12 +1150,31 @@ export function OperationsScreen() {
               : `${Math.round((100 * jobStats.completed24h) / (jobStats.completed24h + jobStats.failed24h))}% · ${jobStats.completed24h} completed · ${jobStats.failed24h} failed`
             : "read failed"}
         />
-        <MetricCard title="Readiness checks" value={selectedCluster ? checks.length : null} note={selectedCluster ? (apiChecks ? `${checks.length} evaluated` : "not evaluated yet") : clusters && clusters.length > 0 ? `${clusters.length} clusters enrolled · choose one` : "no cluster enrolled"} />
-        <MetricCard title="Failed (24 h)" value={jobStats ? jobStats.failed24h : null} note={jobStats ? (jobStats.failed24h === 0 ? "none" : `${jobStats.failed24h} failed jobs`) : "read failed"} />
+        {/* There is no fleet-wide readiness figure -- only a per-cluster verdict once its preflight is read
+            (review §3). "Evaluated" counts the clusters this session has actually read/run a preflight for;
+            the KPI never claims a passive count the product does not have. */}
+        <MetricCard
+          title="Readiness checks"
+          value={null}
+          state="not_evaluated"
+          note={clusters ? `${clusters.length} clusters enrolled · ${evaluatedCount} evaluated` : "reading enrolled clusters"}
+        />
+        <Card sx={{ bgcolor: m3.scLowest, boxShadow: "none", border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2.25,
+                    display: "flex", flexDirection: "column", gap: 1 }}>
+          <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>Failed (24 h)</Typography>
+          <Typography variant="h1">{jobStats ? jobStats.failed24h : "—"}</Typography>
+          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{jobStats ? (jobStats.failed24h === 0 ? "none" : `${jobStats.failed24h} failed jobs`) : "read failed"}</Typography>
+          {/* The header's "Job history" button duplicated the History tab (review §3); it lives here instead. */}
+          <Box component="button" onClick={() => setTab(3)}
+            sx={{ all: "unset", cursor: "pointer", color: m3.primary, fontSize: 13, fontWeight: 500 }}>
+            Job history
+          </Box>
+        </Card>
       </MetricGrid>
       <M3Tabs
         ariaLabel="Operations sections"
-        initial={urlParam("tab") === "jobs" ? 1 : 0}
+        value={tab}
+        onChange={setTab}
         tabs={[
           {
             label: "HA & readiness",
@@ -1082,7 +1183,7 @@ export function OperationsScreen() {
           { label: "Jobs", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>All jobs</Typography><JobLogsPanel
             initialState={urlParam("state") ?? ""} initialJobType={urlParam("job_type") ?? ""}
             initialSinceHours={urlParam("since_hours") ? Number(urlParam("since_hours")) : undefined} initialText={urlParam("q") ?? ""} /></Box> },
-          { label: "Queue", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>Queued and running jobs</Typography><JobLogsPanel initialState="REQUESTED,CLAIMED,EXECUTING" /></Box> },
+          { label: "Queue", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>Queued and running jobs</Typography><JobLogsPanel initialState="REQUESTED,CLAIMED,EXECUTING" emptyTitle="Queue empty" emptyBody="0 requested · 0 claimed · 0 executing" /></Box> },
           { label: "History", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>Finished jobs</Typography><JobLogsPanel initialState="COMPLETED,FAILED,OUTCOME_UNKNOWN,REJECTED" /></Box> },
         ]}
       />

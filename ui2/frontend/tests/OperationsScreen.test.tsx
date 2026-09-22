@@ -72,7 +72,7 @@ describe("OperationsScreen tabs", () => {
   it("shows only the checks the preflight API returned, and NOT_EVALUATED when it returned none", async () => {
     stubFetch(MEMBERS, PREFLIGHT);
     render(withTheme(<OperationsScreen />));
-    fireEvent.click(await screen.findByRole("button", { name: /\(CP\)/ }));
+    fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
     expect(await screen.findByText("Two-Sided Split-Brain Prevention")).toBeInTheDocument();
     expect(screen.queryByText("Critical Problem Notifications (pnotes)")).toBeNull();
     fireEvent.click(screen.getByText("All clusters"));
@@ -82,9 +82,47 @@ describe("OperationsScreen tabs", () => {
   it("opens the 4-Eyes gate and the maintenance-window dialogs for a real cluster", async () => {
     stubFetch(MEMBERS, PREFLIGHT);
     render(withTheme(<OperationsScreen />));
-    fireEvent.click(await screen.findByRole("button", { name: /\(CP\)/ }));
+    fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
     await screen.findByText("Two-Sided Split-Brain Prevention");
     fireEvent.click(screen.getByRole("button", { name: "Authorize Failover (4-Eyes)" }));
     expect(screen.getByText(/Phase B & C: 4-Eyes Controlled Failover Gate/i)).toBeInTheDocument();
+  });
+
+  it("lists the enrolled cluster in a table with vendor, members and readiness, not a chip wall", async () => {
+    stubFetch(MEMBERS, null);
+    render(withTheme(<OperationsScreen />));
+    await screen.findByText("1 clusters enrolled");
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByText("FW-ROMEO-01-M1")).toBeInTheDocument();
+    expect(screen.getByText("FW-ROMEO-01-M2")).toBeInTheDocument();
+    expect(screen.getAllByText("NOT EVALUATED").length).toBeGreaterThan(0);
+  });
+
+  it("preselects the cluster named in ?cluster_ref= (a link from another screen)", async () => {
+    const originalLocation = window.location.href;
+    window.history.pushState({}, "", "/?screen=operations&cluster_ref=CLS-ROMEO-01");
+    try {
+      stubFetch(MEMBERS, PREFLIGHT);
+      render(withTheme(<OperationsScreen />));
+      expect(await screen.findByText("Two-Sided Split-Brain Prevention")).toBeInTheDocument();
+    } finally {
+      window.history.pushState({}, "", originalLocation);
+    }
+  });
+
+  it("shows the readiness KPI as NOT EVALUATED, never 0 or a dash, with the enrolled/evaluated count", async () => {
+    stubFetch(MEMBERS, null);
+    render(withTheme(<OperationsScreen />));
+    await screen.findByText("1 clusters enrolled · 0 evaluated");
+    expect(screen.getAllByText("NOT EVALUATED").length).toBeGreaterThan(0);
+  });
+
+  it("moves the Job history action into the Failed jobs KPI card and switches to the History tab", async () => {
+    stubFetch(MEMBERS, null);
+    render(withTheme(<OperationsScreen />));
+    // Exactly one "Job history" control: the header no longer duplicates the History tab with its own button.
+    expect(await screen.findAllByText("Job history")).toHaveLength(1);
+    fireEvent.click(screen.getByText("Job history"));
+    expect(await screen.findByText("Finished jobs")).toBeInTheDocument();
   });
 });
