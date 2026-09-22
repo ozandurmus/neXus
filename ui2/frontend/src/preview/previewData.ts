@@ -1,10 +1,8 @@
 /**
  * Design-preview data. **Not live data, and never presented as such.**
  *
- * Every name here is synthetic and comes from two places that are already
- * sanitized: the Product Owner's own design canvas (the `M3*` artboards) and
- * this repository's `tests/fixtures/uitest/` set. No real hostname, address,
- * serial or policy name appears — `AGENTS.md`'s sensitive identity law applies
+ * Every identity here uses the product's AIView pseudonym pattern and
+ * documentation-only addresses/domains. `AGENTS.md`'s sensitive identity law applies
  * to a mockup exactly as it applies to a report, because a screenshot of a
  * mockup travels further than a report does.
  *
@@ -47,11 +45,11 @@ export interface AlignmentRow {
 }
 
 export const ALIGNMENT: readonly AlignmentRow[] = [
-  { device: "fw-ist-core-02", setting: "ntp.server[2]", expected: "ntp-pri.example.invalid", effective: "ntp-alt.example.invalid", state: "Effective drift" },
-  { device: "pan-izm-edge-01", setting: "log.syslog.target", expected: "syslog-a.example.invalid:514", effective: "removed", state: "Effective drift" },
-  { device: "fw-ist-core-01", setting: "ha.monitor.interface", expected: "eth1", effective: "eth1", state: "Member-specific" },
-  { device: "pan-ank-edge-02", setting: "panorama.template", expected: "TPL-EDGE-V4", effective: "TPL-EDGE-V3", state: "Out of sync" },
-  { device: "cp-edge-a", setting: "dns.resolver[1]", expected: "dns-pri.example.invalid", effective: "dns-pri.example.invalid", state: "Aligned" },
+  { device: "FW-ROMEO-01-M2", setting: "ntp.server[2]", expected: "ntp-pri.example.test", effective: "ntp-alt.example.test", state: "Effective drift" },
+  { device: "FW-JULIET-06-M1", setting: "log.syslog.target", expected: "syslog-a.example.test:514", effective: "removed", state: "Effective drift" },
+  { device: "FW-ROMEO-01-M1", setting: "ha.monitor.interface", expected: "eth1", effective: "eth1", state: "Member-specific" },
+  { device: "FW-OSCAR-04-M2", setting: "panorama.template", expected: "TPL-EDGE-V4", effective: "TPL-EDGE-V3", state: "Out of sync" },
+  { device: "FW-BRAVO-02-M1", setting: "dns.resolver[1]", expected: "dns-pri.example.test", effective: "dns-pri.example.test", state: "Aligned" },
 ];
 
 export const ALIGNMENT_TOTALS: readonly { readonly label: string; readonly n: number }[] = [
@@ -72,14 +70,14 @@ export interface InventoryRow {
 }
 
 export const INVENTORY: readonly InventoryRow[] = [
-  { kind: "MDS", name: "cp-mds-01", detail: "Management server · 3 CMA · 24 gateways", liveness: "Live", note: "MDS" },
-  { kind: "CP", name: "fw-ist-core-CLS", detail: "ClusterXL · fw-ist-core-01 · fw-ist-core-02", liveness: "Live", note: "2 members, 6 interfaces" },
-  { kind: "CP", name: "fw-ist-core-01", detail: "Member · active · R81.20", liveness: "Live", note: "3 interfaces" },
-  { kind: "VSX", name: "vsx-ist-CLS", detail: "VSX cluster · 12 virtual systems", liveness: "Live", note: "12 VS" },
-  { kind: "VSX", name: "VS-PAYMENTS", detail: "Virtual system · vsx-ist-CLS", liveness: "Live", note: "4 interfaces" },
-  { kind: "CP", name: "cp-edge-CLS", detail: "ClusterXL · cp-edge-a · cp-edge-b", liveness: "Stale", note: "6 d last live 09-02" },
-  { kind: "PAN", name: "pan-ank-edge-01", detail: "PA-3420 · PAN-OS 11.1.4 · pano-ank-01", liveness: "Live", note: "5 interfaces" },
-  { kind: "PAN", name: "pan-izm-edge-01", detail: "PA-1410 · PAN-OS 10.2.9 · pano-izm-01", liveness: "No live data", note: "management plane only" },
+  { kind: "MDS", name: "FW-MIKE-08", detail: "Management server · 3 CMA · 24 gateways", liveness: "Live", note: "MDS" },
+  { kind: "CP", name: "CLS-ROMEO-01", detail: "ClusterXL · FW-ROMEO-01-M1 · FW-ROMEO-01-M2", liveness: "Live", note: "2 members, 6 interfaces" },
+  { kind: "CP", name: "FW-ROMEO-01-M1", detail: "Member · active · R81.20", liveness: "Live", note: "3 interfaces" },
+  { kind: "VSX", name: "CLS-DELTA-03", detail: "VSX cluster · 12 virtual systems", liveness: "Live", note: "12 VS" },
+  { kind: "VSX", name: "VS-DELTA-03-12", detail: "Virtual system · CLS-DELTA-03", liveness: "Live", note: "4 interfaces" },
+  { kind: "CP", name: "CLS-BRAVO-02", detail: "ClusterXL · FW-BRAVO-02-M1 · FW-BRAVO-02-M2", liveness: "Stale", note: "6 d last live 09-02" },
+  { kind: "PAN", name: "FW-OSCAR-04-M1", detail: "PA-3420 · PAN-OS 11.1.4 · FW-OSCAR-09", liveness: "Live", note: "5 interfaces" },
+  { kind: "PAN", name: "FW-JULIET-06-M1", detail: "PA-1410 · PAN-OS 10.2.9 · FW-JULIET-09", liveness: "No live data", note: "management plane only" },
 ];
 
 export const INVENTORY_FILTERS: readonly { readonly label: string; readonly n: number }[] = [
@@ -96,19 +94,19 @@ export interface ConfigDeviceRow {
 }
 
 export const CONFIG_DEVICES: readonly ConfigDeviceRow[] = [
-  { name: "cp-mds-01", detail: "Management · 3 CMA", state: "Aligned" },
-  { name: "fw-ist-core-CLS", detail: "ClusterXL · 2 members", state: "Effective drift" },
-  { name: "vsx-ist-CLS", detail: "VSX · 12 virtual systems", state: "Local override" },
-  { name: "pan-ank-edge-02", detail: "PA-3420 · pano-ank-01", state: "Out of sync" },
-  { name: "fw-brs-dr-01", detail: "DR site · standalone", state: "Difference observed" },
+  { name: "FW-MIKE-08", detail: "Management · 3 CMA", state: "Aligned" },
+  { name: "CLS-ROMEO-01", detail: "ClusterXL · 2 members", state: "Effective drift" },
+  { name: "CLS-DELTA-03", detail: "VSX · 12 virtual systems", state: "Local override" },
+  { name: "FW-OSCAR-04-M2", detail: "PA-3420 · FW-OSCAR-09", state: "Out of sync" },
+  { name: "FW-ECHO-05", detail: "DR site · standalone", state: "Difference observed" },
 ];
 
 export const CONFIG_SETTINGS: readonly AlignmentRow[] = [
-  { device: "fw-ist-core-CLS", setting: "Cluster VIP", expected: "cluster-vip.example.invalid", effective: "cluster-vip.example.invalid", state: "Aligned" },
-  { device: "fw-ist-core-CLS", setting: "Hostname", expected: "fw-ist-core-{member}", effective: "fw-ist-core-01 · fw-ist-core-02", state: "Member-specific" },
-  { device: "fw-ist-core-CLS", setting: "NTP · server 2", expected: "ntp-pri.example.invalid", effective: "ntp-alt.example.invalid", state: "Effective drift" },
-  { device: "fw-ist-core-CLS", setting: "SNMP · trap receiver", expected: "snmp-a.example.invalid", effective: "snmp-b.example.invalid", state: "Local override" },
-  { device: "fw-ist-core-CLS", setting: "Login banner", expected: "not in intent", effective: "Authorized use only", state: "Difference observed" },
+  { device: "CLS-ROMEO-01", setting: "Cluster VIP", expected: "cluster-vip.example.test", effective: "cluster-vip.example.test", state: "Aligned" },
+  { device: "CLS-ROMEO-01", setting: "Hostname", expected: "FW-ROMEO-01-M1 / FW-ROMEO-01-M2", effective: "FW-ROMEO-01-M1 · FW-ROMEO-01-M2", state: "Member-specific" },
+  { device: "CLS-ROMEO-01", setting: "NTP · server 2", expected: "ntp-pri.example.test", effective: "ntp-alt.example.test", state: "Effective drift" },
+  { device: "CLS-ROMEO-01", setting: "SNMP · trap receiver", expected: "snmp-a.example.test", effective: "snmp-b.example.test", state: "Local override" },
+  { device: "CLS-ROMEO-01", setting: "Login banner", expected: "not in intent", effective: "Authorized use only", state: "Difference observed" },
 ];
 
 export interface ComplianceFamilyRow {
@@ -130,9 +128,9 @@ export interface ComplianceFindingRow {
 }
 
 export const COMPLIANCE_FINDINGS: readonly ComplianceFindingRow[] = [
-  { control: "CIS 3.1.2 · time sync", device: "fw-ist-core-02", severity: "bad", note: "Effective drift on server 2" },
-  { control: "CIS 2.4.1 · banner", device: "fw-ist-core-CLS", severity: "warn", note: "Unclassified difference" },
-  { control: "CIS 4.2 · logging target", device: "pan-izm-edge-01", severity: "bad", note: "Syslog target removed" },
+  { control: "CIS 3.1.2 · time sync", device: "FW-ROMEO-01-M2", severity: "bad", note: "Effective drift on server 2" },
+  { control: "CIS 2.4.1 · banner", device: "CLS-ROMEO-01", severity: "warn", note: "Unclassified difference" },
+  { control: "CIS 4.2 · logging target", device: "FW-JULIET-06-M1", severity: "bad", note: "Syslog target removed" },
 ];
 
 export interface OperationsJobRow {
@@ -143,10 +141,10 @@ export interface OperationsJobRow {
 }
 
 export const OPERATIONS_JOBS: readonly OperationsJobRow[] = [
-  { job: "Collect evidence", target: "fw-ist-core-CLS", status: "ok", finished: "06:41 UTC" },
-  { job: "Collect evidence", target: "pan-izm-edge-01", status: "bad", finished: "management plane only" },
-  { job: "HA readiness assessment", target: "vsx-ist-CLS", status: "ok", finished: "06:58 UTC" },
-  { job: "HA readiness assessment", target: "pan-ank-edge HA", status: "warn", finished: "mismatch" },
+  { job: "Collect evidence", target: "CLS-ROMEO-01", status: "ok", finished: "06:41 UTC" },
+  { job: "Collect evidence", target: "FW-JULIET-06-M1", status: "bad", finished: "management plane only" },
+  { job: "HA readiness assessment", target: "CLS-DELTA-03", status: "ok", finished: "06:58 UTC" },
+  { job: "HA readiness assessment", target: "CLS-OSCAR-04", status: "warn", finished: "mismatch" },
 ];
 
 export interface ReadinessRow {
@@ -156,10 +154,10 @@ export interface ReadinessRow {
 }
 
 export const OPERATIONS_READINESS: readonly ReadinessRow[] = [
-  { cluster: "fw-ist-core-CLS", state: "ok", note: "Ready · sync OK" },
-  { cluster: "vsx-ist-CLS", state: "ok", note: "Ready · 12 VS" },
-  { cluster: "pan-ank-edge HA", state: "warn", note: "Not ready · mismatch" },
-  { cluster: "cp-edge-CLS", state: "unknown", note: "Undetermined" },
+  { cluster: "CLS-ROMEO-01", state: "ok", note: "Ready · sync OK" },
+  { cluster: "CLS-DELTA-03", state: "ok", note: "Ready · 12 VS" },
+  { cluster: "CLS-OSCAR-04", state: "warn", note: "Not ready · mismatch" },
+  { cluster: "CLS-BRAVO-02", state: "unknown", note: "Undetermined" },
 ];
 
 export interface AdminDeviceRow {
@@ -170,8 +168,8 @@ export interface AdminDeviceRow {
 }
 
 export const ADMIN_DEVICES: readonly AdminDeviceRow[] = [
-  { name: "cp-mds-01", vendor: "Check Point", credentialProfile: "nexus-cp-ro", status: "Enrolled" },
-  { name: "fw-ist-core-01", vendor: "Check Point", credentialProfile: "nexus-cp-ro", status: "Enrolled" },
-  { name: "pan-ank-edge-01", vendor: "Palo Alto Networks", credentialProfile: "nexus-api-ro", status: "Enrolled" },
-  { name: "pan-izm-edge-02", vendor: "Palo Alto Networks", credentialProfile: "nexus-api-ro", status: "Draft entry" },
+  { name: "FW-MIKE-08", vendor: "Check Point", credentialProfile: "profile-01", status: "Enrolled" },
+  { name: "FW-ROMEO-01-M1", vendor: "Check Point", credentialProfile: "profile-01", status: "Enrolled" },
+  { name: "FW-OSCAR-04-M1", vendor: "Palo Alto Networks", credentialProfile: "profile-02", status: "Enrolled" },
+  { name: "FW-JULIET-06-M2", vendor: "Palo Alto Networks", credentialProfile: "profile-02", status: "Draft entry" },
 ];

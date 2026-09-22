@@ -49,7 +49,7 @@ export function BackupPreview() {
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", p: 1.5, bgcolor: m3.surface, borderRadius: "8px" }}>
             <Box>
-              <Typography sx={{ fontWeight: 600 }}>Tango-01 (Gaia R81.20)</Typography>
+              <Typography sx={{ fontWeight: 600 }}>FW-BRAVO-02-M1 (Gaia R81.20)</Typography>
               <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>192.0.2.21 · Check Point Gateway · Today at 02:00 UTC</Typography>
             </Box>
             <Chip size="small" label="UNCHANGED" sx={{ bgcolor: m3.successContainer, color: m3.onSuccessContainer, fontWeight: 700 }} />

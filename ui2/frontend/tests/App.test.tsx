@@ -17,12 +17,13 @@ const PRODUCT_MARKERS: Record<string, string> = {
 };
 
 const PREVIEW_MARKERS: Record<string, string> = {
-  overview: "fw-ist-core-02",
-  inventory: "cp-mds-01",
-  configuration: "fw-ist-core-CLS",
+  overview: "FW-ROMEO-01-M2",
+  inventory: "FW-MIKE-08",
+  configuration: "CLS-ROMEO-01",
   compliance: "CIS Benchmarks",
+  backups: "FW-TANGO-04 (PA-5410)",
   operations: "Recent jobs",
-  administration: "pan-izm-edge-02",
+  administration: "FW-JULIET-06-M2",
 };
 
 describe("the UI 2.0 shell navigation", () => {

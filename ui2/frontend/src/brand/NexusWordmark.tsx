@@ -1,5 +1,6 @@
 import wordmarkSvg from "../assets/wordmark.svg";
 import wordmarkTaglineSvg from "../assets/wordmark-tagline.svg";
+import { m3 } from "../theme/m3Theme";
 
 export function NexusWordmark({
   height = 40,
@@ -15,7 +16,7 @@ export function NexusWordmark({
       src={tagline ? wordmarkTaglineSvg : wordmarkSvg}
       alt={tagline ? "neXus — A CLEARER TOMORROW" : "neXus"}
       height={height}
-      style={{ width: "auto", color }}
+      style={{ width: "auto", color, backgroundColor: m3.brandBackdrop }}
     />
   );
 }

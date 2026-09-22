@@ -47,7 +47,7 @@ export function ConfigurationPreview() {
           ))}
         </Stack>
         <Card sx={{ bgcolor: m3.scLow, borderRadius: "16px", p: 2.5, boxShadow: "none" }}>
-          <Typography variant="h4" sx={{ mb: 1 }}>fw-ist-core-CLS · Alignment</Typography>
+          <Typography variant="h4" sx={{ mb: 1 }}>CLS-ROMEO-01 · Alignment</Typography>
           <Table size="small">
             <TableHead>
               <TableRow>

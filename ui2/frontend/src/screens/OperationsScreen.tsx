@@ -472,17 +472,17 @@ export function OperationsScreen() {
 
         {/* Sticky Quarantine Alert Banner */}
         {quarantined && (
-          <Card sx={{ bgcolor: "#fff3e0", border: "1px solid #ffb74d", borderRadius: "12px", p: 2 }}>
+          <Card sx={{ bgcolor: m3.warningContainer, border: `1px solid ${m3.warning}`, borderRadius: "12px", p: 2 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: "#e65100", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
+                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: m3.warning, color: m3.onWarning, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
                   !
                 </Box>
                 <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#e65100" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: m3.onWarningContainer }}>
                     STICKY ENTITY QUARANTINE ACTIVE (OUTCOME_UNKNOWN)
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "#bf360c" }}>
+                  <Typography variant="body2" sx={{ color: m3.onWarningContainer }}>
                     Cluster and member endpoints are locked from CLASS 2+ actions until 4-eyes audited acknowledgment.
                   </Typography>
                 </Box>
@@ -496,17 +496,17 @@ export function OperationsScreen() {
 
         {/* Overall Verdict Banner */}
         {overallVerdict === "BLOCKING_CONDITIONS_PRESENT" ? (
-          <Card sx={{ bgcolor: "#ffebee", border: "1px solid #ef9a9a", borderRadius: "12px", p: 2 }}>
+          <Card sx={{ bgcolor: m3.errorContainer, border: `1px solid ${m3.error}`, borderRadius: "12px", p: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: "#c62828", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
+                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: m3.error, color: m3.onError, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
                   ✕
                 </Box>
                 <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#b71c1c" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: m3.onErrorContainer }}>
                     VERDICT: BLOCKING_CONDITIONS_PRESENT
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "#c62828" }}>
+                  <Typography variant="body2" sx={{ color: m3.onErrorContainer }}>
                     Pre-flight safety checks failed or evidence is missing. Failover is strictly blocked.
                   </Typography>
                 </Box>
@@ -517,17 +517,17 @@ export function OperationsScreen() {
             </Box>
           </Card>
         ) : overallVerdict === "ADVISORY_CONDITIONS_PRESENT" ? (
-          <Card sx={{ bgcolor: "#fff8e1", border: "1px solid #ffe082", borderRadius: "12px", p: 2 }}>
+          <Card sx={{ bgcolor: m3.warningContainer, border: `1px solid ${m3.warning}`, borderRadius: "12px", p: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: "#f57f17", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
+                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: m3.warning, color: m3.onWarning, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
                   !
                 </Box>
                 <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#e65100" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: m3.onWarningContainer }}>
                     VERDICT: ADVISORY_CONDITIONS_PRESENT
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "#f57f17" }}>
+                  <Typography variant="body2" sx={{ color: m3.onWarningContainer }}>
                     Advisory conditions noted. Proceed with operational awareness.
                   </Typography>
                 </Box>
@@ -545,17 +545,17 @@ export function OperationsScreen() {
             action={<M3Button emphasis="tonal" onClick={handleRunBattery} disabled={isRunning}>{isRunning ? "Evaluating..." : "Run Pre-Flight Battery"}</M3Button>}
           />
         ) : (
-          <Card sx={{ bgcolor: "#e8f5e9", border: "1px solid #a5d6a7", borderRadius: "12px", p: 2 }}>
+          <Card sx={{ bgcolor: m3.successContainer, border: `1px solid ${m3.success}`, borderRadius: "12px", p: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: "#2e7d32", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
+                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: m3.success, color: m3.onSuccess, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
                   ✓
                 </Box>
                 <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#1b5e20" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: m3.onSuccessContainer }}>
                     VERDICT: NO_BLOCKING_CONDITIONS_OBSERVED
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "#2e7d32" }}>
+                  <Typography variant="body2" sx={{ color: m3.onSuccessContainer }}>
                     All {checks.length} pre-flight checks evaluated cleanly against verified evidence. Zero blocking conditions detected.
                   </Typography>
                 </Box>
@@ -764,8 +764,8 @@ export function OperationsScreen() {
           <DialogContent dividers>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
               {actionError && (
-                <Card sx={{ bgcolor: "#ffebee", border: "1px solid #ef9a9a", p: 1.5 }}>
-                  <Typography variant="body2" sx={{ color: "#c62828", fontWeight: 600 }}>
+                <Card sx={{ bgcolor: m3.errorContainer, border: `1px solid ${m3.error}`, p: 1.5 }}>
+                  <Typography variant="body2" sx={{ color: m3.onErrorContainer, fontWeight: 600 }}>
                     {actionError}
                   </Typography>
                 </Card>
@@ -852,7 +852,7 @@ export function OperationsScreen() {
                               </TableRow>
                             ))}
                             {dryRunPlan.reversal_steps?.map((st: any) => (
-                              <TableRow key={`rev-${st.step_number}`} sx={{ bgcolor: "#fafafa" }}>
+                              <TableRow key={`rev-${st.step_number}`} sx={{ bgcolor: m3.scLow }}>
                                 <TableCell>Reversal</TableCell>
                                 <TableCell sx={{ fontWeight: 500 }}>{st.target_member_masked_name || st.target_member}</TableCell>
                                 <TableCell><Chip size="small" label={st.action_kind || "REVERSAL"} color="secondary" /></TableCell>
@@ -875,11 +875,11 @@ export function OperationsScreen() {
 
                   {/* Execution Action & Outcome */}
                   {!executionResult ? (
-                    <Box sx={{ mt: 1, p: 2, bgcolor: "#fff3e0", borderRadius: "8px", border: "1px solid #ffe0b2" }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#e65100" }}>
+                    <Box sx={{ mt: 1, p: 2, bgcolor: m3.warningContainer, borderRadius: "8px", border: `1px solid ${m3.warning}` }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: m3.onWarningContainer }}>
                         ⚠️ MUTATION BOUNDARY
                       </Typography>
-                      <Typography variant="body2" sx={{ color: "#bf360c", mb: 2 }}>
+                      <Typography variant="body2" sx={{ color: m3.onWarningContainer, mb: 2 }}>
                         Executing controlled failover submits an at-most-once command across the mutation boundary. Zero blind retries will occur.
                       </Typography>
                       <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1.5 }}>
@@ -897,8 +897,8 @@ export function OperationsScreen() {
                     </Box>
                   ) : (
                     /* Execution Result Display */
-                    <Card sx={{ p: 2, bgcolor: executionResult.state === "SUCCEEDED" ? "#e8f5e9" : "#fff3e0", border: `1px solid ${executionResult.state === "SUCCEEDED" ? "#a5d6a7" : "#ffb74d"}` }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: executionResult.state === "SUCCEEDED" ? "#1b5e20" : "#e65100" }}>
+                    <Card sx={{ p: 2, bgcolor: executionResult.state === "SUCCEEDED" ? m3.successContainer : m3.warningContainer, border: `1px solid ${executionResult.state === "SUCCEEDED" ? m3.success : m3.warning}` }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: executionResult.state === "SUCCEEDED" ? m3.onSuccessContainer : m3.onWarningContainer }}>
                         EXECUTION STATE: {executionResult.state}
                       </Typography>
                       <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -978,18 +978,18 @@ export function OperationsScreen() {
           <DialogContent dividers>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
               {scheduleError && (
-                <Card sx={{ bgcolor: "#ffebee", border: "1px solid #ef9a9a", p: 1.5 }}>
-                  <Typography variant="body2" sx={{ color: "#c62828", fontWeight: 600 }}>
+                <Card sx={{ bgcolor: m3.errorContainer, border: `1px solid ${m3.error}`, p: 1.5 }}>
+                  <Typography variant="body2" sx={{ color: m3.onErrorContainer, fontWeight: 600 }}>
                     {scheduleError}
                   </Typography>
                 </Card>
               )}
 
-              <Card sx={{ bgcolor: "#fff3e0", border: "1px solid #ffe0b2", p: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#e65100" }}>
+              <Card sx={{ bgcolor: m3.warningContainer, border: `1px solid ${m3.warning}`, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: m3.onWarningContainer }}>
                   ⚠️ Unattended Execution Safety Invariant
                 </Typography>
-                <Typography variant="body2" sx={{ color: "#ef6c00", mt: 0.5 }}>
+                <Typography variant="body2" sx={{ color: m3.onWarningContainer, mt: 0.5 }}>
                   Scheduled maintenance window failovers execute unattended at T₀ without further human keystrokes.
                   A fresh, direct two-sided pre-flight check battery is executed at T₀ inside the exclusive execution lock.
                   If ANY blocking check fails or baseline drift is detected, the execution strictly aborts with zero blind retries.

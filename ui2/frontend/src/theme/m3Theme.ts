@@ -22,6 +22,7 @@ type TokenName =
   | "attention" | "attentionContainer" | "onAttentionContainer"
   | "goodInk" | "warningInk" | "seriousInk" | "criticalInk" | "neutralInk"
   | "cp" | "vsx" | "pan"
+  | "brandTeal" | "brandBlue" | "brandBackdrop"
   | "e1" | "e2";
 
 export const LIGHT: Record<TokenName, string> = {
@@ -63,11 +64,14 @@ export const LIGHT: Record<TokenName, string> = {
   goodInk: "#087a08",
   warningInk: "#8a5a00",
   seriousInk: "#b0421a",
-  criticalInk: "#d03b3b",
+  criticalInk: "#cc3636",
   neutralInk: "#5b6473",
   cp: "#c2338a",
   vsx: "#4a3aa7",
   pan: "#d9731a",
+  brandTeal: "#1f8f7c",
+  brandBlue: "#3b63d1",
+  brandBackdrop: "#ffffff",
   e1: "none",
   e2: "0 4px 14px rgba(15,23,42,0.08)",
 };
@@ -116,6 +120,9 @@ export const DARK: Record<TokenName, string> = {
   cp: "#e06ab0",
   vsx: "#9a8fe0",
   pan: "#f0a060",
+  brandTeal: "#1f8f7c",
+  brandBlue: "#3b63d1",
+  brandBackdrop: "#eef1f5",
   e1: "none",
   e2: "0 4px 14px rgba(0,0,0,0.4)",
 };
@@ -172,6 +179,12 @@ export function m3ThemeFor(mode: ColorMode = "light", density: Density = "comfor
     components: {
       MuiCssBaseline: { styleOverrides: { body: { fontVariantNumeric: "tabular-nums" } } },
       MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
+      MuiAlert: { styleOverrides: {
+        standardError: { backgroundColor: t.errorContainer, color: t.onErrorContainer },
+        standardWarning: { backgroundColor: t.warningContainer, color: t.onWarningContainer },
+        standardSuccess: { backgroundColor: t.successContainer, color: t.onSuccessContainer },
+        standardInfo: { backgroundColor: t.primaryContainer, color: t.onPrimaryContainer },
+      } },
       MuiTableCell: {
         styleOverrides: {
           root: { borderColor: t.outlineVar, paddingTop: compact ? 4 : 8, paddingBottom: compact ? 4 : 8 },
