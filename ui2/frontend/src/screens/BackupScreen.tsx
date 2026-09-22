@@ -22,6 +22,8 @@ import Switch from "@mui/material/Switch";
 import {
   getBackupDeviations,
   getBackupPolicy,
+  updateBackupPolicy,
+  setBackupBaseline,
   collectDeviceBackup,
   compareBackups,
   downloadBackupArtefact,
@@ -124,11 +126,19 @@ export function BackupScreen() {
   const [compareBusy, setCompareBusy] = useState(false);
   const [policyOpen, setPolicyOpen] = useState(false);
 
-  // Policy configuration (PO requirements: 14 days standard retention, depth 4 snapshots, 400 GB vault)
+  // V44: the policy dialog edits the real, audited row; fields are seeded from the last read.
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [dailyCron, setDailyCron] = useState("0 2 * * *");
-  const [weeklyCron, setWeeklyCron] = useState("0 3 * * 0");
   const [retentionDays, setRetentionDays] = useState(14);
   const [snapshotDepth, setSnapshotDepth] = useState(4);
+  const [policyBusy, setPolicyBusy] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  // V44: per-device baseline artefact ids and the History dialog.
+  const [baselines, setBaselines] = useState<Record<string, string>>({});
+  const [historyFor, setHistoryFor] = useState<BackupDeviceItem | null>(null);
+  const [history, setHistory] = useState<BackupArtefact[] | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [baselineBusy, setBaselineBusy] = useState<string | null>(null);
 
   // The fleet list is read from the artefact store. It used to be a hardcoded array,
   // which meant the screen showed three devices with passing validation badges whether
@@ -173,6 +183,7 @@ export function BackupScreen() {
         listDevices().then((r) => new Map(r.devices.map((d) => [d.device_id, d.hostname ?? d.device_id] as const))).catch(() => new Map<string, string>()),
       ]);
       setDevices(toFleetRows(response.backups ?? [], names));
+      setBaselines(response.baselines ?? {});
       setListError(null);
     } catch (error) {
       setDevices([]);
@@ -184,7 +195,12 @@ export function BackupScreen() {
     // Policy and deviation counts are read separately and are allowed to be absent.
     // A card with nothing behind it says so; it does not fall back to a figure.
     try {
-      setPolicy(await getBackupPolicy());
+      const loaded = await getBackupPolicy();
+      setPolicy(loaded);
+      setScheduleEnabled(Boolean(loaded.schedule_enabled));
+      setDailyCron(loaded.daily_backup_cron ?? "0 2 * * *");
+      setRetentionDays(loaded.backup_retention_days ?? 14);
+      setSnapshotDepth(loaded.snapshot_retention_depth ?? 4);
     } catch {
       setPolicy(null);
     }
@@ -291,7 +307,10 @@ export function BackupScreen() {
         .filter((a) => a.artefact_id !== device.artefactId)
         .sort((a, b) => b.collected_at.localeCompare(a.collected_at));
       setCompareHistory(history);
-      if (history.length > 0) {
+      const baseline = baselines[device.deviceId];
+      if (baseline && history.some((a) => a.artefact_id === baseline)) {
+        setCompareOtherId(baseline);
+      } else if (history.length > 0) {
         setCompareOtherId(history[0].artefact_id);
       }
     } catch (error) {
@@ -318,17 +337,75 @@ export function BackupScreen() {
     }
   };
 
-  // The service answers 405 POLICY_IMMUTABLE to any policy write: retention and vault
-  // policy are changed through approved cluster configuration, not over HTTP. The dialog
-  // used to close and report the policy updated without ever calling the service, so an
-  // operator could believe they had changed a retention window that never moved.
-  const handleSavePolicy = () => {
-    setPolicyOpen(false);
-    setListError(
-      "Backup retention and vault policy are immutable over HTTP and were not changed. "
-      + "They are updated through approved cluster configuration."
-    );
+  // V44: the policy is a real, audited row now; the dialog used to close and report a
+  // change it never made, then (honestly) refuse. Save writes it and re-reads it.
+  const handleSavePolicy = async () => {
+    setPolicyBusy(true);
+    setPolicyError(null);
+    try {
+      const saved = await updateBackupPolicy({
+        schedule_enabled: scheduleEnabled,
+        daily_backup_cron: dailyCron.trim(),
+        backup_retention_days: retentionDays,
+        snapshot_retention_depth: snapshotDepth,
+      });
+      setPolicy(saved);
+      setPolicyOpen(false);
+      setSuccessMessage(saved.schedule_enabled
+        ? `Policy saved: fleet backup scheduled at "${saved.daily_backup_cron}" (UTC), ${saved.backup_retention_days}-day retention.`
+        : `Policy saved: schedule off, ${saved.backup_retention_days}-day retention.`);
+      setTimeout(() => setSuccessMessage(null), 8000);
+    } catch (error) {
+      const body = (error as { body?: { reason?: string } }).body;
+      const status = (error as { status?: number }).status;
+      setPolicyError(body?.reason ?? (status === 403 ? "Refused by the service: your session may not change the backup policy." : "The policy could not be saved."));
+    } finally {
+      setPolicyBusy(false);
+    }
   };
+
+  const openHistory = async (device: BackupDeviceItem) => {
+    setHistoryFor(device);
+    setHistory(null);
+    setHistoryError(null);
+    try {
+      const response = await listDeviceBackups(device.deviceId);
+      setHistory([...response.backups].sort((a, b) => b.collected_at.localeCompare(a.collected_at)));
+      if (response.baseline_artefact_id) {
+        setBaselines((prev) => ({ ...prev, [device.deviceId]: response.baseline_artefact_id as string }));
+      }
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : "The device's backup history could not be read.");
+    }
+  };
+
+  const handleSetBaseline = async (device: BackupDeviceItem, artefactId: string | null) => {
+    setBaselineBusy(artefactId ?? "clear");
+    setHistoryError(null);
+    try {
+      const result = await setBackupBaseline(device.deviceId, artefactId);
+      setBaselines((prev) => {
+        const next = { ...prev };
+        if (result.baseline_artefact_id) next[device.deviceId] = result.baseline_artefact_id;
+        else delete next[device.deviceId];
+        return next;
+      });
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      setHistoryError(status === 403 ? "Refused by the service: your session may not set a baseline." : `Baseline change refused${status ? ` (HTTP ${status})` : ""}.`);
+    } finally {
+      setBaselineBusy(null);
+    }
+  };
+
+  /** A row for one artefact of a device, so the per-artefact dialogs (Contents, Download) work from History too. */
+  const asItem = (device: BackupDeviceItem, artefact: BackupArtefact): BackupDeviceItem => ({
+    ...device,
+    artefactId: artefact.artefact_id,
+    sizeBytes: artefact.size_bytes,
+    lastBackupTime: artefact.collected_at,
+    validationLevel: artefact.validation_level || "UNKNOWN",
+  });
 
   return (
     <ScreenRoot>
@@ -383,17 +460,17 @@ export function BackupScreen() {
 
         <Card sx={{ p: 2.5, borderRadius: "16px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}` }}>
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar, fontWeight: 500 }}>
-            Configured Vault Capacity
+            Scheduled Fleet Backup
           </Typography>
-          <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: m3.primary }}>
-            {policy ? policy.storage_capacity : "—"}
+          <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: policy?.schedule_enabled ? m3.primary : m3.onSurfaceVar }}>
+            {policy ? (policy.schedule_enabled ? policy.daily_backup_cron : "Off") : "—"}
           </Typography>
-          {/* The card used to read "400 GiB / ui2-backup-vault PVC mounted", naming a
-              volume that does not exist. This is the capacity the policy declares, which
-              is not the same claim as space actually reserved: the store currently shares
-              a volume with the evidence plane and no quota enforces either figure. */}
           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-            {policy ? "Declared by policy; not a measured reservation" : "Policy unavailable"}
+            {policy
+              ? policy.schedule_enabled
+                ? `Cron, UTC · last run ${policy.last_scheduled_run_at ? new Date(policy.last_scheduled_run_at).toLocaleString() : "never"}`
+                : "Enable it under Retention & Policies; nothing runs until then"
+              : "Policy unavailable"}
           </Typography>
         </Card>
 
@@ -579,6 +656,10 @@ export function BackupScreen() {
                         </M3Button>
                       )}
 
+                      <M3Button emphasis="text" onClick={() => void openHistory(device)}>
+                        History{baselines[device.deviceId] ? " ★" : ""}
+                      </M3Button>
+
                       <M3Button emphasis="text" disabled={!device.artefactId} onClick={() => void openContents(device)}>
                         Contents
                       </M3Button>
@@ -652,6 +733,7 @@ export function BackupScreen() {
                 >
                   {compareHistory.map((a) => (
                     <option key={a.artefact_id} value={a.artefact_id}>
+                      {baselines[selectedDeviceDiff.deviceId] === a.artefact_id ? "★ baseline · " : ""}
                       {a.collected_at} · {formatBytes(a.size_bytes)} · {a.artefact_id.slice(0, 8)}
                     </option>
                   ))}
@@ -843,57 +925,126 @@ export function BackupScreen() {
         </Dialog>
       )}
 
-      {/* Retention Policy Modal */}
-      <Dialog open={policyOpen} onClose={() => setPolicyOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Backup & Snapshot Policies</DialogTitle>
+      {/* V44 History dialog: every backup of one device, baseline, per-artefact actions */}
+      {historyFor && (
+        <Dialog open={true} onClose={() => setHistoryFor(null)} maxWidth="md" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>Backup history: {historyFor.name}</DialogTitle>
+          <DialogContent dividers>
+            {historyError && <Alert severity="error" sx={{ mb: 1 }}>{historyError}</Alert>}
+            {!history && !historyError && <CircularProgress size={20} />}
+            {history && history.length === 0 && <Alert severity="info">No backup of this device is on record.</Alert>}
+            {history && history.length > 0 && (
+              <TableContainer sx={{ maxHeight: 460 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Collected</TableCell>
+                      <TableCell align="right">Size</TableCell>
+                      <TableCell>Validation</TableCell>
+                      <TableCell>Deviation</TableCell>
+                      <TableCell>Baseline</TableCell>
+                      <TableCell align="right">Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {history.map((a) => {
+                      const isBaseline = baselines[historyFor.deviceId] === a.artefact_id;
+                      return (
+                        <TableRow key={a.artefact_id} hover selected={isBaseline}>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>{new Date(a.collected_at).toLocaleString()}</TableCell>
+                          <TableCell align="right">{formatBytes(a.size_bytes)}</TableCell>
+                          <TableCell>{a.validation_level || "UNKNOWN"}</TableCell>
+                          <TableCell>{a.deviation_state ? a.deviation_state.toUpperCase() : "NOT EVALUATED"}</TableCell>
+                          <TableCell>
+                            {isBaseline ? (
+                              <Chip size="small" label="★ baseline" sx={{ bgcolor: m3.primaryContainer, color: m3.onPrimaryContainer, fontWeight: 700 }} />
+                            ) : (
+                              <M3Button emphasis="text" disabled={baselineBusy !== null} onClick={() => void handleSetBaseline(historyFor, a.artefact_id)}>
+                                Set as baseline
+                              </M3Button>
+                            )}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                              <M3Button emphasis="text" onClick={() => void openContents(asItem(historyFor, a))}>Contents</M3Button>
+                              <M3Button
+                                emphasis="text"
+                                onClick={() => {
+                                  setExportError(null);
+                                  setSelectedDeviceExport(asItem(historyFor, a));
+                                }}
+                              >
+                                Download
+                              </M3Button>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DialogContent>
+          <DialogActions>
+            {baselines[historyFor.deviceId] && (
+              <M3Button emphasis="text" disabled={baselineBusy !== null} onClick={() => void handleSetBaseline(historyFor, null)}>
+                Clear baseline
+              </M3Button>
+            )}
+            <M3Button emphasis="filled" onClick={() => setHistoryFor(null)}>
+              Close
+            </M3Button>
+          </DialogActions>
+        </Dialog>
+      )}
+
+      {/* V44 Retention & schedule policy: the real, audited row */}
+      <Dialog open={policyOpen} onClose={() => !policyBusy && setPolicyOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Backup Schedule & Retention</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2.5} sx={{ mt: 1 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Switch checked={scheduleEnabled} onChange={(e) => setScheduleEnabled(e.target.checked)} disabled={policyBusy} />
+              <Typography variant="body2">
+                {scheduleEnabled ? "Scheduled fleet backup is ON: every backup target runs on the cron below." : "Scheduled fleet backup is OFF: backups run only from this screen."}
+              </Typography>
+            </Stack>
             <TextField
-              label="Daily Backup Schedule (Cron)"
+              label="Fleet backup schedule (cron, UTC)"
               value={dailyCron}
               onChange={(e) => setDailyCron(e.target.value)}
-              helperText="Default: 0 2 * * * (02:00 UTC Daily)"
+              helperText="Five fields: minute hour day month weekday. 0 2 * * * = 02:00 UTC every day."
+              disabled={policyBusy}
               fullWidth
             />
             <TextField
-              label="Weekly Snapshot Schedule (Cron)"
-              value={weeklyCron}
-              onChange={(e) => setWeeklyCron(e.target.value)}
-              helperText="Default: 0 3 * * 0 (03:00 UTC Sunday)"
-              fullWidth
-            />
-            <TextField
-              label="Daily Backup Retention Period (Days)"
+              label="Backup retention (days)"
               type="number"
               value={retentionDays}
               onChange={(e) => setRetentionDays(Number(e.target.value))}
-              helperText="Backups older than this horizon are pruned with append-only ledger tombstones (Approved: 30 days)"
+              helperText="Backups older than this are pruned with append-only ledger tombstones; a device's last backup is never pruned."
+              disabled={policyBusy}
               fullWidth
             />
             <TextField
-              label="Weekly Snapshot Retention Depth"
+              label="Snapshot retention depth"
               type="number"
               value={snapshotDepth}
               onChange={(e) => setSnapshotDepth(Number(e.target.value))}
-              helperText="Number of full OS snapshots kept per gateway (Approved: 2 snapshots)"
+              helperText="Gaia snapshots kept per gateway."
+              disabled={policyBusy}
               fullWidth
             />
-            <Box sx={{ p: 1.5, bgcolor: m3.scLow, borderRadius: "8px" }}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Storage Allocation: 400 GiB Dedicated Persistent Volume
-              </Typography>
-              <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                Allocated to accommodate 1-month daily backups and 2-depth Gaia snapshots without disk exhaustion.
-              </Typography>
-            </Box>
+            {policyError && <Alert severity="error">{policyError}</Alert>}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <M3Button emphasis="text" onClick={() => setPolicyOpen(false)}>
+          <M3Button emphasis="text" disabled={policyBusy} onClick={() => setPolicyOpen(false)}>
             Cancel
           </M3Button>
-          <M3Button emphasis="filled" onClick={handleSavePolicy}>
-            Save Policy
+          <M3Button emphasis="filled" disabled={policyBusy} onClick={() => void handleSavePolicy()}>
+            {policyBusy ? <CircularProgress size={16} /> : "Save Policy"}
           </M3Button>
         </DialogActions>
       </Dialog>

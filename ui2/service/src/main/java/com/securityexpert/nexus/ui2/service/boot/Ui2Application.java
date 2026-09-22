@@ -37,6 +37,7 @@ import org.springframework.core.env.Environment;
 // the service package above it -- otherwise the controllers in
 // `…​.ui2.service` and `…​.ui2.service.api` are never found and every route
 // answers 404 while the process looks healthy.
+@org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication(
         scanBasePackages = "com.securityexpert.nexus.ui2.service",
         exclude = {

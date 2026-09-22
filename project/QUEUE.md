@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T12:18:58Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T12:48:37Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -18,13 +18,13 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T12:18:58Z
 - P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices ( (target: )
 - P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner vs DeviceComposit)
 - P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect, warn with the (target: ui2 worker HostKeyVerifier / TrustRuleRe)
+- P1/in_progress backup_screen_backbox_model — Backup screen on the Backbox model: per-device history, sc (target: PO directive 2026-09-22 (Backbox standar)
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
 - P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI jo (target: workflow §5 B1-1)
 - P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, sing (target: workflow §5 B1-3)
 - P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, s (target: workflow §5 B1-4)
 - P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
 - P1/planned backup_plane_separate_service — Deliver the backup plane as the independent service the re (target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITEC)
-- P1/planned backup_screen_backbox_model — Backup screen on the Backbox model: per-device history, sc (target: PO directive 2026-09-22 (Backbox standar)
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
 - P1/planned cli_parity_for_every_ui_action — Every UI action has a CLI counterpart (the product must no (target: PO directive 2026-09-22; ui2/cli CliEntr)
 - P1/planned cluster_member_model_needs_second_query — Cluster members carry no hardware field in the gateway enu (target: Check Point management plane enumeration)

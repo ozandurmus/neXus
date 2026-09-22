@@ -103,26 +103,42 @@ export interface BackupArtefact {
   readonly deviation_state: "unchanged" | "changed" | "first" | null;
 }
 
-export function listDeviceBackups(deviceId: string): Promise<{ backups: BackupArtefact[] }> {
+export function listDeviceBackups(deviceId: string): Promise<{ backups: BackupArtefact[]; baseline_artefact_id?: string | null }> {
   return call(`/devices/${encodeURIComponent(deviceId)}/backups`, "GET");
 }
 
 /** Every recorded backup artefact across the fleet, newest first as the store returns them. */
-export function listFleetBackups(): Promise<{ backups: BackupArtefact[] }> {
+export function listFleetBackups(): Promise<{ backups: BackupArtefact[]; baselines?: Record<string, string> }> {
   return call("/backups", "GET");
 }
 
+/** V44: the one audited policy row -- schedule (cron, UTC) and retention. */
 export interface BackupPolicy {
   readonly policy_id: string;
+  readonly schedule_enabled: boolean;
   readonly daily_backup_cron: string;
-  readonly weekly_snapshot_cron: string;
   readonly backup_retention_days: number;
   readonly snapshot_retention_depth: number;
-  readonly major_alert_enabled: boolean;
-  readonly storage_capacity: string;
+  readonly last_scheduled_run_at?: string | null;
+  readonly updated_at?: string;
 }
 
-/** Read-only: the service answers 405 POLICY_IMMUTABLE to any write, by design. */
+export interface BackupPolicyUpdate {
+  readonly schedule_enabled: boolean;
+  readonly daily_backup_cron: string;
+  readonly backup_retention_days: number;
+  readonly snapshot_retention_depth: number;
+}
+
+export function updateBackupPolicy(update: BackupPolicyUpdate): Promise<BackupPolicy> {
+  return call("/api/v2/backups/policies", "PUT", update);
+}
+
+/** V44: declare (or clear, with null) the artefact that is a device's reference point. */
+export function setBackupBaseline(deviceId: string, artefactId: string | null): Promise<{ device_id: string; baseline_artefact_id: string | null; changed: boolean }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/backup-baseline`, "PUT", { artefact_id: artefactId });
+}
+
 export function getBackupPolicy(): Promise<BackupPolicy> {
   return call("/api/v2/backups/policies", "GET");
 }

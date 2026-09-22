@@ -121,22 +121,6 @@ class BackupControllerTest {
     }
 
     @Test
-    void getBackupPolicyReportsTruthful14DaysAndDepth4() {
-        ResponseEntity<Map<String, Object>> response = controller.getBackupPolicy();
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(14, response.getBody().get("backup_retention_days"));
-        assertEquals(4, response.getBody().get("snapshot_retention_depth"));
-        assertEquals("400Gi", response.getBody().get("storage_capacity"));
-    }
-
-    @Test
-    void updateBackupPolicyRefusesMutationWith405() {
-        ResponseEntity<Map<String, Object>> response = controller.updateBackupPolicy(Map.of("backup_retention_days", 60));
-        assertEquals(HttpStatus.METHOD_NOT_ALLOWED, response.getStatusCode());
-        assertEquals("POLICY_IMMUTABLE", response.getBody().get("error"));
-    }
-
-    @Test
     void deviceBackupsRejectsPathTraversal() {
         ResponseEntity<Map<String, Object>> response = controller.deviceBackups("../../../etc/shadow");
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());

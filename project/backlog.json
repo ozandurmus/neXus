@@ -797,7 +797,7 @@
       "id": "backup_screen_backbox_model",
       "category": "ui2",
       "title": "Backup screen on the Backbox model: per-device history, schedule, baseline, run-now, download, compare in one view",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P1",
       "target": "PO directive 2026-09-22 (Backbox standard); download/contents/compare shipped 2026-09-22, history/schedule/baseline remain",
       "note": ""

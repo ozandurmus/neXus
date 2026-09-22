@@ -50,18 +50,21 @@ public final class BackupController {
     private final BackupCollectService backupCollectService;
     private final BackupArtefactManifestRepository manifestRepository;
     private final BackupDownloadService backupDownloadService;
+    private final com.securityexpert.nexus.ui2.persistence.artefact.BackupBaselineRepository baselineRepository;
 
     public BackupController(BackupCollectService backupCollectService,
             BackupArtefactManifestRepository manifestRepository) {
-        this(backupCollectService, manifestRepository, null);
+        this(backupCollectService, manifestRepository, null, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public BackupController(BackupCollectService backupCollectService,
-            BackupArtefactManifestRepository manifestRepository, BackupDownloadService backupDownloadService) {
+            BackupArtefactManifestRepository manifestRepository, BackupDownloadService backupDownloadService,
+            com.securityexpert.nexus.ui2.persistence.artefact.BackupBaselineRepository baselineRepository) {
         this.backupCollectService = backupCollectService;
         this.manifestRepository = manifestRepository;
         this.backupDownloadService = backupDownloadService;
+        this.baselineRepository = baselineRepository;
     }
 
     public record DownloadRequest(@JsonProperty("reason") String reason) {
@@ -265,6 +268,9 @@ public final class BackupController {
         List<BackupArtefactSummary> rows = manifestRepository.findByDevice(deviceId, ArtefactClass.BACKUP);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("device_id", deviceId);
+        // V44: the device's declared reference point, so the history view can mark it and compare against it.
+        body.put("baseline_artefact_id", baselineRepository == null ? null
+                : baselineRepository.find(deviceId).map(b -> b.artefactId()).orElse(null));
         body.put("backups", rows.stream().map(BackupController::toSummaryBody).toList());
         return ResponseEntity.ok(body);
     }
@@ -274,29 +280,8 @@ public final class BackupController {
         List<BackupArtefactSummary> rows = manifestRepository.findAll(ArtefactClass.BACKUP);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("backups", rows.stream().map(BackupController::toSummaryBody).toList());
+        body.put("baselines", baselineRepository == null ? Map.of() : baselineRepository.findAll());
         return ResponseEntity.ok(body);
-    }
-
-    @GetMapping("/api/v2/backups/policies")
-    public ResponseEntity<Map<String, Object>> getBackupPolicy() {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("policy_id", "default");
-        body.put("daily_backup_cron", "0 2 * * *");
-        body.put("weekly_snapshot_cron", "0 3 * * 0");
-        body.put("backup_retention_days", 14);
-        body.put("snapshot_retention_depth", 4);
-        body.put("major_alert_enabled", true);
-        body.put("storage_capacity", "400Gi");
-        return ResponseEntity.ok(body);
-    }
-
-    @PutMapping("/api/v2/backups/policies")
-    public ResponseEntity<Map<String, Object>> updateBackupPolicy(@RequestBody(required = false) Map<String, Object> policy) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("error", "POLICY_IMMUTABLE");
-        body.put("code", "READ_ONLY_POLICY");
-        body.put("reason", "Backup retention and vault policies are immutable via HTTP API and must be updated via approved cluster configuration.");
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(body);
     }
 
     @GetMapping("/api/v2/backups/deviations")

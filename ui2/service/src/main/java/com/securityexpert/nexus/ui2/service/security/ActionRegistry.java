@@ -90,6 +90,10 @@ public final class ActionRegistry {
      * the first byte leaves the service.
      */
     public static final String DEVICE_BACKUP_RETRIEVE = "device_backup_retrieve";
+    /** V44: {@code PUT /api/v2/backups/policies} -- schedule and retention, {@code role:backup_admin}, audited. */
+    public static final String DEVICE_BACKUP_POLICY_SET = "device_backup_policy_set";
+    /** V44: {@code PUT /devices/{id}/backup-baseline} -- {@code role:backup_admin}, audited. */
+    public static final String DEVICE_BACKUP_BASELINE_SET = "device_backup_baseline_set";
 
     /**
      * WORKER.md (movement NXS-LOCAL-0174): {@code GET /project-plan} -- any
@@ -163,6 +167,8 @@ public final class ActionRegistry {
         register(new ActionDescriptor(DEVICE_BACKUP_READ, true, Optional.empty()));
         register(new ActionDescriptor(DEVICE_BACKUP_TARGET_SET, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(DEVICE_BACKUP_RETRIEVE, true, Optional.of(RoleToken.BACKUP_ADMIN)));
+        register(new ActionDescriptor(DEVICE_BACKUP_POLICY_SET, true, Optional.of(RoleToken.BACKUP_ADMIN)));
+        register(new ActionDescriptor(DEVICE_BACKUP_BASELINE_SET, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         // WORKER.md: same open-to-any-authenticated-session gate as DEVICE_READ.
         register(new ActionDescriptor(PROJECT_PLAN_READ, true, Optional.empty()));
         register(new ActionDescriptor(RBAC_ROLE_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));

@@ -461,6 +461,52 @@ public class DeviceCompositionConfiguration {
      * that one purpose; when either env var is absent the download route
      * answers 503 {@code ARTEFACT_STORE_NOT_MOUNTED} rather than failing at boot.
      */
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.artefact.BackupPolicyRepository backupPolicyRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupPolicyRepository(transactionBoundary);
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.artefact.BackupBaselineRepository backupBaselineRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupBaselineRepository(transactionBoundary);
+    }
+
+    /** V44: the cron-driven fleet backup; {@link BackupScheduleTrigger} calls it once a minute. */
+    @Bean
+    public com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler backupScheduler(
+            com.securityexpert.nexus.ui2.persistence.artefact.BackupPolicyRepository policyRepository,
+            BackupCollectService collectService) {
+        return new com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler(policyRepository, collectService);
+    }
+
+    @Bean
+    public BackupScheduleTrigger backupScheduleTrigger(
+            com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler scheduler) {
+        return new BackupScheduleTrigger(scheduler);
+    }
+
+    /** The one-minute tick behind {@link com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler}. */
+    public static final class BackupScheduleTrigger {
+        private static final java.util.logging.Logger LOG =
+                java.util.logging.Logger.getLogger(BackupScheduleTrigger.class.getName());
+        private final com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler scheduler;
+
+        BackupScheduleTrigger(com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler scheduler) {
+            this.scheduler = scheduler;
+        }
+
+        @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60_000, initialDelay = 30_000)
+        public void tick() {
+            try {
+                scheduler.tick(java.time.Instant.now());
+            } catch (RuntimeException e) {
+                LOG.warning("[BACKUP_SCHEDULE] tick failed: " + e.getMessage());
+            }
+        }
+    }
+
     /** The service's artefact store, or {@code storeOrNull() == null} when the pod has no key/volume mounted. */
     public record ArtefactStoreAccess(com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore storeOrNull) {
     }
