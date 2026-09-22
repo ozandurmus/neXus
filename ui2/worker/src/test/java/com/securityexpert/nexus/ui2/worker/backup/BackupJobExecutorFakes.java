@@ -196,7 +196,9 @@ final class BackupJobExecutorFakes {
 
         @Override
         public List<DeviceSummaryRecord> listAll() {
-            throw new UnsupportedOperationException("not used by this test");
+            // The manifest write consults the coalesced device view for a software version; this
+            // fake holds no discovery-joined rows, so "unresolvable" stays unresolvable here.
+            return List.of();
         }
     }
 

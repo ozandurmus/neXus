@@ -186,7 +186,8 @@ public final class BackupJobExecutor {
     private JobOutcome handleCompleted(String jobId, long leaseEpoch, String deviceId, BackupResult.Completed completed,
             Optional<DeviceConfirmFacts> confirmFacts) {
         String deviationState = deviationStateAgainstPrevious(deviceId, completed.artefact().plaintextSha256());
-        boolean recorded = recordManifest(completed.artefact(), deviceId, confirmFacts, deviationState);
+        boolean recorded = recordManifest(completed.artefact(), deviceId, confirmFacts, deviationState,
+                completed.observedSoftwareVersion());
         if (!recorded) {
             // AC-3 / C7 section 3.3: an unresolvable Check Point software version refuses the store with zero rows.
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
@@ -211,7 +212,7 @@ public final class BackupJobExecutor {
         // still refuses the store here exactly as it would on the happy
         // path, and the run still fails for cleanup_failed either way).
         String deviationState = deviationStateAgainstPrevious(deviceId, cleanupFailed.artefact().plaintextSha256());
-        recordManifest(cleanupFailed.artefact(), deviceId, confirmFacts, deviationState);
+        recordManifest(cleanupFailed.artefact(), deviceId, confirmFacts, deviationState, Optional.empty());
 
         eligibilityRepository.markIneligible(deviceId, cleanupFailed.reason(), ACTOR, ACTION_INELIGIBILITY_MARKED);
 
@@ -231,10 +232,18 @@ public final class BackupJobExecutor {
     }
 
     private boolean recordManifest(ArtefactStore.ArtefactMetadata artefact, String deviceId,
-            Optional<DeviceConfirmFacts> confirmFacts, String deviationState) {
+            Optional<DeviceConfirmFacts> confirmFacts, String deviationState, Optional<String> resultSoftwareVersion) {
         String vendor = deviceRepository.find(deviceId).map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::vendorHint).orElse(VENDOR);
         Optional<String> virtualSystemRef = confirmFacts.flatMap(DeviceConfirmFacts::virtualSystemRef);
-        Optional<String> softwareVersion = confirmFacts.flatMap(DeviceConfirmFacts::observedSoftwareVersion);
+        // C7 section 3.3 refuses a manifest without a software version. Measured live (2026-09-22): two
+        // discovery-imported Check Point gateways whose confirm read parsed no version had one on the
+        // same coalesced view the inventory screen shows (discovery's own "software_version"), so
+        // that view is the second source; the backup run's own observation (when the executor reads
+        // one) is the third. Only when all three are empty is the store refused.
+        Optional<String> softwareVersion = confirmFacts.flatMap(DeviceConfirmFacts::observedSoftwareVersion)
+                .or(() -> deviceRepository.findSummary(deviceId).flatMap(
+                        com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedSoftwareVersion))
+                .or(() -> resultSoftwareVersion);
         String hostnameSource = confirmFacts.flatMap(DeviceConfirmFacts::observedHostname).orElse(deviceId);
         try {
             BackupArtefactManifestRecord manifest = new BackupArtefactManifestRecord(UUID.randomUUID().toString(), deviceId,
