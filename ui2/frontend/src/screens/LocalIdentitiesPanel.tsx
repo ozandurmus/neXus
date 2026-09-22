@@ -12,6 +12,7 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { RestrictedPanel, StatePanel, Ts, isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import {
   createLocalIdentity,
@@ -42,6 +43,7 @@ export function LocalIdentitiesPanel() {
   const {
     data,
     error: fetchError,
+    rawError,
     refresh,
   } = useFetchOnMount(
     () => listLocalIdentities().then((result) => result.identities ?? []),
@@ -49,22 +51,16 @@ export function LocalIdentitiesPanel() {
   );
   const identities = data;
   const [mutationError, setMutationError] = useState<string | null>(null);
-  const error = fetchError ?? mutationError;
 
-  if (error) {
-    return (
-      <EmptyPanel title="Local identities unavailable" body={error}>
-        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-          <M3Button emphasis="outlined" onClick={refresh}>
-            Retry
-          </M3Button>
-        </Box>
-      </EmptyPanel>
-    );
+  if (fetchError && identities === null) {
+    return isRestricted(rawError)
+      ? <RestrictedPanel area="Local identities" role="Security Admin" />
+      : <StatePanel variant="error" title="Local identities unavailable" body="Local identities could not be read." code={fetchError}
+          action={<M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>} />;
   }
 
   if (identities === null) {
-    return <EmptyPanel title="Local identities" body="Loading…" />;
+    return <StatePanel variant="empty" title="Local identities" body="Loading…" />;
   }
 
   if (identities.length === 0) {
@@ -89,6 +85,11 @@ export function LocalIdentitiesPanel() {
           Create identity
         </M3Button>
       </Box>
+      {mutationError && (
+        <Box role="alert" sx={{ px: 1.5, py: 1, border: "1px solid", borderColor: "error.main", borderRadius: 1.5 }}>
+          <Typography color="error">{mutationError}</Typography>
+        </Box>
+      )}
       <Stack spacing={1.5}>
         {identities.map((identity) => (
           <Box
@@ -106,8 +107,8 @@ export function LocalIdentitiesPanel() {
           >
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="body1">{identity.local_identity_name}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                created {identity.created_at} · password set {identity.password_set_at}
+              <Typography variant="caption" color="text.secondary" component="div">
+                created <Ts at={identity.created_at} /> · password set <Ts at={identity.password_set_at} />
                 {identity.must_change_password ? " · must change password at next sign-in" : ""}
               </Typography>
             </Box>

@@ -11,6 +11,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { M3Button } from "../../shell/M3Widgets";
+import { RestrictedPanel } from "../../shell/States";
 
 type DirectoryProfile = {
   id: string; profileName: string; host: string; port: number; transport: "LDAPS" | "STARTTLS"; trustFormat: "PEM" | "PKCS12";
@@ -63,7 +64,7 @@ export function DirectorySettingsPanel() {
       setProfile(await response.json()); setMessage({ text: "LDAP settings saved.", type: "success" });
     } catch { setMessage({ text: "Unable to save LDAP settings.", type: "error" }); } finally { setSaving(false); }
   };
-  if (forbidden) return <Alert severity="info" sx={{ maxWidth: 900 }}>LDAP settings need the Security Admin role; this account can not view or change them.</Alert>;
+  if (forbidden) return <RestrictedPanel area="LDAP Settings" role="Security Admin" />;
   if (!profile) return <Box p={3}>Loading LDAP settings…</Box>;
   return <Box sx={{ maxWidth: 820, p: 2 }}><Stack spacing={3}>
     <Box><Typography variant="h5">LDAP directory</Typography><Typography variant="body2" color="text.secondary">Configure the directory connection and group used for operator access.</Typography></Box>

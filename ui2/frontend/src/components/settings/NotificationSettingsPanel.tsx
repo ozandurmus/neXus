@@ -10,6 +10,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { M3Button } from "../../shell/M3Widgets";
+import { RestrictedPanel } from "../../shell/States";
 import {
   getNotificationSettings,
   saveNotificationSettings,
@@ -37,12 +38,20 @@ export function NotificationSettingsPanel() {
   const [message, setMessage] = useState<Message | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
+  const [restricted, setRestricted] = useState(false);
   useEffect(() => {
-    getNotificationSettings().then(setS).catch((e) => setMessage((e as ApiError)?.status === 403
-      ? { text: "Remote logging and notification settings need the Security Admin role; this account can not view or change them.", type: "info" }
-      : { text: `Settings could not be read: ${problemsOf(e)}`, type: "error" }));
+    getNotificationSettings().then(setS).catch((e) => {
+      if ((e as ApiError)?.status === 403) {
+        setRestricted(true);
+        return;
+      }
+      setMessage({ text: `Settings could not be read: ${problemsOf(e)}`, type: "error" });
+    });
   }, []);
 
+  if (restricted) {
+    return <RestrictedPanel area="Notifications" role="Security Admin" />;
+  }
   if (!s) return message ? <Alert severity={message.type} sx={{ maxWidth: 900 }}>{message.text}</Alert> : <Typography sx={{ p: 3 }}>Loading notification settings…</Typography>;
   const change = <K extends keyof NotificationSettingsView>(k: K, v: NotificationSettingsView[K]) => setS({ ...s, [k]: v });
 

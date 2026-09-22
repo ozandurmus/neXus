@@ -12,6 +12,7 @@ import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 
 import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { Ts } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { getSystemPods, getSystemStorage, type PodsView, type StorageView } from "../auth/adminApi";
 
@@ -140,8 +141,8 @@ export function SystemStatusPanel() {
                 <TableCell>{b.devices}</TableCell>
                 <TableCell sx={{ fontFamily: "monospace" }}>{formatBytes(b.stored_bytes)}</TableCell>
                 <TableCell sx={{ fontFamily: "monospace" }}>{formatBytes(b.original_bytes)}</TableCell>
-                <TableCell>{b.oldest ? new Date(b.oldest).toLocaleDateString() : "—"}</TableCell>
-                <TableCell>{b.newest ? new Date(b.newest).toLocaleDateString() : "—"}</TableCell>
+                <TableCell><Ts at={b.oldest} /></TableCell>
+                <TableCell><Ts at={b.newest} /></TableCell>
               </TableRow>
             ))}
           </TableBody>

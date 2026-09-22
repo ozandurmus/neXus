@@ -9,6 +9,14 @@ function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
 }
 
+// AdministrationScreen now writes its selected tab into the URL (`history.replaceState`) so the selection is a
+// real deep link (review §3). jsdom's `window.location` is shared across every test in this file, so without a
+// reset the next test's initial render would read the previous test's leftover `?tab=...` and start on the
+// wrong panel.
+afterEach(() => {
+  window.history.replaceState(null, "", "/");
+});
+
 function withTheme(node: React.ReactElement) {
   return <ThemeProvider theme={m3Theme}>{node}</ThemeProvider>;
 }
@@ -74,7 +82,7 @@ const TABS = [
   { label: "Device management", marker: "Device registry · 0 entries" },
   { label: "Inventory exclusions", marker: "No device excluded" },
   { label: "Credentials", marker: "No credential stored" },
-  { label: "Project plan", marker: "Declared roadmap completion" },
+  { label: "Delivery plan", marker: "Declared roadmap completion" },
 ];
 
 function credential(kind: "ssh_password" | "ssh_private_key" | "api_password") {
@@ -141,10 +149,9 @@ describe("AdministrationScreen tabs", () => {
       routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN, "/credentials": { body: { credentials: [] } } }),
     );
     render(withTheme(<AdministrationScreen />));
-    const tablist = screen.getByRole("tablist", { name: "Administration sections" });
 
     for (const tab of TABS) {
-      fireEvent.click(within(tablist).getByRole("tab", { name: tab.label }));
+      fireEvent.click(screen.getByRole("tab", { name: tab.label }));
       await waitFor(() => expect(screen.getByText(tab.marker)).toBeInTheDocument());
       for (const other of TABS) {
         if (other.label === tab.label) continue;
@@ -153,18 +160,34 @@ describe("AdministrationScreen tabs", () => {
     }
   });
 
-  it("Project plan renders the real roadmap, not the earlier empty placeholder", async () => {
+  it("every group's sub-navigation stays reachable, and the header buttons show only for Registry", async () => {
     vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN }));
     render(withTheme(<AdministrationScreen />));
-    fireEvent.click(screen.getByRole("tab", { name: "Project plan" }));
+
+    expect(screen.getByRole("tablist", { name: "Registry" })).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: "Access" })).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: "Platform" })).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: "Records" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import from manager" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add device" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "System" }));
+    expect(screen.queryByRole("button", { name: "Import from manager" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add device" })).toBeNull();
+  });
+
+  it("Delivery plan renders the real roadmap, not the earlier empty placeholder", async () => {
+    vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN }));
+    render(withTheme(<AdministrationScreen />));
+    fireEvent.click(screen.getByRole("tab", { name: "Delivery plan" }));
     await waitFor(() => expect(screen.getByText("Declared roadmap completion")).toBeInTheDocument());
     expect(screen.queryByText("No project plan")).toBeNull();
   });
 
-  it("Project plan states when no source is configured", async () => {
+  it("Delivery plan states when no source is configured", async () => {
     vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...UNCONFIGURED_PROJECT_PLAN }));
     render(withTheme(<AdministrationScreen />));
-    fireEvent.click(screen.getByRole("tab", { name: "Project plan" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Delivery plan" }));
     await waitFor(() => expect(screen.getByText("No project-plan source is configured.")).toBeInTheDocument());
     expect(screen.queryByText("Declared roadmap completion")).toBeNull();
   });
@@ -208,7 +231,7 @@ describe("AdministrationScreen tabs", () => {
     expect(screen.getByText("1 device")).toBeInTheDocument();
   });
 
-  it("renders an explicit unknown instead of a device id when hostname evidence is missing", async () => {
+  it("reads 'UNKNOWN hostname' with a reason chip instead of a device id when hostname evidence is missing", async () => {
     vi.stubGlobal(
       "fetch",
       routedFetch({
@@ -232,13 +255,13 @@ describe("AdministrationScreen tabs", () => {
     );
     render(withTheme(<AdministrationScreen />));
 
-    await waitFor(() => expect(screen.getByText("Unknown")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("UNKNOWN hostname")).toBeInTheDocument());
+    expect(screen.getByText("draft")).toBeInTheDocument();
     expect(screen.queryByText("opaque-device-id")).toBeNull();
   });
 
-  it("reports the backup artefact count and requires keep or remove before deletion", async () => {
+  it("moves Delete into the row's overflow menu, behind a confirmation dialog naming the device", async () => {
     const deleteBodies: unknown[] = [];
-    vi.stubGlobal("confirm", vi.fn(() => true));
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
       const path = url.split("?")[0];
@@ -268,7 +291,17 @@ describe("AdministrationScreen tabs", () => {
 
     render(withTheme(<AdministrationScreen />));
     await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    // No filled Delete button on the row any more -- it is behind the overflow menu.
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "FW-TANGO-04 actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+
+    // The confirmation dialog names the device before anything is sent.
+    const dialog = await waitFor(() => screen.getByRole("dialog"));
+    expect(within(dialog).getByRole("heading", { name: "Delete this device?" })).toBeInTheDocument();
+    expect(within(dialog).getByText(/FW-TANGO-04/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(screen.getByText(/This device has 3 backup artefacts/)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Keep artefacts" })).toBeInTheDocument();
@@ -276,6 +309,41 @@ describe("AdministrationScreen tabs", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Keep artefacts" }));
     await waitFor(() => expect(deleteBodies).toEqual([undefined, { backup_disposition: "KEEP" }]));
+  });
+
+  it("bulk-deletes a checkbox selection behind a confirmation dialog naming the devices", async () => {
+    const deleteBodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      const path = url.split("?")[0];
+      if (path === "/session/status") return jsonResponse(200, {});
+      if (path === "/devices" && (!init?.method || init.method === "GET")) {
+        return jsonResponse(200, {
+          devices: [
+            { device_id: "dev-1", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-TANGO-04", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
+            { device_id: "dev-2", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-JULIET-06", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
+          ],
+        });
+      }
+      if (path === "/devices/dev-1/delete" || path === "/devices/dev-2/delete") {
+        deleteBodies.push(path);
+        return jsonResponse(200, { deleted: true });
+      }
+      return jsonResponse(404, { error: `NOT_MOCKED:${path}` });
+    }));
+
+    render(withTheme(<AdministrationScreen />));
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select FW-TANGO-04" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select FW-JULIET-06" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected (2)" }));
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Delete 2 devices?" })).toBeInTheDocument());
+    expect(screen.getByText(/FW-TANGO-04, FW-JULIET-06/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(deleteBodies.sort()).toEqual(["/devices/dev-1/delete", "/devices/dev-2/delete"]));
   });
 });
 
@@ -325,13 +393,17 @@ describe("AdministrationScreen Local identities tab", () => {
     expect(document.body.textContent?.toLowerCase()).not.toMatch(/verifier|salt/);
   });
 
-  it("shows the server's own refusal verbatim rather than inventing a different message", async () => {
+  it("renders a 403/ACTION_REFUSED as the shared Restricted state, not the raw code, and with no Retry", async () => {
     vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, "/local-identities": { status: 403, body: { error: "ACTION_REFUSED" } } }));
     render(withTheme(<AdministrationScreen />));
 
     fireEvent.click(screen.getByRole("tab", { name: "Local identities" }));
 
-    await waitFor(() => expect(screen.getByText("ACTION_REFUSED")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/This account can not view or change it/)).toBeInTheDocument());
+    expect(screen.getByText(/This needs the Security Admin role/)).toBeInTheDocument();
+    expect(screen.queryByText("ACTION_REFUSED")).toBeNull();
+    expect(screen.queryByText("Loading…")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 });
 

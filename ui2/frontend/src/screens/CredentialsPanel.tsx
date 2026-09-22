@@ -14,6 +14,7 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { RestrictedPanel, StatePanel, Ts, isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import {
   createCredential,
@@ -53,6 +54,7 @@ export function CredentialsPanel() {
   const {
     data,
     error: fetchError,
+    rawError,
     refresh,
   } = useFetchOnMount(
     () => listCredentials().then((result) => result.credentials ?? []),
@@ -61,20 +63,15 @@ export function CredentialsPanel() {
   const credentials = data;
   const error = fetchError;
 
-  if (error) {
-    return (
-      <EmptyPanel title="Credentials unavailable" body={error}>
-        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-          <M3Button emphasis="outlined" onClick={refresh}>
-            Retry
-          </M3Button>
-        </Box>
-      </EmptyPanel>
-    );
+  if (error && credentials === null) {
+    return isRestricted(rawError)
+      ? <RestrictedPanel area="Credentials" role="Security Admin" />
+      : <StatePanel variant="error" title="Credentials unavailable" body="The credential store could not be read." code={error}
+          action={<M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>} />;
   }
 
   if (credentials === null) {
-    return <EmptyPanel title="Credentials" body="Loading…" />;
+    return <StatePanel variant="empty" title="Credentials" body="Loading…" />;
   }
 
   const handleDelete = (credentialId: string) => {
@@ -124,8 +121,8 @@ export function CredentialsPanel() {
           >
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="body1">{credential.display_name}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                {KIND_LABEL[credential.kind]} · {credential.username} · secret set {credential.secret_set_at}
+              <Typography variant="caption" color="text.secondary" component="div">
+                {KIND_LABEL[credential.kind]} · {credential.username} · secret set <Ts at={credential.secret_set_at} />
               </Typography>
               {deleteError[credential.credential_id] && (
                 <Typography variant="caption" color="error" sx={{ display: "block" }}>
