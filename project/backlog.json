@@ -785,15 +785,6 @@
       "note": ""
     },
     {
-      "id": "pan_backup_include_set_format_config",
-      "category": "backup",
-      "title": "PAN backup bundle: add the SSH 'show' (set-format) running configuration alongside the device-state export",
-      "status": "planned",
-      "priority": "P0",
-      "target": "",
-      "note": ""
-    },
-    {
       "id": "cli_parity_for_every_ui_action",
       "category": "ui2",
       "title": "Every UI action has a CLI counterpart (the product must not be UI-bound)",
@@ -809,15 +800,6 @@
       "status": "planned",
       "priority": "P1",
       "target": "PO directive 2026-09-22 (Backbox standard); download/contents/compare shipped 2026-09-22, history/schedule/baseline remain",
-      "note": ""
-    },
-    {
-      "id": "jobs_screen_history_filter_pagination_export",
-      "category": "ui2",
-      "title": "Jobs screen: full history (not only recent), top filters (state/type/device/time), numbered pagination, export",
-      "status": "planned",
-      "priority": "P0",
-      "target": "PO directive 2026-09-22, after the backup pass",
       "note": ""
     }
   ]

@@ -926,8 +926,58 @@ export interface JobEventView {
   readonly duration_ms?: number;
 }
 
-export function listJobs(): Promise<JobEventView[]> {
-  return call("/api/v2/jobs", "GET");
+export interface JobQueryParams {
+  readonly state?: string;
+  readonly job_type?: string;
+  readonly device_id?: string;
+  /** ISO-8601 instants. */
+  readonly since?: string;
+  readonly until?: string;
+  readonly q?: string;
+  readonly page?: number;
+  readonly page_size?: number;
+}
+
+export interface JobPageView {
+  readonly items: readonly JobEventView[];
+  readonly page: number;
+  readonly page_size: number;
+  readonly total: number;
+}
+
+export interface JobFacetsView {
+  readonly states: readonly string[];
+  readonly job_types: readonly string[];
+}
+
+function jobQueryString(params: JobQueryParams): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && String(value) !== "") search.set(key, String(value));
+  }
+  const s = search.toString();
+  return s ? `?${s}` : "";
+}
+
+/** Jobs screen (PO P0, 2026-09-22): the whole history, filtered and paged on the server. */
+export function listJobs(params: JobQueryParams = {}): Promise<JobPageView> {
+  return call(`/api/v2/jobs${jobQueryString(params)}`, "GET");
+}
+
+export function jobFacets(): Promise<JobFacetsView> {
+  return call("/api/v2/jobs/facets", "GET");
+}
+
+/** The same filter as a CSV file (newest first, at most 50 000 rows). */
+export async function downloadJobsCsv(params: JobQueryParams): Promise<{ blob: Blob; fileName: string }> {
+  const { page: _page, page_size: _pageSize, ...filters } = params;
+  const response = await fetch(`/api/v2/jobs/export.csv${jobQueryString(filters)}`, { credentials: "include" });
+  if (!response.ok) {
+    const error: ApiError = { status: response.status, body: await response.json().catch(() => ({})) };
+    throw error;
+  }
+  const match = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "");
+  return { blob: await response.blob(), fileName: match ? match[1] : "nexus-jobs.csv" };
 }
 
 export interface ComplianceOverview {

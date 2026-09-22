@@ -12,9 +12,18 @@ import Chip from "@mui/material/Chip";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import Paper from "@mui/material/Paper";
-
+import Pagination from "@mui/material/Pagination";
 import { EmptyPanel } from "../shell/ScreenLayout";
-import { listDevices, listJobs, type JobEventView, type ApiError } from "../auth/adminApi";
+import {
+  downloadJobsCsv,
+  jobFacets,
+  listDevices,
+  listJobs,
+  type ApiError,
+  type JobEventView,
+  type JobFacetsView,
+  type JobQueryParams,
+} from "../auth/adminApi";
 
 function formatDuration(ms?: number): string {
   if (ms === undefined || ms === null) return "-";
@@ -41,24 +50,62 @@ function stateColor(state: string): "default" | "primary" | "secondary" | "error
   }
 }
 
+/** A datetime-local input value (local time, no zone) to the ISO instant the API expects; empty stays empty. */
+export function localInputToIso(value: string): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+const PAGE_SIZES = [25, 50, 100, 200] as const;
+
+/**
+ * Jobs screen (Product Owner P0, 2026-09-22): the whole history, not the last
+ * 50; filters on the server (state, type, device, time window, free text);
+ * numbered pages; CSV export of the current filter. Live polling refreshes
+ * the page being looked at and never resets the filters.
+ */
 export function JobLogsPanel() {
-  const [jobs, setJobs] = useState<JobEventView[] | null>(null);
+  const [page, setPage] = useState<{ items: readonly JobEventView[]; total: number } | null>(null);
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
+  const [facets, setFacets] = useState<JobFacetsView>({ states: [], job_types: [] });
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+
+  const [state, setState] = useState("");
+  const [jobType, setJobType] = useState("");
+  const [deviceId, setDeviceId] = useState("");
+  const [sinceLocal, setSinceLocal] = useState("");
+  const [untilLocal, setUntilLocal] = useState("");
+  const [text, setText] = useState("");
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+
+  const params: JobQueryParams = {
+    state: state || undefined,
+    job_type: jobType || undefined,
+    device_id: deviceId || undefined,
+    since: localInputToIso(sinceLocal),
+    until: localInputToIso(untilLocal),
+    q: text.trim() || undefined,
+    page: pageNumber,
+    page_size: pageSize,
+  };
+  const paramsKey = JSON.stringify(params);
 
   const fetchJobs = useCallback(() => {
-    listJobs()
+    const current = JSON.parse(paramsKey) as JobQueryParams;
+    listJobs(current)
       .then((data) => {
-        setJobs(data);
+        setPage({ items: data.items ?? [], total: data.total ?? 0 });
         setError(null);
       })
       .catch((err: ApiError) => {
         setError(typeof err.body?.error === "string" ? err.body.error : `Request failed (status ${err.status})`);
       });
-  }, []);
+  }, [paramsKey]);
 
   const fetchDeviceNames = useCallback(() => {
     listDevices()
@@ -77,53 +124,131 @@ export function JobLogsPanel() {
   }, []);
 
   useEffect(() => {
-    fetchJobs();
     fetchDeviceNames();
+    jobFacets().then(setFacets).catch(() => setFacets({ states: [], job_types: [] }));
+  }, [fetchDeviceNames]);
+
+  useEffect(() => {
+    fetchJobs();
     if (!autoRefresh) return;
     const interval = setInterval(fetchJobs, 4000);
     return () => clearInterval(interval);
-  }, [fetchJobs, fetchDeviceNames, autoRefresh]);
+  }, [fetchJobs, autoRefresh]);
 
-  if (error && !jobs) return <EmptyPanel title="Job logs unavailable" body={error} />;
-  if (jobs === null) return <EmptyPanel title="Job logs" body="Loading…" />;
+  const resetToFirstPage = () => setPageNumber(1);
 
-  const filtered = jobs.filter((j) => {
-    const q = filter.toLowerCase();
-    return (
-      j.job_id.toLowerCase().includes(q) ||
-      j.target_device_id.toLowerCase().includes(q) ||
-      j.job_type.toLowerCase().includes(q) ||
-      j.state.toLowerCase().includes(q) ||
-      (j.terminal_reason && j.terminal_reason.toLowerCase().includes(q))
-    );
-  });
+  const handleExport = async () => {
+    setExportBusy(true);
+    try {
+      const { blob, fileName } = await downloadJobsCsv(params);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(`Export refused${(err as ApiError).status ? ` (status ${(err as ApiError).status})` : ""}`);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  if (error && !page) return <EmptyPanel title="Job logs unavailable" body={error} />;
+  if (page === null) return <EmptyPanel title="Job logs" body="Loading…" />;
+
+  const pageCount = Math.max(1, Math.ceil(page.total / pageSize));
+  const deviceOptions = Object.entries(deviceNames).sort((a, b) => a[1].localeCompare(b[1]));
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+        <TextField
+          select
+          size="small"
+          label="State"
+          value={state}
+          onChange={(e) => { setState(e.target.value); resetToFirstPage(); }}
+          SelectProps={{ native: true }}
+          InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: 150 }}
+        >
+          <option value="">Any</option>
+          {facets.states.map((s) => <option key={s} value={s}>{s}</option>)}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Type"
+          value={jobType}
+          onChange={(e) => { setJobType(e.target.value); resetToFirstPage(); }}
+          SelectProps={{ native: true }}
+          InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: 220 }}
+        >
+          <option value="">Any</option>
+          {facets.job_types.map((t) => <option key={t} value={t}>{t}</option>)}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Device"
+          value={deviceId}
+          onChange={(e) => { setDeviceId(e.target.value); resetToFirstPage(); }}
+          SelectProps={{ native: true }}
+          InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: 220 }}
+        >
+          <option value="">Any</option>
+          {deviceOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+        </TextField>
         <TextField
           size="small"
-          placeholder="Filter by device, state, or reason..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          sx={{ minWidth: 320 }}
+          type="datetime-local"
+          label="From"
+          value={sinceLocal}
+          onChange={(e) => { setSinceLocal(e.target.value); resetToFirstPage(); }}
+          InputLabelProps={{ shrink: true }}
         />
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Button
-            size="small"
-            variant={autoRefresh ? "contained" : "outlined"}
-            onClick={() => setAutoRefresh((v) => !v)}
-            sx={{ textTransform: "none" }}
-          >
-            {autoRefresh ? "Live polling: ON" : "Live polling: OFF"}
-          </Button>
-          <Button size="small" variant="outlined" onClick={fetchJobs} sx={{ textTransform: "none" }}>
-            Refresh
-          </Button>
-        </Stack>
+        <TextField
+          size="small"
+          type="datetime-local"
+          label="To"
+          value={untilLocal}
+          onChange={(e) => { setUntilLocal(e.target.value); resetToFirstPage(); }}
+          InputLabelProps={{ shrink: true }}
+        />
+        <TextField
+          size="small"
+          label="Search"
+          placeholder="job id, device id or reason…"
+          value={text}
+          onChange={(e) => { setText(e.target.value); resetToFirstPage(); }}
+          InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: 260 }}
+        />
+        <Box sx={{ flexGrow: 1 }} />
+        <Button
+          size="small"
+          variant={autoRefresh ? "contained" : "outlined"}
+          onClick={() => setAutoRefresh((v) => !v)}
+          sx={{ textTransform: "none" }}
+        >
+          {autoRefresh ? "Live polling: ON" : "Live polling: OFF"}
+        </Button>
+        <Button size="small" variant="outlined" onClick={fetchJobs} sx={{ textTransform: "none" }}>
+          Refresh
+        </Button>
+        <Button size="small" variant="outlined" disabled={exportBusy} onClick={() => void handleExport()} sx={{ textTransform: "none" }}>
+          {exportBusy ? "Exporting…" : "Export CSV"}
+        </Button>
       </Stack>
 
-      {filtered.length === 0 ? (
+      {error && <Typography variant="body2" color="error">{error}</Typography>}
+
+      {page.items.length === 0 ? (
         <EmptyPanel title="No jobs matching filter" body="No background jobs matched your criteria." />
       ) : (
         <TableContainer component={Paper} variant="outlined">
@@ -140,7 +265,7 @@ export function JobLogsPanel() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filtered.map((job) => {
+              {page.items.map((job) => {
                 const isExpanded = expandedJobId === job.job_id;
                 return (
                   <TableRow
@@ -150,7 +275,7 @@ export function JobLogsPanel() {
                     sx={{ cursor: "pointer" }}
                   >
                     <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>
-                      {job.job_id.slice(0, 8)}...
+                      {isExpanded ? job.job_id : `${job.job_id.slice(0, 8)}...`}
                     </TableCell>
                     <TableCell sx={{ fontWeight: 500 }}>
                       {deviceNames[job.target_device_id] ?? "Unknown device"} · {job.target_device_id}
@@ -175,7 +300,7 @@ export function JobLogsPanel() {
                       {job.terminal_reason || "-"}
                     </TableCell>
                     <TableCell sx={{ fontSize: "0.75rem", color: "text.secondary", whiteSpace: "nowrap" }}>
-                      {job.submitted_at ? new Date(job.submitted_at).toLocaleTimeString() : "-"}
+                      {job.submitted_at ? new Date(job.submitted_at).toLocaleString() : "-"}
                     </TableCell>
                   </TableRow>
                 );
@@ -184,6 +309,37 @@ export function JobLogsPanel() {
           </Table>
         </TableContainer>
       )}
+
+      <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
+        <Typography variant="body2" color="text.secondary">
+          {page.total === 0
+            ? "0 jobs"
+            : `${(pageNumber - 1) * pageSize + 1}–${Math.min(pageNumber * pageSize, page.total)} of ${page.total} jobs`}
+        </Typography>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <TextField
+            select
+            size="small"
+            label="Per page"
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); resetToFirstPage(); }}
+            SelectProps={{ native: true }}
+            InputLabelProps={{ shrink: true }}
+            sx={{ width: 110 }}
+          >
+            {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+          </TextField>
+          <Pagination
+            count={pageCount}
+            page={Math.min(pageNumber, pageCount)}
+            onChange={(_e, value) => setPageNumber(value)}
+            color="primary"
+            showFirstButton
+            showLastButton
+            size="small"
+          />
+        </Stack>
+      </Stack>
     </Box>
   );
 }

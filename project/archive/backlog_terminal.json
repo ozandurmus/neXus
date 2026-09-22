@@ -1212,6 +1212,24 @@
       "priority": "P0",
       "target": "BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md Tier 1: OR-3, BK-12, BW-4",
       "note": ""
+    },
+    {
+      "id": "jobs_screen_history_filter_pagination_export",
+      "category": "ui2",
+      "title": "Jobs screen: full history (not only recent), top filters (state/type/device/time), numbered pagination, export",
+      "status": "automated_validated",
+      "priority": "P0",
+      "target": "PO directive 2026-09-22, after the backup pass",
+      "note": ""
+    },
+    {
+      "id": "pan_backup_include_set_format_config",
+      "category": "backup",
+      "title": "PAN backup bundle: add the SSH 'show' (set-format) running configuration alongside the device-state export",
+      "status": "automated_validated",
+      "priority": "P0",
+      "target": "",
+      "note": ""
     }
   ]
 }
