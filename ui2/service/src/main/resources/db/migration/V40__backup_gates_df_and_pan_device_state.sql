@@ -8,6 +8,7 @@
 --    rows and was never registered, so every PAN backup request was refused CAPABILITY_UNKNOWN. Its
 --    two reads are the XML API calls the executor already issues -- the same shape Backbox's own
 --    measured PAN backup uses (keygen, then type=export&category=device-state).
+SELECT set_config('app.actor_fingerprint', 'migration:V40_backup_gates_df_and_pan_device_state', true);
 SELECT set_config('app.action_id', 'gate_registry_seed_by_migration', true);
 
 INSERT INTO gate_registry (gate_id, vendor, platform_role_scope, shell_context, transport_kind,
