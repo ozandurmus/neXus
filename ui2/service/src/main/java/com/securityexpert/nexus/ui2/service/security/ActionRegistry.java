@@ -114,6 +114,8 @@ public final class ActionRegistry {
     public static final String SYSTEM_STATUS_READ = "system_status_read";
     public static final String AUDIT_LOG_READ = "audit_log_read";
     public static final String JOB_LOG_READ = "job_log_read";
+    /** Search includes setting values, so it has the same gate as the configuration text read. */
+    public static final String GLOBAL_SEARCH_READ = "global_search_read";
 
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
@@ -185,6 +187,7 @@ public final class ActionRegistry {
         register(new ActionDescriptor(SYSTEM_STATUS_READ, true, Optional.empty()));
         register(new ActionDescriptor(AUDIT_LOG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(JOB_LOG_READ, true, Optional.empty()));
+        register(new ActionDescriptor(GLOBAL_SEARCH_READ, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

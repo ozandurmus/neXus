@@ -17,6 +17,44 @@ export interface ApiError {
   readonly body: Record<string, unknown>;
 }
 
+export interface GlobalSearchDevice {
+  readonly device_id: string;
+  readonly name: string | null;
+  readonly serial: string | null;
+  readonly model: string | null;
+  readonly software_version: string | null;
+  readonly cluster: string | null;
+  readonly management_address: string | null;
+  readonly vendor: string | null;
+  readonly href: string;
+}
+
+export interface GlobalSearchSetting {
+  readonly device: string | null;
+  readonly cluster: string | null;
+  readonly section: string;
+  readonly setting: string;
+  readonly value_excerpt: string;
+  readonly href: string;
+}
+
+export interface GlobalSearchEvidence {
+  readonly kind: "job" | "backup";
+  readonly label: string;
+  readonly detail: string;
+  readonly href: string;
+}
+
+export interface GlobalSearchResponse {
+  readonly devices: readonly GlobalSearchDevice[];
+  readonly settings: readonly GlobalSearchSetting[];
+  readonly evidence: readonly GlobalSearchEvidence[];
+}
+
+export function globalSearch(q: string, limit = 20): Promise<GlobalSearchResponse> {
+  return call(`/api/v2/search?q=${encodeURIComponent(q)}&limit=${limit}`, "GET");
+}
+
 async function csrfToken(): Promise<string | undefined> {
   try {
     const response = await fetch("/session/status", { credentials: "include" });
