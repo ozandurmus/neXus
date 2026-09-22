@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "reviewed_at": "2026-09-22",
-  "reviewed_current_build": "NXS-LOCAL-0366",
+  "reviewed_at": "2026-09-23",
+  "reviewed_current_build": "NXS-LOCAL-0368",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -20,41 +20,66 @@
         "java_inventory",
         "java_configuration",
         "java_backup",
-        "java_project_plan",
         "java_restore",
         "java_checks",
         "java_failover_readiness",
-        "java_scheduler"
+        "java_scheduler",
+        "java_project_plan",
+        "java_operations",
+        "java_overview",
+        "java_automation",
+        "java_vendor_expansion",
+        "java_platform"
       ]
     }
   ],
   "next": {
-    "build": "script_execution_module",
-    "title": "Script Execution module -- slice 1",
+    "build": "overview_acceptance_and_member_specific_tuning",
+    "title": "Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today)",
     "status": "planned",
-    "detail": "docs/design/SCRIPT_EXECUTION_CONTRACT.md"
+    "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
   },
   "upcoming": [
     {
+      "build": "script_execution_module",
+      "title": "Script Execution module (own pod) -- slice 1",
+      "status": "planned",
+      "detail": "docs/design/SCRIPT_EXECUTION_CONTRACT.md"
+    },
+    {
       "build": "task_executor_automation_module",
-      "title": "Automation: in-product step editor over gated commands (Operations)",
+      "title": "Automation: in-product step editor over gated commands",
       "status": "planned",
       "detail": "docs/design/TASK_EXECUTOR_AUTOMATION_CONTRACT.md"
     },
     {
+      "build": "aiview_masking_leak_audit",
+      "title": "Masking leak audit (compare aiview responses with raw tables)",
+      "status": "planned",
+      "detail": "docs/history/backlog/aiview_masking_leak_audit.md"
+    },
+    {
       "build": "module_per_pod_split",
-      "title": "Every module its own pod (backup, compliance, automation, script execution, operations, configuration, inventory)",
+      "title": "Every module its own pod",
       "status": "planned",
       "detail": "docs/history/backlog/module_per_pod_split.md"
     },
     {
       "build": "vendor_backup_block",
-      "title": "Eight vendor backups: generic HTTPS client, onboarding, Radware, Pulse, Panorama, Infoblox, FortiGate, ASA, Provider-1/MDS, ProxySG (measure first)",
+      "title": "Eight vendor backups, measure first",
       "status": "planned",
       "detail": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md"
+    },
+    {
+      "build": "legacy_python_separation",
+      "title": "Separate the legacy Python product from the neXus repository (plan awaiting PO decision)",
+      "status": "planned",
+      "detail": "docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md"
     }
   ],
   "product_build_ids": [
+    "NXS-LOCAL-0368",
+    "NXS-LOCAL-0367",
     "NXS-LOCAL-0366",
     "NXS-LOCAL-0365",
     "NXS-LOCAL-0364",
@@ -180,7 +205,10 @@
     "storage_usage_view": "java_feature",
     "service_view_screen": "java_feature",
     "overview_exception_and_evidence_screen": "java_feature",
-    "aiview_masking_leak_audit": "java_debt"
+    "aiview_masking_leak_audit": "java_debt",
+    "cluster_diff_member_specific_tuning": "java_debt",
+    "legacy_python_separation": "java_debt",
+    "github_open_pr_triage": "java_debt"
   },
   "converted_lessons": [
     {
@@ -210,7 +238,7 @@
   ],
   "notes": [
     "Java is the only product development line. Line-1 outcomes remain historical provenance and do not contribute to Java completion.",
-    "Deployed on HOST-A (ui2 namespace) and used by the Product Owner daily since 2026-09-22 against the real estate: 105 devices, 38 clusters, 93 with a configuration read, 83 with a stored backup. Device-facing reads are graded automated_validated until the next Bulk Collect confirms them on gateways and VSX members.",
+    "Deployed on HOST-A and used daily by the Product Owner against the real estate: 105 devices, 39 clusters, 102 evaluated for compliance, 83 with a stored backup (16 GB). A criterion counts as done only with its evidence; real-environment criteria say so in their label. Overall progress 2026-09-23: 57 % of the declared Java roadmap (was shown as 25 % from a plan last reviewed 2026-09-20).",
     "Product direction 2026-09-22: 'Backbox-level minimum, and more' -- every UI action has a CLI counterpart (P1), RBAC over prohibition for downloads, Configuration on the old product's shape, platform identity facts collected, automation authored in the product, Script Execution with scheduled ledgered device writes under five conditions, every module its own pod.",
     "Active backlog statuses are preserved even where broad contract-era rows lag narrower delivered builds. Review their acceptance criteria before advancing them.",
     "Unlisted terminal backlog records and old tracks remain historical reference; agent-operation records are excluded. New unclassified active rows produce a metadata warning."

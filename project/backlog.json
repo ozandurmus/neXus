@@ -821,57 +821,39 @@
       "note": ""
     },
     {
-      "id": "operations_readiness_panel_ignores_enrolled_clusters",
-      "category": "ui2",
-      "title": "Operations › HA & readiness says 'No HA pair or cluster enrolled' while 38 clusters exist (seen in the aiview tour 2026-09-22); the readiness panel reads a different source than the inventory clusters",
-      "status": "planned",
-      "priority": "P2",
-      "target": "Point the readiness panel at the inventory's cluster list or state plainly what it needs",
-      "note": ""
-    },
-    {
-      "id": "ui2_pod_memory_limits_2gi",
-      "category": "ui2",
-      "title": "Raise ui2-service and ui2-worker memory limits from 1 GiB to 2 GiB (requests stay 512 MiB); node has 62 GiB, neXus limits total 4 GiB",
-      "status": "planned",
-      "priority": "P1",
-      "target": "deploy/ui2/50-service-deployment.yaml, 52-worker-deployment.yaml; PO 2026-09-22",
-      "note": ""
-    },
-    {
-      "id": "storage_usage_view",
-      "category": "ui2",
-      "title": "Show how much space backups and configuration evidence take: artefact store bytes per vendor/device/kind, database size, trend; Backups and Configuration screens + CLI",
-      "status": "planned",
-      "priority": "P1",
-      "target": "PO 2026-09-22",
-      "note": ""
-    },
-    {
-      "id": "service_view_screen",
-      "category": "ui2",
-      "title": "Service view: every neXus pod, its state, restarts, CPU and memory use (top-like), version, last rollout -- read-only, Administration; CLI counterpart",
-      "status": "planned",
-      "priority": "P1",
-      "target": "PO 2026-09-22; needs a read-only metrics path from the service to the cluster (no kubectl in the browser)",
-      "note": ""
-    },
-    {
-      "id": "overview_exception_and_evidence_screen",
-      "category": "ui2",
-      "title": "Next major build (PO 2026-09-22): Overview rebuilt as an exception-and-evidence screen per the design council (Astra + Fable agree): attention strip, evidence freshness, morning exceptions, compliance with coverage/gaps, recovery posture, platform spread, neXus health",
-      "status": "planned",
-      "priority": "P0",
-      "target": "docs/design/OVERVIEW_COUNCIL_2026_09_22_ASTRA.md, _FABLE.md; first release uses stored evidence only",
-      "note": ""
-    },
-    {
       "id": "aiview_masking_leak_audit",
       "category": "ui2",
       "title": "Masking leak audit: compare aiview responses against the raw tables (hostnames, addresses, serials) and report any raw value that survives masking; consider a masked read-model/schema with a separate DB role for aiview",
       "status": "planned",
       "priority": "P1",
       "target": "PO 2026-09-22 proposal (separate masked table read by aiview)",
+      "note": ""
+    },
+    {
+      "id": "cluster_diff_member_specific_tuning",
+      "category": "ui2",
+      "title": "Cluster DIFF: 38 of 39 clusters show member differences (264 settings); find the settings that are per-member by nature (e.g. PAN HA device priority, CP per-NIC settings) and exempt them in both the browser and the Java projection",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Overview contract; configurationProjection.ts + ConfigurationProjection.java parity",
+      "note": ""
+    },
+    {
+      "id": "legacy_python_separation",
+      "category": "governance",
+      "title": "Separate the legacy Python product from the neXus repository: delete root clutter, move the action taxonomy to the Java registry (AGENTS.md amendment), keep governance tooling, archive the rest to a private repository",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md -- four PO decisions",
+      "note": ""
+    },
+    {
+      "id": "github_open_pr_triage",
+      "category": "governance",
+      "title": "Decide the 21 open GitHub PRs (2026-09-15..17): close 15 superseded, review 3, re-implement 3 hardening items on main (DB role ownership, PostgreSQL network isolation, backup claim authorization)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/operations/OPEN_PR_TRIAGE_2026_09_23.md",
       "note": ""
     }
   ]

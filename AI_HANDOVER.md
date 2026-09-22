@@ -1,35 +1,31 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
 # Snapshot
-Palo Alto PAN-OS HA clustering reconciled with official discovery API evidence.
-Cross-contaminated HA pairings (GARTEST vs HOST) separated and matched reciprocally.
-Missing metadata and HA links for TAKASNETAPP and TAKASNETWEB resolved in database and repository.
-Derived cluster title generator implemented in UI2 (`<base>-CLS`) alongside inspectable API serial reference chip.
-Deployed live on HOST-A K3s cluster; all pods 1/1 Running; 17 PAN clusters cleanly paired.
+neXus UI2 deployed on HOST-A at schema V53, image built from `origin/main`.
+Overview rebuilt as an exception-and-evidence screen (frozen contract, Fable draft + engineering notes).
+Collision-free aiview pseudonyms; 645 MB of unread configuration text released; limits 2 GiB.
+Evidence-weighted roadmap progress 57 % (was shown as 25 % from a stale plan).
 
-# Recent session changes
-- Database & Repository Reconciliation:
-  - `JooqDeviceRepository.java`: Fixed lateral join `dc` to match `(vendor || '|' || stable_identifier)` and `stable_identifier = recorded_identity_primary` with `parent_candidate_id IS NULL`.
-  - `V33__reconcile_ha_pairs_from_discovery_api.sql`: Reconciled reciprocal HA pairs for GARTEST, HOST, TAKASNETWEB, and populated observed hostname/serials for TAKASNETAPP.
-- Frontend Presentation (`InventoryScreen.tsx` & `InventoryPanels.tsx`):
-  - `deriveClusterTitle()`: Implemented deterministic base name extraction (`<base>-CLS`) for pipe-separated cluster references while preserving explicit cluster names (Check Point / test fixtures).
-  - Cluster list & details: Render clean cluster title and inspectable monospace badge displaying verified API serial pair reference.
-  - Added unit test suite in `InventoryScreen.test.tsx` verifying all title derivation edge cases.
-- Build & Live Deployment:
-  - Compiled and verified locally (`npm test` 108/108 passed, `bootJar` success).
-  - Deployed to HOST-A via `~/run_build.sh`; Kaniko build and deployment rollout completed with zero errors.
+# Recent session changes (2026-09-22 .. 23)
+- Builds NXS-LOCAL-0363..0368: backup download/listing/compare, Configuration rebuild with cluster DIFF,
+  platform identity facts, automation / Script Execution / scheduled-write decisions, menu-tour fixes,
+  notifications and service view, Overview.
+- Deploy tooling: `scripts/hosta_deploy.sh` (watched, fail-fast, 12-minute limit; host from local config).
+- Plans: `docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md` (four PO decisions), backlog updated.
+- Real customer names removed from four test files; they remain in an applied migration and in Git history.
 
 # Exact next action
-- Operator visual review under `aiview` persona:
-  - Open `http://ui2.nexus.local/` on HOST-A.
-  - Verify Inventory screen displays clean cluster names (`FW-PALT-*-CLS`) with 2 members each.
-  - Verify detail panel displays cluster interfaces, routing, and member nodes without cross-contamination.
+- Product Owner signs in as aiview and runs the Overview acceptance checklist
+  (`docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md` §6).
+- Then `cluster_diff_member_specific_tuning`, then `script_execution_module` slice 1.
 
 # Test delta
-- Frontend: 108 passed across 15 test suites (`npm test` in `ui2/frontend`).
-- Backend: `:persistence:test` passed, `:service:bootJar` passed.
-- Privacy Gate: 0 findings (`python3 main.py --repository-privacy-check`).
-- HTML Render Harness: 6 passed, 1 skipped (`python3 -m pytest tests/test_html_render_harness.py`).
+- UI2 Gradle suites (service, persistence, worker, cli, capability-registry, architecture-tests): green.
+- Frontend vitest: 20 files, 153 tests green (new Overview tests).
+- Parity test pins the Java cluster DIFF projection to the TypeScript one.
 
 # Risks
-- None. Real-environment database and cluster state verified directly on HOST-A.
+- The GitHub repository is public and its history holds internal design, host details and some real
+  customer names (V33 migration, earlier commits). Visibility is the Product Owner's call.
+- Notifications are unproven against real syslog / SMTP targets (PO needs permission first).
+- 38 of 39 clusters show a member DIFF; part of it is per-member by nature and needs tuning.

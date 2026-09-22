@@ -213,35 +213,35 @@ describe("InventoryScreen device list", () => {
                   device_id: "dev-dmz-1",
                   vendor_hint: "check_point",
                   enrollment_state: "ENROLLED",
-                  hostname: "FW-CKP-GARANTIDMZAPP-AA.1",
+                  hostname: "FW-CKP-EXAMPLEBANKDMZAPP-AA.1",
                   model: "Quantum",
                   software_version: "R81.20",
                   ha_role: "active",
-                  cluster_member_ref: "FW-CKP-GARANTIDMZAPP-CLS-AA",
-                  virtual_systems: "GarantiBetaAA, GarantiPosAppAA",
+                  cluster_member_ref: "FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA",
+                  virtual_systems: "ExamplebankBetaAA, ExamplebankPosAppAA",
                 },
                 {
                   device_id: "dev-dmz-2",
                   vendor_hint: "check_point",
                   enrollment_state: "ENROLLED",
-                  hostname: "FW-CKP-GARANTIDMZAPP-AA.2",
+                  hostname: "FW-CKP-EXAMPLEBANKDMZAPP-AA.2",
                   model: "Quantum",
                   software_version: "R81.20",
                   ha_role: "standby",
-                  cluster_member_ref: "FW-CKP-GARANTIDMZAPP-CLS-AA",
-                  virtual_systems: "GarantiBetaAA, GarantiPosAppAA",
+                  cluster_member_ref: "FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA",
+                  virtual_systems: "ExamplebankBetaAA, ExamplebankPosAppAA",
                 },
               ],
             }),
           );
         }
-        if (url.includes("/clusters/FW-CKP-GARANTIDMZAPP-CLS-AA/inventory")) {
+        if (url.includes("/clusters/FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA/inventory")) {
           return Promise.resolve(
             jsonResponse(200, {
-              cluster_member_ref: "FW-CKP-GARANTIDMZAPP-CLS-AA",
+              cluster_member_ref: "FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA",
               members: [
-                { device_id: "dev-dmz-1", hostname: "FW-CKP-GARANTIDMZAPP-AA.1", ha_role: "active", model: "Quantum", software_version: "R81.20", enrollment_state: "ENROLLED", virtual_systems: "GarantiBetaAA, GarantiPosAppAA" },
-                { device_id: "dev-dmz-2", hostname: "FW-CKP-GARANTIDMZAPP-AA.2", ha_role: "standby", model: "Quantum", software_version: "R81.20", enrollment_state: "ENROLLED", virtual_systems: "GarantiBetaAA, GarantiPosAppAA" },
+                { device_id: "dev-dmz-1", hostname: "FW-CKP-EXAMPLEBANKDMZAPP-AA.1", ha_role: "active", model: "Quantum", software_version: "R81.20", enrollment_state: "ENROLLED", virtual_systems: "ExamplebankBetaAA, ExamplebankPosAppAA" },
+                { device_id: "dev-dmz-2", hostname: "FW-CKP-EXAMPLEBANKDMZAPP-AA.2", ha_role: "standby", model: "Quantum", software_version: "R81.20", enrollment_state: "ENROLLED", virtual_systems: "ExamplebankBetaAA, ExamplebankPosAppAA" },
               ],
               contexts: [
                 {
@@ -252,7 +252,7 @@ describe("InventoryScreen device list", () => {
                   routes: [],
                 },
               ],
-              virtual_systems: ["GarantiBetaAA", "GarantiPosAppAA"],
+              virtual_systems: ["ExamplebankBetaAA", "ExamplebankPosAppAA"],
             }),
           );
         }
@@ -261,14 +261,14 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("FW-CKP-GARANTIDMZAPP-CLS-AA")).toBeInTheDocument());
-    expect(screen.getByText("GarantiBetaAA")).toBeInTheDocument();
-    expect(screen.getByText("GarantiPosAppAA")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA")).toBeInTheDocument());
+    expect(screen.getByText("ExamplebankBetaAA")).toBeInTheDocument();
+    expect(screen.getByText("ExamplebankPosAppAA")).toBeInTheDocument();
 
     // Clicking the Virtual System selects the cluster and displays the VS details
-    fireEvent.click(screen.getByText("GarantiBetaAA"));
-    await waitFor(() => expect(screen.getByText(/CLS > FW-CKP-GARANTIDMZAPP-CLS-AA/)).toBeInTheDocument());
-    expect(screen.getAllByText("GarantiBetaAA").length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(screen.getByText("ExamplebankBetaAA"));
+    await waitFor(() => expect(screen.getByText(/CLS > FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA/)).toBeInTheDocument());
+    expect(screen.getAllByText("ExamplebankBetaAA").length).toBeGreaterThanOrEqual(2);
   });
 
   it("shows a Check Point cluster's own physical context by default, filters to a VS on sidebar selection, and resets on re-selecting the cluster", async () => {
@@ -289,7 +289,7 @@ describe("InventoryScreen device list", () => {
                   software_version: "R81.20",
                   ha_role: "active",
                   cluster_member_ref: "FW-CKP-VSX-CLS",
-                  virtual_systems: "GarantiBetaAA",
+                  virtual_systems: "ExamplebankBetaAA",
                 },
                 {
                   device_id: "dev-vsx-2",
@@ -300,7 +300,7 @@ describe("InventoryScreen device list", () => {
                   software_version: "R81.20",
                   ha_role: "standby",
                   cluster_member_ref: "FW-CKP-VSX-CLS",
-                  virtual_systems: "GarantiBetaAA",
+                  virtual_systems: "ExamplebankBetaAA",
                 },
               ],
             }),
@@ -324,14 +324,14 @@ describe("InventoryScreen device list", () => {
                 },
                 {
                   context: "1",
-                  vs_name: "GarantiBetaAA",
+                  vs_name: "ExamplebankBetaAA",
                   interfaces: [
                     { name: "eth0.100", kind: "vlan", addresses: [{ address: "192.0.2.1/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
                   ],
                   routes: [],
                 },
               ],
-              virtual_systems: ["GarantiBetaAA"],
+              virtual_systems: ["ExamplebankBetaAA"],
             }),
           );
         }
@@ -350,7 +350,7 @@ describe("InventoryScreen device list", () => {
     expect(screen.queryByText("eth0.100")).toBeNull();
 
     // Selecting the VS from the sidebar filters to that VS's own interface only.
-    fireEvent.click(screen.getByText("GarantiBetaAA"));
+    fireEvent.click(screen.getByText("ExamplebankBetaAA"));
     await waitFor(() => expect(screen.queryByText("Mgmt")).toBeNull());
     expect(screen.getByText("eth0.100")).toBeInTheDocument();
 
@@ -379,7 +379,7 @@ describe("InventoryScreen device list", () => {
                   software_version: "R81.20",
                   ha_role: null,
                   cluster_member_ref: null,
-                  virtual_systems: "GarantiBetaAA",
+                  virtual_systems: "ExamplebankBetaAA",
                 },
               ],
             }),
@@ -398,12 +398,12 @@ describe("InventoryScreen device list", () => {
                 },
                 {
                   context: "1",
-                  vs_name: "GarantiBetaAA",
+                  vs_name: "ExamplebankBetaAA",
                   interfaces: [{ name: "eth0.100", kind: "vlan", addresses: [{ address: "192.0.2.1/24", family: "ipv4", role: "member" }] }],
                   routes: [],
                 },
               ],
-              virtual_systems: ["GarantiBetaAA"],
+              virtual_systems: ["ExamplebankBetaAA"],
             }),
           );
         }
@@ -420,14 +420,14 @@ describe("InventoryScreen device list", () => {
     // sidebar's own VS sub-navigation.
     await waitFor(() => expect(screen.getByText("Mgmt")).toBeInTheDocument());
     expect(screen.queryByText("eth0.100")).toBeNull();
-    expect(screen.queryByRole("tab", { name: /GarantiBetaAA/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /ExamplebankBetaAA/i })).toBeNull();
     expect(screen.queryByRole("tab", { name: /Physical/i })).toBeNull();
 
     // Selecting the VS from the sidebar switches straight to that VS's own interface.
-    fireEvent.click(screen.getByText("GarantiBetaAA"));
+    fireEvent.click(screen.getByText("ExamplebankBetaAA"));
     await waitFor(() => expect(screen.getByText("eth0.100")).toBeInTheDocument());
     expect(screen.queryByText("Mgmt")).toBeNull();
-    expect(screen.queryByRole("tab", { name: /GarantiBetaAA/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /ExamplebankBetaAA/i })).toBeNull();
   });
 
   it("reads two members agreeing on a non-up/down state as that state, not Degraded, and hides loopback", async () => {
@@ -684,10 +684,10 @@ describe("deriveClusterTitle", () => {
 
   it("derives clean cluster name from Palo Alto reciprocal serial pair references", () => {
     const members = [
-      { device_id: "1", hostname: "FW-PALT-GARTEST.AA.1", vendor_hint: "palo_alto" },
-      { device_id: "2", hostname: "FW-PALT-GARTEST.AA.2", vendor_hint: "palo_alto" },
+      { device_id: "1", hostname: "FW-PALT-EXTEST.AA.1", vendor_hint: "palo_alto" },
+      { device_id: "2", hostname: "FW-PALT-EXTEST.AA.2", vendor_hint: "palo_alto" },
     ] as any;
-    expect(deriveClusterTitle("026109000729|026109000751", members)).toBe("FW-PALT-GARTEST.AA-CLS");
+    expect(deriveClusterTitle("026109000729|026109000751", members)).toBe("FW-PALT-EXTEST.AA-CLS");
   });
 
   it("handles numeric and hyphenated member suffixes like -01 / -02", () => {

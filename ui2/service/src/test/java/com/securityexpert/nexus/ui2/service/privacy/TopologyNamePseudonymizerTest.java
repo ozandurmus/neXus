@@ -18,9 +18,9 @@ class TopologyNamePseudonymizerTest {
 
     @Test
     void clusterAndMembersShareSyntheticBase() {
-        String clusterName = "FW-CKP-GARANTIMOBAPP-AA-CLS";
-        String member1 = "FW-CKP-GARANTIMOBAPP-AA-1";
-        String member2 = "FW-CKP-GARANTIMOBAPP-AA-2";
+        String clusterName = "FW-CKP-EXAMPLEBANKMOBAPP-AA-CLS";
+        String member1 = "FW-CKP-EXAMPLEBANKMOBAPP-AA-1";
+        String member2 = "FW-CKP-EXAMPLEBANKMOBAPP-AA-2";
 
         String maskedCluster = pseudonymizer.maskClusterName(clusterName);
         String maskedM1 = pseudonymizer.maskDeviceName(member1, clusterName);
@@ -61,13 +61,13 @@ class TopologyNamePseudonymizerTest {
 
     @Test
     void virtualSystemsShareParentBase() {
-        String clusterName = "FW-CKP-GARANTIMOBAPP-AA-CLS";
+        String clusterName = "FW-CKP-EXAMPLEBANKMOBAPP-AA-CLS";
         String maskedCluster = pseudonymizer.maskClusterName(clusterName);
         String base = maskedCluster.substring(4);
 
-        String maskedVs = pseudonymizer.maskVirtualSystem("VS-GARANTI-APP", clusterName);
+        String maskedVs = pseudonymizer.maskVirtualSystem("VS-EXAMPLEBANK-APP", clusterName);
         assertThat(maskedVs).startsWith("VS-" + base + "-");
-        assertThat(maskedVs).doesNotContain("GARANTI");
+        assertThat(maskedVs).doesNotContain("EXAMPLEBANK");
     }
 
     @Test

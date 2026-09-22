@@ -1,60 +1,82 @@
 # neXus
 
-A multi-vendor network-security **evidence** platform. It collects and
-reconciles runtime inventory and current configuration from Check Point
-(MDS/CMA), Check Point VSX, and Palo Alto Panorama / PAN-OS — with run isolation,
-completeness telemetry, last-known-good snapshots, UI freshness state, a
-content-addressed configuration history, and privacy-preserving support bundles.
+**neXus** is an on-premises operations platform for enterprise firewall estates. It reads what the firewalls
+actually run — inventory, configuration, platform identity, HA state — keeps encrypted backups, evaluates
+compliance, and shows the exceptions an operator must act on, without ever sending a command the product has
+not been explicitly allowed to send.
 
-Product maturity axis: `SEE → VERIFY → TRACE → RECOVER → OPERATE`. `SEE`
-(inventory) is mature; `VERIFY` (configuration, alignment, compliance) is in
-progress; `RECOVER` has shipped its first controlled writes; `OPERATE` has
-shipped its read-only half (the operator console).
+Principle: `SEE → VERIFY → TRACE → RECOVER → OPERATE`.
 
-**What the product may do is an explicit five-class taxonomy**, not a slogan —
-`utils/action_taxonomy.py` is the single source of truth; see `AI_START_HERE.md`
-for the full table.
+Today it runs against a live estate of 105 devices (Check Point gateways, ClusterXL, VSX, a Multi-Domain
+Server; Palo Alto firewalls, HA pairs, Panorama) in 39 clusters.
 
-Authoritative state: **`CURRENT_STATE.md`**.
+## What it does
 
-## Install and run
+| Module | What it gives you |
+|---|---|
+| **Overview** | Exceptions first: failed jobs, stale evidence, clusters whose members differ, changed configurations, backup targets without an archive, compliance with coverage and gaps, hotfix spread. Every figure opens its filtered list. |
+| **Inventory** | Interfaces, routes, HA roles, virtual systems, serial, software version, jumbo hotfix / content versions, uptime. |
+| **Configuration** | The sanitized current configuration per device, section by section; cluster members side by side with every difference marked; change detection. |
+| **Compliance** | CIS, PCI-DSS 4.0.1, NIST 800-53 and a financial baseline, evaluated from stored configuration. |
+| **Backups** | Check Point and Palo Alto backups, AES-GCM encrypted at rest, schedule and retention, archive listing and compare, download under role-based access. |
+| **Operations** | Job history with filters and CSV export, HA readiness (read-only), and the automation modules to come. |
+| **Administration** | Devices, credentials, local identities, roles, sessions, LDAP/AD, notifications (syslog, SMTP relay), service and storage view, audit and job logs, project plan. |
+| **nexus-cli** | The same actions from a shell, for every screen. |
 
-```powershell
-py.exe -m pip install -r requirements.txt
-py.exe .\main.py
+What the product may execute against a device is a closed, gated list: every device command has a gate row
+(vendor, class, shell, timeout, frequency, secret-output risk) before it is ever issued. Writes to devices
+are limited to the controlled recovery classes and, when the Script Execution module ships, to scheduled,
+ledgered writes under the five conditions in `AGENTS.md`.
+
+## Architecture
+
+```
+browser ──HTTPS──▶ ingress ──▶ ui2-service (Spring Boot: API, RBAC gate chain, masking, scheduler)
+                                   │        ▲
+                                   ▼        │ jobs (lease, heartbeat, drain)
+                              PostgreSQL ◀──┴── ui2-worker (SSH / PAN XML API collectors, backups)
+                                   │
+                        encrypted artefact store (backups, configuration evidence)
 ```
 
-`py.exe .\main.py` is the full integration checkpoint. Development modes:
-`--only cp` / `--only vsx` / `--only pan-config`, `--render-only`,
-`--cp-config-collect --cp-config-stage all`. See `AI_START_HERE.md` for the full
-CLI table.
+- `ui2/` — the product: `service`, `worker`, `persistence` (jOOQ, Flyway migrations), `job-engine`,
+  `capability-registry` (command gates), `cli`, `frontend` (React, Material 3), `architecture-tests`.
+- `deploy/` — Kubernetes (k3s) manifests and the image build (kaniko).
+- Runs as unprivileged pods in its own namespace; service and worker 512 MiB requested, 2 GiB limit.
 
-No devices to hand? `py.exe .\scripts\render_sample.py` renders the UI from a
-synthetic inventory so the shell and the Network Inventory / Overview / Project
-Plan modules can be checked locally (it prints the `index.html` path).
+## Build and test
 
-Full runs write a shareable support bundle under the runtime `output/`. All run
-artifacts live outside the repository (Windows:
-`%LOCALAPPDATA%\SecurityExpert\runtime\`).
+```bash
+cd ui2
+./gradlew :service:test :worker:test :persistence:test :architecture-tests:test
+cd frontend && npm ci && npx vitest run
+```
 
-## Security boundary
+Deploy to the development host (watched, stops at the first failure, 12-minute limit):
 
-Never commit `output/`, `data/state/`, `data/runs/`, `data/configs/`, `.env`,
-keys, support HMAC keys, or real firewall configuration / inventory artifacts.
-No credential, management IP, device name, serial, or raw configuration belongs
-in any repository file — documentation and `project/*.json` metadata included.
+```bash
+scripts/hosta_deploy.sh
+```
 
-## Documentation
+## Privacy
 
-| Doc | Purpose |
-| --- | --- |
-| `AI_START_HERE.md` | Cold-start entry point: the idea, how it works in 30 lines, the reading order |
-| `docs/ARCHITECTURE.md` | Deep mechanism reference |
-| `CURRENT_STATE.md` | Active build, next task, blockers, test baseline |
-| `AI_HANDOVER.md` | Last session close and the next session's exact starting point |
-| `AGENTS.md` · `docs/AI_DEVELOPMENT_PROTOCOL.md` | Engineering law and lifecycle |
-| `project/roadmap.json` · `project/backlog.json` | Task source |
-| `project/build_history.json` · `docs/history/INDEX.md` | Structured build timeline |
-| `docs/design/` | Forward-looking architecture for major not-yet-built features (`FAILOVER_ENGINE_ARCHITECTURE.md`, `COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md`) |
-| `docs/history/` | Archived phase agreements, validation reports, old handovers |
-| `PROJECT_VISION.md` · `PRIVACY_AND_DATA_HANDLING.md` | North star and data-handling rules |
+Real device names, addresses, serials and configurations never enter this repository, commits or chat.
+Screens are reviewed under the `aiview` persona, which sees collision-free pseudonyms (`FW-TANGO-04`,
+`CLS-ROMEO-01`). A pre-push privacy gate refuses private endpoints and secrets.
+
+## Where to read next
+
+| Document | Purpose |
+|---|---|
+| `AGENTS.md` | Engineering and security law (authoritative) |
+| `CURRENT_STATE.md` · `project/QUEUE.md` | What is being built now, what is next |
+| `docs/design/` | Contracts: Overview, Script Execution, automation, platform identity, vendor backups |
+| `project/build_history.json` · `docs/history/INDEX.md` | Build timeline |
+| `PRIVACY_AND_DATA_HANDLING.md` | Data-handling rules |
+
+## Status
+
+57 % of the declared Java roadmap is evidenced (2026-09-23): inventory, configuration, backup and compliance
+run on the live estate; restore is deliberately disabled; automation, Script Execution and further vendors are
+contracted and next. The earlier Python product (`utils/`, `application/`, `main.py`, …) is historical and is
+being separated from this repository (`docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md`).

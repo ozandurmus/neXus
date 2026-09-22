@@ -43,8 +43,8 @@ class PrivacyMaskingResponseBodyAdviceTest {
 
         Map<String, Object> body = Map.of(
                 "device_id", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
-                "hostname", "FW-CKP-GARANTIMOBAPP-AA-1",
-                "cluster_member_ref", "FW-CKP-GARANTIMOBAPP-AA-CLS"
+                "hostname", "FW-CKP-EXAMPLEBANKMOBAPP-AA-1",
+                "cluster_member_ref", "FW-CKP-EXAMPLEBANKMOBAPP-AA-CLS"
         );
 
         Object result = advice.beforeBodyWrite(body, null, null, null, serverRequest, null);
@@ -76,8 +76,8 @@ class PrivacyMaskingResponseBodyAdviceTest {
 
         Map<String, Object> dev1 = new LinkedHashMap<>();
         dev1.put("device_id", "148bd45b-e5b4-490b-95c5-54862e2d63d0");
-        dev1.put("hostname", "FW-CKP-GARANTIMOBAPP-AA-1");
-        dev1.put("cluster_member_ref", "FW-CKP-GARANTIMOBAPP-AA-CLS");
+        dev1.put("hostname", "FW-CKP-EXAMPLEBANKMOBAPP-AA-1");
+        dev1.put("cluster_member_ref", "FW-CKP-EXAMPLEBANKMOBAPP-AA-CLS");
         dev1.put("virtual_systems", "VS-APP, VS-DB");
         dev1.put("latest_job_terminal_reason", "connect_failed to 192.168.230.2: timed out");
 
@@ -93,13 +93,13 @@ class PrivacyMaskingResponseBodyAdviceTest {
 
         Map<String, Object> maskedDev = devices.get(0);
         assertThat(maskedDev.get("device_id")).isEqualTo("148bd45b-e5b4-490b-95c5-54862e2d63d0");
-        assertThat((String) maskedDev.get("hostname")).startsWith("FW-").doesNotContain("GARANTI");
-        assertThat((String) maskedDev.get("cluster_member_ref")).startsWith("CLS-").doesNotContain("GARANTI");
+        assertThat((String) maskedDev.get("hostname")).startsWith("FW-").doesNotContain("EXAMPLEBANK");
+        assertThat((String) maskedDev.get("cluster_member_ref")).startsWith("CLS-").doesNotContain("EXAMPLEBANK");
         assertThat((String) maskedDev.get("virtual_systems")).doesNotContain("VS-APP");
         assertThat((String) maskedDev.get("latest_job_terminal_reason")).doesNotContain("192.168.230.2").contains("10.");
 
         // In-memory original map must NOT be mutated
-        assertThat(dev1.get("hostname")).isEqualTo("FW-CKP-GARANTIMOBAPP-AA-1");
+        assertThat(dev1.get("hostname")).isEqualTo("FW-CKP-EXAMPLEBANKMOBAPP-AA-1");
     }
 
     @Test
@@ -113,14 +113,14 @@ class PrivacyMaskingResponseBodyAdviceTest {
         Map<String, Object> context = Map.of("context", "system", "interfaces", List.of(iface), "routes", List.of(route));
 
         Map<String, Object> clusterInventory = new LinkedHashMap<>();
-        clusterInventory.put("cluster_member_ref", "FW-CKP-GARANTIMOBAPP-AA-CLS");
+        clusterInventory.put("cluster_member_ref", "FW-CKP-EXAMPLEBANKMOBAPP-AA-CLS");
         clusterInventory.put("contexts", List.of(context));
         clusterInventory.put("virtual_systems", List.of("VS-APP"));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) advice.beforeBodyWrite(clusterInventory, null, null, null, serverRequest, null);
 
-        assertThat(result.get("cluster_member_ref").toString()).startsWith("CLS-").doesNotContain("GARANTI");
+        assertThat(result.get("cluster_member_ref").toString()).startsWith("CLS-").doesNotContain("EXAMPLEBANK");
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> contexts = (List<Map<String, Object>>) result.get("contexts");
@@ -165,17 +165,17 @@ class PrivacyMaskingResponseBodyAdviceTest {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
 
         // Pre-register a device hostname
-        advice.maskObject(Map.of("hostname", "FW-CKP-GARANTIMOBAPP-AA-1"), null);
+        advice.maskObject(Map.of("hostname", "FW-CKP-EXAMPLEBANKMOBAPP-AA-1"), null);
 
         JobEvent event = new JobEvent("job-999", "DEVICE_INVENTORY", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
-                "FAILED", "SSH connection to FW-CKP-GARANTIMOBAPP-AA-1 at 192.168.230.2 timed out", Instant.now());
+                "FAILED", "SSH connection to FW-CKP-EXAMPLEBANKMOBAPP-AA-1 at 192.168.230.2 timed out", Instant.now());
 
         @SuppressWarnings("unchecked")
         List<JobEvent> result = (List<JobEvent>) advice.beforeBodyWrite(List.of(event), null, null, null, serverRequest, null);
 
         assertThat(result).hasSize(1);
         String reason = result.get(0).terminalReason();
-        assertThat(reason).doesNotContain("FW-CKP-GARANTIMOBAPP-AA-1");
+        assertThat(reason).doesNotContain("FW-CKP-EXAMPLEBANKMOBAPP-AA-1");
         assertThat(reason).doesNotContain("192.168.230.2");
         assertThat(reason).contains("FW-");
         assertThat(reason).contains("10.");
@@ -199,7 +199,7 @@ class PrivacyMaskingResponseBodyAdviceTest {
         );
         Map<String, Object> context = Map.of("context", "system", "interfaces", List.of(iface), "routes", List.of());
         Map<String, Object> clusterInventory = Map.of(
-                "cluster_member_ref", "CLS-GARANTI-PROD",
+                "cluster_member_ref", "CLS-EXAMPLEBANK-PROD",
                 "contexts", List.of(context)
         );
 

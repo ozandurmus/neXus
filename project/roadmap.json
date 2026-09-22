@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0366",
+  "current_build": "NXS-LOCAL-0368",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,35 +150,53 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0366",
-      "title": "Automation editor, Script Execution and scheduled device-write decisions; vendor and test contracts",
+      "build": "NXS-LOCAL-0368",
+      "title": "Overview rebuilt as an exception-and-evidence screen; collision-free aiview pseudonyms",
       "status": "automated_validated",
-      "completed": "2026-09-22"
+      "completed": "2026-09-23"
     },
     "next": {
-      "build": "script_execution_module",
-      "title": "Script Execution module (own pod) -- slice 1: script record, versioning, secret scan, routes, CLI",
+      "build": "overview_acceptance_and_member_specific_tuning",
+      "title": "Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today)",
       "status": "planned",
-      "detail": "docs/design/SCRIPT_EXECUTION_CONTRACT.md"
+      "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
     },
     "upcoming": [
       {
+        "build": "script_execution_module",
+        "title": "Script Execution module (own pod) -- slice 1",
+        "status": "planned",
+        "detail": "docs/design/SCRIPT_EXECUTION_CONTRACT.md"
+      },
+      {
         "build": "task_executor_automation_module",
-        "title": "Automation: in-product step editor over gated commands (Operations)",
+        "title": "Automation: in-product step editor over gated commands",
         "status": "planned",
         "detail": "docs/design/TASK_EXECUTOR_AUTOMATION_CONTRACT.md"
       },
       {
+        "build": "aiview_masking_leak_audit",
+        "title": "Masking leak audit (compare aiview responses with raw tables)",
+        "status": "planned",
+        "detail": "docs/history/backlog/aiview_masking_leak_audit.md"
+      },
+      {
         "build": "module_per_pod_split",
-        "title": "Every module its own pod (backup, compliance, automation, script execution, operations, configuration, inventory)",
+        "title": "Every module its own pod",
         "status": "planned",
         "detail": "docs/history/backlog/module_per_pod_split.md"
       },
       {
         "build": "vendor_backup_block",
-        "title": "Eight vendor backups: generic HTTPS client, onboarding, Radware, Pulse, Panorama, Infoblox, FortiGate, ASA, Provider-1/MDS, ProxySG (measure first)",
+        "title": "Eight vendor backups, measure first",
         "status": "planned",
         "detail": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md"
+      },
+      {
+        "build": "legacy_python_separation",
+        "title": "Separate the legacy Python product from the neXus repository (plan awaiting PO decision)",
+        "status": "planned",
+        "detail": "docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md"
       },
       {
         "build": "ui2_b0_c7_backup_artefact_restore_engine_contract",

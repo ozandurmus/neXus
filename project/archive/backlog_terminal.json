@@ -1257,6 +1257,51 @@
       "priority": "P1",
       "target": "verify against a running deployment before scoping",
       "note": ""
+    },
+    {
+      "id": "overview_exception_and_evidence_screen",
+      "category": "ui2",
+      "title": "Next major build (PO 2026-09-22): Overview rebuilt as an exception-and-evidence screen per the design council (Astra + Fable agree): attention strip, evidence freshness, morning exceptions, compliance with coverage/gaps, recovery posture, platform spread, neXus health",
+      "status": "automated_validated",
+      "priority": "P0",
+      "target": "docs/design/OVERVIEW_COUNCIL_2026_09_22_ASTRA.md, _FABLE.md; first release uses stored evidence only",
+      "note": ""
+    },
+    {
+      "id": "service_view_screen",
+      "category": "ui2",
+      "title": "Service view: every neXus pod, its state, restarts, CPU and memory use (top-like), version, last rollout -- read-only, Administration; CLI counterpart",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "PO 2026-09-22; needs a read-only metrics path from the service to the cluster (no kubectl in the browser)",
+      "note": ""
+    },
+    {
+      "id": "storage_usage_view",
+      "category": "ui2",
+      "title": "Show how much space backups and configuration evidence take: artefact store bytes per vendor/device/kind, database size, trend; Backups and Configuration screens + CLI",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "PO 2026-09-22",
+      "note": ""
+    },
+    {
+      "id": "ui2_pod_memory_limits_2gi",
+      "category": "ui2",
+      "title": "Raise ui2-service and ui2-worker memory limits from 1 GiB to 2 GiB (requests stay 512 MiB); node has 62 GiB, neXus limits total 4 GiB",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "deploy/ui2/50-service-deployment.yaml, 52-worker-deployment.yaml; PO 2026-09-22",
+      "note": ""
+    },
+    {
+      "id": "operations_readiness_panel_ignores_enrolled_clusters",
+      "category": "ui2",
+      "title": "Operations › HA & readiness says 'No HA pair or cluster enrolled' while 38 clusters exist (seen in the aiview tour 2026-09-22); the readiness panel reads a different source than the inventory clusters",
+      "status": "done",
+      "priority": "P2",
+      "target": "Point the readiness panel at the inventory's cluster list or state plainly what it needs",
+      "note": ""
     }
   ]
 }

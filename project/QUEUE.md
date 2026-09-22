@@ -1,10 +1,10 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T20:47:36Z
+Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T21:22:50Z
 
 ## Now
-- NXS-LOCAL-0366 — Automation editor, Script Execution and scheduled device-write decisions; vendor and test contracts (automated_validated)
+- NXS-LOCAL-0368 — Overview rebuilt as an exception-and-evidence screen; collision-free aiview pseudonyms (automated_validated)
 ## Next
-- script_execution_module — Script Execution module (own pod) -- slice 1: script record, versioning, secret scan, routes, CLI (planned)
+- overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a c (target: PanXmlApiTransport certificate verificat)
@@ -15,7 +15,6 @@ Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T20:47:36Z
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every c (target: JooqDeviceRepository DEVICE_SELECT later)
 - P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason a (target: jobs.outcome/terminal_reason/finished_at)
-- P0/planned overview_exception_and_evidence_screen — Next major build (PO 2026-09-22): Overview rebuilt as an e (target: docs/design/OVERVIEW_COUNCIL_2026_09_22_)
 - P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices ( (target: )
 - P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner vs DeviceComposit)
 - P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect, warn with the (target: ui2 worker HostKeyVerifier / TrustRuleRe)
@@ -28,6 +27,7 @@ Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T20:47:36Z
 - P1/planned aiview_masking_leak_audit — Masking leak audit: compare aiview responses against the r (target: PO 2026-09-22 proposal (separate masked)
 - P1/planned backup_plane_separate_service — Deliver the backup plane as the independent service the re (target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITEC)
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
+- P1/planned cluster_diff_member_specific_tuning — Cluster DIFF: 38 of 39 clusters show member differences (2 (target: Overview contract; configurationProjecti)
 - P1/planned cluster_member_model_needs_second_query — Cluster members carry no hardware field in the gateway enu (target: Check Point management plane enumeration)
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
@@ -39,17 +39,17 @@ Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T20:47:36Z
 - P1/planned failover_readiness_check_contract — Failover readiness contract carrying the PO's four semanti (target: PO_DECISION_RECORD 3)
 - P1/planned failover_recheck_on_request — A failover request must re-run every readiness check at th (target: PO rule 2026-09-12; OP.2 contract)
 - P1/planned failover_vsx_vsls_mentality_contract — VSX/VSLS semantics: CP per-VS state independent of chassis (target: PO statement 2026-09-12; needs vendor-se)
+- P1/planned github_open_pr_triage — Decide the 21 open GitHub PRs (2026-09-15..17): close 15 s (target: docs/operations/OPEN_PR_TRIAGE_2026_09_2)
 - P1/planned gov_orch_budget_ceiling_not_persisted_or_enforced — The dispatch budget ceiling is neither recorded nor enforc (target: GOV.ORCH.13 DL-3 budget column; scripts/)
 - P1/planned inventory_row_does_not_say_why_a_device_is_unconfirmed — The inventory row shows Registered, not confirmed without (target: InventoryScreen row rendering; jobs.term)
 - P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a pr (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
+- P1/planned legacy_python_separation — Separate the legacy Python product from the neXus reposito (target: docs/design/LEGACY_PYTHON_SEPARATION_PLA)
 - P1/planned module_per_pod_split — PO 2026-09-22: every module its own pod -- backup, complia (target: Major work; PO-requested ('ayır bunu').)
 - P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP l (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
 - P1/planned pan_collection_contract_from_measurement — Write the Palo Alto collection contract from the PAN_COLLE (target: docs/design/PAN_COLLECTION_MEASUREMENT_B)
 - P1/planned platform_identity_facts_on_configuration — PO 2026-09-22 'kesinlikle': serial number, software versio (target: Contract docs/design/PLATFORM_IDENTITY_F)
 - P1/planned relay_id_reuse_when_record_uncommitted — local_relay _next_id reissues an id whose JSON was never c (target: GOV.ORCH successor or scripts/local_rela)
 - P1/planned script_execution_module — Script Execution: operator scripts (.sh/.py/.jar or inline (target: PO decision record 2026-09-22 (automatio)
-- P1/planned service_view_screen — Service view: every neXus pod, its state, restarts, CPU an (target: PO 2026-09-22; needs a read-only metrics)
-- P1/planned storage_usage_view — Show how much space backups and configuration evidence tak (target: PO 2026-09-22)
 - P1/planned task_executor_automation_module — Task Executor / Automation module: operator-authored, orde (target: )
 - P1/planned top_app_bar_search_is_not_an_input — The top app bar search is a styled box containing static t (target: ui2/frontend/src/shell/TopAppBar.tsx)
 - P1/planned ui2_audit_logging — Audit logging for device and user management (target: ui2)
@@ -64,7 +64,6 @@ Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T20:47:36Z
 - P1/planned ui2_ldap_config — LDAP Configuration Screen (target: ui2)
 - P1/planned ui2_networkpolicy_in_cluster_db_reach — NetworkPolicy restricting in-cluster reach to PostgreSQL (target: UI2_0_B1_01C successor)
 - P1/planned ui2_pan_transport_no_credentials_in_url — UI2 Palo Alto transport: no credential ever appears in a U (target: PAN_DISCOVERY_CONTRACT.md T-1/T-5; the P)
-- P1/planned ui2_pod_memory_limits_2gi — Raise ui2-service and ui2-worker memory limits from 1 GiB (target: deploy/ui2/50-service-deployment.yaml, 5)
 - P1/planned ui2_private_play_and_mockup_view — Private Play & Mockup View integration (target: )
 - P1/planned ui2_reproducible_in_cluster_image_build — UI2 reproducible in-cluster image build and release assura (target: UI2_0_B1_01C in-cluster OCI build; 13D B)
 - P1/planned vault_has_no_enforced_quota_on_a_shared_host — The artefact/recovery store has no enforced quota: local-p (target: deploy/ui2/35-artefact-store-pvc.yaml; s)
@@ -89,7 +88,6 @@ Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T20:47:36Z
 - P2/planned failover_phase_d_has_no_build_record
 - P2/planned gov_orch_turn_counter_blind_to_codex_stream
 - P2/planned java_product_plan_build_selection_is_stale
-- P2/planned operations_readiness_panel_ignores_enrolled_clusters
 - P2/planned orchestrator_worktree_lacks_frontend_dependencies
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
@@ -148,8 +146,8 @@ Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T20:47:36Z
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
+- NXS-LOCAL-0368 (automated_validated)
+- NXS-LOCAL-0367 (automated_validated)
 - NXS-LOCAL-0366 (automated_validated)
 - NXS-LOCAL-0365 (automated_validated)
 - NXS-LOCAL-0364 (automated_validated)
-- NXS-LOCAL-0363 (automated_validated)
-- NXS-LOCAL-0346 (automated_validated)

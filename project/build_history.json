@@ -3,6 +3,26 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0368",
+      "status": "automated_validated",
+      "title": "Overview rebuilt as an exception-and-evidence screen; collision-free aiview pseudonyms",
+      "summary": "Implemented the frozen Overview contract (one aggregate endpoint, cluster DIFF summary ported to Java with a parity test, filtered links into every screen) and made cluster and device pseudonyms unique through a persisted registry. Deployed; aiview acceptance by the Product Owner pending.",
+      "completed": "2026-09-23",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0368.md"
+    },
+    {
+      "build": "NXS-LOCAL-0367",
+      "status": "automated_validated",
+      "title": "Menu-tour fixes: heap exhaustion, speed, notifications and remote logging, service and storage view",
+      "summary": "Released 645 MB of unread configuration text that exhausted the service and worker heap, sped up aiview masking and the per-request gate, fixed demo data on HA readiness, and added Administration > Notifications (syslog, SMTP relay, two triggers) and > System (pods, storage) with CLI counterparts; memory limits raised to 2 GiB. Deployed and inspected under aiview.",
+      "completed": "2026-09-23",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0367.md"
+    },
+    {
       "build": "NXS-LOCAL-0366",
       "status": "automated_validated",
       "title": "Automation editor, Script Execution and scheduled device-write decisions; vendor and test contracts",

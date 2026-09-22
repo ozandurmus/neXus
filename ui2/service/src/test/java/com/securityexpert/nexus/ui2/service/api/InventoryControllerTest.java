@@ -40,9 +40,9 @@ class InventoryControllerTest {
     void resolvesVirtualSystemNamesForNumericContexts() {
         Map<String, String> mapped = InventoryController.resolveVsNames(
                 List.of("physical", "2", "3"),
-                List.of("GarantiPosAA", "GarantiWebAA"));
-        assertEquals("GarantiPosAA", mapped.get("2"));
-        assertEquals("GarantiWebAA", mapped.get("3"));
+                List.of("ExamplebankPosAA", "ExamplebankWebAA"));
+        assertEquals("ExamplebankPosAA", mapped.get("2"));
+        assertEquals("ExamplebankWebAA", mapped.get("3"));
         assertEquals(null, mapped.get("physical"));
     }
 

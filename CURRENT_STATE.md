@@ -6,47 +6,28 @@ the generated project data it represents; contract succession is in
 
 ## Product today
 
-The Java product requires local login. An authenticated operator can administer
-local identities, manage encrypted credential references, discover Check Point
-or Palo Alto candidates from the UI, see already-imported candidates, add a
-device, and run the enrollment confirm. Inventory collection persists the
-inventory and exposes its cluster view. Configuration collection exposes an
-index view and stores encrypted artefacts. Check Point gateway backup is gated
-to the pilot allowlist. The Administration screen reads the project-plan
-payload from the repository’s project data.
-
-Discovery command gates are approved; the repository records vendor measurement
-findings for inventory and configuration. Field bindings, live discovery,
-inventory, configuration, and backup outcomes remain **UNVERIFIED** until
-their specified real-device runs. Automated tests do not replace those runs.
-Restore is deliberately disabled. The scheduler is deliberately deferred and
-has no enabled product path.
+neXus (UI2, Java) runs on HOST-A against the live estate — 105 devices, 39
+clusters — and the Product Owner uses it daily under the `aiview` persona.
+Inventory (with serial, version, hotfix / content versions, uptime),
+configuration (section projection, cluster member DIFF, change detection),
+compliance (four frameworks over 102 firewalls), Check Point and Palo Alto
+backups (encrypted, downloadable under RBAC, listed and compared), jobs with
+filters and export, nexus-cli, notifications (syslog / SMTP relay, built but
+not yet pointed at real targets), a service and storage view, and the
+Overview (exception-and-evidence screen, frozen contract) are deployed.
+Restore is deliberately disabled. Backup scheduling exists; the fleet
+schedule is not switched on. Evidence-weighted progress of the Java roadmap:
+57 % (2026-09-23).
 
 ## Active build
 
-`NXS-LOCAL-0366` — `automated_validated` (2026-09-22, deployed on HOST-A):
-the day's four builds — backup download with RBAC, archive listing and
-compare, jobs screen and nexus-cli (`NXS-LOCAL-0363`); Configuration screen
-rebuilt with the cluster DIFF view (`0364`); platform identity facts —
-serial, version, hotfix, content versions, uptime (`0365`); automation,
-Script Execution and scheduled device-write decisions plus vendor contracts
-(`0366`). NEXT: `script_execution_module` slice 1. Records in
-`project/build_history.json`, detail under `docs/history/builds/`.
-
-`NXS-LOCAL-0347` — `in_progress`: real-environment validation, under the
-`aiview` persona, of the Palo Alto HA cluster presentation that
-`NXS-LOCAL-0346` was graded on but never received, plus the delivery-grade
-correction and machine-authority backfill for `NXS-LOCAL-0331`–`0346`.
-Movement record: `relay/NXS-LOCAL-0347-real-environment-validation-of-pan-ha-cl.json`.
-
-`NXS-LOCAL-0346` — `automated_validated`: Palo Alto PAN-OS HA clustering
-reconciliation per official discovery API evidence, reciprocal serial
-pairing, jOOQ lateral-join fix, and deterministic `<base>-CLS` title
-derivation for presentation only.
-
-Predecessor builds carry one structured record each in
-`project/build_history.json`; `project/QUEUE.md` is the cold-start view. No
-predecessor detail is repeated here.
+`NXS-LOCAL-0368` — `automated_validated` (2026-09-23, deployed on HOST-A):
+Overview rebuilt per `docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md`
+(FROZEN), collision-free aiview pseudonyms (V53), and the menu-tour fixes of
+`NXS-LOCAL-0367` (heap exhaustion, speed, notifications, service view). The
+open gate is the Product Owner's aiview acceptance of the Overview. NEXT:
+Overview acceptance and per-member settings not counted as drift (38 of 39
+clusters show a member DIFF today). Records in `project/build_history.json`.
 
 ## Open Product Owner decisions
 
@@ -58,16 +39,12 @@ restore or scheduling.
 
 ## Development environment
 
-Moving off the Product Owner's laptop: the corporate VPN captures every RFC1918
-range the local cluster needs. The destination is a registered host that also
-carries another product's production workload, on Kubernetes, on CGNAT blocks.
-What an agent may execute there is a separate authority from the network action
-taxonomy and is fixed by
-`docs/design/PO_DECISION_RECORD_2026_09_15A_THE_DEVELOPMENT_HOST_AND_WHAT_AN_AGENT_MAY_DO_ON_IT.md`,
-with the allowlist in `docs/design/HOST_REGISTER.md`, the step order in
-`docs/operations/HOST_A_MIGRATION.md` and the record of what was done in
-`docs/operations/HOST_LEDGER_HOST-A.md`. The migration is at phase A. No host
-write has been performed.
+HOST-A (k3s, namespace `ui2`) is the development and pilot host; builds run in
+the cluster (kaniko) and are deployed with `scripts/hosta_deploy.sh`, which
+refuses with jobs in flight and stops at the first failure. What an agent may
+execute there is fixed by the host register and the 2026-09-19 amendment in
+`AGENTS.md`. The repository on GitHub is public; the Product Owner's decision
+on visibility is open (`docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md` §4).
 
 ## Production and real-environment posture
 
