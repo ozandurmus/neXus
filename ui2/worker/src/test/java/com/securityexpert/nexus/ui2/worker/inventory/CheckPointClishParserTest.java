@@ -57,7 +57,7 @@ class CheckPointClishParserTest {
                 description:
                 name: LAN1
                 ipv4-address: 192.0.2.1
-                status: connected
+                status: 1000/full
                 mac-address: 00:1c:7f:20:11:23
                 description: office
                 name: WAN

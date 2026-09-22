@@ -618,11 +618,18 @@ public final class InventoryCapabilityExecutor {
                     case "status" -> {
                         statusTokens.add(value.toLowerCase().replaceAll("\\d+", "#"));
                         if (current != null) {
-                            current.state = switch (value.toLowerCase()) {
-                                case "on", "up", "connected" -> InventoryInterface.STATE_UP;
-                                case "off", "down", "disconnected" -> InventoryInterface.STATE_DOWN;
-                                default -> InventoryInterface.STATE_UNKNOWN;
-                            };
+                            // Measured live, 2026-09-22 (status tokens: "#/full", "disconnected",
+                            // "off"): a port with link reports its negotiated speed/duplex, e.g.
+                            // "1000/full", as its status -- that is the only "up" shape this shell
+                            // was seen to use.
+                            String status = value.toLowerCase();
+                            current.state = status.matches("^\\d+[a-z]*/(full|half)$")
+                                    ? InventoryInterface.STATE_UP
+                                    : switch (status) {
+                                        case "on", "up", "connected" -> InventoryInterface.STATE_UP;
+                                        case "off", "down", "disconnected" -> InventoryInterface.STATE_DOWN;
+                                        default -> InventoryInterface.STATE_UNKNOWN;
+                                    };
                         }
                     }
                     case "ipv4-address", "ip-address", "ipv4 address" -> {
