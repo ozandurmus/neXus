@@ -31,8 +31,21 @@ public final class ConfigurationQueryService {
         }
     }
 
+    /**
+     * One list row. {@code clusterMemberRef} lets the screen present the cluster as the unit
+     * (design language section 2); {@code projectedSettings} is the latest run's index entry
+     * total, so two members' agreement is judged by canonical hash and by count, never by eye.
+     */
     public record DeviceListEntry(String deviceId, Optional<String> hostname, String vendor,
-            Optional<ConfigurationRun> latestRun) {
+            Optional<ConfigurationRun> latestRun, Optional<String> clusterMemberRef) {
+
+        public DeviceListEntry(String deviceId, Optional<String> hostname, String vendor, Optional<ConfigurationRun> latestRun) {
+            this(deviceId, hostname, vendor, latestRun, Optional.empty());
+        }
+
+        public int projectedSettings() {
+            return latestRun.map(run -> run.index().stream().mapToInt(e -> e.entryCount()).sum()).orElse(0);
+        }
     }
 
     private final DeviceRepository deviceRepository;
@@ -84,7 +97,7 @@ public final class ConfigurationQueryService {
         }
         return devices.stream()
                 .map(device -> new DeviceListEntry(device.deviceId(), device.observedHostname(), device.vendorHint(),
-                        Optional.ofNullable(latestByDeviceId.get(device.deviceId()))))
+                        Optional.ofNullable(latestByDeviceId.get(device.deviceId())), device.clusterMemberRef()))
                 .toList();
     }
 }

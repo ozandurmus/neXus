@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { ConfigurationScreen } from "../src/screens/ConfigurationScreen";
+import { ConfigurationScreen, groupByCluster } from "../src/screens/ConfigurationScreen";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -57,5 +57,40 @@ describe("ConfigurationScreen device list", () => {
 
     await waitFor(() => expect(screen.getByText("Configuration unavailable")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+});
+
+describe("the configuration list presents the cluster as the unit (design language section 2/3)", () => {
+  const entry = (device_id: string, extra: Record<string, unknown> = {}) => ({
+    device_id, hostname: `FW-${device_id}`, vendor: "check_point", last_collected_at: "2026-09-22T10:00:00Z",
+    change_state: "unchanged" as const, ...extra,
+  });
+
+  it("groups members under their cluster and judges agreement by canonical hash", () => {
+    const rows = groupByCluster([
+      entry("m1", { cluster_member_ref: "CLS-ROMEO-01", canonical_hash: "h1", projected_settings: 352 }),
+      entry("s1"),
+      entry("m2", { cluster_member_ref: "CLS-ROMEO-01", canonical_hash: "h1", projected_settings: 352 }),
+      entry("x1", { cluster_member_ref: "CLS-JULIET-02", canonical_hash: "a" }),
+      entry("x2", { cluster_member_ref: "CLS-JULIET-02", canonical_hash: "b" }),
+      entry("u1", { cluster_member_ref: "CLS-TANGO-03", canonical_hash: "a" }),
+      entry("u2", { cluster_member_ref: "CLS-TANGO-03", canonical_hash: null, change_state: null, last_collected_at: null }),
+    ]);
+
+    expect(rows.map((r) => (r.kind === "cluster" ? `cluster:${r.group.clusterRef}:${r.group.agreement}` : `device:${r.device.device_id}`)))
+      .toEqual(["cluster:CLS-ROMEO-01:agree", "device:s1", "cluster:CLS-JULIET-02:differ", "cluster:CLS-TANGO-03:unknown"]);
+  });
+
+  it("renders a cluster row with its members as chips and a Config diff badge when they disagree", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, { devices: [
+      entry("x1", { cluster_member_ref: "CLS-JULIET-02", canonical_hash: "a", projected_settings: 352 }),
+      entry("x2", { cluster_member_ref: "CLS-JULIET-02", canonical_hash: "b", projected_settings: 354, change_state: "changed" }),
+    ] }))));
+    render(withTheme(<ConfigurationScreen />));
+
+    await waitFor(() => expect(screen.getByText("CLS-JULIET-02")).toBeInTheDocument());
+    expect(screen.getByText("Config diff")).toBeInTheDocument();
+    expect(screen.getByText("FW-x1")).toBeInTheDocument();
+    expect(screen.getByText("354 settings")).toBeInTheDocument();
   });
 });

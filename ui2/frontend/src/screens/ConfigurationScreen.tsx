@@ -42,6 +42,115 @@ function changeStateLabel(state: string | null): string {
   return "Aligned";
 }
 
+/**
+ * Design language section 2/3: the list presents operational units. Members of a cluster
+ * are grouped under one row keyed by their cluster reference; agreement is judged by the
+ * canonical hash of each member's latest run -- "agree" only when every member was collected
+ * and every hash matches, "differ" when two collected members disagree, and UNKNOWN when a
+ * member has never been collected (absence of evidence is not agreement).
+ */
+export interface ClusterGroup {
+  readonly clusterRef: string;
+  readonly members: readonly ConfigurationDeviceListEntry[];
+  readonly agreement: "agree" | "differ" | "unknown";
+}
+
+export type ConfigurationListRow =
+  | { readonly kind: "device"; readonly device: ConfigurationDeviceListEntry }
+  | { readonly kind: "cluster"; readonly group: ClusterGroup };
+
+export function groupByCluster(entries: readonly ConfigurationDeviceListEntry[]): ConfigurationListRow[] {
+  const groups = new Map<string, ConfigurationDeviceListEntry[]>();
+  const rows: ConfigurationListRow[] = [];
+  for (const entry of entries) {
+    const ref = entry.cluster_member_ref;
+    if (!ref) {
+      rows.push({ kind: "device", device: entry });
+      continue;
+    }
+    const members = groups.get(ref);
+    if (members) {
+      members.push(entry);
+    } else {
+      const created = [entry];
+      groups.set(ref, created);
+      rows.push({ kind: "cluster", group: { clusterRef: ref, members: created, agreement: "unknown" } });
+    }
+  }
+  return rows.map((row) => {
+    if (row.kind !== "cluster") return row;
+    const members = row.group.members;
+    const collected = members.filter((m) => m.canonical_hash);
+    let agreement: ClusterGroup["agreement"];
+    if (collected.length < members.length) {
+      agreement = "unknown";
+    } else {
+      agreement = new Set(collected.map((m) => m.canonical_hash)).size === 1 ? "agree" : "differ";
+    }
+    return { kind: "cluster", group: { ...row.group, agreement } };
+  });
+}
+
+function ClusterRow({
+  group,
+  selectedDeviceId,
+  onSelect,
+}: {
+  readonly group: ClusterGroup;
+  readonly selectedDeviceId: string | null;
+  readonly onSelect: (device: ConfigurationDeviceListEntry) => void;
+}) {
+  const vendor = group.members[0]?.vendor ?? "unknown";
+  const tone = group.agreement === "agree" ? "ok" : group.agreement === "differ" ? "bad" : "warn";
+  const label = group.agreement === "agree" ? "Members agree" : group.agreement === "differ" ? "Config diff" : "UNKNOWN";
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 1,
+        p: 1.25,
+        bgcolor: m3.scLowest,
+        border: "1px solid",
+        borderColor: group.members.some((m) => m.device_id === selectedDeviceId) ? m3.primary : m3.outlineVar,
+        borderRadius: "12px",
+      }}
+    >
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>{group.clusterRef}</Typography>
+        <StatusChip tone={tone} label={label} dense />
+      </Box>
+      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+        {vendorLabel(vendor)} · cluster · {group.members.length} members
+      </Typography>
+      <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+        {group.members.map((member) => (
+          <Box
+            key={member.device_id}
+            role="button"
+            tabIndex={0}
+            onClick={() => onSelect(member)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") onSelect(member);
+            }}
+            sx={{
+              display: "flex", alignItems: "center", gap: 0.75, px: 1, py: 0.5, borderRadius: "8px", cursor: "pointer",
+              border: "1px solid", borderColor: member.device_id === selectedDeviceId ? m3.primary : m3.outlineVar,
+              bgcolor: member.device_id === selectedDeviceId ? "#f0f5ff" : "transparent",
+            }}
+          >
+            <Typography variant="caption" sx={{ fontWeight: 600 }}>{member.hostname ?? member.device_id}</Typography>
+            <StatusChip tone={changeStateTone(member.change_state)} label={changeStateLabel(member.change_state)} dense />
+            {member.projected_settings !== null && member.projected_settings !== undefined && (
+              <Typography variant="caption" color="text.secondary">{member.projected_settings} settings</Typography>
+            )}
+          </Box>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
 function DeviceRow({
   device,
   selected,
@@ -203,14 +312,23 @@ export function ConfigurationScreen() {
             )}
             {!error && devices !== null && devices.length > 0 && (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25, maxHeight: "calc(100vh - 240px)", overflowY: "auto", pr: 0.5 }}>
-                {filteredDevices.map((device) => (
-                  <DeviceRow
-                    key={device.device_id}
-                    device={device}
-                    selected={device.device_id === selectedDeviceId}
-                    onSelect={(d) => setSelectedDeviceId(d.device_id)}
-                  />
-                ))}
+                {groupByCluster(filteredDevices).map((row) =>
+                  row.kind === "cluster" ? (
+                    <ClusterRow
+                      key={`cluster:${row.group.clusterRef}`}
+                      group={row.group}
+                      selectedDeviceId={selectedDeviceId}
+                      onSelect={(d) => setSelectedDeviceId(d.device_id)}
+                    />
+                  ) : (
+                    <DeviceRow
+                      key={row.device.device_id}
+                      device={row.device}
+                      selected={row.device.device_id === selectedDeviceId}
+                      onSelect={(d) => setSelectedDeviceId(d.device_id)}
+                    />
+                  ),
+                )}
               </Box>
             )}
           </Box>

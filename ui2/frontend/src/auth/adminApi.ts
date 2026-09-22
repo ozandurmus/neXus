@@ -771,6 +771,11 @@ export interface ConfigurationDeviceListEntry {
   readonly vendor: string;
   readonly last_collected_at: string | null;
   readonly change_state: "changed" | "unchanged" | "first_run" | null;
+  /** Design language section 2: members are grouped under this cluster reference (null for a standalone device). */
+  readonly cluster_member_ref?: string | null;
+  /** Section 3: agreement between members is judged by these, never by eye. */
+  readonly canonical_hash?: string | null;
+  readonly projected_settings?: number | null;
 }
 
 export function getDeviceConfiguration(deviceId: string): Promise<DeviceConfiguration> {
