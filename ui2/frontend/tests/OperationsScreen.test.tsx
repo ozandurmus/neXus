@@ -10,9 +10,9 @@ function withTheme(node: React.ReactElement) {
 
 const TABS = [
   { label: "HA & readiness", marker: "No HA pair or cluster enrolled" },
-  { label: "Jobs", marker: "No jobs yet" },
-  { label: "Queue", marker: "Nothing queued" },
-  { label: "History", marker: "No job history" },
+  { label: "Jobs", marker: "All jobs" },
+  { label: "Queue", marker: "Queued and running jobs" },
+  { label: "History", marker: "Finished jobs" },
 ];
 
 describe("OperationsScreen tabs", () => {
@@ -33,7 +33,7 @@ describe("OperationsScreen tabs", () => {
   it("defaults to the HA & readiness tab, empty", () => {
     render(withTheme(<OperationsScreen />));
     expect(screen.getByText("No HA pair or cluster enrolled")).toBeInTheDocument();
-    expect(screen.queryByText("No jobs yet")).toBeNull();
+    expect(screen.queryByText("All jobs")).toBeNull();
   });
 
   it("renders rich pre-flight checklist and verdict banner when a cluster is inspected", () => {

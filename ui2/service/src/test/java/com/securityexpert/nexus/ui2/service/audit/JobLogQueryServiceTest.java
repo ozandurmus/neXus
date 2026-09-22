@@ -39,6 +39,15 @@ class JobLogQueryServiceTest {
     }
 
     @Test
+    void aCommaSeparatedStateListBecomesAnInClause() {
+        Where where = JobLogQueryService.whereOf(new JobQuery(Optional.of("requested, claimed"), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), 1, 50));
+
+        assertEquals(" where state in (?, ?)", where.sql());
+        assertEquals(List.of("REQUESTED", "CLAIMED"), where.bindings());
+    }
+
+    @Test
     void pageBoundsAreClamped() {
         JobQuery query = new JobQuery(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 Optional.empty(), Optional.empty(), 0, 10_000);

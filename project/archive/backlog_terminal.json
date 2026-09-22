@@ -1248,6 +1248,15 @@
       "priority": "P1",
       "target": "measured 2026-09-22: three requeued runs each ran 'add backup local' without reaching 'delete backup'",
       "note": ""
+    },
+    {
+      "id": "ui_overview_operations_show_stale_or_empty_state",
+      "category": "UI 2.0 (Java product line)",
+      "title": "UNVERIFIED claim: Overview and Operations render empty state while devices and jobs exist",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "verify against a running deployment before scoping",
+      "note": ""
     }
   ]
 }

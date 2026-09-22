@@ -119,8 +119,16 @@ public final class JobLogQueryService {
         List<String> clauses = new ArrayList<>();
         List<Object> bindings = new ArrayList<>();
         query.state().filter(s -> !s.isBlank()).ifPresent(s -> {
-            clauses.add("state = ?");
-            bindings.add(s.strip().toUpperCase(java.util.Locale.ROOT));
+            // One state, or a comma-separated set (the Operations screen's Queue tab is REQUESTED,CLAIMED).
+            List<String> states = java.util.Arrays.stream(s.split(",")).map(String::strip).filter(x -> !x.isEmpty())
+                    .map(x -> x.toUpperCase(java.util.Locale.ROOT)).toList();
+            if (states.size() == 1) {
+                clauses.add("state = ?");
+                bindings.add(states.get(0));
+            } else if (!states.isEmpty()) {
+                clauses.add("state in (" + String.join(", ", java.util.Collections.nCopies(states.size(), "?")) + ")");
+                bindings.addAll(states);
+            }
         });
         query.jobType().filter(s -> !s.isBlank()).ifPresent(s -> {
             clauses.add("job_type = ?");

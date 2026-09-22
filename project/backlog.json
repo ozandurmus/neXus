@@ -425,15 +425,6 @@
       "note": ""
     },
     {
-      "id": "ui_overview_operations_show_stale_or_empty_state",
-      "category": "UI 2.0 (Java product line)",
-      "title": "UNVERIFIED claim: Overview and Operations render empty state while devices and jobs exist",
-      "status": "planned",
-      "priority": "P1",
-      "target": "verify against a running deployment before scoping",
-      "note": ""
-    },
-    {
       "id": "ui2_service_cannot_bootstrap_an_empty_database",
       "category": "UI 2.0 (Java product line)",
       "title": "The service cannot start against an empty database: a bean reads gate_registry during context refresh, before the ApplicationRunner that runs Flyway",

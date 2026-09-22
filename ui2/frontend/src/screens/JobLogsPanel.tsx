@@ -65,7 +65,7 @@ const PAGE_SIZES = [25, 50, 100, 200] as const;
  * numbered pages; CSV export of the current filter. Live polling refreshes
  * the page being looked at and never resets the filters.
  */
-export function JobLogsPanel() {
+export function JobLogsPanel({ initialState = "" }: { readonly initialState?: string } = {}) {
   const [page, setPage] = useState<{ items: readonly JobEventView[]; total: number } | null>(null);
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
   const [facets, setFacets] = useState<JobFacetsView>({ states: [], job_types: [] });
@@ -74,7 +74,7 @@ export function JobLogsPanel() {
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
 
-  const [state, setState] = useState("");
+  const [state, setState] = useState(initialState);
   const [jobType, setJobType] = useState("");
   const [deviceId, setDeviceId] = useState("");
   const [sinceLocal, setSinceLocal] = useState("");
@@ -176,6 +176,7 @@ export function JobLogsPanel() {
           sx={{ minWidth: 150 }}
         >
           <option value="">Any</option>
+          {initialState.includes(",") && <option value={initialState}>{initialState.replaceAll(",", " | ")}</option>}
           {facets.states.map((s) => <option key={s} value={s}>{s}</option>)}
         </TextField>
         <TextField

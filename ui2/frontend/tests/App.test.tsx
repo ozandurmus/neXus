@@ -89,18 +89,19 @@ describe("the six product screens", () => {
     }
   });
 
+  // Overview and Operations count from the store since 2026-09-22 (PO: "0 devices enrolled" was a constant
+  // over a fleet of 103); without a store they say the read failed, never 0. Compliance still renders zeros.
   it("shows a metric card's count as zero, never a placeholder, on the screens that have one", () => {
-    for (const id of ["overview", "compliance", "operations"]) {
+    for (const id of ["compliance"]) {
       const { unmount } = render(<App search={`?screen=${id}`} />);
       expect(screen.getAllByText("0").length).toBeGreaterThan(0);
       unmount();
     }
   });
 
-  it("defaults to the Overview screen, empty, when no screen is named", () => {
+  it("defaults to the Overview screen when no screen is named", () => {
     render(<App search="" />);
     expect(screen.getByText("Operational posture")).toBeInTheDocument();
-    expect(screen.getAllByText("0").length).toBeGreaterThan(0);
   });
 });
 

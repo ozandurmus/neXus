@@ -21,6 +21,8 @@ import TextField from "@mui/material/TextField";
 import { ScreenHeader, MetricGrid, MetricCard, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
+import { JobLogsPanel } from "./JobLogsPanel";
+import { listJobs } from "../auth/adminApi";
 
 interface PreflightCheckItem {
   id: string;
@@ -217,6 +219,20 @@ const DEMO_CHECKS_PAN: PreflightCheckItem[] = [
 
 /** Operations screen featuring HA & readiness pre-flight checklist. */
 export function OperationsScreen() {
+  // Counted from /api/v2/jobs (the same reads the Jobs screen makes); a failed read says so, never 0.
+  const [jobStats, setJobStats] = useState<{ total24h: number; completed24h: number; failed24h: number; running: number } | null>(null);
+  useEffect(() => {
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    Promise.all([
+      listJobs({ since, page_size: 1 }),
+      listJobs({ since, state: "COMPLETED", page_size: 1 }),
+      listJobs({ since, state: "FAILED", page_size: 1 }),
+      listJobs({ state: "REQUESTED,CLAIMED,EXECUTING", page_size: 1 }),
+    ])
+      .then(([all, completed, failed, running]) => setJobStats({ total24h: all.total, completed24h: completed.total, failed24h: failed.total, running: running.total }))
+      .catch(() => setJobStats(null));
+  }, []);
+
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   const [selectedCheck, setSelectedCheck] = useState<PreflightCheckItem | null>(null);
   const [filter, setFilter] = useState<"ALL" | "BLOCKING" | "ADVISORY">("ALL");
@@ -1214,10 +1230,17 @@ export function OperationsScreen() {
         }
       />
       <MetricGrid>
-        <MetricCard title="Jobs run" note="nothing run yet" />
-        <MetricCard title="Success rate" note="no runs to measure" />
+        <MetricCard title="Jobs run (24 h)" note={jobStats ? `${jobStats.total24h} submitted · ${jobStats.running} in flight` : "read failed"} />
+        <MetricCard
+          title="Success rate (24 h)"
+          note={jobStats
+            ? jobStats.completed24h + jobStats.failed24h === 0
+              ? "no finished run in 24 h"
+              : `${Math.round((100 * jobStats.completed24h) / (jobStats.completed24h + jobStats.failed24h))}% · ${jobStats.completed24h} completed · ${jobStats.failed24h} failed`
+            : "read failed"}
+        />
         <MetricCard title="Readiness checks" note={selectedCluster ? `${checks.length} evaluated (PASS)` : "no cluster enrolled"} />
-        <MetricCard title="Alerts" note="nothing to alert on" />
+        <MetricCard title="Failed (24 h)" note={jobStats ? (jobStats.failed24h === 0 ? "none" : `${jobStats.failed24h} failed jobs`) : "read failed"} />
       </MetricGrid>
       <M3Tabs
         ariaLabel="Operations sections"
@@ -1226,33 +1249,9 @@ export function OperationsScreen() {
             label: "HA & readiness",
             panel: renderHaPanel(),
           },
-          {
-            label: "Jobs",
-            panel: (
-              <EmptyPanel
-                title="No jobs yet"
-                body="Nothing has run against the fleet, because the fleet is empty. Read jobs are class 0; backup creation is the only class 1 write and runs under its own contract."
-              />
-            ),
-          },
-          {
-            label: "Queue",
-            panel: (
-              <EmptyPanel
-                title="Nothing queued"
-                body="No job is scheduled to run against the fleet yet. A job appears here once it is scheduled and before it starts."
-              />
-            ),
-          },
-          {
-            label: "History",
-            panel: (
-              <EmptyPanel
-                title="No job history"
-                body="Job history accumulates only after jobs run against the fleet; none has run in this empty database yet."
-              />
-            ),
-          },
+          { label: "Jobs", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>All jobs</Typography><JobLogsPanel /></Box> },
+          { label: "Queue", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>Queued and running jobs</Typography><JobLogsPanel initialState="REQUESTED,CLAIMED,EXECUTING" /></Box> },
+          { label: "History", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>Finished jobs</Typography><JobLogsPanel initialState="COMPLETED,FAILED,OUTCOME_UNKNOWN,REJECTED" /></Box> },
         ]}
       />
     </ScreenRoot>
