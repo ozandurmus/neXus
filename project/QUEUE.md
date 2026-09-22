@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T23:35:31Z
+Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T23:38:57Z
 
 ## Now
 - NXS-LOCAL-0368 — Overview rebuilt as an exception-and-evidence screen; collision-free aiview pseudonyms (automated_validated)
@@ -92,6 +92,7 @@ Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T23:35:31Z
 - P2/planned failover_phase_d_has_no_build_record
 - P2/planned gov_orch_turn_counter_blind_to_codex_stream
 - P2/planned java_product_plan_build_selection_is_stale
+- P2/planned m3_design_alignment_review
 - P2/planned orchestrator_worktree_lacks_frontend_dependencies
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned pan_keygen_no_usable_key_under_load
