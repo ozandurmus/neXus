@@ -18,6 +18,19 @@ metadata:
     app.kubernetes.io/part-of: nexus-ui2
 spec:
   rules:
+    # Product Owner, 2026-09-22: the console must also answer on the bare
+    # node address (https://<node-ip>/) until the DNS record exists -- a
+    # host-less rule matches any Host header, on both 80 and 443 (Traefik
+    # serves its default certificate when no SNI name matches).
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui2-service
+                port:
+                  name: http
     - host: ui2.nexus.local
       http:
         paths:
