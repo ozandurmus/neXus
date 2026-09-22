@@ -491,7 +491,8 @@ public final class InventoryCapabilityExecutor {
         }
         String virtualSystemsString = panVsNames.isEmpty() ? null : String.join(", ", panVsNames);
 
-        return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString));
+        return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
+                Optional.of(PlatformFactsRead.paloAlto(sysInfo)));
     }
 
     private static boolean isValidPanVsys(String vsys) {

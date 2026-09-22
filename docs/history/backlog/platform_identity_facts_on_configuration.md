@@ -1,0 +1,5 @@
+# PO 2026-09-22 'kesinlikle': serial number, software version, hotfix / jumbo take, content versions, uptime on the Configuration screen -- what industry-leading tools collect
+
+status: planned · target: Contract docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md. PAN: parse-scope extension of the already-gated show system info (serial, sw-version, app/threat/av/wildfire/url versions, uptime, family). CP: new gate rows needed (show asset system for serial; jumbo take), PO sign-off before real-device use. Serial shown in the clear per PO; masked for the aiview persona.
+
+2026-09-22 slice 1 implemented: V46 device_platform_facts; Palo Alto show system info parse-scope extension (serial, family, app/threat/av/wildfire/url versions, uptime) recorded by the inventory job; GET /devices and /devices/{id} carry serial_number, hotfix_level, platform_family, content_versions, uptime_text, platform_facts_observed_at; serial masked SN-xxxx for aiview; Configuration identity card and cluster members table show them, DIFF on version / content level between members. Check Point serial/hotfix/uptime wait for the three gate rows in the contract §3 (PO sign-off).

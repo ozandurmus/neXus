@@ -12,6 +12,7 @@ import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentReadPort;
 import com.securityexpert.nexus.ui2.jobs.executor.JobOutcome;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.stepattempt.JobStepAttemptRepository;
+import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
@@ -57,10 +58,20 @@ public final class InventoryJobExecutor {
     private final DeviceRepository deviceRepository;
     private final DeviceInventoryRepository deviceInventoryRepository;
     private final InventoryCapabilityExecutor inventoryExecutor;
+    private final DevicePlatformFactsRepository platformFactsRepository;
 
     public InventoryJobExecutor(JobLeaseRepository leaseRepository, JobStepAttemptRepository attemptRepository,
             DeviceEnrollmentReadPort deviceEnrollmentReadPort, DeviceRepository deviceRepository,
             DeviceInventoryRepository deviceInventoryRepository, InventoryCapabilityExecutor inventoryExecutor) {
+        this(leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository,
+                inventoryExecutor, DevicePlatformFactsRepository.NONE);
+    }
+
+    public InventoryJobExecutor(JobLeaseRepository leaseRepository, JobStepAttemptRepository attemptRepository,
+            DeviceEnrollmentReadPort deviceEnrollmentReadPort, DeviceRepository deviceRepository,
+            DeviceInventoryRepository deviceInventoryRepository, InventoryCapabilityExecutor inventoryExecutor,
+            DevicePlatformFactsRepository platformFactsRepository) {
+        this.platformFactsRepository = Objects.requireNonNull(platformFactsRepository, "platformFactsRepository");
         this.leaseRepository = Objects.requireNonNull(leaseRepository, "leaseRepository");
         this.attemptRepository = Objects.requireNonNull(attemptRepository, "attemptRepository");
         this.deviceEnrollmentReadPort = Objects.requireNonNull(deviceEnrollmentReadPort, "deviceEnrollmentReadPort");
@@ -137,6 +148,15 @@ public final class InventoryJobExecutor {
                     ACTION_FAILED, reasonWithTime);
             return new JobOutcome.Failed("inventory_run_write_failed: " + recordFailed.getMessage());
         }
+        // Platform identity facts (V46): the run is the record; a facts write that fails is logged, never fails the job.
+        completed.platformFacts().ifPresent(read -> {
+            try {
+                platformFactsRepository.record(read.forDevice(targetDeviceId));
+            } catch (RuntimeException factsFailed) {
+                LOG.log(System.Logger.Level.WARNING, "[PLATFORM_FACTS_WRITE_FAILED] Inventory job {0} for device {1}: {2}",
+                        jobId, targetDeviceId, factsFailed.getMessage());
+            }
+        });
 
         long elapsed = System.currentTimeMillis() - jobStart;
         LOG.log(System.Logger.Level.INFO,

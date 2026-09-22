@@ -157,6 +157,13 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         result.put(key, value);
                     }
                 }
+                case "serial_number" -> {
+                    if (value instanceof String s) {
+                        result.put(key, topologyPseudonymizer.maskSerial(s));
+                    } else {
+                        result.put(key, value);
+                    }
+                }
                 case "affected_devices", "target_devices" -> {
                     if (value instanceof List<?> devList) {
                         List<String> maskedList = new ArrayList<>();

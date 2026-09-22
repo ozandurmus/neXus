@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts;
+import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts;
+import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository.BackupDisposition;
@@ -54,13 +56,23 @@ public final class DeviceRegistrationController {
     private final DeviceAddSingleService deviceAddSingleService;
     private final DeviceDeletionService deviceDeletionService;
     private final DeviceQueryService deviceQueryService;
+    private final DevicePlatformFactsRepository platformFactsRepository;
 
     public DeviceRegistrationController(DeviceAddSingleService deviceAddSingleService,
             DeviceDeletionService deviceDeletionService,
             DeviceQueryService deviceQueryService) {
+        this(deviceAddSingleService, deviceDeletionService, deviceQueryService, DevicePlatformFactsRepository.NONE);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DeviceRegistrationController(DeviceAddSingleService deviceAddSingleService,
+            DeviceDeletionService deviceDeletionService,
+            DeviceQueryService deviceQueryService,
+            DevicePlatformFactsRepository platformFactsRepository) {
         this.deviceAddSingleService = deviceAddSingleService;
         this.deviceDeletionService = deviceDeletionService;
         this.deviceQueryService = deviceQueryService;
+        this.platformFactsRepository = platformFactsRepository;
     }
 
     @PostMapping("/devices/add-single")
@@ -152,13 +164,20 @@ public final class DeviceRegistrationController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
         }
         DeviceQueryService.DetailOutcome.Found found = (DeviceQueryService.DetailOutcome.Found) outcome;
-        return ResponseEntity.ok(toDetailBody(found.device(), found.facts(), found.job()));
+        Map<String, Object> body = toDetailBody(found.device(), found.facts(), found.job());
+        putPlatformFacts(body, platformFactsRepository.find(deviceId));
+        return ResponseEntity.ok(body);
     }
 
     @GetMapping("/devices")
     public ResponseEntity<Map<String, Object>> listDevices() {
+        Map<String, DevicePlatformFacts> platformFacts = platformFactsRepository.findAll();
         List<Map<String, Object>> devices = deviceQueryService.listDevices().stream()
-                .map(DeviceRegistrationController::toSummaryBody)
+                .map(summary -> {
+                    Map<String, Object> body = toSummaryBody(summary);
+                    putPlatformFacts(body, Optional.ofNullable(platformFacts.get(summary.deviceId())));
+                    return body;
+                })
                 .toList();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("devices", devices);
@@ -207,6 +226,19 @@ public final class DeviceRegistrationController {
         body.put("outcome", jobRow.outcome());
         body.put("terminal_reason", jobRow.terminalReason());
         return body;
+    }
+
+    /**
+     * Platform identity facts (V46, PLATFORM_IDENTITY_FACTS_CONTRACT §2): always present as keys so the
+     * screen can say UNKNOWN; {@code serial_number} is masked for the AIView persona by the body advice.
+     */
+    static void putPlatformFacts(Map<String, Object> body, Optional<DevicePlatformFacts> facts) {
+        body.put("serial_number", facts.flatMap(DevicePlatformFacts::serialNumber).orElse(null));
+        body.put("hotfix_level", facts.flatMap(DevicePlatformFacts::hotfixLevel).orElse(null));
+        body.put("platform_family", facts.flatMap(DevicePlatformFacts::platformFamily).orElse(null));
+        body.put("content_versions", facts.map(DevicePlatformFacts::contentVersions).filter(m -> !m.isEmpty()).orElse(null));
+        body.put("uptime_text", facts.flatMap(DevicePlatformFacts::uptimeText).orElse(null));
+        body.put("platform_facts_observed_at", facts.flatMap(DevicePlatformFacts::observedAt).map(Object::toString).orElse(null));
     }
 
     private static Map<String, Object> toSummaryBody(DeviceSummaryRecord summary) {

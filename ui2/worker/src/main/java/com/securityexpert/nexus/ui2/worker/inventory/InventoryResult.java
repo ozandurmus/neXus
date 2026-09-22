@@ -10,16 +10,22 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact
 public sealed interface InventoryResult {
 
     /** {@code haFacts} (migration V17): every {@link InventoryHaFact} the contact produced, across every context. */
-    record Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems) implements InventoryResult {
+    record Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
+            Optional<PlatformFactsRead> platformFacts) implements InventoryResult {
 
         public Completed {
             contexts = contexts == null ? List.of() : List.copyOf(contexts);
             haFacts = haFacts == null ? List.of() : List.copyOf(haFacts);
             virtualSystems = virtualSystems == null ? Optional.empty() : virtualSystems;
+            platformFacts = platformFacts == null ? Optional.empty() : platformFacts;
         }
 
         public Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts) {
-            this(contexts, haFacts, Optional.empty());
+            this(contexts, haFacts, Optional.empty(), Optional.empty());
+        }
+
+        public Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems) {
+            this(contexts, haFacts, virtualSystems, Optional.empty());
         }
 
         /** Pre-V17 shape, kept so a caller that never mentions HA facts keeps compiling unchanged. */

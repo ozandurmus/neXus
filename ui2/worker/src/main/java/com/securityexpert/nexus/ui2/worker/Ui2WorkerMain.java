@@ -181,7 +181,8 @@ public final class Ui2WorkerMain {
         InventoryCapabilityExecutor inventoryCapabilityExecutor =
                 new InventoryCapabilityExecutor(compositeTransport, panCredentialResolver);
         InventoryJobExecutor inventoryJobExecutor = new InventoryJobExecutor(leaseRepository, attemptRepository,
-                deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, inventoryCapabilityExecutor);
+                deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, inventoryCapabilityExecutor,
+                new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository(transactionBoundary));
 
         ArtefactStore artefactStore =
                 new FileArtefactStore(artefactStoreRoot, ArtefactStoreCipher.fromBase64Key(artefactStoreKeyBase64));

@@ -2,11 +2,12 @@
 
 ## Status
 
-**DRAFT — 2026-09-22**, on the Product Owner's direction: "I definitely want
-serial number and version information on the Configuration screen. Whatever
-industry leaders collect and whatever is meaningful must all be there."
-Backlog `platform_identity_facts_on_configuration` (P1). Freezes when the
-Check Point gate rows in §3 are signed off by the Product Owner.
+**FROZEN for §1 Palo Alto column and §2 (Product Owner directive 2026-09-22:
+"I definitely want serial number and version information on the Configuration
+screen; whatever industry leaders collect and whatever is meaningful must all
+be there"). §3 Check Point gate rows: PENDING PO sign-off** — the Check Point
+serial, hotfix level and uptime are not read until then. Backlog
+`platform_identity_facts_on_configuration` (P1).
 
 ## 1. The facts
 

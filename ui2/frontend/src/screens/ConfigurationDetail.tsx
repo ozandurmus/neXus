@@ -195,18 +195,39 @@ interface IdentityTile {
  * serial number, HA role, virtual systems. A value the product has not read
  * says so ("not collected"); nothing is inferred.
  */
+const CONTENT_VERSION_LABELS: ReadonlyArray<readonly [string, string]> = [
+  ["app", "Applications"],
+  ["threat", "Threats"],
+  ["av", "Antivirus"],
+  ["wildfire", "WildFire"],
+  ["url", "URL filtering"],
+];
+
+export function contentVersionText(versions: Readonly<Record<string, string>> | null | undefined): string | null {
+  if (!versions) return null;
+  const parts = CONTENT_VERSION_LABELS.filter(([key]) => versions[key]).map(([key, label]) => `${label} ${versions[key]}`);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 function identityTiles(device: DeviceSummary, collectedAt: string | null): IdentityTile[] {
   const vs = vsListOf(device);
+  const isPaloAlto = device.vendor_hint === "palo_alto";
+  const needsGate = "not collected -- needs its own gated read";
+  const observed = device.platform_facts_observed_at ? new Date(device.platform_facts_observed_at).toLocaleString() : null;
   return [
-    { label: "Vendor", value: vendorLabel(device.vendor_hint) },
+    { label: "Vendor", value: device.platform_family ? `${vendorLabel(device.vendor_hint)} · ${device.platform_family}` : vendorLabel(device.vendor_hint) },
     { label: "Model", value: device.model, absent: "not read at first contact" },
+    { label: "Serial number", value: device.serial_number ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate, mono: true },
     { label: "Software version", value: device.software_version, absent: "not read at first contact" },
-    { label: "Hotfix / Jumbo take", value: null, absent: "not collected -- needs its own gated read" },
-    { label: "Serial number", value: null, absent: device.vendor_hint === "palo_alto" ? "read as identity; not shown here yet" : "not collected -- needs its own gated read" },
+    isPaloAlto
+      ? { label: "Content versions", value: contentVersionText(device.content_versions), absent: "not read yet -- run Inventory collect" }
+      : { label: "Hotfix / Jumbo take", value: device.hotfix_level ?? null, absent: needsGate },
+    { label: "Uptime", value: device.uptime_text ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate },
     { label: "HA role", value: haLabel(device.ha_role) },
-    { label: device.vendor_hint === "palo_alto" ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },
+    { label: isPaloAlto ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },
     { label: "Management address", value: device.management_ip ?? null, absent: "not recorded", mono: true },
     { label: "Enrollment", value: device.enrollment_state },
+    { label: "Platform facts read", value: observed, absent: "never" },
     { label: "Last configuration read", value: collectedAt, absent: "never" },
   ];
 }
@@ -261,7 +282,7 @@ function ClusterMembersCard({ members }: { readonly members: readonly DeviceSumm
         <Table size="small">
           <TableHead>
             <TableRow>
-              {["MEMBER", "MODEL", "SOFTWARE VERSION", "HOTFIX / JUMBO", "SERIAL", "HA ROLE", "MANAGEMENT ADDRESS", isPaloAlto ? "VSYS" : "VSX", "ENROLLMENT"].map((h) => (
+              {["MEMBER", "MODEL", "SERIAL", "SOFTWARE VERSION", isPaloAlto ? "CONTENT VERSIONS" : "HOTFIX / JUMBO", "UPTIME", "HA ROLE", "MANAGEMENT ADDRESS", isPaloAlto ? "VSYS" : "VSX", "ENROLLMENT"].map((h) => (
                 <TableCell key={h} sx={{ fontSize: 11, letterSpacing: "0.06em" }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -269,13 +290,24 @@ function ClusterMembersCard({ members }: { readonly members: readonly DeviceSumm
           <TableBody>
             {members.map((m) => {
               const vs = vsListOf(m);
+              const unknown = <StatusChip tone="warn" label="UNKNOWN" dense />;
+              // A version or hotfix level that differs between members is a compliance finding in its own right.
+              const distinct = (pick: (d: DeviceSummary) => string | null | undefined) =>
+                new Set(members.map(pick).filter((v): v is string => Boolean(v))).size > 1;
+              const versionDiff = distinct((d) => d.software_version);
+              const levelDiff = distinct((d) => (isPaloAlto ? contentVersionText(d.content_versions) : d.hotfix_level));
               return (
                 <TableRow key={m.device_id} hover>
                   <TableCell sx={{ fontWeight: 600, fontSize: 12.5 }}>{m.hostname ?? m.device_id}</TableCell>
-                  <TableCell>{m.model ?? <StatusChip tone="warn" label="UNKNOWN" dense />}</TableCell>
-                  <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{m.software_version ?? <StatusChip tone="warn" label="UNKNOWN" dense />}</TableCell>
-                  <TableCell><StatusChip tone="warn" label="not collected" dense /></TableCell>
-                  <TableCell><StatusChip tone="warn" label="not collected" dense /></TableCell>
+                  <TableCell>{m.model ?? unknown}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{m.serial_number ?? unknown}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: 12, bgcolor: versionDiff ? m3.errorContainer : undefined }}>
+                    {m.software_version ?? unknown}{versionDiff && <StatusChip tone="bad" label="DIFF" dense />}
+                  </TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: 12, bgcolor: levelDiff ? m3.errorContainer : undefined }}>
+                    {(isPaloAlto ? contentVersionText(m.content_versions) : m.hotfix_level) ?? unknown}{levelDiff && <StatusChip tone="bad" label="DIFF" dense />}
+                  </TableCell>
+                  <TableCell>{m.uptime_text ?? unknown}</TableCell>
                   <TableCell><StatusChip tone={haTone(m.ha_role)} label={haLabel(m.ha_role)} dense /></TableCell>
                   <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{m.management_ip ?? "—"}</TableCell>
                   <TableCell>{vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none"}</TableCell>

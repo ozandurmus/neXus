@@ -104,6 +104,19 @@ public class TopologyNamePseudonymizer {
     /**
      * Replaces known raw hostnames, cluster names, and VS names in free-form text.
      */
+    /** A serial number as a stable, keyed pseudonym ({@code SN-} + 10 hex) -- comparable across screens, never the value. */
+    public String maskSerial(String rawSerial) {
+        if (rawSerial == null || rawSerial.isBlank()) {
+            return rawSerial;
+        }
+        byte[] hash = hmacSha256("SERIAL:" + rawSerial.strip());
+        StringBuilder hex = new StringBuilder("SN-");
+        for (int i = 0; i < 5; i++) {
+            hex.append(String.format("%02X", hash[i]));
+        }
+        return hex.toString();
+    }
+
     public String maskText(String text) {
         if (text == null || text.isBlank()) {
             return text;

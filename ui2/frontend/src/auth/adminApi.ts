@@ -428,6 +428,13 @@ export interface DeviceSummary {
   readonly management_ip?: string | null;
   readonly ip_addresses?: string | null;
   readonly backup_target?: boolean;
+  /** Platform identity facts (V46); null = not collected, and the screen says UNKNOWN. */
+  readonly serial_number?: string | null;
+  readonly hotfix_level?: string | null;
+  readonly platform_family?: string | null;
+  readonly content_versions?: Readonly<Record<string, string>> | null;
+  readonly uptime_text?: string | null;
+  readonly platform_facts_observed_at?: string | null;
 }
 
 export type DeviceRole = "gateway" | "management_server";
