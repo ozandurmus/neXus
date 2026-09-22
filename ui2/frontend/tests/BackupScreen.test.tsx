@@ -80,7 +80,7 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
     render(<BackupScreen />);
     const row = (await screen.findByText("FW-TANGO-04-M1")).closest("tr")!;
     expect(within(row).getByRole("checkbox", { name: "Backup target FW-TANGO-04-M1" })).toBeChecked();
-    expect(within(row).getByText("2026-09-22 11:43:28")).toBeInTheDocument();
+    expect(within(row).getByText("2026-09-22 14:43:28")).toBeInTheDocument();
     for (const action of ["Backup Now", "Snapshot", "History", "Contents", "Compare", "Download"]) {
       expect(within(row).getByRole("button", { name: action })).toBeInTheDocument();
     }

@@ -7,7 +7,7 @@ import Tooltip from "@mui/material/Tooltip";
 import { MONO, m3 } from "../theme/m3Theme";
 import { useDisplayMode } from "./displayMode";
 import { GlobalSearch } from "./GlobalSearch";
-import { formatUtc } from "./time";
+import { DISPLAY_TZ_LABEL, formatUtc } from "./time";
 import { Icon } from "./Icon";
 import { M3Button, StatusChip } from "./M3Widgets";
 import { useSession } from "../auth/SessionContext";
@@ -107,11 +107,11 @@ function MaskChip() {
   return masked ? <StatusChip tone="mem" label="aiview · names masked" dense /> : null;
 }
 
-/** The as-of clock the wall display shows (review §6): UTC, ticking every 30 s. */
+/** The as-of clock the wall display shows (review §6): GMT+3, ticking every 30 s. */
 function AsOfClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(t); }, []);
-  return <Typography sx={{ fontFamily: MONO, fontSize: 15, color: m3.onSurface }}>as of {formatUtc(now.toISOString(), false)} UTC</Typography>;
+  return <Typography sx={{ fontFamily: MONO, fontSize: 15, color: m3.onSurface }}>as of {formatUtc(now.toISOString(), false)} {DISPLAY_TZ_LABEL}</Typography>;
 }
 
 /** Colour mode, density and wall display -- per-viewer preferences only. */
@@ -218,7 +218,7 @@ export function TopAppBar() {
       <Box sx={{ ml: 3 }}><GlobalSearch /></Box>
       <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2, color: m3.onSurfaceVar }}>
         <MaskChip />
-        <Tooltip title="Every time on every screen is UTC"><Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>Times in UTC</Typography></Tooltip>
+        <Tooltip title="Every time on every screen is Turkey time (Europe/Istanbul). Hover a time for the UTC value; exports carry UTC."><Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>Times in {DISPLAY_TZ_LABEL}</Typography></Tooltip>
         <BuildBadge />
         <DisplayControls />
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>

@@ -142,3 +142,11 @@ describe("Overview -- exception-and-evidence screen (OVERVIEW_EXCEPTION_SCREEN_C
     expect(relativeAge(null, now)).toBe("UNKNOWN");
   });
 });
+
+describe("display time zone", () => {
+  it("shows Turkey time (GMT+3) and converts a UTC cron hour for the label", async () => {
+    const { formatUtc, utcHourToLocal } = await import("../src/shell/time");
+    expect(formatUtc("2026-09-22T22:57:54Z")).toBe("2026-09-23 01:57:54");
+    expect(utcHourToLocal(2)).toBe("05:00 GMT+3");
+  });
+});

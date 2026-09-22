@@ -159,7 +159,7 @@ describe("Configuration device detail", () => {
       content_versions: { threat: "0", url: "0000.00.00.000" }, platform_facts_observed_at: "2026-09-22T22:57:54.123456Z",
     }} />));
     await waitFor(() => expect(screen.getAllByText("(as reported)")).toHaveLength(2));
-    expect(screen.getByText("2026-09-22 22:57:54")).toBeInTheDocument();
+    expect(screen.getByText("2026-09-23 01:57:54")).toBeInTheDocument();
     expect(screen.getAllByText("ACTIVE")[0]).toHaveAttribute("data-role", "ACTIVE");
   });
 });

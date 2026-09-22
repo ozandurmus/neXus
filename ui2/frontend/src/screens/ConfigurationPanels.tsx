@@ -298,7 +298,7 @@ export function DeviceConfigurationPanels({
   const isPaloAlto = vendor === "palo_alto";
   const displayName = hostname ?? device?.facts?.hostname ?? deviceId;
   const collected = configuration?.collected_at ?? null;
-  // One timestamp format (review §4): `2026-09-22 22:57:54`, UTC (declared in the top bar).
+  // One timestamp format (review §4): `2026-09-22 22:57:54`, GMT+3 (declared in the top bar).
   const collectedLabel = collected ? formatUtc(collected) : null;
   const withheld = configuration?.withheld_line_count ?? 0;
 

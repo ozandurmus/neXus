@@ -114,3 +114,5 @@ render_only_*.log
 # root node_modules, so ignoring it costs nothing and stops every frontend
 # movement failing verify on an untracked cache directory.
 /node_modules/
+ui2/node_modules/
+.claude/worktrees/

@@ -12,7 +12,7 @@ import { StatusChip } from "../shell/M3Widgets";
 import { Donut, STATUS, STATUS_INK, StackedBar, foldSlices } from "../shell/Charts";
 import { StatePanel, Ts, isRestricted } from "../shell/States";
 import { useDisplayMode } from "../shell/displayMode";
-import { formatUtc, relativeAge } from "../shell/time";
+import { DISPLAY_TZ_LABEL, formatUtc, relativeAge } from "../shell/time";
 import { MONO, m3 } from "../theme/m3Theme";
 import { getOverview, type CountTile, type EvidenceChip, type FailureReason, type OverviewView, type VersionSlice } from "../auth/adminApi";
 
@@ -71,7 +71,7 @@ function EvidenceDot({ label, chip, href }: { readonly label: string; readonly c
   const tone = chip?.state === "OK" ? ageTone(chip.at) : "neutral";
   const text = chip?.state === "OK" ? relativeAge(chip.at) : chip?.state === "UNKNOWN" ? "UNKNOWN — no stored evidence" : "READ FAILED";
   return (
-    <Tooltip title={chip?.at ? `${formatUtc(chip.at)} UTC` : text}>
+    <Tooltip title={chip?.at ? `${formatUtc(chip.at)} ${DISPLAY_TZ_LABEL}` : text}>
       <Link href={href} underline="none" sx={{ color: "inherit" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1.25, py: 0.4, borderRadius: "999px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLowest }}>
           <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: STATUS[tone] }} />
@@ -466,7 +466,7 @@ export function OverviewScreen() {
       {/* Row A */}
       <ScreenHeader
         title="Overview"
-        subtitle={`as of ${formatUtc(data.generated_at, false)} UTC · ${d.active_devices} of ${enrolled} devices active · ${d.clusters} of ${clustersEnrolled} clusters active · ${p.check_point ?? "UNKNOWN"} Check Point, ${p.palo_alto ?? "UNKNOWN"} Palo Alto`}
+        subtitle={`as of ${formatUtc(data.generated_at, false)} ${DISPLAY_TZ_LABEL} · ${d.active_devices} of ${enrolled} devices active · ${d.clusters} of ${clustersEnrolled} clusters active · ${p.check_point ?? "UNKNOWN"} Check Point, ${p.palo_alto ?? "UNKNOWN"} Palo Alto`}
         actions={
           <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
             <FreshnessChip evidence={data.evidence} />

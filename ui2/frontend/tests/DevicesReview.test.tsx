@@ -116,7 +116,7 @@ describe("Devices screen after the Fable review", () => {
     expect(within(idRows[0]).getByText("vs-b")).toBeInTheDocument();
     expect(within(idRows[1]).getByText("2 · same as cluster")).toBeInTheDocument();
     expect(within(idRows[1]).getByText("SN-00000002")).toBeInTheDocument();
-    expect(within(idRows[1]).getByText("2026-09-22 22:57:54")).toBeInTheDocument();
+    expect(within(idRows[1]).getByText("2026-09-23 01:57:54")).toBeInTheDocument();
     expect(within(idRows[0]).getAllByText("UNKNOWN").length).toBeGreaterThan(0);
   });
 

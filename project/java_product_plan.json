@@ -213,7 +213,8 @@
     "cp_backup_free_space_parse_refusal": "java_debt",
     "pan_keygen_no_usable_key_under_load": "java_debt",
     "ui_effectiveness_review_after_refresh": "java_feature",
-    "test_fixture_realistic_names_cleanup": "java_debt"
+    "test_fixture_realistic_names_cleanup": "java_debt",
+    "aiview_masked_readonly_admin": "java_feature"
   },
   "converted_lessons": [
     {

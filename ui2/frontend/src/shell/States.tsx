@@ -71,11 +71,11 @@ export function RestrictedPanel({ area, role }: { readonly area: string; readonl
   );
 }
 
-/** A timestamp: `2026-09-22 22:57:54` (UTC), optional relative age, full ISO on hover. */
+/** A timestamp: `2026-09-22 22:57:54` in GMT+3, optional relative age, full UTC ISO on hover. */
 export function Ts({ at, relative = false, seconds = true }: { readonly at: string | null | undefined; readonly relative?: boolean; readonly seconds?: boolean }) {
   if (!at) return <Box component="span" sx={{ color: m3.neutralInk }}>UNKNOWN</Box>;
   return (
-    <Tooltip title={`${at} (UTC)`}>
+    <Tooltip title={`${at} (UTC reference)`}>
       <Box component="span" sx={{ fontFamily: MONO, fontSize: "0.95em", whiteSpace: "nowrap" }}>
         {formatUtc(at, seconds)}
         {relative ? <Box component="span" sx={{ fontFamily: "inherit", color: m3.onSurfaceVar, ml: 0.75, fontSize: "0.92em" }}>{relativeAge(at)}</Box> : null}

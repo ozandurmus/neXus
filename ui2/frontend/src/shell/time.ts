@@ -1,16 +1,27 @@
 /**
- * One timestamp format for the whole product (review §4): `2026-09-22 22:57:54`, UTC, the zone declared once in
- * the top bar; relative age in muted text where useful; full precision on hover and in exports.
+ * One timestamp format for the whole product: `2026-09-22 22:57:54`, in Turkey time (Europe/Istanbul, GMT+3 --
+ * Product Owner 2026-09-23), the zone declared once in the top bar; relative age in muted text where useful; the
+ * full UTC ISO value on hover and in every export (the audit trail keeps one reference clock).
  */
+export const DISPLAY_TZ = "Europe/Istanbul";
+export const DISPLAY_TZ_LABEL = "GMT+3";
 
+const FMT_S = new Intl.DateTimeFormat("sv-SE", { timeZone: DISPLAY_TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+const FMT_M = new Intl.DateTimeFormat("sv-SE", { timeZone: DISPLAY_TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+
+/** Display time (GMT+3). Kept under its old name so every caller moves at once. */
 export function formatUtc(iso: string | null | undefined, withSeconds = true): string {
   if (!iso) return "UNKNOWN";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const p = (n: number) => String(n).padStart(2, "0");
-  const date = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
-  const time = `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}${withSeconds ? `:${p(d.getUTCSeconds())}` : ""}`;
-  return `${date} ${time}`;
+  return (withSeconds ? FMT_S : FMT_M).format(d).replace("T", " ");
+}
+export const formatTime = formatUtc;
+
+/** "02:00 UTC" cron hour → "05:00 GMT+3", for labels next to a server-side (UTC) schedule. */
+export function utcHourToLocal(hour: number, minute = 0): string {
+  const d = new Date(Date.UTC(2026, 0, 15, hour, minute));
+  return `${FMT_M.format(d).slice(11)} ${DISPLAY_TZ_LABEL}`;
 }
 
 export function relativeAge(iso: string | null | undefined, now: Date = new Date()): string {

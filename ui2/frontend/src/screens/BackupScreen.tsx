@@ -45,6 +45,13 @@ import {
 import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { Ts, VendorBadge } from "../shell/States";
+import { utcHourToLocal } from "../shell/time";
+
+/** " (= 05:00 GMT+3)" for a daily cron with a fixed minute and hour; "" when the expression is not that simple. */
+function cronLocal(cron: string | null | undefined): string {
+  const m = /^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/.exec((cron ?? "").trim());
+  return m ? ` (= ${utcHourToLocal(Number(m[2]), Number(m[1]))})` : "";
+}
 import Tooltip from "@mui/material/Tooltip";
 import { MONO, m3 } from "../theme/m3Theme";
 
@@ -464,7 +471,7 @@ export function BackupScreen() {
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
             {policy
               ? policy.schedule_enabled
-                ? <>Cron, UTC · last run {policy.last_scheduled_run_at ? <Ts at={policy.last_scheduled_run_at} seconds={false} /> : "never"}</>
+                ? <>Cron in UTC{cronLocal(policy.daily_backup_cron)} · last run {policy.last_scheduled_run_at ? <Ts at={policy.last_scheduled_run_at} seconds={false} /> : "never"}</>
                 : "No backup runs on its own. Enable the schedule under Retention & Policies."
               : "Policy unavailable"}
           </Typography>
@@ -838,7 +845,7 @@ export function BackupScreen() {
               label="Fleet backup schedule (cron, UTC)"
               value={dailyCron}
               onChange={(e) => setDailyCron(e.target.value)}
-              helperText="Five fields: minute hour day month weekday. 0 2 * * * = 02:00 UTC every day."
+              helperText={`Five fields: minute hour day month weekday, in UTC (the server's schedule clock). 0 2 * * * = 02:00 UTC = ${utcHourToLocal(2)} every day.${cronLocal(dailyCron)}`}
               disabled={policyBusy}
               fullWidth
             />
