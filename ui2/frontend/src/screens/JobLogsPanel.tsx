@@ -279,7 +279,7 @@ export function JobLogsPanel({ initialState = "" }: { readonly initialState?: st
                       {isExpanded ? job.job_id : `${job.job_id.slice(0, 8)}...`}
                     </TableCell>
                     <TableCell sx={{ fontWeight: 500 }}>
-                      {deviceNames[job.target_device_id] ?? "Unknown device"} · {job.target_device_id}
+                      {job.device_name ?? deviceNames[job.target_device_id] ?? "Unknown device"} · {job.target_device_id}
                     </TableCell>
                     <TableCell sx={{ fontSize: "0.8rem" }}>{job.job_type}</TableCell>
                     <TableCell>

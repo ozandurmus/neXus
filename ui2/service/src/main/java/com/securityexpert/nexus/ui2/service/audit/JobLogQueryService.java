@@ -32,14 +32,17 @@ public final class JobLogQueryService {
             @JsonProperty("job_id") String jobId,
             @JsonProperty("job_type") String jobType,
             @JsonProperty("target_device_id") String targetDeviceId,
+            /** The device's observed hostname at read time; null when the device has none recorded. */
+            @JsonProperty("device_name") String deviceName,
             @JsonProperty("state") String state,
+            @JsonProperty("outcome") String outcome,
             @JsonProperty("terminal_reason") String terminalReason,
             @JsonProperty("submitted_at") Instant submittedAt,
             @JsonProperty("finished_at") Instant finishedAt,
             @JsonProperty("duration_ms") Long durationMs) {
 
         public JobEvent(String jobId, String jobType, String targetDeviceId, String state, String terminalReason, Instant submittedAt) {
-            this(jobId, jobType, targetDeviceId, state, terminalReason, submittedAt, null, null);
+            this(jobId, jobType, targetDeviceId, null, state, null, terminalReason, submittedAt, null, null);
         }
     }
 
@@ -67,9 +70,12 @@ public final class JobLogQueryService {
     record Where(String sql, List<Object> bindings) {
     }
 
-    private static final String SELECT = "select job_id, job_type, target_device_id, state, terminal_reason, submitted_at, finished_at, "
-            + "case when finished_at is not null then extract(epoch from (finished_at - submitted_at)) * 1000 "
-            + "     else extract(epoch from (now() - submitted_at)) * 1000 end as duration_ms from jobs";
+    /** Jobs joined to their device for the name; the join is outer so a job whose device was removed still lists. */
+    private static final String FROM = " from jobs j left join devices d on d.device_id = j.target_device_id";
+    private static final String SELECT = "select j.job_id, j.job_type, j.target_device_id, d.observed_hostname as device_name, "
+            + "j.state, j.outcome, j.terminal_reason, j.submitted_at, j.finished_at, "
+            + "case when j.finished_at is not null then extract(epoch from (j.finished_at - j.submitted_at)) * 1000 "
+            + "     else extract(epoch from (now() - j.submitted_at)) * 1000 end as duration_ms" + FROM;
 
     private final TransactionBoundary transactionBoundary;
 
@@ -78,7 +84,7 @@ public final class JobLogQueryService {
     }
 
     public List<JobEvent> recent() {
-        return transactionBoundary.inTransaction(dsl -> dsl.fetch(SELECT + " order by submitted_at desc limit {0}", RECENT_LIMIT)
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(SELECT + " order by j.submitted_at desc limit {0}", RECENT_LIMIT)
                 .map(JobLogQueryService::toEvent));
     }
 
@@ -86,12 +92,12 @@ public final class JobLogQueryService {
         Where where = whereOf(query);
         Object[] bindings = where.bindings().toArray();
         return transactionBoundary.inTransaction(dsl -> {
-            long total = dsl.fetchOne("select count(*) from jobs" + where.sql(), bindings).get(0, Long.class);
+            long total = dsl.fetchOne("select count(*)" + FROM + where.sql(), bindings).get(0, Long.class);
             int offset = (query.page() - 1) * query.pageSize();
             List<Object> pageBindings = new ArrayList<>(where.bindings());
             pageBindings.add(query.pageSize());
             pageBindings.add(offset);
-            List<JobEvent> items = dsl.fetch(SELECT + where.sql() + " order by submitted_at desc limit ? offset ?",
+            List<JobEvent> items = dsl.fetch(SELECT + where.sql() + " order by j.submitted_at desc limit ? offset ?",
                     pageBindings.toArray()).map(JobLogQueryService::toEvent);
             return new JobPage(items, query.page(), query.pageSize(), total);
         });
@@ -109,7 +115,7 @@ public final class JobLogQueryService {
         List<JobEvent> rows = transactionBoundary.inTransaction(dsl -> {
             List<Object> bindings = new ArrayList<>(where.bindings());
             bindings.add(MAX_EXPORT_ROWS + 1);
-            return dsl.fetch(SELECT + where.sql() + " order by submitted_at desc limit ?", bindings.toArray())
+            return dsl.fetch(SELECT + where.sql() + " order by j.submitted_at desc limit ?", bindings.toArray())
                     .map(JobLogQueryService::toEvent);
         });
         return toCsv(rows);
@@ -123,32 +129,34 @@ public final class JobLogQueryService {
             List<String> states = java.util.Arrays.stream(s.split(",")).map(String::strip).filter(x -> !x.isEmpty())
                     .map(x -> x.toUpperCase(java.util.Locale.ROOT)).toList();
             if (states.size() == 1) {
-                clauses.add("state = ?");
+                clauses.add("j.state = ?");
                 bindings.add(states.get(0));
             } else if (!states.isEmpty()) {
-                clauses.add("state in (" + String.join(", ", java.util.Collections.nCopies(states.size(), "?")) + ")");
+                clauses.add("j.state in (" + String.join(", ", java.util.Collections.nCopies(states.size(), "?")) + ")");
                 bindings.addAll(states);
             }
         });
         query.jobType().filter(s -> !s.isBlank()).ifPresent(s -> {
-            clauses.add("job_type = ?");
+            clauses.add("j.job_type = ?");
             bindings.add(s.strip());
         });
         query.deviceId().filter(s -> !s.isBlank()).ifPresent(s -> {
-            clauses.add("target_device_id = ?");
+            clauses.add("j.target_device_id = ?");
             bindings.add(s.strip());
         });
         query.since().ifPresent(t -> {
-            clauses.add("submitted_at >= ?");
+            clauses.add("j.submitted_at >= ?");
             bindings.add(Timestamp.from(t));
         });
         query.until().ifPresent(t -> {
-            clauses.add("submitted_at <= ?");
+            clauses.add("j.submitted_at <= ?");
             bindings.add(Timestamp.from(t));
         });
         query.text().filter(s -> !s.isBlank()).ifPresent(s -> {
             String like = "%" + s.strip().toLowerCase(java.util.Locale.ROOT).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
-            clauses.add("(lower(job_id) like ? or lower(target_device_id) like ? or lower(coalesce(terminal_reason, '')) like ?)");
+            clauses.add("(lower(j.job_id) like ? or lower(j.target_device_id) like ? or lower(coalesce(d.observed_hostname, '')) like ? "
+                    + "or lower(coalesce(j.terminal_reason, '')) like ?)");
+            bindings.add(like);
             bindings.add(like);
             bindings.add(like);
             bindings.add(like);
@@ -157,7 +165,7 @@ public final class JobLogQueryService {
     }
 
     static String toCsv(List<JobEvent> rows) {
-        StringBuilder csv = new StringBuilder("job_id,job_type,target_device_id,state,submitted_at,finished_at,duration_ms,terminal_reason\r\n");
+        StringBuilder csv = new StringBuilder("job_id,job_type,device_name,target_device_id,state,outcome,submitted_at,finished_at,duration_ms,terminal_reason\r\n");
         int emitted = 0;
         for (JobEvent row : rows) {
             if (emitted == MAX_EXPORT_ROWS) {
@@ -165,7 +173,8 @@ public final class JobLogQueryService {
                 break;
             }
             csv.append(csvCell(row.jobId())).append(',').append(csvCell(row.jobType())).append(',')
-                    .append(csvCell(row.targetDeviceId())).append(',').append(csvCell(row.state())).append(',')
+                    .append(csvCell(row.deviceName())).append(',').append(csvCell(row.targetDeviceId())).append(',')
+                    .append(csvCell(row.state())).append(',').append(csvCell(row.outcome())).append(',')
                     .append(csvCell(row.submittedAt() == null ? "" : row.submittedAt().toString())).append(',')
                     .append(csvCell(row.finishedAt() == null ? "" : row.finishedAt().toString())).append(',')
                     .append(row.durationMs() == null ? "" : row.durationMs().toString()).append(',')
@@ -199,7 +208,9 @@ public final class JobLogQueryService {
                 row.get("job_id", String.class),
                 row.get("job_type", String.class),
                 row.get("target_device_id", String.class),
+                row.get("device_name", String.class),
                 row.get("state", String.class),
+                row.get("outcome", String.class),
                 row.get("terminal_reason", String.class),
                 subTs != null ? subTs.toInstant() : null,
                 finTs != null ? finTs.toInstant() : null,

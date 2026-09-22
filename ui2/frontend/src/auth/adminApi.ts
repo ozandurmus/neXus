@@ -940,7 +940,10 @@ export interface JobEventView {
   readonly job_id: string;
   readonly job_type: string;
   readonly target_device_id: string;
+  /** Observed hostname at read time; absent when the device has none recorded. */
+  readonly device_name?: string | null;
   readonly state: string;
+  readonly outcome?: string | null;
   readonly terminal_reason?: string;
   readonly submitted_at: string;
   readonly finished_at?: string;

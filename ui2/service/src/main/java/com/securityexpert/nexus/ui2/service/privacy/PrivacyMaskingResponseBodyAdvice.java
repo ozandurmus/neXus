@@ -83,6 +83,11 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
         }
     }
 
+    /** True when the request's session is the replay viewer (AIView), i.e. when a body must be masked. */
+    public static boolean isReplayViewer(HttpServletRequest request) {
+        return Boolean.TRUE.equals(request.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE));
+    }
+
     /**
      * Entrypoint for deep-masking arbitrary objects without mutating the inputs.
      */
@@ -101,7 +106,9 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     jobEvent.jobId(),
                     jobEvent.jobType(),
                     jobEvent.targetDeviceId(),
+                    topologyPseudonymizer.maskDeviceName(jobEvent.deviceName(), null),
                     jobEvent.state(),
+                    jobEvent.outcome(),
                     maskedReason,
                     jobEvent.submittedAt(),
                     jobEvent.finishedAt(),

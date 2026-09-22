@@ -14,6 +14,9 @@ import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService;
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.Facets;
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage;
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobQuery;
+import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * Jobs screen (Product Owner P0, 2026-09-22): the whole history, filtered
@@ -24,9 +27,11 @@ import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobQuery;
 public final class JobLogController {
 
     private final JobLogQueryService jobLogQueryService;
+    private final PrivacyMaskingResponseBodyAdvice masking;
 
-    public JobLogController(JobLogQueryService jobLogQueryService) {
+    public JobLogController(JobLogQueryService jobLogQueryService, PrivacyMaskingResponseBodyAdvice masking) {
         this.jobLogQueryService = jobLogQueryService;
+        this.masking = masking;
     }
 
     @GetMapping("/api/v2/jobs")
@@ -53,12 +58,17 @@ public final class JobLogController {
             @RequestParam(name = "job_type", required = false) String jobType,
             @RequestParam(name = "device_id", required = false) String deviceId,
             @RequestParam(required = false) String since, @RequestParam(required = false) String until,
-            @RequestParam(required = false) String q) {
+            @RequestParam(required = false) String q, HttpServletRequest request) {
         Optional<JobQuery> query = parse(state, jobType, deviceId, since, until, q, 1, 1);
         if (query.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        byte[] body = jobLogQueryService.exportCsv(query.get()).getBytes(StandardCharsets.UTF_8);
+        String csv = jobLogQueryService.exportCsv(query.get());
+        // The body advice masks objects, not a byte body: the AIView persona's CSV is masked here, as text.
+        if (PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)) {
+            csv = (String) masking.maskObject(csv, null);
+        }
+        byte[] body = csv.getBytes(StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .header("Content-Type", "text/csv; charset=utf-8")
                 .header("Content-Disposition", "attachment; filename=\"nexus-jobs-" + Instant.now().toString().replace(":", "") + ".csv\"")

@@ -31,11 +31,12 @@ class JobLogQueryServiceTest {
         Where where = JobLogQueryService.whereOf(new JobQuery(Optional.of("failed"), Optional.of("cp_gateway_backup"),
                 Optional.of("dev-1"), Optional.of(since), Optional.empty(), Optional.of("SFTP 100%"), 3, 25));
 
-        assertEquals(" where state = ? and job_type = ? and target_device_id = ? and submitted_at >= ? and "
-                + "(lower(job_id) like ? or lower(target_device_id) like ? or lower(coalesce(terminal_reason, '')) like ?)",
+        assertEquals(" where j.state = ? and j.job_type = ? and j.target_device_id = ? and j.submitted_at >= ? and "
+                + "(lower(j.job_id) like ? or lower(j.target_device_id) like ? or lower(coalesce(d.observed_hostname, '')) like ? "
+                + "or lower(coalesce(j.terminal_reason, '')) like ?)",
                 where.sql());
         assertEquals(List.of("FAILED", "cp_gateway_backup", "dev-1", Timestamp.from(since), "%sftp 100\\%%", "%sftp 100\\%%",
-                "%sftp 100\\%%"), where.bindings());
+                "%sftp 100\\%%", "%sftp 100\\%%"), where.bindings());
     }
 
     @Test
@@ -43,7 +44,7 @@ class JobLogQueryServiceTest {
         Where where = JobLogQueryService.whereOf(new JobQuery(Optional.of("requested, claimed"), Optional.empty(),
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), 1, 50));
 
-        assertEquals(" where state in (?, ?)", where.sql());
+        assertEquals(" where j.state in (?, ?)", where.sql());
         assertEquals(List.of("REQUESTED", "CLAIMED"), where.bindings());
     }
 
@@ -59,15 +60,16 @@ class JobLogQueryServiceTest {
     @Test
     void csvQuotesCommasAndNeutralisesSpreadsheetFormulas() {
         String csv = JobLogQueryService.toCsv(List.of(
-                new JobEvent("job-1", "cp_gateway_backup", "dev-1", "FAILED", "sftp fetch failed: SftpException id=4, \"no message\"",
+                new JobEvent("job-1", "cp_gateway_backup", "dev-1", "FW-TANGO-01", "FAILED", "FAILURE",
+                        "sftp fetch failed: SftpException id=4, \"no message\"",
                         Instant.parse("2026-09-22T11:43:23Z"), Instant.parse("2026-09-22T11:44:46Z"), 83_000L),
                 new JobEvent("job-2", "pan_device_state_backup", "dev-2", "COMPLETED", "=HYPERLINK(\"x\")",
                         Instant.parse("2026-09-22T11:43:23Z"))));
 
         String[] lines = csv.split("\r\n");
-        assertEquals("job_id,job_type,target_device_id,state,submitted_at,finished_at,duration_ms,terminal_reason", lines[0]);
-        assertEquals("job-1,cp_gateway_backup,dev-1,FAILED,2026-09-22T11:43:23Z,2026-09-22T11:44:46Z,83000,"
+        assertEquals("job_id,job_type,device_name,target_device_id,state,outcome,submitted_at,finished_at,duration_ms,terminal_reason", lines[0]);
+        assertEquals("job-1,cp_gateway_backup,FW-TANGO-01,dev-1,FAILED,FAILURE,2026-09-22T11:43:23Z,2026-09-22T11:44:46Z,83000,"
                 + "\"sftp fetch failed: SftpException id=4, \"\"no message\"\"\"", lines[1]);
-        assertEquals("job-2,pan_device_state_backup,dev-2,COMPLETED,2026-09-22T11:43:23Z,,,\"'=HYPERLINK(\"\"x\"\")\"", lines[2]);
+        assertEquals("job-2,pan_device_state_backup,,dev-2,COMPLETED,,2026-09-22T11:43:23Z,,,\"'=HYPERLINK(\"\"x\"\")\"", lines[2]);
     }
 }
