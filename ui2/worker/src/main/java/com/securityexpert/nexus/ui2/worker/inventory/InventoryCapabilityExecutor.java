@@ -792,13 +792,14 @@ public final class InventoryCapabilityExecutor {
                 yield "";
             }
         };
-        // A Gaia Embedded/Quantum Spark device rejects the exec channel outright, for every
-        // command, not just the confirm's identity read (ConfirmCapabilityExecutor.execOutput
-        // carries the same fallback for that read) -- so inventory collection against such a
-        // device produced zero interface/route evidence despite a successful confirm (Product
-        // Owner, 2026-09-22: "Live gözüküyor ama cihazdan veri çekemiyorum"). Tried only when the
-        // exec channel itself was rejected, never for a command that merely printed nothing.
-        if (result instanceof ExecResult.ChannelFailed) {
+        // A Gaia Embedded/Quantum Spark device's exec channel doesn't always fail cleanly
+        // (ChannelFailed) -- measured live, 2026-09-22, on a second such appliance: every exec
+        // attempt instead ran out its full READ_TIMEOUT (ExecResult.TimedOut), never producing a
+        // ChannelFailed at all, so gating the interactive-shell fallback on ChannelFailed alone
+        // (as first shipped) never triggered here and inventory collection just spun. Both
+        // failure shapes get the same fallback (confirm's own ConfirmCapabilityExecutor.execOutput
+        // does not distinguish them either), never for a command that merely printed nothing.
+        if (result instanceof ExecResult.ChannelFailed || result instanceof ExecResult.TimedOut) {
             String interactiveOutput = interactiveFallback(session, command);
             if (interactiveOutput != null) {
                 return interactiveOutput;
@@ -870,7 +871,7 @@ public final class InventoryCapabilityExecutor {
                 yield "";
             }
         };
-        if (result instanceof ExecResult.ChannelFailed) {
+        if (result instanceof ExecResult.ChannelFailed || result instanceof ExecResult.TimedOut) {
             String interactiveOutput = interactiveFallback(session, command);
             if (interactiveOutput != null) {
                 return interactiveOutput;

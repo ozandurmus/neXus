@@ -24,6 +24,7 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
     private final Map<String, String> outputByCommand;
     private final Map<String, String> hostBySessionId = new HashMap<>();
     private boolean execChannelRejectedEntirely;
+    private boolean execChannelTimesOutEntirely;
 
     ScriptedCheckPointInventoryTransport(Map<String, String> outputByCommand) {
         this.outputByCommand = outputByCommand;
@@ -37,6 +38,14 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
         this.execChannelRejectedEntirely = true;
     }
 
+    /** Simulates a second exec-channel failure shape measured live, 2026-09-22: some Spark/Gaia
+     * Embedded appliances never return a clean {@code ChannelFailed} at all -- every exec attempt
+     * instead runs out its full read timeout ({@code ExecResult.TimedOut}). */
+    void timeOutExecChannelEntirely() {
+        this.execChannelTimesOutEntirely = true;
+        this.execChannelRejectedEntirely = true;
+    }
+
     @Override
     public ConnectResult connect(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
         String sessionId = UUID.randomUUID().toString();
@@ -46,6 +55,9 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
 
     @Override
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
+        if (execChannelTimesOutEntirely) {
+            return new ExecResult.TimedOut();
+        }
         if (execChannelRejectedEntirely) {
             return new ExecResult.ChannelFailed("simulated: exec channel request rejected outright");
         }

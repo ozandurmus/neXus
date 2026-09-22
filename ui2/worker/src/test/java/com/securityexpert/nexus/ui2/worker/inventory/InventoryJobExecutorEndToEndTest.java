@@ -219,6 +219,54 @@ class InventoryJobExecutorEndToEndTest {
         assertEquals("203.0.113.5/24", vsid3.interfaces().get(0).addresses().get(0).address());
     }
 
+    /** Product Owner, 2026-09-22, second real device: the first fix (gated on {@code
+     * ExecResult.ChannelFailed} only) never triggered here because this appliance's exec channel
+     * never returns a clean rejection at all -- every exec attempt instead runs out its full
+     * read timeout ({@code ExecResult.TimedOut}), so the job just spun ("dönüp duruyor"). Same
+     * fixture and assertions as the ChannelFailed test above, proving both failure shapes now
+     * reach the interactive shell. */
+    @Test
+    void aDeviceWhoseExecChannelTimesOutInsteadOfFailingCleanlyStillCompletesInventory() {
+        Map<String, String> outputByCommand = Map.ofEntries(
+                Map.entry(InventoryReadPlan.CP_VSX_STAT, "ID | Type | Name\n0 | S | VS0\n3 | S | vs-lab\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_FW_GETIFS), "localhost eth0 192.0.2.20 255.255.255.0\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ROUTE_SHOW), "default via 192.0.2.1 dev eth0 proto 7\n"),
+                Map.entry(vsenvZero(InventoryReadPlan.CP_CPHAPROB_STAT), "Cluster is not enabled\n"),
+                Map.entry(vsenvZeroFaultTolerant(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF), ""),
+                Map.entry("bash -lc 'vsenv 3 && fw getifs && ip -4 route show'",
+                        "localhost eth1 203.0.113.5 255.255.255.0\n"
+                                + "default via 203.0.113.1 dev eth1 proto 7\n"),
+                Map.entry("bash -lc 'vsenv 3 && cphaprob stat'", "Cluster is not enabled\n"));
+
+        ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
+        transport.timeOutExecChannelEntirely();
+        InventoryJobExecutorFakes.FakeLeaseRepository leaseRepo =
+                new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
+        InventoryJobExecutorFakes.FakeStepAttemptRepository attemptRepo = new InventoryJobExecutorFakes.FakeStepAttemptRepository();
+        InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort devicePort = new InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort();
+        InventoryJobExecutorFakes.FakeDeviceRepository deviceRepository = new InventoryJobExecutorFakes.FakeDeviceRepository();
+        InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository =
+                new InventoryJobExecutorFakes.FakeDeviceInventoryRepository();
+
+        InventoryCapabilityExecutor capabilityExecutor =
+                new InventoryCapabilityExecutor(transport, ref -> { throw new IllegalStateException("not used"); });
+        InventoryJobExecutor executor = new InventoryJobExecutor(leaseRepo, attemptRepo, devicePort, deviceRepository,
+                inventoryRepository, capabilityExecutor);
+
+        InventoryRequest request =
+                InventoryRequest.checkPoint(new ConnectionTarget("ep-1", "gw-a-host", 22), "cred-1", "trust-1");
+
+        JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request, false);
+
+        assertTrue(outcome instanceof JobOutcome.Completed,
+                "a device whose exec channel times out (never a clean ChannelFailed) must still complete inventory "
+                        + "over the interactive shell, got " + outcome);
+        InventoryRun run = inventoryRepository.lastRecordedRun;
+        InventoryContext vsid3 = contextNamed(run, "3");
+        assertEquals(1, vsid3.interfaces().size());
+        assertEquals("203.0.113.5/24", vsid3.interfaces().get(0).addresses().get(0).address());
+    }
+
     private static String vsenvZero(String read) {
         return "bash -lc 'vsenv 0 && " + read + "'";
     }
