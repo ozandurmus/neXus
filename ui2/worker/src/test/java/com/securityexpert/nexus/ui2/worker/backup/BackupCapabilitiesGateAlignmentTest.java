@@ -47,6 +47,17 @@ class BackupCapabilitiesGateAlignmentTest {
         assertTrue(capability.executionEligible());
     }
 
+    /** Measured live (2026-09-22): "Run Fleet Backup" with two Palo Alto targets issued nothing --
+     * the capability id was known to admission but never registered (BackupCapabilities.all returned
+     * Check Point only) and had no gate rows, so every PAN request was refused as unknown. */
+    @Test
+    void paloAltoBackupCapabilityResolvesEligibleAndIsRegistered() {
+        var registry = realFixtureGateRegistry();
+        assertTrue(BackupCapabilities.paloAlto(registry).executionEligible());
+        assertTrue(BackupCapabilities.all(registry).stream()
+                .anyMatch(c -> c.id().equals(com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP)));
+    }
+
     private static final class InMemoryAdmissionRepository implements JobAdmissionRepository {
         private final Map<String, String> jobsByIdempotencyKey = new HashMap<>();
 

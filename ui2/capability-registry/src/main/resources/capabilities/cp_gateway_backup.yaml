@@ -29,6 +29,10 @@ steps:
     gate_reference: cp_backup_show_diskspace
   - kind: exec
     shell_context: expert
+    send: 'df -P /var/log'
+    gate_reference: cp_backup_df_var_log
+  - kind: exec
+    shell_context: expert
     send: 'clish -c "add backup local"'
     gate_reference: cp_backup_add_backup_local
   - kind: poll

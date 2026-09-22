@@ -37,6 +37,7 @@ public final class BackupCapabilities {
         List<CapabilityStep> steps = List.of(
                 connectStep(),
                 execStep(BackupReadPlan.CP_SHOW_DISKSPACE),
+                execStep(BackupReadPlan.CP_DF_VAR_LOG),
                 execStep(BackupReadPlan.CP_ADD_BACKUP_LOCAL),
                 pollStep(BackupReadPlan.CP_SHOW_BACKUP_STATUS),
                 sftpGetStepNotApplicable(),
@@ -48,8 +49,27 @@ public final class BackupCapabilities {
         return new CapabilityRegistryLoader(gateRegistry).load(spec);
     }
 
+    /** The two XML API reads {@code worker.backup.pan.PaloAltoBackupExecutor} issues, gated as
+     * pan_backup_config_show / pan_backup_export_device_state (V40). Until this existed the capability
+     * id was known to admission but never registered, so every PAN backup was refused as unknown. */
+    public static Capability paloAlto(GateRegistryPort gateRegistry) {
+        List<CapabilityStep> steps = List.of(
+                connectStep(),
+                xmlApiCallStep("type=config&action=show"),
+                xmlApiCallStep("type=export&category=device-state"));
+        CapabilitySpec spec = new CapabilitySpec(BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, "palo_alto",
+                "pan_firewall", TransportKind.PAN_XML_API, MaturityState.CAP_VALIDATED, steps,
+                List.of(disconnectStep()), "14H", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistry).load(spec);
+    }
+
     public static List<Capability> all(GateRegistryPort gateRegistry) {
-        return List.of(checkPoint(gateRegistry));
+        return List.of(checkPoint(gateRegistry), paloAlto(gateRegistry));
+    }
+
+    private static CapabilityStep xmlApiCallStep(String send) {
+        return new CapabilityStep(StepKind.XML_API_CALL, "not_applicable", send, false, Optional.empty(),
+                Optional.empty(), Optional.empty());
     }
 
     private static CapabilityStep connectStep() {

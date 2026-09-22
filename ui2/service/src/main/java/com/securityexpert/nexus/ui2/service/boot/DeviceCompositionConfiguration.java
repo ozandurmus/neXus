@@ -149,6 +149,7 @@ public class DeviceCompositionConfiguration {
                 checkPointConfigurationCapability(gateRegistryPort),
                 paloAltoConfigurationCapability(gateRegistryPort),
                 checkPointBackupCapability(gateRegistryPort),
+                paloAltoBackupCapability(gateRegistryPort),
                 // 14F DR-1: admitted through JobAdmissionService#submitForRun
                 // against a discovery_run row, never a device -- same
                 // gate-free placeholder shape (StepExecutor never runs
@@ -253,6 +254,23 @@ public class DeviceCompositionConfiguration {
      * gate_not_applicable} per C4 section 2.3's sftp_get/prior-step rule,
      * not looped from the literal list.
      */
+    /** Mirrors {@code worker.backup.BackupCapabilities.paloAlto} exactly (V40 gate rows). */
+    private static Capability paloAltoBackupCapability(GateRegistryPort gateRegistryPort) {
+        CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        List<CapabilityStep> steps = List.of(connect,
+                new CapabilityStep(StepKind.XML_API_CALL, "not_applicable", "type=config&action=show", false,
+                        Optional.empty(), Optional.empty(), Optional.empty()),
+                new CapabilityStep(StepKind.XML_API_CALL, "not_applicable", "type=export&category=device-state", false,
+                        Optional.empty(), Optional.empty(), Optional.empty()));
+        CapabilitySpec spec = new CapabilitySpec(BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, "palo_alto",
+                "pan_firewall", TransportKind.PAN_XML_API, MaturityState.CAP_VALIDATED, steps, List.of(disconnect),
+                "14H", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
+    }
+
     private static Capability checkPointBackupCapability(GateRegistryPort gateRegistryPort) {
         CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
                 Optional.empty(), Optional.empty(), Optional.empty());
@@ -262,6 +280,9 @@ public class DeviceCompositionConfiguration {
                 Optional.empty(), Optional.empty());
         List<CapabilityStep> steps = List.of(connect,
                 new CapabilityStep(StepKind.EXEC, "expert", CHECK_POINT_BACKUP_LITERALS.get(0), false,
+                        Optional.empty(), Optional.empty(), Optional.empty()),
+                // cp_backup_df_var_log (V40): the Expert fallback entry 1 names; mirrors BackupCapabilities.checkPoint.
+                new CapabilityStep(StepKind.EXEC, "expert", "df -P /var/log", false,
                         Optional.empty(), Optional.empty(), Optional.empty()),
                 new CapabilityStep(StepKind.EXEC, "expert", CHECK_POINT_BACKUP_LITERALS.get(1), false,
                         Optional.empty(), Optional.empty(), Optional.empty()),

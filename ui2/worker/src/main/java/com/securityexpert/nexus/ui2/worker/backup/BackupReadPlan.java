@@ -44,7 +44,7 @@ public final class BackupReadPlan {
     public static final String CP_DELETE_SNAPSHOT_TEMPLATE = "clish -c \"delete snapshot %s\"";
 
     /** 14H section 5's own order: free-space precondition, submit, poll (repeated), fetch, digest, delete. */
-    public static final List<String> LITERALS = List.of(CP_SHOW_DISKSPACE, CP_ADD_BACKUP_LOCAL, CP_SHOW_BACKUP_STATUS,
+    public static final List<String> LITERALS = List.of(CP_SHOW_DISKSPACE, CP_DF_VAR_LOG, CP_ADD_BACKUP_LOCAL, CP_SHOW_BACKUP_STATUS,
             CP_SHOW_BACKUPS, CP_ARCHIVE_DIGEST_TEMPLATE, CP_DELETE_BACKUP_TEMPLATE);
 
     /** Check Point Gaia snapshot literal set for weekly image recovery. */

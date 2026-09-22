@@ -697,6 +697,54 @@ gates:
     secret_output_risk: none
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md entry 1"
+  - gate_id: cp_backup_df_var_log
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: 'df -P /var/log'
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per run, before the submit, only when show diskspace did not answer"
+    session_reuse_rule: "one session held for the whole run"
+    unsupported_behavior_ref: "the Expert fallback named by cp_backup_show_diskspace (BK-7); POSIX df, Available column in 1K blocks"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_BACKUP_COMMAND_GATE_ENTRIES.md entry 1"
+  - gate_id: pan_backup_config_show
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: 'type=config&action=show'
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "companion running-config read for the semantic deviation diff; secret-bearing leaves withheld in any view, encrypted at rest"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/BACKUP_RECOVERY_CONTRACTS.md (PAN device-state) -- Product Owner directive 2026-09-22, Backbox trail 34411050 as measurement"
+  - gate_id: pan_backup_export_device_state
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: 'type=export&category=device-state'
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 600
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "streamed straight into the envelope-encrypted artefact store; never held whole in memory"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/BACKUP_RECOVERY_CONTRACTS.md (PAN device-state) -- Product Owner directive 2026-09-22, Backbox trail 34411050 as measurement"
 
   - gate_id: cp_backup_add_backup_local
     vendor: check_point

@@ -1,0 +1,29 @@
+# pan_device_state_backup -- the Palo Alto half of the gateway backup movement.
+# Registered programmatically by worker.backup.BackupCapabilities.paloAlto and
+# DeviceCompositionConfiguration (service); this file is the readable twin so
+# the gate alignment test and a reader see the same two XML API reads the
+# executor (worker.backup.pan.PaloAltoBackupExecutor) issues.
+capability_id: pan_device_state_backup
+vendor: palo_alto
+platform_role_scope: pan_firewall
+maturity_state: CAP_VALIDATED
+transport:
+  kind: pan_xml_api
+  trust_rule_ref: utils.pan_xml_api_trust
+steps:
+  - kind: connect
+  - kind: xml_api_call
+    send: "type=config&action=show"
+    gate_reference: pan_backup_config_show
+  - kind: xml_api_call
+    send: "type=export&category=device-state"
+    gate_reference: pan_backup_export_device_state
+finally_steps:
+  - kind: disconnect
+parser_ref:
+  parser_version: "14H"
+  semantics_doc_ref: "docs/design/BACKUP_RECOVERY_CONTRACTS.md"
+source_pointers:
+  - "worker.backup.pan.PaloAltoBackupExecutor (keygen, config show, streamed device-state export)"
+validation_status: FIXTURE_ONLY
+revalidation_plan_ref: "first live run against a backup target (Product Owner, 2026-09-22)"

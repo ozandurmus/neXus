@@ -35,6 +35,8 @@ import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
  */
 public final class BackupCapabilityExecutor {
 
+    private static final System.Logger LOG = System.getLogger(BackupCapabilityExecutor.class.getName());
+
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration DISKSPACE_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration SUBMIT_TIMEOUT = Duration.ofSeconds(60);
@@ -95,12 +97,23 @@ public final class BackupCapabilityExecutor {
     }
 
     private BackupResult runAgainstSession(TransportSession session, String deviceId, String jobId) {
-        // Entry 1 (BK-6): free-space precondition.
+        // Entry 1 (BK-6): free-space precondition. Gate row cp_backup_show_diskspace, BK-7: "if the
+        // Clish form fails, the Expert fallback df -P /var/log becomes primary". Measured live on the
+        // first real run (2026-09-22): the Clish form answered a one-line CLI error with exit 0, and
+        // the first integer of that error code was read as "329 KB free" -- so a CLI error is now
+        // "the Clish form failed", never a number, and df -P /var/log is read instead.
         ExecOutcome diskspace = exec(session, BackupReadPlan.CP_SHOW_DISKSPACE, DISKSPACE_TIMEOUT);
         Optional<Long> freeBytes = parseFreeSpaceBytes(diskspace.output());
         if (freeBytes.isEmpty()) {
-            return new BackupResult.InsufficientFreeSpace(
-                    "show diskspace output could not be parsed for a free-space value; refusing (fail-closed)");
+            ExecOutcome df = exec(session, BackupReadPlan.CP_DF_VAR_LOG, DISKSPACE_TIMEOUT);
+            freeBytes = parseDfAvailableBytes(df.output());
+            if (freeBytes.isEmpty()) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[BACKUP_FREE_SPACE_UNPARSED] clish_shape={0} df_shape={1}",
+                        maskedShape(diskspace.output()), maskedShape(df.output()));
+                return new BackupResult.InsufficientFreeSpace(
+                        "neither show diskspace nor df -P /var/log could be parsed for a free-space value; refusing (fail-closed)");
+            }
         }
         if (freeBytes.get() < freeSpaceThresholdBytes) {
             return new BackupResult.InsufficientFreeSpace("free space " + freeBytes.get() + " bytes is below the "
@@ -209,8 +222,53 @@ public final class BackupCapabilityExecutor {
     private record ExecOutcome(String output, boolean succeeded) {
     }
 
+    /** The same CLI-error vocabulary the interactive shell uses: any of these means the command
+     * was not understood, so nothing in the output is a number to trust. */
+    private static final String[] CLI_ERROR_MARKERS = {"invalid command", "unknown command", "command not found",
+            "syntax error", "not a valid command", "permission denied", "not authorized", "clinfr", "clicmd"};
+
+    static boolean looksLikeCliError(String output) {
+        if (output == null) {
+            return false;
+        }
+        String lower = output.toLowerCase(Locale.ROOT);
+        for (String marker : CLI_ERROR_MARKERS) {
+            if (lower.contains(marker)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** {@code df -P /var/log}: POSIX format, one data line, "Available" is the 4th column in 1K blocks. */
+    static Optional<Long> parseDfAvailableBytes(String dfOutput) {
+        if (dfOutput == null || dfOutput.isBlank() || looksLikeCliError(dfOutput)) {
+            return Optional.empty();
+        }
+        for (String line : dfOutput.split("\\R")) {
+            String[] tokens = line.trim().split("\\s+");
+            if (tokens.length >= 6 && tokens[1].matches("\\d+") && tokens[3].matches("\\d+")) {
+                try {
+                    return Optional.of(Long.parseLong(tokens[3]) * 1024L);
+                } catch (NumberFormatException notANumber) {
+                    return Optional.empty();
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Structure-only projection for a diagnostic log: digit runs become {@code #}, whitespace collapses. */
+    static String maskedShape(String output) {
+        if (output == null) {
+            return "<null>";
+        }
+        String s = output.replaceAll("\\d+", "#").replaceAll("\\s+", " ").trim();
+        return s.length() > 160 ? s.substring(0, 160) + "..." : s;
+    }
+
     static Optional<Long> parseFreeSpaceBytes(String diskspaceOutput) {
-        if (diskspaceOutput == null || diskspaceOutput.isBlank()) {
+        if (diskspaceOutput == null || diskspaceOutput.isBlank() || looksLikeCliError(diskspaceOutput)) {
             return Optional.empty();
         }
         Matcher matcher = FIRST_INTEGER.matcher(diskspaceOutput);
