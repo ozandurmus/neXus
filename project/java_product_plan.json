@@ -178,7 +178,9 @@
     "operations_readiness_panel_ignores_enrolled_clusters": "java_debt",
     "ui2_pod_memory_limits_2gi": "java_debt",
     "storage_usage_view": "java_feature",
-    "service_view_screen": "java_feature"
+    "service_view_screen": "java_feature",
+    "overview_exception_and_evidence_screen": "java_feature",
+    "aiview_masking_leak_audit": "java_debt"
   },
   "converted_lessons": [
     {
