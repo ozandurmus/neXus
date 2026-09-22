@@ -42,9 +42,11 @@ import {
   type BackupDeviations,
   type BackupPolicy,
 } from "../auth/adminApi";
-import { ScreenHeader, MetricGrid, ScreenRoot } from "../shell/ScreenLayout";
-import { M3Button } from "../shell/M3Widgets";
-import { m3 } from "../theme/m3Theme";
+import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
+import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { Ts, VendorBadge } from "../shell/States";
+import Tooltip from "@mui/material/Tooltip";
+import { MONO, m3 } from "../theme/m3Theme";
 
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "unknown size";
@@ -413,7 +415,7 @@ export function BackupScreen() {
   return (
     <ScreenRoot>
       <ScreenHeader
-        title="Backups & Recovery"
+        title="Backups"
         subtitle="Fleet backups, Gaia snapshots, and AST semantic deviation analysis. Every figure on this screen is read from the artefact store or the backup policy; nothing is inferred from inventory."
         actions={
           <Stack direction="row" spacing={1.5}>
@@ -443,69 +445,38 @@ export function BackupScreen() {
         </Box>
       )}
 
-      {/* Metric Cards */}
+      {/* Metric Cards: a figure or the word for why there is none (UI review 2026-09-23) */}
       <MetricGrid>
-        <Card sx={{ p: 2.5, borderRadius: "16px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}` }}>
-          <Typography variant="body2" sx={{ color: m3.onSurfaceVar, fontWeight: 500 }}>
-            Devices With A Stored Backup
-          </Typography>
-          <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: m3.onSurface }}>
-            {listLoaded && !listError ? devices.length : "—"}
-          </Typography>
-          {/* This was a hardcoded "100% / All active firewalls backed up". A protection
-              rate needs a denominator this screen is not given, and a device with no
-              backup is exactly the one an operator must not be reassured about, so the
-              card counts what the store holds instead of rating what it does not know. */}
-          <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-            {listError ? "Store unreadable" : "Counted from the artefact store, not from inventory"}
-          </Typography>
-        </Card>
-
-        <Card sx={{ p: 2.5, borderRadius: "16px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}` }}>
-          <Typography variant="body2" sx={{ color: m3.onSurfaceVar, fontWeight: 500 }}>
-            Scheduled Fleet Backup
-          </Typography>
-          <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: policy?.schedule_enabled ? m3.primary : m3.onSurfaceVar }}>
-            {policy ? (policy.schedule_enabled ? policy.daily_backup_cron : "Off") : "—"}
-          </Typography>
-          <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+        <MetricCard title="Devices with a stored backup" value={listLoaded && !listError ? devices.length : null}
+          state={listLoaded && !listError ? "ok" : "unknown"} reason={listError ?? undefined}
+          note={listError ? "Store unreadable" : "Counted from the artefact store, not from inventory"} />
+        <Card sx={{ p: 2.25, borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, boxShadow: "none", display: "flex", flexDirection: "column", gap: 1 }}>
+          <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>Scheduled fleet backup</Typography>
+          {!policy ? (
+            <Typography sx={{ fontSize: 22, lineHeight: "40px", fontWeight: 650, color: m3.neutralInk }}>UNKNOWN</Typography>
+          ) : policy.schedule_enabled ? (
+            <Typography sx={{ fontFamily: MONO, fontSize: 24, lineHeight: "40px", fontWeight: 600, color: m3.onSurface }}>{policy.daily_backup_cron}</Typography>
+          ) : (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 40 }}>
+              <StatusChip tone="warn" label="Not scheduled" />
+            </Box>
+          )}
+          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
             {policy
               ? policy.schedule_enabled
-                ? `Cron, UTC · last run ${policy.last_scheduled_run_at ? new Date(policy.last_scheduled_run_at).toLocaleString() : "never"}`
-                : "Enable it under Retention & Policies; nothing runs until then"
+                ? <>Cron, UTC · last run {policy.last_scheduled_run_at ? <Ts at={policy.last_scheduled_run_at} seconds={false} /> : "never"}</>
+                : "No backup runs on its own. Enable the schedule under Retention & Policies."
               : "Policy unavailable"}
           </Typography>
         </Card>
-
-        <Card sx={{ p: 2.5, borderRadius: "16px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}` }}>
-          <Typography variant="body2" sx={{ color: m3.onSurfaceVar, fontWeight: 500 }}>
-            Retention Horizon
-          </Typography>
-          <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: m3.onSurface }}>
-            {policy ? `${policy.backup_retention_days} Days` : "—"}
-          </Typography>
-          <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-            {policy ? `Snapshots depth: ${policy.snapshot_retention_depth} retained` : "Policy unavailable"}
-          </Typography>
-        </Card>
-
-        <Card sx={{ p: 2.5, borderRadius: "16px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}` }}>
-          <Typography variant="body2" sx={{ color: m3.onSurfaceVar, fontWeight: 500 }}>
-            Active Major Deviations
-          </Typography>
-          <Typography variant="h4" sx={{ my: 1, fontWeight: 700, color: deviations ? m3.onSurface : m3.onSurfaceVar }}>
-            {deviations ? deviations.active_major_deviations.length : "—"}
-          </Typography>
-          {/* A zero here used to be printed unconditionally with the caption "No
-              unauthorized network or rule shifts". Zero deviations found and zero
-              comparisons run look identical on the face of it and mean opposite things,
-              so the caption now says which one this is. */}
-          <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-            {deviations
-              ? `${deviations.total_deviations_checked} comparison${deviations.total_deviations_checked === 1 ? "" : "s"} run`
-              : "Deviation state unavailable"}
-          </Typography>
-        </Card>
+        <MetricCard title="Retention horizon" value={policy ? `${policy.backup_retention_days} days` : null} state={policy ? "ok" : "unknown"}
+          note={policy ? `Snapshot depth: ${policy.snapshot_retention_depth} retained` : "Policy unavailable"} />
+        {/* Zero deviations found and zero comparisons run look identical and mean opposite things. */}
+        <MetricCard title="Active major deviations"
+          value={deviations && deviations.total_deviations_checked > 0 ? deviations.active_major_deviations.length : null}
+          state={deviations && deviations.total_deviations_checked > 0 ? "ok" : "unknown"}
+          reason="No comparison has run, so no deviation can be claimed or ruled out"
+          note={deviations ? `${deviations.total_deviations_checked} comparison${deviations.total_deviations_checked === 1 ? "" : "s"} run` : "Deviation state unavailable"} />
       </MetricGrid>
 
       <Dialog open={fleetOpen} onClose={() => (fleetBusy ? undefined : setFleetOpen(false))} fullWidth maxWidth="sm">
@@ -535,171 +506,21 @@ export function BackupScreen() {
         </DialogActions>
       </Dialog>
 
-      {/* Backup targets: which devices the product may back up at all. */}
-      <Box sx={{ mt: 3 }}>
-        <BackupTargetsSection version={targetsVersion} onChanged={() => setTargetsVersion((v) => v + 1)} />
-      </Box>
-
-      {/* Fleet Backups Table */}
-      <Box sx={{ mt: 3 }}>
-        <TableContainer
-          component={Card}
-          sx={{
-            borderRadius: "16px",
-            border: `1px solid ${m3.outlineVar}`,
-            bgcolor: m3.scLow,
-            boxShadow: "none",
-          }}
-        >
-          <Table>
-            <TableHead sx={{ bgcolor: m3.sc }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, color: m3.onSurfaceVar }}>Device Name</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: m3.onSurfaceVar }}>IP & Role</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: m3.onSurfaceVar }}>Vendor</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: m3.onSurfaceVar }}>Last Backup</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: m3.onSurfaceVar }}>Validation</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: m3.onSurfaceVar }}>Deviation Status</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 600, color: m3.onSurfaceVar }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {devices.map((device) => (
-                <TableRow key={device.deviceId} hover>
-                  <TableCell>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: m3.onSurface }}>
-                      {device.name}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                      {device.backupType === "snapshot" ? "Full OS Snapshot" : "Daily Config/State Backup"}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace", color: m3.onSurface }}>
-                      {device.ip}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                      {device.role}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={device.vendor === "palo_alto" ? "Palo Alto" : device.vendor === "check_point" ? "Check Point" : "Unknown vendor"}
-                      sx={{
-                        bgcolor: device.vendor === "palo_alto" ? "#e0f2fe" : "#fce7f3",
-                        color: device.vendor === "palo_alto" ? "#0369a1" : "#be185d",
-                        fontWeight: 600,
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ color: m3.onSurface }}>
-                      {device.lastBackupTime}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                      {(device.sizeBytes / (1024 * 1024)).toFixed(1)} MB
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={device.validationLevel}
-                      sx={{
-                        bgcolor: m3.successContainer,
-                        color: m3.onSuccessContainer,
-                        fontWeight: 700,
-                        fontSize: "0.75rem",
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={device.deviationState}
-                      sx={{
-                        bgcolor:
-                          device.deviationState === "UNCHANGED"
-                            ? m3.successContainer
-                            : device.deviationState === "MAJOR DEVIATION"
-                            ? m3.errorContainer
-                            : m3.primaryContainer,
-                        color:
-                          device.deviationState === "UNCHANGED"
-                            ? m3.onSuccessContainer
-                            : device.deviationState === "MAJOR DEVIATION"
-                            ? m3.onErrorContainer
-                            : m3.onPrimaryContainer,
-                        fontWeight: 700,
-                        fontSize: "0.75rem",
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={1} justifyContent="flex-end">
-                      <M3Button
-                        emphasis="tonal"
-                        disabled={loading && triggeringId === device.deviceId}
-                        onClick={() => handleBackupNow(device, "standard")}
-                      >
-                        {loading && triggeringId === device.deviceId ? (
-                          <CircularProgress size={16} />
-                        ) : (
-                          "Backup Now"
-                        )}
-                      </M3Button>
-
-                      {device.vendor === "check_point" && (
-                        <M3Button
-                          emphasis="outlined"
-                          disabled={loading && triggeringId === device.deviceId}
-                          onClick={() => handleBackupNow(device, "snapshot")}
-                        >
-                          Snapshot Now
-                        </M3Button>
-                      )}
-
-                      <M3Button emphasis="text" onClick={() => void openHistory(device)}>
-                        History{baselines[device.deviceId] ? " ★" : ""}
-                      </M3Button>
-
-                      <M3Button emphasis="text" disabled={!device.artefactId} onClick={() => void openContents(device)}>
-                        Contents
-                      </M3Button>
-
-                      <M3Button emphasis="text" disabled={!device.artefactId} onClick={() => void openCompare(device)}>
-                        Compare
-                      </M3Button>
-
-                      <M3Button
-                        emphasis="text"
-                        disabled={!device.artefactId}
-                        onClick={() => {
-                          setExportError(null);
-                          setSelectedDeviceExport(device);
-                        }}
-                      >
-                        Download
-                      </M3Button>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {listLoaded && devices.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7}>
-                    <Typography variant="body2" sx={{ color: m3.onSurfaceVar, py: 2 }}>
-                      {listError
-                        ? "The backup store could not be read, so no fleet state is shown."
-                        : "No backup artefact has been recorded yet. Nothing here is inferred from inventory: a device appears once it has a stored backup."}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Box>
+      {/* One table per device (UI review 2026-09-23): target switch, latest archive, validation, deviation, every action. */}
+      <BackupFleetTable
+        version={targetsVersion}
+        onTargetChanged={() => setTargetsVersion((v) => v + 1)}
+        fleet={devices}
+        fleetLoaded={listLoaded}
+        fleetError={listError}
+        baselines={baselines}
+        busyDeviceId={loading ? triggeringId : null}
+        onBackupNow={(d, type) => void handleBackupNow(d, type)}
+        onHistory={(d) => void openHistory(d)}
+        onContents={(d) => void openContents(d)}
+        onCompare={(d) => void openCompare(d)}
+        onDownload={(d) => { setExportError(null); setSelectedDeviceExport(d); }}
+      />
 
       {/* Deviation Diff Modal */}
       {selectedDeviceDiff && (
@@ -737,7 +558,7 @@ export function BackupScreen() {
                   {compareHistory.map((a) => (
                     <option key={a.artefact_id} value={a.artefact_id}>
                       {baselines[selectedDeviceDiff.deviceId] === a.artefact_id ? "★ baseline · " : ""}
-                      {a.collected_at} · {formatBytes(a.size_bytes)} · {a.artefact_id.slice(0, 8)}
+                      <Ts at={a.collected_at} /> · {formatBytes(a.size_bytes)} · {a.artefact_id.slice(0, 8)}
                     </option>
                   ))}
                 </TextField>
@@ -758,8 +579,8 @@ export function BackupScreen() {
                     : `${compareResult.changed.length} changed · ${compareResult.added.length} added · ${compareResult.removed.length} removed · ${compareResult.unchanged} unchanged`}
                 </Typography>
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar, display: "block", mb: 1 }}>
-                  {compareResult.left.collected_at} ({formatBytes(compareResult.left.size_bytes)}) →{" "}
-                  {compareResult.right.collected_at} ({formatBytes(compareResult.right.size_bytes)})
+                  <Ts at={compareResult.left.collected_at} /> ({formatBytes(compareResult.left.size_bytes)}) →{" "}
+                  <Ts at={compareResult.right.collected_at} /> ({formatBytes(compareResult.right.size_bytes)})
                 </Typography>
                 {(
                   [
@@ -888,7 +709,7 @@ export function BackupScreen() {
             </Typography>
             <Typography variant="body2" sx={{ mb: 1.5, color: m3.onSurfaceVar }}>
               {selectedDeviceExport.vendor} · {formatBytes(selectedDeviceExport.sizeBytes)} · collected{" "}
-              {selectedDeviceExport.lastBackupTime}
+              <Ts at={selectedDeviceExport.lastBackupTime} />
             </Typography>
 
             <TextField
@@ -954,7 +775,7 @@ export function BackupScreen() {
                       const isBaseline = baselines[historyFor.deviceId] === a.artefact_id;
                       return (
                         <TableRow key={a.artefact_id} hover selected={isBaseline}>
-                          <TableCell sx={{ whiteSpace: "nowrap" }}>{new Date(a.collected_at).toLocaleString()}</TableCell>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}><Ts at={a.collected_at} /></TableCell>
                           <TableCell align="right">{formatBytes(a.size_bytes)}</TableCell>
                           <TableCell>{a.validation_level || "UNKNOWN"}</TableCell>
                           <TableCell>{a.deviation_state ? a.deviation_state.toUpperCase() : "NOT EVALUATED"}</TableCell>
@@ -1056,24 +877,51 @@ export function BackupScreen() {
 }
 
 
+/** The deviation word: CHANGED is a signal (attention), FIRST / UNCHANGED neutral, MAJOR a fault, NOT EVALUATED neutral. */
+function DeviationChip({ state }: { readonly state: string }) {
+  const tone = state === "MAJOR DEVIATION" ? "bad" : state === "CHANGED" ? "attn" : "neutral";
+  return <StatusChip tone={tone} label={state} dense />;
+}
+
+/** The validation level is an evidence grade on the V1-V4 ladder, not a pass mark: shown as recorded, neutral. */
+function ValidationChip({ level }: { readonly level: string }) {
+  return (
+    <Tooltip title={`Validation level ${level} as recorded on the V1–V4 ladder (evidence grade, not a pass mark)`}>
+      <Box component="span"><StatusChip tone="neutral" label={level} dense /></Box>
+    </Tooltip>
+  );
+}
+
+type Show = "all" | "targets" | "without_archive";
+
 /**
- * Backups > Backup targets (Product Owner, 2026-09-22): the devices the product is allowed to
- * back up -- singly or by "Run Fleet Backup" -- chosen here, never by hand in the database. Every
- * enrolled gateway is listed; the switch is an audited devices UPDATE.
+ * Backups (Product Owner, 2026-09-22; merged per the UI review 2026-09-23): the devices the product may back up and
+ * what the store holds for each, in one table. Every enrolled gateway is listed; the switch is an audited devices
+ * UPDATE; a device appears with its newest archive, or "No archive". Nothing is inferred from inventory: the archive
+ * columns come from the artefact store only. The five per-device actions (Backup Now, History, Contents, Compare,
+ * Download, plus Snapshot Now on Check Point) are all kept.
  */
-function BackupTargetsSection({ version, onChanged }: { readonly version: number; readonly onChanged: () => void }) {
+function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetError, baselines, busyDeviceId,
+  onBackupNow, onHistory, onContents, onCompare, onDownload }: {
+  readonly version: number;
+  readonly onTargetChanged: () => void;
+  readonly fleet: readonly BackupDeviceItem[];
+  readonly fleetLoaded: boolean;
+  readonly fleetError: string | null;
+  readonly baselines: Record<string, string>;
+  readonly busyDeviceId: string | null;
+  readonly onBackupNow: (d: BackupDeviceItem, type: "standard" | "snapshot") => void;
+  readonly onHistory: (d: BackupDeviceItem) => void;
+  readonly onContents: (d: BackupDeviceItem) => void;
+  readonly onCompare: (d: BackupDeviceItem) => void;
+  readonly onDownload: (d: BackupDeviceItem) => void;
+}) {
   const [devices, setDevices] = useState<DeviceSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [targetsOnly, setTargetsOnly] = useState(false);
-  // Overview link "backup targets without an archive": the targets with no stored backup archive.
-  const [withoutArchiveOnly, setWithoutArchiveOnly] = useState(() => urlParam("artefact") === "none");
-  const [archivedIds, setArchivedIds] = useState<ReadonlySet<string> | null>(null);
-  useEffect(() => {
-    if (!withoutArchiveOnly) return;
-    listFleetBackups().then((r) => setArchivedIds(new Set((r.backups ?? []).map((b) => b.device_id)))).catch(() => setArchivedIds(new Set()));
-  }, [withoutArchiveOnly]);
+  // `q` carries a filter from other screens (the cluster context strip); `artefact=none` from the Overview tile.
+  const [search, setSearch] = useState(() => urlParam("q") ?? "");
+  const [show, setShow] = useState<Show>(() => (urlParam("artefact") === "none" ? "without_archive" : "all"));
 
   useEffect(() => {
     let cancelled = false;
@@ -1084,12 +932,8 @@ function BackupTargetsSection({ version, onChanged }: { readonly version: number
           setError(null);
         }
       })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Devices could not be read.");
-      });
-    return () => {
-      cancelled = true;
-    };
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Devices could not be read."); });
+    return () => { cancelled = true; };
   }, [version]);
 
   const toggle = async (device: DeviceSummary, enabled: boolean) => {
@@ -1097,7 +941,7 @@ function BackupTargetsSection({ version, onChanged }: { readonly version: number
     try {
       await setBackupTarget(device.device_id, enabled);
       setDevices((prev) => prev?.map((d) => (d.device_id === device.device_id ? { ...d, backup_target: enabled } : d)) ?? prev);
-      onChanged();
+      onTargetChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "The backup target could not be changed.");
     } finally {
@@ -1105,73 +949,126 @@ function BackupTargetsSection({ version, onChanged }: { readonly version: number
     }
   };
 
-  const targetCount = devices?.filter((d) => d.backup_target).length ?? 0;
-  const shown = (devices ?? []).filter((d) => {
-    if (targetsOnly && !d.backup_target) return false;
-    if (withoutArchiveOnly && (!d.backup_target || archivedIds === null || archivedIds.has(d.device_id))) return false;
-    const q = search.trim().toLowerCase();
+  const byId = new Map(fleet.map((f) => [f.deviceId, f] as const));
+  // Every enrolled gateway, plus any device the store holds an archive for that is not in that list.
+  const summaries = devices ?? [];
+  const known = new Set(summaries.map((d) => d.device_id));
+  const rows: Array<{ summary: DeviceSummary | null; item: BackupDeviceItem | null; id: string }> = [
+    ...summaries.map((d) => ({ summary: d, item: byId.get(d.device_id) ?? null, id: d.device_id })),
+    ...fleet.filter((f) => !known.has(f.deviceId)).map((f) => ({ summary: null, item: f, id: f.deviceId })),
+  ];
+  const targetCount = summaries.filter((d) => d.backup_target).length;
+  const withoutArchive = summaries.filter((d) => d.backup_target && !byId.has(d.device_id)).length;
+  const q = search.trim().toLowerCase();
+  const shown = rows.filter(({ summary, item }) => {
+    if (show === "targets" && !summary?.backup_target) return false;
+    if (show === "without_archive" && (!summary?.backup_target || item !== null)) return false;
     if (!q) return true;
-    return (d.hostname ?? "").toLowerCase().includes(q) || (d.model ?? "").toLowerCase().includes(q) || d.device_id.toLowerCase().includes(q);
-  });
+    return [summary?.hostname, summary?.model, summary?.cluster_member_ref, summary?.software_version, item?.name, summary?.device_id ?? item?.deviceId]
+      .some((f) => (f ?? "").toLowerCase().includes(q));
+  }).sort((a, b) => (a.summary?.hostname ?? a.item?.name ?? "").localeCompare(b.summary?.hostname ?? b.item?.name ?? ""));
+
+  const chip = (value: Show, label: string, count: number) => (
+    <Chip key={value} clickable size="small" label={`${label} · ${count}`} onClick={() => setShow(value)}
+      sx={{ bgcolor: show === value ? m3.primaryContainer : m3.scLow, color: show === value ? m3.onPrimaryContainer : m3.onSurface,
+            fontWeight: show === value ? 600 : 400, border: `1px solid ${m3.outlineVar}` }} />
+  );
 
   return (
-    <Card sx={{ p: 2.5, borderRadius: "16px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, boxShadow: "none" }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1.5, mb: 1.5 }}>
+    <Card sx={{ borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, boxShadow: "none", overflow: "hidden" }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1.5, p: 2, pb: 1.5 }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 700, color: m3.onSurface }}>
-            Backup targets · {targetCount}
-          </Typography>
+          <Typography sx={{ fontSize: 16, fontWeight: 600, color: m3.onSurface }}>Backup fleet · {targetCount} targets</Typography>
           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-            Only devices switched on here are ever backed up. Enrolled gateways are listed; each change is audited.
+            Only devices switched on as a backup target are ever backed up; each change is audited. Archive columns come from the artefact store.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <TextField size="small" placeholder="Filter devices…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          {withoutArchiveOnly && (
-            <M3Button emphasis="filled" onClick={() => setWithoutArchiveOnly(false)}>✓ Without an archive (from Overview) · clear</M3Button>
-          )}
-          <M3Button emphasis={targetsOnly ? "filled" : "outlined"} onClick={() => setTargetsOnly(!targetsOnly)}>
-            {targetsOnly ? "✓ Targets only" : "All enrolled"}
-          </M3Button>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
+          <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Show:</Typography>
+          {chip("all", "All enrolled", summaries.length)}
+          {chip("targets", "Targets", targetCount)}
+          {chip("without_archive", "Targets without archive", withoutArchive)}
+          <TextField size="small" placeholder="Filter devices, clusters, models…" value={search} onChange={(e) => setSearch(e.target.value)}
+            inputProps={{ "aria-label": "Filter the backup fleet" }} />
         </Stack>
       </Box>
-      {error && <Alert severity="warning" sx={{ mb: 1.5 }}>{error}</Alert>}
-      {devices === null ? (
-        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Loading devices…</Typography>
+      {(error || fleetError) && <Alert severity="warning" sx={{ mx: 2, mb: 1.5 }}>{error ?? fleetError}</Alert>}
+      {devices === null && !error ? (
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar, px: 2, pb: 2 }}>Reading the devices…</Typography>
       ) : shown.length === 0 ? (
-        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-          {devices.length === 0 ? "No enrolled gateway to choose from yet." : "No device matches the filter."}
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar, px: 2, pb: 2 }}>
+          {rows.length === 0
+            ? (fleetLoaded ? "No enrolled gateway and no stored archive yet. Nothing here is inferred from inventory." : "Reading the store…")
+            : "No device matches the filter."}
         </Typography>
       ) : (
-        <TableContainer sx={{ maxHeight: 360 }}>
+        <TableContainer sx={{ maxHeight: 640 }}>
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Device</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Vendor</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Model · Version</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Cluster</TableCell>
-                <TableCell sx={{ fontWeight: 600 }} align="right">Backup target</TableCell>
+                <TableCell>Device</TableCell>
+                <TableCell>Model · version</TableCell>
+                <TableCell>Cluster</TableCell>
+                <TableCell align="center">Target</TableCell>
+                <TableCell>Latest archive</TableCell>
+                <TableCell align="right">Size</TableCell>
+                <TableCell>Validation</TableCell>
+                <TableCell>Deviation</TableCell>
+                <TableCell align="right" sx={{ width: 470 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {shown.map((d) => (
-                <TableRow key={d.device_id} hover>
-                  <TableCell sx={{ fontWeight: 600 }}>{d.hostname ?? d.device_id}</TableCell>
-                  <TableCell>{d.vendor_hint === "palo_alto" ? "Palo Alto" : "Check Point"}</TableCell>
-                  <TableCell sx={{ color: m3.onSurfaceVar }}>{d.model ?? "—"}{d.software_version ? ` · ${d.software_version}` : ""}</TableCell>
-                  <TableCell sx={{ color: m3.onSurfaceVar }}>{d.cluster_member_ref ?? "—"}</TableCell>
-                  <TableCell align="right">
-                    <Switch
-                      size="small"
-                      checked={Boolean(d.backup_target)}
-                      disabled={busyId === d.device_id}
-                      onChange={(e) => void toggle(d, e.target.checked)}
-                      inputProps={{ "aria-label": `Backup target ${d.hostname ?? d.device_id}` }}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
+              {shown.map(({ summary, item, id }) => {
+                const name = summary?.hostname ?? item?.name ?? id.slice(0, 8);
+                const vendor = summary?.vendor_hint ?? item?.vendor;
+                const busy = busyDeviceId === id;
+                return (
+                  <TableRow key={id} hover>
+                    <TableCell>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <VendorBadge vendor={vendor} size={24} />
+                        <Typography sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600 }}>{name}</Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 12.5 }}>
+                      {summary ? `${summary.model ?? "UNKNOWN"}${summary.software_version ? ` · ${summary.software_version}` : ""}` : "UNKNOWN"}
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: MONO, fontSize: 12, color: m3.onSurfaceVar }}>{summary?.cluster_member_ref ?? "standalone"}</TableCell>
+                    <TableCell align="center">
+                      {summary ? (
+                        <Switch size="small" checked={Boolean(summary.backup_target)} disabled={busyId === id}
+                          onChange={(e) => void toggle(summary, e.target.checked)}
+                          inputProps={{ "aria-label": `Backup target ${name}` }} />
+                      ) : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>not enrolled</Typography>}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: 12.5 }}>
+                      {item ? <Ts at={item.lastBackupTime} relative />
+                        : summary?.backup_target ? <StatusChip tone="warn" label="No archive" dense />
+                        : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>No archive</Typography>}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12.5 }}>{item ? formatBytes(item.sizeBytes) : ""}</TableCell>
+                    <TableCell>{item ? <ValidationChip level={item.validationLevel} /> : null}</TableCell>
+                    <TableCell>{item ? <DeviationChip state={item.deviationState} /> : null}</TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={0.25} justifyContent="flex-end" alignItems="center" sx={{ whiteSpace: "nowrap" }}>
+                        {item || summary?.backup_target ? (
+                          <M3Button emphasis="tonal" disabled={busy || !summary?.backup_target}
+                            onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "standard")}>
+                            {busy ? <CircularProgress size={14} /> : "Backup Now"}
+                          </M3Button>
+                        ) : null}
+                        {vendor === "check_point" && item ? (
+                          <M3Button emphasis="text" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</M3Button>
+                        ) : null}
+                        <M3Button emphasis="text" disabled={!item} onClick={() => item && onHistory(item)}>History{baselines[id] ? " ★" : ""}</M3Button>
+                        <M3Button emphasis="text" disabled={!item?.artefactId} onClick={() => item && onContents(item)}>Contents</M3Button>
+                        <M3Button emphasis="text" disabled={!item?.artefactId} onClick={() => item && onCompare(item)}>Compare</M3Button>
+                        <M3Button emphasis="text" disabled={!item?.artefactId} onClick={() => item && onDownload(item)}>Download</M3Button>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
