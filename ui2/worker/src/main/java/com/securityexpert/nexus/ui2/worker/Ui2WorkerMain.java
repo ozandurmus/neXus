@@ -291,6 +291,34 @@ public final class Ui2WorkerMain {
                         .log(System.Logger.Level.WARNING, "Periodic job reconciliation error: " + t.getMessage(), t);
             }
         }, 10, 30, java.util.concurrent.TimeUnit.SECONDS);
+
+        // V44: retention pruning against the operator's policy row, hourly. Until now the executor was
+        // composed with a null pruning service, so the 14-day horizon the screen showed never ran.
+        com.securityexpert.nexus.ui2.persistence.artefact.BackupPolicyRepository backupPolicyRepository =
+                new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupPolicyRepository(transactionBoundary);
+        com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService pruningService =
+                new com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService(
+                        new com.securityexpert.nexus.ui2.worker.backup.retention.JooqRetentionStorePort(
+                                new com.securityexpert.nexus.ui2.persistence.artefact.JooqRetentionQueries(transactionBoundary),
+                                artefactStoreRoot));
+        reconcilerExecutor.scheduleWithFixedDelay(() -> {
+            try {
+                backupPolicyRepository.find().ifPresent(policy -> {
+                    var summary = pruningService.prune(
+                            new com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService.PruningPolicy(
+                                    policy.backupRetentionDays(), policy.snapshotRetentionDepth()));
+                    if (summary.backupsPruned() > 0 || summary.snapshotsPruned() > 0) {
+                        System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
+                                "[RETENTION] pruned backups=" + summary.backupsPruned() + " snapshots=" + summary.snapshotsPruned()
+                                        + " bytes=" + summary.bytesReclaimed() + " (retention " + policy.backupRetentionDays()
+                                        + " d, depth " + policy.snapshotRetentionDepth() + ")");
+                    }
+                });
+            } catch (Throwable t) {
+                System.getLogger(Ui2WorkerMain.class.getName())
+                        .log(System.Logger.Level.WARNING, "Retention pruning error: " + t.getMessage(), t);
+            }
+        }, 120, 3600, java.util.concurrent.TimeUnit.SECONDS);
     }
 
     private static String requireEnv(String name) {

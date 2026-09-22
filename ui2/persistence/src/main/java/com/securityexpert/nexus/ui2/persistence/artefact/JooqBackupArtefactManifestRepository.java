@@ -58,7 +58,7 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
     @Override
     public Optional<PlaintextDigestSummary> findLatestPlaintextDigest(String deviceId, String artefactClass) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetchOptional(
-                "select artefact_id, plaintext_sha256 from backup_artefact where device_id = {0} "
+                "select artefact_id, plaintext_sha256 from backup_artefact where not exists (select 1 from artefact_retention_ledger l where l.artefact_id = backup_artefact.artefact_id and l.event = 'removed') and device_id = {0} "
                         + "and artefact_class = {1} order by created_at desc limit 1",
                 deviceId, artefactClass)
                 .map(row -> new PlaintextDigestSummary(row.get("artefact_id", String.class),
@@ -70,7 +70,7 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 "select artefact_id, device_id, created_at, plaintext_bytes, plaintext_sha256, "
                         + "validation->>'level_reached' as validation_level, deviation_state, vendor, artefact_class "
-                        + "from backup_artefact where device_id = {0} and artefact_class = {1} "
+                        + "from backup_artefact where not exists (select 1 from artefact_retention_ledger l where l.artefact_id = backup_artefact.artefact_id and l.event = 'removed') and device_id = {0} and artefact_class = {1} "
                         + "order by created_at desc",
                 deviceId, artefactClass)
                 .stream().map(JooqBackupArtefactManifestRepository::toSummary).toList());
@@ -81,7 +81,7 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
         return transactionBoundary.inTransaction(dsl -> dsl.fetchOptional(
                 "select artefact_id, device_id, created_at, plaintext_bytes, plaintext_sha256, "
                         + "validation->>'level_reached' as validation_level, deviation_state, vendor, artefact_class "
-                        + "from backup_artefact where artefact_id = {0}",
+                        + "from backup_artefact where not exists (select 1 from artefact_retention_ledger l where l.artefact_id = backup_artefact.artefact_id and l.event = 'removed') and artefact_id = {0}",
                 artefactId)
                 .map(JooqBackupArtefactManifestRepository::toSummary));
     }
@@ -91,7 +91,7 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 "select artefact_id, device_id, created_at, plaintext_bytes, plaintext_sha256, "
                         + "validation->>'level_reached' as validation_level, deviation_state, vendor, artefact_class "
-                        + "from backup_artefact where artefact_class = {0} order by created_at desc",
+                        + "from backup_artefact where not exists (select 1 from artefact_retention_ledger l where l.artefact_id = backup_artefact.artefact_id and l.event = 'removed') and artefact_class = {0} order by created_at desc",
                 artefactClass)
                 .stream().map(JooqBackupArtefactManifestRepository::toSummary).toList());
     }
@@ -99,7 +99,7 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
     @Override
     public Optional<RetrievalManifest> findForRetrieval(String artefactId) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetchOptional(
-                "select artefact_id, recovery_volume_path, wrapped_data_key from backup_artefact where artefact_id = {0}", artefactId)
+                "select artefact_id, recovery_volume_path, wrapped_data_key from backup_artefact where not exists (select 1 from artefact_retention_ledger l where l.artefact_id = backup_artefact.artefact_id and l.event = 'removed') and artefact_id = {0}", artefactId)
                 .map(row -> new RetrievalManifest(row.get("artefact_id", String.class),
                         row.get("recovery_volume_path", String.class),
                         row.get("wrapped_data_key", byte[].class))));
