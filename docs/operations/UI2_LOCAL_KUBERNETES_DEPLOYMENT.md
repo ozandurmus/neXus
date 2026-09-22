@@ -165,6 +165,31 @@ the DSN is assembled inside the process (contract SEC-4, and the `C1` §6
 secret-file rule the service implements — a missing, unreadable or empty
 file stops start-up rather than falling back).
 
+## 5c. Supply the AIView pseudonymizer key (2026-09-23)
+
+The `aiview` persona sees pseudonyms (`FW-TANGO-04`, `CLS-ROMEO-01`) computed under an HMAC key and
+claimed once in `pseudonym_registry` (V53). The key must survive pod restarts or every pseudonym moves on
+each deploy. `deploy/ui2/25-secret-privacy-hmac-key.yaml` carries the Secret's name and no value; the
+service reads the mounted file named by `UI2_PRIVACY_HMAC_KEY_FILE` and refuses to start if that file is
+missing, unreadable or shorter than 32 bytes. Created once, only when absent:
+
+```sh
+kubectl -n ui2 get secret ui2-privacy-hmac-key -o jsonpath='{.data.key}' | grep -q . || {
+d="$(mktemp -d)"
+( umask 077
+  openssl rand -base64 32 | tr -d '\n' > "$d/key"
+  kubectl -n ui2 apply -f deploy/ui2/25-secret-privacy-hmac-key.yaml
+  kubectl -n ui2 create secret generic ui2-privacy-hmac-key \
+    --from-file=key="$d/key" \
+    --dry-run=client -o json > "$d/patch.json"
+  kubectl -n ui2 patch secret ui2-privacy-hmac-key --type=merge --patch-file "$d/patch.json" )
+rm -rf "$d"; }
+```
+
+Rotating this key re-assigns every pseudonym: V54 cleared the registry once, when the durable key was
+introduced; a later rotation needs the same clearing (`delete from pseudonym_registry`, as the migration
+role) and a note to the Product Owner that the names changed.
+
 ## 5a. Supply the configuration-artefact-store key (NXS-LOCAL-0165)
 
 Configuration collection's raw copy (Check Point `show configuration`, Palo

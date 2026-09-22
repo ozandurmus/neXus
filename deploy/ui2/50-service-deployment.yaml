@@ -119,6 +119,10 @@ spec:
               value: /run/secrets/ui2-artefact-store/key
             - name: UI2_ARTEFACT_STORE_ROOT
               value: /app/artefact-store
+            # The AIView pseudonymizer's key (25-secret-privacy-hmac-key.yaml):
+            # durable, so a pseudonym never moves across pod restarts.
+            - name: UI2_PRIVACY_HMAC_KEY_FILE
+              value: /run/secrets/ui2-privacy-hmac/key
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
@@ -178,6 +182,9 @@ spec:
             - name: artefact-store-key
               mountPath: /run/secrets/ui2-artefact-store
               readOnly: true
+            - name: privacy-hmac-key
+              mountPath: /run/secrets/ui2-privacy-hmac
+              readOnly: true
             - name: artefact-store
               mountPath: /app/artefact-store
               readOnly: true
@@ -201,6 +208,10 @@ spec:
         - name: artefact-store-key
           secret:
             secretName: ui2-artefact-store-key
+            defaultMode: 0440
+        - name: privacy-hmac-key
+          secret:
+            secretName: ui2-privacy-hmac-key
             defaultMode: 0440
         # RWO on a single-node local-path cluster: both pods schedule on the
         # same node, so the worker's claim can be mounted here read-only.

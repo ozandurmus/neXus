@@ -37,6 +37,10 @@ public class HmacKeyProvider {
     }
 
     private static byte[] resolveKey() {
+        String keyFile = System.getenv("UI2_PRIVACY_HMAC_KEY_FILE");
+        if (keyFile != null && !keyFile.isBlank()) {
+            return readKeyFile(Path.of(keyFile.trim()));
+        }
         String envKey = System.getenv("NEXUS_PRIVACY_HMAC_KEY");
         if (envKey != null && !envKey.isBlank()) {
             try {
@@ -67,5 +71,33 @@ public class HmacKeyProvider {
             new SecureRandom().nextBytes(ephemeral);
             return ephemeral;
         }
+    }
+
+    /**
+     * The deployed key (25-secret-privacy-hmac-key.yaml, mounted read-only): base64 text or raw bytes, at least
+     * 32 bytes. Named but missing, unreadable or short stops start-up (C1 §6 secret-file rule): a random fallback
+     * would re-key every pseudonym on each restart, which is the defect this file exists to prevent.
+     */
+    static byte[] readKeyFile(Path path) {
+        byte[] raw;
+        try {
+            raw = Files.readAllBytes(path);
+        } catch (IOException e) {
+            throw new IllegalStateException("privacy HMAC key file named by UI2_PRIVACY_HMAC_KEY_FILE is unreadable", e);
+        }
+        String text = new String(raw, java.nio.charset.StandardCharsets.US_ASCII).strip();
+        byte[] key = raw;
+        if (text.matches("[A-Za-z0-9+/=]+")) {
+            try {
+                key = Base64.getDecoder().decode(text);
+            } catch (IllegalArgumentException ignored) {
+                key = raw;
+            }
+        }
+        if (key.length < KEY_LENGTH_BYTES) {
+            throw new IllegalStateException("privacy HMAC key file named by UI2_PRIVACY_HMAC_KEY_FILE holds fewer than "
+                    + KEY_LENGTH_BYTES + " bytes");
+        }
+        return key;
     }
 }
