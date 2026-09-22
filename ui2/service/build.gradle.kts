@@ -39,6 +39,8 @@ dependencies {
     // this adds no class-level dependency edge for Ui2ArchitectureTest's
     // dir2 to catch, and dir2 stays unedited.
     runtimeOnly(project(":worker"))
+    // cli_parity_for_every_ui_action: the CLI rides in the same boot jar (`cli` launcher role).
+    runtimeOnly(project(":cli"))
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.spring.boot.starter.test)

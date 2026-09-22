@@ -1230,6 +1230,15 @@
       "priority": "P0",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "cli_parity_for_every_ui_action",
+      "category": "ui2",
+      "title": "Every UI action has a CLI counterpart (the product must not be UI-bound)",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "PO directive 2026-09-22; ui2/cli CliEntryPoint is the seed",
+      "note": ""
     }
   ]
 }

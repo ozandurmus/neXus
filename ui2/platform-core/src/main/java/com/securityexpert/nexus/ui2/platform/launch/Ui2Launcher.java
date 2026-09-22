@@ -29,7 +29,9 @@ public final class Ui2Launcher {
 
     static final Map<String, String> MAIN_CLASS_BY_ROLE = Map.of(
             "service", "com.securityexpert.nexus.ui2.service.boot.Ui2Application",
-            "worker", "com.securityexpert.nexus.ui2.worker.Ui2WorkerMain");
+            "worker", "com.securityexpert.nexus.ui2.worker.Ui2WorkerMain",
+            // cli_parity_for_every_ui_action: `java -jar service.jar cli <command>` in the shipped image.
+            "cli", "com.securityexpert.nexus.ui2.cli.CliEntryPoint");
 
     private Ui2Launcher() {
     }

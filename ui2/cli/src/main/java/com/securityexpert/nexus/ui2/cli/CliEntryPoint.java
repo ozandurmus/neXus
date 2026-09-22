@@ -63,12 +63,26 @@ public final class CliEntryPoint {
             case "role-bind-create" -> roleBindCreate(args);
             case "role-bind-revoke" -> roleBindRevoke(args);
             case "backup-retrieve" -> backupRetrieve(args);
-            default -> System.out.println("known job states: " + java.util.Arrays.toString(JobState.values()));
+            default -> {
+                int exit = new NexusSessionCli(NexusSessionCli.defaultHome()).run(args);
+                if (exit < 0) {
+                    System.err.println("unknown command: " + args[0]);
+                    printUsage();
+                    System.out.println("known job states: " + java.util.Arrays.toString(JobState.values()));
+                    exit = 2;
+                }
+                if (exit != 0) {
+                    System.exit(exit);
+                }
+            }
         }
     }
 
     private static void printUsage() {
         System.out.println("usage: cli <command>");
+        System.out.println("session commands (the screen's buttons, over the same routes and role gates):");
+        NexusSessionCli.printUsage();
+        System.out.println("bootstrap and store commands (direct database access, deployment-time):");
         System.out.println("  bootstrap-security-admin <jdbcUrl> <migrateUser> <migratePasswordFile> "
                 + "<groupReferenceDn> <groupReferenceKeyBase64> <groupReferenceKeyId>");
         System.out.println("  bootstrap-local-identity <jdbcUrl> <migrateUser> <migratePasswordFile> "

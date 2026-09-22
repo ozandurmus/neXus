@@ -86,6 +86,10 @@ RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
  && rm -rf /tmp/corp-ca
 
 COPY --from=build /build/service-boot.jar /app/service.jar
+# nexus-cli: the screen's actions from a shell inside the pod (cli_parity_for_every_ui_action).
+#   kubectl -n ui2 exec -it deploy/ui2-service -- /app/nexus-cli login http://localhost:8080 <user>
+RUN printf '#!/bin/sh\nexec java -Djava.io.tmpdir=/app/tmp -Duser.home=/app/home -jar /app/service.jar cli "$@"\n' > /app/nexus-cli \
+ && chmod 0755 /app/nexus-cli
 COPY project/roadmap.json project/feature_registry.json project/backlog.json project/build_history.json project/java_product_plan.json project/deploy_info.json /app/project/
 COPY project/archive/backlog_terminal.json project/archive/build_history_*.json /app/project/archive/
 
