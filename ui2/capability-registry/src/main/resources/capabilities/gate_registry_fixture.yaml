@@ -184,14 +184,14 @@ gates:
     platform_role_scope: cp_gaia_gateway
     shell_context: expert
     transport_kind: SSH_EXEC
-    canonical_command_key: "cpinfo -y all"
+    canonical_command_key: "bash -lc 'cpinfo -y all'"
     action_class: read
     sign_off_state: SIGNED_OFF
     timeout_s: 60
     retry_rule: none
     max_frequency: "once per device per run"
     session_reuse_rule: "the inventory session"
-    unsupported_behavior_ref: "a device with no jumbo line reports no hotfix level, which is a result, not an error"
+    unsupported_behavior_ref: "a device with no jumbo line reports no hotfix level, which is a result, not an error; over the bare exec channel cpinfo is not on PATH (exit 0, empty), hence the login shell"
     secret_output_risk: none
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md §3 -- measured 2026-09-22"

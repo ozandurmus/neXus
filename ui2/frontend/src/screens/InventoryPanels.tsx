@@ -1499,6 +1499,7 @@ export function InventoryEntityHeader({
               <Typography variant="h5" sx={{ fontWeight: 700, color: m3.onSurface }}>
                 {titlePrefix ? `${titlePrefix} ` : ""}{title}
               </Typography>
+              {reference && (
               <Typography
                 variant="caption"
                 sx={{
@@ -1515,6 +1516,7 @@ export function InventoryEntityHeader({
               >
                 {reference}
               </Typography>
+              )}
               {chips}
             </Box>
           </Box>

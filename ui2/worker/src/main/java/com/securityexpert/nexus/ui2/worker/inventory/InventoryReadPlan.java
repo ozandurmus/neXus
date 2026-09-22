@@ -78,7 +78,9 @@ public final class InventoryReadPlan {
     public static final String CP_CPHAPROB_CLUSTER_IF = "cphaprob -a if";
     public static final String CP_VSX_STAT = "vsx stat -v";
     /** Platform identity facts (PLATFORM_IDENTITY_FACTS_CONTRACT §3), bare Expert reads, never vsenv-wrapped. */
-    public static final String CP_CPINFO_HOTFIXES = "cpinfo -y all";
+    /** A login shell: over the bare exec channel cpinfo is not on PATH (the Check Point environment is sourced by the
+     *  login profile) and the command answered exit 0 with no output on every gateway (measured live 2026-09-22). */
+    public static final String CP_CPINFO_HOTFIXES = "bash -lc 'cpinfo -y all'";
     public static final String CP_UPTIME = "uptime";
     public static final String CP_SHOW_ASSET_SYSTEM = "clish -c 'show asset system'";
 

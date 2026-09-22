@@ -24,6 +24,15 @@ has no enabled product path.
 
 ## Active build
 
+`NXS-LOCAL-0366` — `automated_validated` (2026-09-22, deployed on HOST-A):
+the day's four builds — backup download with RBAC, archive listing and
+compare, jobs screen and nexus-cli (`NXS-LOCAL-0363`); Configuration screen
+rebuilt with the cluster DIFF view (`0364`); platform identity facts —
+serial, version, hotfix, content versions, uptime (`0365`); automation,
+Script Execution and scheduled device-write decisions plus vendor contracts
+(`0366`). NEXT: `script_execution_module` slice 1. Records in
+`project/build_history.json`, detail under `docs/history/builds/`.
+
 `NXS-LOCAL-0347` — `in_progress`: real-environment validation, under the
 `aiview` persona, of the Palo Alto HA cluster presentation that
 `NXS-LOCAL-0346` was graded on but never received, plus the delivery-grade

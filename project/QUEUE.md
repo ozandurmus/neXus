@@ -1,10 +1,10 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T18:28:53Z
+Build: NXS-LOCAL-0366 · Track: PCP.x · Generated: 2026-09-22T19:10:49Z
 
 ## Now
-- NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
+- NXS-LOCAL-0366 — Automation editor, Script Execution and scheduled device-write decisions; vendor and test contracts (automated_validated)
 ## Next
-- M12 — M12 -- per-device / per-capability schedules (D5 producer) (planned)
+- script_execution_module — Script Execution module (own pod) -- slice 1: script record, versioning, secret scan, routes, CLI (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a c (target: PanXmlApiTransport certificate verificat)
@@ -84,6 +84,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T18:28:53Z
 - P2/planned failover_phase_d_has_no_build_record
 - P2/planned gov_orch_turn_counter_blind_to_codex_stream
 - P2/planned java_product_plan_build_selection_is_stale
+- P2/planned operations_readiness_panel_ignores_enrolled_clusters
 - P2/planned orchestrator_worktree_lacks_frontend_dependencies
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
@@ -142,8 +143,8 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T18:28:53Z
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
+- NXS-LOCAL-0366 (automated_validated)
+- NXS-LOCAL-0365 (automated_validated)
+- NXS-LOCAL-0364 (automated_validated)
+- NXS-LOCAL-0363 (automated_validated)
 - NXS-LOCAL-0346 (automated_validated)
-- NXS-LOCAL-0345 (blocked)
-- NXS-LOCAL-0344 (blocked)
-- NXS-LOCAL-0343 (automated_validated)
-- NXS-LOCAL-0342 (automated_validated)

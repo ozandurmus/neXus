@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0346",
+  "current_build": "NXS-LOCAL-0366",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,18 +150,36 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0346",
-      "title": "Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence",
+      "build": "NXS-LOCAL-0366",
+      "title": "Automation editor, Script Execution and scheduled device-write decisions; vendor and test contracts",
       "status": "automated_validated",
-      "completed": "2026-09-20"
+      "completed": "2026-09-22"
     },
     "next": {
-      "build": "M12",
-      "title": "M12 -- per-device / per-capability schedules (D5 producer)",
+      "build": "script_execution_module",
+      "title": "Script Execution module (own pod) -- slice 1: script record, versioning, secret scan, routes, CLI",
       "status": "planned",
-      "detail": "docs/history/roadmap/now_next_M12.md"
+      "detail": "docs/design/SCRIPT_EXECUTION_CONTRACT.md"
     },
     "upcoming": [
+      {
+        "build": "task_executor_automation_module",
+        "title": "Automation: in-product step editor over gated commands (Operations)",
+        "status": "planned",
+        "detail": "docs/design/TASK_EXECUTOR_AUTOMATION_CONTRACT.md"
+      },
+      {
+        "build": "module_per_pod_split",
+        "title": "Every module its own pod (backup, compliance, automation, script execution, operations, configuration, inventory)",
+        "status": "planned",
+        "detail": "docs/history/backlog/module_per_pod_split.md"
+      },
+      {
+        "build": "vendor_backup_block",
+        "title": "Eight vendor backups: generic HTTPS client, onboarding, Radware, Pulse, Panorama, Infoblox, FortiGate, ASA, Provider-1/MDS, ProxySG (measure first)",
+        "status": "planned",
+        "detail": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md"
+      },
       {
         "build": "ui2_b0_c7_backup_artefact_restore_engine_contract",
         "title": "UI2 B0/C7 -- backup, artefact and restore engine contract (DRAFT, for Product Owner freeze)",

@@ -819,6 +819,15 @@
       "priority": "P1",
       "target": "Contract docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md. PAN: parse-scope extension of the already-gated show system info (serial, sw-version, app/threat/av/wildfire/url versions, uptime, family). CP: new gate rows needed (show asset system for serial; jumbo take), PO sign-off before real-device use. Serial shown in the clear per PO; masked for the aiview persona.",
       "note": ""
+    },
+    {
+      "id": "operations_readiness_panel_ignores_enrolled_clusters",
+      "category": "ui2",
+      "title": "Operations › HA & readiness says 'No HA pair or cluster enrolled' while 38 clusters exist (seen in the aiview tour 2026-09-22); the readiness panel reads a different source than the inventory clusters",
+      "status": "planned",
+      "priority": "P2",
+      "target": "Point the readiness panel at the inventory's cluster list or state plainly what it needs",
+      "note": ""
     }
   ]
 }

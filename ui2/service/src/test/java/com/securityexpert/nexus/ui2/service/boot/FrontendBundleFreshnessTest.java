@@ -41,6 +41,20 @@ class FrontendBundleFreshnessTest {
         // "/"), while the same file is packaged under the "static/" classpath
         // prefix Spring Boot's static-resource handler expects.
         String bundledScript = readClasspathResource("/static" + scriptSrc);
+        // Every product screen is a lazy chunk the entry script imports by name; the marker lives in one of them.
+        StringBuilder allScripts = new StringBuilder(bundledScript);
+        var chunk = java.util.regex.Pattern.compile("\\./([A-Za-z0-9_]+-[A-Za-z0-9_-]+\\.js)").matcher(bundledScript);
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        while (chunk.find()) {
+            if (seen.add(chunk.group(1))) {
+                try (InputStream in = FrontendBundleFreshnessTest.class.getResourceAsStream("/static/assets/" + chunk.group(1))) {
+                    if (in != null) {
+                        allScripts.append(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+                    }
+                }
+            }
+        }
+        bundledScript = allScripts.toString();
         assertTrue(
                 bundledScript.contains(MARKER_PRESENT_ONLY_IN_CURRENT_SOURCE),
                 "the packaged frontend script does not carry '" + MARKER_PRESENT_ONLY_IN_CURRENT_SOURCE

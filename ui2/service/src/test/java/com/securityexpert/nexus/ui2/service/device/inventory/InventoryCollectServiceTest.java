@@ -181,7 +181,7 @@ class InventoryCollectServiceTest {
     @Test
     void aManagementServerIsRefusedNamingTheMissingGate() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
-        devices.byId.put("device-1", enrolledManagementServer("device-1", "check_point"));
+        devices.byId.put("device-1", enrolledManagementServer("device-1", "palo_alto"));
         InventoryCollectService service = serviceFor(devices);
 
         InventoryCollectService.Outcome outcome = service.requestCollect("device-1", "actor", Optional.empty());
@@ -190,6 +190,18 @@ class InventoryCollectServiceTest {
         InventoryCollectService.Outcome.AdmissionRefused refused = (InventoryCollectService.Outcome.AdmissionRefused) outcome;
         assertEquals("MANAGEMENT_SERVER_UNGATED", refused.code());
         assertTrue(refused.reason().contains("14I MS-2"), "the reason must name the missing gate");
+    }
+
+    @Test
+    void aCheckPointManagementServerIsAdmittedOnTheGaiaReadSet() {
+        // PO 2026-09-22: an SMS / MDS is a Gaia host; the gateway path's gated Expert reads apply.
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("device-1", enrolledManagementServer("device-1", "check_point"));
+        InventoryCollectService service = serviceFor(devices);
+
+        InventoryCollectService.Outcome outcome = service.requestCollect("device-1", "actor", Optional.empty());
+
+        assertTrue(outcome instanceof InventoryCollectService.Outcome.Admitted, "expected Admitted, got " + outcome);
     }
 
     @Test

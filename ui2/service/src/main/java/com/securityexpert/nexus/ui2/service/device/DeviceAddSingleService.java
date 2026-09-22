@@ -171,6 +171,11 @@ public final class DeviceAddSingleService {
             String credentialReferenceId, VendorMapping mapping, String registrationSource,
             Optional<String> clusterMemberRef, Optional<String> virtualSystemRef, Optional<String> discoveryMatchKey,
             String actionId) {
+        // PO rule (2026-09-22): never a duplicate entry -- one address, one device.
+        Optional.ofNullable(deviceRepository).flatMap(repository -> repository.findDeviceIdByEndpointAddress(address)).ifPresent(existing -> {
+            throw new AdmissionRefusedSignal("DUPLICATE_ADDRESS",
+                    "a device already exists at this address (device " + existing + "); delete it first if it must be re-added");
+        });
         DeviceRegistrationService.Outcome registration = deviceRegistrationService.register(actorFingerprint, role, vendor,
                 mapping.transportKind(), address, credentialReferenceId, false, registrationSource, clusterMemberRef,
                 virtualSystemRef, discoveryMatchKey, actionId);

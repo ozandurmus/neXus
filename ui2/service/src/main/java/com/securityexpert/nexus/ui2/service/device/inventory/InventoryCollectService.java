@@ -70,12 +70,18 @@ public final class InventoryCollectService {
         }
         String role = device.get().role();
         if (!"gateway".equals(role)) {
-            if ("management_server".equals(role)) {
+            // PO 2026-09-22: a Check Point management server (SMS / MDS) is a Gaia host -- its interfaces,
+            // routes and platform identity come from the same Expert reads the gateway path issues (fw
+            // getifs, ip route, cpinfo, uptime, show asset system), all gated; the cluster probe answers
+            // "standalone". Panorama is not a Gaia host: its read set is still unmeasured (14I MS-2).
+            if ("management_server".equals(role) && !"check_point".equalsIgnoreCase(device.get().vendorHint())) {
                 return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",
                         "device " + deviceId + " is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)");
             }
+            if (!"management_server".equals(role)) {
             return new Outcome.AdmissionRefused("ROLE_UNRECOGNISED",
                     "device " + deviceId + " carries role '" + role + "', which is not one the product knows how to collect from, so nothing was issued");
+            }
         }
         String capabilityId = CAPABILITY_BY_VENDOR.get(device.get().vendorHint());
         if (capabilityId == null) {

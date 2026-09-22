@@ -9,6 +9,16 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // React and MUI change only when a dependency is bumped; keep them in their own
+        // long-cached chunks so a product build re-downloads only the product's code.
+        manualChunks: {
+          react: ["react", "react-dom"],
+          mui: ["@mui/material", "@emotion/react", "@emotion/styled"],
+        },
+      },
+    },
   },
   test: {
     environment: "jsdom",

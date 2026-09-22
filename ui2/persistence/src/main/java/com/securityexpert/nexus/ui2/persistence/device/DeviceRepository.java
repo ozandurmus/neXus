@@ -30,6 +30,16 @@ public interface DeviceRepository {
     Optional<EndpointRecord> findEndpointByDeviceId(String deviceId);
 
     /**
+     * The device (if any) that already owns an endpoint at this exact address
+     * reference -- the Product Owner's rule (2026-09-22): a device is never
+     * registered twice under the same address. Case-insensitive, whitespace
+     * ignored; a disabled device still counts (delete it first).
+     */
+    default Optional<String> findDeviceIdByEndpointAddress(String addressRef) {
+        return Optional.empty();
+    }
+
+    /**
      * Registers a device as {@code DRAFT} together with its one endpoint,
      * in a single audited transaction (contract §4: "the devices INSERT
      * (and paired endpoints... rows) each get an audit_log row" -- one

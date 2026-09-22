@@ -1,3 +1,4 @@
+import { Suspense, lazy, type ComponentType } from "react";
 import Box from "@mui/material/Box";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
@@ -5,13 +6,13 @@ import { ThemeProvider } from "@mui/material/styles";
 import { NavigationRail } from "./shell/NavigationRail";
 import { TopAppBar } from "./shell/TopAppBar";
 import { PreviewBanner } from "./preview/PreviewBanner";
-import { OverviewScreen } from "./screens/OverviewScreen";
-import { InventoryScreen } from "./screens/InventoryScreen";
-import { ConfigurationScreen } from "./screens/ConfigurationScreen";
-import { ComplianceScreen } from "./screens/ComplianceScreen";
-import { BackupScreen } from "./screens/BackupScreen";
-import { OperationsScreen } from "./screens/OperationsScreen";
-import { AdministrationScreen } from "./screens/AdministrationScreen";
+const OverviewScreen = lazy(() => import("./screens/OverviewScreen").then((m) => ({ default: m.OverviewScreen })));
+const InventoryScreen = lazy(() => import("./screens/InventoryScreen").then((m) => ({ default: m.InventoryScreen })));
+const ConfigurationScreen = lazy(() => import("./screens/ConfigurationScreen").then((m) => ({ default: m.ConfigurationScreen })));
+const ComplianceScreen = lazy(() => import("./screens/ComplianceScreen").then((m) => ({ default: m.ComplianceScreen })));
+const BackupScreen = lazy(() => import("./screens/BackupScreen").then((m) => ({ default: m.BackupScreen })));
+const OperationsScreen = lazy(() => import("./screens/OperationsScreen").then((m) => ({ default: m.OperationsScreen })));
+const AdministrationScreen = lazy(() => import("./screens/AdministrationScreen").then((m) => ({ default: m.AdministrationScreen })));
 import { OverviewPreview } from "./preview/OverviewPreview";
 import { InventoryPreview } from "./preview/InventoryPreview";
 import { ConfigurationPreview } from "./preview/ConfigurationPreview";
@@ -36,7 +37,7 @@ import { isScreenId, type ScreenId } from "./shell/types";
  */
 export type { ScreenId } from "./shell/types";
 
-const PRODUCT_SCREENS: Record<ScreenId, () => JSX.Element> = {
+const PRODUCT_SCREENS: Record<ScreenId, ComponentType> = {
   overview: OverviewScreen,
   inventory: InventoryScreen,
   configuration: ConfigurationScreen,
@@ -103,7 +104,7 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
         <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
           <TopAppBar />
           {preview && <PreviewBanner />}
-          {preview ? <Preview /> : <Product />}
+          <Suspense fallback={null}>{preview ? <Preview /> : <Product />}</Suspense>
         </Box>
       </Box>
     </ThemeProvider>

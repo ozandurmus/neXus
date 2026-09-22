@@ -15,7 +15,12 @@ This is Check Point's software version R81.20 - Build 059
 Version already comes from `show version all` (first contact); `fw ver` is
 not gated and not used.
 
-## `cpinfo -y all` (gate `cp_identity_cpinfo_hotfixes`)
+## `cpinfo -y all` (gate `cp_identity_cpinfo_hotfixes`, issued as `bash -lc 'cpinfo -y all'`)
+
+Live finding 2026-09-22 (62 gateways): over the bare SSH exec channel the
+command returns exit 0 and no output -- `cpinfo` is on PATH only after the
+login profile sources the Check Point environment. The product issues it
+through a login shell (V49), as the gated vsenv reads already are.
 
 Shape: a build line, then `[PACKAGE]` headings each followed by indented
 hotfix names, some with `Take:  N`. The main jumbo appears under several

@@ -6,6 +6,12 @@
 # a build argument.
 server:
   port: ${UI2_HTTP_PORT:8080}
+  # The console bundle is ~750 KB of JavaScript; uncompressed it is the login
+  # page's whole wait on a WAN. Compress every text response above 1 KiB.
+  compression:
+    enabled: true
+    min-response-size: 1024
+    mime-types: text/html,text/css,text/plain,text/csv,application/javascript,application/json,image/svg+xml
 
 spring:
   application:

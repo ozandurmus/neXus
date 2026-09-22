@@ -78,30 +78,31 @@ describe("the UI 2.0 shell navigation", () => {
 });
 
 describe("the six product screens", () => {
-  it("each renders its own empty state, with no evidence invented", () => {
+  it("each renders its own empty state, with no evidence invented", async () => {
     // Every screen's own subtitle or panel text says the state is empty
     // (a zero count or an explicit "nothing yet"/"no device" statement);
-    // none of them ever shows a plausible-looking populated card.
+    // none of them ever shows a plausible-looking populated card. Screens are
+    // lazy chunks, so each is awaited.
     for (const [id, marker] of Object.entries(PRODUCT_MARKERS)) {
       const { unmount } = render(<App search={`?screen=${id}`} />);
-      expect(screen.getByText(marker)).toBeInTheDocument();
+      expect(await screen.findByText(marker)).toBeInTheDocument();
       unmount();
     }
   });
 
   // Overview and Operations count from the store since 2026-09-22 (PO: "0 devices enrolled" was a constant
   // over a fleet of 103); without a store they say the read failed, never 0. Compliance still renders zeros.
-  it("shows a metric card's count as zero, never a placeholder, on the screens that have one", () => {
+  it("shows a metric card's count as zero, never a placeholder, on the screens that have one", async () => {
     for (const id of ["compliance"]) {
       const { unmount } = render(<App search={`?screen=${id}`} />);
-      expect(screen.getAllByText("0").length).toBeGreaterThan(0);
+      expect((await screen.findAllByText("0")).length).toBeGreaterThan(0);
       unmount();
     }
   });
 
-  it("defaults to the Overview screen when no screen is named", () => {
+  it("defaults to the Overview screen when no screen is named", async () => {
     render(<App search="" />);
-    expect(screen.getByText("Operational posture")).toBeInTheDocument();
+    expect(await screen.findByText("Operational posture")).toBeInTheDocument();
   });
 });
 

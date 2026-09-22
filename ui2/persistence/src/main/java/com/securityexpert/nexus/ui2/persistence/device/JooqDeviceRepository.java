@@ -35,7 +35,7 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "coalesce(d.observed_hostname, dc.display_name) as observed_hostname, "
             + "coalesce(d.observed_model, dc.model, c_parent.model) as observed_model, "
             + "coalesce(d.observed_software_version, dc.software_version, c_parent.software_version) as observed_software_version, "
-            + "d.observed_ha_role, "
+            + "coalesce(d.observed_ha_role, inv_ha.role) as observed_ha_role, "
             + "coalesce(c_parent.display_name, d.cluster_member_ref, dc.cluster_reference) as cluster_member_ref, "
             + "coalesce(vs_info.virtual_systems, inv_run.virtual_systems) as virtual_systems, "
             + "latest_job.state as latest_job_state, "
@@ -66,6 +66,12 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "left join lateral ( "
             + "    select virtual_systems from device_inventory_run dir where dir.device_id = d.device_id order by collected_at desc limit 1 "
             + ") inv_run on true "
+            // The HA role the last inventory run observed on the physical context (cphaprob stat / show
+            // high-availability state): the first-contact read often has none, the inventory always does.
+            + "left join lateral ( "
+            + "    select h.role from device_inventory_run r2 join device_inventory_ha h on h.run_id = r2.run_id "
+            + "    where r2.device_id = d.device_id and h.context = 'physical' order by r2.collected_at desc limit 1 "
+            + ") inv_ha on true "
             + "left join lateral ( "
             + "    select address_ref from endpoints ep where ep.device_id = d.device_id order by ep.created_at asc limit 1 "
             + ") ep on true "
@@ -109,6 +115,17 @@ public final class JooqDeviceRepository implements DeviceRepository {
                     endpointId);
             return rows.stream().findFirst().map(JooqDeviceRepository::toEndpointRecord);
         });
+    }
+
+    @Override
+    public Optional<String> findDeviceIdByEndpointAddress(String addressRef) {
+        if (addressRef == null || addressRef.isBlank()) {
+            return Optional.empty();
+        }
+        return transactionBoundary.inTransaction(dsl -> dsl
+                .fetch("select device_id from endpoints where lower(trim(address_ref)) = lower({0}) order by created_at asc limit 1",
+                        addressRef.strip())
+                .stream().findFirst().map(row -> row.get("device_id", String.class)));
     }
 
     @Override

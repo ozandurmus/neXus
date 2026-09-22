@@ -463,7 +463,9 @@ export function ClusterConfigurationDetail({ clusterRef, members }: { readonly c
         model={first?.model}
         titlePrefix={`Configuration · ${vendorLabel(first?.vendor_hint)} cluster`}
         title={deriveClusterTitle(clusterRef, members)}
-        reference={clusterRef}
+        // A Palo Alto HA pair's reference is the two serials joined; the members table below shows each
+        // serial in its own column, so the chip would only repeat them (PO, 2026-09-22).
+        reference={first?.vendor_hint === "palo_alto" ? "" : clusterRef}
         referenceTitle="Cluster reference"
         chips={
           <>
