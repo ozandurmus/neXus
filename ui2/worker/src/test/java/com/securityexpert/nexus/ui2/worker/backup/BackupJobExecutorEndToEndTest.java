@@ -81,6 +81,27 @@ class BackupJobExecutorEndToEndTest {
         final BackupJobExecutorFakes.FakeBackupArtefactManifestRepository manifestRepo;
         final BackupJobExecutorFakes.FakeBackupEndpointEligibilityRepository eligibilityRepo;
         final BackupJobExecutor executor;
+        final FakeLedger ledger = new FakeLedger();
+
+        /** V45: in-memory device-side archive ledger. */
+        static final class FakeLedger implements com.securityexpert.nexus.ui2.persistence.artefact.DeviceArchiveLedger {
+            final java.util.LinkedHashMap<String, Boolean> deletedByName = new java.util.LinkedHashMap<>();
+
+            @Override
+            public void record(String deviceId, String archiveName) {
+                deletedByName.putIfAbsent(archiveName, false);
+            }
+
+            @Override
+            public void markDeleted(String deviceId, String archiveName) {
+                deletedByName.put(archiveName, true);
+            }
+
+            @Override
+            public java.util.List<String> pendingFor(String deviceId) {
+                return deletedByName.entrySet().stream().filter(e -> !e.getValue()).map(java.util.Map.Entry::getKey).toList();
+            }
+        }
 
         Harness(ScriptedBackupTransport transport, ArtefactStore artefactStore, Duration pollInterval,
                 Duration runDeadline, Path recoveryVolume) {
@@ -93,7 +114,7 @@ class BackupJobExecutorEndToEndTest {
             this.manifestRepo = new BackupJobExecutorFakes.FakeBackupArtefactManifestRepository();
             this.eligibilityRepo = new BackupJobExecutorFakes.FakeBackupEndpointEligibilityRepository();
             BackupCapabilityExecutor capabilityExecutor =
-                    new BackupCapabilityExecutor(transport, artefactStore, 1L, pollInterval, runDeadline);
+                    new BackupCapabilityExecutor(transport, artefactStore, 1L, pollInterval, runDeadline, ledger);
             this.executor = new BackupJobExecutor(leaseRepo, attemptRepo, enrollmentPort, deviceRepo,
                     capabilityExecutor, manifestRepo, eligibilityRepo, testFingerprint(), recoveryVolume.toString());
         }
@@ -234,5 +255,36 @@ class BackupJobExecutorEndToEndTest {
             assertEquals(0, files.filter(p -> p.toString().endsWith(".enc")).count(),
                     "zero rows must also mean zero bytes: the refused run's archive is not left on the volume");
         }
+    }
+
+    /** V45: an archive an earlier run left on the device is deleted first, by its recorded name only; the new one is recorded and closed. */
+    @Test
+    void staleArchivesFromEarlierRunsAreDeletedBeforeTheSubmitAndTheNewOneIsClosed(@TempDir Path tempDir) throws Exception {
+        ScriptedBackupTransport transport = happyPathTransportUpTo("succeeded");
+        transport.fetchedContent = "archive-bytes-content";
+        String digestHex = sha256Hex(transport.fetchedContent);
+        transport.execOutputs.put(BackupReadPlan.archiveDigestCommand(ARCHIVE_NAME), digestHex + "  " + ARCHIVE_NAME + "\n");
+        transport.execOutputs.put(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME), "");
+        String stale = "backup_--_gw-a_20260921.tgz";
+        String vanished = "backup_--_gw-a_20260920.tgz";
+        transport.execOutputs.put(BackupReadPlan.CP_SHOW_BACKUPS, "Backup files:\n" + stale + "  2026-09-21\nbackup_--_admin_manual.tgz  2026-09-19\n");
+        transport.execOutputs.put(BackupReadPlan.deleteBackupCommand(stale), "");
+
+        Harness harness = new Harness(transport, newArtefactStore(tempDir), Duration.ofMillis(5), Duration.ofSeconds(5), tempDir);
+        harness.ledger.record(DEVICE_ID, stale);
+        harness.ledger.record(DEVICE_ID, vanished);
+
+        JobOutcome outcome = harness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request());
+
+        assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        java.util.List<String> issued = harness.transport.commandsIssued;
+        int listIndex = issued.indexOf(BackupReadPlan.CP_SHOW_BACKUPS);
+        int staleDelete = issued.indexOf(BackupReadPlan.deleteBackupCommand(stale));
+        int submit = issued.indexOf(BackupReadPlan.CP_ADD_BACKUP_LOCAL);
+        assertTrue(listIndex >= 0 && staleDelete > listIndex && submit > staleDelete, "list, delete the stale name, then submit: " + issued);
+        assertFalse(issued.contains(BackupReadPlan.deleteBackupCommand("backup_--_admin_manual.tgz")), "an archive the product did not create is left alone");
+        assertFalse(issued.contains(BackupReadPlan.deleteBackupCommand(vanished)), "a name no longer listed is closed without a delete");
+        assertEquals(java.util.Map.of(stale, true, vanished, true, ARCHIVE_NAME, true), harness.ledger.deletedByName,
+                "the stale and vanished names are closed; this run's own archive is recorded and closed after its delete");
     }
 }

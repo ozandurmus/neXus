@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.worker.backup;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -61,8 +62,18 @@ public final class BackupCapabilityExecutor {
     private final Duration pollInterval;
     private final Duration runDeadline;
 
+    /** V45: the device-side archives this product created and has not yet deleted; null in compositions without one. */
+    private final com.securityexpert.nexus.ui2.persistence.artefact.DeviceArchiveLedger archiveLedger;
+
     public BackupCapabilityExecutor(DeviceTransport transport, ArtefactStore artefactStore,
             long freeSpaceThresholdBytes, Duration pollInterval, Duration runDeadline) {
+        this(transport, artefactStore, freeSpaceThresholdBytes, pollInterval, runDeadline, null);
+    }
+
+    public BackupCapabilityExecutor(DeviceTransport transport, ArtefactStore artefactStore,
+            long freeSpaceThresholdBytes, Duration pollInterval, Duration runDeadline,
+            com.securityexpert.nexus.ui2.persistence.artefact.DeviceArchiveLedger archiveLedger) {
+        this.archiveLedger = archiveLedger;
         this.transport = Objects.requireNonNull(transport, "transport");
         this.artefactStore = Objects.requireNonNull(artefactStore, "artefactStore");
         this.freeSpaceThresholdBytes = freeSpaceThresholdBytes;
@@ -97,6 +108,11 @@ public final class BackupCapabilityExecutor {
     }
 
     private BackupResult runAgainstSession(TransportSession session, String deviceId, String jobId) {
+        // V45 (cp_backup_stale_device_archives_cleanup): before anything else, delete the archives an
+        // earlier run of ours left on this device -- exactly the names the ledger holds open, and only
+        // those `show backups` still lists. Best effort: a failure here is logged, never the run's fate.
+        cleanupStaleArchives(session, deviceId);
+
         // Entry 1 (BK-6): free-space precondition. Gate row cp_backup_show_diskspace, BK-7: "if the
         // Clish form fails, the Expert fallback df -P /var/log becomes primary". Measured live on the
         // first real run (2026-09-22): the Clish form answered a one-line CLI error with exit 0, and
@@ -144,6 +160,14 @@ public final class BackupCapabilityExecutor {
                     "neither add backup local nor show backup status named the archive; refusing rather than guessing");
         }
         String name = archivePath.orElse("<unnamed>");
+        if (archivePath.isPresent() && archiveLedger != null) {
+            // On record before the fetch: whatever happens from here, the next run knows what to delete.
+            try {
+                archiveLedger.record(deviceId, archiveBaseName(archivePath.get()));
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "[BACKUP] archive ledger record failed: " + e.getMessage());
+            }
+        }
         if (status == BackupStatus.FAILED) {
             // The device's own words, digits masked, so a refusal ("backup already in progress", a full
             // disk) can be told apart from a run the device really failed -- the run's reason carries
@@ -211,7 +235,50 @@ public final class BackupCapabilityExecutor {
                     "delete backup " + name + " failed after its one retry (BK-7): " + delete.output());
         }
 
+        if (archiveLedger != null) {
+            try {
+                archiveLedger.markDeleted(deviceId, archiveBaseName(name));
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "[BACKUP] archive ledger mark-deleted failed: " + e.getMessage());
+            }
+        }
+
         return new BackupResult.Completed(metadata, name, Optional.empty(), Optional.empty());
+    }
+
+    private void cleanupStaleArchives(TransportSession session, String deviceId) {
+        if (archiveLedger == null) {
+            return;
+        }
+        List<String> pending;
+        try {
+            pending = archiveLedger.pendingFor(deviceId);
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "[BACKUP] archive ledger read failed: " + e.getMessage());
+            return;
+        }
+        if (pending.isEmpty()) {
+            return;
+        }
+        ExecOutcome listing = exec(session, BackupReadPlan.CP_SHOW_BACKUPS, POLL_TIMEOUT);
+        String listed = listing.output() == null ? "" : listing.output();
+        int deleted = 0;
+        int gone = 0;
+        for (String archive : pending) {
+            if (!listed.contains(archive)) {
+                gone++; // no longer on the device (an administrator removed it, or the disk was cleaned): close it
+                archiveLedger.markDeleted(deviceId, archive);
+                continue;
+            }
+            ExecOutcome delete = exec(session, BackupReadPlan.deleteBackupCommand(archive), DELETE_TIMEOUT);
+            if (delete.succeeded()) {
+                archiveLedger.markDeleted(deviceId, archive);
+                deleted++;
+            } else {
+                LOG.log(System.Logger.Level.WARNING, "[BACKUP_STALE_ARCHIVE] delete refused: " + maskedShape(delete.output()));
+            }
+        }
+        LOG.log(System.Logger.Level.INFO, "[BACKUP_STALE_ARCHIVE] pending=" + pending.size() + " deleted=" + deleted + " gone=" + gone);
     }
 
     private record Poll(BackupStatus status, String lastOutput) {

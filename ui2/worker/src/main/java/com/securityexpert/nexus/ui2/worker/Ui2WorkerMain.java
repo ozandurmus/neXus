@@ -216,7 +216,8 @@ public final class Ui2WorkerMain {
         BackupEndpointEligibilityRepository backupEndpointEligibilityRepository =
                 new JooqBackupEndpointEligibilityRepository(transactionBoundary);
         BackupCapabilityExecutor backupCapabilityExecutor = new BackupCapabilityExecutor(compositeTransport,
-                artefactStore, backupFreeSpaceThresholdBytes, backupPollInterval, backupRunDeadline);
+                artefactStore, backupFreeSpaceThresholdBytes, backupPollInterval, backupRunDeadline,
+                new com.securityexpert.nexus.ui2.persistence.artefact.JooqDeviceArchiveLedger(transactionBoundary));
         com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor snapshotExecutor =
                 new com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor(compositeTransport,
                         artefactStore, backupFreeSpaceThresholdBytes, backupPollInterval, backupRunDeadline);
