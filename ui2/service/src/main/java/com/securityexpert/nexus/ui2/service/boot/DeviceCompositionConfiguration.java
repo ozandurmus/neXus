@@ -422,6 +422,31 @@ public class DeviceCompositionConfiguration {
     }
 
     /**
+     * PO decision record 2026-09-22 (backup HTTP download with RBAC): the
+     * service decrypts a backup artefact for {@code POST /backups/{id}/download}.
+     * The artefact-store key and volume are mounted on the service pod for
+     * that one purpose; when either env var is absent the download route
+     * answers 503 {@code ARTEFACT_STORE_NOT_MOUNTED} rather than failing at boot.
+     */
+    @Bean
+    public com.securityexpert.nexus.ui2.service.device.backup.BackupDownloadService backupDownloadService(
+            BackupArtefactManifestRepository manifestRepository, TransactionBoundary transactionBoundary) {
+        String keyFile = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_KEY_FILE", "");
+        String root = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "");
+        com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore store = null;
+        if (!keyFile.isBlank() && !root.isBlank()) {
+            String keyBase64 = com.securityexpert.nexus.ui2.platform.SecretFile.readRequired(
+                    java.nio.file.Path.of(keyFile), "artefact_store_key");
+            store = new com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore(
+                    java.nio.file.Path.of(root),
+                    com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher.fromBase64Key(keyBase64));
+        }
+        return new com.securityexpert.nexus.ui2.service.device.backup.BackupDownloadService(store, manifestRepository,
+                new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupArtefactRetrievalRepository(
+                        transactionBoundary));
+    }
+
+    /**
      * 14H BK-1: the pilot-device allowlist, an env-backed configuration
      * list -- {@code UI2_BACKUP_PILOT_DEVICE_IDS}, comma-separated,
      * empty by default (WORKER.md: "empty means every backup is refused").

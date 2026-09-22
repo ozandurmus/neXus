@@ -425,24 +425,6 @@
       "note": ""
     },
     {
-      "id": "backup_retrieval_audit_fail_closed_and_reason_persists",
-      "category": "security",
-      "title": "Backup retrieval must be fail-closed on its audit row, and the reason and role must survive to execution",
-      "status": "planned",
-      "priority": "P0",
-      "target": "BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md Tier 1: OR-3, BK-12, BW-4",
-      "note": ""
-    },
-    {
-      "id": "backup_artefact_id_opaque_not_storage_path",
-      "category": "security",
-      "title": "The artefact id returned over HTTP must be opaque, not the storage path",
-      "status": "planned",
-      "priority": "P0",
-      "target": "BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md Tier 1: BK-14, OR-1",
-      "note": ""
-    },
-    {
       "id": "ui_overview_operations_show_stale_or_empty_state",
       "category": "UI 2.0 (Java product line)",
       "title": "UNVERIFIED claim: Overview and Operations render empty state while devices and jobs exist",
@@ -809,6 +791,15 @@
       "status": "planned",
       "priority": "P0",
       "target": "",
+      "note": ""
+    },
+    {
+      "id": "cli_parity_for_every_ui_action",
+      "category": "ui2",
+      "title": "Every UI action has a CLI counterpart (the product must not be UI-bound)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO directive 2026-09-22; ui2/cli CliEntryPoint is the seed",
       "note": ""
     }
   ]

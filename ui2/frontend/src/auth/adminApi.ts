@@ -141,6 +141,37 @@ export function collectDeviceBackup(deviceId: string, reason: string, type: "bac
   return call(`/devices/${encodeURIComponent(deviceId)}/backup/collect`, "POST", { reason, type });
 }
 
+export interface BackupDownload {
+  readonly blob: Blob;
+  readonly fileName: string;
+}
+
+/**
+ * PO decision record 2026-09-22: {@code POST /backups/{id}/download} -- the backup administrator role, a reason
+ * of at least eight characters, audited server-side before the first byte. The response is the
+ * decrypted archive itself, so it is read as a Blob, never JSON-parsed; the file name comes from
+ * the server's Content-Disposition (vendor + opaque id prefix + collection time).
+ */
+export async function downloadBackupArtefact(artefactId: string, reason: string): Promise<BackupDownload> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = await csrfToken();
+  if (token) headers["X-CSRF-Token"] = token;
+  const response = await fetch(`/backups/${encodeURIComponent(artefactId)}/download`, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: JSON.stringify({ reason }),
+  });
+  if (!response.ok) {
+    const parsed = await response.json().catch(() => ({}));
+    const error: ApiError = { status: response.status, body: parsed };
+    throw error;
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = /filename="([^"]+)"/.exec(disposition);
+  return { blob: await response.blob(), fileName: match ? match[1] : `nexus-backup-${artefactId.slice(0, 8)}.tgz` };
+}
+
 export function createLocalIdentity(localIdentityName: string, initialPassword: string): Promise<LocalIdentityView> {
   return call("/local-identities", "POST", {
     local_identity_name: localIdentityName,

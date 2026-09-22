@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T11:07:19Z
+Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T11:31:30Z
 
 ## Now
 - NXS-LOCAL-0346 — Palo Alto PAN-OS HA clustering reconciliation per discovery API evidence (automated_validated)
@@ -11,8 +11,6 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T11:07:19Z
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test env (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
 - P0/planned aiview_masking_manufactures_names_from_any_string — The AIView pseudonymizer turns any non-blank string into a (target: TopologyNamePseudonymizer.computeDeviceN)
-- P0/planned backup_artefact_id_opaque_not_storage_path — The artefact id returned over HTTP must be opaque, not the (target: BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09)
-- P0/planned backup_retrieval_audit_fail_closed_and_reason_persists — Backup retrieval must be fail-closed on its audit row, and (target: BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09)
 - P0/planned cluster_membership_lost_at_enrollment — Cluster membership is known at discovery but does not reac (target: enrollment/confirm path writing devices.)
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every c (target: JooqDeviceRepository DEVICE_SELECT later)
@@ -28,6 +26,7 @@ Build: NXS-LOCAL-0346 · Track: PCP.x · Generated: 2026-09-22T11:07:19Z
 - P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
 - P1/planned backup_plane_separate_service — Deliver the backup plane as the independent service the re (target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITEC)
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
+- P1/planned cli_parity_for_every_ui_action — Every UI action has a CLI counterpart (the product must no (target: PO directive 2026-09-22; ui2/cli CliEntr)
 - P1/planned cluster_member_model_needs_second_query — Cluster members carry no hardware field in the gateway enu (target: Check Point management plane enumeration)
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)

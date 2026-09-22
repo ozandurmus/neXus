@@ -77,6 +77,16 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
     }
 
     @Override
+    public Optional<BackupArtefactSummary> findSummary(String artefactId) {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetchOptional(
+                "select artefact_id, device_id, created_at, plaintext_bytes, plaintext_sha256, "
+                        + "validation->>'level_reached' as validation_level, deviation_state, vendor, artefact_class "
+                        + "from backup_artefact where artefact_id = {0}",
+                artefactId)
+                .map(JooqBackupArtefactManifestRepository::toSummary));
+    }
+
+    @Override
     public List<BackupArtefactSummary> findAll(String artefactClass) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 "select artefact_id, device_id, created_at, plaintext_bytes, plaintext_sha256, "

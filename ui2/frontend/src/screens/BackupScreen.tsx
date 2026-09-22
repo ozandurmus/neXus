@@ -23,6 +23,7 @@ import {
   getBackupDeviations,
   getBackupPolicy,
   collectDeviceBackup,
+  downloadBackupArtefact,
   listDevices,
   listFleetBackups,
   requestFleetBackup,
@@ -35,6 +36,13 @@ import {
 import { ScreenHeader, MetricGrid, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
+
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "unknown size";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export interface BackupDeviceItem {
   readonly deviceId: string;
@@ -96,6 +104,8 @@ export function BackupScreen() {
   const [selectedDeviceDiff, setSelectedDeviceDiff] = useState<BackupDeviceItem | null>(null);
   const [selectedDeviceExport, setSelectedDeviceExport] = useState<BackupDeviceItem | null>(null);
   const [exportReason, setExportReason] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [policyOpen, setPolicyOpen] = useState(false);
 
   // Policy configuration (PO requirements: 14 days standard retention, depth 4 snapshots, 400 GB vault)
@@ -189,6 +199,39 @@ export function BackupScreen() {
     } finally {
       setLoading(false);
       setTriggeringId(null);
+    }
+  };
+
+  // PO decision record 2026-09-22: the archive is downloaded here, role-gated by the service + reason,
+  // audited by the service before the first byte. The dialog used to print a CLI command it
+  // never ran and then report "audit record emitted" without touching the service.
+  const handleDownload = async (device: BackupDeviceItem) => {
+    setExportBusy(true);
+    setExportError(null);
+    try {
+      const { blob, fileName } = await downloadBackupArtefact(device.artefactId, exportReason.trim());
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setSelectedDeviceExport(null);
+      setExportReason("");
+      setSuccessMessage(`Downloaded ${fileName} (${formatBytes(blob.size)}); the retrieval is on the audit log.`);
+      setTimeout(() => setSuccessMessage(null), 8000);
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      const code = (error as { body?: { code?: string } }).body?.code;
+      setExportError(
+        status === 403
+          ? "Refused by the service: your session is not allowed to download a backup."
+          : `Download refused${status ? ` (HTTP ${status}${code ? `, ${code}` : ""})` : ""}.`,
+      );
+    } finally {
+      setExportBusy(false);
     }
   };
 
@@ -462,9 +505,13 @@ export function BackupScreen() {
 
                       <M3Button
                         emphasis="text"
-                        onClick={() => setSelectedDeviceExport(device)}
+                        disabled={!device.artefactId}
+                        onClick={() => {
+                          setExportError(null);
+                          setSelectedDeviceExport(device);
+                        }}
                       >
-                        Export
+                        Download
                       </M3Button>
                     </Stack>
                   </TableCell>
@@ -549,15 +596,21 @@ export function BackupScreen() {
           fullWidth
         >
           <DialogTitle sx={{ fontWeight: 700 }}>
-            Export Recovery Artifact: {selectedDeviceExport.name}
+            Download backup: {selectedDeviceExport.name}
           </DialogTitle>
           <DialogContent dividers>
             <Alert severity="warning" sx={{ mb: 2 }}>
-              Per neXus Security Law (Plane 3 Recovery Isolation), raw decrypted secrets never traverse the browser. Decryption and retrieval are strictly audited via the fail-closed operator CLI.
+              The archive is decrypted by the service and downloaded as-is. A Gaia backup carries the
+              system's own account database and other secret-bearing files: the copy is yours to protect
+              from here on. The service decides who may download; every download is audited with your reason.
             </Alert>
 
-            <Typography variant="body2" sx={{ mb: 1.5, fontWeight: 500 }}>
+            <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>
               Artefact ID: <code>{selectedDeviceExport.artefactId}</code>
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1.5, color: m3.onSurfaceVar }}>
+              {selectedDeviceExport.vendor} · {formatBytes(selectedDeviceExport.sizeBytes)} · collected{" "}
+              {selectedDeviceExport.lastBackupTime}
             </Typography>
 
             <TextField
@@ -566,42 +619,32 @@ export function BackupScreen() {
               placeholder="e.g. Disaster recovery drill ticket SEC-4091"
               value={exportReason}
               onChange={(e) => setExportReason(e.target.value)}
-              sx={{ mb: 2 }}
+              disabled={exportBusy}
+              sx={{ mb: 1 }}
             />
-
-            <Typography variant="caption" sx={{ color: m3.onSurfaceVar, fontWeight: 600 }}>
-              CLI RETRIEVAL COMMAND:
-            </Typography>
-            <Box
-              sx={{
-                p: 1.5,
-                bgcolor: "#1e1e1e",
-                color: "#4ade80",
-                fontFamily: "monospace",
-                fontSize: "0.8rem",
-                borderRadius: "6px",
-                mt: 0.5,
-                wordBreak: "break-all",
-              }}
-            >
-              nexus-cli backup-retrieve {selectedDeviceExport.artefactId} /var/tmp/{selectedDeviceExport.name}.tgz "{exportReason || '<REASON>'}"
-            </Box>
+            {exportError && (
+              <Alert severity="error" sx={{ mt: 1 }}>
+                {exportError}
+              </Alert>
+            )}
           </DialogContent>
           <DialogActions>
-            <M3Button emphasis="text" onClick={() => setSelectedDeviceExport(null)}>
+            <M3Button
+              emphasis="text"
+              disabled={exportBusy}
+              onClick={() => {
+                setSelectedDeviceExport(null);
+                setExportError(null);
+              }}
+            >
               Cancel
             </M3Button>
             <M3Button
               emphasis="filled"
-              disabled={exportReason.trim().length < 8}
-              onClick={() => {
-                setSelectedDeviceExport(null);
-                setExportReason("");
-                setSuccessMessage(`Audit record emitted for export of ${selectedDeviceExport.artefactId}.`);
-                setTimeout(() => setSuccessMessage(null), 5000);
-              }}
+              disabled={exportBusy || exportReason.trim().length < 8}
+              onClick={() => void handleDownload(selectedDeviceExport)}
             >
-              Confirm Audit & Export
+              {exportBusy ? <CircularProgress size={16} /> : "Download"}
             </M3Button>
           </DialogActions>
         </Dialog>

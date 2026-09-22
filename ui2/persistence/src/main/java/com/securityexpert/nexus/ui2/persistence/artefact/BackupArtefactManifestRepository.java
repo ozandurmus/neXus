@@ -36,6 +36,11 @@ public interface BackupArtefactManifestRepository {
     /** 14I OR-2: the wrapped data key an operator retrieval needs to decrypt through the artefact store. */
     Optional<RetrievalManifest> findForRetrieval(String artefactId);
 
+    /** One artefact's posture row (vendor, size, collection time) -- the download response's own header facts. */
+    default Optional<BackupArtefactSummary> findSummary(String artefactId) {
+        return Optional.empty();
+    }
+
     record PlaintextDigestSummary(String artefactId, String plaintextSha256) {
     }
 

@@ -111,6 +111,14 @@ spec:
               value: /run/secrets/ui2-credential-store/key
             - name: UI2_ROLE_BINDING_GROUP_REFERENCE_KEY_FILE
               value: /run/secrets/ui2-role-binding/key
+            # PO decision record 2026-09-22 (backup HTTP download with RBAC):
+            # the service decrypts a backup artefact for POST
+            # /backups/{id}/download, so it carries the artefact-store key
+            # and a read-only mount of the worker's artefact volume.
+            - name: UI2_ARTEFACT_STORE_KEY_FILE
+              value: /run/secrets/ui2-artefact-store/key
+            - name: UI2_ARTEFACT_STORE_ROOT
+              value: /app/artefact-store
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
@@ -167,6 +175,12 @@ spec:
             - name: role-binding-key
               mountPath: /run/secrets/ui2-role-binding
               readOnly: true
+            - name: artefact-store-key
+              mountPath: /run/secrets/ui2-artefact-store
+              readOnly: true
+            - name: artefact-store
+              mountPath: /app/artefact-store
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir: {}
@@ -184,3 +198,13 @@ spec:
           secret:
             secretName: ui2-role-binding-key
             defaultMode: 0440
+        - name: artefact-store-key
+          secret:
+            secretName: ui2-artefact-store-key
+            defaultMode: 0440
+        # RWO on a single-node local-path cluster: both pods schedule on the
+        # same node, so the worker's claim can be mounted here read-only.
+        - name: artefact-store
+          persistentVolumeClaim:
+            claimName: ui2-artefact-store
+            readOnly: true
