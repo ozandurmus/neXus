@@ -435,6 +435,8 @@ export interface DeviceSummary {
   readonly content_versions?: Readonly<Record<string, string>> | null;
   readonly uptime_text?: string | null;
   readonly platform_facts_observed_at?: string | null;
+  /** Newest inventory run of the device (Overview "inventory evidence age" filters). */
+  readonly inventory_collected_at?: string | null;
 }
 
 export type DeviceRole = "gateway" | "management_server";
@@ -1198,4 +1200,40 @@ export interface StorageView {
 
 export function getSystemStorage(): Promise<StorageView> {
   return call("/api/v2/system/storage", "GET");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Overview (OVERVIEW_EXCEPTION_SCREEN_CONTRACT, FROZEN 2026-09-23)
+// ---------------------------------------------------------------------------------------------
+
+export type EvidenceState = "OK" | "UNKNOWN" | "READ_FAILED";
+export interface EvidenceChip { readonly at: string | null; readonly state: EvidenceState }
+export interface CountTile { readonly count: number; readonly of?: number; readonly unknown?: number; readonly terminal_24h?: number; readonly state: EvidenceState }
+export interface OverviewView {
+  readonly generated_at: string;
+  readonly masked: boolean;
+  readonly denominators: { active_devices: number; gateways: number; clusters: number; backup_targets: number };
+  readonly evidence: Record<"inventory" | "configuration" | "compliance" | "backup" | "jobs" | "platform_facts", EvidenceChip> & { state?: EvidenceState };
+  readonly attention: {
+    failed_jobs_24h: CountTile; stale_inventory: CountTile; cluster_diff: CountTile; config_changed: CountTile; backup_missing: CountTile;
+    state?: EvidenceState;
+  };
+  readonly exceptions: {
+    failed_jobs: { total: number; rows: Array<{ job_id: string; job_type: string; device_id: string; label: string | null; cluster?: string | null; terminal_reason: string | null; finished_at: string }> };
+    config_changes: { total: number; rows: Array<{ device_id: string; label: string | null; cluster?: string | null; run_id: string; sections_latest: number; collected_at: string }> };
+    cluster_diff: { total: number; unknown: number; all_refs: string[]; rows: Array<{ cluster_ref: string; diff_section_count: number; diff_setting_count: number; diff_sections: string[]; computed_at: string }> };
+    state?: EvidenceState;
+  };
+  readonly inventory_age: { lt24h: number; h24_72: number; gt72h: number; never: number; of: number; state?: EvidenceState };
+  readonly compliance: {
+    state: EvidenceState; reason?: string | null; evaluated?: number; of_firewalls?: number; observed_pct?: number; assured_pct?: number;
+    coverage_pct?: number; critical_deficiencies?: number; data_gaps?: number;
+    frameworks?: Array<{ name: string; pass: number; fail: number; unavailable: number; total: number; score_pct: number }>;
+  };
+  readonly platform: { devices: number; check_point: number; palo_alto: number; clusters: number; hotfix_levels: Array<{ level: string | null; count: number }>; evidence_at: string | null; state?: EvidenceState };
+  readonly nexus: { completed_24h: number; running: number; oldest_running_submitted_at: string | null; last_inventory: { check_point: string | null; palo_alto: string | null }; state?: EvidenceState };
+}
+
+export function getOverview(): Promise<OverviewView> {
+  return call("/api/v2/overview", "GET");
 }

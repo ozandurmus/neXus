@@ -18,3 +18,7 @@ Product Owner accepts it and it is frozen:
    `aiview_masking_leak_audit`, F20) — the Overview's cluster denominators
    must be computed on raw references server-side and only labels masked.
 5. `backup_target` is a boolean, not nullable: "IS NOT NULL" reads "= true".
+
+**Applied 2026-09-23** in the frozen `OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md`, plus one change of mechanism:
+the cluster DIFF summary is recomputed by a service task every 5 minutes (and at startup) instead of "at
+job completion" -- the service does not observe job completion; the worker does.

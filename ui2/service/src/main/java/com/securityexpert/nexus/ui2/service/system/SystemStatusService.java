@@ -50,9 +50,12 @@ public class SystemStatusService {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final TransactionBoundary transactionBoundary;
+    private final com.securityexpert.nexus.ui2.persistence.device.DeviceRepository deviceRepository;
 
-    public SystemStatusService(TransactionBoundary transactionBoundary) {
+    public SystemStatusService(TransactionBoundary transactionBoundary,
+            com.securityexpert.nexus.ui2.persistence.device.DeviceRepository deviceRepository) {
         this.transactionBoundary = Objects.requireNonNull(transactionBoundary, "transactionBoundary");
+        this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
     }
 
     public Map<String, Object> pods() {
@@ -221,6 +224,9 @@ public class SystemStatusService {
     }
 
     public Map<String, Object> storage() {
+        // Names as the device list serves them (observed hostname, else the discovery name) -- F21, 2026-09-23.
+        Map<String, com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord> summaries = new HashMap<>();
+        deviceRepository.listAll().forEach(d -> summaries.put(d.deviceId(), d));
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("read_at", Instant.now().toString());
         transactionBoundary.inTransaction(dsl -> {
@@ -247,8 +253,9 @@ public class SystemStatusService {
                     + "group by b.device_id, d.observed_hostname, d.cluster_member_ref order by stored_bytes desc limit 10")) {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("device_id", r.get("device_id", String.class));
-                row.put("hostname", r.get("hostname", String.class));
-                row.put("cluster_member_ref", r.get("cluster_member_ref", String.class));
+                var summary = summaries.get(r.get("device_id", String.class));
+                row.put("hostname", summary == null ? r.get("hostname", String.class) : summary.observedHostname().orElse(null));
+                row.put("cluster_member_ref", summary == null ? r.get("cluster_member_ref", String.class) : summary.clusterMemberRef().orElse(null));
                 row.put("artefacts", r.get("artefacts", Long.class));
                 row.put("stored_bytes", r.get("stored_bytes", Long.class));
                 top.add(row);

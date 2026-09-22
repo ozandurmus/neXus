@@ -1,4 +1,15 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { urlParam } from "../shell/urlParams";
+
+/** Overview link values -> this screen's filter values (framework names are matched by keyword). */
+function frameworkFromUrl(name: string | null): string {
+  const n = (name ?? "").toUpperCase();
+  if (n.includes("CIS")) return "CIS";
+  if (n.includes("PCI")) return "PCI";
+  if (n.includes("NIST")) return "NIST";
+  if (n.includes("FINANCIAL")) return "FINANCIAL";
+  return "ALL";
+}
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
@@ -93,9 +104,10 @@ export function ComplianceScreen() {
   const [loading, setLoading] = useState(true);
   const [reEvaluating, setReEvaluating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-  const [severityFilter, setSeverityFilter] = useState<string>("ALL");
-  const [frameworkFilter, setFrameworkFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() =>
+    urlParam("result") === "fail" ? "FAILING" : urlParam("result") === "unavailable" ? "UNAVAILABLE" : "ALL");
+  const [severityFilter, setSeverityFilter] = useState<string>(() => (urlParam("severity") ? urlParam("severity")!.toUpperCase() : "ALL"));
+  const [frameworkFilter, setFrameworkFilter] = useState<string>(() => frameworkFromUrl(urlParam("framework")));
   const [selectedControl, setSelectedControl] = useState<ComplianceControlItem | null>(null);
 
   const loadData = useCallback(async () => {

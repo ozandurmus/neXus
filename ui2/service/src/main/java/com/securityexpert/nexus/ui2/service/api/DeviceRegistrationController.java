@@ -57,6 +57,12 @@ public final class DeviceRegistrationController {
     private final DeviceDeletionService deviceDeletionService;
     private final DeviceQueryService deviceQueryService;
     private final DevicePlatformFactsRepository platformFactsRepository;
+    private com.securityexpert.nexus.ui2.service.overview.OverviewService overviewService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setOverviewService(com.securityexpert.nexus.ui2.service.overview.OverviewService overviewService) {
+        this.overviewService = overviewService;
+    }
 
     public DeviceRegistrationController(DeviceAddSingleService deviceAddSingleService,
             DeviceDeletionService deviceDeletionService,
@@ -172,10 +178,13 @@ public final class DeviceRegistrationController {
     @GetMapping("/devices")
     public ResponseEntity<Map<String, Object>> listDevices() {
         Map<String, DevicePlatformFacts> platformFacts = platformFactsRepository.findAll();
+        Map<String, java.time.Instant> inventoryAt = overviewService == null ? Map.of() : overviewService.latestInventoryAll();
         List<Map<String, Object>> devices = deviceQueryService.listDevices().stream()
                 .map(summary -> {
                     Map<String, Object> body = toSummaryBody(summary);
                     putPlatformFacts(body, Optional.ofNullable(platformFacts.get(summary.deviceId())));
+                    java.time.Instant inv = inventoryAt.get(summary.deviceId());
+                    body.put("inventory_collected_at", inv == null ? null : inv.toString());
                     return body;
                 })
                 .toList();

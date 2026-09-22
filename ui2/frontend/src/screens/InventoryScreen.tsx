@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { urlParam } from "../shell/urlParams";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
@@ -203,6 +204,21 @@ function DeviceRow({
       </Box>
     </Box>
   );
+}
+
+/** The Overview's inventory evidence age buckets, over the device's newest inventory run. */
+export function inAgeBucket(device: DeviceSummary, bucket: string, now: number = Date.now()): boolean {
+  if (device.enrollment_state !== "ENROLLED") return false;
+  const at = device.inventory_collected_at ? new Date(device.inventory_collected_at).getTime() : null;
+  const hours = at === null ? null : (now - at) / 3_600_000;
+  switch (bucket) {
+    case "stale": return hours === null || hours >= 24;
+    case "lt24h": return hours !== null && hours < 24;
+    case "24h_72h": return hours !== null && hours >= 24 && hours <= 72;
+    case "gt72h": return hours !== null && hours > 72;
+    case "never": return hours === null;
+    default: return true;
+  }
 }
 
 export function DeviceList({
@@ -623,7 +639,11 @@ export function InventoryScreen() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterMode, setFilterMode] = useState<"all" | "cluster" | "check_point" | "palo_alto" | "stale" | "draft" | "failed">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "cluster" | "check_point" | "palo_alto" | "stale" | "draft" | "failed">(
+    () => (urlParam("vendor") === "check_point" ? "check_point" : urlParam("vendor") === "palo_alto" ? "palo_alto" : "all"));
+  // Overview links (OVERVIEW_EXCEPTION_SCREEN_CONTRACT §4.2): inventory evidence age bucket and hotfix level.
+  const [ageFilter, setAgeFilter] = useState<string | null>(() => urlParam("inventory_age"));
+  const [hotfixFilter, setHotfixFilter] = useState<string | null>(() => urlParam("hotfix_level"));
   const [sortMode, setSortMode] = useState<"name_asc" | "name_desc" | "vendor">("name_asc");
 
   const devices = data;
@@ -672,6 +692,8 @@ export function InventoryScreen() {
     if (filterMode === "draft" && device.enrollment_state !== "DRAFT") return false;
     if (filterMode === "failed" && !hasFailedCollection(device)) return false;
     if (filterMode === "stale" && device.enrollment_state !== "DEGRADED" && device.enrollment_state !== "UNREACHABLE") return false;
+    if (ageFilter && !inAgeBucket(device, ageFilter)) return false;
+    if (hotfixFilter && (hotfixFilter === "unknown" ? Boolean(device.hotfix_level) || device.role === "management_server" : device.hotfix_level !== hotfixFilter)) return false;
 
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase().trim();
@@ -746,6 +768,15 @@ export function InventoryScreen() {
               pr: 0.5,
             }}
           >
+            {(ageFilter || hotfixFilter) && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, flexWrap: "wrap" }}>
+                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>From Overview:</Typography>
+                {ageFilter && <StatusChip tone="attn" label={`inventory ${({ stale: "older than 24 h or never", lt24h: "under 24 h", "24h_72h": "24–72 h", gt72h: "over 72 h", never: "never collected" } as Record<string, string>)[ageFilter] ?? ageFilter}`} dense />}
+                {hotfixFilter && <StatusChip tone="attn" label={`hotfix ${hotfixFilter === "unknown" ? "UNKNOWN" : hotfixFilter}`} dense />}
+                <Box component="span" role="button" tabIndex={0} sx={{ cursor: "pointer", fontSize: 12, color: m3.primary }}
+                  onClick={() => { setAgeFilter(null); setHotfixFilter(null); }}>clear</Box>
+              </Box>
+            )}
             <Box
               sx={{
                 height: 44,

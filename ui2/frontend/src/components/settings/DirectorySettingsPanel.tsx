@@ -36,15 +36,18 @@ export function DirectorySettingsPanel() {
   const [profile, setProfile] = useState<DirectoryProfile | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [forbidden, setForbidden] = useState(false);
 
   useEffect(() => {
     // No saved profile yet is a 200 with an empty body: that is "start a new profile", not an error.
     fetch("/api/v2/config/ldap").then(async (response) => {
+      if (response.status === 403) { setForbidden(true); return Promise.reject("forbidden"); }
       if (!response.ok) return Promise.reject();
       const text = await response.text();
       return text.trim() ? JSON.parse(text) : null;
     })
-      .then((saved) => setProfile(saved ? { ...saved, transport: saved.transport === "STARTTLS" ? "STARTTLS" : "LDAPS" } : emptyProfile())).catch(() => {
+      .then((saved) => setProfile(saved ? { ...saved, transport: saved.transport === "STARTTLS" ? "STARTTLS" : "LDAPS" } : emptyProfile())).catch((reason) => {
+        if (reason === "forbidden") return;
         setProfile(emptyProfile());
         setMessage({ text: "Unable to load LDAP settings; enter values to create a profile.", type: "error" });
       });
@@ -60,6 +63,7 @@ export function DirectorySettingsPanel() {
       setProfile(await response.json()); setMessage({ text: "LDAP settings saved.", type: "success" });
     } catch { setMessage({ text: "Unable to save LDAP settings.", type: "error" }); } finally { setSaving(false); }
   };
+  if (forbidden) return <Alert severity="info" sx={{ maxWidth: 900 }}>LDAP settings need the Security Admin role; this account can not view or change them.</Alert>;
   if (!profile) return <Box p={3}>Loading LDAP settings…</Box>;
   return <Box sx={{ maxWidth: 820, p: 2 }}><Stack spacing={3}>
     <Box><Typography variant="h5">LDAP directory</Typography><Typography variant="body2" color="text.secondary">Configure the directory connection and group used for operator access.</Typography></Box>

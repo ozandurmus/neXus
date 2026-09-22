@@ -43,6 +43,36 @@ public class TopologyNamePseudonymizer {
         this.secretKey = Objects.requireNonNull(secretKey, "secretKey").clone();
     }
 
+    /** Uniqueness of cluster and standalone-device pseudonyms (V53); process-local until a database registry is set. */
+    private volatile PseudonymRegistry registry = PseudonymRegistry.inMemory();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setRegistry(PseudonymRegistry registry) {
+        if (registry != null) {
+            this.registry = registry;
+        }
+    }
+
+    /** The computed candidate first, then every other word/digit pair in a fixed walk from it. */
+    private static List<String> candidates(String prefix, int dictIndex, int suffixNum) {
+        List<String> out = new java.util.ArrayList<>(DICTIONARY.size() * 9 + 1);
+        for (int i = 0; i < DICTIONARY.size() * 9; i++) {
+            int word = (dictIndex + i / 9) % DICTIONARY.size();
+            int digit = ((suffixNum - 1 + i) % 9) + 1;
+            out.add(String.format("%s-%s-0%d", prefix, DICTIONARY.get(word), digit));
+        }
+        return out;
+    }
+
+    private String rawKey(String kind, String raw) {
+        byte[] h = hmacSha256("REGISTRY:" + kind + ":" + raw.toUpperCase());
+        StringBuilder hex = new StringBuilder();
+        for (int i = 0; i < 16; i++) {
+            hex.append(String.format("%02x", h[i]));
+        }
+        return hex.toString();
+    }
+
     private final Map<String, String> reverseClusterCache = new ConcurrentHashMap<>();
     private final Map<String, String> rawNameToPseudonym = new ConcurrentHashMap<>();
 
@@ -171,7 +201,7 @@ public class TopologyNamePseudonymizer {
         byte[] hash = hmacSha256("CLUSTER:" + raw.toUpperCase());
         int dictIndex = (hash[0] & 0xFF) % DICTIONARY.size();
         int suffixNum = ((hash[1] & 0xFF) % 9) + 1;
-        return String.format("CLS-%s-0%d", DICTIONARY.get(dictIndex), suffixNum);
+        return registry.claim("cluster", rawKey("cluster", raw), candidates("CLS", dictIndex, suffixNum));
     }
 
     private String computeDeviceName(String rawDeviceName, String clusterMemberRef) {
@@ -184,7 +214,7 @@ public class TopologyNamePseudonymizer {
         byte[] hash = hmacSha256("DEVICE:" + rawDeviceName.toUpperCase());
         int dictIndex = (hash[0] & 0xFF) % DICTIONARY.size();
         int suffixNum = ((hash[1] & 0xFF) % 9) + 1;
-        return String.format("FW-%s-0%d", DICTIONARY.get(dictIndex), suffixNum);
+        return registry.claim("device", rawKey("device", rawDeviceName), candidates("FW", dictIndex, suffixNum));
     }
 
     private String computeVsName(String rawVsName, String parentRef) {

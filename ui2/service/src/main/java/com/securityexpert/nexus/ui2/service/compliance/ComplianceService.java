@@ -169,6 +169,19 @@ public final class ComplianceService {
         return overview;
     }
 
+    /**
+     * True when at least one device evaluation is cached and none is older than the 10-minute freshness window --
+     * the Overview reads the compliance figures only then, and never triggers an evaluation itself
+     * (OVERVIEW_EXCEPTION_SCREEN_CONTRACT §3 Section 5).
+     */
+    public boolean isEvaluationCacheWarm() {
+        if (evaluationCache.isEmpty()) {
+            return false;
+        }
+        Instant limit = Instant.now().minus(Duration.ofMinutes(10));
+        return evaluationCache.values().stream().allMatch(c -> c.timestamp().isAfter(limit));
+    }
+
     public List<Map<String, Object>> getControls() {
         List<Map<String, Object>> catalog = fetchCatalog();
         List<ConfigurationQueryService.DeviceListEntry> devices = configurationQueryService.listDevices();

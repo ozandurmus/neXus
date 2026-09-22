@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { urlParam } from "../shell/urlParams";
+import { getOverview } from "../auth/adminApi";
 import Box from "@mui/material/Box";
 import InputBase from "@mui/material/InputBase";
 import Stack from "@mui/material/Stack";
@@ -210,10 +212,17 @@ export function ConfigurationScreen() {
     () => listConfigurations().then((result) => result.devices ?? []),
     describeApiError,
   );
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(() => urlParam("device_id"));
   const [selectedCluster, setSelectedCluster] = useState<{ ref: string; members: DeviceSummary[] } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterMode, setFilterMode] = useState<"all" | "changed" | "first_run" | "uncollected">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "changed" | "first_run" | "uncollected">(() => (urlParam("change_state") === "changed" ? "changed" : "all"));
+  // Overview links: clusters whose members differ (the Overview's own list), or one cluster to open.
+  const [diffRefs, setDiffRefs] = useState<ReadonlySet<string> | null>(null);
+  const [pendingClusterRef] = useState<string | null>(() => urlParam("cluster_ref"));
+  useEffect(() => {
+    if (urlParam("cluster_diff") !== "present") return;
+    getOverview().then((o) => setDiffRefs(new Set(o.exceptions?.cluster_diff?.all_refs ?? []))).catch(() => setDiffRefs(new Set()));
+  }, []);
   const [vendorFilter, setVendorFilter] = useState<"all" | "check_point" | "palo_alto">("all");
   // Design language section 2: the list is the inventory's own tree (cluster -> virtual systems),
   // read from /devices; /configuration only supplies each device's change state and filters.
@@ -267,8 +276,16 @@ export function ConfigurationScreen() {
   const treeDevices = useMemo(() => {
     if (!summaries) return [];
     const allowed = new Set(filteredDevices.map((d) => d.device_id));
-    return summaries.filter((d) => allowed.has(d.device_id) && (vendorFilter === "all" || d.vendor_hint === vendorFilter));
-  }, [summaries, filteredDevices, vendorFilter]);
+    return summaries.filter((d) => allowed.has(d.device_id) && (vendorFilter === "all" || d.vendor_hint === vendorFilter)
+      && (diffRefs === null || (d.cluster_member_ref !== null && diffRefs.has(d.cluster_member_ref))));
+  }, [summaries, filteredDevices, vendorFilter, diffRefs]);
+
+  // Open the cluster an Overview row named, once the device list is in.
+  useEffect(() => {
+    if (!pendingClusterRef || !summaries || selectedCluster) return;
+    const members = summaries.filter((d) => d.cluster_member_ref === pendingClusterRef);
+    if (members.length > 0) setSelectedCluster({ ref: pendingClusterRef, members });
+  }, [pendingClusterRef, summaries, selectedCluster]);
   const selectedSummary = summaries?.find((d) => d.device_id === selectedDeviceId) ?? null;
   const vendorCount = (vendor: string) => summaries?.filter((d) => d.vendor_hint === vendor).length ?? 0;
 
@@ -296,6 +313,12 @@ export function ConfigurationScreen() {
       <ListDetail
         list={
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
+            {diffRefs !== null && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <StatusChip tone="bad" label={`From Overview: ${diffRefs.size} cluster(s) with member DIFF`} dense />
+                <Box component="span" role="button" tabIndex={0} sx={{ cursor: "pointer", fontSize: 12, color: m3.primary }} onClick={() => setDiffRefs(null)}>clear</Box>
+              </Box>
+            )}
             <Box sx={{ height: 48, display: "flex", alignItems: "center", gap: 1.5, px: 2,
                        borderRadius: "24px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, fontSize: 14 }}>
               <Icon name="search" size={20} />

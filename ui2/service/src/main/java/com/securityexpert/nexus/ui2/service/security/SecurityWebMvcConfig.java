@@ -70,6 +70,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/config/notifications/test-syslog", ActionRegistry.NOTIFICATION_CONFIG_WRITE),
             Map.entry("POST /api/v2/config/notifications/test-mail", ActionRegistry.NOTIFICATION_CONFIG_WRITE),
             Map.entry("GET /api/v2/system/pods", ActionRegistry.SYSTEM_STATUS_READ),
+            Map.entry("GET /api/v2/overview", ActionRegistry.SYSTEM_STATUS_READ),
             Map.entry("GET /api/v2/system/storage", ActionRegistry.SYSTEM_STATUS_READ),
             Map.entry("GET /audit-logs", ActionRegistry.AUDIT_LOG_READ),
             Map.entry("GET /api/v2/jobs", ActionRegistry.JOB_LOG_READ),

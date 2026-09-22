@@ -31,11 +31,11 @@ class JobLogQueryServiceTest {
         Where where = JobLogQueryService.whereOf(new JobQuery(Optional.of("failed"), Optional.of("cp_gateway_backup"),
                 Optional.of("dev-1"), Optional.of(since), Optional.empty(), Optional.of("SFTP 100%"), 3, 25));
 
-        assertEquals(" where j.state = ? and j.job_type = ? and j.target_device_id = ? and j.submitted_at >= ? and "
+        assertEquals(" where j.state = ? and (j.job_type = ? or j.job_type like ?) and j.target_device_id = ? and j.submitted_at >= ? and "
                 + "(lower(j.job_id) like ? or lower(j.target_device_id) like ? or lower(coalesce(d.observed_hostname, '')) like ? "
                 + "or lower(coalesce(j.terminal_reason, '')) like ?)",
                 where.sql());
-        assertEquals(List.of("FAILED", "cp_gateway_backup", "dev-1", Timestamp.from(since), "%sftp 100\\%%", "%sftp 100\\%%",
+        assertEquals(List.of("FAILED", "cp_gateway_backup", "%\\_cp\\_gateway\\_backup", "dev-1", Timestamp.from(since), "%sftp 100\\%%", "%sftp 100\\%%",
                 "%sftp 100\\%%", "%sftp 100\\%%"), where.bindings());
     }
 

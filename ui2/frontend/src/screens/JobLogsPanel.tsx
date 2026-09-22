@@ -65,7 +65,16 @@ const PAGE_SIZES = [25, 50, 100, 200] as const;
  * numbered pages; CSV export of the current filter. Live polling refreshes
  * the page being looked at and never resets the filters.
  */
-export function JobLogsPanel({ initialState = "" }: { readonly initialState?: string } = {}) {
+/** Local "datetime-local" input value for a moment {@code hours} ago. */
+function hoursAgoLocal(hours: number): string {
+  const d = new Date(Date.now() - hours * 3600 * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function JobLogsPanel({ initialState = "", initialJobType = "", initialSinceHours, initialText = "" }: {
+  readonly initialState?: string; readonly initialJobType?: string; readonly initialSinceHours?: number; readonly initialText?: string;
+} = {}) {
   const [page, setPage] = useState<{ items: readonly JobEventView[]; total: number } | null>(null);
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
   const [facets, setFacets] = useState<JobFacetsView>({ states: [], job_types: [] });
@@ -75,11 +84,11 @@ export function JobLogsPanel({ initialState = "" }: { readonly initialState?: st
   const [exportBusy, setExportBusy] = useState(false);
 
   const [state, setState] = useState(initialState);
-  const [jobType, setJobType] = useState("");
+  const [jobType, setJobType] = useState(initialJobType);
   const [deviceId, setDeviceId] = useState("");
-  const [sinceLocal, setSinceLocal] = useState("");
+  const [sinceLocal, setSinceLocal] = useState(initialSinceHours ? hoursAgoLocal(initialSinceHours) : "");
   const [untilLocal, setUntilLocal] = useState("");
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState<number>(50);
 
@@ -190,6 +199,7 @@ export function JobLogsPanel({ initialState = "" }: { readonly initialState?: st
           sx={{ minWidth: 220 }}
         >
           <option value="">Any</option>
+          {initialJobType && !facets.job_types.includes(initialJobType) && <option value={initialJobType}>any *_{initialJobType}</option>}
           {facets.job_types.map((t) => <option key={t} value={t}>{t}</option>)}
         </TextField>
         <TextField

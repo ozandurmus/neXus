@@ -1,3 +1,4 @@
+import { urlParam } from "../shell/urlParams";
 import { useCallback, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
@@ -1066,6 +1067,13 @@ function BackupTargetsSection({ version, onChanged }: { readonly version: number
   const [busyId, setBusyId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [targetsOnly, setTargetsOnly] = useState(false);
+  // Overview link "backup targets without an archive": the targets with no stored backup archive.
+  const [withoutArchiveOnly, setWithoutArchiveOnly] = useState(() => urlParam("artefact") === "none");
+  const [archivedIds, setArchivedIds] = useState<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    if (!withoutArchiveOnly) return;
+    listFleetBackups().then((r) => setArchivedIds(new Set((r.backups ?? []).map((b) => b.device_id)))).catch(() => setArchivedIds(new Set()));
+  }, [withoutArchiveOnly]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1100,6 +1108,7 @@ function BackupTargetsSection({ version, onChanged }: { readonly version: number
   const targetCount = devices?.filter((d) => d.backup_target).length ?? 0;
   const shown = (devices ?? []).filter((d) => {
     if (targetsOnly && !d.backup_target) return false;
+    if (withoutArchiveOnly && (!d.backup_target || archivedIds === null || archivedIds.has(d.device_id))) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (d.hostname ?? "").toLowerCase().includes(q) || (d.model ?? "").toLowerCase().includes(q) || d.device_id.toLowerCase().includes(q);
@@ -1118,6 +1127,9 @@ function BackupTargetsSection({ version, onChanged }: { readonly version: number
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
           <TextField size="small" placeholder="Filter devices…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          {withoutArchiveOnly && (
+            <M3Button emphasis="filled" onClick={() => setWithoutArchiveOnly(false)}>✓ Without an archive (from Overview) · clear</M3Button>
+          )}
           <M3Button emphasis={targetsOnly ? "filled" : "outlined"} onClick={() => setTargetsOnly(!targetsOnly)}>
             {targetsOnly ? "✓ Targets only" : "All enrolled"}
           </M3Button>

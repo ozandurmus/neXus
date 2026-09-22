@@ -38,10 +38,12 @@ export function NotificationSettingsPanel() {
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
-    getNotificationSettings().then(setS).catch((e) => setMessage({ text: `Settings could not be read: ${problemsOf(e)}`, type: "error" }));
+    getNotificationSettings().then(setS).catch((e) => setMessage((e as ApiError)?.status === 403
+      ? { text: "Remote logging and notification settings need the Security Admin role; this account can not view or change them.", type: "info" }
+      : { text: `Settings could not be read: ${problemsOf(e)}`, type: "error" }));
   }, []);
 
-  if (!s) return <Typography sx={{ p: 3 }}>{message ? message.text : "Loading notification settings…"}</Typography>;
+  if (!s) return message ? <Alert severity={message.type} sx={{ maxWidth: 900 }}>{message.text}</Alert> : <Typography sx={{ p: 3 }}>Loading notification settings…</Typography>;
   const change = <K extends keyof NotificationSettingsView>(k: K, v: NotificationSettingsView[K]) => setS({ ...s, [k]: v });
 
   const save = async () => {

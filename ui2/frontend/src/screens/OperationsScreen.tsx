@@ -22,6 +22,7 @@ import { ScreenHeader, MetricGrid, MetricCard, EmptyPanel, ScreenRoot } from "..
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel } from "./JobLogsPanel";
+import { urlParam } from "../shell/urlParams";
 import { getJobStats, listDevices, type DeviceSummary } from "../auth/adminApi";
 import { deriveClusterTitle } from "./InventoryPanels";
 
@@ -1072,12 +1073,15 @@ export function OperationsScreen() {
       </MetricGrid>
       <M3Tabs
         ariaLabel="Operations sections"
+        initial={urlParam("tab") === "jobs" ? 1 : 0}
         tabs={[
           {
             label: "HA & readiness",
             panel: renderHaPanel(),
           },
-          { label: "Jobs", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>All jobs</Typography><JobLogsPanel /></Box> },
+          { label: "Jobs", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>All jobs</Typography><JobLogsPanel
+            initialState={urlParam("state") ?? ""} initialJobType={urlParam("job_type") ?? ""}
+            initialSinceHours={urlParam("since_hours") ? Number(urlParam("since_hours")) : undefined} initialText={urlParam("q") ?? ""} /></Box> },
           { label: "Queue", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>Queued and running jobs</Typography><JobLogsPanel initialState="REQUESTED,CLAIMED,EXECUTING" /></Box> },
           { label: "History", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>Finished jobs</Typography><JobLogsPanel initialState="COMPLETED,FAILED,OUTCOME_UNKNOWN,REJECTED" /></Box> },
         ]}

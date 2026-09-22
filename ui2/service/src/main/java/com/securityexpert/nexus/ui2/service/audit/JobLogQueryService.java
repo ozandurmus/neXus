@@ -155,8 +155,11 @@ public final class JobLogQueryService {
             }
         });
         query.jobType().filter(s -> !s.isBlank()).ifPresent(s -> {
-            clauses.add("j.job_type = ?");
+            // An exact type, or a vendor-neutral suffix (Overview links: "inventory_collect" matches
+            // cp_inventory_collect and pan_inventory_collect; "backup" matches every *_backup type).
+            clauses.add("(j.job_type = ? or j.job_type like ?)");
             bindings.add(s.strip());
+            bindings.add("%\\_" + s.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_"));
         });
         query.deviceId().filter(s -> !s.isBlank()).ifPresent(s -> {
             clauses.add("j.target_device_id = ?");

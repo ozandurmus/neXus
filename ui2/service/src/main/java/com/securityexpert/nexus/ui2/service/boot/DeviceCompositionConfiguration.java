@@ -117,6 +117,11 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
+    public com.securityexpert.nexus.ui2.service.privacy.PseudonymRegistry pseudonymRegistry(TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.service.privacy.JooqPseudonymRegistry(transactionBoundary);
+    }
+
+    @Bean
     public com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository devicePlatformFactsRepository(
             TransactionBoundary transactionBoundary) {
         return new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository(transactionBoundary);
