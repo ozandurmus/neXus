@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T21:53:56Z
+Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T23:06:05Z
 
 ## Now
 - NXS-LOCAL-0368 — Overview rebuilt as an exception-and-evidence screen; collision-free aiview pseudonyms (automated_validated)
@@ -68,6 +68,7 @@ Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T21:53:56Z
 - P1/planned ui2_pan_transport_no_credentials_in_url — UI2 Palo Alto transport: no credential ever appears in a U (target: PAN_DISCOVERY_CONTRACT.md T-1/T-5; the P)
 - P1/planned ui2_private_play_and_mockup_view — Private Play & Mockup View integration (target: )
 - P1/planned ui2_reproducible_in_cluster_image_build — UI2 reproducible in-cluster image build and release assura (target: UI2_0_B1_01C in-cluster OCI build; 13D B)
+- P1/planned ui_effectiveness_review_after_refresh — After the UI review refresh is deployed and working: usabi (target: )
 - P1/planned vault_has_no_enforced_quota_on_a_shared_host — The artefact/recovery store has no enforced quota: local-p (target: deploy/ui2/35-artefact-store-pvc.yaml; s)
 - P1/planned vendor_bluecoat_proxysg_backup — Blue Coat / Symantec ProxySG: configuration backup (target: )
 - P1/planned vendor_cisco_asa_backup — Cisco ASA: running/startup config + native backup tar over (target: )

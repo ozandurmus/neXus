@@ -882,6 +882,15 @@
       "priority": "P2",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "ui_effectiveness_review_after_refresh",
+      "category": "ui2",
+      "title": "After the UI review refresh is deployed and working: usability and effectiveness analysis of every screen by Codex (Astra, scripts/consult_codex_*.py), confirmed by Fable (scripts/consult_fable_*.py) -- does each screen serve its purpose for its user (GMY, manager, operator, auditor), what is effective, what is only a feature; outputs unaltered in docs/design/",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }
