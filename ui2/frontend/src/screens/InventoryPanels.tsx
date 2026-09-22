@@ -12,7 +12,7 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
-import { deviceNameLabel, jobPhaseLabel, isTerminalJobState } from "../shell/deviceCopy";
+import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel } from "../shell/deviceCopy";
 import { m3 } from "../theme/m3Theme";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import {
@@ -1459,6 +1459,79 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
  * device.device_id}`) on every selection change so `useFetchOnMount`'s own
  * mount effect re-runs -- it never re-triggers on a changed fetcher alone.
  */
+
+/** One header for every inventory entity (standalone device or cluster): avatar, title, opaque
+ * reference badge, status chips, an optional action on the right and optional body rows below
+ * (member cards) -- so a standalone device and a cluster read the same way. */
+function InventoryEntityHeader({
+  vendorHint,
+  model,
+  titlePrefix,
+  title,
+  reference,
+  referenceTitle,
+  chips,
+  action,
+  children,
+}: {
+  readonly vendorHint: string;
+  readonly model?: string | null;
+  readonly titlePrefix?: string;
+  readonly title: string;
+  readonly reference: string;
+  readonly referenceTitle: string;
+  readonly chips: React.ReactNode;
+  readonly action?: React.ReactNode;
+  readonly children?: React.ReactNode;
+}) {
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 1.5,
+        p: 2,
+        bgcolor: m3.scLowest,
+        borderRadius: "16px",
+        border: `1px solid ${m3.outlineVar}`,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+      }}
+    >
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+          <VendorAvatar vendorHint={vendorHint} model={model} hostname={title} />
+          <Box sx={{ minWidth: 0 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+              <Typography variant="h5" sx={{ fontWeight: 700, color: m3.onSurface }}>
+                {titlePrefix ? `${titlePrefix} ` : ""}{title}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  fontFamily: "monospace",
+                  fontSize: "0.75rem",
+                  color: m3.primary,
+                  bgcolor: m3.scHigh,
+                  px: 0.75,
+                  py: 0.2,
+                  borderRadius: "4px",
+                  border: `1px solid ${m3.outlineVar}`,
+                }}
+                title={referenceTitle}
+              >
+                {reference}
+              </Typography>
+              {chips}
+            </Box>
+          </Box>
+        </Box>
+        {action}
+      </Box>
+      {children}
+    </Box>
+  );
+}
+
 export function DeviceInventoryPanels({
   device,
   initialVs,
@@ -1506,61 +1579,59 @@ export function DeviceInventoryPanels({
     );
   }
 
+  const deviceContexts = deviceInventory?.contexts ?? [];
+  const deviceIfaceCount = deviceContexts.reduce((acc, c) => acc + c.interfaces.length, 0);
+  const deviceRouteCount = deviceContexts.reduce((acc, c) => acc + c.routes.length, 0);
+  const isEnrolledDevice = device.enrollment_state === "ENROLLED";
+  const isLiveDevice = isEnrolledDevice && Boolean(device.ip_addresses);
+
   return (
     <Stack spacing={2}>
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <Typography variant="caption" color="text.secondary">
-          Devices · {isPaloAlto ? "Palo Alto" : "Check Point"}
-          {device.cluster_member_ref ? ` ${isPaloAlto ? "PAN-OS HA" : "ClusterXL"} (${device.cluster_member_ref})` : ""}
-        </Typography>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Typography variant="h3" sx={{ fontWeight: 600 }}>
-                {deviceNameLabel(device.hostname)}
-              </Typography>
-              <Typography variant="caption" sx={{ fontFamily: "monospace", color: m3.primary }}>
-                {device.device_id}
-              </Typography>
-              <JobStatusIndicator
-                state={device.latest_job_state}
-                type={device.latest_job_type}
-                terminalReason={device.latest_job_terminal_reason}
-                size="medium"
-              />
-            </Box>
-            {isCluster && clusterInventory && clusterInventory.members.length > 0 ? (
-              <Typography variant="caption" color="text.secondary">
-                Members: {clusterInventory.members.map((m) => deviceNameLabel(m.hostname)).join(" · ")}
-              </Typography>
-            ) : null}
-          </Box>
-          <CollectNowButton deviceId={device.device_id} onCollected={refresh} enrollmentState={device.enrollment_state} />
-        </Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", pt: 0.5 }}>
-          <StatusChip
-            tone={device.enrollment_state === "ENROLLED" && device.ip_addresses ? "ok" : "warn"}
-            label={
-              device.enrollment_state !== "ENROLLED"
-                ? device.enrollment_state
-                : device.ip_addresses
-                  ? "✓ Live"
-                  : "Confirmed · Not collected"
-            }
-            dense
-          />
-          <StatusChip tone="ok" label="✓ Identity verified" dense />
-          {device.software_version && (
-            <StatusChip tone="neutral" label={`${device.software_version} · ${isPaloAlto ? "PAN-OS" : "Gaia"}`} dense />
-          )}
-          {device.model && (
-            <StatusChip tone="neutral" label={device.model} dense />
-          )}
-          {isCluster && clusterInventory && (
-            <ClusterMembersMarker inventory={clusterInventory} />
-          )}
-        </Box>
-      </Box>
+      <InventoryEntityHeader
+        vendorHint={device.vendor_hint}
+        model={device.model}
+        title={deviceNameLabel(device.hostname)}
+        reference={device.device_id}
+        referenceTitle={`Device ID: ${device.device_id}`}
+        chips={
+          <>
+            <JobStatusIndicator
+              state={device.latest_job_state}
+              type={device.latest_job_type}
+              terminalReason={device.latest_job_terminal_reason}
+              size="medium"
+            />
+            <StatusChip
+              tone={isLiveDevice ? "ok" : "warn"}
+              label={!isEnrolledDevice ? enrollmentStateLabel(device.enrollment_state) : isLiveDevice ? "✓ Live" : "Confirmed · Not collected"}
+              dense
+            />
+            {isEnrolledDevice && <StatusChip tone="ok" label="✓ Identity verified" dense />}
+            <StatusChip
+              tone="neutral"
+              label={
+                device.cluster_member_ref
+                  ? `${isPaloAlto ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"} · ${device.cluster_member_ref}`
+                  : `${isPaloAlto ? "Palo Alto" : "Check Point"} · Standalone`
+              }
+              dense
+            />
+            {device.software_version && (
+              <StatusChip tone="neutral" label={`${device.software_version} · ${isPaloAlto ? "PAN-OS" : "Gaia"}`} dense />
+            )}
+            {device.model && <StatusChip tone="neutral" label={device.model} dense />}
+            <StatusChip tone="neutral" label={`${deviceIfaceCount} interfaces · ${deviceRouteCount} routes`} dense />
+            {isCluster && clusterInventory && <ClusterMembersMarker inventory={clusterInventory} />}
+          </>
+        }
+        action={<CollectNowButton deviceId={device.device_id} onCollected={refresh} enrollmentState={device.enrollment_state} />}
+      >
+        {isCluster && clusterInventory && clusterInventory.members.length > 0 ? (
+          <Typography variant="caption" color="text.secondary">
+            Members: {clusterInventory.members.map((m) => deviceNameLabel(m.hostname)).join(" · ")}
+          </Typography>
+        ) : null}
+      </InventoryEntityHeader>
 
       <M3Tabs
         ariaLabel="Device detail"
@@ -1723,68 +1794,33 @@ export function ClusterDetailPanels({
 
   return (
     <Stack spacing={2}>
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 1.5,
-          p: 2,
-          bgcolor: m3.scLowest,
-          borderRadius: "16px",
-          border: `1px solid ${m3.outlineVar}`,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-        }}
-      >
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <VendorAvatar
-              vendorHint={firstMember?.vendor_hint ?? "check_point"}
-              model={firstMember?.model}
-              hostname={clusterTitle}
+      <InventoryEntityHeader
+        vendorHint={firstMember?.vendor_hint ?? "check_point"}
+        model={firstMember?.model}
+        titlePrefix="CLS >"
+        title={clusterTitle}
+        reference={clusterRef}
+        referenceTitle={`Verified API Cluster Reference: ${clusterRef}`}
+        chips={
+          <>
+            <StatusChip
+              tone={isLive ? "ok" : "warn"}
+              label={!isEnrolled ? "Not enrolled" : isLive ? "✓ Live" : "Confirmed · Not collected"}
+              dense
             />
-            <Box>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                <Typography variant="h5" sx={{ fontWeight: 700, color: m3.onSurface }}>
-                  CLS &gt; {clusterTitle}
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontFamily: "monospace",
-                    fontSize: "0.75rem",
-                    color: m3.primary,
-                    bgcolor: m3.scHigh,
-                    px: 0.75,
-                    py: 0.2,
-                    borderRadius: "4px",
-                    border: `1px solid ${m3.outlineVar}`,
-                  }}
-                  title={`Verified API Cluster Reference: ${clusterRef}`}
-                >
-                  {clusterRef}
-                </Typography>
-                <StatusChip
-                  tone={isLive ? "ok" : "warn"}
-                  label={!isEnrolled ? "Not enrolled" : isLive ? "✓ Live" : "Confirmed · Not collected"}
-                  dense
-                />
-                <StatusChip
-                  tone="neutral"
-                  label={firstMember?.vendor_hint === "palo_alto" ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"}
-                  dense
-                />
-                {firstMember?.software_version && (
-                  <StatusChip tone="neutral" label={`${firstMember.software_version} · ${firstMember?.vendor_hint === "palo_alto" ? "PAN-OS" : "Gaia"}`} dense />
-                )}
-                {firstMember?.model && (
-                  <StatusChip tone="neutral" label={firstMember.model} dense />
-                )}
-                <StatusChip tone="neutral" label={`${ifaceCount} interfaces · ${routeCount} routes`} dense />
-              </Box>
-            </Box>
-          </Box>
-        </Box>
-
+            <StatusChip
+              tone="neutral"
+              label={firstMember?.vendor_hint === "palo_alto" ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"}
+              dense
+            />
+            {firstMember?.software_version && (
+              <StatusChip tone="neutral" label={`${firstMember.software_version} · ${firstMember?.vendor_hint === "palo_alto" ? "PAN-OS" : "Gaia"}`} dense />
+            )}
+            {firstMember?.model && <StatusChip tone="neutral" label={firstMember.model} dense />}
+            <StatusChip tone="neutral" label={`${ifaceCount} interfaces · ${routeCount} routes`} dense />
+          </>
+        }
+      >
         {/* 2 Member Cards Sub-row */}
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5, pt: 0.5 }}>
           {members.map((m) => {
@@ -1836,7 +1872,7 @@ export function ClusterDetailPanels({
             already sets activeVsContext, and duplicating that control here just for a second click
             target -- next to a third one inside the panel below -- is exactly the confusing repetition
             this screen must not have. */}
-      </Box>
+      </InventoryEntityHeader>
 
       <M3Tabs
         ariaLabel="Cluster detail"
