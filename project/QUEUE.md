@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T23:38:57Z
+Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T23:39:40Z
 
 ## Now
 - NXS-LOCAL-0368 — Overview rebuilt as an exception-and-evidence screen; collision-free aiview pseudonyms (automated_validated)
@@ -79,6 +79,7 @@ Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-22T23:38:57Z
 - P1/planned vendor_panorama_backup — Palo Alto Panorama: device-bundle export + running config (target: )
 - P1/planned vendor_pulse_secure_backup — Pulse Secure (Ivanti) Secure Access: system/users/IVS conf (target: )
 - P1/planned vendor_radware_defensepro_backup — Radware DefensePro: configuration backup (HTTPS) (target: )
+- P1/planned version_advisory_exposure — Security advisories and critical bugs for the versions the (target: )
 - P2/in_progress cp_spark_exec_channel_rejected
 - P2/in_progress cp_vsx_interfaces_identical_to_physical
 - P2/in_progress ui2_m3_design_transfer_pass

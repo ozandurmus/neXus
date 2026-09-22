@@ -215,7 +215,8 @@
     "ui_effectiveness_review_after_refresh": "java_feature",
     "test_fixture_realistic_names_cleanup": "java_debt",
     "aiview_masked_readonly_admin": "java_feature",
-    "m3_design_alignment_review": "java_feature"
+    "m3_design_alignment_review": "java_feature",
+    "version_advisory_exposure": "java_feature"
   },
   "converted_lessons": [
     {
