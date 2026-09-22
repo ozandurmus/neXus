@@ -29,7 +29,7 @@ async function csrfToken(): Promise<string | undefined> {
 
 async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unknown): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (method === "POST") {
+  if (method !== "GET") {
     const token = await csrfToken();
     if (token) headers["X-CSRF-Token"] = token;
   }
