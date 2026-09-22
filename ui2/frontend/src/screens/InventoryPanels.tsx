@@ -246,7 +246,7 @@ export function toClusterContexts(contexts: readonly InventoryContext[], deviceI
       presence: "all" as const,
       differences: [],
       member_addresses: { [deviceId]: iface.addresses.filter((a) => a.role !== "cluster_virtual") },
-      member_states: { [deviceId]: iface.state },
+      member_states: { [deviceId]: iface.state ?? "unknown" },
     })),
     routes: ctx.routes.map((route) => ({
       destination: route.destination,
@@ -300,7 +300,7 @@ function ClusterInterfacesTable({
 
   const filtered = withoutLoopback.filter((iface) => {
     if (upOnly) {
-      const memberStates = iface.member_states ? Object.values(iface.member_states) : [];
+      const memberStates = iface.member_states ? Object.values(iface.member_states).filter((v): v is string => typeof v === "string") : [];
       const allDown = memberStates.length > 0 && memberStates.every((s) => s.toLowerCase() === "down");
       const hasVip = iface.addresses.some((a) => a.role === "cluster_virtual");
       // Hide strictly when all members are closed/down and there is no VIP.
@@ -355,7 +355,7 @@ function ClusterInterfacesTable({
             <TableCell sx={{ fontWeight: 600 }}>Kind</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>VLAN</TableCell>
             {sharedAddressOnly || singleMember ? (
-              <TableCell sx={{ fontWeight: 600 }}>Addresses</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Address</TableCell>
             ) : (
               <>
                 {showVipColumn && <TableCell sx={{ fontWeight: 600 }}>Cluster VIP</TableCell>}
@@ -391,7 +391,7 @@ function ClusterInterfacesTable({
             // Members agree or disagree with each other -- never "not literally up, not literally
             // down" against two hardcoded values. Two members reporting the same "unknown" agree;
             // Degraded means the members' own states genuinely differ from each other, nothing else.
-            const memberStates = iface.member_states ? Object.values(iface.member_states) : [];
+            const memberStates = iface.member_states ? Object.values(iface.member_states).filter((v): v is string => typeof v === "string") : [];
             const normalizedStates = memberStates.map((s) => s.toLowerCase());
             const distinctStates = new Set(normalizedStates);
             const isMixed = memberStates.length > 0 && distinctStates.size > 1;
