@@ -50,6 +50,9 @@ spec:
           # second tag or a shell-interpreted environment variable.
           args: ["worker"]
           env:
+            # BK-11: the distinct backup credential (Admin > Credentials: Backup-User-LDAP), never the collection credential.
+            - name: UI2_CP_BACKUP_CREDENTIAL_REF
+              value: "a5c22471-26af-4cb1-a13e-090311c88c96"
             # SEC-4: the non-secret half of the connection comes from the
             # ConfigMap and the DSN is assembled in the process. No complete
             # DSN containing a credential exists in a manifest, a ConfigMap,
