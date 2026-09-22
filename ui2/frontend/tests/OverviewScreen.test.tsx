@@ -49,30 +49,47 @@ function stub(body: OverviewView) {
 }
 
 describe("Overview -- exception-and-evidence screen (OVERVIEW_EXCEPTION_SCREEN_CONTRACT)", () => {
-  it("shows the five attention tiles with their denominators and filtered links", async () => {
+  it("shows six posture tiles with denominators, status words, deltas and filtered links", async () => {
+    stub(overview({ attention: { ...overview().attention, failed_jobs_24h: { count: 7, terminal_24h: 212, previous: 4, state: "OK" } } }));
+    render(<OverviewScreen />);
+    expect((await screen.findAllByText("Act now")).length).toBeGreaterThan(1);
+    const backup = screen.getByText("Backup targets without archive").closest("a")!;
+    expect(backup.getAttribute("href")).toBe("?screen=backups&artefact=none");
+    expect(backup.textContent).toContain("19");
+    expect(backup.textContent).toContain("of 102");
+    const failedTile = screen.getByText("Failed jobs, 24 h").closest("a")!;
+    expect(failedTile.getAttribute("href")).toBe("?screen=operations&tab=jobs&state=FAILED&since_hours=24");
+    expect(failedTile.textContent).toContain("+3 since yesterday");
+    expect(screen.getByText("Clusters with member differences").closest("a")!.textContent).toContain("8 not comparable");
+    // zero is neutral: the stale-inventory tile says Clear, not a status colour word
+    expect(screen.getByText("Devices without evidence, 24 h").closest("a")!.textContent).toContain("Clear");
+    // no stored history for configuration changes
+    expect(screen.getByText("Configuration changed").closest("a")!.textContent).toContain("no history");
+  });
+
+  it("writes the headline as three lines: Act now, Review, Evidence", async () => {
     stub(overview());
     render(<OverviewScreen />);
-    expect(await screen.findByText("Needs attention")).toBeInTheDocument();
-    const tile = screen.getByText("Backup targets without an archive").closest("a")!;
-    expect(tile.getAttribute("href")).toBe("?screen=backups&artefact=none");
-    expect(tile.textContent).toContain("19");
-    expect(tile.textContent).toContain("of 102");
-    expect(screen.getByText("Failed jobs, 24 h").closest("a")!.getAttribute("href")).toBe("?screen=operations&tab=jobs&state=FAILED&since_hours=24");
-    expect(screen.getByText("Clusters with member DIFF").closest("a")!.textContent).toContain("UNKNOWN for 8 cluster(s)");
+    expect(await screen.findByText(/7 of 212 jobs failed in 24 h/)).toBeInTheDocument();
+    expect(screen.getByText(/19 of 102 backup targets have no archive/)).toBeInTheDocument();
+    expect(screen.getAllByText("Review").length).toBeGreaterThan(1);
+    expect(screen.getByText(/3 of 31 active clusters show member differences/)).toBeInTheDocument();
+    expect(screen.getByText("Evidence")).toBeInTheDocument();
   });
 
   it("writes UNKNOWN, never 0, for what is not evidenced", async () => {
     stub(overview({ attention: { ...overview().attention, stale_inventory: { count: 0, of: 0, state: "UNKNOWN" } } }));
     render(<OverviewScreen />);
-    expect(await screen.findByText(/UNKNOWN — compliance not yet evaluated/)).toBeInTheDocument();
-    expect(screen.getByText("Devices without inventory in 24 h").closest("a")!.textContent).toContain("UNKNOWN");
-    expect(screen.getByText("UNKNOWN — no stored evidence")).toBeInTheDocument();
+    expect(await screen.findByText(/Compliance has not been evaluated yet/)).toBeInTheDocument();
+    expect(screen.getByText("Devices without evidence, 24 h").closest("a")!.textContent).toContain("UNKNOWN");
+    expect(screen.getByText("Compliance deficiencies").closest("a")!.textContent).toContain("UNKNOWN");
+    expect(screen.getByText(/1 UNKNOWN/)).toBeInTheDocument();
   });
 
   it("groups failed jobs by cause, shows the three latest and links to the whole list", async () => {
     stub(overview());
     render(<OverviewScreen />);
-    expect(await screen.findByText("Show all (7)")).toBeInTheDocument();
+    expect(await screen.findByText("Show all · 7")).toBeInTheDocument();
     const cause = screen.getByText("connect_failed: palo alto key generation did not return a usable key").closest("a")!;
     expect(cause.textContent).toContain("3 devices");
     expect(cause.getAttribute("href")).toBe("?screen=operations&tab=jobs&state=FAILED&since_hours=24&q=connect_failed%3A+palo+alto+key+generation+did+not+return+a+usable+key");
@@ -99,9 +116,9 @@ describe("Overview -- exception-and-evidence screen (OVERVIEW_EXCEPTION_SCREEN_C
     stub(overview({ compliance: { state: "OK", reason: null, evaluated: 102, of_firewalls: 105, observed_pct: 34.7, assured_pct: 28.9, coverage_pct: 82.5,
       critical_deficiencies: 172, data_gaps: 428, frameworks: [] } }));
     render(<OverviewScreen />);
-    const kpi = (await screen.findByText("COMPLIANCE EVIDENCE COVERAGE")).closest("a")!;
-    expect(kpi.textContent).toContain("82.5%");
-    expect(kpi.textContent).not.toContain("of 100");
+    expect(await screen.findByText(/covers 82.5% of control checks: 172 critical deficiencies, 428 data gaps/)).toBeInTheDocument();
+    expect(screen.getByText("Compliance deficiencies").closest("a")!.textContent).toContain("82.5% coverage");
+    expect(document.body.textContent).not.toContain("of 100");
   });
 
   it("keeps an UNKNOWN row in the hotfix histogram and never calls a level outdated", async () => {
@@ -115,7 +132,7 @@ describe("Overview -- exception-and-evidence screen (OVERVIEW_EXCEPTION_SCREEN_C
   it("says the read failed instead of rendering figures when the endpoint fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 500 })));
     render(<OverviewScreen />);
-    expect(await screen.findByText("Overview unavailable")).toBeInTheDocument();
+    expect(await screen.findByText(/Overview unavailable/)).toBeInTheDocument();
   });
 
   it("ages evidence in plain words", () => {

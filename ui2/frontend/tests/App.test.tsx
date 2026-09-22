@@ -8,7 +8,7 @@ import { DESTINATIONS, DRAWER_GROUPS } from "../src/shell/NavigationRail";
 // subtitle/panel text is used instead of its heading to keep each query
 // unambiguous.
 const PRODUCT_MARKERS: Record<string, string> = {
-  overview: "Operational posture",
+  overview: "Reading the fleet…",
   inventory: "Network inventory",
   configuration: "Configuration",
   compliance: "No framework assigned · nothing assessed yet",
@@ -102,7 +102,7 @@ describe("the six product screens", () => {
 
   it("defaults to the Overview screen when no screen is named", async () => {
     render(<App search="" />);
-    expect(await screen.findByText("Operational posture")).toBeInTheDocument();
+    expect(await screen.findByText("Reading the fleet…")).toBeInTheDocument();
   });
 });
 

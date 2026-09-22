@@ -39,12 +39,28 @@ async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unkn
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  noteMasking(response);
   const parsed = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error: ApiError = { status: response.status, body: parsed };
     throw error;
   }
   return parsed as T;
+}
+
+/**
+ * The server marks a masked (aiview) response with `X-Nexus-Masked: true`; the shell shows the mask chip on every
+ * screen from that header alone -- the browser never infers masking from a role token.
+ */
+let maskedSeen = false;
+export function responsesAreMasked(): boolean {
+  return maskedSeen;
+}
+function noteMasking(response: Response) {
+  if (!maskedSeen && response.headers?.get?.("X-Nexus-Masked") === "true") {
+    maskedSeen = true;
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("nx-masked"));
+  }
 }
 
 /** Like {@link call}, but for a {@code text/plain} response (the Check Point sanitized configuration view) -- never JSON-parsed. */
@@ -1208,13 +1224,13 @@ export function getSystemStorage(): Promise<StorageView> {
 
 export type EvidenceState = "OK" | "UNKNOWN" | "READ_FAILED";
 export interface EvidenceChip { readonly at: string | null; readonly state: EvidenceState }
-export interface CountTile { readonly count: number; readonly of?: number; readonly unknown?: number; readonly terminal_24h?: number; readonly last_at?: string | null; readonly state: EvidenceState }
+export interface CountTile { readonly count: number; readonly of?: number; readonly unknown?: number; readonly terminal_24h?: number; readonly last_at?: string | null; readonly previous?: number | null; readonly state: EvidenceState }
 export interface FailureReason { readonly reason: string; readonly count: number; readonly devices: number; readonly job_types: readonly string[]; readonly last_at: string | null }
 export interface VersionSlice { readonly label: string | null; readonly count: number }
 export interface OverviewView {
   readonly generated_at: string;
   readonly masked: boolean;
-  readonly denominators: { active_devices: number; gateways: number; clusters: number; backup_targets: number };
+  readonly denominators: { active_devices: number; enrolled_devices?: number; gateways: number; clusters: number; clusters_enrolled?: number; backup_targets: number };
   readonly evidence: Record<"inventory" | "configuration" | "compliance" | "backup" | "jobs" | "platform_facts", EvidenceChip> & { state?: EvidenceState };
   readonly attention: {
     failed_jobs_24h: CountTile; stale_inventory: CountTile; cluster_diff: CountTile; config_changed: CountTile; backup_missing: CountTile;

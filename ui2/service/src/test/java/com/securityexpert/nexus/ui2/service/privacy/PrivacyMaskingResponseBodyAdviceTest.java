@@ -38,6 +38,23 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void marksAMaskedResponseWithTheMaskedHeaderAndOnlyThat() {
+        org.springframework.http.server.ServerHttpResponse masked = mock(org.springframework.http.server.ServerHttpResponse.class);
+        org.springframework.http.HttpHeaders maskedHeaders = new org.springframework.http.HttpHeaders();
+        when(masked.getHeaders()).thenReturn(maskedHeaders);
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        advice.beforeBodyWrite(Map.of("device_id", "x"), null, null, null, serverRequest, masked);
+        assertThat(maskedHeaders.getFirst(PrivacyMaskingResponseBodyAdvice.MASKED_HEADER)).isEqualTo("true");
+
+        org.springframework.http.server.ServerHttpResponse plain = mock(org.springframework.http.server.ServerHttpResponse.class);
+        org.springframework.http.HttpHeaders plainHeaders = new org.springframework.http.HttpHeaders();
+        when(plain.getHeaders()).thenReturn(plainHeaders);
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(null);
+        advice.beforeBodyWrite(Map.of("device_id", "x"), null, null, null, serverRequest, plain);
+        assertThat(plainHeaders.getFirst(PrivacyMaskingResponseBodyAdvice.MASKED_HEADER)).isNull();
+    }
+
+    @Test
     void returnsUnmaskedDataWhenNotReplayViewer() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(null);
 

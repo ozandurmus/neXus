@@ -13,7 +13,7 @@ import { M3Button, StatusChip } from "./M3Widgets";
 import { useSession } from "../auth/SessionContext";
 import { NexusWordmark } from "../brand/NexusWordmark";
 import { useFetchOnMount } from "./useFetchOnMount";
-import { listNotifications, getProjectPlan } from "../auth/adminApi";
+import { listNotifications, getProjectPlan, responsesAreMasked } from "../auth/adminApi";
 
 /**
  * The minimal notification badge NXS-LOCAL-0165 adds (WORKER.md
@@ -96,6 +96,17 @@ function BuildBadge() {
  * block at all only when a session is present (useSession() is non-null
  * inside AuthGate, null in App's own standalone tests/preview rendering).
  */
+/** "aiview · names masked" on every screen, once any response came back masked (server header). */
+function MaskChip() {
+  const [masked, setMasked] = useState(responsesAreMasked());
+  useEffect(() => {
+    const on = () => setMasked(true);
+    window.addEventListener("nx-masked", on);
+    return () => window.removeEventListener("nx-masked", on);
+  }, []);
+  return masked ? <StatusChip tone="mem" label="aiview · names masked" dense /> : null;
+}
+
 /** The as-of clock the wall display shows (review §6): UTC, ticking every 30 s. */
 function AsOfClock() {
   const [now, setNow] = useState(() => new Date());
@@ -206,6 +217,7 @@ export function TopAppBar() {
       </Box>
       <Box sx={{ ml: 3 }}><GlobalSearch /></Box>
       <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2, color: m3.onSurfaceVar }}>
+        <MaskChip />
         <Tooltip title="Every time on every screen is UTC"><Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>Times in UTC</Typography></Tooltip>
         <BuildBadge />
         <DisplayControls />

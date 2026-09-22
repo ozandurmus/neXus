@@ -1,38 +1,39 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
+import Collapse from "@mui/material/Collapse";
 import Link from "@mui/material/Link";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
-import { EmptyPanel, ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
+import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { Icon, type IconName } from "../shell/Icon";
 import { StatusChip } from "../shell/M3Widgets";
-import { Donut, Meter, STATUS, StackedBar, foldSlices } from "../shell/Charts";
-import { m3 } from "../theme/m3Theme";
+import { Donut, STATUS, STATUS_INK, StackedBar, foldSlices } from "../shell/Charts";
+import { StatePanel, Ts, isRestricted } from "../shell/States";
+import { useDisplayMode } from "../shell/displayMode";
+import { formatUtc, relativeAge } from "../shell/time";
+import { MONO, m3 } from "../theme/m3Theme";
 import { getOverview, type CountTile, type EvidenceChip, type FailureReason, type OverviewView, type VersionSlice } from "../auth/adminApi";
 
+export { relativeAge } from "../shell/time";
+
 /**
- * Overview -- an executive summary over stored evidence (OVERVIEW_EXCEPTION_SCREEN_CONTRACT, FROZEN 2026-09-23;
- * visual pass requested by the PO the same day: "more appealing, an executive summary, per-vendor major and
- * minor versions as pie charts, more colour" -- recorded as amendment A-2026-09-23 in the contract). Every figure is
- * still a stored-evidence query with its evidence time; UNKNOWN is written as UNKNOWN, never 0; every figure opens
- * the screen that lists it, filtered.
+ * Overview -- the executive summary over stored evidence (OVERVIEW_EXCEPTION_SCREEN_CONTRACT, FROZEN 2026-09-23,
+ * amendments A and B of the same day; layout from UI_VISUAL_REVIEW_2026_09_23_FABLE.md §2):
+ *   A  title, "as of" with active-of-enrolled denominators, mask chip, one freshness chip (expands to six)
+ *   B  the headline in three lines: Act now / Review / Evidence
+ *   C  six posture tiles, each count + "of N", status word, bar, context, since-yesterday delta, one click
+ *   D  compliance by framework | why jobs failed
+ *   E  software and hardware (inventory facts, not exceptions -- below the fold)
+ *   F  configuration changes | cluster member DIFF | inventory evidence age
+ * Every figure is a stored-evidence query with its evidence time; UNKNOWN is written as UNKNOWN, never 0; zero is
+ * neutral; every figure opens the list behind it. `?wall=1` shows rows B, C and the failure causes beside the queue.
  */
 
-export function relativeAge(iso: string | null | undefined, now: Date = new Date()): string {
-  if (!iso) return "UNKNOWN";
-  const s = Math.max(0, (now.getTime() - new Date(iso).getTime()) / 1000);
-  if (s < 90) return "just now";
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 172800) return `${Math.round(s / 3600)} h ago`;
-  return `${Math.round(s / 86400)} d ago`;
-}
+const CARD = { borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, p: 2.25, boxShadow: "none" } as const;
+const q = (params: Record<string, string>) => `?${new URLSearchParams(params).toString()}`;
+const pct = (a: number, b: number) => (b > 0 ? Math.round((100 * a) / b) : 0);
 
 function ageTone(iso: string | null | undefined): keyof typeof STATUS {
   if (!iso) return "neutral";
@@ -40,20 +41,16 @@ function ageTone(iso: string | null | undefined): keyof typeof STATUS {
   return h < 24 ? "good" : h < 72 ? "warning" : "critical";
 }
 
-const CARD = { borderRadius: "20px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, p: 2.5, boxShadow: "0 1px 2px rgba(15,23,42,0.04)" } as const;
-const q = (params: Record<string, string>) => `?${new URLSearchParams(params).toString()}`;
-const pct = (a: number, b: number) => (b > 0 ? Math.round((100 * a) / b) : 0);
-
-function SectionTitle({ icon, title, hint, right }: { readonly icon: IconName; readonly title: string; readonly hint?: string; readonly right?: React.ReactNode }) {
+function SectionTitle({ icon, title, hint, right }: { readonly icon: IconName; readonly title: string; readonly hint?: string; readonly right?: ReactNode }) {
   return (
     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5, gap: 1, flexWrap: "wrap" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-        <Box sx={{ width: 34, height: 34, borderRadius: "10px", bgcolor: m3.primaryContainer, color: m3.primary, display: "grid", placeItems: "center" }}>
-          <Icon name={icon} size={18} />
+        <Box sx={{ width: 30, height: 30, borderRadius: "8px", bgcolor: m3.primaryContainer, color: m3.primary, display: "grid", placeItems: "center" }}>
+          <Icon name={icon} size={17} />
         </Box>
         <Box>
-          <Typography sx={{ fontSize: 17, fontWeight: 650, color: m3.onSurface, lineHeight: 1.2 }}>{title}</Typography>
-          {hint && <Typography variant="caption" color="text.secondary">{hint}</Typography>}
+          <Typography sx={{ fontSize: 16, lineHeight: "24px", fontWeight: 600, color: m3.onSurface }}>{title}</Typography>
+          {hint && <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{hint}</Typography>}
         </Box>
       </Box>
       {right}
@@ -61,35 +58,22 @@ function SectionTitle({ icon, title, hint, right }: { readonly icon: IconName; r
   );
 }
 
-/** One KPI of the executive band: a big number, a ratio meter and what it means. */
-function Kpi({ label, value, of, suffix, tone, note, href, display }: {
-  readonly label: string; readonly value: number | null; readonly of: number; readonly suffix?: string;
-  readonly tone: keyof typeof STATUS | "primary"; readonly note: string; readonly href: string;
-  /** A stored percentage shown as read (one decimal), with no "N of D" ratio. */
-  readonly display?: string;
-}) {
-  return (
-    <Link href={href} underline="none" sx={{ color: "inherit", display: "block", flex: "1 1 200px", minWidth: 190 }}>
-      <Box sx={{ p: 2, borderRadius: "16px", bgcolor: "rgba(255,255,255,0.82)", border: "1px solid rgba(255,255,255,0.9)", height: "100%", "&:hover": { bgcolor: "#fff" } }}>
-        <Typography sx={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", color: m3.onSurfaceVar }}>{label.toUpperCase()}</Typography>
-        <Typography sx={{ fontSize: 34, fontWeight: 750, lineHeight: 1.15, color: m3.onSurface, my: 0.5 }}>
-          {value === null ? "UNKNOWN" : display ?? `${pct(value, of)}%`}
-          {value !== null && display === undefined && <Typography component="span" sx={{ fontSize: 13, fontWeight: 500, color: m3.onSurfaceVar, ml: 1 }}>{value} of {of}{suffix ? ` ${suffix}` : ""}</Typography>}
-        </Typography>
-        <Meter value={value ?? 0} of={of} tone={tone} />
-        <Typography variant="caption" sx={{ color: m3.onSurfaceVar, display: "block", mt: 0.75 }}>{note}</Typography>
-      </Box>
-    </Link>
-  );
-}
+const EVIDENCE_KEYS: Array<[string, string, string]> = [
+  ["inventory", "Inventory", q({ screen: "operations", tab: "jobs", job_type: "inventory_collect" })],
+  ["configuration", "Configuration", q({ screen: "operations", tab: "jobs", job_type: "configuration_collect" })],
+  ["compliance", "Compliance", "?screen=compliance"],
+  ["backup", "Backup", q({ screen: "operations", tab: "jobs", job_type: "backup" })],
+  ["jobs", "Jobs", q({ screen: "operations", tab: "jobs" })],
+  ["platform_facts", "Platform facts", "?screen=inventory"],
+];
 
 function EvidenceDot({ label, chip, href }: { readonly label: string; readonly chip: EvidenceChip | undefined; readonly href: string }) {
   const tone = chip?.state === "OK" ? ageTone(chip.at) : "neutral";
   const text = chip?.state === "OK" ? relativeAge(chip.at) : chip?.state === "UNKNOWN" ? "UNKNOWN — no stored evidence" : "READ FAILED";
   return (
-    <Tooltip title={chip?.at ? new Date(chip.at).toUTCString() : text}>
+    <Tooltip title={chip?.at ? `${formatUtc(chip.at)} UTC` : text}>
       <Link href={href} underline="none" sx={{ color: "inherit" }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1.25, py: 0.5, borderRadius: "999px", bgcolor: "rgba(255,255,255,0.7)" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1.25, py: 0.4, borderRadius: "999px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLowest }}>
           <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: STATUS[tone] }} />
           <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{label}</Typography>
           <Typography sx={{ fontSize: 12, fontWeight: 600, color: m3.onSurface }}>{text}</Typography>
@@ -99,57 +83,80 @@ function EvidenceDot({ label, chip, href }: { readonly label: string; readonly c
   );
 }
 
-type Severity = "critical" | "serious" | "warning";
-
-function AttentionTile({ title, tile, href, subtitle, severity, icon }: {
-  readonly title: string; readonly tile: CountTile | undefined; readonly href: string; readonly subtitle: string;
-  readonly severity: Severity; readonly icon: IconName;
-}) {
-  const unknown = !tile || tile.state !== "OK";
-  const active = !unknown && tile.count > 0;
-  const color = active ? STATUS[severity] : STATUS.neutral;
-  const word = unknown ? "Unknown" : active ? (severity === "critical" ? "Act now" : severity === "serious" ? "Review" : "Watch") : "Clear";
+/** One chip, "All evidence 2 h ago" (the oldest of the six), that expands to the six per-domain chips. */
+function FreshnessChip({ evidence: raw }: { readonly evidence: OverviewView["evidence"] }) {
+  const [open, setOpen] = useState(false);
+  const evidence = raw as unknown as Record<string, EvidenceChip | undefined>;
+  const chips = EVIDENCE_KEYS.map(([k]) => evidence[k]);
+  const missing = chips.filter((c) => !c || c.state !== "OK").length;
+  const oldest = chips.filter((c) => c?.state === "OK" && c.at).map((c) => c!.at as string).sort()[0] ?? null;
+  const tone = missing > 0 ? "neutral" : ageTone(oldest);
+  const label = missing === chips.length ? "Evidence UNKNOWN" : `All evidence ${relativeAge(oldest)}${missing ? ` · ${missing} UNKNOWN` : ""}`;
   return (
-    <Link href={href} underline="none" sx={{ color: "inherit", display: "block" }}>
-      <Card sx={{ ...CARD, p: 2, height: "100%", position: "relative", overflow: "hidden", "&:hover": { boxShadow: "0 4px 14px rgba(15,23,42,0.08)" } }}>
-        <Box sx={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 5, bgcolor: color }} />
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
-          <Box sx={{ color, display: "flex" }}><Icon name={icon} size={18} /></Box>
-          <Box sx={{ px: 1, py: 0.25, borderRadius: "999px", bgcolor: active ? `${color}22` : m3.sc, fontSize: 11, fontWeight: 700, color: active ? m3.onSurface : m3.onSurfaceVar }}>{word}</Box>
+    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.75 }}>
+      <Box component="button" type="button" aria-expanded={open} onClick={() => setOpen(!open)}
+        sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1.25, py: 0.5, borderRadius: "999px", cursor: "pointer",
+              border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLowest, color: m3.onSurface, font: "inherit" }}>
+        <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: STATUS[tone] }} />
+        <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{label}</Typography>
+        <Typography sx={{ fontSize: 11, color: m3.onSurfaceVar }}>{open ? "hide" : "details"}</Typography>
+      </Box>
+      <Collapse in={open}>
+        <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 640 }}>
+          {EVIDENCE_KEYS.map(([k, name, href]) => <EvidenceDot key={k} label={name} chip={evidence[k]} href={href} />)}
         </Box>
-        <Typography sx={{ fontSize: 13.5, fontWeight: 550, color: m3.onSurfaceVar, minHeight: 38 }}>{title}</Typography>
-        <Typography sx={{ fontSize: 32, fontWeight: 750, lineHeight: 1.1, color: m3.onSurface }}>
-          {unknown ? "UNKNOWN" : tile.count}
-          {!unknown && tile.of !== undefined && <Typography component="span" sx={{ fontSize: 15, fontWeight: 500, color: m3.onSurfaceVar }}> of {tile.of}</Typography>}
-        </Typography>
-        <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
-      </Card>
-    </Link>
+      </Collapse>
+    </Box>
   );
 }
 
-function ExceptionList<T>({ icon, title, total, rows, empty, head, cells, rowHref, allHref }: {
-  readonly icon: IconName; readonly title: string; readonly total: number; readonly rows: readonly T[]; readonly empty: string;
-  readonly head: readonly string[]; readonly cells: (r: T) => React.ReactNode[]; readonly rowHref: (r: T) => string; readonly allHref: string;
-}) {
+type Severity = "critical" | "serious" | "warning";
+const WORD: Record<Severity, string> = { critical: "Act now", serious: "Review", warning: "Watch" };
+
+/** "+3 since yesterday" / "−2" / "no change"; nothing when the product keeps no history for the figure. */
+function Delta({ count, previous }: { readonly count: number; readonly previous: number | null | undefined }) {
+  if (previous === null || previous === undefined) {
+    return <Tooltip title="No stored history for this figure yet"><Box component="span" sx={{ color: m3.onSurfaceVar }}>no history</Box></Tooltip>;
+  }
+  const d = count - previous;
   return (
-    <Card sx={CARD}>
-      <SectionTitle icon={icon} title={title} right={total > rows.length ? <Link href={allHref} sx={{ fontSize: 13 }}>Show all ({total})</Link> : null} />
-      {rows.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">{empty}</Typography>
-      ) : (
-        <Table size="small">
-          <TableHead><TableRow>{head.map((h) => <TableCell key={h} sx={{ fontSize: 11, letterSpacing: "0.06em", color: m3.onSurfaceVar }}>{h}</TableCell>)}</TableRow></TableHead>
-          <TableBody>
-            {rows.map((r, i) => (
-              <TableRow key={i} hover sx={{ cursor: "pointer" }} onClick={() => { window.location.href = rowHref(r); }}>
-                {cells(r).map((c, j) => <TableCell key={j} sx={{ fontSize: 12.5, verticalAlign: "top" }}>{c}</TableCell>)}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-    </Card>
+    <Tooltip title={`${previous} the day before`}>
+      <Box component="span" sx={{ color: m3.onSurfaceVar, fontFamily: MONO }}>{d === 0 ? "no change" : `${d > 0 ? "+" : "−"}${Math.abs(d)} since yesterday`}</Box>
+    </Tooltip>
+  );
+}
+
+/** A posture tile (row C): eyebrow, count "of N", status word chip, thin bar, one context line, delta; one link. */
+function PostureTile({ title, count, of, unknown, severity, icon, context, previous, href, big = false }: {
+  readonly title: string; readonly count: number; readonly of?: number; readonly unknown: boolean; readonly severity: Severity;
+  readonly icon: IconName; readonly context: string; readonly previous?: number | null; readonly href: string; readonly big?: boolean;
+}) {
+  const active = !unknown && count > 0;
+  const fill = active ? STATUS[severity] : STATUS.neutral;
+  const ink = active ? STATUS_INK[severity] : m3.onSurfaceVar;
+  const word = unknown ? "UNKNOWN" : active ? WORD[severity] : "Clear";
+  return (
+    <Link href={href} underline="none" sx={{ color: "inherit", display: "block" }} aria-label={`${title}: ${unknown ? "UNKNOWN" : count}${of !== undefined ? ` of ${of}` : ""}, ${word}`}>
+      <Card sx={{ ...CARD, p: big ? 2.5 : 2, height: "100%", display: "flex", flexDirection: "column", gap: 0.75, "&:hover": { borderColor: m3.outline } }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, color: ink, minWidth: 0 }}>
+            <Icon name={icon} size={16} />
+            <Typography noWrap sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>{title}</Typography>
+          </Box>
+          <Box sx={{ px: 1, py: 0.2, borderRadius: "6px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
+                     bgcolor: active ? `${fill}26` : m3.sc, color: ink }}>{word}</Box>
+        </Box>
+        <Typography sx={{ fontSize: big ? 44 : 32, lineHeight: 1.1, fontWeight: 700, color: unknown ? m3.neutralInk : m3.onSurface }}>
+          {unknown ? "UNKNOWN" : count}
+          {!unknown && of !== undefined && <Typography component="span" sx={{ fontSize: big ? 18 : 14, fontWeight: 500, color: m3.onSurfaceVar }}> of {of}</Typography>}
+        </Typography>
+        <Box sx={{ height: 4, borderRadius: "2px", bgcolor: m3.sc, overflow: "hidden" }}>
+          <Box sx={{ width: `${of && of > 0 ? Math.min(100, (100 * count) / of) : active ? 100 : 0}%`, height: "100%", bgcolor: fill }} />
+        </Box>
+        <Typography variant="caption" sx={{ color: m3.onSurfaceVar, fontSize: big ? 13 : 11.5 }}>{context}</Typography>
+        {!unknown && <Typography variant="caption" sx={{ fontSize: big ? 13 : 11.5 }}><Delta count={count} previous={previous} /></Typography>}
+      </Card>
+    </Link>
   );
 }
 
@@ -179,16 +186,36 @@ function VendorVersions({ vendor, name, majorTitle, minorTitle, modelTitle, vers
     foldSlices(raw.map((s) => ({ ...s, href: link(kind, s.label) })), 5, all)
       .map((s) => (s.label !== null && s.display === s.label ? { ...s, display: shortLabel(vendor, kind, s.label) } : s));
   const minorRaw = versions?.minor ?? (fallbackMinor ?? []).map((h) => ({ label: h.level, count: h.count }));
+  /** A donut with one slice carries no information (review §2): a stat line that keeps the click-through. */
+  const part = (kind: "major" | "minor" | "model", title: string, raw: readonly VersionSlice[]) => {
+    const slices = donut(kind, raw);
+    if (slices.length === 1) {
+      const s = slices[0];
+      return (
+        <Box key={kind} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <Typography variant="caption" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.06em", fontWeight: 600 }}>{title.toUpperCase()}</Typography>
+          <Link href={s.href} underline="hover" sx={{ color: m3.onSurface }}>
+            <Typography sx={{ fontFamily: MONO, fontSize: 22, fontWeight: 600 }}>{s.display}</Typography>
+            <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{s.count} of {s.count} devices</Typography>
+          </Link>
+        </Box>
+      );
+    }
+    return <Donut key={kind} stacked size={120} title={title} slices={slices} />;
+  };
   return (
-    <Card sx={{ ...CARD, borderTop: `4px solid ${accent}` }}>
+    <Card sx={CARD}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", mb: 1.5 }}>
-        <Typography sx={{ fontSize: 16, fontWeight: 650 }}>{name}</Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box sx={{ width: 9, height: 9, borderRadius: "2px", bgcolor: accent }} />
+          <Typography sx={{ fontSize: 16, fontWeight: 600 }}>{name}</Typography>
+        </Box>
         <Link href={all} sx={{ fontSize: 13 }}>{total} devices</Link>
       </Box>
-      <Box sx={{ display: "grid", gap: 2.5, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
-        <Donut stacked size={124} title={majorTitle} slices={donut("major", versions?.major ?? [])} />
-        <Donut stacked size={124} title={minorTitle} slices={donut("minor", minorRaw)} />
-        <Donut stacked size={124} title={modelTitle} slices={donut("model", versions?.model ?? [])} />
+      <Box sx={{ display: "grid", gap: 2.5, gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+        {part("major", majorTitle, versions?.major ?? [])}
+        {part("minor", minorTitle, minorRaw)}
+        {part("model", modelTitle, versions?.model ?? [])}
       </Box>
     </Card>
   );
@@ -199,62 +226,124 @@ function reasonSearch(reason: string): string {
   return reason.replace(/(^|[^A-Za-z])N([^A-Za-z]|$).*$/, "$1").trim();
 }
 
-/**
- * Failed jobs, 24 h (amendment A-2026-09-23): grouped by cause first -- what an executive asks -- then the latest
- * failures as the contract's list (masked target, job type, terminal reason, finished).
- */
-function FailedJobsCard({ total, reasons, rows, allHref }: {
+/** Failed jobs, 24 h, grouped by cause first, then the contract's list as the three latest rows. */
+function FailedJobsCard({ total, reasons, rows, allHref, latest = true }: {
   readonly total: number; readonly reasons: readonly FailureReason[];
-  readonly rows: OverviewView["exceptions"]["failed_jobs"]["rows"]; readonly allHref: string;
+  readonly rows: OverviewView["exceptions"]["failed_jobs"]["rows"]; readonly allHref: string; readonly latest?: boolean;
 }) {
   const max = Math.max(1, ...reasons.map((r) => r.count));
   return (
     <Card sx={CARD}>
       <SectionTitle icon="operations" title="Why jobs failed" hint={total > 0 ? "last 24 h, grouped by cause" : undefined}
-        right={total > 0 ? <Link href={allHref} sx={{ fontSize: 13 }}>Show all ({total})</Link> : null} />
+        right={total > 0 ? <Link href={allHref} sx={{ fontSize: 13 }}>Show all · {total}</Link> : null} />
       {total === 0 ? (
-        <Typography variant="body2" color="text.secondary">No failed jobs in the last 24 h.</Typography>
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>No failed jobs in the last 24 h.</Typography>
       ) : (
         <>
           {reasons.map((r) => (
             <Link key={r.reason} href={q({ screen: "operations", tab: "jobs", state: "FAILED", since_hours: "24", q: reasonSearch(r.reason) })}
-              underline="none" sx={{ color: "inherit", display: "block", mb: 1.25, "&:hover .bar": { opacity: 0.85 } }}>
+              underline="none" sx={{ color: "inherit", display: "block", mb: 1.25 }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, alignItems: "baseline" }}>
-                <Typography sx={{ fontSize: 12.5, color: m3.onSurface, fontFamily: "monospace", overflowWrap: "anywhere" }}>{r.reason}</Typography>
+                <Typography sx={{ fontSize: 12.5, color: m3.onSurface, fontFamily: MONO, overflowWrap: "anywhere" }}>{r.reason}</Typography>
                 <Typography sx={{ fontSize: 15, fontWeight: 700, color: m3.onSurface }}>{r.count}</Typography>
               </Box>
-              <Box sx={{ height: 6, borderRadius: "3px", bgcolor: m3.sc, my: 0.5 }}>
-                <Box className="bar" sx={{ width: `${(100 * r.count) / max}%`, minWidth: 4, height: "100%", borderRadius: "3px", bgcolor: STATUS.critical }} />
+              <Box sx={{ height: 5, borderRadius: "3px", bgcolor: m3.sc, my: 0.5 }}>
+                <Box sx={{ width: `${(100 * r.count) / max}%`, minWidth: 4, height: "100%", borderRadius: "3px", bgcolor: STATUS.critical }} />
               </Box>
               <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
                 {r.devices} device{r.devices === 1 ? "" : "s"} · {r.job_types.join(", ")} · last {relativeAge(r.last_at)}
               </Typography>
             </Link>
           ))}
-          <Typography variant="caption" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.06em", fontWeight: 600, display: "block", mt: 2, mb: 0.5 }}>LATEST</Typography>
-          {rows.slice(0, 3).map((r) => (
-            <Link key={r.job_id} href={q({ screen: "operations", tab: "jobs", q: r.job_id })} underline="none"
-              sx={{ color: "inherit", display: "block", py: 0.75, borderTop: `1px solid ${m3.outlineVar}` }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
-                <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{r.label ?? r.device_id.slice(0, 8)} <Box component="span" sx={{ fontWeight: 400, color: m3.onSurfaceVar }}>· {r.job_type}</Box></Typography>
-                <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>{relativeAge(r.finished_at)}</Typography>
-              </Box>
-              <Typography noWrap title={r.terminal_reason ?? ""} sx={{ fontSize: 11.5, color: m3.onSurfaceVar }}>{r.terminal_reason ?? "—"}</Typography>
-            </Link>
-          ))}
+          {latest && (
+            <>
+              <Typography variant="caption" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.06em", fontWeight: 600, display: "block", mt: 2, mb: 0.5 }}>LATEST</Typography>
+              {rows.slice(0, 3).map((r) => (
+                <Link key={r.job_id} href={q({ screen: "operations", tab: "jobs", q: r.job_id })} underline="none"
+                  sx={{ color: "inherit", display: "block", py: 0.75, borderTop: `1px solid ${m3.outlineVar}` }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
+                    <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{r.label ?? r.device_id.slice(0, 8)} <Box component="span" sx={{ fontWeight: 400, color: m3.onSurfaceVar }}>· {r.job_type}</Box></Typography>
+                    <Typography sx={{ fontSize: 12 }}><Ts at={r.finished_at} seconds={false} /></Typography>
+                  </Box>
+                  <Typography noWrap title={r.terminal_reason ?? ""} sx={{ fontSize: 11.5, color: m3.onSurfaceVar }}>{r.terminal_reason ?? "—"}</Typography>
+                </Link>
+              ))}
+            </>
+          )}
         </>
       )}
     </Card>
   );
 }
 
+function ComplianceCard({ c, evidenceAt }: { readonly c: OverviewView["compliance"]; readonly evidenceAt: string | null | undefined }) {
+  return (
+    <Card sx={CARD}>
+      <SectionTitle icon="compliance" title="Compliance by framework" hint={`control checks (control × firewall) · evidence ${relativeAge(evidenceAt)}`}
+        right={<Link href="?screen=compliance" sx={{ fontSize: 13 }}>Open Compliance</Link>} />
+      {c.state !== "OK" ? (
+        <StatePanel variant="not_evaluated" title="Compliance has not been evaluated yet" body={<>Open <Link href="?screen=compliance">Compliance</Link> to evaluate.</>} />
+      ) : (
+        <>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
+            <StatusChip tone="neutral" label={`${c.evaluated} of ${c.of_firewalls} firewalls evaluated`} />
+            <Tooltip title="Assured: passing checks among all assigned checks (a check without evidence counts against). Observed: passing checks among checks that could be judged (pass + fail).">
+              <Box component="span"><StatusChip tone="neutral" label={`Assured ${c.assured_pct}% · observed ${c.observed_pct}% · coverage ${c.coverage_pct}%`} /></Box>
+            </Tooltip>
+            <Link href={q({ screen: "compliance", severity: "critical", result: "fail" })} underline="none"><StatusChip tone={(c.critical_deficiencies ?? 0) > 0 ? "bad" : "neutral"} label={`${c.critical_deficiencies} critical deficiencies`} /></Link>
+            <Link href={q({ screen: "compliance", result: "unavailable" })} underline="none"><StatusChip tone={(c.data_gaps ?? 0) > 0 ? "warn" : "neutral"} label={`${c.data_gaps} data gaps`} /></Link>
+          </Box>
+          {(c.frameworks ?? []).map((f) => (
+            <Link key={f.name} href={q({ screen: "compliance", framework: f.name })} underline="none" sx={{ color: "inherit", display: "block", mb: 1.5 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{f.name}</Typography>
+                <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>{f.pass} / {f.total} checks pass · <b style={{ color: "inherit" }}>{f.score_pct}%</b></Typography>
+              </Box>
+              <StackedBar parts={[
+                { label: "Pass", count: f.pass, color: STATUS.good },
+                { label: "Fail", count: f.fail, color: STATUS.critical },
+                { label: "Unavailable (no evidence)", count: f.unavailable, color: STATUS.neutral },
+              ]} />
+            </Link>
+          ))}
+          <Box sx={{ display: "flex", gap: 2, mt: 0.5 }}>
+            {[["Pass", STATUS.good], ["Fail", STATUS.critical], ["Unavailable", STATUS.neutral]].map(([l, col]) => (
+              <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}><Box sx={{ width: 10, height: 10, borderRadius: "3px", bgcolor: col }} /><Typography variant="caption">{l}</Typography></Box>
+            ))}
+          </Box>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function ListCard<T>({ icon, title, total, rows, empty, cells, rowHref, allHref }: {
+  readonly icon: IconName; readonly title: string; readonly total: number; readonly rows: readonly T[]; readonly empty: string;
+  readonly cells: (r: T) => ReactNode; readonly rowHref: (r: T) => string; readonly allHref: string;
+}) {
+  return (
+    <Card sx={CARD}>
+      <SectionTitle icon={icon} title={title} right={total > rows.length ? <Link href={allHref} sx={{ fontSize: 13 }}>Show all · {total}</Link> : null} />
+      {rows.length === 0 ? (
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{empty}</Typography>
+      ) : rows.map((r, i) => (
+        <Link key={i} href={rowHref(r)} underline="none" sx={{ color: "inherit", display: "block", py: 0.9, borderTop: i ? `1px solid ${m3.outlineVar}` : "none", "&:hover": { bgcolor: m3.sc } }}>
+          {cells(r)}
+        </Link>
+      ))}
+    </Card>
+  );
+}
+
 export function OverviewScreen() {
   const [data, setData] = useState<OverviewView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; restricted: boolean } | null>(null);
+  const { wall } = useDisplayMode();
 
   const load = useCallback(() => {
     getOverview().then((d) => { setData(d); setError(null); })
-      .catch((e: { status?: number; message?: string }) => setError(e?.message ?? `The overview could not be read (status ${e?.status ?? "?"})`));
+      .catch((e: { status?: number; message?: string }) => setError({
+        message: e?.message ?? `The overview could not be read (status ${e?.status ?? "?"})`, restricted: isRestricted(e) }));
   }, []);
 
   useEffect(() => {
@@ -266,10 +355,18 @@ export function OverviewScreen() {
   }, [load]);
 
   if (error) {
-    return <ScreenRoot><ScreenHeader title="Operational posture" subtitle="The overview could not be read" /><EmptyPanel title="Overview unavailable" body={error} /></ScreenRoot>;
+    return (
+      <ScreenRoot>
+        <ScreenHeader title="Overview" subtitle="The overview could not be read" />
+        {error.restricted
+          ? <StatePanel variant="restricted" title="Overview" body="This account can not view the overview." />
+          : <StatePanel variant="error" title="Overview unavailable" body="The overview could not be read. It retries every 60 s." code={error.message}
+              action={<Link component="button" onClick={load}>Retry</Link>} />}
+      </ScreenRoot>
+    );
   }
   if (!data) {
-    return <ScreenRoot><ScreenHeader title="Operational posture" subtitle="Reading the fleet…" /></ScreenRoot>;
+    return <ScreenRoot><ScreenHeader title="Overview" subtitle="Reading the fleet…" /></ScreenRoot>;
   }
 
   const a = data.attention;
@@ -279,78 +376,118 @@ export function OverviewScreen() {
   const p = data.platform;
   const n = data.nexus;
   const d = data.denominators;
-  const fresh = age?.lt24h ?? 0;
-  const protectedTargets = a.backup_missing?.state === "OK" ? (a.backup_missing.of ?? 0) - a.backup_missing.count : null;
-  const agreeing = a.cluster_diff?.state === "OK" ? (a.cluster_diff.of ?? 0) - a.cluster_diff.count : null;
   const failed = a.failed_jobs_24h?.count ?? 0;
+  const tileUnknown = (t: CountTile | undefined) => !t || t.state !== "OK";
+  const neverRead = age?.never ?? 0;
 
-  const headline: string[] = [];
-  headline.push(`Evidence is current for ${fresh} of ${age?.of ?? d.active_devices} devices.`);
-  headline.push(failed > 0
-    ? `${failed} job${failed === 1 ? "" : "s"} failed in the last 24 hours${a.failed_jobs_24h?.last_at ? `, the latest ${relativeAge(a.failed_jobs_24h.last_at)}` : ""}.`
-    : "No job failed in the last 24 hours.");
-  if (protectedTargets !== null) headline.push(`${protectedTargets} of ${a.backup_missing.of} backup targets hold an archive.`);
-  if (c.state === "OK") headline.push(`Compliance: ${c.assured_pct ?? c.observed_pct}% assured, evidence coverage ${c.coverage_pct}%, ${c.critical_deficiencies} critical deficiencies.`);
+  // Row B -- three lines, Act now / Review / Evidence (review §2 wording: "n of N", no adjectives).
+  const actNow: string[] = [];
+  if (!tileUnknown(a.failed_jobs_24h)) actNow.push(failed > 0
+    ? `${failed} of ${a.failed_jobs_24h.terminal_24h} jobs failed in 24 h${a.failed_jobs_24h.last_at ? `, latest ${relativeAge(a.failed_jobs_24h.last_at)}` : ""}.`
+    : "No job failed in 24 h.");
+  if (!tileUnknown(a.backup_missing)) actNow.push(a.backup_missing.count > 0
+    ? `${a.backup_missing.count} of ${a.backup_missing.of} backup targets have no archive.`
+    : `Every one of ${a.backup_missing.of} backup targets holds an archive.`);
+  const review: string[] = [];
+  if (!tileUnknown(a.cluster_diff)) review.push(`${a.cluster_diff.count} of ${a.cluster_diff.of} active clusters show member differences${a.cluster_diff.unknown ? ` (${a.cluster_diff.unknown} not comparable)` : ""}.`);
+  if (!tileUnknown(a.config_changed)) review.push(`${a.config_changed.count} device${a.config_changed.count === 1 ? "" : "s"} changed configuration since the previous collection.`);
+  const evidence: string[] = [];
+  evidence.push(`Evidence read in 24 h for ${age?.lt24h ?? 0} of ${age?.of ?? d.active_devices} active devices${neverRead ? `; ${neverRead} never read` : ""}.`);
+  evidence.push(c.state === "OK"
+    ? `Compliance evidence covers ${c.coverage_pct}% of control checks: ${c.critical_deficiencies} critical deficiencies, ${c.data_gaps} data gaps.`
+    : "Compliance NOT EVALUATED.");
+
+  const headline = (
+    <Card sx={{ ...CARD, p: { xs: 2, md: 2.5 }, bgcolor: m3.scLowest }}>
+      {([["Act now", actNow, STATUS_INK.critical], ["Review", review, STATUS_INK.serious], ["Evidence", evidence, m3.onSurfaceVar]] as Array<[string, string[], string]>).map(([word, lines, ink]) => (
+        <Box key={word} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "96px 1fr" }, gap: { xs: 0, sm: 2 }, py: 0.6 }}>
+          <Typography sx={{ fontSize: wall ? 22 : 15, fontWeight: 700, color: ink }}>{word}</Typography>
+          <Typography sx={{ fontSize: wall ? 22 : 15, lineHeight: 1.45, color: m3.onSurface }}>{lines.length ? lines.join(" ") : "Nothing to report."}</Typography>
+        </Box>
+      ))}
+    </Card>
+  );
+
+  const tiles = (
+    <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(3, 1fr)", xl: "repeat(6, 1fr)" } }}>
+      <PostureTile big={wall} icon="operations" severity="critical" title="Failed jobs, 24 h" count={failed} of={a.failed_jobs_24h?.terminal_24h}
+        unknown={tileUnknown(a.failed_jobs_24h)} previous={a.failed_jobs_24h?.previous}
+        context={a.failed_jobs_24h?.last_at ? `latest ${relativeAge(a.failed_jobs_24h.last_at)}` : "no failure in 24 h"}
+        href={q({ screen: "operations", tab: "jobs", state: "FAILED", since_hours: "24" })} />
+      <PostureTile big={wall} icon="backup" severity="critical" title="Backup targets without archive" count={a.backup_missing?.count ?? 0} of={a.backup_missing?.of}
+        unknown={tileUnknown(a.backup_missing)} previous={a.backup_missing?.previous}
+        context={`latest backup ${relativeAge(data.evidence.backup?.at)}`} href={q({ screen: "backups", artefact: "none" })} />
+      <PostureTile big={wall} icon="config" severity="serious" title="Clusters with member differences" count={a.cluster_diff?.count ?? 0} of={a.cluster_diff?.of}
+        unknown={tileUnknown(a.cluster_diff)} previous={a.cluster_diff?.previous}
+        context={`${(a.cluster_diff?.of ?? 0) - (a.cluster_diff?.count ?? 0)} in agreement${a.cluster_diff?.unknown ? ` · ${a.cluster_diff.unknown} not comparable` : ""} · expected member-specific settings not yet separated`}
+        href={q({ screen: "configuration", cluster_diff: "present" })} />
+      <PostureTile big={wall} icon="config" severity="serious" title="Configuration changed" count={a.config_changed?.count ?? 0} of={a.config_changed?.of}
+        unknown={tileUnknown(a.config_changed)} previous={a.config_changed?.previous}
+        context={`since the previous collection · latest ${relativeAge(data.evidence.configuration?.at)}`} href={q({ screen: "configuration", change_state: "changed" })} />
+      <PostureTile big={wall} icon="devices" severity="warning" title="Devices without evidence, 24 h" count={a.stale_inventory?.count ?? 0} of={a.stale_inventory?.of}
+        unknown={tileUnknown(a.stale_inventory)} previous={a.stale_inventory?.previous}
+        context={`${age?.h24_72 ?? 0} aging · ${age?.gt72h ?? 0} stale · ${neverRead} never read`} href={q({ screen: "inventory", inventory_age: "stale" })} />
+      <PostureTile big={wall} icon="compliance" severity="critical" title="Compliance deficiencies" count={c.state === "OK" ? (c.critical_deficiencies ?? 0) : 0}
+        unknown={c.state !== "OK"} previous={null}
+        context={c.state === "OK" ? `critical · ${c.coverage_pct}% coverage · ${c.data_gaps} data gaps` : "not evaluated"}
+        href={q({ screen: "compliance", severity: "critical", result: "fail" })} />
+    </Box>
+  );
+
+  const failedCard = (
+    <FailedJobsCard total={ex.failed_jobs?.total ?? 0} reasons={ex.failed_jobs?.reasons ?? []} rows={ex.failed_jobs?.rows ?? []} latest={!wall}
+      allHref={q({ screen: "operations", tab: "jobs", state: "FAILED", since_hours: "24" })} />
+  );
+
+  if (wall) {
+    return (
+      <ScreenRoot>
+        {headline}
+        {tiles}
+        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "2fr 1fr" } }}>
+          {failedCard}
+          <Card sx={CARD}>
+            <SectionTitle icon="operations" title="Queue" hint="neXus jobs" />
+            <Typography sx={{ fontSize: 40, fontWeight: 700 }}>{n.running ?? "UNKNOWN"}<Typography component="span" sx={{ fontSize: 16, color: m3.onSurfaceVar }}> running</Typography></Typography>
+            <Typography sx={{ color: m3.onSurfaceVar }}>completed in 24 h: <b>{n.completed_24h ?? "UNKNOWN"}</b></Typography>
+            <Typography sx={{ color: m3.onSurfaceVar }}>oldest running: {n.oldest_running_submitted_at ? relativeAge(n.oldest_running_submitted_at) : "none"}</Typography>
+            <Typography sx={{ color: m3.onSurfaceVar }}>last inventory: Check Point {relativeAge(n.last_inventory?.check_point)} · Palo Alto {relativeAge(n.last_inventory?.palo_alto)}</Typography>
+          </Card>
+        </Box>
+      </ScreenRoot>
+    );
+  }
+
+  const enrolled = d.enrolled_devices ?? d.active_devices;
+  const clustersEnrolled = d.clusters_enrolled ?? d.clusters;
 
   return (
     <ScreenRoot>
+      {/* Row A */}
       <ScreenHeader
-        title="Operational posture"
-        subtitle={`${d.active_devices} active devices · ${p.check_point ?? "—"} Check Point · ${p.palo_alto ?? "—"} Palo Alto · ${d.clusters} clusters · read ${relativeAge(data.generated_at)}`}
-        actions={data.masked ? <StatusChip tone="mem" label="aiview · names masked" /> : undefined}
+        title="Overview"
+        subtitle={`as of ${formatUtc(data.generated_at, false)} UTC · ${d.active_devices} of ${enrolled} devices active · ${d.clusters} of ${clustersEnrolled} clusters active · ${p.check_point ?? "UNKNOWN"} Check Point, ${p.palo_alto ?? "UNKNOWN"} Palo Alto`}
+        actions={
+          <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+            <FreshnessChip evidence={data.evidence} />
+          </Box>
+        }
       />
 
-      {/* Executive summary band */}
-      <Box sx={{ borderRadius: "24px", p: { xs: 2, md: 3 }, background: `linear-gradient(135deg, ${m3.primaryContainer} 0%, #EEF4FF 45%, #F3EEFF 100%)`, border: `1px solid ${m3.outlineVar}` }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap", mb: 2 }}>
-          <Box sx={{ maxWidth: 820 }}>
-            <Typography sx={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: m3.primary }}>EXECUTIVE SUMMARY</Typography>
-            <Typography sx={{ fontSize: 21, fontWeight: 650, lineHeight: 1.35, color: m3.onPrimaryContainer, mt: 0.5 }}>{headline.join(" ")}</Typography>
-          </Box>
-          <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", maxWidth: 560, justifyContent: "flex-end" }}>
-            <EvidenceDot label="Inventory" chip={data.evidence.inventory} href={q({ screen: "operations", tab: "jobs", job_type: "inventory_collect" })} />
-            <EvidenceDot label="Configuration" chip={data.evidence.configuration} href={q({ screen: "operations", tab: "jobs", job_type: "configuration_collect" })} />
-            <EvidenceDot label="Compliance" chip={data.evidence.compliance} href="?screen=compliance" />
-            <EvidenceDot label="Backup" chip={data.evidence.backup} href={q({ screen: "operations", tab: "jobs", job_type: "backup" })} />
-            <EvidenceDot label="Jobs" chip={data.evidence.jobs} href={q({ screen: "operations", tab: "jobs" })} />
-            <EvidenceDot label="Platform facts" chip={data.evidence.platform_facts} href="?screen=inventory" />
-          </Box>
-        </Box>
-        <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
-          <Kpi label="Evidence current (24 h)" value={fresh} of={age?.of ?? 0} tone={pct(fresh, age?.of ?? 0) >= 95 ? "good" : "warning"}
-            note={`${age?.h24_72 ?? 0} aging · ${age?.gt72h ?? 0} stale · ${age?.never ?? 0} never read`} href={q({ screen: "inventory", inventory_age: "stale" })} />
-          <Kpi label="Backup targets protected" value={protectedTargets} of={a.backup_missing?.of ?? 0} tone={protectedTargets !== null && pct(protectedTargets, a.backup_missing.of ?? 0) >= 95 ? "good" : "serious"}
-            note={`${a.backup_missing?.count ?? "—"} targets without an archive`} href={q({ screen: "backups", artefact: "none" })} />
-          <Kpi label="Compliance evidence coverage" value={c.state === "OK" ? (c.coverage_pct ?? 0) : null} of={100} tone="primary"
-            display={c.state === "OK" ? `${c.coverage_pct}%` : undefined}
-            note={c.state === "OK" ? `controls with evidence · ${c.assured_pct ?? c.observed_pct}% assured · ${c.data_gaps} data gaps` : "not evaluated yet"} href="?screen=compliance" />
-          <Kpi label="Clusters in agreement" value={agreeing} of={a.cluster_diff?.of ?? 0} tone={agreeing !== null && agreeing === (a.cluster_diff.of ?? 0) ? "good" : "warning"}
-            note={`${a.cluster_diff?.count ?? "—"} with member differences${a.cluster_diff?.unknown ? ` · ${a.cluster_diff.unknown} not comparable` : ""}`} href={q({ screen: "configuration", cluster_diff: "present" })} />
-        </Box>
+      {/* Row B, C */}
+      {headline}
+      {tiles}
+
+      {/* Row D */}
+      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" } }}>
+        <ComplianceCard c={c} evidenceAt={data.evidence.compliance?.at} />
+        {failedCard}
       </Box>
 
-      {/* Needs attention */}
-      <Box>
-        <SectionTitle icon="bell" title="Needs attention" hint="Each tile opens its filtered list" />
-        <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-          <AttentionTile icon="operations" severity="critical" title="Failed jobs, 24 h" tile={a.failed_jobs_24h} subtitle={`of ${a.failed_jobs_24h?.terminal_24h ?? "—"} finished in 24 h${a.failed_jobs_24h?.last_at ? ` · latest ${relativeAge(a.failed_jobs_24h.last_at)}` : ""}`}
-            href={q({ screen: "operations", tab: "jobs", state: "FAILED", since_hours: "24" })} />
-          <AttentionTile icon="devices" severity="warning" title="Devices without inventory in 24 h" tile={a.stale_inventory} subtitle={`latest inventory ${relativeAge(data.evidence.inventory?.at)}`}
-            href={q({ screen: "inventory", inventory_age: "stale" })} />
-          <AttentionTile icon="config" severity="serious" title="Clusters with member DIFF" tile={a.cluster_diff}
-            subtitle={a.cluster_diff?.unknown ? `UNKNOWN for ${a.cluster_diff.unknown} cluster(s) without two member reads` : "every cluster comparable"}
-            href={q({ screen: "configuration", cluster_diff: "present" })} />
-          <AttentionTile icon="config" severity="serious" title="Configuration changed since previous collection" tile={a.config_changed} subtitle={`latest configuration ${relativeAge(data.evidence.configuration?.at)}`}
-            href={q({ screen: "configuration", change_state: "changed" })} />
-          <AttentionTile icon="backup" severity="critical" title="Backup targets without an archive" tile={a.backup_missing} subtitle={`latest backup ${relativeAge(data.evidence.backup?.at)}`}
-            href={q({ screen: "backups", artefact: "none" })} />
-        </Box>
-      </Box>
-
-      {/* Software versions */}
+      {/* Row E -- inventory facts, below the fold */}
       <Box>
         <SectionTitle icon="grid" title="Software and hardware" hint={`Per vendor, from the latest reads · facts ${relativeAge(p.evidence_at)} · each slice opens the device list`} />
-        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fit, minmax(600px, 1fr))" }}>
+        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" } }}>
           <VendorVersions vendor="check_point" name="Check Point" majorTitle="Major version" minorTitle="Jumbo hotfix"
             modelTitle="Appliance" versions={p.versions?.check_point} fallbackMinor={p.hotfix_levels} total={p.check_point ?? 0} />
           <VendorVersions vendor="palo_alto" name="Palo Alto Networks" majorTitle="PAN-OS major" minorTitle="Exact version"
@@ -358,75 +495,45 @@ export function OverviewScreen() {
         </Box>
       </Box>
 
-      {/* Compliance + evidence age */}
-      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fit, minmax(460px, 1fr))" }}>
-        <Card sx={CARD}>
-          <SectionTitle icon="compliance" title="Compliance" hint={`evidence ${relativeAge(data.evidence.compliance?.at)}`} />
-          {c.state !== "OK" ? (
-            <Typography variant="body2" color="text.secondary">UNKNOWN — compliance not yet evaluated. <Link href="?screen=compliance">Open Compliance to evaluate.</Link></Typography>
-          ) : (
-            <>
-              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
-                <StatusChip tone="neutral" label={`${c.evaluated} of ${c.of_firewalls} firewalls evaluated`} />
-                <StatusChip tone="neutral" label={`Observed ${c.observed_pct}% · coverage ${c.coverage_pct}%`} />
-                <Link href={q({ screen: "compliance", severity: "critical", result: "fail" })} underline="none"><StatusChip tone="bad" label={`${c.critical_deficiencies} critical deficiencies`} /></Link>
-                <Link href={q({ screen: "compliance", result: "unavailable" })} underline="none"><StatusChip tone="warn" label={`${c.data_gaps} data gaps`} /></Link>
-              </Box>
-              {(c.frameworks ?? []).map((f) => (
-                <Link key={f.name} href={q({ screen: "compliance", framework: f.name })} underline="none" sx={{ color: "inherit", display: "block", mb: 1.5 }}>
-                  <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
-                    <Typography sx={{ fontSize: 13.5, fontWeight: 600 }}>{f.name}</Typography>
-                    <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>{f.pass} / {f.total} pass · <b style={{ color: m3.onSurface }}>{f.score_pct}%</b></Typography>
-                  </Box>
-                  <StackedBar parts={[
-                    { label: "Pass", count: f.pass, color: STATUS.good },
-                    { label: "Fail", count: f.fail, color: STATUS.critical },
-                    { label: "Unavailable (no evidence)", count: f.unavailable, color: STATUS.neutral },
-                  ]} />
-                </Link>
-              ))}
-              <Box sx={{ display: "flex", gap: 2, mt: 0.5 }}>
-                {[["Pass", STATUS.good], ["Fail", STATUS.critical], ["Unavailable", STATUS.neutral]].map(([l, col]) => (
-                  <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}><Box sx={{ width: 10, height: 10, borderRadius: "3px", bgcolor: col }} /><Typography variant="caption">{l}</Typography></Box>
-                ))}
-              </Box>
-            </>
+      {/* Row F */}
+      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "1fr 1fr", xl: "1fr 1fr 1fr" } }}>
+        <ListCard icon="config" title="Configuration changes" total={ex.config_changes?.total ?? 0} rows={ex.config_changes?.rows ?? []}
+          empty="No configuration change in the latest collections."
+          cells={(r) => (
+            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 600, fontFamily: MONO }}>{r.label ?? r.device_id.slice(0, 8)}</Typography>
+              <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{r.sections_latest} sections · <Ts at={r.collected_at} seconds={false} /></Typography>
+            </Box>
           )}
-        </Card>
-
+          rowHref={(r) => q({ screen: "configuration", device_id: r.device_id })}
+          allHref={q({ screen: "configuration", change_state: "changed" })} />
+        <ListCard icon="config" title="Cluster member DIFF" total={ex.cluster_diff?.total ?? 0} rows={ex.cluster_diff?.rows ?? []}
+          empty={ex.cluster_diff?.unknown ? `No member differences in comparable clusters; member comparison not available for ${ex.cluster_diff.unknown} cluster(s).` : "No member differences in comparable clusters."}
+          cells={(r) => (
+            <Box sx={{ display: "grid", gridTemplateColumns: "140px 1fr auto", gap: 1.5, alignItems: "baseline" }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 600, fontFamily: MONO, whiteSpace: "nowrap" }}>{r.cluster_ref}</Typography>
+              <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{r.diff_sections.join(", ") || `${r.diff_section_count} sections`}</Typography>
+              <Typography sx={{ fontSize: 13, fontWeight: 600, textAlign: "right" }}>{r.diff_setting_count}<Typography component="span" sx={{ fontSize: 11, color: m3.onSurfaceVar }}> settings</Typography></Typography>
+            </Box>
+          )}
+          rowHref={(r) => q({ screen: "configuration", cluster_ref: r.cluster_ref })}
+          allHref={q({ screen: "configuration", cluster_diff: "present" })} />
         <Card sx={CARD}>
           <SectionTitle icon="devices" title="Inventory evidence age" hint={`${age?.of ?? 0} active devices · newest read per device`} />
           <Donut title="Last successful inventory" centerLabel="devices" slices={[
             { label: "under 24 h", display: "under 24 h", count: age?.lt24h ?? 0, color: STATUS.good, href: q({ screen: "inventory", inventory_age: "lt24h" }) },
             { label: "24–72 h", display: "24–72 h", count: age?.h24_72 ?? 0, color: STATUS.warning, href: q({ screen: "inventory", inventory_age: "24h_72h" }) },
             { label: "over 72 h", display: "over 72 h", count: age?.gt72h ?? 0, color: STATUS.critical, href: q({ screen: "inventory", inventory_age: "gt72h" }) },
-            { label: "never", display: "never", count: age?.never ?? 0, color: STATUS.neutral, href: q({ screen: "inventory", inventory_age: "never" }) },
+            { label: "never", display: "never", count: neverRead, color: STATUS.neutral, href: q({ screen: "inventory", inventory_age: "never" }) },
           ].filter((s) => s.count > 0)} />
           <Box sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${m3.outlineVar}` }}>
             <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>
-              <Link href={q({ screen: "operations", tab: "jobs" })} underline="hover">neXus</Link>: completed 24 h <b>{n.completed_24h ?? "—"}</b> · running <b>{n.running ?? "—"}</b> ·
-              oldest running {n.oldest_running_submitted_at ? `${relativeAge(n.oldest_running_submitted_at)} (since submitted)` : "—"} ·
+              <Link href={q({ screen: "operations", tab: "jobs" })} underline="hover">neXus</Link>: completed 24 h <b>{n.completed_24h ?? "UNKNOWN"}</b> · running <b>{n.running ?? "UNKNOWN"}</b> ·
+              oldest running {n.oldest_running_submitted_at ? `${relativeAge(n.oldest_running_submitted_at)} (since submitted)` : "none"} ·
               last inventory: Check Point {relativeAge(n.last_inventory?.check_point)} · Palo Alto {relativeAge(n.last_inventory?.palo_alto)}
             </Typography>
           </Box>
         </Card>
-      </Box>
-
-      {/* Morning exceptions */}
-      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))" }}>
-        <FailedJobsCard total={ex.failed_jobs?.total ?? 0} reasons={ex.failed_jobs?.reasons ?? []} rows={ex.failed_jobs?.rows ?? []}
-          allHref={q({ screen: "operations", tab: "jobs", state: "FAILED", since_hours: "24" })} />
-        <ExceptionList icon="config" title="Configuration changes" total={ex.config_changes?.total ?? 0} rows={ex.config_changes?.rows ?? []} empty="No configuration change in the latest collections."
-          head={["DEVICE", "SECTIONS (LATEST)", "COLLECTED"]}
-          cells={(r) => [r.label ?? r.device_id.slice(0, 8), r.sections_latest, relativeAge(r.collected_at)]}
-          rowHref={(r) => q({ screen: "configuration", device_id: r.device_id })}
-          allHref={q({ screen: "configuration", change_state: "changed" })} />
-        <ExceptionList icon="config" title="Cluster member DIFF" total={ex.cluster_diff?.total ?? 0} rows={ex.cluster_diff?.rows ?? []}
-          empty={ex.cluster_diff?.unknown ? `No member differences in comparable clusters; member comparison not available for ${ex.cluster_diff.unknown} cluster(s).` : "No member differences in comparable clusters."}
-          head={["CLUSTER", "SECTIONS", "SETTINGS", "COMPUTED"]}
-          cells={(r) => [r.cluster_ref, r.diff_sections.join(", ") || r.diff_section_count, r.diff_setting_count, relativeAge(r.computed_at)]}
-          rowHref={(r) => q({ screen: "configuration", cluster_ref: r.cluster_ref })}
-          allHref={q({ screen: "configuration", cluster_diff: "present" })} />
       </Box>
     </ScreenRoot>
   );

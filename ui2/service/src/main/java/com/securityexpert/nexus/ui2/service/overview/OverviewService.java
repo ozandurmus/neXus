@@ -73,6 +73,8 @@ public class OverviewService {
         body.put("generated_at", now.toString());
         Map<String, Object> denominators = new LinkedHashMap<>();
         denominators.put("active_devices", active.size());
+        denominators.put("enrolled_devices", all.size());
+        denominators.put("clusters_enrolled", all.stream().map(d -> d.clusterMemberRef().orElse(null)).filter(Objects::nonNull).distinct().count());
         denominators.put("gateways", active.stream().filter(d -> "gateway".equals(d.role())).count());
         denominators.put("clusters", clusters.size());
         denominators.put("backup_targets", active.stream().filter(DeviceSummaryRecord::backupTarget).count());
@@ -146,8 +148,10 @@ public class OverviewService {
         Map<String, Object> exceptions = new LinkedHashMap<>();
 
         // 1. failed jobs, 24 h
-        Record jobs = q(dsl -> dsl.fetchOne("select count(*) filter (where state = 'FAILED') as failed, count(*) as terminal "
-                + "from jobs where state in ('COMPLETED','FAILED') and finished_at >= now() - interval '24 hours'"));
+        Record jobs = q(dsl -> dsl.fetchOne("select count(*) filter (where state = 'FAILED' and finished_at >= now() - interval '24 hours') as failed, "
+                + "count(*) filter (where finished_at >= now() - interval '24 hours') as terminal, "
+                + "count(*) filter (where state = 'FAILED' and finished_at < now() - interval '24 hours') as failed_prev "
+                + "from jobs where state in ('COMPLETED','FAILED') and finished_at >= now() - interval '48 hours'"));
         List<FailedJob> failedAll = q(dsl -> dsl.fetch("select job_type, target_device_id, terminal_reason, finished_at from jobs "
                 + "where state = 'FAILED' and finished_at >= now() - interval '24 hours'")).map(r -> new FailedJob(
                 r.get("job_type", String.class), r.get("target_device_id", String.class),
@@ -156,6 +160,8 @@ public class OverviewService {
         failedTile.put("count", jobs.get("failed", Long.class));
         failedTile.put("terminal_24h", jobs.get("terminal", Long.class));
         failedTile.put("last_at", iso(failedAll.stream().map(FailedJob::finishedAt).filter(Objects::nonNull).max(Timestamp::compareTo).orElse(null)));
+        // "since yesterday" (review §6): the same count over the 24 h before this window.
+        failedTile.put("previous", jobs.get("failed_prev", Long.class));
         failedTile.put("state", "OK");
         tiles.put("failed_jobs_24h", failedTile);
         List<Map<String, Object>> failedRows = new ArrayList<>();
@@ -180,7 +186,21 @@ public class OverviewService {
             Timestamp t = latestInv.get(id);
             return t == null || t.toInstant().isBefore(now.minusSeconds(DAY_S));
         }).count();
-        tiles.put("stale_inventory", Map.of("count", stale, "of", activeIds.size(), "state", "OK"));
+        Map<String, Timestamp> invDayAgo = new HashMap<>();
+        for (Record r : q(dsl -> dsl.fetch("select device_id, max(collected_at) as at from device_inventory_run "
+                + "where device_id = any({0}) and collected_at < now() - interval '24 hours' group by device_id", (Object) ids))) {
+            invDayAgo.put(r.get("device_id", String.class), r.get("at", Timestamp.class));
+        }
+        long staleDayAgo = activeIds.stream().filter(id -> {
+            Timestamp t = invDayAgo.get(id);
+            return t == null || t.toInstant().isBefore(now.minusSeconds(2 * DAY_S));
+        }).count();
+        Map<String, Object> staleTile = new LinkedHashMap<>();
+        staleTile.put("count", stale);
+        staleTile.put("of", activeIds.size());
+        staleTile.put("previous", staleDayAgo);
+        staleTile.put("state", "OK");
+        tiles.put("stale_inventory", staleTile);
 
         // 3. clusters with member DIFF
         Map<String, Record> latestDiff = new HashMap<>();
@@ -256,7 +276,15 @@ public class OverviewService {
         List<String> withArchive = q(dsl -> dsl.fetch("select distinct device_id from backup_artefact where artefact_class = 'backup' "
                 + "and device_id = any({0})", (Object) targets.toArray(String[]::new)).map(r -> r.get(0, String.class)));
         long missing = targets.stream().filter(t -> !withArchive.contains(t)).count();
-        tiles.put("backup_missing", Map.of("count", missing, "of", targets.size(), "state", "OK"));
+        List<String> withArchiveDayAgo = q(dsl -> dsl.fetch("select distinct device_id from backup_artefact where artefact_class = 'backup' "
+                + "and created_at < now() - interval '24 hours' and device_id = any({0})", (Object) targets.toArray(String[]::new)).map(r -> r.get(0, String.class)));
+        Map<String, Object> backupTile = new LinkedHashMap<>();
+        backupTile.put("count", missing);
+        backupTile.put("of", targets.size());
+        // today's targets measured against yesterday's archives; a target added today counts as missing yesterday too
+        backupTile.put("previous", targets.stream().filter(t -> !withArchiveDayAgo.contains(t)).count());
+        backupTile.put("state", "OK");
+        tiles.put("backup_missing", backupTile);
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("tiles", tiles);
@@ -264,7 +292,6 @@ public class OverviewService {
         return out;
     }
 
-    /** Every device's newest inventory run, for the device list ({@code inventory_collected_at}). */
     record FailedJob(String jobType, String deviceId, String reason, Timestamp finishedAt) {
     }
 
@@ -319,6 +346,7 @@ public class OverviewService {
         return detail.isEmpty() ? code : code + ": " + detail;
     }
 
+    /** Every device's newest inventory run, for the device list ({@code inventory_collected_at}). */
     public Map<String, Instant> latestInventoryAll() {
         Map<String, Instant> out = new HashMap<>();
         for (Record r : q(dsl -> dsl.fetch("select device_id, max(collected_at) as at from device_inventory_run group by device_id"))) {

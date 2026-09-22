@@ -8,7 +8,8 @@
 Drafted by Fable (`OVERVIEW_EXCEPTION_SCREEN_CONTRACT_FABLE_DRAFT.md`, kept unaltered); frozen by the
 engineering session with the five corrections of `OVERVIEW_EXCEPTION_SCREEN_CONTRACT_ENGINEERING_NOTES.md`
 and the population rule of §5.1 applied. Backlog `overview_exception_and_evidence_screen` (P0).
-**Amended** A-2026-09-23 (§8, Product Owner directive: executive summary, version pie charts, colour).
+**Amended** A-2026-09-23 (§8, Product Owner directive: executive summary, version pie charts, colour) and
+B-2026-09-23 (§9, Product Owner approval of the whole UI review: layout, posture tiles, deltas, wall mode).
 
 **Basis:** `docs/design/OVERVIEW_COUNCIL_2026_09_22_ASTRA.md` and `docs/design/OVERVIEW_COUNCIL_2026_09_22_FABLE.md`, converged on the minimal first release both answers name.
 
@@ -274,3 +275,36 @@ shipped before this record was written — that ordering was an engineering erro
 population rule, click targets of §3 and the non-goals of §1 other than the chart rule stand as frozen.
 Tests: `tests/OverviewScreen.test.tsx` (donut links, cause grouping, coverage as read),
 `OverviewFailureReasonsTest` (grouping key, target tail dropped, cap of six).
+
+## 9. Amendment B-2026-09-23 — layout from the UI review (Product Owner approval)
+
+**Source.** `docs/design/UI_VISUAL_REVIEW_2026_09_23_FABLE.md` §2 and §6 (Fable, through
+`scripts/consult_fable_ui_visual_review.py`, output unaltered). The Product Owner, 2026-09-23: "Let us make all the
+changes" -- every P0, P1 and P2 item -- with the current state set aside first (`docs/operations/UI_BASELINE_2026_09_23.md`,
+tag `ui-baseline-2026-09-23`). Hard constraint carried from that direction: no loss of capability.
+
+**What changes (supersedes the named §2 / §4 text only).**
+
+1. **Layout.** Row A: title `Overview`, subtitle `as of <UTC> · <active> of <enrolled> devices active · <active> of
+   <enrolled> clusters active`, one freshness chip (`All evidence <oldest age>`) that expands to the six §2 chips.
+   Row B: the headline in three lines, `Act now` (failed jobs, backup targets without archive), `Review` (cluster
+   member differences, configuration changes), `Evidence` (inventory read in 24 h, compliance coverage with critical
+   deficiencies and data gaps); numbers as "n of N", no adjectives. Row C: six posture tiles replacing the four KPIs and
+   five attention tiles (the same facts, once): Failed jobs 24 h, Backup targets without archive, Clusters with member
+   differences, Configuration changed, Devices without evidence 24 h, Compliance deficiencies -- each with count, "of N",
+   status word, bar, one context line, a since-yesterday delta, one click target (unchanged from §3). Row D: compliance
+   by framework | why jobs failed. Row E: software and hardware (below the fold; a one-slice donut becomes a stat line
+   with the same link). Row F: configuration changes | cluster member DIFF | inventory evidence age.
+2. **Since-yesterday deltas.** `attention.<tile>.previous` -- the same figure one day earlier, only where stored
+   history computes it: failed jobs (the 24 h window before this one), devices without evidence 24 h (latest inventory
+   read as of 24 h ago), backup targets without archive (today's targets against archives created before 24 h ago).
+   Cluster differences, configuration changes and compliance keep no history: the tile says `no history`, never 0.
+3. **Denominators.** `denominators.enrolled_devices` (every registry entry) and `denominators.clusters_enrolled`
+   beside the active counts, so every screen can write "n active of N enrolled".
+4. **Wall display** (`?wall=1`): dark tokens, no rail, no header actions, an as-of clock; rows B and C, then the
+   failure causes beside the queue. Nothing new is computed. Masking follows the signed-in role, as everywhere.
+5. **Mask indicator.** Every masked response carries `X-Nexus-Masked: true`; the top bar shows `aiview · names masked`
+   on every screen from that header (the browser never infers it from a role token).
+
+**Unchanged.** Every figure, percentage, click target and evidence time of §3; UNKNOWN written out; zero neutral;
+no composite score; no "outdated" judgement; the endpoint, cache and masking rules.

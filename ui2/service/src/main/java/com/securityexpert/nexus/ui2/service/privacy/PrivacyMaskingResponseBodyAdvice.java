@@ -45,6 +45,8 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
         return true;
     }
 
+    public static final String MASKED_HEADER = "X-Nexus-Masked";
+
     @Override
     public Object beforeBodyWrite(Object body, MethodParameter returnType, MediaType selectedContentType,
             Class<? extends HttpMessageConverter<?>> selectedConverterType, ServerHttpRequest request,
@@ -61,6 +63,11 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             return body;
         }
 
+        // Tells the page this response was masked, so the shell can show the mask chip on every screen without
+        // the browser ever deciding anything from a role token (UI review 2026-09-23 §4).
+        if (response != null) {
+            response.getHeaders().set(MASKED_HEADER, "true");
+        }
         preRegisterSubnets(body);
         return maskObject(body, null);
     }
