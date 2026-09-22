@@ -22,7 +22,8 @@ import { ScreenHeader, MetricGrid, MetricCard, EmptyPanel, ScreenRoot } from "..
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel } from "./JobLogsPanel";
-import { listJobs } from "../auth/adminApi";
+import { getJobStats, listDevices, type DeviceSummary } from "../auth/adminApi";
+import { deriveClusterTitle } from "./InventoryPanels";
 
 interface PreflightCheckItem {
   id: string;
@@ -35,205 +36,34 @@ interface PreflightCheckItem {
 }
 
 // Reference pre-flight battery datasets (used in AIView preview / offline validation mode when backend is unreachable)
-const DEMO_CHECKS_CP: PreflightCheckItem[] = [
-  {
-    id: "preflight.platform_mode_gate",
-    name: "Platform & HA Mode Gate",
-    category: "Topology & Identity",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "HA Mode 'CLUSTER_XL_HA' is verified and supported for automated Active/Passive operations.",
-  },
-  {
-    id: "preflight.viable_target",
-    name: "Viable Target Standby Peer",
-    category: "Topology & Identity",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Target standby peer FW-JULIET-06 is healthy, reachable, and in STANDBY state.",
-  },
-  {
-    id: "preflight.split_brain_prevention",
-    name: "Two-Sided Split-Brain Prevention",
-    category: "Cluster Health",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Split-brain ruled out via two-sided observation: exactly one active member (FW-TANGO-04).",
-  },
-  {
-    id: "preflight.state_sync_current",
-    name: "State Synchronization Health",
-    category: "State & Synchronization",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Connection state synchronization is healthy, current, and synchronized across both peers (delta: 8 events).",
-  },
-  {
-    id: "preflight.policy_parity",
-    name: "Software & Policy Parity",
-    category: "Configuration & Alignment",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Software version (R81.20-JUMBO_TAKE_79) and security policy hashes are aligned across both members.",
-  },
-  {
-    id: "preflight.control_sync_link_health",
-    name: "Control & Sync Link Health",
-    category: "Network & Interfaces",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "All cluster control, sync, and monitored virtual interfaces are UP with zero link errors.",
-  },
-  {
-    id: "preflight.checkpoint_pnotes",
-    name: "Critical Problem Notifications (pnotes)",
-    category: "Vendor Diagnostics",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "All Check Point critical devices (fwd, cphad, daemons, interfaces) are reporting OK across both members.",
-  },
-  {
-    id: "preflight.standby_resource_headroom",
-    name: "Standby Member Resource Headroom",
-    category: "Resource & Capacity",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Standby peer FW-JULIET-06 has sufficient capacity headroom (CPU: 19%, Mem: 38%).",
-  },
-  {
-    id: "preflight.preemption_awareness",
-    name: "Preemption Hazard Disclosure",
-    category: "Operational Risk",
-    enforcement: "ADVISORY",
-    status: "PASS",
-    summary: "Preemption is disabled across both cluster members. Failover will remain stable post-transition.",
-  },
-  {
-    id: "preflight.flap_history",
-    name: "Cluster Stability & Flap History",
-    category: "Operational Risk",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Cluster has been completely stable with 0 state transitions in the last 24 hours.",
-  },
-];
-
-const DEMO_CHECKS_PAN: PreflightCheckItem[] = [
-  {
-    id: "preflight.platform_mode_gate",
-    name: "Platform & HA Mode Gate",
-    category: "Topology & Identity",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "HA Mode 'PAN_ACTIVE_PASSIVE' is verified and supported for automated Active/Passive operations.",
-  },
-  {
-    id: "preflight.viable_target",
-    name: "Viable Target Standby Peer",
-    category: "Topology & Identity",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Target standby peer FW-JULIET-06 is healthy, reachable, and in PASSIVE state.",
-  },
-  {
-    id: "preflight.split_brain_prevention",
-    name: "Two-Sided Split-Brain Prevention",
-    category: "Cluster Health",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Split-brain ruled out via two-sided observation: exactly one active member (FW-TANGO-04).",
-  },
-  {
-    id: "preflight.state_sync_current",
-    name: "State Synchronization Health",
-    category: "State & Synchronization",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Session synchronization status is complete with 0 unconfirmed sessions.",
-  },
-  {
-    id: "preflight.policy_parity",
-    name: "Software & Policy Parity",
-    category: "Configuration & Alignment",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Software version (PAN-OS 11.1.2-h3) and running configuration timestamps match across peers.",
-  },
-  {
-    id: "preflight.control_sync_link_health",
-    name: "Control & Sync Link Health",
-    category: "Network & Interfaces",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "HA1 (control) and HA2 (sync) physical and backup links report UP.",
-  },
-  {
-    id: "preflight.paloalto_path_monitoring",
-    name: "HA Path & Link Monitoring",
-    category: "Vendor Diagnostics",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "All Palo Alto monitored network destination groups and physical link groups are UP.",
-  },
-  {
-    id: "preflight.paloalto_pending_commits",
-    name: "Pending / In-Flight Commits",
-    category: "Configuration & Alignment",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "No pending or in-flight commits detected across cluster peers.",
-  },
-  {
-    id: "preflight.standby_resource_headroom",
-    name: "Standby Member Resource Headroom",
-    category: "Resource & Capacity",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Standby peer FW-JULIET-06 has sufficient capacity headroom (CPU: 22%, Mem: 41%).",
-  },
-  {
-    id: "preflight.preemption_awareness",
-    name: "Preemption Hazard Disclosure",
-    category: "Operational Risk",
-    enforcement: "ADVISORY",
-    status: "PASS",
-    summary: "Preemption is disabled across both cluster members.",
-  },
-  {
-    id: "preflight.flap_history",
-    name: "Cluster Stability & Flap History",
-    category: "Operational Risk",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Cluster has been completely stable with 0 state transitions in the last 24 hours.",
-  },
-  {
-    id: "preflight.clock_health",
-    name: "Host & Evidence Clock Health",
-    category: "System Timing & Security",
-    enforcement: "BLOCKING",
-    status: "PASS",
-    summary: "Host monotonic timer and UTC wall-clock verified in sync with zero NTP jumps.",
-  },
-];
 
 /** Operations screen featuring HA & readiness pre-flight checklist. */
 export function OperationsScreen() {
   // Counted from /api/v2/jobs (the same reads the Jobs screen makes); a failed read says so, never 0.
   const [jobStats, setJobStats] = useState<{ total24h: number; completed24h: number; failed24h: number; running: number } | null>(null);
   useEffect(() => {
-    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    Promise.all([
-      listJobs({ since, page_size: 1 }),
-      listJobs({ since, state: "COMPLETED", page_size: 1 }),
-      listJobs({ since, state: "FAILED", page_size: 1 }),
-      listJobs({ state: "REQUESTED,CLAIMED,EXECUTING", page_size: 1 }),
-    ])
-      .then(([all, completed, failed, running]) => setJobStats({ total24h: all.total, completed24h: completed.total, failed24h: failed.total, running: running.total }))
+    getJobStats()
+      .then((s) => setJobStats({ total24h: s.total_24h, completed24h: s.completed_24h, failed24h: s.failed_24h, running: s.running }))
       .catch(() => setJobStats(null));
   }, []);
 
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
+  // The enrolled clusters, from the device list (cluster reference -> members). Replaces two hardcoded
+  // demo names and their demo checks (2026-09-22): nothing here is shown that the store did not return.
+  const [clusters, setClusters] = useState<ReadonlyArray<{ ref: string; title: string; members: DeviceSummary[] }> | null>(null);
+  useEffect(() => {
+    listDevices()
+      .then(({ devices }) => {
+        const byRef = new Map<string, DeviceSummary[]>();
+        for (const d of devices ?? []) {
+          if (d.cluster_member_ref) byRef.set(d.cluster_member_ref, [...(byRef.get(d.cluster_member_ref) ?? []), d]);
+        }
+        setClusters([...byRef.entries()].map(([ref, members]) => ({ ref, title: deriveClusterTitle(ref, members), members }))
+          .sort((a, b) => a.title.localeCompare(b.title)));
+      })
+      .catch(() => setClusters([]));
+  }, []);
+  const selected = clusters?.find((c) => c.ref === selectedCluster) ?? null;
   const [selectedCheck, setSelectedCheck] = useState<PreflightCheckItem | null>(null);
   const [filter, setFilter] = useState<"ALL" | "BLOCKING" | "ADVISORY">("ALL");
   const [isRunning, setIsRunning] = useState(false);
@@ -280,7 +110,7 @@ export function OperationsScreen() {
     }
 
     let isMounted = true;
-    fetch(`/api/v2/failover/${selectedCluster}/preflight`)
+    fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/preflight`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -305,7 +135,7 @@ export function OperationsScreen() {
         // Standalone/offline reference mode fallback
       });
 
-    fetch(`/api/v2/failover/${selectedCluster}/schedules`)
+    fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/schedules`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (isMounted && Array.isArray(data)) setSchedulesList(data);
@@ -317,9 +147,9 @@ export function OperationsScreen() {
     };
   }, [selectedCluster]);
 
-  const fallbackChecks = selectedCluster === "CLS-TANGO-01" ? DEMO_CHECKS_PAN : DEMO_CHECKS_CP;
-  const checks = apiChecks && apiChecks.length > 0 ? apiChecks : fallbackChecks;
-  const overallVerdict = apiVerdict || "NO_BLOCKING_CONDITIONS_OBSERVED";
+  // Only what the preflight API returned; no demo fallback, and no verdict until one is evaluated.
+  const checks = apiChecks ?? [];
+  const overallVerdict = apiVerdict || "NOT_EVALUATED";
 
   const filteredChecks = checks.filter((c) => {
     if (filter === "BLOCKING") return c.enforcement === "BLOCKING";
@@ -331,7 +161,7 @@ export function OperationsScreen() {
     if (!selectedCluster) return;
     setIsRunning(true);
     try {
-      const res = await fetch(`/api/v2/failover/${selectedCluster}/preflight`, { method: "POST" });
+      const res = await fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/preflight`, { method: "POST" });
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.checks)) {
@@ -360,7 +190,7 @@ export function OperationsScreen() {
     setIsAuthorizing(true);
     setActionError(null);
     try {
-      const authRes = await fetch(`/api/v2/failover/${selectedCluster}/authorize`, {
+      const authRes = await fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/authorize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -379,7 +209,7 @@ export function OperationsScreen() {
       setLeaseToken(tokId);
 
       // Disclose dry-run plan (does NOT consume single-use execution lease)
-      const dryRes = await fetch(`/api/v2/failover/${selectedCluster}/dry-run`, {
+      const dryRes = await fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/dry-run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -404,7 +234,7 @@ export function OperationsScreen() {
     setIsExecuting(true);
     setActionError(null);
     try {
-      const res = await fetch(`/api/v2/failover/${selectedCluster}/execute`, {
+      const res = await fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -431,7 +261,7 @@ export function OperationsScreen() {
   const handleAcknowledgeQuarantine = async () => {
     if (!selectedCluster) return;
     try {
-      const res = await fetch(`/api/v2/failover/${selectedCluster}/quarantine/acknowledge`, {
+      const res = await fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/quarantine/acknowledge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -455,7 +285,7 @@ export function OperationsScreen() {
     try {
       const startIso = new Date(scheduleStartTime).toISOString();
       const endIso = new Date(new Date(scheduleStartTime).getTime() + scheduleDuration * 60000).toISOString();
-      const res = await fetch(`/api/v2/failover/${selectedCluster}/schedules`, {
+      const res = await fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/schedules`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -517,30 +347,32 @@ export function OperationsScreen() {
 
   const renderHaPanel = () => {
     if (!selectedCluster) {
+      const count = clusters?.length ?? 0;
       return (
         <Box>
           <EmptyPanel
-            title="No HA pair or cluster enrolled"
-            body="Readiness needs enrolled cluster members and a current health read from each one; neither exists yet, so no cluster can be assessed."
+            title={clusters === null ? "Reading the enrolled clusters…" : count === 0 ? "No HA pair or cluster enrolled" : `${count} clusters enrolled`}
+            body={count === 0
+              ? "Readiness needs enrolled cluster members and a current health read from each one; none is enrolled, so no cluster can be assessed."
+              : "Choose a cluster to read its preflight checks. Readiness is observed only; nothing is inferred and no class 2 action exists in this build."}
           />
-          <Box sx={{ mt: 3, display: "flex", gap: 2, justifyContent: "center", alignItems: "center" }}>
-            <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-              Inspect Enrolled Estate Cluster:
-            </Typography>
-            <M3Button emphasis="tonal" onClick={() => setSelectedCluster("CLS-ROMEO-01")}>
-              Inspect CLS-ROMEO-01 (Check Point ClusterXL)
-            </M3Button>
-            <M3Button emphasis="outlined" onClick={() => setSelectedCluster("CLS-TANGO-01")}>
-              Inspect CLS-TANGO-01 (Palo Alto HA)
-            </M3Button>
-          </Box>
+          {count > 0 && (
+            <Box sx={{ mt: 2, display: "flex", gap: 1, flexWrap: "wrap" }}>
+              {clusters!.map((c) => (
+                <M3Button key={c.ref} emphasis="outlined" onClick={() => setSelectedCluster(c.ref)}>
+                  {c.title} ({c.members[0]?.vendor_hint === "palo_alto" ? "PAN" : "CP"})
+                </M3Button>
+              ))}
+            </Box>
+          )}
         </Box>
       );
     }
 
-    const isPan = selectedCluster === "CLS-TANGO-01";
-    const clusterName = isPan ? "CLS-TANGO-01" : "CLS-ROMEO-01";
+    const isPan = selected?.members[0]?.vendor_hint === "palo_alto";
+    const clusterName = selected?.title ?? selectedCluster;
     const vendorLabel = isPan ? "Palo Alto Networks (Active/Passive)" : "Check Point (ClusterXL HA)";
+    const roleOf = (role: string) => selected?.members.filter((m) => (m.ha_role ?? "").toLowerCase() === role).map((m) => m.hostname ?? m.device_id).join(", ") || "UNKNOWN";
 
     return (
       <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -556,24 +388,12 @@ export function OperationsScreen() {
                 <Chip size="small" label="AIView Pseudonymized" sx={{ bgcolor: m3.primaryContainer, color: m3.onPrimaryContainer }} />
               </Box>
               <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mt: 0.5 }}>
-                Active: FW-TANGO-04 • Standby: FW-JULIET-06 • Evaluated: Just now (Fresh)
+                Active: {roleOf("active")} • Standby: {roleOf("standby") !== "UNKNOWN" ? roleOf("standby") : roleOf("passive")} • {apiVerdict ? "Evaluated by the preflight API" : "Not evaluated yet"}
               </Typography>
             </Box>
             <Box sx={{ display: "flex", gap: 1 }}>
-              <M3Button
-                emphasis={selectedCluster === "CLS-ROMEO-01" ? "filled" : "outlined"}
-                onClick={() => setSelectedCluster("CLS-ROMEO-01")}
-              >
-                CLS-ROMEO-01 (CP)
-              </M3Button>
-              <M3Button
-                emphasis={selectedCluster === "CLS-TANGO-01" ? "filled" : "outlined"}
-                onClick={() => setSelectedCluster("CLS-TANGO-01")}
-              >
-                CLS-TANGO-01 (PAN)
-              </M3Button>
               <M3Button emphasis="text" onClick={() => setSelectedCluster(null)}>
-                Clear
+                All clusters
               </M3Button>
             </Box>
           </Box>
@@ -1147,7 +967,7 @@ export function OperationsScreen() {
                   Cryptographic Binding & Canonical Framing:
                 </Typography>
                 <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: 11, mt: 0.5 }}>
-                  Domain: NEXUS_FAILOVER_SCHEDULE_V1 | Target: {isPan ? "FW-TANGO-04" : "FW-TANGO-01"} | HMAC-SHA256
+                  Domain: NEXUS_FAILOVER_SCHEDULE_V1 | Target: {roleOf("active")} | HMAC-SHA256
                 </Typography>
               </Card>
             </Box>
@@ -1200,7 +1020,7 @@ export function OperationsScreen() {
                       Corroboration:
                     </Typography>
                     <Typography variant="body2">
-                      Two-sided independent observation corroborated from both active (FW-TANGO-04) and standby (FW-JULIET-06) members.
+                      Two-sided observation requires a current read from both members (active: {roleOf("active")}); shown only as the preflight API reports it.
                     </Typography>
                   </Box>
                 </Box>
@@ -1239,7 +1059,7 @@ export function OperationsScreen() {
               : `${Math.round((100 * jobStats.completed24h) / (jobStats.completed24h + jobStats.failed24h))}% · ${jobStats.completed24h} completed · ${jobStats.failed24h} failed`
             : "read failed"}
         />
-        <MetricCard title="Readiness checks" note={selectedCluster ? `${checks.length} evaluated (PASS)` : "no cluster enrolled"} />
+        <MetricCard title="Readiness checks" value={selectedCluster ? checks.length : null} note={selectedCluster ? (apiChecks ? `${checks.length} evaluated` : "not evaluated yet") : clusters && clusters.length > 0 ? `${clusters.length} clusters enrolled · choose one` : "no cluster enrolled"} />
         <MetricCard title="Failed (24 h)" note={jobStats ? (jobStats.failed24h === 0 ? "none" : `${jobStats.failed24h} failed jobs`) : "read failed"} />
       </MetricGrid>
       <M3Tabs

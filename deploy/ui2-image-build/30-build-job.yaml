@@ -15,7 +15,9 @@ metadata:
     app.kubernetes.io/part-of: nexus-ui2
     app.kubernetes.io/component: image-build
 spec:
-  backoffLimit: 0
+  # Two retries: a base-image layer pull from the registry CDN through the proxy times out now and
+  # then (TLS handshake timeout, 2026-09-22, three times in a row); the build itself is deterministic.
+  backoffLimit: 2
   template:
     metadata:
       labels:

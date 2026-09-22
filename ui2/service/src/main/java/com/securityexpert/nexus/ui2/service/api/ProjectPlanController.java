@@ -27,6 +27,6 @@ public final class ProjectPlanController {
 
     @GetMapping("/project-plan")
     public ResponseEntity<Map<String, Object>> getProjectPlan() {
-        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(projectPlanReader.read());
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofMinutes(5)).cachePrivate()).body(projectPlanReader.read());
     }
 }

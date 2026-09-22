@@ -194,10 +194,6 @@ public final class ConfigurationCapabilityExecutor {
         }
     }
 
-    /** Effective-running text above this is projected from the active read only; the artefact still holds it all. */
-    static final long MAX_SANITIZED_TEXT_BYTES = 32L * 1024 * 1024;
-    private static final System.Logger LOG = System.getLogger(ConfigurationCapabilityExecutor.class.getName());
-
     private ConfigurationRunData collectEffectiveRunningStreamed(ApiTarget target, Map<String, String> headers,
             String deviceId, String jobId, String deviceSerial) throws IOException {
         ArtefactStore.ArtefactHandle handle = artefactStore.open(deviceId, jobId, "palo_alto", true);
@@ -236,18 +232,11 @@ public final class ConfigurationCapabilityExecutor {
             ArtefactStore.ArtefactMetadata metadata = handle.finish();
             List<com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationOverride> overrides =
                     panoramaCrossCheck.nameOverrideSources(deviceSerial, completed.handled().overrides());
-            // The Configuration screen projects the sanitized text; effective-running is the primary evidence
-            // (Panorama-pushed values included), so it carries the text too -- read back from the artefact just
-            // written, secret-bearing leaves redacted, bounded so a very large configuration cannot fill memory.
+            // Effective-running stores no sanitized text: every reader (the Configuration screen, compliance)
+            // serves the active read's text, and a full effective-running document runs to 20+ MB per device --
+            // stored as text it exhausted both the worker's and the service's heap (2026-09-22). The artefact
+            // store keeps the whole document.
             Optional<String> sanitized = Optional.empty();
-            if (metadata.plaintextBytes() <= MAX_SANITIZED_TEXT_BYTES) {
-                try (InputStream back = artefactStore.retrieve(metadata.ref(), metadata.wrappedDataKey(), true)) {
-                    sanitized = Optional.of(sanitizePaloAltoXml(new String(back.readAllBytes(), StandardCharsets.UTF_8)));
-                } catch (IOException readBack) {
-                    LOG.log(System.Logger.Level.WARNING,
-                            "[EFFECTIVE_RUNNING_TEXT_UNAVAILABLE] device {0}: artefact read-back failed: {1}", deviceId, readBack.getMessage());
-                }
-            }
             return new ConfigurationRunData(ConfigurationReadKind.EFFECTIVE_RUNNING, true, metadata.plaintextSha256(),
                     0, sanitized, completed.handled().index(), overrides,
                     toRecord(metadata, deviceId, jobId, "palo_alto"));

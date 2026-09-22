@@ -5,16 +5,7 @@ import Typography from "@mui/material/Typography";
 
 import { ScreenHeader, MetricGrid, MetricCard, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
-import {
-  getComplianceOverview,
-  listConfigurations,
-  listDevices,
-  listFleetBackups,
-  listJobs,
-  type BackupArtefact,
-  type ComplianceOverview,
-  type DeviceSummary,
-} from "../auth/adminApi";
+import { getComplianceOverview, listConfigurations, listDevices, listFleetBackups, type BackupArtefact, type ComplianceOverview, type DeviceSummary, getJobStats } from "../auth/adminApi";
 
 /**
  * What the Overview says, computed from the same reads the other screens make.
@@ -109,22 +100,23 @@ export function OverviewScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      let devices: DeviceSummary[] = [];
-      try {
-        devices = (await listDevices()).devices ?? [];
-      } catch (error) {
-        if (!cancelled) setDevicesError(error instanceof Error ? error.message : "The device list could not be read.");
-        return;
-      }
-      const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-      const [configuration, backups, jobsTotal, jobsRunning, jobsFailed24h, compliance] = await Promise.all([
+      // Every read starts at once: the device list no longer gates the others.
+      const [devicesResult, configuration, backups, stats, compliance] = await Promise.all([
+        listDevices().then((r) => ({ ok: true as const, devices: r.devices ?? [] }))
+          .catch((error: unknown) => ({ ok: false as const, error: error instanceof Error ? error.message : "The device list could not be read." })),
         listConfigurations().then((r) => r.devices.map((d) => d.device_id)).catch(() => null),
         listFleetBackups().then((r) => r.backups ?? []).catch(() => null),
-        listJobs({ page_size: 1 }).then((r) => r.total).catch(() => null),
-        listJobs({ state: "EXECUTING,CLAIMED,REQUESTED", page_size: 1 }).then((r) => r.total).catch(() => null),
-        listJobs({ state: "FAILED", since, page_size: 1 }).then((r) => r.total).catch(() => null),
+        getJobStats().catch(() => null),
         getComplianceOverview().catch(() => null),
       ]);
+      if (!devicesResult.ok) {
+        if (!cancelled) setDevicesError(devicesResult.error);
+        return;
+      }
+      const devices = devicesResult.devices;
+      const jobsTotal = stats ? stats.total : null;
+      const jobsRunning = stats ? stats.running : null;
+      const jobsFailed24h = stats ? stats.failed_24h : null;
       if (!cancelled) {
         setFigures(computeFigures({ devices, configurationDeviceIds: configuration, backups, jobsTotal, jobsRunning, jobsFailed24h, compliance }));
       }

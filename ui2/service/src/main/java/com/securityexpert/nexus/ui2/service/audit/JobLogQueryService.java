@@ -63,6 +63,24 @@ public final class JobLogQueryService {
             @JsonProperty("total") long total) {
     }
 
+    /** The headline counts Overview and Operations show, from one query (they were four round trips). */
+    public record Stats(@JsonProperty("total") long total, @JsonProperty("total_24h") long total24h,
+            @JsonProperty("completed_24h") long completed24h, @JsonProperty("failed_24h") long failed24h,
+            @JsonProperty("running") long running) {
+    }
+
+    public Stats stats() {
+        return transactionBoundary.inTransaction(dsl -> {
+            var r = dsl.fetchOne("select count(*) as total, "
+                    + "count(*) filter (where submitted_at >= now() - interval '24 hours') as total_24h, "
+                    + "count(*) filter (where state = 'COMPLETED' and submitted_at >= now() - interval '24 hours') as completed_24h, "
+                    + "count(*) filter (where state = 'FAILED' and submitted_at >= now() - interval '24 hours') as failed_24h, "
+                    + "count(*) filter (where state in ('REQUESTED', 'CLAIMED', 'EXECUTING')) as running from jobs");
+            return new Stats(r.get("total", Long.class), r.get("total_24h", Long.class), r.get("completed_24h", Long.class),
+                    r.get("failed_24h", Long.class), r.get("running", Long.class));
+        });
+    }
+
     public record Facets(@JsonProperty("states") List<String> states, @JsonProperty("job_types") List<String> jobTypes) {
     }
 

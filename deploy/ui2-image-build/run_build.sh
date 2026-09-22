@@ -48,9 +48,21 @@ echo "Streaming build logs from pod $POD..."
 kubectl -n ui2-build logs -f "$POD" || true
 
 echo "Checking build job completion status..."
-if ! kubectl wait --for=condition=complete job/ui2-image-build -n ui2-build --timeout=15s; then
-  echo "Build job did not succeed! Pod status:"
-  kubectl -n ui2-build describe pod "$POD"
+# The log stream can end before the job does (a dropped stream, or a retried pod after a transient
+# base-image pull timeout -- backoffLimit 2). Wait for the job itself: complete, or failed for good.
+for i in $(seq 1 180); do
+  if kubectl -n ui2-build get job ui2-image-build -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null | grep -q True; then
+    break
+  fi
+  if kubectl -n ui2-build get job ui2-image-build -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null | grep -q True; then
+    echo "Build job failed after its retries. Last pod:"
+    kubectl -n ui2-build logs "$(kubectl -n ui2-build get pod -l job-name=ui2-image-build -o name | tail -1)" --tail=5 || true
+    exit 1
+  fi
+  sleep 10
+done
+if ! kubectl -n ui2-build get job ui2-image-build -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' | grep -q True; then
+  echo "Build job did not finish within 30 minutes."
   exit 1
 fi
 

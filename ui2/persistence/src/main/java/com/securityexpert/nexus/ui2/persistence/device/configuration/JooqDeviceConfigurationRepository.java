@@ -48,6 +48,13 @@ public final class JooqDeviceConfigurationRepository implements DeviceConfigurat
                     run.runId(), run.deviceId(), run.jobId(), Timestamp.from(run.collectedAt()), run.vendor(),
                     run.readKind(), run.primary(), run.canonicalHash(), run.rawHash(), run.rawBytes(),
                     run.artefactRef(), run.withheldLineCount(), run.sanitizedText().orElse(null), run.changeState());
+            // Only the newest run of a read kind keeps its sanitized text: every reader serves the latest
+            // one, and an older copy is raw evidence with no reader (AGENTS.md raw-evidence law).
+            if (run.sanitizedText().isPresent()) {
+                dsl.execute("update device_configuration_run set sanitized_text = null where device_id = {0} "
+                        + "and read_kind = {1} and run_id <> {2} and sanitized_text is not null",
+                        run.deviceId(), run.readKind(), run.runId());
+            }
 
             for (ConfigurationIndexEntry entry : run.index()) {
                 dsl.execute("insert into device_configuration_index(index_id, run_id, context, section, source, "
@@ -95,10 +102,39 @@ public final class JooqDeviceConfigurationRepository implements DeviceConfigurat
         if (deviceIds.isEmpty()) {
             return List.of();
         }
+        // Two queries for the whole fleet, never the sanitized text: a list needs the run's identity,
+        // time, hash, change state and index counts only. Measured live 2026-09-22: one assemble() per
+        // device (4 queries each) that also loaded every run's text drove the service out of heap
+        // (OutOfMemoryError on /configuration and the compliance screen) once large texts were stored.
         return transactionBoundary.inTransaction(dsl -> {
+            String placeholders = String.join(", ", java.util.Collections.nCopies(deviceIds.size(), "?"));
+            Result<Record> heads = dsl.fetch("select distinct on (device_id) run_id, device_id, job_id, collected_at, "
+                    + "vendor, read_kind, is_primary, canonical_hash, raw_hash, raw_bytes, artefact_ref, "
+                    + "withheld_line_count, change_state from device_configuration_run "
+                    + "where is_primary = true and device_id in (" + placeholders + ") "
+                    + "order by device_id, collected_at desc", deviceIds.toArray());
+            if (heads.isEmpty()) {
+                return List.<ConfigurationRun>of();
+            }
+            List<String> runIds = heads.map(r -> r.get("run_id", String.class));
+            java.util.Map<String, List<ConfigurationIndexEntry>> indexByRun = new java.util.HashMap<>();
+            for (Record row : dsl.fetch("select run_id, context, section, source, entry_count from device_configuration_index "
+                    + "where run_id in (" + String.join(", ", java.util.Collections.nCopies(runIds.size(), "?")) + ")",
+                    runIds.toArray())) {
+                indexByRun.computeIfAbsent(row.get("run_id", String.class), k -> new ArrayList<>())
+                        .add(new ConfigurationIndexEntry(row.get("context", String.class), row.get("section", String.class),
+                                Optional.ofNullable(row.get("source", String.class)), row.get("entry_count", Integer.class)));
+            }
             List<ConfigurationRun> result = new ArrayList<>();
-            for (String deviceId : deviceIds) {
-                findLatestPrimary(dsl, deviceId).ifPresent(result::add);
+            for (Record r : heads) {
+                String runId = r.get("run_id", String.class);
+                result.add(new ConfigurationRun(runId, r.get("device_id", String.class), r.get("job_id", String.class),
+                        r.get("collected_at", Timestamp.class).toInstant(), r.get("vendor", String.class),
+                        r.get("read_kind", String.class), Boolean.TRUE.equals(r.get("is_primary", Boolean.class)),
+                        r.get("canonical_hash", String.class), r.get("raw_hash", String.class), r.get("raw_bytes", Long.class),
+                        r.get("artefact_ref", String.class), r.get("withheld_line_count", Integer.class), Optional.empty(),
+                        r.get("change_state", String.class), indexByRun.getOrDefault(runId, List.of()), List.of(),
+                        Optional.empty()));
             }
             return List.copyOf(result);
         });

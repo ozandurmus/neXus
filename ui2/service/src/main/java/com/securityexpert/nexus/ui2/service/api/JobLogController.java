@@ -48,6 +48,11 @@ public final class JobLogController {
         return ResponseEntity.ok(jobLogQueryService.query(query.get()));
     }
 
+    @GetMapping("/api/v2/jobs/stats")
+    public JobLogQueryService.Stats stats() {
+        return jobLogQueryService.stats();
+    }
+
     @GetMapping("/api/v2/jobs/facets")
     public Facets facets() {
         return jobLogQueryService.facets();

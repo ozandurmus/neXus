@@ -465,8 +465,16 @@ export function requestFleetBackup(reason: string): Promise<{ targets: number; a
   return call("/backups/collect-all", "POST", { reason });
 }
 
+let devicesInFlight: Promise<{ devices: DeviceSummary[] }> | null = null;
+
+/** Concurrent callers on one screen share one request (the Backups screen fetched it twice); settled results are not reused. */
 export function listDevices(): Promise<{ devices: DeviceSummary[] }> {
-  return call("/devices", "GET");
+  if (!devicesInFlight) {
+    devicesInFlight = call<{ devices: DeviceSummary[] }>("/devices", "GET").finally(() => {
+      devicesInFlight = null;
+    });
+  }
+  return devicesInFlight;
 }
 
 export type BackupDisposition = "KEEP" | "REMOVE";
@@ -993,6 +1001,19 @@ function jobQueryString(params: JobQueryParams): string {
 /** Jobs screen (PO P0, 2026-09-22): the whole history, filtered and paged on the server. */
 export function listJobs(params: JobQueryParams = {}): Promise<JobPageView> {
   return call(`/api/v2/jobs${jobQueryString(params)}`, "GET");
+}
+
+export interface JobStatsView {
+  readonly total: number;
+  readonly total_24h: number;
+  readonly completed_24h: number;
+  readonly failed_24h: number;
+  readonly running: number;
+}
+
+/** The headline job counts in one request. */
+export function getJobStats(): Promise<JobStatsView> {
+  return call("/api/v2/jobs/stats", "GET");
 }
 
 export function jobFacets(): Promise<JobFacetsView> {

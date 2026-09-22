@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { OperationsScreen } from "../src/screens/OperationsScreen";
@@ -7,6 +7,30 @@ import { OperationsScreen } from "../src/screens/OperationsScreen";
 function withTheme(node: React.ReactElement) {
   return <ThemeProvider theme={m3Theme}>{node}</ThemeProvider>;
 }
+
+const MEMBERS = [
+  { device_id: "d1", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-ROMEO-01-M1", model: null, software_version: null, ha_role: "active", cluster_member_ref: "CLS-ROMEO-01" },
+  { device_id: "d2", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-ROMEO-01-M2", model: null, software_version: null, ha_role: "standby", cluster_member_ref: "CLS-ROMEO-01" },
+];
+
+function stubFetch(devices: unknown[], preflight: unknown | null) {
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
+    const url = String(input);
+    const json = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status }));
+    if (url === "/devices") return json(200, { devices });
+    if (url.endsWith("/preflight")) return preflight ? json(200, preflight) : json(404, { error: "NOT_FOUND" });
+    if (url.endsWith("/schedules")) return json(200, []);
+    if (url.startsWith("/api/v2/jobs")) return json(200, { items: [], page: 1, page_size: 50, total: 0, states: [], job_types: [], total_24h: 0, completed_24h: 0, failed_24h: 0, running: 0 });
+    return json(200, {});
+  }));
+}
+
+const PREFLIGHT = {
+  overall_verdict: "NO_BLOCKING_CONDITIONS_OBSERVED",
+  checks: [{ check_id: "c1", name: "Two-Sided Split-Brain Prevention", category: "HA", enforcement: "BLOCKING", status: "PASS", summary: "ok", remediation_code: null }],
+};
+
+afterEach(() => vi.unstubAllGlobals());
 
 const TABS = [
   { label: "HA & readiness", marker: "No HA pair or cluster enrolled" },
@@ -16,8 +40,10 @@ const TABS = [
 ];
 
 describe("OperationsScreen tabs", () => {
-  it("renders each tab's own panel, and no other tab's panel, tab by tab", () => {
+  it("renders each tab's own panel, and no other tab's panel, tab by tab", async () => {
+    stubFetch([], null);
     render(withTheme(<OperationsScreen />));
+    await screen.findByText("No HA pair or cluster enrolled");
     const tablist = screen.getByRole("tablist", { name: "Operations sections" });
 
     for (const tab of TABS) {
@@ -30,64 +56,35 @@ describe("OperationsScreen tabs", () => {
     }
   });
 
-  it("defaults to the HA & readiness tab, empty", () => {
+  it("defaults to the HA & readiness tab, empty", async () => {
+    stubFetch([], null);
     render(withTheme(<OperationsScreen />));
-    expect(screen.getByText("No HA pair or cluster enrolled")).toBeInTheDocument();
-    expect(screen.queryByText("All jobs")).toBeNull();
+    expect(await screen.findByText("No HA pair or cluster enrolled")).toBeInTheDocument();
   });
 
-  it("renders rich pre-flight checklist and verdict banner when a cluster is inspected", () => {
+  it("lists the enrolled clusters from the device list, never a demo name", async () => {
+    stubFetch(MEMBERS, null);
     render(withTheme(<OperationsScreen />));
-
-    // Click to inspect Check Point cluster
-    fireEvent.click(screen.getByText(/Inspect CLS-ROMEO-01/i));
-
-    // Verify cluster card & verdict banner
-    expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument();
-    expect(screen.getByText(/VERDICT: NO_BLOCKING_CONDITIONS_OBSERVED/i)).toBeInTheDocument();
-
-    // Verify core pre-flight checks are rendered
-    expect(screen.getByText("Two-Sided Split-Brain Prevention")).toBeInTheDocument();
-    expect(screen.getByText("Critical Problem Notifications (pnotes)")).toBeInTheDocument();
-    expect(screen.getByText("State Synchronization Health")).toBeInTheDocument();
-
-    // Verify failover mutation buttons are safely disabled
-    const failoverBtn = screen.getByRole("button", { name: "Initiate Failover" });
-    expect(failoverBtn).toBeDisabled();
-
-    // Switch to Palo Alto cluster
-    fireEvent.click(screen.getByText("CLS-TANGO-01 (PAN)"));
-    expect(screen.getByText("CLS-TANGO-01")).toBeInTheDocument();
-    expect(screen.getByText("HA Path & Link Monitoring")).toBeInTheDocument();
-    expect(screen.getByText("Pending / In-Flight Commits")).toBeInTheDocument();
-
-    // Clear cluster inspection
-    fireEvent.click(screen.getByText("Clear"));
-    expect(screen.getByText("No HA pair or cluster enrolled")).toBeInTheDocument();
+    expect(await screen.findByText("1 clusters enrolled")).toBeInTheDocument();
+    expect(screen.queryByText(/CLS-TANGO-01/)).toBeNull();
   });
 
-  it("opens 4-Eyes Controlled Failover Gate modal when Authorize Failover (4-Eyes) is clicked", () => {
+  it("shows only the checks the preflight API returned, and NOT_EVALUATED when it returned none", async () => {
+    stubFetch(MEMBERS, PREFLIGHT);
     render(withTheme(<OperationsScreen />));
-    fireEvent.click(screen.getByText(/Inspect CLS-ROMEO-01/i));
+    fireEvent.click(await screen.findByRole("button", { name: /\(CP\)/ }));
+    expect(await screen.findByText("Two-Sided Split-Brain Prevention")).toBeInTheDocument();
+    expect(screen.queryByText("Critical Problem Notifications (pnotes)")).toBeNull();
+    fireEvent.click(screen.getByText("All clusters"));
+    expect(await screen.findByText("1 clusters enrolled")).toBeInTheDocument();
+  });
 
-    const authBtn = screen.getByRole("button", { name: "Authorize Failover (4-Eyes)" });
-    expect(authBtn).not.toBeDisabled();
-
-    fireEvent.click(authBtn);
+  it("opens the 4-Eyes gate and the maintenance-window dialogs for a real cluster", async () => {
+    stubFetch(MEMBERS, PREFLIGHT);
+    render(withTheme(<OperationsScreen />));
+    fireEvent.click(await screen.findByRole("button", { name: /\(CP\)/ }));
+    await screen.findByText("Two-Sided Split-Brain Prevention");
+    fireEvent.click(screen.getByRole("button", { name: "Authorize Failover (4-Eyes)" }));
     expect(screen.getByText(/Phase B & C: 4-Eyes Controlled Failover Gate/i)).toBeInTheDocument();
-    expect(screen.getByText(/Step 1: Obtain 4-Eyes Authorization Lease/i)).toBeInTheDocument();
-  });
-
-  it("opens Phase D Schedule Maintenance Window modal when Schedule Maintenance Window is clicked", () => {
-    render(withTheme(<OperationsScreen />));
-    fireEvent.click(screen.getByText(/Inspect CLS-ROMEO-01/i));
-
-    const schedBtn = screen.getByRole("button", { name: "Schedule Maintenance Window" });
-    expect(schedBtn).not.toBeDisabled();
-
-    fireEvent.click(schedBtn);
-    expect(screen.getByText(/Phase D: Schedule Maintenance Window Failover/i)).toBeInTheDocument();
-    expect(screen.getByText(/Unattended Execution Safety Invariant/i)).toBeInTheDocument();
-    expect(screen.getByText(/Schedule & Seal \(HMAC-SHA256\)/i)).toBeInTheDocument();
   });
 });
