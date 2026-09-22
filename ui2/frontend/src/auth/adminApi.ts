@@ -464,6 +464,8 @@ export interface ClusterDifference {
 export interface ClusterInterface {
   readonly name: string;
   readonly kind: string;
+  /** Present when the row came from a single device's own inventory (toClusterContexts); the cluster API does not carry it. */
+  readonly vlan_id?: number | null;
   readonly addresses: InventoryAddress[];
   readonly presence: Presence;
   readonly differences: ClusterDifference[];
