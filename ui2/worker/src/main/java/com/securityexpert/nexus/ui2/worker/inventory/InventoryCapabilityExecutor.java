@@ -604,6 +604,7 @@ public final class InventoryCapabilityExecutor {
 
         if (isKeyValueFormat) {
             ClishInterfaceBuilder current = null;
+            java.util.Set<String> statusTokens = new java.util.TreeSet<>();
             for (String rawLine : output.split("\\R")) {
                 String line = rawLine.trim();
                 int colon = line.indexOf(':');
@@ -615,6 +616,7 @@ public final class InventoryCapabilityExecutor {
                 switch (key) {
                     case "name" -> current = value.isEmpty() ? null : builders.computeIfAbsent(value, ClishInterfaceBuilder::new);
                     case "status" -> {
+                        statusTokens.add(value.toLowerCase().replaceAll("\\d+", "#"));
                         if (current != null) {
                             current.state = switch (value.toLowerCase()) {
                                 case "on", "up", "connected" -> InventoryInterface.STATE_UP;
@@ -643,6 +645,11 @@ public final class InventoryCapabilityExecutor {
                     default -> { }
                 }
             }
+            // Vendor semantics law: which "status:" words this shell uses (and what each means) is
+            // unmeasured beyond off/disconnected -- the distinct tokens (no identity values) are
+            // logged so the up/down mapping above is corrected from evidence, not guessed.
+            LOG.log(System.Logger.Level.INFO, "[INVENTORY_CLISH_IF_STATUS_TOKENS] interfaces={0} status_tokens={1}",
+                    builders.size(), statusTokens);
         } else if (isBlockFormat) {
             ClishInterfaceBuilder current = null;
             for (String rawLine : output.split("\\R")) {
