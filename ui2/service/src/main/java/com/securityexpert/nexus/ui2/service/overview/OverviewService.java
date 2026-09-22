@@ -380,8 +380,75 @@ public class OverviewService {
         unknownRow.put("count", unknown);
         rows.add(unknownRow);
         out.put("hotfix_levels", rows);
+        out.put("versions", versions(fleet));
         out.put("evidence_at", iso(q(dsl -> dsl.fetchOne("select max(observed_at) from device_platform_facts").get(0, Timestamp.class))));
         return out;
+    }
+
+    /**
+     * Software versions per vendor, as the executive summary's donuts (PO 2026-09-23): Check Point major = the
+     * software version (R81.20), minor = the jumbo hotfix take; Palo Alto major = the first two numbers of
+     * PAN-OS (11.1), minor = the full version (11.1.10-h7). Unread values count under a null label (UNKNOWN).
+     * Versions are opaque strings: grouped by equality, never parsed beyond the Palo Alto major prefix.
+     */
+    private Map<String, Object> versions(Fleet fleet) {
+        String[] ids = fleet.active().stream().map(DeviceSummaryRecord::deviceId).toArray(String[]::new);
+        Map<String, String> hotfix = new HashMap<>();
+        for (Record r : q(dsl -> dsl.fetch("select device_id, hotfix_level from device_platform_facts where device_id = any({0})",
+                (Object) ids))) {
+            hotfix.put(r.get("device_id", String.class), r.get("hotfix_level", String.class));
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (String vendor : List.of("check_point", "palo_alto")) {
+            Map<String, Long> major = new TreeMap<>();
+            Map<String, Long> minor = new TreeMap<>();
+            long unknownMajor = 0;
+            long unknownMinor = 0;
+            for (DeviceSummaryRecord d : fleet.active()) {
+                if (!vendor.equals(d.vendorHint())) {
+                    continue;
+                }
+                String sw = d.observedSoftwareVersion().map(String::strip).filter(s -> !s.isEmpty()).orElse(null);
+                String maj = null;
+                String min = null;
+                if ("check_point".equals(vendor)) {
+                    maj = sw;
+                    min = hotfix.get(d.deviceId());
+                } else if (sw != null) {
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d+\\.\\d+)").matcher(sw);
+                    maj = m.find() ? m.group(1) : sw;
+                    min = sw;
+                }
+                if (maj == null) {
+                    unknownMajor++;
+                } else {
+                    major.merge(maj, 1L, Long::sum);
+                }
+                if (min == null) {
+                    unknownMinor++;
+                } else {
+                    minor.merge(min, 1L, Long::sum);
+                }
+            }
+            Map<String, Object> v = new LinkedHashMap<>();
+            v.put("major", slices(major, unknownMajor));
+            v.put("minor", slices(minor, unknownMinor));
+            out.put(vendor, v);
+        }
+        return out;
+    }
+
+    private static List<Map<String, Object>> slices(Map<String, Long> counts, long unknown) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        counts.entrySet().stream().sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .forEach(e -> rows.add(Map.of("label", e.getKey(), "count", e.getValue())));
+        if (unknown > 0) {
+            Map<String, Object> u = new LinkedHashMap<>();
+            u.put("label", null);
+            u.put("count", unknown);
+            rows.add(u);
+        }
+        return rows;
     }
 
     private Object nexus() {

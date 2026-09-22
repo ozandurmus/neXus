@@ -1230,7 +1230,12 @@ export interface OverviewView {
     coverage_pct?: number; critical_deficiencies?: number; data_gaps?: number;
     frameworks?: Array<{ name: string; pass: number; fail: number; unavailable: number; total: number; score_pct: number }>;
   };
-  readonly platform: { devices: number; check_point: number; palo_alto: number; clusters: number; hotfix_levels: Array<{ level: string | null; count: number }>; evidence_at: string | null; state?: EvidenceState };
+  readonly platform: {
+    devices: number; check_point: number; palo_alto: number; clusters: number;
+    hotfix_levels: Array<{ level: string | null; count: number }>; evidence_at: string | null; state?: EvidenceState;
+    /** Per vendor: major (CP software version / PAN x.y) and minor (CP jumbo take / PAN full version); null label = UNKNOWN. */
+    versions?: Record<"check_point" | "palo_alto", { major: Array<{ label: string | null; count: number }>; minor: Array<{ label: string | null; count: number }> }>;
+  };
   readonly nexus: { completed_24h: number; running: number; oldest_running_submitted_at: string | null; last_inventory: { check_point: string | null; palo_alto: string | null }; state?: EvidenceState };
 }
 

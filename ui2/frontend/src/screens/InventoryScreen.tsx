@@ -644,6 +644,9 @@ export function InventoryScreen() {
   // Overview links (OVERVIEW_EXCEPTION_SCREEN_CONTRACT §4.2): inventory evidence age bucket and hotfix level.
   const [ageFilter, setAgeFilter] = useState<string | null>(() => urlParam("inventory_age"));
   const [hotfixFilter, setHotfixFilter] = useState<string | null>(() => urlParam("hotfix_level"));
+  // Overview version donuts: an exact software version, or a Palo Alto major (x.y) / Check Point version.
+  const [versionFilter, setVersionFilter] = useState<{ kind: "exact" | "major"; value: string } | null>(() =>
+    urlParam("sw_version") ? { kind: "exact", value: urlParam("sw_version")! } : urlParam("sw_major") ? { kind: "major", value: urlParam("sw_major")! } : null);
   const [sortMode, setSortMode] = useState<"name_asc" | "name_desc" | "vendor">("name_asc");
 
   const devices = data;
@@ -693,6 +696,12 @@ export function InventoryScreen() {
     if (filterMode === "failed" && !hasFailedCollection(device)) return false;
     if (filterMode === "stale" && device.enrollment_state !== "DEGRADED" && device.enrollment_state !== "UNREACHABLE") return false;
     if (ageFilter && !inAgeBucket(device, ageFilter)) return false;
+    if (versionFilter) {
+      const sw = device.software_version?.trim() || null;
+      if (versionFilter.value === "unknown") { if (sw !== null) return false; }
+      else if (versionFilter.kind === "exact" ? sw !== versionFilter.value
+        : !(sw === versionFilter.value || (device.vendor_hint === "palo_alto" && sw !== null && (sw === versionFilter.value || sw.startsWith(`${versionFilter.value}.`))))) return false;
+    }
     if (hotfixFilter && (hotfixFilter === "unknown" ? Boolean(device.hotfix_level) || device.role === "management_server" : device.hotfix_level !== hotfixFilter)) return false;
 
     if (!searchTerm.trim()) return true;
@@ -768,13 +777,14 @@ export function InventoryScreen() {
               pr: 0.5,
             }}
           >
-            {(ageFilter || hotfixFilter) && (
+            {(ageFilter || hotfixFilter || versionFilter) && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, flexWrap: "wrap" }}>
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>From Overview:</Typography>
                 {ageFilter && <StatusChip tone="attn" label={`inventory ${({ stale: "older than 24 h or never", lt24h: "under 24 h", "24h_72h": "24–72 h", gt72h: "over 72 h", never: "never collected" } as Record<string, string>)[ageFilter] ?? ageFilter}`} dense />}
                 {hotfixFilter && <StatusChip tone="attn" label={`hotfix ${hotfixFilter === "unknown" ? "UNKNOWN" : hotfixFilter}`} dense />}
+                {versionFilter && <StatusChip tone="attn" label={`version ${versionFilter.value === "unknown" ? "UNKNOWN" : versionFilter.value}${versionFilter.kind === "major" ? " (major)" : ""}`} dense />}
                 <Box component="span" role="button" tabIndex={0} sx={{ cursor: "pointer", fontSize: 12, color: m3.primary }}
-                  onClick={() => { setAgeFilter(null); setHotfixFilter(null); }}>clear</Box>
+                  onClick={() => { setAgeFilter(null); setHotfixFilter(null); setVersionFilter(null); }}>clear</Box>
               </Box>
             )}
             <Box
