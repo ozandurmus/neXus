@@ -70,6 +70,20 @@ public final class CompositeDeviceTransport implements DeviceTransport {
     }
 
     @Override
+    public com.securityexpert.nexus.ui2.jobs.transport.FetchStreamResult fetchStreaming(TransportSession session,
+            FetchSpec spec, Duration timeout, java.io.OutputStream sink) {
+        // Same gap as execInteractive before it (measured live, 2026-09-22: the first Check Point
+        // backup that reached its SFTP fetch died with TRANSPORT_NOT_IMPLEMENTED although
+        // SshExecTransport implements the method): a default method added to DeviceTransport is
+        // not routed until it is overridden here. CompositeDeviceTransportTest now proves every
+        // default method of the interface is overridden by this class.
+        return registry.find(TransportKind.SSH_EXEC)
+                .map(transport -> transport.fetchStreaming(session, spec, timeout, sink))
+                .orElseGet(() -> new com.securityexpert.nexus.ui2.jobs.transport.FetchStreamResult.Failed(
+                        noAdapter(TransportKind.SSH_EXEC)));
+    }
+
+    @Override
     public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
         return registry.find(TransportKind.PAN_XML_API)
                 .map(transport -> transport.xmlApiCall(target, spec, timeout))

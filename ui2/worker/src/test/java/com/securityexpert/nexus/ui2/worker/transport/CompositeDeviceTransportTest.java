@@ -100,6 +100,23 @@ class CompositeDeviceTransportTest {
         assertTrue(result instanceof ExecResult.Completed);
     }
 
+    /** The structural guarantee behind the two live incidents (execInteractive 2026-09-21, fetchStreaming
+     * 2026-09-22): every default method DeviceTransport declares must be overridden here, or it
+     * silently falls to the interface's own "not implemented" default in production. */
+    @Test
+    void everyDefaultMethodOfDeviceTransportIsRoutedByTheComposite() {
+        for (java.lang.reflect.Method method : DeviceTransport.class.getDeclaredMethods()) {
+            if (!method.isDefault()) {
+                continue;
+            }
+            boolean overridden = java.util.Arrays.stream(CompositeDeviceTransport.class.getDeclaredMethods())
+                    .anyMatch(m -> m.getName().equals(method.getName())
+                            && java.util.Arrays.equals(m.getParameterTypes(), method.getParameterTypes()));
+            assertTrue(overridden, "CompositeDeviceTransport must override DeviceTransport." + method.getName()
+                    + " -- otherwise production calls fall to the interface's throwing default");
+        }
+    }
+
     @Test
     void xmlApiCallRoutesToTheRegisteredPanXmlApiAdapter() {
         RecordingTransport pan = new RecordingTransport();
