@@ -225,10 +225,14 @@ public final class Ui2WorkerMain {
         com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine deviationEngine =
                 new com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine();
 
+        com.securityexpert.nexus.ui2.persistence.artefact.content.ArchiveContentListingService contentListing =
+                new com.securityexpert.nexus.ui2.persistence.artefact.content.ArchiveContentListingService(artefactStore,
+                        new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupArtefactEntryRepository(
+                                transactionBoundary));
         BackupJobExecutor backupJobExecutor = new BackupJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, backupCapabilityExecutor, snapshotExecutor,
                 paloAltoBackupExecutor, deviationEngine, null, backupArtefactManifestRepository,
-                backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString());
+                backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString(), contentListing);
 
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
         MgmtCliEnumerationAdapter checkPointDiscoveryAdapter =

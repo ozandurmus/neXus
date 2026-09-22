@@ -421,6 +421,19 @@ public class DeviceCompositionConfiguration {
         return new JooqBackupArtefactManifestRepository(transactionBoundary);
     }
 
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactEntryRepository backupArtefactEntryRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupArtefactEntryRepository(transactionBoundary);
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.device.backup.BackupCompareService backupCompareService(
+            BackupArtefactManifestRepository manifestRepository,
+            com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactEntryRepository entryRepository) {
+        return new com.securityexpert.nexus.ui2.service.device.backup.BackupCompareService(manifestRepository, entryRepository);
+    }
+
     /**
      * PO decision record 2026-09-22 (backup HTTP download with RBAC): the
      * service decrypts a backup artefact for {@code POST /backups/{id}/download}.
@@ -428,22 +441,49 @@ public class DeviceCompositionConfiguration {
      * that one purpose; when either env var is absent the download route
      * answers 503 {@code ARTEFACT_STORE_NOT_MOUNTED} rather than failing at boot.
      */
+    /** The service's artefact store, or {@code storeOrNull() == null} when the pod has no key/volume mounted. */
+    public record ArtefactStoreAccess(com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore storeOrNull) {
+    }
+
     @Bean
-    public com.securityexpert.nexus.ui2.service.device.backup.BackupDownloadService backupDownloadService(
-            BackupArtefactManifestRepository manifestRepository, TransactionBoundary transactionBoundary) {
+    public ArtefactStoreAccess artefactStoreAccess() {
         String keyFile = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_KEY_FILE", "");
         String root = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "");
-        com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore store = null;
-        if (!keyFile.isBlank() && !root.isBlank()) {
-            String keyBase64 = com.securityexpert.nexus.ui2.platform.SecretFile.readRequired(
-                    java.nio.file.Path.of(keyFile), "artefact_store_key");
-            store = new com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore(
-                    java.nio.file.Path.of(root),
-                    com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher.fromBase64Key(keyBase64));
+        if (keyFile.isBlank() || root.isBlank()) {
+            return new ArtefactStoreAccess(null);
         }
-        return new com.securityexpert.nexus.ui2.service.device.backup.BackupDownloadService(store, manifestRepository,
+        String keyBase64 = com.securityexpert.nexus.ui2.platform.SecretFile.readRequired(
+                java.nio.file.Path.of(keyFile), "artefact_store_key");
+        return new ArtefactStoreAccess(new com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore(
+                java.nio.file.Path.of(root),
+                com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher.fromBase64Key(keyBase64)));
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.device.backup.BackupDownloadService backupDownloadService(
+            BackupArtefactManifestRepository manifestRepository, TransactionBoundary transactionBoundary,
+            ArtefactStoreAccess artefactStoreAccess) {
+        return new com.securityexpert.nexus.ui2.service.device.backup.BackupDownloadService(
+                artefactStoreAccess.storeOrNull(), manifestRepository,
                 new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupArtefactRetrievalRepository(
                         transactionBoundary));
+    }
+
+    /**
+     * V41 "List now": lists an artefact stored before content listing existed (or whose listing
+     * failed) on the service, through the same lister the worker runs after every backup. Null
+     * when the pod has no store, and the route then answers 503.
+     */
+    @Bean
+    public com.securityexpert.nexus.ui2.service.device.backup.BackupRelistService backupRelistService(
+            BackupArtefactManifestRepository manifestRepository,
+            com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactEntryRepository entryRepository,
+            ArtefactStoreAccess artefactStoreAccess) {
+        com.securityexpert.nexus.ui2.persistence.artefact.content.ArchiveContentListingService lister =
+                artefactStoreAccess.storeOrNull() == null ? null
+                        : new com.securityexpert.nexus.ui2.persistence.artefact.content.ArchiveContentListingService(
+                                artefactStoreAccess.storeOrNull(), entryRepository);
+        return new com.securityexpert.nexus.ui2.service.device.backup.BackupRelistService(manifestRepository, lister);
     }
 
     /**

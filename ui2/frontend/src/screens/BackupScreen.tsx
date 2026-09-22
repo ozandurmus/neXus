@@ -23,13 +23,19 @@ import {
   getBackupDeviations,
   getBackupPolicy,
   collectDeviceBackup,
+  compareBackups,
   downloadBackupArtefact,
+  listBackupEntries,
+  listDeviceBackups,
+  relistBackupContents,
   listDevices,
   listFleetBackups,
   requestFleetBackup,
   setBackupTarget,
   type DeviceSummary,
+  type BackupArchiveListing,
   type BackupArtefact,
+  type BackupCompareResult,
   type BackupDeviations,
   type BackupPolicy,
 } from "../auth/adminApi";
@@ -106,6 +112,16 @@ export function BackupScreen() {
   const [exportReason, setExportReason] = useState("");
   const [exportBusy, setExportBusy] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  // V41 archive contents and compare.
+  const [contentsFor, setContentsFor] = useState<BackupDeviceItem | null>(null);
+  const [contents, setContents] = useState<BackupArchiveListing | null>(null);
+  const [contentsFilter, setContentsFilter] = useState("");
+  const [contentsError, setContentsError] = useState<string | null>(null);
+  const [compareHistory, setCompareHistory] = useState<BackupArtefact[]>([]);
+  const [compareOtherId, setCompareOtherId] = useState<string>("");
+  const [compareResult, setCompareResult] = useState<BackupCompareResult | null>(null);
+  const [compareError, setCompareError] = useState<string | null>(null);
+  const [compareBusy, setCompareBusy] = useState(false);
   const [policyOpen, setPolicyOpen] = useState(false);
 
   // Policy configuration (PO requirements: 14 days standard retention, depth 4 snapshots, 400 GB vault)
@@ -232,6 +248,73 @@ export function BackupScreen() {
       );
     } finally {
       setExportBusy(false);
+    }
+  };
+
+  const [relistBusy, setRelistBusy] = useState(false);
+  const relistNow = async (device: BackupDeviceItem) => {
+    setRelistBusy(true);
+    setContentsError(null);
+    try {
+      await relistBackupContents(device.artefactId);
+      setContents(await listBackupEntries(device.artefactId));
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      setContentsError(status === 403 ? "Refused by the service: your session may not list archive contents." : `Listing refused${status ? ` (HTTP ${status})` : ""}.`);
+    } finally {
+      setRelistBusy(false);
+    }
+  };
+
+  const openContents = async (device: BackupDeviceItem) => {
+    setContentsFor(device);
+    setContents(null);
+    setContentsError(null);
+    setContentsFilter("");
+    try {
+      setContents(await listBackupEntries(device.artefactId));
+    } catch (error) {
+      setContentsError(error instanceof Error ? error.message : "The listing could not be read.");
+    }
+  };
+
+  // The Diff dialog used to print five "Identical" domains from a constant, whatever the store held.
+  // Compare now joins two listings of the same device on the service (names, sizes, digests).
+  const openCompare = async (device: BackupDeviceItem) => {
+    setSelectedDeviceDiff(device);
+    setCompareResult(null);
+    setCompareError(null);
+    setCompareHistory([]);
+    setCompareOtherId("");
+    try {
+      const history = (await listDeviceBackups(device.deviceId)).backups
+        .filter((a) => a.artefact_id !== device.artefactId)
+        .sort((a, b) => b.collected_at.localeCompare(a.collected_at));
+      setCompareHistory(history);
+      if (history.length > 0) {
+        setCompareOtherId(history[0].artefact_id);
+      }
+    } catch (error) {
+      setCompareError(error instanceof Error ? error.message : "The device's backup history could not be read.");
+    }
+  };
+
+  const runCompare = async (device: BackupDeviceItem, otherId: string) => {
+    setCompareBusy(true);
+    setCompareError(null);
+    setCompareResult(null);
+    try {
+      // left = older (the one chosen), right = the current row's artefact: "what changed since".
+      setCompareResult(await compareBackups(otherId, device.artefactId));
+    } catch (error) {
+      const body = (error as { body?: { error?: string; reason?: string } }).body;
+      setCompareError(
+        body?.error === "NOT_LISTED"
+          ? `One side has no content listing${body.reason ? ` (${body.reason})` : ""}; nothing to compare.`
+          : body?.reason ?? (error instanceof Error ? error.message : "The compare was refused."),
+      );
+    } finally {
+      setCompareBusy(false);
     }
   };
 
@@ -496,11 +579,12 @@ export function BackupScreen() {
                         </M3Button>
                       )}
 
-                      <M3Button
-                        emphasis="text"
-                        onClick={() => setSelectedDeviceDiff(device)}
-                      >
-                        Diff
+                      <M3Button emphasis="text" disabled={!device.artefactId} onClick={() => void openContents(device)}>
+                        Contents
+                      </M3Button>
+
+                      <M3Button emphasis="text" disabled={!device.artefactId} onClick={() => void openCompare(device)}>
+                        Compare
                       </M3Button>
 
                       <M3Button
@@ -541,46 +625,155 @@ export function BackupScreen() {
           maxWidth="md"
           fullWidth
         >
-          <DialogTitle sx={{ fontWeight: 700 }}>
-            AST Semantic Deviation: {selectedDeviceDiff.name} ({selectedDeviceDiff.ip})
-          </DialogTitle>
+          <DialogTitle sx={{ fontWeight: 700 }}>Compare backups: {selectedDeviceDiff.name}</DialogTitle>
           <DialogContent dividers>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              The Deviation Engine performs semantic AST diffing on paired configuration text (excluding volatile timestamps, sequence IDs, and ephemeral session tokens).
-            </Alert>
-
-            <Box sx={{ p: 2, bgcolor: m3.scLow, borderRadius: "8px", border: `1px solid ${m3.outlineVar}` }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                Evaluation Verdict: {selectedDeviceDiff.deviationState}
-              </Typography>
-              <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 2 }}>
-                Current backup is verified against predecessor backup ({selectedDeviceDiff.artefactId}).
-              </Typography>
-
-              <Typography variant="caption" sx={{ fontWeight: 700, color: m3.primary, display: "block", mb: 1 }}>
-                INSPECTED CONFIGURATION DOMAINS:
-              </Typography>
-              <Stack spacing={1}>
-                <Box sx={{ p: 1, bgcolor: m3.surface, borderRadius: "4px" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>✓ Network Interfaces & Subnets: <b>Identical</b></Typography>
-                </Box>
-                <Box sx={{ p: 1, bgcolor: m3.surface, borderRadius: "4px" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>✓ Static & Dynamic Routing: <b>Identical</b></Typography>
-                </Box>
-                <Box sx={{ p: 1, bgcolor: m3.surface, borderRadius: "4px" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>✓ Security Access Rules & NAT: <b>Identical</b></Typography>
-                </Box>
-                <Box sx={{ p: 1, bgcolor: m3.surface, borderRadius: "4px" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>✓ Administrative Users & Roles: <b>Identical</b></Typography>
-                </Box>
-                <Box sx={{ p: 1, bgcolor: m3.surface, borderRadius: "4px" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>✓ Cluster / High-Availability State: <b>Identical</b></Typography>
-                </Box>
+            <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 1.5 }}>
+              Compares the archive listings (member names, sizes and digests) of two backups of this device. It
+              says which files changed, never what changed inside them.
+            </Typography>
+            {compareError && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                {compareError}
+              </Alert>
+            )}
+            {compareHistory.length === 0 && !compareError && (
+              <Alert severity="info">This device has only one backup on record; there is nothing to compare it with yet.</Alert>
+            )}
+            {compareHistory.length > 0 && (
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                <TextField
+                  select
+                  size="small"
+                  label="Compare current with"
+                  value={compareOtherId}
+                  onChange={(e) => setCompareOtherId(e.target.value)}
+                  SelectProps={{ native: true }}
+                  sx={{ minWidth: 320 }}
+                >
+                  {compareHistory.map((a) => (
+                    <option key={a.artefact_id} value={a.artefact_id}>
+                      {a.collected_at} · {formatBytes(a.size_bytes)} · {a.artefact_id.slice(0, 8)}
+                    </option>
+                  ))}
+                </TextField>
+                <M3Button
+                  emphasis="filled"
+                  disabled={compareBusy || !compareOtherId}
+                  onClick={() => void runCompare(selectedDeviceDiff, compareOtherId)}
+                >
+                  {compareBusy ? <CircularProgress size={16} /> : "Compare"}
+                </M3Button>
               </Stack>
-            </Box>
+            )}
+            {compareResult && (
+              <Box sx={{ p: 2, bgcolor: m3.scLow, borderRadius: "8px", border: `1px solid ${m3.outlineVar}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                  {compareResult.identical
+                    ? "Identical listings: every member present in both with the same digest."
+                    : `${compareResult.changed.length} changed · ${compareResult.added.length} added · ${compareResult.removed.length} removed · ${compareResult.unchanged} unchanged`}
+                </Typography>
+                <Typography variant="caption" sx={{ color: m3.onSurfaceVar, display: "block", mb: 1 }}>
+                  {compareResult.left.collected_at} ({formatBytes(compareResult.left.size_bytes)}) →{" "}
+                  {compareResult.right.collected_at} ({formatBytes(compareResult.right.size_bytes)})
+                </Typography>
+                {(
+                  [
+                    ["Changed", compareResult.changed.map((c) => `${c.path} (${formatBytes(c.left_bytes)} → ${formatBytes(c.right_bytes)})`)],
+                    ["Added", compareResult.added],
+                    ["Removed", compareResult.removed],
+                  ] as const
+                ).map(([label, rows]) =>
+                  rows.length === 0 ? null : (
+                    <Box key={label} sx={{ mb: 1 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: m3.primary }}>
+                        {label.toUpperCase()} ({rows.length})
+                      </Typography>
+                      <Box
+                        component="pre"
+                        sx={{ m: 0, p: 1, bgcolor: m3.surface, borderRadius: "4px", fontSize: "0.75rem", maxHeight: 220, overflow: "auto" }}
+                      >
+                        {rows.slice(0, 500).join("\n")}
+                        {rows.length > 500 ? `\n… ${rows.length - 500} more` : ""}
+                      </Box>
+                    </Box>
+                  ),
+                )}
+              </Box>
+            )}
           </DialogContent>
           <DialogActions>
             <M3Button emphasis="filled" onClick={() => setSelectedDeviceDiff(null)}>
+              Close
+            </M3Button>
+          </DialogActions>
+        </Dialog>
+      )}
+
+      {/* V41 archive contents */}
+      {contentsFor && (
+        <Dialog open={true} onClose={() => setContentsFor(null)} maxWidth="md" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>Archive contents: {contentsFor.name}</DialogTitle>
+          <DialogContent dividers>
+            {contentsError && <Alert severity="error">{contentsError}</Alert>}
+            {!contents && !contentsError && <CircularProgress size={20} />}
+            {contents && contents.listing_state !== "LISTED" && (
+              <Alert
+                severity="info"
+                action={
+                  <M3Button emphasis="tonal" disabled={relistBusy} onClick={() => void relistNow(contentsFor)}>
+                    {relistBusy ? <CircularProgress size={16} /> : "List now"}
+                  </M3Button>
+                }
+              >
+                {contents.listing_state === "FAILED"
+                  ? `The archive could not be listed${contents.reason ? `: ${contents.reason}` : ""}.`
+                  : "This backup was stored before content listing existed; it has no listing."}
+              </Alert>
+            )}
+            {contents && contents.listing_state === "LISTED" && (
+              <>
+                <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
+                  <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                    {contents.entry_count} members{contents.truncated ? " (first 20 000 shown)" : ""} · listed {contents.listed_at}
+                  </Typography>
+                  <TextField
+                    size="small"
+                    label="Filter by path"
+                    value={contentsFilter}
+                    onChange={(e) => setContentsFilter(e.target.value)}
+                    sx={{ ml: "auto", minWidth: 260 }}
+                  />
+                </Stack>
+                <TableContainer sx={{ maxHeight: 440 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Path</TableCell>
+                        <TableCell>Type</TableCell>
+                        <TableCell align="right">Size</TableCell>
+                        <TableCell>Digest</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {contents.entries
+                        .filter((e) => !contentsFilter || e.path.toLowerCase().includes(contentsFilter.toLowerCase()))
+                        .slice(0, 2000)
+                        .map((e) => (
+                          <TableRow key={e.path}>
+                            <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem", wordBreak: "break-all" }}>{e.path}</TableCell>
+                            <TableCell>{e.type}</TableCell>
+                            <TableCell align="right">{e.type === "file" ? formatBytes(e.bytes) : ""}</TableCell>
+                            <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{e.digest_prefix ?? ""}</TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <M3Button emphasis="filled" onClick={() => setContentsFor(null)}>
               Close
             </M3Button>
           </DialogActions>

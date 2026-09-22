@@ -104,6 +104,11 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("PUT /devices/*/backup-target", ActionRegistry.DEVICE_BACKUP_TARGET_SET),
             // PO decision record 2026-09-22: the one route that returns artefact bytes, role-gated.
             Map.entry("POST /backups/*/download", ActionRegistry.DEVICE_BACKUP_RETRIEVE),
+            // V41 content listing and compare: posture reads (names/sizes/digests, never content).
+            Map.entry("GET /backups/*/entries", ActionRegistry.DEVICE_BACKUP_READ),
+            Map.entry("GET /backups/*/compare/*", ActionRegistry.DEVICE_BACKUP_READ),
+            // "List now" decrypts on the service: gated like the download.
+            Map.entry("POST /backups/*/relist", ActionRegistry.DEVICE_BACKUP_RETRIEVE),
             // Measured live (2026-09-22): both routes answered 403 ACTION_MAPPING_REQUIRED, so the
             // Backups screen read "Policy unavailable" -- the routes existed, their mapping did not.
             Map.entry("GET /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_READ),

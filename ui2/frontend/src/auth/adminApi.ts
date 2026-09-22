@@ -141,6 +141,56 @@ export function collectDeviceBackup(deviceId: string, reason: string, type: "bac
   return call(`/devices/${encodeURIComponent(deviceId)}/backup/collect`, "POST", { reason, type });
 }
 
+/** V41: one archive member -- name, type, size, digest prefix; never content. */
+export interface BackupArchiveEntry {
+  readonly path: string;
+  readonly type: "file" | "dir" | "symlink" | "other";
+  readonly bytes: number;
+  readonly digest_prefix?: string;
+}
+
+export interface BackupArchiveListing {
+  readonly artefact_id: string;
+  readonly listing_state: "LISTED" | "FAILED" | "NOT_LISTED";
+  readonly reason?: string;
+  readonly listed_at?: string;
+  readonly entry_count?: number;
+  readonly truncated?: boolean;
+  readonly entries: readonly BackupArchiveEntry[];
+}
+
+export function listBackupEntries(artefactId: string): Promise<BackupArchiveListing> {
+  return call(`/backups/${encodeURIComponent(artefactId)}/entries`, "GET");
+}
+
+/** "List now" for an artefact stored before listing existed; decrypts on the service, so it is role-gated like the download. */
+export function relistBackupContents(artefactId: string): Promise<{ listing_state: "LISTED" | "FAILED"; entry_count?: number }> {
+  return call(`/backups/${encodeURIComponent(artefactId)}/relist`, "POST", {});
+}
+
+export interface BackupCompareSide {
+  readonly artefact_id: string;
+  readonly device_id: string;
+  readonly collected_at: string;
+  readonly size_bytes: number;
+  readonly vendor: string;
+}
+
+export interface BackupCompareResult {
+  readonly left: BackupCompareSide;
+  readonly right: BackupCompareSide;
+  readonly identical: boolean;
+  readonly unchanged: number;
+  readonly added: readonly string[];
+  readonly removed: readonly string[];
+  readonly changed: readonly { readonly path: string; readonly left_bytes: number; readonly right_bytes: number }[];
+}
+
+/** Structural compare of two listings of one device: which members were added, removed or changed. */
+export function compareBackups(leftId: string, rightId: string): Promise<BackupCompareResult> {
+  return call(`/backups/${encodeURIComponent(leftId)}/compare/${encodeURIComponent(rightId)}`, "GET");
+}
+
 export interface BackupDownload {
   readonly blob: Blob;
   readonly fileName: string;

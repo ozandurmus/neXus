@@ -74,6 +74,8 @@ public final class BackupJobExecutor {
     private final BackupEndpointEligibilityRepository eligibilityRepository;
     private final HostnameFingerprint hostnameFingerprint;
     private final String recoveryVolumePath;
+    /** V41 content listing; null in compositions that do not list (tests, the CLI). */
+    private final com.securityexpert.nexus.ui2.persistence.artefact.content.ArchiveContentListingService contentListing;
 
     public BackupJobExecutor(JobLeaseRepository leaseRepository, JobStepAttemptRepository attemptRepository,
             DeviceEnrollmentReadPort deviceEnrollmentReadPort, DeviceRepository deviceRepository,
@@ -82,7 +84,7 @@ public final class BackupJobExecutor {
             String recoveryVolumePath) {
         this(leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceRepository,
                 backupExecutor, null, null, null, null, manifestRepository, eligibilityRepository,
-                hostnameFingerprint, recoveryVolumePath);
+                hostnameFingerprint, recoveryVolumePath, null);
     }
 
     public BackupJobExecutor(JobLeaseRepository leaseRepository, JobStepAttemptRepository attemptRepository,
@@ -95,6 +97,23 @@ public final class BackupJobExecutor {
             BackupArtefactManifestRepository manifestRepository,
             BackupEndpointEligibilityRepository eligibilityRepository, HostnameFingerprint hostnameFingerprint,
             String recoveryVolumePath) {
+        this(leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceRepository, backupExecutor,
+                snapshotExecutor, panBackupExecutor, deviationEngine, retentionPruningService, manifestRepository,
+                eligibilityRepository, hostnameFingerprint, recoveryVolumePath, null);
+    }
+
+    public BackupJobExecutor(JobLeaseRepository leaseRepository, JobStepAttemptRepository attemptRepository,
+            DeviceEnrollmentReadPort deviceEnrollmentReadPort, DeviceRepository deviceRepository,
+            BackupCapabilityExecutor backupExecutor,
+            com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor snapshotExecutor,
+            com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor panBackupExecutor,
+            com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine deviationEngine,
+            com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService retentionPruningService,
+            BackupArtefactManifestRepository manifestRepository,
+            BackupEndpointEligibilityRepository eligibilityRepository, HostnameFingerprint hostnameFingerprint,
+            String recoveryVolumePath,
+            com.securityexpert.nexus.ui2.persistence.artefact.content.ArchiveContentListingService contentListing) {
+        this.contentListing = contentListing;
         this.leaseRepository = Objects.requireNonNull(leaseRepository, "leaseRepository");
         this.attemptRepository = Objects.requireNonNull(attemptRepository, "attemptRepository");
         this.deviceEnrollmentReadPort = Objects.requireNonNull(deviceEnrollmentReadPort, "deviceEnrollmentReadPort");
@@ -187,9 +206,9 @@ public final class BackupJobExecutor {
     private JobOutcome handleCompleted(String jobId, long leaseEpoch, String deviceId, BackupResult.Completed completed,
             Optional<DeviceConfirmFacts> confirmFacts) {
         String deviationState = deviationStateAgainstPrevious(deviceId, completed.artefact().plaintextSha256());
-        boolean recorded = recordManifest(completed.artefact(), deviceId, confirmFacts, deviationState,
+        Optional<String> recorded = recordManifest(completed.artefact(), deviceId, confirmFacts, deviationState,
                 completed.observedSoftwareVersion());
-        if (!recorded) {
+        if (recorded.isEmpty()) {
             // AC-3 / C7 section 3.3: an unresolvable Check Point software version refuses the store with zero rows.
             // "Zero rows" must also mean zero bytes: the archive was already streamed onto the recovery
             // volume before the manifest was refused, and a file no manifest row names is unreachable by
@@ -201,6 +220,12 @@ public final class BackupJobExecutor {
                     + "software version refuses the store with zero rows (C7 section 3.3)");
             return new JobOutcome.Failed("backup_artefact_version_unresolvable: an unresolvable Check Point "
                     + "software version refuses the store with zero rows (C7 section 3.3)");
+        }
+
+        // V41: list the archive's entries after the manifest is on record. Best effort: a listing
+        // failure is recorded as such and never turns a verified, stored backup into a failed job.
+        if (contentListing != null) {
+            contentListing.list(recorded.get(), completed.artefact().ref(), completed.artefact().wrappedDataKey());
         }
 
         eligibilityRepository.clear(deviceId, ACTOR, ACTION_INELIGIBILITY_CLEARED);
@@ -237,7 +262,8 @@ public final class BackupJobExecutor {
                 : BackupArtefactManifestRecord.DEVIATION_CHANGED;
     }
 
-    private boolean recordManifest(ArtefactStore.ArtefactMetadata artefact, String deviceId,
+    /** @return the recorded manifest's opaque artefact id, empty when the store was refused (C7 section 3.3). */
+    private Optional<String> recordManifest(ArtefactStore.ArtefactMetadata artefact, String deviceId,
             Optional<DeviceConfirmFacts> confirmFacts, String deviationState, Optional<String> resultSoftwareVersion) {
         String vendor = deviceRepository.find(deviceId).map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::vendorHint).orElse(VENDOR);
         Optional<String> virtualSystemRef = confirmFacts.flatMap(DeviceConfirmFacts::virtualSystemRef);
@@ -251,8 +277,9 @@ public final class BackupJobExecutor {
                         com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedSoftwareVersion))
                 .or(() -> resultSoftwareVersion);
         String hostnameSource = confirmFacts.flatMap(DeviceConfirmFacts::observedHostname).orElse(deviceId);
+        String artefactId = UUID.randomUUID().toString();
         try {
-            BackupArtefactManifestRecord manifest = new BackupArtefactManifestRecord(UUID.randomUUID().toString(), deviceId,
+            BackupArtefactManifestRecord manifest = new BackupArtefactManifestRecord(artefactId, deviceId,
                     virtualSystemRef, ArtefactClass.BACKUP, vendor, softwareVersion, hostnameFingerprint.of(hostnameSource),
                     artefact.plaintextSha256(), artefact.plaintextBytes(), artefact.ciphertextSha256(),
                     artefact.ciphertextBytes(), artefact.keyId(), artefact.wrappedDataKey(),
@@ -266,9 +293,9 @@ public final class BackupJobExecutor {
                 } catch (Exception ignored) {
                 }
             }
-            return true;
+            return Optional.of(artefactId);
         } catch (IllegalStateException versionUnresolvable) {
-            return false;
+            return Optional.empty();
         }
     }
 
