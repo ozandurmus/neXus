@@ -68,17 +68,26 @@ function hasFailedCollection(device: DeviceSummary): boolean {
 // look: its name, that it is a cluster, and whether the connection is clean -- member count,
 // virtual-system count and the raw cluster reference move to the detail view, which already
 // shows every member's own version/serial/identity once selected.
-function clusterHealthTone(members: readonly DeviceSummary[]): "ok" | "warn" {
+// Same rule as the detail header (InventoryPanels): "Live" needs collected interface evidence, not
+// just a successful confirm -- a cluster read as "Live" in this list while its own detail view said
+// "Confirmed · Not collected" (Product Owner, 2026-09-22).
+function clusterHasCollectedEvidence(members: readonly DeviceSummary[]): boolean {
+  return members.some((m) => Boolean(m.ip_addresses && m.ip_addresses.trim().length > 0));
+}
+
+function clusterHealthTone(members: readonly DeviceSummary[]): "ok" | "warn" | "neutral" {
   const allEnrolled = members.every((m) => m.enrollment_state === "ENROLLED");
   const anyFailed = members.some(hasFailedCollection);
-  return allEnrolled && !anyFailed ? "ok" : "warn";
+  if (!allEnrolled || anyFailed) return "warn";
+  return clusterHasCollectedEvidence(members) ? "ok" : "neutral";
 }
 
 function clusterHealthLabel(members: readonly DeviceSummary[]): string {
   const anyFailed = members.some(hasFailedCollection);
   if (anyFailed) return "Collection issue";
   const allEnrolled = members.every((m) => m.enrollment_state === "ENROLLED");
-  return allEnrolled ? "✓ Live" : "Not enrolled";
+  if (!allEnrolled) return "Not enrolled";
+  return clusterHasCollectedEvidence(members) ? "✓ Live" : "Confirmed · Not collected";
 }
 
 function DeviceRow({
