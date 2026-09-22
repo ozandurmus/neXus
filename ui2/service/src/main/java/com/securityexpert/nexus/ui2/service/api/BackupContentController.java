@@ -98,8 +98,14 @@ public final class BackupContentController {
         return ResponseEntity.ok(body);
     }
 
-    @GetMapping("/backups/{leftId}/compare/{rightId}")
-    public ResponseEntity<Map<String, Object>> compare(@PathVariable String leftId, @PathVariable String rightId) {
+    /**
+     * One path variable only: the route map resolves a single wildcard segment per route (measured
+     * live 2026-09-22: {@code /backups/a/compare/b} never resolved and every compare answered 403
+     * ACTION_MAPPING_REQUIRED), so the second artefact travels as {@code ?with=}.
+     */
+    @GetMapping("/backups/{leftId}/compare")
+    public ResponseEntity<Map<String, Object>> compare(@PathVariable String leftId,
+            @org.springframework.web.bind.annotation.RequestParam(name = "with", required = false) String rightId) {
         if (leftId == null || rightId == null || !ARTEFACT_ID.matcher(leftId).matches()
                 || !ARTEFACT_ID.matcher(rightId).matches()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "INVALID_ARTEFACT_ID"));

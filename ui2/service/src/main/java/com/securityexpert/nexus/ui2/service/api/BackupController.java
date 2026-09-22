@@ -131,8 +131,10 @@ public final class BackupController {
                     refusal(HttpStatus.SERVICE_UNAVAILABLE, "DOWNLOAD_UNAVAILABLE", "ARTEFACT_STORE_NOT_MOUNTED",
                             unavailable.reason());
             case BackupDownloadService.Outcome.IoFailure failure ->
+                    // The store's own reason (e.g. "stored in the pre-streaming format ... take a new backup")
+                    // is the operator's next action; it carries no path and no secret.
                     refusal(HttpStatus.INTERNAL_SERVER_ERROR, "IO_FAILURE", "IO_FAILURE",
-                            "The artefact could not be read from the store");
+                            "The artefact could not be read from the store: " + failure.reason());
         };
     }
 

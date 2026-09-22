@@ -211,4 +211,37 @@ class GateChainInterceptorSecurityTest {
         Mockito.when(asset.getServletPath()).thenReturn("/assets/app.js");
         assertTrue(interceptor.preHandle(asset, response, new ResourceHttpRequestHandler()));
     }
+
+    /**
+     * Measured live 2026-09-22: the resolver wildcards one segment at a time, so a route with two
+     * path variables ({@code /backups/a/compare/b}) never resolved and every compare answered 403
+     * ACTION_MAPPING_REQUIRED. Every backup/jobs route shipped today resolves with concrete ids.
+     */
+    @Test
+    void everyBackupAndJobsRouteResolvesWithConcreteIdentifiers() throws Exception {
+        var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
+        var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
+        method.setAccessible(true);
+        String a = "3ed07327-0000-0000-0000-000000000001";
+        String d = "e6b911f7-0000-0000-0000-000000000002";
+        java.util.Map<String, String> expected = java.util.Map.ofEntries(
+                java.util.Map.entry("GET /backups", ActionRegistry.DEVICE_BACKUP_READ),
+                java.util.Map.entry("GET /backups/" + a + "/entries", ActionRegistry.DEVICE_BACKUP_READ),
+                java.util.Map.entry("GET /backups/" + a + "/compare", ActionRegistry.DEVICE_BACKUP_READ),
+                java.util.Map.entry("POST /backups/" + a + "/relist", ActionRegistry.DEVICE_BACKUP_RETRIEVE),
+                java.util.Map.entry("POST /backups/" + a + "/download", ActionRegistry.DEVICE_BACKUP_RETRIEVE),
+                java.util.Map.entry("POST /backups/collect-all", ActionRegistry.DEVICE_BACKUP_COLLECT),
+                java.util.Map.entry("GET /devices/" + d + "/backups", ActionRegistry.DEVICE_BACKUP_READ),
+                java.util.Map.entry("PUT /devices/" + d + "/backup-target", ActionRegistry.DEVICE_BACKUP_TARGET_SET),
+                java.util.Map.entry("PUT /devices/" + d + "/backup-baseline", ActionRegistry.DEVICE_BACKUP_BASELINE_SET),
+                java.util.Map.entry("GET /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_READ),
+                java.util.Map.entry("PUT /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_POLICY_SET),
+                java.util.Map.entry("GET /api/v2/jobs", ActionRegistry.JOB_LOG_READ),
+                java.util.Map.entry("GET /api/v2/jobs/facets", ActionRegistry.JOB_LOG_READ),
+                java.util.Map.entry("GET /api/v2/jobs/export.csv", ActionRegistry.JOB_LOG_READ));
+        for (var entry : expected.entrySet()) {
+            String[] parts = entry.getKey().split(" ", 2);
+            assertEquals(entry.getValue(), method.invoke(interceptor, parts[0], parts[1]), entry.getKey());
+        }
+    }
 }

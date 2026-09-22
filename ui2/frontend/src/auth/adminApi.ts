@@ -204,7 +204,7 @@ export interface BackupCompareResult {
 
 /** Structural compare of two listings of one device: which members were added, removed or changed. */
 export function compareBackups(leftId: string, rightId: string): Promise<BackupCompareResult> {
-  return call(`/backups/${encodeURIComponent(leftId)}/compare/${encodeURIComponent(rightId)}`, "GET");
+  return call(`/backups/${encodeURIComponent(leftId)}/compare?with=${encodeURIComponent(rightId)}`, "GET");
 }
 
 export interface BackupDownload {

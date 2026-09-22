@@ -256,11 +256,13 @@ export function BackupScreen() {
       setTimeout(() => setSuccessMessage(null), 8000);
     } catch (error) {
       const status = (error as { status?: number }).status;
-      const code = (error as { body?: { code?: string } }).body?.code;
+      const body = (error as { body?: { code?: string; reason?: string } }).body;
       setExportError(
         status === 403
           ? "Refused by the service: your session is not allowed to download a backup."
-          : `Download refused${status ? ` (HTTP ${status}${code ? `, ${code}` : ""})` : ""}.`,
+          : body?.reason
+            ? `Download refused: ${body.reason}`
+            : `Download refused${status ? ` (HTTP ${status}${body?.code ? `, ${body.code}` : ""})` : ""}.`,
       );
     } finally {
       setExportBusy(false);

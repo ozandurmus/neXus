@@ -36,7 +36,7 @@ is the compare's whole value, without the product ever holding the file.
 
 ## Compare
 
-`GET /backups/{a}/compare/{b}`: both artefacts must belong to the same device and
+`GET /backups/{a}/compare?with={b}`: both artefacts must belong to the same device and
 both must be `LISTED`; otherwise the response says which side is not listed and
 why, and no diff is invented. Pairs are joined on path and classified `added` /
 `removed` / `changed` (digest or type differs) / `unchanged`. A compare over

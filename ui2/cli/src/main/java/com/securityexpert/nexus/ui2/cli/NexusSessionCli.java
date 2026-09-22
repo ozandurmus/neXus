@@ -104,7 +104,7 @@ final class NexusSessionCli {
                 }
                 case "backup-compare" -> {
                     require(args, 3, "backup-compare <olderArtefactId> <newerArtefactId>");
-                    yield print(call("GET", "/backups/" + args[1] + "/compare/" + args[2], null));
+                    yield print(call("GET", "/backups/" + args[1] + "/compare?with=" + args[2], null));
                 }
                 case "backup-baseline" -> {
                     require(args, 3, "backup-baseline <deviceId> <artefactId|clear>");
