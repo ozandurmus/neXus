@@ -212,7 +212,8 @@
     "cp_platform_facts_empty_on_nine_gateways": "java_debt",
     "cp_backup_free_space_parse_refusal": "java_debt",
     "pan_keygen_no_usable_key_under_load": "java_debt",
-    "ui_effectiveness_review_after_refresh": "java_feature"
+    "ui_effectiveness_review_after_refresh": "java_feature",
+    "test_fixture_realistic_names_cleanup": "java_debt"
   },
   "converted_lessons": [
     {
