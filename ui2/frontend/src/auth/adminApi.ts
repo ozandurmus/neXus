@@ -684,6 +684,31 @@ export function getDeviceInventory(deviceId: string): Promise<DeviceInventory> {
   return call(`/devices/${encodeURIComponent(deviceId)}/inventory`, "GET");
 }
 
+/** GET /devices/{id}/management-tree: what a Check Point management server manages (latest discovery run). */
+export interface ManagementTreeNode {
+  readonly kind: string;
+  readonly cluster_member_ref?: string;
+  readonly hostname?: string;
+  readonly virtual_system?: string;
+  readonly device_id: string | null;
+  readonly imported: boolean;
+  readonly ha_role: string | null;
+  readonly enrollment_state: string | null;
+  readonly last_collection_state: string | null;
+  readonly last_collection_at: string | null;
+  readonly children: readonly ManagementTreeNode[];
+}
+export interface ManagementTree {
+  readonly device_id: string;
+  readonly discovered_at: string | null;
+  readonly domains: ReadonlyArray<{ readonly domain: string | null; readonly nodes: readonly ManagementTreeNode[] }>;
+  readonly counts: { readonly domains?: number; readonly clusters?: number; readonly gateways?: number; readonly virtual_systems?: number; readonly imported?: number };
+}
+
+export function getManagementTree(deviceId: string): Promise<ManagementTree> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/management-tree`, "GET");
+}
+
 export function getClusterInventory(clusterMemberRef: string): Promise<ClusterInventory> {
   return call(`/clusters/${encodeURIComponent(clusterMemberRef)}/inventory`, "GET");
 }

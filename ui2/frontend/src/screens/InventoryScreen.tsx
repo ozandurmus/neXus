@@ -3,6 +3,7 @@ import { urlParam } from "../shell/urlParams";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
+import { ManagementTreePanel } from "./ManagementTreePanel";
 import Typography from "@mui/material/Typography";
 
 import { ScreenHeader, ListDetail, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
@@ -1000,12 +1001,27 @@ export function InventoryScreen() {
                 onCacheUpdate={(ref, inv) => clusterCacheRef.current.set(ref, inv)}
               />
             ) : selectedDevice ? (
-              <DeviceInventoryPanels
-                key={selectedDevice.device_id}
-                device={selectedDevice}
-                initialVs={selectedDeviceVs ?? undefined}
-                onDeviceStateChange={refresh}
-              />
+              <Stack spacing={2}>
+                {selectedDevice.role === "management_server" && selectedDevice.vendor_hint === "check_point" && (
+                  <ManagementTreePanel
+                    deviceId={selectedDevice.device_id}
+                    onOpenDevice={(id) => {
+                      const d = devices?.find((x) => x.device_id === id);
+                      if (d) { setSelectedCluster(null); setSelectedDeviceVs(null); setSelectedDevice(d); }
+                    }}
+                    onOpenCluster={(ref) => {
+                      const members = (devices ?? []).filter((x) => x.cluster_member_ref === ref);
+                      if (members.length > 0) { setSelectedDevice(null); setSelectedCluster({ ref, members }); }
+                    }}
+                  />
+                )}
+                <DeviceInventoryPanels
+                  key={selectedDevice.device_id}
+                  device={selectedDevice}
+                  initialVs={selectedDeviceVs ?? undefined}
+                  onDeviceStateChange={refresh}
+                />
+              </Stack>
             ) : (
               // Review §3: the detail tabs (Interfaces, Routing, Cluster members, Backup, Identity & provenance)
               // appear once a device or cluster is chosen; before that there is nothing for them to show.

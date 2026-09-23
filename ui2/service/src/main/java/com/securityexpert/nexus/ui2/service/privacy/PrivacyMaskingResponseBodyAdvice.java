@@ -164,6 +164,20 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         result.put(key, value);
                     }
                 }
+                case "domain" -> {
+                    if (value instanceof String s) {
+                        result.put(key, topologyPseudonymizer.maskDomainName(s));
+                    } else {
+                        result.put(key, value);
+                    }
+                }
+                case "virtual_system" -> {
+                    if (value instanceof String s) {
+                        result.put(key, topologyPseudonymizer.maskVirtualSystem(s, clusterRef));
+                    } else {
+                        result.put(key, value);
+                    }
+                }
                 case "serial_number" -> {
                     if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskSerial(s));

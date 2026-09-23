@@ -121,6 +121,20 @@ public class TopologyNamePseudonymizer {
         return masked;
     }
 
+    /** A management domain (CMA) name as a stable, unique pseudonym ({@code DOM-TANGO-04}). */
+    public String maskDomainName(String rawDomainName) {
+        if (rawDomainName == null || rawDomainName.isBlank()) {
+            return rawDomainName;
+        }
+        String trimmed = rawDomainName.trim();
+        byte[] hash = hmacSha256("DOMAIN:" + trimmed.toUpperCase());
+        int dictIndex = (hash[0] & 0xFF) % DICTIONARY.size();
+        int suffixNum = ((hash[1] & 0xFF) % 9) + 1;
+        String masked = registry.claim("domain", rawKey("domain", trimmed), candidates("DOM", dictIndex, suffixNum));
+        rawNameToPseudonym.put(trimmed, masked);
+        return masked;
+    }
+
     public String maskVirtualSystem(String rawVsName, String parentRef) {
         if (rawVsName == null || rawVsName.isBlank()) {
             return rawVsName;

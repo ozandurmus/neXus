@@ -250,4 +250,17 @@ class PrivacyMaskingResponseBodyAdviceTest {
         assertThat(vipParts[3]).isEqualTo("11");
         assertThat(m1Parts[3]).isEqualTo("12");
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void masksManagementDomainsAndVirtualSystemsInTheManagementTree() {
+        Map<String, Object> tree = Map.of("domains", List.of(Map.of("domain", "Retail_Banking_CMA",
+                "nodes", List.of(Map.of("kind", "STANDALONE_VIRTUAL_SYSTEM", "virtual_system", "vs_payments")))));
+        Map<String, Object> masked = (Map<String, Object>) advice.maskObject(tree, null);
+        Map<String, Object> domain = ((List<Map<String, Object>>) masked.get("domains")).get(0);
+        assertThat((String) domain.get("domain")).startsWith("DOM-").doesNotContain("Retail");
+        assertThat(advice.maskObject(Map.of("domain", "Retail_Banking_CMA"), null)).isEqualTo(Map.of("domain", domain.get("domain")));
+        Map<String, Object> vs = ((List<Map<String, Object>>) domain.get("nodes")).get(0);
+        assertThat((String) vs.get("virtual_system")).doesNotContain("payments");
+    }
 }
