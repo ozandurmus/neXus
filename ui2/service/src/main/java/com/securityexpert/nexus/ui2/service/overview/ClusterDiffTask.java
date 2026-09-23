@@ -97,10 +97,11 @@ public class ClusterDiffTask {
                     : new ConfigurationProjection.ClusterDiff(0, 0, List.of());
             String[] runIds = signature.toArray(String[]::new);
             String[] sections = diff.diffSections().toArray(String[]::new);
+            String signaturesJson = signaturesJson(diff.signatures());
             transactionBoundary.inTransaction(dsl -> dsl.execute(
                     "insert into cluster_member_diff(cluster_ref, member_run_ids, comparable, diff_section_count, "
-                            + "diff_setting_count, diff_sections) values ({0}, {1}, {2}, {3}, {4}, {5})",
-                    cluster.getKey(), runIds, comparable, sections.length, diff.diffCount(), sections));
+                            + "diff_setting_count, diff_sections, diff_signatures) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}::jsonb)",
+                    cluster.getKey(), runIds, comparable, sections.length, diff.diffCount(), sections, signaturesJson));
             written++;
         }
         // keep the latest row per cluster and the one before it; older rows carry no reader
@@ -141,5 +142,15 @@ public class ClusterDiffTask {
             out.put(r.get("cluster_ref", String.class), ids == null ? List.of() : Arrays.asList(ids));
         }
         return out;
+    }
+
+    /** Hand-rolled flat JSON object of signature -> count (signatures are product-made strings; quotes and backslashes escaped). */
+    static String signaturesJson(java.util.Map<String, Integer> signatures) {
+        StringBuilder b = new StringBuilder("{");
+        for (var e : new java.util.TreeMap<>(signatures).entrySet()) {
+            if (b.length() > 1) b.append(',');
+            b.append('"').append(e.getKey().replace("\\", "\\\\").replace("\"", "\\\"")).append("\":").append(e.getValue());
+        }
+        return b.append('}').toString();
     }
 }

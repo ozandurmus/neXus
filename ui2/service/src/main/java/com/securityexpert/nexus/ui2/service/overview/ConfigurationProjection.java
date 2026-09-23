@@ -34,7 +34,10 @@ public final class ConfigurationProjection {
     public record Row(String section, String setting, String key, String value, boolean memberSpecific) {
     }
 
-    public record ClusterDiff(int diffCount, int settingCount, List<String> diffSections) {
+    public record ClusterDiff(int diffCount, int settingCount, List<String> diffSections, Map<String, Integer> signatures) {
+        public ClusterDiff(int diffCount, int settingCount, List<String> diffSections) {
+            this(diffCount, settingCount, diffSections, Map.of());
+        }
     }
 
     private ConfigurationProjection() {
@@ -322,6 +325,7 @@ public final class ConfigurationProjection {
         }
         int diffCount = 0;
         Set<String> sections = new LinkedHashSet<>();
+        Map<String, Integer> signatures = new java.util.TreeMap<>();
         for (Map.Entry<String, Row> e : first.entrySet()) {
             if (e.getValue().memberSpecific()) {
                 continue;
@@ -331,8 +335,38 @@ public final class ConfigurationProjection {
             if (diff) {
                 diffCount++;
                 sections.add(e.getValue().section());
+                signatures.merge(signature(e.getValue().section(), e.getValue().setting()), 1, Integer::sum);
             }
         }
-        return new ClusterDiff(diffCount, first.size(), List.copyOf(sections));
+        return new ClusterDiff(diffCount, first.size(), List.copyOf(sections), Map.copyOf(signatures));
+    }
+
+    private static final Set<String> PRINCIPAL_SECTIONS = Set.of("Users", "AAA", "Administrators", "Admins", "Login", "Radius", "Tacacs");
+    private static final Pattern HAS_DIGIT = Pattern.compile(".*\\d.*");
+
+    /**
+     * A setting's normalized signature for measurement: {@code section > first component > ... > attribute}, where any
+     * token containing a digit becomes {@code <x>} (interfaces, VLANs, addresses, indexes) and, in sections that name
+     * principals, every component after the first becomes {@code <item>} unless it is the last one of three or more.
+     * Never a value; never a device, user or object name.
+     */
+    static String signature(String section, String setting) {
+        String[] parts = setting.split(" · ");
+        List<String> out = new ArrayList<>();
+        boolean principal = PRINCIPAL_SECTIONS.contains(section);
+        for (int i = 0; i < parts.length; i++) {
+            String p = parts[i].strip();
+            boolean last = i == parts.length - 1;
+            if (principal && !(last && parts.length >= 2)) {
+                out.add("<item>");
+                continue;
+            }
+            List<String> tokens = new ArrayList<>();
+            for (String t : p.split("\\s+")) {
+                tokens.add(HAS_DIGIT.matcher(t).matches() ? "<x>" : t);
+            }
+            out.add(String.join(" ", tokens));
+        }
+        return section + " > " + String.join(" > ", out);
     }
 }
