@@ -55,8 +55,13 @@ public class ManagementTreeService {
 
     /** The latest finished discovery run against this management server's own address, if the device is one. */
     Optional<Run> runFor(String deviceId) {
-        Optional<DeviceSummaryRecord> d = devices.findSummary(deviceId);
-        if (d.isEmpty() || !"management_server".equals(d.get().role())) {
+        return devices.findSummary(deviceId).flatMap(this::runFor);
+    }
+
+    Optional<Run> runFor(DeviceSummaryRecord summary) {
+        Optional<DeviceSummaryRecord> d = Optional.of(summary);
+        String deviceId = summary.deviceId();
+        if (!"management_server".equals(d.get().role())) {
             return Optional.empty();
         }
         List<Record> run = tx.inTransaction(dsl -> dsl.fetch(
@@ -96,21 +101,25 @@ public class ManagementTreeService {
 
     /** Gateways every enrolled management server lists that neXus does not enrol (and nobody marked not an issue). */
     public Map<String, Long> notInNexusAcrossManagers() {
+        List<DeviceSummaryRecord> all = devices.listAll();
+        List<DeviceSummaryRecord> managers = all.stream().filter(d -> "management_server".equals(d.role())).toList();
+        if (managers.isEmpty()) {
+            return Map.of("count", 0L, "managers", 0L);
+        }
+        Map<String, Linked> linked = linked(all);
+        Map<String, Ack> acks = acks();
         long missing = 0;
-        long managers = 0;
-        for (DeviceSummaryRecord d : devices.listAll()) {
-            if (!"management_server".equals(d.role())) {
+        long counted = 0;
+        for (DeviceSummaryRecord d : managers) {
+            Optional<Run> run = runFor(d);
+            if (run.isEmpty() || run.get().runId() == null) {
                 continue;
             }
-            Optional<Map<String, Object>> t = tree(d.deviceId());
-            if (t.isEmpty() || t.get().get("run_id") == null) {
-                continue;
-            }
-            managers++;
-            Object n = ((Map<?, ?>) t.get().get("counts")).get("not_in_nexus");
+            counted++;
+            Object n = counts(candidates(run.get().runId()), linked, acks).get("not_in_nexus");
             missing += n instanceof Number num ? num.longValue() : 0;
         }
-        return Map.of("count", missing, "managers", managers);
+        return Map.of("count", missing, "managers", counted);
     }
 
     public enum AckResult { OK, NOT_A_MANAGEMENT_SERVER, UNKNOWN_ITEM, INVALID_REASON }
@@ -156,7 +165,11 @@ public class ManagementTreeService {
     }
 
     private Map<String, Linked> linked() {
-        Map<String, DeviceSummaryRecord> byId = devices.listAll().stream()
+        return linked(devices.listAll());
+    }
+
+    private Map<String, Linked> linked(List<DeviceSummaryRecord> all) {
+        Map<String, DeviceSummaryRecord> byId = all.stream()
                 .collect(Collectors.toMap(DeviceSummaryRecord::deviceId, Function.identity(), (a, b) -> a));
         Map<String, Linked> out = new HashMap<>();
         for (Record r : tx.inTransaction(dsl -> dsl.fetch(
