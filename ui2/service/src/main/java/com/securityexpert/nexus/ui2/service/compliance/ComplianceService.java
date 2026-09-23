@@ -57,6 +57,8 @@ public final class ComplianceService {
     private final int parallelism;
     private final Duration maxAge;
     private volatile String rulesFingerprint = "";
+    private final java.util.concurrent.atomic.AtomicLong textNanos = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong callNanos = new java.util.concurrent.atomic.AtomicLong();
     private volatile Instant rulesFingerprintAt = Instant.EPOCH;
 
     private final String complianceServiceUrl;
@@ -240,6 +242,7 @@ public final class ComplianceService {
                 out.put(t.deviceId(), null); // keep the caller's order
             }
         }
+        long t0 = System.nanoTime();
         if (misses.size() <= 1 || parallelism == 1) {
             misses.forEach(t -> out.put(t.deviceId(), evaluateDevice(t.deviceId(), t.canonicalHash())));
         } else {
@@ -260,11 +263,24 @@ public final class ComplianceService {
                 pool.shutdown();
             }
         }
+        long ms = (System.nanoTime() - t0) / 1_000_000;
+        if (ms > 500) {
+            LOG.log(System.Logger.Level.INFO, "[COMPLIANCE_TIMING] {0} cached, {1} evaluated in {2} ms (text read {3} ms, service call {4} ms, summed)",
+                    evaluated.size() - misses.size(), misses.size(), ms, textNanos.getAndSet(0) / 1_000_000, callNanos.getAndSet(0) / 1_000_000);
+        }
         return out;
     }
 
+    private static final System.Logger LOG = System.getLogger(ComplianceService.class.getName());
+
     private List<Target> allDevices() {
-        return targets.get();
+        long t0 = System.nanoTime();
+        List<Target> list = targets.get();
+        long ms = (System.nanoTime() - t0) / 1_000_000;
+        if (ms > 500) {
+            LOG.log(System.Logger.Level.INFO, "[COMPLIANCE_TIMING] device list {0} ms ({1} devices)", ms, list.size());
+        }
+        return list;
     }
 
     private static List<Target> evaluable(List<Target> all) {
@@ -435,7 +451,9 @@ public final class ComplianceService {
         Optional<DeviceRecord> device = deviceRepository.find(deviceId);
         String vendor = device.map(DeviceRecord::vendorHint).orElse("check_point");
 
+        long tText = System.nanoTime();
         Optional<String> sanitizedConfig = sanitizedText.apply(deviceId);
+        textNanos.addAndGet(System.nanoTime() - tText);
         String configText = sanitizedConfig.orElse("");
 
         if (cached != null && cached.configHash().equals(String.valueOf(configText.hashCode()))
@@ -452,7 +470,9 @@ public final class ComplianceService {
                     .POST(HttpRequest.BodyPublishers.ofString(configText, StandardCharsets.UTF_8))
                     .build();
 
+            long tCall = System.nanoTime();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            callNanos.addAndGet(System.nanoTime() - tCall);
             if (response.statusCode() == 200) {
                 Map<String, Object> parsed = mapper.readValue(response.body(), new TypeReference<Map<String, Object>>() {});
                 evaluationCache.put(deviceId, new CachedEvaluation(clock.get(), String.valueOf(configText.hashCode()),
