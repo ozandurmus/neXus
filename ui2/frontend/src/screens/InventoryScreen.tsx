@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { urlParam } from "../shell/urlParams";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
@@ -13,7 +13,7 @@ import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
 import { FilterRow, contentVersionText, downloadText, toCsv } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { requestBulkInventoryCollect, listDevices, type ApiError, type DeviceSummary, type ClusterInventory } from "../auth/adminApi";
+import { requestBulkInventoryCollect, listDevices, getManagementTree, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode } from "../auth/adminApi";
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar, deriveClusterTitle } from "./InventoryPanels";
@@ -241,7 +241,120 @@ export function inAgeBucket(device: DeviceSummary, bucket: string, now: number =
   }
 }
 
-export function DeviceList({
+/** Which enrolled devices and clusters each management server's domains hold, from its managed-estate tree. */
+export function managerGroups(tree: ManagementTree): Array<{ domain: string | null; deviceIds: Set<string> }> {
+  return tree.domains.map((d) => {
+    const ids = new Set<string>();
+    const walk = (n: ManagementTreeNode) => {
+      if (n.device_id) ids.add(n.device_id);
+      n.children.forEach(walk);
+    };
+    d.nodes.forEach(walk);
+    return { domain: d.domain, deviceIds: ids };
+  }).filter((g) => g.deviceIds.size > 0);
+}
+
+type DeviceListProps = Parameters<typeof FlatDeviceList>[0] & {
+  /** Nest what each management server (MDS, Panorama) manages under it, by domain (PO, 2026-09-23). Off while a filter is active. */
+  readonly groupByManager?: boolean;
+};
+
+/**
+ * The device list. With {@code groupByManager}, each management server is a top row; its domains and, in each, the
+ * clusters and gateways it manages (the flat list's own rows, VS/VSYS included) nest under it. Devices no manager
+ * lists stay at the top level. Membership comes from each manager's managed-estate tree; until it loads, or when it
+ * cannot be read, the flat list is shown -- nothing is hidden.
+ */
+export function DeviceList(props: DeviceListProps) {
+  const { groupByManager = false, devices, ...rest } = props;
+  const managers = useMemo(() => devices.filter((d) => d.role === "management_server"), [devices]);
+  const [trees, setTrees] = useState<ReadonlyMap<string, ManagementTree>>(new Map());
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const managerKey = managers.map((m) => m.device_id).join(",");
+  useEffect(() => {
+    if (!groupByManager || managers.length === 0) return;
+    let cancelled = false;
+    Promise.all(managers.map((m) => getManagementTree(m.device_id).then((t) => [m.device_id, t] as const).catch(() => null)))
+      .then((rows) => {
+        if (cancelled) return;
+        setTrees(new Map(rows.filter((r): r is readonly [string, ManagementTree] => r !== null)));
+      });
+    return () => { cancelled = true; };
+  }, [groupByManager, managerKey]);
+
+  if (!groupByManager || managers.length === 0 || trees.size === 0) return <FlatDeviceList devices={devices} {...rest} />;
+  const byId = new Map(devices.map((d) => [d.device_id, d]));
+  const placed = new Set<string>();
+  const sections = managers.map((m) => {
+    const tree = trees.get(m.device_id);
+    const groups = tree ? managerGroups(tree).map((g) => {
+      const members = [...g.deviceIds].map((id) => byId.get(id)).filter((d): d is DeviceSummary => d !== undefined && d.role !== "management_server");
+      // a whole cluster moves with any of its members, so a cluster is never split across two places
+      const refs = new Set(members.map((d) => d.cluster_member_ref).filter(Boolean));
+      const all = devices.filter((d) => members.includes(d) || (d.cluster_member_ref && refs.has(d.cluster_member_ref)));
+      all.forEach((d) => placed.add(d.device_id));
+      return { domain: g.domain, devices: all };
+    }).filter((g) => g.devices.length > 0) : [];
+    placed.add(m.device_id);
+    return { manager: m, groups };
+  });
+  const unmanaged = devices.filter((d) => !placed.has(d.device_id));
+  const toggle = (k: string) => setOpen((prev) => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  return (
+    <Stack spacing={1.25}>
+      {sections.map(({ manager, groups }) => {
+        const expanded = open.has(manager.device_id);
+        const total = groups.reduce((a, g) => a + g.devices.length, 0);
+        return (
+          <Box key={manager.device_id} data-row="manager" sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <DeviceRow
+              device={manager}
+              selected={rest.selectedDeviceId === manager.device_id && !rest.selectedVs}
+              onSelect={(dev) => rest.onSelectDevice(dev)}
+              trailingExtra={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <StatusChip tone="neutral" label={`${total} managed`} dense />
+                  <Box component="span" role="button" aria-expanded={expanded} aria-label={expanded ? "Collapse managed devices" : "Expand managed devices"}
+                    onClick={(e) => { e.stopPropagation(); toggle(manager.device_id); }}
+                    sx={{ cursor: "pointer", px: 0.5, color: "text.secondary", fontSize: "0.875rem", "&:hover": { color: m3.primary } }}>
+                    {expanded ? "▲" : "▼"}
+                  </Box>
+                </Box>
+              }
+            />
+            {expanded && (
+              <Box sx={{ pl: 2, display: "flex", flexDirection: "column", gap: 1, borderLeft: `2px solid ${m3.outlineVar}`, ml: 1 }}>
+                {groups.map((g, i) => {
+                  const k = `${manager.device_id}|${g.domain ?? i}`;
+                  const domainOpen = groups.length === 1 || open.has(k);
+                  return (
+                    <Box key={k} data-domain={g.domain ?? ""} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      {groups.length > 1 && (
+                        <Box role="button" tabIndex={0} aria-expanded={domainOpen} onClick={() => toggle(k)}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggle(k); }}
+                          sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer", px: 0.5, py: 0.25 }}>
+                          <Box component="span" sx={{ color: m3.onSurfaceVar, width: 12, fontSize: 12 }}>{domainOpen ? "▾" : "▸"}</Box>
+                          <Typography sx={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", color: m3.onSurfaceVar, flex: 1 }}>
+                            {g.domain ?? "No domain"}
+                          </Typography>
+                          <Typography sx={{ fontSize: 11.5, color: m3.onSurfaceVar }}>{g.devices.length}</Typography>
+                        </Box>
+                      )}
+                      {domainOpen && <FlatDeviceList devices={g.devices} {...rest} />}
+                    </Box>
+                  );
+                })}
+              </Box>
+            )}
+          </Box>
+        );
+      })}
+      {unmanaged.length > 0 && <FlatDeviceList devices={unmanaged} {...rest} />}
+    </Stack>
+  );
+}
+
+function FlatDeviceList({
   devices,
   selectedDeviceId,
   selectedClusterRef,
@@ -970,6 +1083,7 @@ export function InventoryScreen() {
             )}
             {!error && devices !== null && filteredDevices.length > 0 && (
               <DeviceList
+                groupByManager={filteredDevices.length === (devices?.length ?? 0)}
                 devices={sortedDevices}
                 selectedDeviceId={selectedDevice?.device_id ?? null}
                 selectedClusterRef={selectedCluster?.ref ?? null}
