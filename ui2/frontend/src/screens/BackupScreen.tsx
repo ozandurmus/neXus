@@ -886,9 +886,21 @@ export function BackupScreen() {
 
 
 /** The deviation word: CHANGED is a signal (attention), FIRST / UNCHANGED neutral, MAJOR a fault, NOT EVALUATED neutral. */
+const DEVIATION_MEANING: Record<string, string> = {
+  FIRST: "The first archive of this device: nothing earlier to compare with",
+  CHANGED: "Contents differ from the previous archive of this device",
+  UNCHANGED: "Contents match the previous archive of this device",
+  "MAJOR DEVIATION": "A semantic comparison found a major deviation",
+  "NOT EVALUATED": "No comparison has run for this archive",
+};
+
 function DeviationChip({ state }: { readonly state: string }) {
   const tone = state === "MAJOR DEVIATION" ? "bad" : state === "CHANGED" ? "attn" : "neutral";
-  return <StatusChip tone={tone} label={state} dense />;
+  return (
+    <Tooltip title={DEVIATION_MEANING[state] ?? state}>
+      <Box component="span"><StatusChip tone={tone} label={state} dense /></Box>
+    </Tooltip>
+  );
 }
 
 /** The validation level is an evidence grade on the V1-V4 ladder, not a pass mark: shown as recorded, neutral. */
@@ -1062,16 +1074,16 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                       <Stack direction="row" spacing={0} justifyContent="flex-end" alignItems="center" sx={{ whiteSpace: "nowrap",
                         "& .MuiButton-root": { minWidth: 0, px: 0.9, py: 0.25, fontSize: 12.5, textTransform: "none", borderRadius: "6px" } }}>
                         {item || summary?.backup_target ? (
-                          <Button size="small" variant="contained" disableElevation disabled={busy || !summary?.backup_target}
+                          <Tooltip title="Take a configuration and state backup of this device now (needs it switched on as a backup target)"><span><Button size="small" variant="contained" disableElevation disabled={busy || !summary?.backup_target}
                             sx={{ bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, "&:hover": { bgcolor: m3.secondaryContainer }, mr: 0.5 }}
                             onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "standard")}>
                             {busy ? <CircularProgress size={12} /> : "Backup Now"}
-                          </Button>
+                          </Button></span></Tooltip>
                         ) : null}
                         {vendor === "check_point" && item ? (
-                          <Button size="small" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</Button>
+                          <Tooltip title="Check Point only: a full Gaia OS snapshot, in addition to the configuration backup. Palo Alto has no equivalent here."><span><Button size="small" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</Button></span></Tooltip>
                         ) : null}
-                        <Button size="small" disabled={!item} onClick={() => item && onHistory(item)}>History{baselines[id] ? " ★" : ""}</Button>
+                        <Tooltip title={baselines[id] ? "Every backup of this device; ★ = a baseline archive is set for comparison" : "Every backup of this device"}><span><Button size="small" disabled={!item} onClick={() => item && onHistory(item)}>History{baselines[id] ? " ★" : ""}</Button></span></Tooltip>
                         <Button size="small" disabled={!item?.artefactId} onClick={() => item && onContents(item)}>Contents</Button>
                         <Button size="small" disabled={!item?.artefactId} onClick={() => item && onCompare(item)}>Compare</Button>
                         <Button size="small" disabled={!item?.artefactId} onClick={() => item && onDownload(item)}>Download</Button>

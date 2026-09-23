@@ -91,7 +91,8 @@ function FreshnessChip({ evidence: raw }: { readonly evidence: OverviewView["evi
   const missing = chips.filter((c) => !c || c.state !== "OK").length;
   const oldest = chips.filter((c) => c?.state === "OK" && c.at).map((c) => c!.at as string).sort()[0] ?? null;
   const tone = missing > 0 ? "neutral" : ageTone(oldest);
-  const label = missing === chips.length ? "Evidence UNKNOWN" : `All evidence ${relativeAge(oldest)}${missing ? ` · ${missing} UNKNOWN` : ""}`;
+  // The oldest of the six latest runs -- "latest evidence", not a claim that every device was read (review 2026-09-23).
+  const label = missing === chips.length ? "Evidence UNKNOWN" : `Latest evidence ${relativeAge(oldest)}${missing ? ` · ${missing} UNKNOWN` : ""}`;
   return (
     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.75 }}>
       <Box component="button" type="button" aria-expanded={open} onClick={() => setOpen(!open)}

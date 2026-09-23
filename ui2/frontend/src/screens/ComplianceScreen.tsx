@@ -308,7 +308,7 @@ export function ComplianceScreen() {
             label: !overview ? "UNKNOWN" : overview.critical_deficiencies === 0 ? "Zero Critical" : "Immediate Action",
             tone: !overview || overview.critical_deficiencies === 0 ? "neutral" : "bad",
           }}
-          note="High priority failing controls"
+          note="Critical-severity controls failing on at least one firewall"
         />
         <ComplianceMetricCard
           title="Data Gaps"
@@ -355,7 +355,7 @@ export function ComplianceScreen() {
         <Card sx={{ bgcolor: m3.scLowest, borderRadius: "10px", boxShadow: "none", border: "1px solid", borderColor: m3.outlineVar, overflow: "hidden" }}>
           <Box sx={{ px: 2, pt: 1.75, pb: 0.5 }}>
             <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Control families</Typography>
-            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>grouped by NIST SP 800-53 family · coverage = checks with evidence · findings = failing checks · click a family to filter the list</Typography>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>grouped by NIST SP 800-53 family · a check is one control on one firewall · coverage = checks with evidence · click a family to filter the list</Typography>
           </Box>
           <Table size="small">
             <TableHead>
@@ -365,7 +365,7 @@ export function ComplianceScreen() {
                 <TableCell align="right">Checks</TableCell>
                 <TableCell sx={{ width: 220 }}>Pass · Fail · Unavailable</TableCell>
                 <TableCell align="right">Coverage</TableCell>
-                <TableCell align="right">Findings</TableCell>
+                <TableCell align="right">Failing checks</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
