@@ -948,7 +948,9 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
     listDevices()
       .then((r) => {
         if (!cancelled) {
-          setDevices(r.devices.filter((d) => d.enrollment_state === "ENROLLED" && (d.role === undefined || d.role === "gateway" || d.role === "firewall")));
+          setDevices(r.devices.filter((d) => d.enrollment_state === "ENROLLED" && (d.role === undefined || d.role === "gateway" || d.role === "firewall"
+            // a Check Point management server (MDS) takes the Gaia backup too
+            || (d.role === "management_server" && d.vendor_hint === "check_point"))));
           setError(null);
         }
       })

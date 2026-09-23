@@ -205,8 +205,18 @@ class BackupCollectServiceTest {
     }
 
     @Test
-    void refusesAManagementServerNamingTheMissingGate() {
+    void admitsTheGaiaBackupOnACheckPointManagementServer() {
+        // PO, 2026-09-23: an MDS takes the same Gaia backup a gateway does ("normal backup")
         BackupCollectService service = new BackupCollectService(new StubDeviceRepository().putManagementServer(PILOT_DEVICE, "check_point"),
+                admissionService(), Set.of(PILOT_DEVICE), true);
+        BackupCollectService.Outcome outcome = service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());
+        assertTrue(!(outcome instanceof BackupCollectService.Outcome.AdmissionRefused refused)
+                || !"MANAGEMENT_SERVER_UNGATED".equals(refused.code()), "a Check Point MDS is no longer refused as ungated: " + outcome);
+    }
+
+    @Test
+    void refusesAManagementServerNamingTheMissingGate() {
+        BackupCollectService service = new BackupCollectService(new StubDeviceRepository().putManagementServer(PILOT_DEVICE, "palo_alto"),
                 admissionService(), Set.of(PILOT_DEVICE), true);
 
         BackupCollectService.Outcome outcome = service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());

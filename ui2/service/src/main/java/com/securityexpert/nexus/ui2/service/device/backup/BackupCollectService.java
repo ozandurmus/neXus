@@ -76,7 +76,10 @@ public final class BackupCollectService {
             return new Outcome.DeviceNotFound();
         }
         String role = device.get().role();
-        if (!"gateway".equals(role) && !"firewall".equals(role)) {
+        // A Check Point management server (MDS) takes the same Gaia backup a gateway does (PO, 2026-09-23: "normal
+        // backup"); its MDS export (mds_backup) is a separate type. Other management servers stay unmeasured.
+        boolean checkPointManagement = "management_server".equals(role) && "check_point".equals(device.get().vendorHint());
+        if (!"gateway".equals(role) && !"firewall".equals(role) && !checkPointManagement) {
             if ("management_server".equals(role)) {
                 return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",
                         "device " + deviceId + " is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)");
