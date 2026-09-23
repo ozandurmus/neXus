@@ -60,6 +60,8 @@ public final class ActionRegistry {
     public static final String DISCOVERY_RUN_READ = "discovery_run_read";
     /** 14F section 2: {@code POST /discovery/runs/{run_id}/import} -- a write action, {@code role:onboarding_admin} only. */
     public static final String DISCOVERY_RUN_IMPORT = "discovery_run_import";
+    /** Marks a device a management server lists, but neXus does not enrol, as "not an issue here" (V58, audited). */
+    public static final String DISCOVERY_ACKNOWLEDGE = "discovery_acknowledge";
     /**
      * NXS-LOCAL-0175: {@code POST /devices/{id}/backup/collect} -- 14H
      * BK-12: {@code role:backup_admin} plus a reason of at least eight
@@ -168,6 +170,7 @@ public final class ActionRegistry {
         register(new ActionDescriptor(DISCOVERY_RUN_START, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DISCOVERY_RUN_READ, true, Optional.empty()));
         register(new ActionDescriptor(DISCOVERY_RUN_IMPORT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        register(new ActionDescriptor(DISCOVERY_ACKNOWLEDGE, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         // 14H BK-12: role:backup_admin plus a reason (length-checked in
         // BackupCollectService, not here -- E4 only evaluates the role).
         register(new ActionDescriptor(DEVICE_BACKUP_COLLECT, true, Optional.of(RoleToken.BACKUP_ADMIN)));

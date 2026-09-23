@@ -1002,7 +1002,7 @@ export function InventoryScreen() {
               />
             ) : selectedDevice ? (
               <Stack spacing={2}>
-                {selectedDevice.role === "management_server" && selectedDevice.vendor_hint === "check_point" && (
+                {selectedDevice.role === "management_server" && (
                   <ManagementTreePanel
                     deviceId={selectedDevice.device_id}
                     onOpenDevice={(id) => {

@@ -696,13 +696,28 @@ export interface ManagementTreeNode {
   readonly enrollment_state: string | null;
   readonly last_collection_state: string | null;
   readonly last_collection_at: string | null;
+  readonly category: "cluster" | "virtual_system" | "management_appliance" | "device";
+  readonly model: string | null;
+  readonly candidate_id: string | null;
+  readonly ack_token: string | null;
+  readonly acknowledged: boolean;
+  readonly acknowledged_reason: string | null;
   readonly children: readonly ManagementTreeNode[];
 }
 export interface ManagementTree {
   readonly device_id: string;
+  readonly vendor: string;
+  readonly run_id: string | null;
   readonly discovered_at: string | null;
   readonly domains: ReadonlyArray<{ readonly domain: string | null; readonly nodes: readonly ManagementTreeNode[] }>;
-  readonly counts: { readonly domains?: number; readonly clusters?: number; readonly gateways?: number; readonly virtual_systems?: number; readonly imported?: number };
+  readonly counts: {
+    readonly domains?: number; readonly clusters?: number; readonly gateways?: number; readonly virtual_systems?: number;
+    readonly imported?: number; readonly management_appliances?: number; readonly not_in_nexus?: number; readonly acknowledged?: number;
+  };
+}
+
+export function acknowledgeManagedItem(deviceId: string, token: string, acknowledge: boolean, reason?: string): Promise<{ ok: boolean }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/management-tree/acknowledge`, "POST", { token, acknowledge, reason });
 }
 
 export function getManagementTree(deviceId: string): Promise<ManagementTree> {
