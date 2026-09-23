@@ -51,6 +51,8 @@ public final class ComplianceService {
     /** Concurrent evaluations when the cache cannot answer (the compliance service runs on virtual threads). */
     static final int PARALLELISM = 8;
 
+    private final ComplianceEvaluationStore store;
+    private volatile boolean loaded;
     private final Supplier<List<Target>> targets;
     private final Function<String, Optional<String>> sanitizedText;
     private final Supplier<Instant> clock;
@@ -82,18 +84,30 @@ public final class ComplianceService {
     public ComplianceService(ConfigurationQueryService configurationQueryService,
                              DeviceRepository deviceRepository,
                              String complianceServiceUrl) {
+        this(configurationQueryService, deviceRepository, complianceServiceUrl, ComplianceEvaluationStore.inMemory());
+    }
+
+    /** Production wiring: evaluations persist in {@code compliance_evaluation} (V59). */
+    public ComplianceService(ConfigurationQueryService configurationQueryService, DeviceRepository deviceRepository,
+            ComplianceEvaluationStore store) {
+        this(configurationQueryService, deviceRepository, resolveUrl(), store);
+    }
+
+    public ComplianceService(ConfigurationQueryService configurationQueryService, DeviceRepository deviceRepository,
+            String complianceServiceUrl, ComplianceEvaluationStore store) {
         this(configurationQueryService, deviceRepository, complianceServiceUrl,
                 () -> configurationQueryService.listDevices().stream()
                         .filter(d -> d.latestRun().isPresent())
                         .map(d -> new Target(d.deviceId(), d.hostname(), d.vendor(), d.latestRun().map(r -> r.canonicalHash())))
                         .toList(),
-                configurationQueryService::sanitizedText, Instant::now, PARALLELISM, MAX_AGE);
+                configurationQueryService::sanitizedText, Instant::now, PARALLELISM, MAX_AGE, store);
     }
 
     /** Test seam: the device list, the configuration text, the clock, parallelism and backstop age are injected. */
     ComplianceService(ConfigurationQueryService configurationQueryService, DeviceRepository deviceRepository,
             String complianceServiceUrl, Supplier<List<Target>> targets, Function<String, Optional<String>> sanitizedText,
-            Supplier<Instant> clock, int parallelism, Duration maxAge) {
+            Supplier<Instant> clock, int parallelism, Duration maxAge, ComplianceEvaluationStore store) {
+        this.store = store;
         this.targets = targets;
         this.sanitizedText = sanitizedText;
         this.clock = clock;
@@ -144,7 +158,8 @@ public final class ComplianceService {
         frameworkStats.put("NIST SP 800-53", new int[]{0, 0, 0, 0});
         frameworkStats.put("Financial Baseline", new int[]{0, 0, 0, 0});
 
-        Map<String, Map<String, Object>> evaluations = evaluateAll(evaluated);
+        int[] pending = {0};
+        Map<String, Map<String, Object>> evaluations = evaluateAll(evaluated, false, pending);
         for (var dev : evaluated) {
             Map<String, Object> eval = evaluations.get(dev.deviceId());
             if (eval == null || eval.containsKey("error")) {
@@ -211,6 +226,9 @@ public final class ComplianceService {
         overview.put("critical_deficiencies", criticalDeficiencies);
         overview.put("data_gaps", dataGaps);
         overview.put("frameworks", frameworkCards);
+        // Devices shown with their previous evaluation while the background re-evaluates a changed configuration
+        // or a changed rule set (at most a minute): the figures are complete, one step behind for these devices.
+        overview.put("pending_reevaluation", pending[0]);
 
         return overview;
     }
@@ -221,21 +239,70 @@ public final class ComplianceService {
      * (OVERVIEW_EXCEPTION_SCREEN_CONTRACT §3 Section 5).
      */
     public boolean isEvaluationCacheWarm() {
-        if (evaluationCache.isEmpty()) {
-            return false;
+        ensureLoaded();
+        return !evaluationCache.isEmpty();
+    }
+
+    /**
+     * Background pass (the warm-up, every minute): evaluates every device whose stored evaluation does not match its
+     * current configuration and rule set, or is older than the backstop age. Screens never wait for this.
+     * @return the number of devices evaluated
+     */
+    public int refreshInBackground() {
+        int[] evaluatedNow = {0};
+        List<Target> evaluated = evaluable(allDevices());
+        refreshRulesFingerprint();
+        long misses = evaluated.stream().filter(t -> cachedResult(t.deviceId(), t.canonicalHash()) == null).count();
+        evaluateAll(evaluated, true, evaluatedNow);
+        return (int) misses;
+    }
+
+    /** Loads the stored evaluations once (V59), so a restart or deploy starts with every device already evaluated. */
+    private void ensureLoaded() {
+        if (loaded) {
+            return;
         }
-        Instant limit = clock.get().minus(maxAge);
-        return evaluationCache.values().stream().allMatch(c -> c.timestamp().isAfter(limit));
+        synchronized (this) {
+            if (loaded) {
+                return;
+            }
+            try {
+                for (ComplianceEvaluationStore.Stored st : store.loadAll()) {
+                    Map<String, Object> parsed = mapper.readValue(st.resultJson(), new TypeReference<Map<String, Object>>() {});
+                    evaluationCache.putIfAbsent(st.deviceId(), new CachedEvaluation(st.evaluatedAt(), st.configHash(),
+                            st.canonicalHash(), st.rulesFingerprint(), parsed));
+                }
+            } catch (Exception e) {
+                LOG.log(System.Logger.Level.WARNING, "[COMPLIANCE] stored evaluations not loaded: {0}", e.getMessage());
+            }
+            loaded = true;
+        }
     }
 
     /** Evaluates every target not answered by the cache, {@link #PARALLELISM} at a time; results keyed by device id. */
-    Map<String, Map<String, Object>> evaluateAll(List<Target> evaluated) {
+    /**
+     * @param background false for a screen request: a device with any stored evaluation is answered from it at once
+     *     (counted in {@code pendingOut} when it no longer matches the current configuration or rule set, the
+     *     background pass catches it up); only a device never evaluated is evaluated in the request.
+     */
+    Map<String, Map<String, Object>> evaluateAll(List<Target> evaluated, boolean background, int[] pendingOut) {
+        ensureLoaded();
         refreshRulesFingerprint();
         Map<String, Map<String, Object>> out = new LinkedHashMap<>();
         List<Target> misses = new ArrayList<>();
         for (Target t : evaluated) {
             Map<String, Object> hit = cachedResult(t.deviceId(), t.canonicalHash());
-            if (hit != null) {
+            CachedEvaluation previous = evaluationCache.get(t.deviceId());
+            if (hit == null && !background && previous != null) {
+                // a configuration or rule change the background has not caught up with yet; the backstop age alone
+                // (same configuration, same rules) is not pending -- that result is still exact
+                boolean exact = t.canonicalHash().isPresent() && t.canonicalHash().get().equals(previous.canonicalHash())
+                        && rulesFingerprint.equals(previous.rulesFingerprint());
+                if (!exact) {
+                    pendingOut[0]++;
+                }
+                out.put(t.deviceId(), previous.result());
+            } else if (hit != null) {
                 out.put(t.deviceId(), hit);
             } else {
                 misses.add(t);
@@ -332,7 +399,7 @@ public final class ComplianceService {
         // each call read and decrypted that device's sanitized artefact before consulting the cache --
         // ~50 controls x ~90 collected devices, several minutes per GET, so the screen never loaded.
         Map<String, Map<String, Object>> evaluationByDevice = new LinkedHashMap<>();
-        evaluateAll(evaluated).forEach((id, eval) -> {
+        evaluateAll(evaluated, false, new int[1]).forEach((id, eval) -> {
             if (eval != null) {
                 evaluationByDevice.put(id, eval);
             }
@@ -475,8 +542,15 @@ public final class ComplianceService {
             callNanos.addAndGet(System.nanoTime() - tCall);
             if (response.statusCode() == 200) {
                 Map<String, Object> parsed = mapper.readValue(response.body(), new TypeReference<Map<String, Object>>() {});
-                evaluationCache.put(deviceId, new CachedEvaluation(clock.get(), String.valueOf(configText.hashCode()),
+                Instant at = clock.get();
+                evaluationCache.put(deviceId, new CachedEvaluation(at, String.valueOf(configText.hashCode()),
                         knownCanonicalHash.orElse(null), rulesFingerprint, parsed));
+                try {
+                    store.save(new ComplianceEvaluationStore.Stored(deviceId, knownCanonicalHash.orElse(null),
+                            String.valueOf(configText.hashCode()), rulesFingerprint, at, response.body()));
+                } catch (RuntimeException e) {
+                    LOG.log(System.Logger.Level.WARNING, "[COMPLIANCE] evaluation not stored: {0}", e.getMessage());
+                }
                 return parsed;
             }
         } catch (Exception ignored) {

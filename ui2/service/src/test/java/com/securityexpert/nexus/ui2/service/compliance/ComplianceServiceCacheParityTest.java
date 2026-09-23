@@ -111,6 +111,10 @@ class ComplianceServiceCacheParityTest {
     }
 
     private ComplianceService service(int parallelism) {
+        return service(parallelism, ComplianceEvaluationStore.inMemory());
+    }
+
+    private ComplianceService service(int parallelism, ComplianceEvaluationStore store) {
         DeviceRepository repo = (DeviceRepository) Proxy.newProxyInstance(getClass().getClassLoader(),
                 new Class<?>[] {DeviceRepository.class}, (p, m, a) -> m.getName().startsWith("find") ? Optional.empty() : null);
         String url = "http://127.0.0.1:" + server.getAddress().getPort();
@@ -122,7 +126,7 @@ class ComplianceServiceCacheParityTest {
             }
             out.add(new Target("dev-other", Optional.of("FW-OTHER-01"), "fortinet", Optional.of("h")));
             return out;
-        }, id -> Optional.ofNullable(configs.get(id)), now::get, parallelism, Duration.ofHours(6));
+        }, id -> Optional.ofNullable(configs.get(id)), now::get, parallelism, Duration.ofHours(6), store);
     }
 
     @Test
@@ -142,35 +146,62 @@ class ComplianceServiceCacheParityTest {
     }
 
     @Test
-    void onlyAChangedConfigurationIsReEvaluatedAndTheResultStillMatches() {
+    void aChangedConfigurationIsShownFromTheStoredEvaluationUntilTheBackgroundCatchesUp() {
         ComplianceService current = service(ComplianceService.PARALLELISM);
-        current.getOverview();
+        Map<String, Object> before = current.getOverview();
         configs.put("dev-5", "C1=on\nC2=on\nC3=on\nC4=on\nC5=on\nC6=on\n");
         hashes.put("dev-5", "h-5-2");
         evaluations.set(0);
-        Map<String, Object> after = current.getOverview();
+        Map<String, Object> screen = current.getOverview();
+        assertThat(evaluations.get()).as("a screen never waits for a re-evaluation").isZero();
+        assertThat(screen.get("pending_reevaluation")).isEqualTo(1);
+        assertThat(without(screen)).isEqualTo(without(before));
+        assertThat(current.refreshInBackground()).isEqualTo(1);
         assertThat(evaluations.get()).isEqualTo(1);
+        Map<String, Object> after = current.getOverview();
+        assertThat(after.get("pending_reevaluation")).isEqualTo(0);
         assertThat(after).isEqualTo(service(1).getOverview());
     }
 
     @Test
-    void aRuleSetChangeReEvaluatesEveryDevice() {
+    void aRestartStartsFromTheStoredEvaluationsWithoutReEvaluating() {
+        ComplianceEvaluationStore store = ComplianceEvaluationStore.inMemory();
+        Map<String, Object> first = service(ComplianceService.PARALLELISM, store).getOverview();
+        evaluations.set(0);
+        ComplianceService restarted = service(ComplianceService.PARALLELISM, store);
+        assertThat(restarted.isEvaluationCacheWarm()).isTrue();
+        assertThat(restarted.getOverview()).isEqualTo(first);
+        assertThat(restarted.refreshInBackground()).isZero();
+        assertThat(evaluations.get()).isZero();
+    }
+
+    @Test
+    void aRuleSetChangeIsCaughtUpInTheBackground() {
         ComplianceService current = service(ComplianceService.PARALLELISM);
         current.getOverview();
         catalogVersion.set("2026.10.1");
         now.set(now.get().plus(Duration.ofMinutes(2))); // the fingerprint is re-read at most once a minute
         evaluations.set(0);
-        current.getOverview();
+        assertThat(current.getOverview().get("pending_reevaluation")).isEqualTo(DEVICES);
+        assertThat(evaluations.get()).isZero();
+        assertThat(current.refreshInBackground()).isEqualTo(DEVICES);
         assertThat(evaluations.get()).isEqualTo(DEVICES);
     }
 
     @Test
-    void theBackstopAgeStillReEvaluates() {
+    void theBackstopAgeReEvaluatesInTheBackgroundOnly() {
         ComplianceService current = service(ComplianceService.PARALLELISM);
         current.getOverview();
         now.set(now.get().plus(Duration.ofHours(7)));
         evaluations.set(0);
-        current.getOverview();
-        assertThat(evaluations.get()).isEqualTo(DEVICES);
+        assertThat(current.getOverview().get("pending_reevaluation")).isEqualTo(0); // same configuration, same rules: exact
+        assertThat(evaluations.get()).isZero();
+        assertThat(current.refreshInBackground()).isEqualTo(DEVICES);
+    }
+
+    private static Map<String, Object> without(Map<String, Object> overview) {
+        Map<String, Object> m = new java.util.LinkedHashMap<>(overview);
+        m.remove("pending_reevaluation");
+        return m;
     }
 }

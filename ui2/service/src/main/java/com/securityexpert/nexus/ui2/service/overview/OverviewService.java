@@ -441,6 +441,7 @@ public class OverviewService {
         out.put("coverage_pct", o.get("evidence_coverage_pct"));
         out.put("critical_deficiencies", o.get("critical_deficiencies"));
         out.put("data_gaps", o.get("data_gaps"));
+        out.put("pending_reevaluation", o.get("pending_reevaluation"));
         List<Map<String, Object>> frameworks = new ArrayList<>();
         if (o.get("frameworks") instanceof List<?> list) {
             for (Object f : list) {

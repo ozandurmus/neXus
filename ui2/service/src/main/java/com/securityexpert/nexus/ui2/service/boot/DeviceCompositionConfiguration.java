@@ -602,8 +602,9 @@ public class DeviceCompositionConfiguration {
     @Bean
     public com.securityexpert.nexus.ui2.service.compliance.ComplianceService complianceService(
             ConfigurationQueryService configurationQueryService,
-            DeviceRepository deviceRepository) {
-        return new com.securityexpert.nexus.ui2.service.compliance.ComplianceService(
-                configurationQueryService, deviceRepository);
+            DeviceRepository deviceRepository,
+            com.securityexpert.nexus.ui2.persistence.TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.service.compliance.ComplianceService(configurationQueryService, deviceRepository,
+                new com.securityexpert.nexus.ui2.service.compliance.JooqComplianceEvaluationStore(transactionBoundary));
     }
 }

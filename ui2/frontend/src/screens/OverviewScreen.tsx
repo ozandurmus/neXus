@@ -296,6 +296,11 @@ function ComplianceCard({ c, evidenceAt }: { readonly c: OverviewView["complianc
             </Tooltip>
             <Link href={q({ screen: "compliance", severity: "critical", result: "fail" })} underline="none"><StatusChip tone={(c.critical_deficiencies ?? 0) > 0 ? "bad" : "neutral"} label={`${c.critical_deficiencies} critical failing checks`} /></Link>
             <Link href={q({ screen: "compliance", result: "unavailable" })} underline="none"><StatusChip tone={(c.data_gaps ?? 0) > 0 ? "warn" : "neutral"} label={`${c.data_gaps} data gaps`} /></Link>
+            {(c.pending_reevaluation ?? 0) > 0 && (
+              <Tooltip title="Their configuration or the rule set changed; they show their previous evaluation until the background re-evaluation (within a minute) completes.">
+                <Box component="span"><StatusChip tone="neutral" label={`${c.pending_reevaluation} being re-evaluated`} /></Box>
+              </Tooltip>
+            )}
           </Box>
           {(c.frameworks ?? []).map((f) => (
             <Link key={f.name} href={q({ screen: "compliance", framework: f.name })} underline="none" sx={{ color: "inherit", display: "block", mb: 1.5 }}>

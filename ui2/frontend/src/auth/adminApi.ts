@@ -1145,6 +1145,8 @@ export interface ComplianceOverview {
   readonly observed_compliance_pct: number;
   readonly critical_deficiencies: number;
   readonly data_gaps: number;
+  /** Devices shown with their previous evaluation while the background re-evaluates a changed configuration or rule set. */
+  readonly pending_reevaluation?: number;
   readonly frameworks: readonly {
     readonly framework: string;
     readonly score_pct: number;
@@ -1332,7 +1334,7 @@ export interface OverviewView {
   readonly inventory_age: { lt24h: number; h24_72: number; gt72h: number; never: number; of: number; state?: EvidenceState };
   readonly compliance: {
     state: EvidenceState; reason?: string | null; evaluated?: number; of_firewalls?: number; observed_pct?: number; assured_pct?: number;
-    coverage_pct?: number; critical_deficiencies?: number; data_gaps?: number;
+    coverage_pct?: number; critical_deficiencies?: number; data_gaps?: number; pending_reevaluation?: number;
     frameworks?: Array<{ name: string; pass: number; fail: number; unavailable: number; total: number; score_pct: number }>;
   };
   readonly platform: {

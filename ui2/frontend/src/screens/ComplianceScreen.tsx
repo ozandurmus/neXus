@@ -289,6 +289,7 @@ export function ComplianceScreen() {
           Scope: all {controls.length} controls on {overview.evaluated_firewalls} of {overview.total_firewalls} evaluated firewalls
           {" · "}{controls.reduce((n, c) => n + c.pass_count + c.fail_count + c.data_unavailable_count, 0)} control checks (one control on one firewall)
           {" · "}every control maps to CIS, so the CIS card shows the same totals.
+          {(overview.pending_reevaluation ?? 0) > 0 && ` · ${overview.pending_reevaluation} firewall(s) shown with their previous evaluation while being re-evaluated`}
         </Typography>
       )}
       <MetricGrid>
