@@ -115,6 +115,8 @@ function AckControl({ node, actions }: { readonly node: ManagementTreeNode; read
 
 /** The member's own state, read from the member (never from the management server). */
 function MemberState({ node, actions }: { readonly node: ManagementTreeNode; readonly actions: RowActions }) {
+  // A virtual system is a context of its gateway, never enrolled on its own: nothing to flag.
+  if (node.category === "virtual_system") return null;
   if (node.category === "management_appliance") return <StatusChip tone="neutral" label="Management / log server" dense />;
   if (!node.imported) {
     return (
@@ -167,7 +169,18 @@ function NodeRow({ node, depth, onOpenDevice, onOpenCluster, actions }: {
         </Typography>
         <Box>{isCluster ? <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{node.children.length} member{node.children.length === 1 ? "" : "s"}</Typography> : <MemberState node={node} actions={actions} />}</Box>
       </Box>
-      {node.children.map((k, i) => <NodeRow key={`${nameOf(k)}-${i}`} node={k} depth={depth + 1} onOpenDevice={onOpenDevice} onOpenCluster={onOpenCluster} actions={actions} />)}
+      {node.category !== "cluster" && node.children.length > 0 && node.children.every((k) => k.category === "virtual_system") ? (
+        // A gateway's virtual systems as one line (Panorama lists every VSYS under each HA member).
+        <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 170px minmax(0,1.3fr)", gap: 1.5, alignItems: "center",
+          minHeight: 34, px: 2, pl: 2 + (depth + 1) * 2.5, borderTop: `1px solid ${m3.outlineVar}` }}>
+          <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            title={node.children.map(nameOf).join(", ")}>
+            └ {node.children.map(nameOf).join(", ")}
+          </Typography>
+          <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{node.children.length} virtual system{node.children.length === 1 ? "" : "s"}</Typography>
+          <Box />
+        </Box>
+      ) : node.children.map((k, i) => <NodeRow key={`${nameOf(k)}-${i}`} node={k} depth={depth + 1} onOpenDevice={onOpenDevice} onOpenCluster={onOpenCluster} actions={actions} />)}
     </>
   );
 }
