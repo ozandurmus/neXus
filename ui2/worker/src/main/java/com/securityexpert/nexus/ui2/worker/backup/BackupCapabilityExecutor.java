@@ -347,7 +347,7 @@ public final class BackupCapabilityExecutor {
     }
 
     /** {@code df -P /var/log}: POSIX format, one data line, "Available" is the 4th column in 1K blocks. */
-    static Optional<Long> parseDfAvailableBytes(String dfOutput) {
+    public static Optional<Long> parseDfAvailableBytes(String dfOutput) {
         if (dfOutput == null || dfOutput.isBlank() || looksLikeCliError(dfOutput)) {
             return Optional.empty();
         }

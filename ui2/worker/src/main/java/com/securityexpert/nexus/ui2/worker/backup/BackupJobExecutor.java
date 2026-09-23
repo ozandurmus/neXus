@@ -67,6 +67,13 @@ public final class BackupJobExecutor {
     private final DeviceRepository deviceRepository;
     private final BackupCapabilityExecutor backupExecutor;
     private final com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor snapshotExecutor;
+    private com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor mdsExportExecutor;
+
+    /** V61: the Check Point MDS export; unset, a cp_mds_export job fails closed (never falls back to the Gaia backup). */
+    public BackupJobExecutor withMdsExportExecutor(com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor executor) {
+        this.mdsExportExecutor = executor;
+        return this;
+    }
     private final com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor panBackupExecutor;
     private final com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine deviationEngine;
     private final com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService retentionPruningService;
@@ -158,7 +165,11 @@ public final class BackupJobExecutor {
         String vendor = deviceRecord.map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::vendorHint).orElse(VENDOR);
 
         BackupResult result;
-        if ((com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP.equals(capabilityId)
+        if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_MDS_EXPORT.equals(capabilityId)) {
+            result = mdsExportExecutor == null
+                    ? new BackupResult.ConnectFailed("mds export executor not configured in this worker")
+                    : mdsExportExecutor.collect(request, targetDeviceId, jobId);
+        } else if ((com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP.equals(capabilityId)
                 || "palo_alto".equals(vendor)) && panBackupExecutor != null) {
             // The device's credential reference; PaloAltoBackupExecutor resolves it and generates the key.
             String credentialRef = deviceRecord.map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::credentialReferenceId).orElse("");

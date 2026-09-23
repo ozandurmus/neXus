@@ -41,7 +41,7 @@ public final class BackupController {
 
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ISO_INSTANT;
     private static final int DIGEST_PREFIX_LENGTH = 12;
-    private static final java.util.Set<String> VALID_BACKUP_TYPES = java.util.Set.of("backup", "standard", "snapshot", "device_state");
+    private static final java.util.Set<String> VALID_BACKUP_TYPES = java.util.Set.of("backup", "standard", "snapshot", "device_state", "mds_export");
 
     public record CollectRequest(@JsonProperty("nonce") String nonce, @JsonProperty("reason") String reason,
             @JsonProperty("type") String type) {

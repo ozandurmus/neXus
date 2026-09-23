@@ -226,15 +226,21 @@ export function BackupScreen() {
     void loadFleet();
   }, [loadFleet]);
 
-  const handleBackupNow = async (device: BackupDeviceItem, type: "standard" | "snapshot") => {
+  const handleBackupNow = async (device: BackupDeviceItem, type: "standard" | "snapshot" | "mds_export") => {
+    if (type === "mds_export" && !window.confirm(
+      "MDS export runs mds_backup for the whole Multi-Domain Server (every domain).\n\n"
+      + "While it runs, the MDS database is locked: no SmartConsole changes can be saved or published in any domain "
+      + "until it completes (Check Point). It normally runs at night.\n\nStart it now?")) {
+      return;
+    }
     setTriggeringId(device.deviceId);
     setLoading(true);
-    const label = type === "snapshot" ? "Snapshot" : "Backup";
+    const label = type === "snapshot" ? "Snapshot" : type === "mds_export" ? "MDS export" : "Backup";
     try {
       // Through the API client: the CSRF token and the mapped /devices/{id}/backup/collect route.
       // The raw fetch to the /api/v2/backups/{id}/run alias went out without a token to a route
       // outside the action map, so every click was refused 403 (Product Owner, 2026-09-22).
-      await collectDeviceBackup(device.deviceId, `Operator manual trigger for ${type} via console`, type === "snapshot" ? "snapshot" : "backup");
+      await collectDeviceBackup(device.deviceId, `Operator manual trigger for ${type} via console`, type === "standard" ? "backup" : type);
       setSuccessMessage(`${label} requested for ${device.name}. Validation level will appear once the run is recorded.`);
       await loadFleet();
     } catch (error) {
@@ -930,7 +936,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   readonly fleetError: string | null;
   readonly baselines: Record<string, string>;
   readonly busyDeviceId: string | null;
-  readonly onBackupNow: (d: BackupDeviceItem, type: "standard" | "snapshot") => void;
+  readonly onBackupNow: (d: BackupDeviceItem, type: "standard" | "snapshot" | "mds_export") => void;
   readonly onHistory: (d: BackupDeviceItem) => void;
   readonly onContents: (d: BackupDeviceItem) => void;
   readonly onCompare: (d: BackupDeviceItem) => void;
@@ -1081,6 +1087,10 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                             onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "standard")}>
                             {busy ? <CircularProgress size={12} /> : "Backup Now"}
                           </Button></span></Tooltip>
+                        ) : null}
+                        {vendor === "check_point" && summary?.role === "management_server" && summary?.backup_target ? (
+                          <Tooltip title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; scheduled at night."><span><Button size="small" disabled={busy}
+                            onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "management_server", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "mds_export")}>MDS export</Button></span></Tooltip>
                         ) : null}
                         {vendor === "check_point" && item ? (
                           <Tooltip title="Check Point only: a full Gaia OS snapshot, in addition to the configuration backup. Palo Alto has no equivalent here."><span><Button size="small" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</Button></span></Tooltip>

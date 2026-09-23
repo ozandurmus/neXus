@@ -58,6 +58,14 @@ class BackupCapabilitiesGateAlignmentTest {
                 .anyMatch(c -> c.id().equals(com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP)));
     }
 
+    @Test
+    void checkPointMdsExportCapabilityResolvesEligibleAndIsRegistered() {
+        var registry = realFixtureGateRegistry();
+        assertTrue(BackupCapabilities.checkPointMdsExport(registry).executionEligible());
+        assertTrue(BackupCapabilities.all(registry).stream()
+                .anyMatch(c -> c.id().equals(com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_MDS_EXPORT)));
+    }
+
     private static final class InMemoryAdmissionRepository implements JobAdmissionRepository {
         private final Map<String, String> jobsByIdempotencyKey = new HashMap<>();
 

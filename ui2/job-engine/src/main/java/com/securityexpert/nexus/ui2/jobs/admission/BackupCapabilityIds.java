@@ -18,7 +18,9 @@ public final class BackupCapabilityIds {
     /** The CLI half of the PAN bundle (V43); registered for gate alignment, run inside PAN_DEVICE_STATE_BACKUP, never submitted alone (hence not in ALL). */
     public static final String PAN_SET_CONFIG_READ = "pan_set_config_read";
 
-    public static final Set<String> ALL = Set.of(CP_GAIA_BACKUP_LOCAL, CP_GAIA_SNAPSHOT, PAN_DEVICE_STATE_BACKUP);
+    /** Check Point Multi-Domain Server export: one mds_backup of the whole server, every domain (V61, PO 2026-09-23). */
+    public static final String CP_MDS_EXPORT = "cp_mds_export";
+    public static final Set<String> ALL = Set.of(CP_GAIA_BACKUP_LOCAL, CP_GAIA_SNAPSHOT, PAN_DEVICE_STATE_BACKUP, CP_MDS_EXPORT);
 
     private BackupCapabilityIds() {
     }

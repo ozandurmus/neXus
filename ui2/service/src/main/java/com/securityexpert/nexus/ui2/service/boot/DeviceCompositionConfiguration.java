@@ -168,6 +168,7 @@ public class DeviceCompositionConfiguration {
                 checkPointBackupCapability(gateRegistryPort),
                 paloAltoBackupCapability(gateRegistryPort),
                 paloAltoSetConfigCapability(gateRegistryPort),
+                checkPointMdsExportCapability(gateRegistryPort),
                 // 14F DR-1: admitted through JobAdmissionService#submitForRun
                 // against a discovery_run row, never a device -- same
                 // gate-free placeholder shape (StepExecutor never runs
@@ -288,6 +289,28 @@ public class DeviceCompositionConfiguration {
         CapabilitySpec spec = new CapabilitySpec(BackupCapabilityIds.PAN_SET_CONFIG_READ, "palo_alto",
                 "pan_firewall", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, List.copyOf(steps),
                 List.of(disconnect), "14H", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
+    }
+
+    /** Mirrors {@code worker.backup.BackupCapabilities.checkPointMdsExport} and {@code MdsExportPlan.LITERALS} exactly (V61). */
+    static final List<String> MDS_EXPORT_LITERALS = List.of("df -P /var/log", "mkdir -p %s",
+            "bash -lc 'mdsstat' > %s/mdsstat.txt 2>&1", "clish -c 'show configuration' > %s/gaia_config.txt",
+            "bash -lc 'cplic print -x' > %s/cplic.txt 2>&1", "netstat -rn > %s/netstat.txt", "uname -a > %s/uname.txt",
+            "cd /var/log && nohup bash -lc '$CPMDIR/scripts/mds_backup -b -l -d %1$s > %1$s/mds_backup.log 2>&1; echo $? > %1$s/mds_backup.rc' >/dev/null 2>&1 &",
+            "cat %s/mds_backup.rc", "ls %s", "cd %1$s && tar -czf %1$s.tgz .", "sha256sum %s.tgz", "rm -rf %1$s %1$s.tgz");
+
+    private static Capability checkPointMdsExportCapability(GateRegistryPort gateRegistryPort) {
+        List<CapabilityStep> steps = new java.util.ArrayList<>();
+        steps.add(new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false, Optional.empty(), Optional.empty(), Optional.empty()));
+        for (String literal : MDS_EXPORT_LITERALS) {
+            steps.add(new CapabilityStep(literal.startsWith("cat ") ? StepKind.POLL : StepKind.EXEC, "expert", literal, false,
+                    Optional.empty(), Optional.empty(), Optional.empty()));
+        }
+        steps.add(new CapabilityStep(StepKind.SFTP_GET, "not_applicable", null, true, Optional.empty(), Optional.empty(), Optional.empty()));
+        CapabilitySpec spec = new CapabilitySpec(BackupCapabilityIds.CP_MDS_EXPORT, "check_point", "cp_multi_domain_server",
+                TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, List.copyOf(steps),
+                List.of(new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false, Optional.empty(), Optional.empty(), Optional.empty())),
+                "14H", List.of(), false);
         return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
     }
 

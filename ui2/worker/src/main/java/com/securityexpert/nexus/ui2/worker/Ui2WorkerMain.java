@@ -237,6 +237,13 @@ public final class Ui2WorkerMain {
                 deviceEnrollmentReadPort, deviceRepository, backupCapabilityExecutor, snapshotExecutor,
                 paloAltoBackupExecutor, deviationEngine, null, backupArtefactManifestRepository,
                 backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString(), contentListing);
+        // V61: MDS export -- mds_backup of the whole server; its run time on this estate is still to be measured, so
+        // the deadline is generous and configurable (UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS).
+        backupJobExecutor.withMdsExportExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor(compositeTransport,
+                artefactStore,
+                Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_MIN_FREE_BYTES", String.valueOf(20L * 1024 * 1024 * 1024))),
+                Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_POLL_INTERVAL_SECONDS", "30"))),
+                Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS", "14400")))));
 
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
         MgmtCliEnumerationAdapter checkPointDiscoveryAdapter =

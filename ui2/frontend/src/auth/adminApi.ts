@@ -209,7 +209,7 @@ export function getBackupDeviations(): Promise<BackupDeviations> {
 }
 
 /** BK-12 manual backup (14K BW-4): posts to the collect route with a required reason. */
-export function collectDeviceBackup(deviceId: string, reason: string, type: "backup" | "snapshot" = "backup"): Promise<{ job_id: string }> {
+export function collectDeviceBackup(deviceId: string, reason: string, type: "backup" | "snapshot" | "mds_export" = "backup"): Promise<{ job_id: string }> {
   return call(`/devices/${encodeURIComponent(deviceId)}/backup/collect`, "POST", { reason, type });
 }
 

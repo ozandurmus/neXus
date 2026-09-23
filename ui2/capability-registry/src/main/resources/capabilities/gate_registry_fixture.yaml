@@ -948,3 +948,243 @@ gates:
     secret_output_risk: high
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PAN_BACKUP_COMMAND_GATE_ENTRIES.md entry 4 -- neXus deviation from Backbox (running, not candidate)"
+  - gate_id: cp_policy_install_cpstat
+    vendor: 'check_point'
+    platform_role_scope: 'cp_gaia_gateway'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'bash -lc ''cpstat -f policy fw'''
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per device per run'
+    session_reuse_rule: 'the inventory session'
+    unsupported_behavior_ref: 'no install-time line -> UNKNOWN; the inventory run continues'
+    secret_output_risk: 'none expected (policy name, install time)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'docs/design/POLICY_INSTALL_TIME_COMMAND_GATE_ENTRIES.md #1 -- PO approved 2026-09-23; bindings UNVERIFIED until measured'
+  - gate_id: pan_policy_install_show_jobs
+    vendor: 'palo_alto'
+    platform_role_scope: 'pan_firewall'
+    shell_context: 'not_applicable'
+    transport_kind: 'PAN_XML_API'
+    canonical_command_key: '<show><jobs><all/></jobs></show>'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per device per run'
+    session_reuse_rule: 'the inventory key'
+    unsupported_behavior_ref: 'no finished commit in the list -> UNKNOWN; the inventory run continues'
+    secret_output_risk: 'job entries carry a user name: never stored'
+    safe_telemetry_fields: []
+    source_document_pointer: 'docs/design/POLICY_INSTALL_TIME_COMMAND_GATE_ENTRIES.md #2 -- PO approved 2026-09-23; bindings UNVERIFIED until measured'
+  - gate_id: mds_df_var_log
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'df -P /var/log'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'unparseable -> refused (fail closed)'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §7 (2026-09-23)'
+  - gate_id: mds_mkdir_workdir
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'mkdir -p %s'
+    action_class: 'recovery-write'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'failure -> run refused before mds_backup'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §7 (2026-09-23) -- the run''s own /var/log/nexus-mds-<job> directory'
+  - gate_id: mds_mdsstat
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'bash -lc ''mdsstat'' > %s/mdsstat.txt 2>&1'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'empty -> recorded as such'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §7 confirm read'
+  - gate_id: mds_gaia_configuration
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'clish -c ''show configuration'' > %s/gaia_config.txt'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 120
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'failure -> bundle without it'
+    secret_output_risk: 'secret-bearing (bundle is encrypted at rest)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'amendment 2026-09-23: show configuration (already SIGNED_OFF for configuration collection) instead of lock database + save configuration'
+  - gate_id: mds_cplic_print
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'bash -lc ''cplic print -x'' > %s/cplic.txt 2>&1'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'failure -> bundle without it'
+    secret_output_risk: 'licence strings (bundle encrypted at rest)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34410129'
+  - gate_id: mds_netstat_rn
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'netstat -rn > %s/netstat.txt'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'failure -> bundle without it'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34410129'
+  - gate_id: mds_uname
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'uname -a > %s/uname.txt'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'failure -> bundle without it'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34410129'
+  - gate_id: mds_backup_start
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'cd /var/log && nohup bash -lc ''$CPMDIR/scripts/mds_backup -b -l -d %1$s > %1$s/mds_backup.log 2>&1; echo $? > %1$s/mds_backup.rc'' >/dev/null 2>&1 &'
+    action_class: 'recovery-write'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'never retried'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'takes the MDS database lock until done; exit code in mds_backup.rc'
+    secret_output_risk: 'secret-bearing archive (encrypted at rest)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §7; R81.20 CLI reference mds_backup (-b batch, -l no logs, -d directory)'
+  - gate_id: mds_backup_poll
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'cat %s/mds_backup.rc'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'polled until the run deadline'
+    max_frequency: 'every poll interval'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'no file yet -> still running'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: '14H asynchronous truth'
+  - gate_id: mds_list_workdir
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'ls %s'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'no *mdsbk* file -> failed run'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34410129'
+  - gate_id: mds_bundle
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'cd %1$s && tar -czf %1$s.tgz .'
+    action_class: 'recovery-write'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 3600
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'failure -> run failed, work directory removed'
+    secret_output_risk: 'secret-bearing archive'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34410129 (tar -pczf)'
+  - gate_id: mds_sha256sum
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'sha256sum %s.tgz'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'unparseable -> digest mismatch'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'BK-3 digest compare'
+  - gate_id: mds_remove_workdir
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'rm -rf %1$s %1$s.tgz'
+    action_class: 'recovery-write'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 120
+    retry_rule: 'retried once'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'failure -> cleanup failed outcome'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'the run''s own work directory and bundle, by exact name'

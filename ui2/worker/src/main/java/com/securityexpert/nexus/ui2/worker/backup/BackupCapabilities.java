@@ -81,8 +81,24 @@ public final class BackupCapabilities {
         return new CapabilityRegistryLoader(gateRegistry).load(spec);
     }
 
+    /** Check Point MDS export (V61): the closed set of {@link com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportPlan}. */
+    public static Capability checkPointMdsExport(GateRegistryPort gateRegistry) {
+        List<CapabilityStep> steps = new java.util.ArrayList<>();
+        steps.add(connectStep());
+        for (String literal : com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportPlan.LITERALS) {
+            steps.add(literal.equals(com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportPlan.MDS_BACKUP_POLL)
+                    ? pollStep(literal) : execStep(literal));
+        }
+        steps.add(sftpGetStepNotApplicable());
+        CapabilitySpec spec = new CapabilitySpec(BackupCapabilityIds.CP_MDS_EXPORT, "check_point", "cp_multi_domain_server",
+                TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, List.copyOf(steps), List.of(disconnectStep()), "14H",
+                List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistry).load(spec);
+    }
+
     public static List<Capability> all(GateRegistryPort gateRegistry) {
-        return List.of(checkPoint(gateRegistry), paloAlto(gateRegistry), paloAltoSetConfig(gateRegistry));
+        return List.of(checkPoint(gateRegistry), paloAlto(gateRegistry), paloAltoSetConfig(gateRegistry),
+                checkPointMdsExport(gateRegistry));
     }
 
     private static CapabilityStep xmlApiCallStep(String send) {

@@ -44,7 +44,7 @@ public final class WorkerClaimLoop {
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
             BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, BackupCapabilityIds.CP_GAIA_SNAPSHOT,
-            BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP);
+            BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, BackupCapabilityIds.CP_MDS_EXPORT);
     private static final int DEFAULT_SSH_PORT = 22;
 
     private final JobLeaseRepository leaseRepository;

@@ -106,7 +106,13 @@ public final class BackupCollectService {
         }
 
         String capabilityId;
-        if ("palo_alto".equals(vendorHint)) {
+        if ("mds_export".equalsIgnoreCase(backupType)) {
+            if (!checkPointManagement) {
+                return new Outcome.AdmissionRefused("MDS_EXPORT_NOT_APPLICABLE",
+                        "an MDS export applies only to a Check Point Multi-Domain Server; device " + deviceId + " is not one");
+            }
+            capabilityId = BackupCapabilityIds.CP_MDS_EXPORT;
+        } else if ("palo_alto".equals(vendorHint)) {
             capabilityId = BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP;
         } else if ("snapshot".equalsIgnoreCase(backupType)) {
             capabilityId = BackupCapabilityIds.CP_GAIA_SNAPSHOT;

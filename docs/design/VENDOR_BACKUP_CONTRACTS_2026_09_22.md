@@ -212,3 +212,25 @@ Radware → Pulse Secure → Panorama → Infoblox → FortiGate → Cisco ASA �
 Provider-1 → ProxySG, preceded by the generic HTTPS client and the one
 onboarding migration. Each vendor ships with its gate rows, capability yaml,
 executor, scripted end-to-end test and a backlog note of its first live run.
+
+## Amendment 2026-09-23 — §7 Check Point Provider-1 / MDS (implemented as V61, `cp_mds_export`)
+
+Product Owner, 2026-09-23: an MDS takes **two** backup types — the Gaia backup a gateway takes (`add backup local`,
+the existing `cp_gateway_backup`, now admitted for a Check Point management server) and the **MDS export** below.
+
+- **Scope:** one `mds_backup -b -l` backs up the whole Multi-Domain Server and every domain (R81.20 CLI reference:
+  "backs up binaries and data from a Multi-Domain Server"; "do not create or delete Domains … until the backup
+  operation completes"). A single domain has its own API (`backup-domain`), not implemented.
+- **Changes from §7 as written:**
+  - Gaia configuration is read with `clish -c 'show configuration'` (already SIGNED_OFF for configuration
+    collection) instead of `lock database override` + `save configuration` + answering `Y`.
+  - `mds_backup` runs in the background from `/var/log` with its exit code written to `mds_backup.rc`, polled by the
+    run (14H: no SSH command held open for the backup's duration); no exit code before the run deadline
+    (default 4 h, `UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS`) is OUTCOME_UNKNOWN and the work directory is left in place.
+  - The `/etc` tar is **not** included yet: the file list Backbox tars is not recorded in the repository (MEASURE
+    FIRST: copy it from trail 34410129).
+  - Expert password (second secret) not needed on this estate: the MDS session lands in Expert.
+- **Lock:** the vendor asks that no SmartConsole changes are made until mds_backup completes. The nightly export runs
+  at 02:00 Europe/Istanbul (`MdsExportScheduler`), and only for a server whose first MDS export an operator started
+  and saw complete (run time measured under watch).
+- **Measurement still open:** mds_backup run time and bundle size on this estate (logged as `[MDS_EXPORT]`).
