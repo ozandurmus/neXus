@@ -41,6 +41,7 @@ class ComplianceServiceCacheParityTest {
 
     private HttpServer server;
     private final AtomicInteger evaluations = new AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicBoolean flipOrder = new java.util.concurrent.atomic.AtomicBoolean();
     private final AtomicReference<String> catalogVersion = new AtomicReference<>("2026.09.1");
     private final Map<String, String> configs = new ConcurrentHashMap<>();
     private final Map<String, String> hashes = new ConcurrentHashMap<>();
@@ -51,7 +52,8 @@ class ComplianceServiceCacheParityTest {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.setExecutor(Executors.newFixedThreadPool(16));
         server.createContext("/healthz", ex -> send(ex, "{\"status\":\"UP\",\"catalog_version\":\"" + catalogVersion.get()
-                + "\",\"controls_count\":6,\"controls_by_vendor\":{\"check_point\":6}}"));
+                + "\",\"controls_count\":6,\"controls_by_vendor\":" + (flipOrder.getAndSet(!flipOrder.get())
+                        ? "{\"palo_alto\":3,\"check_point\":3}}" : "{\"check_point\":3,\"palo_alto\":3}}")));
         server.createContext("/api/v1/compliance/catalog", ex -> {
             StringBuilder b = new StringBuilder("{\"controls\":[");
             for (int i = 0; i < CONTROLS.length; i++) {
@@ -173,6 +175,7 @@ class ComplianceServiceCacheParityTest {
         ComplianceEvaluationStore store = ComplianceEvaluationStore.inMemory();
         Map<String, Object> first = service(ComplianceService.PARALLELISM, store).getOverview();
         evaluations.set(0);
+        flipOrder.set(!flipOrder.get()); // a restarted compliance service may list vendors in another order
         ComplianceService restarted = service(ComplianceService.PARALLELISM, store);
         assertThat(restarted.isEvaluationCacheWarm()).isTrue();
         assertThat(restarted.getOverview()).isEqualTo(first);

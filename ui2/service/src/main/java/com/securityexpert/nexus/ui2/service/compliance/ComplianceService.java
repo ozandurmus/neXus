@@ -394,8 +394,11 @@ public final class ComplianceService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
                 JsonNode root = mapper.readTree(response.body());
+                // order-independent: the service builds controls_by_vendor with Map.of, whose order changes per JVM start
+                java.util.TreeMap<String, String> byVendor = new java.util.TreeMap<>();
+                root.path("controls_by_vendor").fields().forEachRemaining(e -> byVendor.put(e.getKey(), e.getValue().asText()));
                 rulesFingerprint = root.path("catalog_version").asText("") + "|" + root.path("controls_count").asText("")
-                        + "|" + root.path("controls_by_vendor").toString();
+                        + "|" + byVendor;
             }
         } catch (Exception ignored) {
             // unreadable: keep the last fingerprint (an unreachable service also fails every evaluation below)
