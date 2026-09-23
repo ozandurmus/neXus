@@ -18,8 +18,9 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 FABLE_REVIEW = BASE_DIR / "docs" / "design" / "UI_VISUAL_REVIEW_2026_09_23_FABLE.md"
 ASTRA_REVIEW = BASE_DIR / "docs" / "design" / "UI_VISUAL_REVIEW_2026_09_23_ASTRA.md"
 OUT = BASE_DIR / "docs" / "design" / "UI_VISUAL_REVIEW_2026_09_23_FABLE_ON_ASTRA.md"
+NOTE_DEFAULT = ""
 
-PROMPT = """This continues your review of the neXus UI earlier today (your output is quoted at the end for
+PROMPT = """{note}This continues your review of the neXus UI earlier today (your output is quoted at the end for
 reference). Since then the Product Owner approved all 27 of your items and they were implemented; the screenshots
 of the product after the redesign are in {after} (read every one with the Read tool; same aiview masking as before).
 
@@ -50,10 +51,14 @@ def main():
     ap.add_argument("--session", required=True)
     ap.add_argument("--cwd", required=True, help="the directory the original Fable review ran in")
     ap.add_argument("--after", required=True, help="post-redesign screenshots, inside --cwd")
+    ap.add_argument("--astra", default=str(ASTRA_REVIEW), help="the Astra review to comment on")
+    ap.add_argument("--out", default=str(OUT), help="where the unaltered answer is written")
+    ap.add_argument("--note", default=NOTE_DEFAULT, help="a preamble for the resumed session (e.g. a correction)")
     args = ap.parse_args()
+    out = Path(args.out)
     cwd = Path(args.cwd).resolve()
     after = Path(args.after).resolve()
-    prompt = PROMPT.format(after=after, astra=ASTRA_REVIEW.read_text(encoding="utf-8"),
+    prompt = PROMPT.format(note=(args.note + "\n\n") if args.note else "", after=after, astra=Path(args.astra).read_text(encoding="utf-8"),
                            fable=FABLE_REVIEW.read_text(encoding="utf-8"))
     cmd = ["/Users/OzanDur/.local/bin/claude", "-p", prompt, "--resume", args.session, "--model", "claude-fable-5-1",
            "--tools", "Read", "--add-dir", str(cwd), "--dangerously-skip-permissions"]
@@ -65,8 +70,8 @@ def main():
     except Exception as err:  # noqa: BLE001 -- report verbatim
         print(f"fable: failed: {err}", file=sys.stderr)
         return 1
-    OUT.write_text(proc.stdout.strip() + "\n", encoding="utf-8")
-    print(f"fable: ok -> {OUT} ({OUT.stat().st_size} bytes)")
+    out.write_text(proc.stdout.strip() + "\n", encoding="utf-8")
+    print(f"fable: ok -> {out} ({out.stat().st_size} bytes)")
     return 0
 
 
