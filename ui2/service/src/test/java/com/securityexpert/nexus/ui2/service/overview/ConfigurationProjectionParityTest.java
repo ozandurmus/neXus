@@ -84,6 +84,16 @@ class ConfigurationProjectionParityTest {
         assertEquals(0, ConfigurationProjection.cluster(members).diffCount());
     }
 
+    @Test
+    void memberSpecificSettingOnOneMemberOnlyIsARealDifference() {
+        Map<String, List<ConfigurationProjection.Row>> members = new LinkedHashMap<>();
+        members.put("m1", ConfigurationProjection.checkPoint("set hostname FW-TANGO-01\nset interface bond1 mtu 1500\n"));
+        members.put("m2", ConfigurationProjection.checkPoint("set hostname FW-TANGO-02\n"));
+        ConfigurationProjection.ClusterDiff diff = ConfigurationProjection.cluster(members);
+        assertEquals(1, diff.diffCount());
+        assertEquals(List.of("Interfaces"), diff.diffSections());
+    }
+
     private static String panMember(String host, String ip, String ha1, String ntp) {
         return "<response status=\"success\"><result><config>"
                 + "<devices><entry name=\"localhost.localdomain\">"

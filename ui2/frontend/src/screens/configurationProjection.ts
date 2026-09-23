@@ -225,7 +225,7 @@ const PAN_RULES: readonly PanRule[] = [
   { test: /\/telemetry|\/statistics-service/, section: "Telemetry" },
 ];
 
-const PAN_MEMBER_SPECIFIC = /\/deviceconfig\/system\/(hostname|ip-address|ipv6-address|netmask|type\/[^/]+)$|\/high-availability\/interface\/[^/]+\/(ip-address|ipv6-address)$|\/high-availability\/.*peer-ip[^/]*$/;
+const PAN_MEMBER_SPECIFIC = /\/deviceconfig\/system\/(hostname|ip-address|ipv6-address|netmask|type\/[^/]+)$|\/high-availability\/group\/election-option\/device-priority$|\/high-availability\/interface\/[^/]+\/(ip-address|ipv6-address)$|\/high-availability\/.*peer-ip[^/]*$/;
 
 function panLabel(path: string, names: readonly string[]): string {
   // "/config/devices/entry[localhost.localdomain]/deviceconfig/system/dns-setting/servers/primary"
@@ -356,9 +356,11 @@ export function projectCluster(members: ReadonlyArray<{ id: string; projection: 
     const e = byKey.get(key)!;
     const memberSpecific = e.origin === "MEMBER";
     const present = memberIds.map((id) => e.values[id]).filter((v): v is string => v !== undefined);
-    const differs = present.length !== memberIds.length || new Set(present).size > 1;
-    const diff = !memberSpecific && differs;
-    const memberDiff = memberSpecific && differs;
+    const missing = present.length !== memberIds.length;
+    const differs = missing || new Set(present).size > 1;
+    // Member-specific values may differ; a member-specific setting present on some members only is a real DIFF (PO 2026-09-23).
+    const diff = memberSpecific ? missing : differs;
+    const memberDiff = memberSpecific && differs && !missing;
     if (diff) diffCount++;
     if (memberDiff) memberDiffCount++;
     const values: Record<string, string> = {};

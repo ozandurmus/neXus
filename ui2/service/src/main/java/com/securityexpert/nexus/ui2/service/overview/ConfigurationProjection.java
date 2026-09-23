@@ -199,7 +199,7 @@ public final class ConfigurationProjection {
             new PanRule(Pattern.compile("/telemetry|/statistics-service"), "Telemetry"));
 
     private static final Pattern PAN_MEMBER_SPECIFIC = Pattern.compile(
-            "/deviceconfig/system/(hostname|ip-address|ipv6-address|netmask|type/[^/]+)$|/high-availability/interface/[^/]+/(ip-address|ipv6-address)$|/high-availability/.*peer-ip[^/]*$");
+            "/deviceconfig/system/(hostname|ip-address|ipv6-address|netmask|type/[^/]+)$|/high-availability/group/election-option/device-priority$|/high-availability/interface/[^/]+/(ip-address|ipv6-address)$|/high-availability/.*peer-ip[^/]*$");
     private static final Pattern PAN_DROPPED_PART = Pattern.compile("^(deviceconfig|entry|localhost\\.localdomain|vsys1)$");
 
     static String panLabel(String path, List<String> names) {
@@ -331,11 +331,11 @@ public final class ConfigurationProjection {
         Set<String> sections = new LinkedHashSet<>();
         Map<String, Integer> signatures = new java.util.TreeMap<>();
         for (Map.Entry<String, Row> e : first.entrySet()) {
-            if (e.getValue().memberSpecific()) {
-                continue;
-            }
             Map<String, String> v = values.get(e.getKey());
-            boolean diff = v.size() != memberIds.size() || new java.util.HashSet<>(v.values()).size() > 1;
+            boolean missing = v.size() != memberIds.size();
+            // A member-specific setting may hold different values, but one set on some members only is a real
+            // difference (PO, 2026-09-23): e.g. an MTU configured on one member's bond and absent on the other.
+            boolean diff = e.getValue().memberSpecific() ? missing : missing || new java.util.HashSet<>(v.values()).size() > 1;
             if (diff) {
                 diffCount++;
                 sections.add(e.getValue().section());

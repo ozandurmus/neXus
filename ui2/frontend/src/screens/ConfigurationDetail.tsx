@@ -613,7 +613,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
               </Typography>
             )}
             <Typography variant="caption" color="text.secondary">
-              Hostnames, member addresses and interface physical settings (auto-negotiation, link speed, MTU, receive ring size) are expected to differ: shown per member as MEMBER, not counted.
+              Hostnames, member addresses, HA device priority and interface physical settings (auto-negotiation, link speed, MTU, receive ring size) may hold different values: shown per member as MEMBER, not counted. Set on one member only, they count as a difference.
             </Typography>
           </Card>
           {differences.length > 0 && (

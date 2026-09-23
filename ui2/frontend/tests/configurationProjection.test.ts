@@ -84,6 +84,17 @@ set interface eth1-03 state on
     expect(c.memberDiffCount).toBe(3);
   });
 
+  it("a member-specific setting present on one member only is a real DIFF (PO 2026-09-23)", () => {
+    const a = projectCheckPoint("set hostname FW-TANGO-01\nset interface bond1 mtu 1500\n");
+    const b = projectCheckPoint("set hostname FW-TANGO-02\n");
+    const c = projectCluster([{ id: "m1", projection: a }, { id: "m2", projection: b }]);
+    const mtu = c.sections.find((s) => s.label === "Interfaces")!.rows.find((r) => r.setting === "Interface bond1 · MTU")!;
+    expect(mtu.diff).toBe(true);
+    expect(mtu.memberDiff).toBe(false);
+    expect(c.diffCount).toBe(1);
+    expect(c.memberDiffCount).toBe(1); // the hostname
+  });
+
   it("filters by setting, value or section", () => {
     const p = projectCheckPoint(CP_A);
     expect(filterProjection(p.sections, "ntp").map((s) => s.label)).toEqual(["NTP"]);

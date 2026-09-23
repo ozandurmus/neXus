@@ -53,7 +53,7 @@ public class ClusterDiffTask {
 
     /** Carried in member_run_ids: a change to the member-specific rules in ConfigurationProjection bumps this, so every
      * cluster is recomputed once under the new rules even when no member's configuration changed. */
-    static final String RULES_VERSION = "rules:2026-09-23-interface-physical";
+    static final String RULES_VERSION = "rules:2026-09-23b-priority-and-absent";
 
     @Scheduled(fixedDelay = 300_000, initialDelay = 300_000)
     public void refreshQuietly() {
