@@ -665,3 +665,16 @@ describe("Palo Alto certificate trust", () => {
     expect(screen.queryByRole("button", { name: "Certificate trust authorization" })).not.toBeInTheDocument();
   });
 });
+
+describe("Import from manager (review 2026-09-23: the button had no handler)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("opens the add-device dialog directly in management-server discovery mode", async () => {
+    const { ImportFromManagerTrigger } = await import("../src/shell/AddDeviceDialog");
+    vi.stubGlobal("fetch", routedFetch({ "/credentials": CREDENTIALS_ROUTE, "/session/status": { body: { csrf_token: "t" } } }));
+    render(<ImportFromManagerTrigger />);
+    fireEvent.click(screen.getByRole("button", { name: "Import from manager" }));
+    const discovery = await screen.findByRole("button", { name: "Management server (discovery)" });
+    expect(discovery).toHaveAttribute("aria-pressed", "true");
+  });
+});

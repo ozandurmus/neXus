@@ -917,7 +917,9 @@ export function InventoryScreen() {
               options={[
                 { value: "all", label: "All", count: total },
                 { value: "draft", label: "Draft", count: draftCount },
-                { value: "failed", label: "Failed", count: failedCount },
+                // "Latest job failed" on ANY registered device, drafts included; Administration's "Last collection failed
+                // (enrolled)" counts enrolled devices only -- two populations, both named (review 2026-09-23).
+                { value: "failed", label: "Latest job failed", count: failedCount },
                 { value: "stale", label: "Stale", count: staleCount },
               ]}
             />

@@ -116,8 +116,8 @@ describe("InventoryScreen device list", () => {
     expect(within(stateRow).getByText("State:")).toBeInTheDocument();
     expect(within(screen.getByRole("group", { name: "Vendor" })).getByRole("button", { name: "Check Point · 4" })).toBeInTheDocument();
 
-    fireEvent.click(within(stateRow).getByRole("button", { name: "Failed · 2" }));
-    expect(within(stateRow).getByRole("button", { name: "Failed · 2" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(stateRow).getByRole("button", { name: "Latest job failed · 2" }));
+    expect(within(stateRow).getByRole("button", { name: "Latest job failed · 2" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("failed-device")).toBeInTheDocument();
     expect(screen.getByText("unknown-failure-device")).toBeInTheDocument();
     expect(screen.queryByText("done-device")).toBeNull();

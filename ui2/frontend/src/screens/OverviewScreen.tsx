@@ -413,7 +413,7 @@ export function OverviewScreen() {
     <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))" }}>
       <PostureTile big={wall} icon="operations" severity="critical" title="Failed jobs, 24 h" count={failed} of={a.failed_jobs_24h?.terminal_24h}
         unknown={tileUnknown(a.failed_jobs_24h)} previous={a.failed_jobs_24h?.previous}
-        context={a.failed_jobs_24h?.last_at ? `latest ${relativeAge(a.failed_jobs_24h.last_at)}` : "no failure in 24 h"}
+        context={`${a.failed_jobs_24h?.last_at ? `latest ${relativeAge(a.failed_jobs_24h.last_at)}` : "no failure in 24 h"}${a.failed_jobs_24h?.other_terminal_24h ? ` · +${a.failed_jobs_24h.other_terminal_24h} outcome unknown / rejected` : ""}`}
         href={q({ screen: "operations", tab: "jobs", state: "FAILED", since_hours: "24" })} />
       <PostureTile big={wall} icon="backup" severity="critical" title="Backup targets without archive" count={a.backup_missing?.count ?? 0} of={a.backup_missing?.of}
         unknown={tileUnknown(a.backup_missing)} previous={a.backup_missing?.previous}

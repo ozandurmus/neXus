@@ -4,7 +4,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
-import { AddDeviceDialogTrigger } from "../shell/AddDeviceDialog";
+import { AddDeviceDialogTrigger, ImportFromManagerTrigger } from "../shell/AddDeviceDialog";
 import { M3Button } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { urlParam } from "../shell/urlParams";
@@ -122,7 +122,7 @@ export function AdministrationScreen() {
         actions={
           activeGroup.id === "registry" ? (
             <>
-              <M3Button emphasis="outlined">Import from manager</M3Button>
+              <ImportFromManagerTrigger />
               <AddDeviceDialogTrigger />
             </>
           ) : undefined

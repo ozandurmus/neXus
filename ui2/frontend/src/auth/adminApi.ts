@@ -1063,11 +1063,16 @@ export function listJobs(params: JobQueryParams = {}): Promise<JobPageView> {
   return call(`/api/v2/jobs${jobQueryString(params)}`, "GET");
 }
 
+/** One window for every headline job count: terminal states FINISHED in the last 24 h (total_24h = the five below). */
 export interface JobStatsView {
   readonly total: number;
   readonly total_24h: number;
   readonly completed_24h: number;
   readonly failed_24h: number;
+  readonly outcome_unknown_24h?: number;
+  readonly rejected_24h?: number;
+  readonly cancelled_24h?: number;
+  readonly submitted_24h?: number;
   readonly running: number;
 }
 
@@ -1266,7 +1271,7 @@ export function getSystemStorage(): Promise<StorageView> {
 
 export type EvidenceState = "OK" | "UNKNOWN" | "READ_FAILED";
 export interface EvidenceChip { readonly at: string | null; readonly state: EvidenceState }
-export interface CountTile { readonly count: number; readonly of?: number; readonly unknown?: number; readonly terminal_24h?: number; readonly last_at?: string | null; readonly previous?: number | null; readonly state: EvidenceState }
+export interface CountTile { readonly count: number; readonly of?: number; readonly unknown?: number; readonly terminal_24h?: number; readonly other_terminal_24h?: number; readonly last_at?: string | null; readonly previous?: number | null; readonly state: EvidenceState }
 export interface FailureReason { readonly reason: string; readonly count: number; readonly devices: number; readonly job_types: readonly string[]; readonly last_at: string | null }
 export interface VersionSlice { readonly label: string | null; readonly count: number }
 export interface OverviewView {

@@ -42,10 +42,15 @@ interface PreflightCheckItem {
 /** Operations screen featuring HA & readiness pre-flight checklist. */
 export function OperationsScreen() {
   // Counted from /api/v2/jobs (the same reads the Jobs screen makes); a failed read says so, never 0.
-  const [jobStats, setJobStats] = useState<{ total24h: number; completed24h: number; failed24h: number; running: number } | null>(null);
+  const [jobStats, setJobStats] = useState<{ total24h: number; completed24h: number; failed24h: number; otherTerminal24h: number; otherLabel: string; running: number } | null>(null);
   useEffect(() => {
     getJobStats()
-      .then((s) => setJobStats({ total24h: s.total_24h, completed24h: s.completed_24h, failed24h: s.failed_24h, running: s.running }))
+      .then((s) => {
+        const others: Array<[string, number]> = [["outcome unknown", s.outcome_unknown_24h ?? 0], ["rejected", s.rejected_24h ?? 0], ["cancelled", s.cancelled_24h ?? 0]];
+        setJobStats({ total24h: s.total_24h, completed24h: s.completed_24h, failed24h: s.failed_24h,
+          otherTerminal24h: others.reduce((n, [, c]) => n + c, 0),
+          otherLabel: others.filter(([, c]) => c > 0).map(([w, c]) => `${c} ${w}`).join(" · "), running: s.running });
+      })
       .catch(() => setJobStats(null));
   }, []);
 
@@ -1140,14 +1145,18 @@ export function OperationsScreen() {
         actions={<M3Button emphasis="filled">Schedule collection</M3Button>}
       />
       <MetricGrid>
-        <MetricCard title="Jobs run (24 h)" value={jobStats ? jobStats.total24h : null} note={jobStats ? `${jobStats.total24h} submitted · ${jobStats.running} in flight` : "read failed"} />
+        {/* One window with the Overview: jobs FINISHED in 24 h, every terminal state counted (review 2026-09-23). */}
+        <MetricCard title="Jobs finished (24 h)" value={jobStats ? jobStats.total24h : null}
+          note={jobStats
+            ? `${jobStats.completed24h} completed · ${jobStats.failed24h} failed${jobStats.otherLabel ? ` · ${jobStats.otherLabel}` : ""} · ${jobStats.running} in flight`
+            : "read failed"} />
         <MetricCard
           title="Success rate (24 h)"
           value={jobStats && jobStats.completed24h + jobStats.failed24h > 0 ? `${Math.round((100 * jobStats.completed24h) / (jobStats.completed24h + jobStats.failed24h))}%` : null}
           note={jobStats
             ? jobStats.completed24h + jobStats.failed24h === 0
               ? "no finished run in 24 h"
-              : `${Math.round((100 * jobStats.completed24h) / (jobStats.completed24h + jobStats.failed24h))}% · ${jobStats.completed24h} completed · ${jobStats.failed24h} failed`
+              : `completed of ${jobStats.completed24h + jobStats.failed24h} completed or failed${jobStats.otherTerminal24h ? `; ${jobStats.otherTerminal24h} other outcome${jobStats.otherTerminal24h === 1 ? "" : "s"} not counted` : ""}`
             : "read failed"}
         />
         {/* There is no fleet-wide readiness figure -- only a per-cluster verdict once its preflight is read

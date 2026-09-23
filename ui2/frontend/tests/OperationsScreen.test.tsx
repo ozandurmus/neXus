@@ -126,3 +126,19 @@ describe("OperationsScreen tabs", () => {
     expect(await screen.findByText("Finished jobs")).toBeInTheDocument();
   });
 });
+
+describe("job totals reconcile (review 2026-09-23)", () => {
+  it("shows every terminal state of the 24 h window and the success-rate denominator", async () => {
+    const { render, screen } = await import("@testing-library/react");
+    const { vi } = await import("vitest");
+    const { OperationsScreen } = await import("../src/screens/OperationsScreen");
+    vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(
+      url.includes("/api/v2/jobs/stats")
+        ? { total: 5000, total_24h: 1018, completed_24h: 971, failed_24h: 45, outcome_unknown_24h: 2, rejected_24h: 0, cancelled_24h: 0, submitted_24h: 1018, running: 0 }
+        : {}), { status: url.includes("/api/v2/jobs/stats") ? 200 : 404 }))));
+    render(<OperationsScreen />);
+    expect(await screen.findByText(/971 completed · 45 failed · 2 outcome unknown · 0 in flight/)).toBeInTheDocument();
+    expect(screen.getByText(/completed of 1016 completed or failed; 2 other outcomes not counted/)).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+});

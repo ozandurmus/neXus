@@ -112,8 +112,24 @@ export function AddDeviceDialogTrigger() {
 type Phase = "form" | "submitting" | "confirming" | "collecting" | "terminal";
 type DiscoveryPhase = "form" | "starting" | "polling" | "failed" | "candidates" | "importing" | "done";
 
-function AddDeviceDialogContent({ onClose }: { readonly onClose: () => void }) {
-  const [mode, setMode] = useState<"single" | "discovery">("single");
+/**
+ * "Import from manager" (Administration): the same dialog opened in its management-server discovery mode -- the
+ * button used to have no handler at all (review 2026-09-23).
+ */
+export function ImportFromManagerTrigger() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <M3Button emphasis="outlined" onClick={() => setOpen(true)}>
+        Import from manager
+      </M3Button>
+      {open && <AddDeviceDialogContent initialMode="discovery" onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly onClose: () => void; readonly initialMode?: "single" | "discovery" }) {
+  const [mode, setMode] = useState<"single" | "discovery">(initialMode);
   const [address, setAddress] = useState("");
   const [role, setRole] = useState<DeviceRole>("gateway");
   const [vendor, setVendor] = useState<Vendor>("check_point");

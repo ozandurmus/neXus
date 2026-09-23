@@ -63,21 +63,34 @@ public final class JobLogQueryService {
             @JsonProperty("total") long total) {
     }
 
-    /** The headline counts Overview and Operations show, from one query (they were four round trips). */
+    /**
+     * The headline counts Overview and Operations show, from one query. One window for both screens (UI review
+     * 2026-09-23: Operations counted jobs SUBMITTED in 24 h, Overview jobs FINISHED in 24 h, and two jobs in
+     * OUTCOME_UNKNOWN / REJECTED were shown nowhere): every terminal state finished in the last 24 h, each counted,
+     * so {@code total_24h = completed + failed + outcome_unknown + rejected + cancelled}; in-flight jobs apart.
+     */
     public record Stats(@JsonProperty("total") long total, @JsonProperty("total_24h") long total24h,
             @JsonProperty("completed_24h") long completed24h, @JsonProperty("failed_24h") long failed24h,
+            @JsonProperty("outcome_unknown_24h") long outcomeUnknown24h, @JsonProperty("rejected_24h") long rejected24h,
+            @JsonProperty("cancelled_24h") long cancelled24h, @JsonProperty("submitted_24h") long submitted24h,
             @JsonProperty("running") long running) {
     }
 
     public Stats stats() {
         return transactionBoundary.inTransaction(dsl -> {
             var r = dsl.fetchOne("select count(*) as total, "
-                    + "count(*) filter (where submitted_at >= now() - interval '24 hours') as total_24h, "
-                    + "count(*) filter (where state = 'COMPLETED' and submitted_at >= now() - interval '24 hours') as completed_24h, "
-                    + "count(*) filter (where state = 'FAILED' and submitted_at >= now() - interval '24 hours') as failed_24h, "
+                    + "count(*) filter (where state in ('COMPLETED','FAILED','OUTCOME_UNKNOWN','REJECTED','CANCELLED') "
+                    + "and finished_at >= now() - interval '24 hours') as total_24h, "
+                    + "count(*) filter (where state = 'COMPLETED' and finished_at >= now() - interval '24 hours') as completed_24h, "
+                    + "count(*) filter (where state = 'FAILED' and finished_at >= now() - interval '24 hours') as failed_24h, "
+                    + "count(*) filter (where state = 'OUTCOME_UNKNOWN' and finished_at >= now() - interval '24 hours') as outcome_unknown_24h, "
+                    + "count(*) filter (where state = 'REJECTED' and finished_at >= now() - interval '24 hours') as rejected_24h, "
+                    + "count(*) filter (where state = 'CANCELLED' and finished_at >= now() - interval '24 hours') as cancelled_24h, "
+                    + "count(*) filter (where submitted_at >= now() - interval '24 hours') as submitted_24h, "
                     + "count(*) filter (where state in ('REQUESTED', 'CLAIMED', 'EXECUTING')) as running from jobs");
             return new Stats(r.get("total", Long.class), r.get("total_24h", Long.class), r.get("completed_24h", Long.class),
-                    r.get("failed_24h", Long.class), r.get("running", Long.class));
+                    r.get("failed_24h", Long.class), r.get("outcome_unknown_24h", Long.class), r.get("rejected_24h", Long.class),
+                    r.get("cancelled_24h", Long.class), r.get("submitted_24h", Long.class), r.get("running", Long.class));
         });
     }
 

@@ -1,7 +1,7 @@
 # UI review — action items for the Product Owner (2026-09-23)
 
 **Status: DRAFT — awaiting Product Owner decisions.** Sources: `UI_VISUAL_REVIEW_2026_09_23_FABLE.md` (27 items,
-approved and implemented), `UI_VISUAL_REVIEW_2026_09_23_ASTRA.md` (independent review of the result),
+approved and implemented), `UI_VISUAL_REVIEW_2026_09_23_SOL.md` (independent review of the result -- run with gpt-6-sol and mislabelled "Astra"; the architect review with gpt-6-astra is `UI_VISUAL_REVIEW_2026_09_23_ASTRA.md`),
 `UI_VISUAL_REVIEW_2026_09_23_FABLE_ON_ASTRA.md` (Fable's closing review and merged list). Standing authorization
 (PO, 2026-09-23 night): visual bugs are fixed and deployed without asking; anything new (feature, logic, refactor)
 waits for a decision.

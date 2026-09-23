@@ -150,7 +150,9 @@ public class OverviewService {
         // 1. failed jobs, 24 h
         Record jobs = q(dsl -> dsl.fetchOne("select count(*) filter (where state = 'FAILED' and finished_at >= now() - interval '24 hours') as failed, "
                 + "count(*) filter (where finished_at >= now() - interval '24 hours') as terminal, "
-                + "count(*) filter (where state = 'FAILED' and finished_at < now() - interval '24 hours') as failed_prev "
+                + "count(*) filter (where state = 'FAILED' and finished_at < now() - interval '24 hours') as failed_prev, "
+                + "(select count(*) from jobs o where o.state in ('OUTCOME_UNKNOWN','REJECTED','CANCELLED') "
+                + "and o.finished_at >= now() - interval '24 hours') as other_terminal "
                 + "from jobs where state in ('COMPLETED','FAILED') and finished_at >= now() - interval '48 hours'"));
         List<FailedJob> failedAll = q(dsl -> dsl.fetch("select job_type, target_device_id, terminal_reason, finished_at from jobs "
                 + "where state = 'FAILED' and finished_at >= now() - interval '24 hours'")).map(r -> new FailedJob(
@@ -162,6 +164,9 @@ public class OverviewService {
         failedTile.put("last_at", iso(failedAll.stream().map(FailedJob::finishedAt).filter(Objects::nonNull).max(Timestamp::compareTo).orElse(null)));
         // "since yesterday" (review §6): the same count over the 24 h before this window.
         failedTile.put("previous", jobs.get("failed_prev", Long.class));
+        // the terminal outcomes outside the contract's COMPLETED + FAILED denominator, so the totals reconcile with
+        // Operations (review 2026-09-23): shown, never folded into either count
+        failedTile.put("other_terminal_24h", jobs.get("other_terminal", Long.class));
         failedTile.put("state", "OK");
         tiles.put("failed_jobs_24h", failedTile);
         List<Map<String, Object>> failedRows = new ArrayList<>();

@@ -2,7 +2,7 @@
 """Astra (Codex) reviews the whole neXus UI from aiview screenshots, independently of Fable (PO request 2026-09-23).
 
 Per AGENTS.md "External model and second-opinion consultation law" the review is written by the external reviewer
-through its own CLI (`codex exec`, model gpt-6-sol per the Product Owner) and saved unaltered to docs/design/.
+through its own CLI (`codex exec`, model gpt-6-astra: the architect reviewer; workers use gpt-6-sol) and saved unaltered to docs/design/.
 Astra does NOT see Fable's review: the two answers must be independent; Fable compares them afterwards
 (scripts/consult_fable_resume_on_astra_review.py).
 
@@ -16,7 +16,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 OUT = BASE_DIR / "docs" / "design" / "UI_VISUAL_REVIEW_2026_09_23_ASTRA.md"
-MODEL = "gpt-6-sol"
+MODEL = "gpt-6-astra"
 
 PROMPT = """You are Astra, reviewing the whole user interface of neXus as a senior product/UI designer who also
 understands network-security operations and executive reporting. The Product Owner (a security expert, not a
