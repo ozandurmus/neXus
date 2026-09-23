@@ -12,6 +12,16 @@ import { m3 } from "../theme/m3Theme";
 
 const CARD = { borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, boxShadow: "none" } as const;
 
+/** An ApiError ({status, body:{error}}) or an Error, as one readable line -- never "[object Object]". */
+export function describeError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object" && "status" in e) {
+    const err = e as { status: number; body?: { error?: string } };
+    return `HTTP ${err.status}${err.body?.error ? ` · ${err.body.error}` : ""}`;
+  }
+  return String(e);
+}
+
 /** Discovery kinds in the operator's words. */
 export const KIND_LABEL: Readonly<Record<string, string>> = {
   PLAIN_HIGH_AVAILABILITY_CLUSTER: "Cluster",
@@ -111,7 +121,7 @@ export function ManagementTreePanel({ deviceId, onOpenDevice, onOpenCluster }: {
     setState({ tree: null, error: null });
     getManagementTree(deviceId)
       .then((tree) => { if (!cancelled) setState({ tree, error: null }); })
-      .catch((e: unknown) => { if (!cancelled) setState({ tree: null, error: e instanceof Error ? e.message : String(e) }); });
+      .catch((e: unknown) => { if (!cancelled) setState({ tree: null, error: describeError(e) }); });
     return () => { cancelled = true; };
   }, [deviceId]);
 
