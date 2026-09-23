@@ -134,10 +134,14 @@ public class ClusterDiffTask {
 
     private Map<String, List<String>> latestSignatures() {
         List<Record> rows = transactionBoundary.inTransaction(dsl -> dsl.fetch(
-                "select distinct on (cluster_ref) cluster_ref, member_run_ids from cluster_member_diff "
+                "select distinct on (cluster_ref) cluster_ref, member_run_ids, "
+                        + "(diff_setting_count > 0 and diff_signatures = '{}'::jsonb) as signatures_missing from cluster_member_diff "
                         + "order by cluster_ref, computed_at desc"));
         Map<String, List<String>> out = new HashMap<>();
         for (Record r : rows) {
+            if (Boolean.TRUE.equals(r.get("signatures_missing", Boolean.class))) {
+                continue; // written before V55: recompute once so the difference signatures exist
+            }
             String[] ids = r.get("member_run_ids", String[].class);
             out.put(r.get("cluster_ref", String.class), ids == null ? List.of() : Arrays.asList(ids));
         }
