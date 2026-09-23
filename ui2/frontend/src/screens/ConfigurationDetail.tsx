@@ -149,12 +149,13 @@ function SnapshotTiles({ projection }: { readonly projection: Projection }) {
   );
 }
 
-/** One accordion row: "Section · n settings · n diff", expanded when it holds a difference (review §3). */
-function SectionAccordion({ id, label, settings, diff, expanded, onToggle, children }: {
+/** One accordion row: "Section · n settings · n diff · n expected", expanded when it holds a difference (review §3). */
+function SectionAccordion({ id, label, settings, diff, expected = 0, expanded, onToggle, children }: {
   readonly id: string;
   readonly label: string;
   readonly settings: number;
   readonly diff: number | null;
+  readonly expected?: number;
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly children: ReactNode;
@@ -169,6 +170,7 @@ function SectionAccordion({ id, label, settings, diff, expanded, onToggle, child
         <Box component="span" sx={{ fontSize: 12, color: m3.onSurfaceVar, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
           {settings} setting{settings === 1 ? "" : "s"}
           {diff !== null && <> · <Box component="span" sx={{ color: diff > 0 ? m3.criticalInk : m3.onSurfaceVar, fontWeight: diff > 0 ? 600 : 400 }}>{diff} diff</Box></>}
+          {expected > 0 && <> · {expected} expected</>}
         </Box>
       </Box>
       {expanded && <Box sx={{ pb: 1 }}>{children}</Box>}
@@ -417,7 +419,7 @@ export function clusterEvidenceCsv(input: {
       return v === undefined || v === ABSENT ? "not present on this member" : v;
     }),
     originWord(row),
-    row.diff ? "DIFF" : "",
+    row.diff ? "DIFF" : row.memberDiff ? "EXPECTED (member-specific)" : "",
     exportedAt,
   ]));
   return toCsv([header, ...rows]);
@@ -470,7 +472,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
   useEffect(() => {
     if (!cluster || defaultedFor.current === cluster) return;
     defaultedFor.current = cluster;
-    setDiffOnly(cluster.diffCount > 0);
+    setDiffOnly(cluster.diffCount > 0 || cluster.memberDiffCount > 0);
   }, [cluster]);
 
   const nameOf = (id: string) => members.find((m) => m.device_id === id)?.hostname ?? id;
@@ -482,6 +484,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
     label: s.label,
     total: s.rows.length,
     diff: s.rows.filter((r) => r.diff).length,
+    expected: s.rows.filter((r) => r.memberDiff).length,
     rows: s.rows,
   })) : []), [cluster]);
   const visibleSections = useMemo(() => {
@@ -489,7 +492,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
     return allSections
       .map((s) => ({
         ...s,
-        rows: s.rows.filter((r) => (!diffOnly || r.diff) && (!q || r.setting.toLowerCase().includes(q) || s.label.toLowerCase().includes(q)
+        rows: s.rows.filter((r) => (!diffOnly || r.diff || r.memberDiff) && (!q || r.setting.toLowerCase().includes(q) || s.label.toLowerCase().includes(q)
           || Object.values(r.values).some((v) => v.toLowerCase().includes(q)))),
       }))
       .filter((s) => s.rows.length > 0);
@@ -498,12 +501,12 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
 
   const isOpen = (label: string, diff: number) => (open === null ? diff > 0 || query.trim() !== "" : open.has(label));
   const toggle = (label: string) => setOpen((prev) => {
-    const next = new Set(prev ?? visibleSections.filter((s) => isOpen(s.label, s.diff)).map((s) => s.label));
+    const next = new Set(prev ?? visibleSections.filter((s) => isOpen(s.label, s.diff + s.expected)).map((s) => s.label));
     if (next.has(label)) next.delete(label); else next.add(label);
     return next;
   });
   const jumpTo = (section: string, key: string) => {
-    setOpen((prev) => new Set([...(prev ?? visibleSections.filter((s) => isOpen(s.label, s.diff)).map((s) => s.label)), section]));
+    setOpen((prev) => new Set([...(prev ?? visibleSections.filter((s) => isOpen(s.label, s.diff + s.expected)).map((s) => s.label)), section]));
     setPendingJump(`cfg-row-${slug(key)}`);
   };
   useEffect(() => {
@@ -595,7 +598,14 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
             <Typography variant="body2" sx={{ color: cluster.diffCount > 0 ? m3.criticalInk : m3.onSurfaceVar, fontWeight: 600 }}>
               {cluster.diffCount === 0 ? "no differences" : `${cluster.diffCount} difference${cluster.diffCount === 1 ? "" : "s"}`}
             </Typography>
-            <Typography variant="caption" color="text.secondary">Hostnames and member addresses are expected to differ (MEMBER) and are not counted.</Typography>
+            {cluster.memberDiffCount > 0 && (
+              <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                {cluster.memberDiffCount} expected member-specific difference{cluster.memberDiffCount === 1 ? "" : "s"}
+              </Typography>
+            )}
+            <Typography variant="caption" color="text.secondary">
+              Hostnames, member addresses and interface physical settings (auto-negotiation, link speed, MTU, receive ring size) are expected to differ: shown per member as MEMBER, not counted.
+            </Typography>
           </Card>
           {differences.length > 0 && (
             <Box component="nav" aria-label="Differences" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", px: 0.5 }}>
@@ -616,7 +626,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
             <Card sx={CARD}>
               {visibleSections.map((section) => (
                 <SectionAccordion key={section.label} id={`cfg-section-${slug(section.label)}`} label={section.label}
-                  settings={section.total} diff={section.diff} expanded={isOpen(section.label, section.diff)} onToggle={() => toggle(section.label)}>
+                  settings={section.total} diff={section.diff} expected={section.expected} expanded={isOpen(section.label, section.diff + section.expected)} onToggle={() => toggle(section.label)}>
                   <TableContainer sx={{ maxHeight: 440 }}>
                     <Table size="small" stickyHeader>
                       <TableHead>
@@ -635,6 +645,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
                               <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                                 {row.setting}
                                 {row.diff && <StatusChip tone="bad" label="DIFF" dense />}
+                                {row.memberDiff && <StatusChip tone="neutral" label="EXPECTED" dense />}
                               </Box>
                             </TableCell>
                             {cluster.memberIds.map((id) => (

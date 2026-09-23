@@ -51,6 +51,10 @@ public class ClusterDiffTask {
         t.start();
     }
 
+    /** Carried in member_run_ids: a change to the member-specific rules in ConfigurationProjection bumps this, so every
+     * cluster is recomputed once under the new rules even when no member's configuration changed. */
+    static final String RULES_VERSION = "rules:2026-09-23-interface-physical";
+
     @Scheduled(fixedDelay = 300_000, initialDelay = 300_000)
     public void refreshQuietly() {
         try {
@@ -75,8 +79,9 @@ public class ClusterDiffTask {
         Map<String, List<String>> latestSignature = latestSignatures();
         int written = 0;
         for (Map.Entry<String, List<DeviceSummaryRecord>> cluster : clusters.entrySet()) {
-            List<String> signature = cluster.getValue().stream()
-                    .map(d -> d.deviceId() + ":" + servedRun.getOrDefault(d.deviceId(), "-")).sorted().toList();
+            List<String> signature = java.util.stream.Stream.concat(cluster.getValue().stream()
+                    .map(d -> d.deviceId() + ":" + servedRun.getOrDefault(d.deviceId(), "-")).sorted(),
+                    java.util.stream.Stream.of(RULES_VERSION)).toList();
             if (signature.equals(latestSignature.get(cluster.getKey()))) {
                 continue;
             }

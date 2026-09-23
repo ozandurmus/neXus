@@ -135,7 +135,9 @@ const CP_RULES: readonly CpRule[] = [
   { prefix: ["user"], section: "Users", nameTokens: 1, label: (t) => `User · ${t[0]}` },
 ];
 
-const CP_MEMBER_SPECIFIC = /^(Interface .* · (IPv4 Address|IPv6 Address)|Hostname)$/;
+/** Member-specific by nature: hostname, member addresses, and (PO, 2026-09-23) per-interface physical settings.
+ *  Keep identical to ConfigurationProjection.java (parity test). */
+const CP_MEMBER_SPECIFIC = /^(Interface .* · (IPv4 Address|IPv6 Address|Auto Negotiation|Link Speed|MTU|Rx Ringsize)|Hostname)$/;
 
 export function projectCheckPoint(text: string): Projection {
   const bySection = new Map<string, SettingRow[]>();
@@ -223,7 +225,7 @@ const PAN_RULES: readonly PanRule[] = [
   { test: /\/telemetry|\/statistics-service/, section: "Telemetry" },
 ];
 
-const PAN_MEMBER_SPECIFIC = /\/deviceconfig\/system\/(hostname|ip-address|ipv6-address)$|\/high-availability\/interface\/[^/]+\/(ip-address|ipv6-address)$|\/high-availability\/.*peer-ip[^/]*$/;
+const PAN_MEMBER_SPECIFIC = /\/deviceconfig\/system\/(hostname|ip-address|ipv6-address|netmask|type\/[^/]+)$|\/high-availability\/interface\/[^/]+\/(ip-address|ipv6-address)$|\/high-availability\/.*peer-ip[^/]*$/;
 
 function panLabel(path: string, names: readonly string[]): string {
   // "/config/devices/entry[localhost.localdomain]/deviceconfig/system/dns-setting/servers/primary"
@@ -315,14 +317,18 @@ export interface MemberRow {
   readonly values: Readonly<Record<string, string>>;
   /** True when two collected members hold different values and the setting is not member-specific by nature. */
   readonly diff: boolean;
-  /** True when the setting is expected to differ per member (hostname, member addresses). */
+  /** True when the setting is expected to differ per member (hostname, member addresses, interface physical settings). */
   readonly memberSpecific: boolean;
+  /** True when a member-specific setting does differ between members: shown as an expected difference, never counted. */
+  readonly memberDiff: boolean;
 }
 
 export interface ClusterProjection {
   readonly memberIds: readonly string[];
   readonly sections: readonly { readonly label: string; readonly rows: readonly MemberRow[] }[];
   readonly diffCount: number;
+  /** Member-specific settings whose values differ -- expected, shown per member, not counted in diffCount. */
+  readonly memberDiffCount: number;
   readonly settingCount: number;
 }
 
@@ -345,23 +351,27 @@ export function projectCluster(members: ReadonlyArray<{ id: string; projection: 
   }
   const bySection = new Map<string, MemberRow[]>();
   let diffCount = 0;
+  let memberDiffCount = 0;
   for (const key of order) {
     const e = byKey.get(key)!;
     const memberSpecific = e.origin === "MEMBER";
     const present = memberIds.map((id) => e.values[id]).filter((v): v is string => v !== undefined);
-    const diff = !memberSpecific && (present.length !== memberIds.length || new Set(present).size > 1);
+    const differs = present.length !== memberIds.length || new Set(present).size > 1;
+    const diff = !memberSpecific && differs;
+    const memberDiff = memberSpecific && differs;
     if (diff) diffCount++;
+    if (memberDiff) memberDiffCount++;
     const values: Record<string, string> = {};
     for (const id of memberIds) values[id] = e.values[id] ?? "—";
     const rows = bySection.get(e.section) ?? [];
-    rows.push({ section: e.section, setting: e.setting, key, origin: e.origin, values, diff, memberSpecific });
+    rows.push({ section: e.section, setting: e.setting, key, origin: e.origin, values, diff, memberSpecific, memberDiff });
     bySection.set(e.section, rows);
   }
   const sections = orderSections(bySection as unknown as Map<string, SettingRow[]>).map((s) => ({
     label: s.label,
     rows: bySection.get(s.label) ?? [],
   }));
-  return { memberIds, sections, diffCount, settingCount: order.length };
+  return { memberIds, sections, diffCount, memberDiffCount, settingCount: order.length };
 }
 
 export function filterProjection(sections: readonly Section[], query: string): Section[] {

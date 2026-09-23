@@ -62,6 +62,28 @@ describe("Check Point projection", () => {
     expect(c.diffCount).toBe(1);
   });
 
+  it("interface physical settings are member-specific: shown as an expected difference, never counted (PO 2026-09-23)", () => {
+    const phys = (speed: string, mtu: string) => `set hostname FW-TANGO-01
+set interface eth1-03 auto-negotiation ${speed === "auto" ? "on" : "off"}
+set interface eth1-03 link-speed ${speed}
+set interface eth1-03 mtu ${mtu}
+set interface eth1-03 rx-ringsize 1024
+set interface eth1-03 state on
+`;
+    const c = projectCluster([{ id: "m1", projection: projectCheckPoint(phys("auto", "1500")) }, { id: "m2", projection: projectCheckPoint(phys("1000M/full", "9000")) }]);
+    const rows = c.sections.find((s) => s.label === "Interfaces")!.rows;
+    for (const setting of ["Interface eth1-03 · Auto Negotiation", "Interface eth1-03 · Link Speed", "Interface eth1-03 · MTU"]) {
+      const r = rows.find((x) => x.setting === setting)!;
+      expect(r.memberSpecific).toBe(true);
+      expect(r.memberDiff).toBe(true);
+      expect(r.diff).toBe(false);
+    }
+    expect(rows.find((x) => x.setting === "Interface eth1-03 · Rx Ringsize")!.memberDiff).toBe(false);
+    expect(rows.find((x) => x.setting === "Interface eth1-03 · State")!.memberSpecific).toBe(false);
+    expect(c.diffCount).toBe(0);
+    expect(c.memberDiffCount).toBe(3);
+  });
+
   it("filters by setting, value or section", () => {
     const p = projectCheckPoint(CP_A);
     expect(filterProjection(p.sections, "ntp").map((s) => s.label)).toEqual(["NTP"]);

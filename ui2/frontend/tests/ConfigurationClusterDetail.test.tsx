@@ -142,7 +142,7 @@ describe("clusterEvidenceCsv", () => {
     const lines = csv.trim().split("\r\n");
     expect(lines[0]).toBe("cluster,cluster_ref,section,setting,FW-TANGO-01 (PASSIVE),FW-TANGO-02 (ACTIVE),origin,difference,exported_at_utc");
     expect(lines).toContain("CLS-ROMEO-01,CLS-ROMEO-01,NTP,Secondary NTP Server,192.0.2.11 version 4,192.0.2.99 version 4,LOCAL,DIFF,2026-09-23T01:02:03.456Z");
-    expect(lines.some((l) => l.includes(",Hostname,FW-TANGO-01,FW-TANGO-02,MEMBER,,"))).toBe(true);
+    expect(lines.some((l) => l.includes(",Hostname,FW-TANGO-01,FW-TANGO-02,MEMBER,EXPECTED (member-specific),"))).toBe(true);
   });
 });
 

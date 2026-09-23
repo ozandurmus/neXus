@@ -126,7 +126,11 @@ public final class ConfigurationProjection {
             rule("aaa", "AAA", 1),
             rule("user", "Users", 1, t -> "User · " + (t.isEmpty() ? "" : t.get(0))));
 
-    private static final Pattern CP_MEMBER_SPECIFIC = Pattern.compile("^(Interface .* · (IPv4 Address|IPv6 Address)|Hostname)$");
+    /** Member-specific by nature: the hostname, member addresses, and (PO, 2026-09-23) the per-interface physical
+     * settings -- auto-negotiation, link speed, MTU, receive ring size -- which follow each member's hardware and cabling.
+     * Shown per member, never counted as a DIFF. Keep identical to configurationProjection.ts (parity test). */
+    private static final Pattern CP_MEMBER_SPECIFIC = Pattern.compile(
+            "^(Interface .* · (IPv4 Address|IPv6 Address|Auto Negotiation|Link Speed|MTU|Rx Ringsize)|Hostname)$");
 
     public static List<Row> checkPoint(String text) {
         Builder b = new Builder();
@@ -195,7 +199,7 @@ public final class ConfigurationProjection {
             new PanRule(Pattern.compile("/telemetry|/statistics-service"), "Telemetry"));
 
     private static final Pattern PAN_MEMBER_SPECIFIC = Pattern.compile(
-            "/deviceconfig/system/(hostname|ip-address|ipv6-address)$|/high-availability/interface/[^/]+/(ip-address|ipv6-address)$|/high-availability/.*peer-ip[^/]*$");
+            "/deviceconfig/system/(hostname|ip-address|ipv6-address|netmask|type/[^/]+)$|/high-availability/interface/[^/]+/(ip-address|ipv6-address)$|/high-availability/.*peer-ip[^/]*$");
     private static final Pattern PAN_DROPPED_PART = Pattern.compile("^(deviceconfig|entry|localhost\\.localdomain|vsys1)$");
 
     static String panLabel(String path, List<String> names) {

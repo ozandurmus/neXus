@@ -64,6 +64,26 @@ class ConfigurationProjectionParityTest {
         assertEquals(List.of("NTP"), diff.diffSections());
     }
 
+    /** Mirrors "interface physical settings are member-specific" in configurationProjection.test.ts. */
+    @Test
+    void checkPointInterfacePhysicalSettingsAreMemberSpecific() {
+        java.util.function.BiFunction<String, String, String> phys = (speed, mtu) -> "set hostname FW-TANGO-01\n"
+                + "set interface eth1-03 auto-negotiation " + (speed.equals("auto") ? "on" : "off") + "\n"
+                + "set interface eth1-03 link-speed " + speed + "\n"
+                + "set interface eth1-03 mtu " + mtu + "\n"
+                + "set interface eth1-03 rx-ringsize 1024\n"
+                + "set interface eth1-03 state on\n";
+        Map<String, List<ConfigurationProjection.Row>> members = new LinkedHashMap<>();
+        members.put("m1", ConfigurationProjection.checkPoint(phys.apply("auto", "1500")));
+        members.put("m2", ConfigurationProjection.checkPoint(phys.apply("1000M/full", "9000")));
+        for (String s : List.of("Interface eth1-03 · Auto Negotiation", "Interface eth1-03 · Link Speed", "Interface eth1-03 · MTU",
+                "Interface eth1-03 · Rx Ringsize")) {
+            assertTrue(members.get("m1").stream().anyMatch(r -> r.setting().equals(s) && r.memberSpecific()), s);
+        }
+        assertTrue(members.get("m1").stream().anyMatch(r -> r.setting().equals("Interface eth1-03 · State") && !r.memberSpecific()));
+        assertEquals(0, ConfigurationProjection.cluster(members).diffCount());
+    }
+
     private static String panMember(String host, String ip, String ha1, String ntp) {
         return "<response status=\"success\"><result><config>"
                 + "<devices><entry name=\"localhost.localdomain\">"
