@@ -423,7 +423,7 @@ export function OverviewScreen() {
         context={`latest backup ${relativeAge(data.evidence.backup?.at)}`} href={q({ screen: "backups", artefact: "none" })} />
       <PostureTile big={wall} icon="config" severity="serious" title="Clusters with member differences" count={a.cluster_diff?.count ?? 0} of={a.cluster_diff?.of}
         unknown={tileUnknown(a.cluster_diff)} previous={a.cluster_diff?.previous}
-        context={`${(a.cluster_diff?.of ?? 0) - (a.cluster_diff?.count ?? 0)} in agreement${a.cluster_diff?.unknown ? ` · ${a.cluster_diff.unknown} not comparable` : ""} · expected member-specific settings not yet separated`}
+        context={`${(a.cluster_diff?.of ?? 0) - (a.cluster_diff?.count ?? 0)} in agreement${a.cluster_diff?.unknown ? ` · ${a.cluster_diff.unknown} not comparable` : ""} · interface physical settings and member addresses excluded`}
         href={q({ screen: "configuration", cluster_diff: "present" })} />
       <PostureTile big={wall} icon="config" severity="serious" title="Configuration changed" count={a.config_changed?.count ?? 0} of={a.config_changed?.of}
         unknown={tileUnknown(a.config_changed)} previous={a.config_changed?.previous}

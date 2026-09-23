@@ -497,7 +497,16 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
       }))
       .filter((s) => s.rows.length > 0);
   }, [allSections, query, diffOnly]);
-  const differences = useMemo(() => allSections.flatMap((s) => s.rows.filter((r) => r.diff).map((r) => ({ section: s.label, row: r }))), [allSections]);
+  // One link per section › setting; repeated settings (e.g. five bonding groups) collapse to "×5" and jump to the first.
+  const differences = useMemo(() => {
+    const seen = new Map<string, { section: string; row: MemberRow; count: number }>();
+    for (const s of allSections) for (const r of s.rows) if (r.diff) {
+      const k = `${s.label}\u0000${r.setting}`;
+      const hit = seen.get(k);
+      if (hit) hit.count++; else seen.set(k, { section: s.label, row: r, count: 1 });
+    }
+    return [...seen.values()];
+  }, [allSections]);
 
   const isOpen = (label: string, diff: number) => (open === null ? diff > 0 || query.trim() !== "" : open.has(label));
   const toggle = (label: string) => setOpen((prev) => {
@@ -610,10 +619,10 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
           {differences.length > 0 && (
             <Box component="nav" aria-label="Differences" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", px: 0.5 }}>
               <Typography component="span" sx={{ fontSize: 12, fontWeight: 600, color: m3.criticalInk }}>Differences:</Typography>
-              {differences.map(({ section, row }, i) => (
+              {differences.map(({ section, row, count }, i) => (
                 <Box component="span" key={row.key} sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
                   <Link component="button" type="button" underline="hover" onClick={() => jumpTo(section, row.key)} sx={{ fontSize: 12.5 }}>
-                    {section} › {row.setting}
+                    {section} › {row.setting}{count > 1 ? ` ×${count}` : ""}
                   </Link>
                   {i < differences.length - 1 && <Box component="span" sx={{ color: m3.outline }}>·</Box>}
                 </Box>
