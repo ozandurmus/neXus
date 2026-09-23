@@ -342,28 +342,23 @@ public final class ConfigurationProjection {
     }
 
     private static final Set<String> PRINCIPAL_SECTIONS = Set.of("Users", "AAA", "Administrators", "Admins", "Login", "Radius", "Tacacs");
-    private static final Pattern HAS_DIGIT = Pattern.compile(".*\\d.*");
+    private static final Pattern IDENTIFIER_LIKE = Pattern.compile("[\\d\\-_:./]");
 
     /**
-     * A setting's normalized signature for measurement: {@code section > first component > ... > attribute}, where any
-     * token containing a digit becomes {@code <x>} (interfaces, VLANs, addresses, indexes) and, in sections that name
-     * principals, every component after the first becomes {@code <item>} unless it is the last one of three or more.
-     * Never a value; never a device, user or object name.
+     * A setting's normalized signature for measurement: {@code section > component > ... > attribute}, where any token
+     * carrying a digit or one of {@code - _ : . /} becomes {@code <x>} (interfaces, VLANs, addresses, object names) and a
+     * section that names principals collapses to {@code section > <principal>} -- its components include account
+     * names in any position. Never a value; never a device, user or object name.
      */
     static String signature(String section, String setting) {
-        String[] parts = setting.split(" · ");
+        if (PRINCIPAL_SECTIONS.contains(section)) {
+            return section + " > <principal>";
+        }
         List<String> out = new ArrayList<>();
-        boolean principal = PRINCIPAL_SECTIONS.contains(section);
-        for (int i = 0; i < parts.length; i++) {
-            String p = parts[i].strip();
-            boolean last = i == parts.length - 1;
-            if (principal && !(last && parts.length >= 2)) {
-                out.add("<item>");
-                continue;
-            }
+        for (String part : setting.split(" · ")) {
             List<String> tokens = new ArrayList<>();
-            for (String t : p.split("\\s+")) {
-                tokens.add(HAS_DIGIT.matcher(t).matches() ? "<x>" : t);
+            for (String t : part.strip().split("\\s+")) {
+                tokens.add(IDENTIFIER_LIKE.matcher(t).find() ? "<x>" : t);
             }
             out.add(String.join(" ", tokens));
         }

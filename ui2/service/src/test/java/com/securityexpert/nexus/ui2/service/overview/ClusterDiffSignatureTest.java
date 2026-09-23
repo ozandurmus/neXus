@@ -16,12 +16,18 @@ class ClusterDiffSignatureTest {
     }
 
     @Test
-    void principalNamesAreNeverKept() {
-        assertThat(ConfigurationProjection.signature("Users", "operator · Shell · Role"))
-                .isEqualTo("Users > <item> > <item> > Role");
-        assertThat(ConfigurationProjection.signature("Users", "operator · Shell"))
-                .isEqualTo("Users > <item> > Shell");
-        assertThat(ConfigurationProjection.signature("Users", "operator")).isEqualTo("Users > <item>");
+    void principalSectionsKeepNoComponentAtAll() {
+        // the Users section carries the account name in any position, including the last
+        assertThat(ConfigurationProjection.signature("Users", "Ssh Key · operator")).isEqualTo("Users > <principal>");
+        assertThat(ConfigurationProjection.signature("AAA", "operator · Radius Servers")).isEqualTo("AAA > <principal>");
+    }
+
+    @Test
+    void objectNamesWithSeparatorsAreMasked() {
+        assertThat(ConfigurationProjection.signature("High Availability", "Link Group · Failure Condition · Edge-LinkGroup"))
+                .isEqualTo("High Availability > Link Group > Failure Condition > <x>");
+        assertThat(ConfigurationProjection.signature("Other Gaia Configuration", "Netflow:rule"))
+                .isEqualTo("Other Gaia Configuration > <x>");
     }
 
     @Test
