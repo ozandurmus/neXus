@@ -85,3 +85,17 @@ same terminal. From the UI the operator selects after the run has ended, so:
 - `CP_AND_VSX_DISCOVERY_CONTRACT.md` §6, §8; `PAN_DISCOVERY_CONTRACT.md`
   §4–§7, §10 — DI-1 completed by §1 above; every other clause unchanged.
 - `UI2_0_C2` (job rules the run obeys), `UI2_0_C4` §4.2.
+
+## Amendment A — 2026-09-23 (Product Owner): managed-estate tree and nightly refresh
+
+- **DR-3 amended.** The latest `FINISHED` run per (vendor, management address) is kept past the 24-hour
+  window; every older run is still swept. That run is what the managed-estate tree
+  (`GET /devices/{id}/management-tree`, `ManagementTreeService`) shows under an enrolled management server, and a
+  failed nightly refresh must not leave the tree empty. Candidate rows still hold no raw response (T-7 unchanged).
+- **Nightly refresh.** `DiscoveryRefreshScheduler` re-runs discovery at 01:00 Europe/Istanbul against each enrolled
+  management server that already has a finished run, with that run's own address, vendor and credential reference —
+  the same gated reads, no new command. A first discovery stays an operator action.
+- **DR-4 note.** Management servers are now device rows (`role = management_server`, V21); the Panorama that had
+  been enrolled as a gateway was corrected on 2026-09-23 (audited, action `panorama_role_correction_by_po_directive`).
+- **"Not an issue here".** A gateway a manager lists but neXus does not enrol can be marked not an issue with a reason
+  (`discovery_acknowledgement`, V58, audited, `onboarding_admin`); it is then not counted on the tree or on Overview.

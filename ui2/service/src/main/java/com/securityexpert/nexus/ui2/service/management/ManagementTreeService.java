@@ -94,6 +94,25 @@ public class ManagementTreeService {
         return Optional.of(out);
     }
 
+    /** Gateways every enrolled management server lists that neXus does not enrol (and nobody marked not an issue). */
+    public Map<String, Long> notInNexusAcrossManagers() {
+        long missing = 0;
+        long managers = 0;
+        for (DeviceSummaryRecord d : devices.listAll()) {
+            if (!"management_server".equals(d.role())) {
+                continue;
+            }
+            Optional<Map<String, Object>> t = tree(d.deviceId());
+            if (t.isEmpty() || t.get().get("run_id") == null) {
+                continue;
+            }
+            managers++;
+            Object n = ((Map<?, ?>) t.get().get("counts")).get("not_in_nexus");
+            missing += n instanceof Number num ? num.longValue() : 0;
+        }
+        return Map.of("count", missing, "managers", managers);
+    }
+
     public enum AckResult { OK, NOT_A_MANAGEMENT_SERVER, UNKNOWN_ITEM, INVALID_REASON }
 
     /** Marks (or, with {@code acknowledge=false}, unmarks) one listed-but-not-enrolled item as "not an issue". */

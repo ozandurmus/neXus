@@ -394,6 +394,9 @@ export function OverviewScreen() {
     : `Every one of ${a.backup_missing.of} backup targets holds an archive.`);
   const review: string[] = [];
   if (!tileUnknown(a.cluster_diff)) review.push(`${a.cluster_diff.count} of ${a.cluster_diff.of} active clusters show member differences${a.cluster_diff.unknown ? ` (${a.cluster_diff.unknown} not comparable)` : ""}.`);
+  if (a.managed_not_enrolled && !tileUnknown(a.managed_not_enrolled) && a.managed_not_enrolled.count > 0) {
+    review.push(`${a.managed_not_enrolled.count} gateway${a.managed_not_enrolled.count === 1 ? "" : "s"} managed by ${a.managed_not_enrolled.of === 1 ? "the management server" : `${a.managed_not_enrolled.of} management servers`} ${a.managed_not_enrolled.count === 1 ? "is" : "are"} not in neXus.`);
+  }
   if (!tileUnknown(a.config_changed)) review.push(`${a.config_changed.count} device${a.config_changed.count === 1 ? "" : "s"} changed configuration since the previous collection.`);
   const evidence: string[] = [];
   evidence.push(`Evidence read in 24 h for ${age?.lt24h ?? 0} of ${age?.of ?? d.active_devices} active devices${neverRead ? `; ${neverRead} never read` : ""}.`);

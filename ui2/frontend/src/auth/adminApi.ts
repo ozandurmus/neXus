@@ -1320,7 +1320,7 @@ export interface OverviewView {
   readonly denominators: { active_devices: number; enrolled_devices?: number; gateways: number; clusters: number; clusters_enrolled?: number; backup_targets: number };
   readonly evidence: Record<"inventory" | "configuration" | "compliance" | "backup" | "jobs" | "platform_facts", EvidenceChip> & { state?: EvidenceState };
   readonly attention: {
-    failed_jobs_24h: CountTile; stale_inventory: CountTile; cluster_diff: CountTile; config_changed: CountTile; backup_missing: CountTile;
+    failed_jobs_24h: CountTile; stale_inventory: CountTile; cluster_diff: CountTile; config_changed: CountTile; backup_missing: CountTile; managed_not_enrolled?: CountTile;
     state?: EvidenceState;
   };
   readonly exceptions: {

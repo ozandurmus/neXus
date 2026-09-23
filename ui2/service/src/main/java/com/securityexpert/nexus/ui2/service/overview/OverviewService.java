@@ -45,6 +45,13 @@ public class OverviewService {
         this.complianceService = Objects.requireNonNull(complianceService, "complianceService");
     }
 
+    private com.securityexpert.nexus.ui2.service.management.ManagementTreeService managementTree;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setManagementTree(com.securityexpert.nexus.ui2.service.management.ManagementTreeService managementTree) {
+        this.managementTree = managementTree;
+    }
+
     /** Active = enrolled (the Inventory screen's predicate). */
     record Fleet(List<DeviceSummaryRecord> active, Map<String, DeviceSummaryRecord> byId, Map<String, List<String>> clusters) {
     }
@@ -262,6 +269,13 @@ public class OverviewService {
         List<Record> changed = latestCfg.stream().filter(r -> "changed".equals(r.get("change_state", String.class)))
                 .sorted((a, b) -> b.get("collected_at", Timestamp.class).compareTo(a.get("collected_at", Timestamp.class))).toList();
         tiles.put("config_changed", Map.of("count", changed.size(), "of", latestCfg.size(), "state", "OK"));
+        // Gateways a management server (MDS, Panorama) lists that neXus does not enrol -- the nightly discovery surfaces new ones.
+        if (managementTree != null) {
+            Map<String, Long> m = managementTree.notInNexusAcrossManagers();
+            tiles.put("managed_not_enrolled", m.get("managers") == 0
+                    ? Map.of("count", 0, "of", 0, "state", "UNKNOWN")
+                    : Map.of("count", m.get("count"), "of", m.get("managers"), "state", "OK"));
+        }
         List<Map<String, Object>> changeRows = new ArrayList<>();
         for (Record r : changed.subList(0, Math.min(5, changed.size()))) {
             String deviceId = r.get("device_id", String.class);

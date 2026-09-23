@@ -154,7 +154,11 @@ public final class JooqDiscoveryRunRepository implements DiscoveryRunRepository 
     @Override
     public int sweepExpired(Instant now, String actorFingerprint, String actionId) {
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> dsl.execute(
-                "delete from discovery_run where finished_at is not null and finished_at < {0}",
+                // The latest FINISHED run per management server is kept past the window: the managed-estate tree reads it,
+                // and a failed nightly refresh must not leave that tree empty (PO, 2026-09-23; amends 14F DR-3).
+                "delete from discovery_run where finished_at is not null and finished_at < {0} and run_id not in ("
+                        + "select distinct on (vendor, management_address) run_id from discovery_run where state = 'FINISHED' "
+                        + "order by vendor, management_address, finished_at desc)",
                 Timestamp.from(now.minus(java.time.Duration.ofHours(MAX_RUN_AGE_HOURS)))));
     }
 
