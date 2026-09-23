@@ -307,21 +307,31 @@ export function DeviceList(props: DeviceListProps) {
         const total = groups.reduce((a, g) => a + g.devices.length, 0);
         return (
           <Box key={manager.device_id} data-row="manager" sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            <DeviceRow
-              device={manager}
-              selected={rest.selectedDeviceId === manager.device_id && !rest.selectedVs}
-              onSelect={(dev) => rest.onSelectDevice(dev)}
-              trailingExtra={
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <StatusChip tone="neutral" label={`${total} managed`} dense />
-                  <Box component="span" role="button" aria-expanded={expanded} aria-label={expanded ? "Collapse managed devices" : "Expand managed devices"}
-                    onClick={(e) => { e.stopPropagation(); toggle(manager.device_id); }}
-                    sx={{ cursor: "pointer", px: 0.5, color: "text.secondary", fontSize: "0.875rem", "&:hover": { color: m3.primary } }}>
-                    {expanded ? "▲" : "▼"}
-                  </Box>
-                </Box>
-              }
-            />
+            <Box data-row="manager-head" sx={{ display: "flex", alignItems: "center", gap: 1, height: 44, boxSizing: "border-box", px: 1,
+              borderRadius: "8px", border: "1px solid", minWidth: 0,
+              borderColor: rest.selectedDeviceId === manager.device_id ? m3.primary : m3.outlineVar,
+              bgcolor: rest.selectedDeviceId === manager.device_id ? m3.primaryContainer : m3.scLow }}>
+              <Box component="span" role="button" tabIndex={0} aria-expanded={expanded}
+                aria-label={expanded ? "Collapse managed devices" : "Expand managed devices"}
+                onClick={() => toggle(manager.device_id)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggle(manager.device_id); }}
+                sx={{ cursor: "pointer", width: 18, textAlign: "center", color: "text.secondary", fontSize: "0.8rem", "&:hover": { color: m3.primary } }}>
+                {expanded ? "▾" : "▸"}
+              </Box>
+              <VendorAvatar vendorHint={manager.vendor_hint} model={manager.model} hostname={manager.hostname ?? manager.device_id} />
+              <Box role="button" tabIndex={0} onClick={() => rest.onSelectDevice(manager)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") rest.onSelectDevice(manager); }}
+                sx={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  title={manager.hostname ?? manager.device_id}>
+                  {manager.hostname ?? "UNKNOWN"}
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>
+                  {manager.vendor_hint === "palo_alto" ? "Panorama" : "Management server (MDS)"}
+                </Typography>
+              </Box>
+              <StatusChip tone="neutral" label={`${total} managed`} dense />
+            </Box>
             {expanded && (
               <Box sx={{ pl: 2, display: "flex", flexDirection: "column", gap: 1, borderLeft: `2px solid ${m3.outlineVar}`, ml: 1 }}>
                 {groups.map((g, i) => {
