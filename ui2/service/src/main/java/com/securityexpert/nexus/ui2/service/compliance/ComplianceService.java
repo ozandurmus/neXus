@@ -71,6 +71,9 @@ public final class ComplianceService {
 
     // Cache of device evaluation results to enable instant UI responsiveness
     private final Map<String, CachedEvaluation> evaluationCache = new ConcurrentHashMap<>();
+    /** A failed evaluation (timeout, non-200) per device and configuration: not retried before this window passes. */
+    static final Duration FAILURE_RETRY = Duration.ofHours(1);
+    private final Map<String, Instant> failedAt = new ConcurrentHashMap<>();
 
     private record CachedEvaluation(Instant timestamp, String configHash, String canonicalHash, String rulesFingerprint,
             Map<String, Object> result) {
@@ -96,10 +99,19 @@ public final class ComplianceService {
     public ComplianceService(ConfigurationQueryService configurationQueryService, DeviceRepository deviceRepository,
             String complianceServiceUrl, ComplianceEvaluationStore store) {
         this(configurationQueryService, deviceRepository, complianceServiceUrl,
-                () -> configurationQueryService.listDevices().stream()
-                        .filter(d -> d.latestRun().isPresent())
+                () -> {
+                    // Firewall compliance: a management server (Panorama, MDS) is not a firewall and is never evaluated
+                    // (2026-09-23: Panorama's 23.7 MB configuration timed out every evaluation, added 24 data gaps to the
+                    // fleet figures and held every screen open 15 s while it was retried).
+                    java.util.Set<String> managers = deviceRepository.listAll().stream()
+                            .filter(d -> "management_server".equals(d.role()))
+                            .map(com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::deviceId)
+                            .collect(java.util.stream.Collectors.toSet());
+                    return configurationQueryService.listDevices().stream()
+                        .filter(d -> d.latestRun().isPresent() && !managers.contains(d.deviceId()))
                         .map(d -> new Target(d.deviceId(), d.hostname(), d.vendor(), d.latestRun().map(r -> r.canonicalHash())))
-                        .toList(),
+                        .toList();
+                },
                 configurationQueryService::sanitizedText, Instant::now, PARALLELISM, MAX_AGE, store);
     }
 
@@ -251,6 +263,7 @@ public final class ComplianceService {
     public int refreshInBackground() {
         int[] evaluatedNow = {0};
         List<Target> evaluated = evaluable(allDevices());
+        ensureLoaded();
         refreshRulesFingerprint();
         long misses = evaluated.stream().filter(t -> cachedResult(t.deviceId(), t.canonicalHash()) == null).count();
         evaluateAll(evaluated, true, evaluatedNow);
@@ -528,7 +541,13 @@ public final class ComplianceService {
             return cached.result();
         }
 
+        String failureKey = deviceId + "|" + configText.hashCode() + "|" + rulesFingerprint;
+        Instant lastFailure = failedAt.get(failureKey);
+        boolean skipCall = lastFailure != null && lastFailure.isAfter(clock.get().minus(FAILURE_RETRY));
         try {
+            if (skipCall) {
+                throw new IllegalStateException("evaluation failed recently; retried after " + FAILURE_RETRY);
+            }
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(complianceServiceUrl + "/api/v1/compliance/evaluate"))
                     .timeout(Duration.ofSeconds(15))
@@ -553,7 +572,11 @@ public final class ComplianceService {
                 }
                 return parsed;
             }
-        } catch (Exception ignored) {
+            failedAt.put(failureKey, clock.get());
+        } catch (Exception e) {
+            if (!skipCall) {
+                failedAt.put(failureKey, clock.get());
+            }
         }
 
         // Return empty evaluation if microservice unreachable and no config

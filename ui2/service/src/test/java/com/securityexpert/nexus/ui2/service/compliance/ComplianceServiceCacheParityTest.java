@@ -64,6 +64,11 @@ class ComplianceServiceCacheParityTest {
         server.createContext("/api/v1/compliance/evaluate", ex -> {
             evaluations.incrementAndGet();
             String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            if (body.contains("UNEVALUABLE")) {
+                ex.sendResponseHeaders(500, -1);
+                ex.close();
+                return;
+            }
             int pass = 0;
             int fail = 0;
             int gap = 0;
@@ -197,6 +202,20 @@ class ComplianceServiceCacheParityTest {
         assertThat(current.getOverview().get("pending_reevaluation")).isEqualTo(0); // same configuration, same rules: exact
         assertThat(evaluations.get()).isZero();
         assertThat(current.refreshInBackground()).isEqualTo(DEVICES);
+    }
+
+    @Test
+    void aDeviceThatCannotBeEvaluatedIsNotRetriedOnEveryScreenOpen() {
+        configs.put("dev-7", "UNEVALUABLE\n");
+        ComplianceService current = service(ComplianceService.PARALLELISM);
+        current.getOverview();
+        evaluations.set(0);
+        current.getOverview();
+        current.getControls();
+        assertThat(evaluations.get()).as("the failed device waits for the retry window").isZero();
+        now.set(now.get().plus(ComplianceService.FAILURE_RETRY).plusSeconds(60));
+        current.refreshInBackground();
+        assertThat(evaluations.get()).isEqualTo(1);
     }
 
     private static Map<String, Object> without(Map<String, Object> overview) {
