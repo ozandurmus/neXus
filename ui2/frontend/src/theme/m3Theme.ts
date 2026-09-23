@@ -209,7 +209,9 @@ export function installTokenStyles(doc: Document = document): void {
     Object.entries(cssVariables(tokens)).map(([k, v]) => `${k}:${v};`).join("");
   const style = doc.createElement("style");
   style.id = "nx-tokens";
-  style.textContent = `:root{${decl(LIGHT)}}:root[data-theme='dark']{${decl(DARK)}color-scheme:dark;}`;
+  style.textContent = `:root{${decl(LIGHT)}}:root[data-theme='dark']{${decl(DARK)}color-scheme:dark;}`
+    // Quiet scrollbars in both themes (a bright table scrollbar drew more attention than the evidence).
+    + `*{scrollbar-color:var(--nx-sc-highest) transparent;scrollbar-width:thin}`;
   doc.head.appendChild(style);
   try {
     const wall = new URLSearchParams(doc.location?.search ?? "").get("wall") === "1";

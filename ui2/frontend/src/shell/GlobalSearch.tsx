@@ -122,8 +122,8 @@ export function GlobalSearch() {
           sx={{ flex: 1, fontSize: 13, color: m3.onSurface }} />
       </Box>
       {open && term.trim() && (
-        <Paper role="listbox" sx={{ position: "absolute", top: 40, left: 0, right: 0, zIndex: 1300, border: `1px solid ${m3.outlineVar}`,
-                                    boxShadow: m3.e2, borderRadius: "10px", py: 0.5, maxHeight: 420, overflow: "auto", bgcolor: m3.scLowest }}>
+        <Paper role="listbox" sx={{ position: "absolute", top: 40, left: 0, width: { xs: "calc(100vw - 32px)", md: 560 }, zIndex: 1300, border: `1px solid ${m3.outlineVar}`,
+                                    boxShadow: m3.e2, borderRadius: "10px", py: 0.5, maxHeight: 520, overflow: "auto", bgcolor: m3.scLowest }}>
           {failed && <StatePanel variant="error" title="The device list could not be read" action={<Button onClick={() => { setFailed(false); setDevices(null); }}>Retry</Button>} />}
           {!failed && devices === null && <Typography variant="body2" sx={{ px: 1.5, py: 1 }}>Reading the device list…</Typography>}
           {devices !== null && entries.length === 0 && !remoteError && <StatePanel variant="empty" title="No matches" />}

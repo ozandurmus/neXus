@@ -444,7 +444,7 @@ export function OverviewScreen() {
       <ScreenRoot>
         {headline}
         {tiles}
-        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "2fr 1fr" } }}>
+        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: (n.running ?? 0) > 0 ? "2fr 1fr" : "3fr 1fr" }, alignItems: "start" }}>
           {failedCard}
           <Card sx={CARD}>
             <SectionTitle icon="operations" title="Queue" hint="neXus jobs" />

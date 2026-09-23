@@ -13,6 +13,7 @@ import Typography from "@mui/material/Typography";
 
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { Ts } from "../shell/States";
+import { DISPLAY_TZ_LABEL, formatUtc } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
 import { getSystemPods, getSystemStorage, type PodsView, type StorageView } from "../auth/adminApi";
 
@@ -51,13 +52,14 @@ function Usage({ used, limit, format }: { readonly used: number | null; readonly
 
 /** Administration › System: the product's own pods (a read-only top) and how much space its evidence takes. */
 export function SystemStatusPanel() {
+  const [observedAt, setObservedAt] = useState<string | null>(null);
   const [pods, setPods] = useState<PodsView | null>(null);
   const [storage, setStorage] = useState<StorageView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     Promise.all([getSystemPods(), getSystemStorage()])
-      .then(([p, s]) => { setPods(p); setStorage(s); setError(null); })
+      .then(([p, s]) => { setPods(p); setStorage(s); setError(null); setObservedAt(new Date().toISOString()); })
       .catch((e) => setError(e instanceof Error ? e.message : `System status could not be read (status ${(e as { status?: number }).status ?? "?"})`));
   }, []);
 
@@ -79,7 +81,7 @@ export function SystemStatusPanel() {
       <Card sx={{ p: 2, borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", mb: 1 }}>
           <Box>
-            <Typography variant="overline" sx={{ color: m3.onSurfaceVar }}>Service view · refreshed every 15 s</Typography>
+            <Typography variant="overline" sx={{ color: m3.onSurfaceVar }}>Service view · observed {observedAt ? formatUtc(observedAt) : "UNKNOWN"} {DISPLAY_TZ_LABEL} · refreshes every 15 s</Typography>
             <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>Pods</Typography>
           </Box>
           <M3Button emphasis="text" onClick={load}>Refresh</M3Button>
@@ -101,7 +103,7 @@ export function SystemStatusPanel() {
                   <TableCell>{p.ready}</TableCell>
                   <TableCell>{p.restarts > 0 ? <StatusChip tone="warn" label={String(p.restarts)} dense /> : "0"}</TableCell>
                   <TableCell>{age(p.started_at)}</TableCell>
-                  <TableCell><Usage used={p.cpu_millicores} limit={p.cpu_limit_millicores} format={(n) => `${n}m`} /></TableCell>
+                  <TableCell><Usage used={p.cpu_millicores} limit={p.cpu_limit_millicores} format={(n) => (n > 0 && n < 1 ? "<1m" : n === 0 ? "<1m" : `${n}m`)} /></TableCell>
                   <TableCell><Usage used={p.memory_bytes} limit={p.memory_limit_bytes} format={formatBytes} /></TableCell>
                   <TableCell sx={{ fontFamily: "monospace", fontSize: 11, color: m3.onSurfaceVar }}>{p.image_digest ?? "—"}</TableCell>
                 </TableRow>
