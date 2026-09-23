@@ -265,6 +265,9 @@ public final class ComplianceService {
         List<Target> evaluated = evaluable(allDevices());
         ensureLoaded();
         refreshRulesFingerprint();
+        if (rulesFingerprint.isEmpty()) {
+            return 0; // the compliance service has not answered its health check yet: try again next pass
+        }
         long misses = evaluated.stream().filter(t -> cachedResult(t.deviceId(), t.canonicalHash()) == null).count();
         evaluateAll(evaluated, true, evaluatedNow);
         return (int) misses;
@@ -385,7 +388,9 @@ public final class ComplianceService {
      * most once a minute. A change invalidates every cached evaluation; when it cannot be read the last value stands.
      */
     private void refreshRulesFingerprint() {
-        if (rulesFingerprintAt.isAfter(clock.get().minusSeconds(60))) {
+        // rate-limited once known; while still unknown (the compliance service not up yet at start) every pass retries,
+        // so evaluations are never stored under an empty fingerprint and redone a minute later
+        if (!rulesFingerprint.isEmpty() && rulesFingerprintAt.isAfter(clock.get().minusSeconds(60))) {
             return;
         }
         try {

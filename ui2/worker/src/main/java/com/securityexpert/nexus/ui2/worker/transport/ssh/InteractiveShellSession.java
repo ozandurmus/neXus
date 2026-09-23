@@ -71,24 +71,27 @@ final class InteractiveShellSession implements AutoCloseable {
         channel.disconnect();
     }
 
+    /** How one command on the shell ended: only {@link Kind#TIMED_OUT} means the prompt never came back. */
+    record Result(Kind kind, String text) {
+        enum Kind { OUTPUT, EMPTY, CLI_ERROR, TIMED_OUT, NOT_SENT }
+    }
+
     /**
-     * Runs one command on this persistent shell. Returns the command's own
-     * output text on success, or {@code null} on timeout, a channel
-     * failure, blank output, or a recognized CLI error string -- the same
-     * "try the next form" contract {@code ConfirmCapabilityExecutor}'s
-     * exec-based fallback already uses.
+     * Runs one command on this persistent shell. Distinguishes a command that answered with its prompt and no text
+     * (normal for a PAN-OS {@code set cli ...} setting) from one whose prompt never came back -- before 2026-09-23 both
+     * were {@code null} and reported as a timeout, which failed every Palo Alto set-format config read.
      */
-    String run(String command, int timeoutMs) {
+    Result runForResult(String command, int timeoutMs) {
         String normalized = command == null ? "" : command.strip();
         if (normalized.isEmpty() || normalized.contains("\n") || normalized.contains("\r")) {
-            return null;
+            return new Result(Result.Kind.NOT_SENT, null);
         }
         drainReady();
         try {
             out.write((normalized + "\n").getBytes(StandardCharsets.UTF_8));
             out.flush();
         } catch (IOException e) {
-            return null;
+            return new Result(Result.Kind.NOT_SENT, null);
         }
 
         StringBuilder raw = new StringBuilder();
@@ -127,7 +130,7 @@ final class InteractiveShellSession implements AutoCloseable {
             sleepQuietly(40);
         }
         if (!completed) {
-            return null;
+            return new Result(Result.Kind.TIMED_OUT, null);
         }
 
         String text = stripTerminalControl(raw.toString());
@@ -143,10 +146,19 @@ final class InteractiveShellSession implements AutoCloseable {
             lines.remove(lines.size() - 1);
         }
         String stdout = String.join("\n", lines).strip();
-        if (stdout.isEmpty() || looksLikeCliError(stdout)) {
-            return null;
+        if (stdout.isEmpty()) {
+            return new Result(Result.Kind.EMPTY, "");
         }
-        return stdout;
+        if (looksLikeCliError(stdout)) {
+            return new Result(Result.Kind.CLI_ERROR, stdout);
+        }
+        return new Result(Result.Kind.OUTPUT, stdout);
+    }
+
+    /** The command's output, or {@code null} for any non-output ending (the "try the next form" contract). */
+    String run(String command, int timeoutMs) {
+        Result r = runForResult(command, timeoutMs);
+        return r.kind() == Result.Kind.OUTPUT ? r.text() : null;
     }
 
     private void drainReady() {

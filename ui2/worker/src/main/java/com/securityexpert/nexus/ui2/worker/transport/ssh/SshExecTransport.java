@@ -275,13 +275,32 @@ public final class SshExecTransport implements DeviceTransport {
         long startMs = System.currentTimeMillis();
         try {
             InteractiveShellSession shell = sshSession.interactiveShell();
-            String output = shell.run(spec.command(), (int) timeout.toMillis());
+            InteractiveShellSession.Result result = shell.runForResult(spec.command(), (int) timeout.toMillis());
+            String output = result.text();
             long elapsedMs = System.currentTimeMillis() - startMs;
-            if (output == null) {
-                LOG.log(System.Logger.Level.WARNING,
-                        "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" produced no usable output after {1}ms",
-                        spec.command(), elapsedMs);
-                return new ExecResult.TimedOut();
+            switch (result.kind()) {
+                case TIMED_OUT -> {
+                    LOG.log(System.Logger.Level.WARNING, "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" TIMED OUT after {1}ms",
+                            spec.command(), elapsedMs);
+                    return new ExecResult.TimedOut();
+                }
+                case EMPTY -> {
+                    // prompt came back with no text: a completed setting, not a timeout
+                    LOG.log(System.Logger.Level.INFO, "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" completed with no output in {1}ms",
+                            spec.command(), elapsedMs);
+                    return new ExecResult.ChannelFailed("empty output");
+                }
+                case CLI_ERROR -> {
+                    LOG.log(System.Logger.Level.WARNING, "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" answered a CLI error after {1}ms",
+                            spec.command(), elapsedMs);
+                    return new ExecResult.ChannelFailed("cli error");
+                }
+                case NOT_SENT -> {
+                    return new ExecResult.ChannelFailed("command not sent");
+                }
+                case OUTPUT -> {
+                    // falls through to Completed below
+                }
             }
             LOG.log(System.Logger.Level.INFO,
                     "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" completed in {1}ms (length={2})",
