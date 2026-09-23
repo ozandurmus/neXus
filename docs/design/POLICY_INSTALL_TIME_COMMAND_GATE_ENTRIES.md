@@ -2,7 +2,8 @@
 
 ## Status
 
-**DRAFT — PENDING PRODUCT OWNER GATE APPROVAL AND A FIRST MEASUREMENT.** Requested by the Product Owner on
+**APPROVED — PRODUCT OWNER, 2026-09-23 ("onaylıyorum"); FIELD BINDINGS UNVERIFIED UNTIL THE MEASUREMENT
+SAMPLES ARE RECORDED BELOW.** (Was: DRAFT — PENDING PRODUCT OWNER GATE APPROVAL AND A FIRST MEASUREMENT.) Requested by the Product Owner on
 2026-09-23: "cihazlarda config ekranında Last time policy installed bilgisi istiyorum; bunu da ana ekrana
 ekleyelim (Overview)". This document records, for `docs/AI_DEVELOPMENT_PROTOCOL.md`'s network-device command gate,
 the ten items for each read the feature needs. **It authorizes nothing until the Product Owner approves it.** Every
@@ -14,8 +15,12 @@ MEASURE FIRST, never an established semantic.
 
 - **Configuration screen, per device (and per virtual system on VSX):** "Policy installed" = the time the gateway
   reports for its currently installed security policy, and the policy name. Shown as observed, with the read time.
-- **Overview:** one line under Review — "n gateways have not had a policy installed in more than X days" — only
-  after the Product Owner fixes X; until then Overview shows nothing new. No "outdated" judgement without that number.
+- **Overview:** no threshold (Product Owner, 2026-09-23: installs run every weekday evening; he wants the dates, and
+  will mail the stale ones from his own nightly query). Overview shows the install dates as a distribution (today,
+  yesterday, older) with the oldest date; no "outdated" word.
+- **When:** the reads ride the inventory collection, which runs for the whole fleet every evening at 23:00
+  Europe/Istanbul (after the weekday evening installs). The stored fields (device, policy name, install time as
+  reported and parsed, read time) are what the Product Owner's mail query reads.
 - UNKNOWN, never a guessed time, when the read fails or the field is absent.
 
 ## Why these reads (and not the management server)
