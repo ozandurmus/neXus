@@ -151,9 +151,12 @@ function PostureTile({ title, count, of, unknown, severity, icon, context, previ
           {unknown ? "UNKNOWN" : count}
           {!unknown && of !== undefined && <Typography component="span" sx={{ fontSize: big ? 18 : 14, fontWeight: 500, color: m3.onSurfaceVar }}> of {of}</Typography>}
         </Typography>
-        <Box sx={{ height: 4, borderRadius: "2px", bgcolor: m3.sc, overflow: "hidden" }}>
-          <Box sx={{ width: `${of && of > 0 ? Math.min(100, (100 * count) / of) : active ? 100 : 0}%`, height: "100%", bgcolor: fill }} />
-        </Box>
+        {/* A bar only where it has a denominator (review 2026-09-23: a full red bar under a bare count said nothing). */}
+        {of !== undefined && of > 0 ? (
+          <Box sx={{ height: 4, borderRadius: "2px", bgcolor: m3.sc, overflow: "hidden" }}>
+            <Box sx={{ width: `${Math.min(100, (100 * count) / of)}%`, height: "100%", bgcolor: fill }} />
+          </Box>
+        ) : <Box sx={{ height: 4 }} />}
         <Typography variant="caption" sx={{ color: m3.onSurfaceVar, fontSize: big ? 13 : 11.5 }}>{context}</Typography>
         {!unknown && <Typography variant="caption" sx={{ fontSize: big ? 13 : 11.5 }}><Delta count={count} previous={previous} /></Typography>}
       </Card>
@@ -291,7 +294,7 @@ function ComplianceCard({ c, evidenceAt }: { readonly c: OverviewView["complianc
             <Tooltip title="Assured: passing checks among all assigned checks (a check without evidence counts against). Observed: passing checks among checks that could be judged (pass + fail).">
               <Box component="span"><StatusChip tone="neutral" label={`Assured ${c.assured_pct}% · observed ${c.observed_pct}% · coverage ${c.coverage_pct}%`} /></Box>
             </Tooltip>
-            <Link href={q({ screen: "compliance", severity: "critical", result: "fail" })} underline="none"><StatusChip tone={(c.critical_deficiencies ?? 0) > 0 ? "bad" : "neutral"} label={`${c.critical_deficiencies} critical deficiencies`} /></Link>
+            <Link href={q({ screen: "compliance", severity: "critical", result: "fail" })} underline="none"><StatusChip tone={(c.critical_deficiencies ?? 0) > 0 ? "bad" : "neutral"} label={`${c.critical_deficiencies} critical failing checks`} /></Link>
             <Link href={q({ screen: "compliance", result: "unavailable" })} underline="none"><StatusChip tone={(c.data_gaps ?? 0) > 0 ? "warn" : "neutral"} label={`${c.data_gaps} data gaps`} /></Link>
           </Box>
           {(c.frameworks ?? []).map((f) => (
@@ -395,7 +398,7 @@ export function OverviewScreen() {
   const evidence: string[] = [];
   evidence.push(`Evidence read in 24 h for ${age?.lt24h ?? 0} of ${age?.of ?? d.active_devices} active devices${neverRead ? `; ${neverRead} never read` : ""}.`);
   evidence.push(c.state === "OK"
-    ? `Compliance evidence covers ${c.coverage_pct}% of control checks: ${c.critical_deficiencies} critical deficiencies, ${c.data_gaps} data gaps.`
+    ? `Compliance evidence covers ${c.coverage_pct}% of control checks: ${c.critical_deficiencies} critical failing checks, ${c.data_gaps} data gaps.`
     : "Compliance NOT EVALUATED.");
 
   const headline = (
@@ -430,7 +433,7 @@ export function OverviewScreen() {
         context={`${age?.h24_72 ?? 0} aging · ${age?.gt72h ?? 0} stale · ${neverRead} never read`} href={q({ screen: "inventory", inventory_age: "stale" })} />
       <PostureTile big={wall} icon="compliance" severity="critical" title="Compliance deficiencies" count={c.state === "OK" ? (c.critical_deficiencies ?? 0) : 0}
         unknown={c.state !== "OK"} previous={null}
-        context={c.state === "OK" ? `critical · ${c.coverage_pct}% coverage · ${c.data_gaps} data gaps` : "not evaluated"}
+        context={c.state === "OK" ? `critical failing checks (control × firewall) · ${c.coverage_pct}% coverage · ${c.data_gaps} data gaps` : "not evaluated"}
         href={q({ screen: "compliance", severity: "critical", result: "fail" })} />
     </Box>
   );

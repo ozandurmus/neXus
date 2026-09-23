@@ -477,7 +477,7 @@ export function BackupScreen() {
               : "Policy unavailable"}
           </Typography>
         </Card>
-        <MetricCard title="Retention horizon" value={policy ? `${policy.backup_retention_days} days` : null} state={policy ? "ok" : "unknown"}
+        <MetricCard title="Retention policy" value={policy ? `${policy.backup_retention_days} days` : null} state={policy ? "ok" : "unknown"}
           note={policy ? `Snapshot depth: ${policy.snapshot_retention_depth} retained` : "Policy unavailable"} />
         {/* Zero deviations found and zero comparisons run look identical and mean opposite things. */}
         <MetricCard title="Active major deviations"

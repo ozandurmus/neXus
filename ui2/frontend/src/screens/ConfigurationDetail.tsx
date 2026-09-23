@@ -326,7 +326,7 @@ export function DeviceConfigurationDetail({ device }: { readonly device: DeviceS
     <Stack spacing={2}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Current actual state</Typography>
+          <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Observed configuration</Typography>
           <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>Device configuration</Typography>
         </Box>
         <FilterBox value={query} onChange={setQuery} />
@@ -340,7 +340,7 @@ export function DeviceConfigurationDetail({ device }: { readonly device: DeviceS
       {projection && (
         <>
           <Card sx={{ px: 2, py: 1.25, ...CARD, display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
-            <StatusChip tone="ok" label="CURRENT ACTUAL" dense />
+            <StatusChip tone="neutral" label="OBSERVED" dense />
             <Typography variant="body2" sx={{ fontWeight: 600 }}>{projection.settingCount} projected settings</Typography>
             <Typography variant="caption" color="text.secondary">Source plane: {projection.sourcePlane}</Typography>
             {collectedAt && <Typography variant="caption" color="text.secondary">Collected <Ts at={collectedAt} relative /></Typography>}
@@ -568,7 +568,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
       </InventoryEntityHeader>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Current actual state · members side by side</Typography>
+          <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Observed configuration · members side by side</Typography>
           <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>Cluster configuration</Typography>
         </Box>
         <Stack direction="row" spacing={1.5} alignItems="center">
@@ -590,8 +590,8 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
       {cluster && (
         <>
           <Card sx={{ px: 2, py: 1.25, ...CARD, display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
-            <StatusChip tone="ok" label="CURRENT ACTUAL" dense />
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>{cluster.settingCount} settings across {cluster.memberIds.length} members</Typography>
+            <StatusChip tone="neutral" label="OBSERVED" dense />
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>{cluster.settingCount} distinct settings compared across {cluster.memberIds.length} members</Typography>
             <Typography variant="body2" sx={{ color: cluster.diffCount > 0 ? m3.criticalInk : m3.onSurfaceVar, fontWeight: 600 }}>
               {cluster.diffCount === 0 ? "no differences" : `${cluster.diffCount} difference${cluster.diffCount === 1 ? "" : "s"}`}
             </Typography>

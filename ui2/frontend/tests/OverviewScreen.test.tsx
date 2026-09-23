@@ -116,7 +116,7 @@ describe("Overview -- exception-and-evidence screen (OVERVIEW_EXCEPTION_SCREEN_C
     stub(overview({ compliance: { state: "OK", reason: null, evaluated: 102, of_firewalls: 105, observed_pct: 34.7, assured_pct: 28.9, coverage_pct: 82.5,
       critical_deficiencies: 172, data_gaps: 428, frameworks: [] } }));
     render(<OverviewScreen />);
-    expect(await screen.findByText(/covers 82.5% of control checks: 172 critical deficiencies, 428 data gaps/)).toBeInTheDocument();
+    expect(await screen.findByText(/covers 82.5% of control checks: 172 critical failing checks, 428 data gaps/)).toBeInTheDocument();
     expect(screen.getByText("Compliance deficiencies").closest("a")!.textContent).toContain("82.5% coverage");
     expect(document.body.textContent).not.toContain("of 100");
   });

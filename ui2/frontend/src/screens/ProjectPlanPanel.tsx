@@ -122,14 +122,25 @@ function HeroCards({ plan }: { readonly plan: ProjectPlanView }) {
           Open backlog
         </Typography>
         <Typography variant="h1" aria-label="Open backlog count">{openBacklogCount}</Typography>
-        <Stack spacing={0.5}>
-          {Object.entries(plan.backlog_counts).map(([status, count]) => (
-            <Box key={status} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-              <Typography variant="body2">{roadmapStatusLabel(status)}</Typography>
-              <StatusChip tone={roadmapStatusTone(status)} label={String(count)} dense />
-            </Box>
-          ))}
-        </Stack>
+        {/* The big number is the sum of the OPEN statuses listed right under it; closed statuses are listed apart, so the
+            card reconciles (Astra review 2026-09-23: "Open backlog 92" sat above counts that added up to 97). */}
+        {(["open", "closed"] as const).map((group) => {
+          const rows = Object.entries(plan.backlog_counts).filter(([status]) => (group === "closed") === TERMINAL_BACKLOG_STATUSES.has(status));
+          if (rows.length === 0) return null;
+          return (
+            <Stack key={group} spacing={0.5}>
+              <Typography variant="caption" sx={{ textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
+                {group === "open" ? `Open · ${rows.reduce((n, [, c]) => n + c, 0)}` : `Closed · ${rows.reduce((n, [, c]) => n + c, 0)}`}
+              </Typography>
+              {rows.map(([status, count]) => (
+                <Box key={status} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                  <Typography variant="body2">{roadmapStatusLabel(status)}</Typography>
+                  <StatusChip tone={roadmapStatusTone(status)} label={String(count)} dense />
+                </Box>
+              ))}
+            </Stack>
+          );
+        })}
       </Card>
     </Box>
   );

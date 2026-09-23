@@ -282,6 +282,15 @@ export function ComplianceScreen() {
       />
 
       {/* 4 Top KPI Cards */}
+      {/* Evaluation scope (Astra review 2026-09-23): the headline is every control on every evaluated firewall, not one
+          framework; every control maps to CIS, which is why the CIS card carries the same totals. */}
+      {overview && overview.evaluated_firewalls > 0 && (
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mt: -1 }}>
+          Scope: all {controls.length} controls on {overview.evaluated_firewalls} of {overview.total_firewalls} evaluated firewalls
+          {" · "}{controls.reduce((n, c) => n + c.pass_count + c.fail_count + c.data_unavailable_count, 0)} control checks (one control on one firewall)
+          {" · "}every control maps to CIS, so the CIS card shows the same totals.
+        </Typography>
+      )}
       <MetricGrid>
         <ComplianceMetricCard
           title="Assured Compliance"
@@ -302,13 +311,13 @@ export function ComplianceScreen() {
           note={overview ? `Checks with collected evidence · observed ${overview.observed_compliance_pct}% (pass among judged checks)` : "Checks with collected evidence"}
         />
         <ComplianceMetricCard
-          title="Critical Deficiencies"
+          title="Critical failing checks"
           count={overview ? String(overview.critical_deficiencies) : null}
           badge={{
             label: !overview ? "UNKNOWN" : overview.critical_deficiencies === 0 ? "Zero Critical" : "Immediate Action",
             tone: !overview || overview.critical_deficiencies === 0 ? "neutral" : "bad",
           }}
-          note="Critical-severity controls failing on at least one firewall"
+          note="Checks of a critical-severity control that failed (one control on one firewall counts once)"
         />
         <ComplianceMetricCard
           title="Data Gaps"

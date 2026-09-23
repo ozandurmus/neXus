@@ -395,7 +395,7 @@ export function OperationsScreen() {
         <Box>
           <Typography variant="h4" sx={{ mb: 0.5 }}>{count} clusters enrolled</Typography>
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 2 }}>
-            Choose a cluster to read its preflight checks. Readiness is observed only; nothing is inferred and no class 2 action exists in this build.
+            Choose a cluster to read its preflight checks. Readiness is observed only; nothing is inferred. Failover is unavailable in this build.
           </Typography>
           <TableContainer component={Paper} sx={{ borderRadius: "10px", border: `1px solid ${m3.outlineVar}`, boxShadow: "none" }}>
             <Table size="small">
@@ -405,6 +405,7 @@ export function OperationsScreen() {
                   <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Vendor</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Active member</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Standby member</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Roles observed</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Last evaluated</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Readiness</TableCell>
                 </TableRow>
@@ -429,6 +430,8 @@ export function OperationsScreen() {
                           {standby ? <RoleChip role="STANDBY" dense /> : null}
                         </Box>
                       </TableCell>
+                      {/* When the roles were read (newest member inventory), separate from readiness evaluation. */}
+                      <TableCell><Ts at={c.members.map((m) => m.inventory_collected_at ?? null).filter((t): t is string => Boolean(t)).sort().slice(-1)[0] ?? null} seconds={false} /></TableCell>
                       <TableCell><Ts at={report?.generatedAt ?? null} /></TableCell>
                       <TableCell>
                         {evaluated
@@ -1141,7 +1144,7 @@ export function OperationsScreen() {
     <ScreenRoot>
       <ScreenHeader
         title="Operations"
-        subtitle="Cluster HA readiness preflight evaluations and controlled failover operations."
+        subtitle="Inspect observed HA roles, readiness evaluations and jobs."
         actions={<M3Button emphasis="filled">Schedule collection</M3Button>}
       />
       <MetricGrid>

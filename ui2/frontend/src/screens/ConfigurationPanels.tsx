@@ -327,7 +327,7 @@ export function DeviceConfigurationPanels({
         <Stack spacing={0.5}>
           <Typography variant="body2" color="text.secondary">
             {collectedLabel
-              ? `Collected ${collectedLabel} · Primary source: ${configuration?.read_kind ?? "UNKNOWN"} · Current actual`
+              ? `Collected ${collectedLabel} · Primary source: ${configuration?.read_kind ?? "UNKNOWN"} · Observed configuration`
               : "Not collected yet -- nothing below is device evidence until the first configuration run lands."}
           </Typography>
           {collected && (

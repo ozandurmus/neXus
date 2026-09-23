@@ -163,6 +163,7 @@ export function TopAppBar() {
       <Box sx={{ height: 56, flex: "none", display: "flex", alignItems: "center", gap: 2, px: 3 }}>
         <NexusWordmark height={24} color={m3.onSurface} />
         <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2 }}>
+          <MaskChip />
           <AsOfClock />
           <Link href={exit} sx={{ fontSize: 12, color: m3.onSurfaceVar }}>Exit wall display</Link>
         </Box>
