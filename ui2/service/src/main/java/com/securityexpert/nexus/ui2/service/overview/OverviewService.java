@@ -52,6 +52,69 @@ public class OverviewService {
         this.managementTree = managementTree;
     }
 
+    private com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository policyInstallRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPolicyInstallRepository(com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository repository) {
+        this.policyInstallRepository = repository;
+    }
+
+    /**
+     * When each active gateway last had a policy installed (V60), by calendar day in Europe/Istanbul: today, yesterday,
+     * 2-7 days, older, and never read -- with the oldest and newest dates. Dates only, no threshold (PO, 2026-09-23).
+     */
+    static Map<String, Object> policyInstallBuckets(List<String> gatewayIds,
+            Map<String, com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstall> installs, Instant now) {
+        java.time.ZoneId zone = java.time.ZoneId.of("Europe/Istanbul");
+        java.time.LocalDate today = now.atZone(zone).toLocalDate();
+        int todayN = 0;
+        int yesterdayN = 0;
+        int weekN = 0;
+        int olderN = 0;
+        int unknownN = 0;
+        Instant oldest = null;
+        Instant newest = null;
+        Instant lastRead = null;
+        for (String id : gatewayIds) {
+            var p = installs.get(id);
+            java.util.Optional<Instant> at = p == null ? java.util.Optional.empty() : p.installedAt();
+            if (p != null && p.observedAt().isPresent() && (lastRead == null || p.observedAt().get().isAfter(lastRead))) {
+                lastRead = p.observedAt().get();
+            }
+            if (at.isEmpty()) {
+                unknownN++;
+                continue;
+            }
+            long days = java.time.temporal.ChronoUnit.DAYS.between(at.get().atZone(zone).toLocalDate(), today);
+            if (days <= 0) todayN++;
+            else if (days == 1) yesterdayN++;
+            else if (days <= 7) weekN++;
+            else olderN++;
+            oldest = oldest == null || at.get().isBefore(oldest) ? at.get() : oldest;
+            newest = newest == null || at.get().isAfter(newest) ? at.get() : newest;
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("state", gatewayIds.size() == unknownN ? "UNKNOWN" : "OK");
+        out.put("of", gatewayIds.size());
+        out.put("today", todayN);
+        out.put("yesterday", yesterdayN);
+        out.put("days_2_7", weekN);
+        out.put("older", olderN);
+        out.put("unknown", unknownN);
+        out.put("oldest_at", oldest == null ? null : oldest.toString());
+        out.put("newest_at", newest == null ? null : newest.toString());
+        out.put("last_read_at", lastRead == null ? null : lastRead.toString());
+        return out;
+    }
+
+    private Object policyInstall(Fleet fleet, Instant now) {
+        if (policyInstallRepository == null) {
+            return Map.of("state", "UNKNOWN");
+        }
+        List<String> gateways = fleet.active().stream().filter(d -> "gateway".equals(d.role())).map(DeviceSummaryRecord::deviceId).toList();
+        return policyInstallBuckets(gateways, policyInstallRepository.findAll(), now);
+    }
+
     /** Active = enrolled (the Inventory screen's predicate). */
     record Fleet(List<DeviceSummaryRecord> active, Map<String, DeviceSummaryRecord> byId, Map<String, List<String>> clusters) {
     }
@@ -74,7 +137,8 @@ public class OverviewService {
         CompletableFuture<Object> compliance = section(this::compliance);
         CompletableFuture<Object> platform = section(() -> platform(fleet));
         CompletableFuture<Object> nexus = section(this::nexus);
-        CompletableFuture.allOf(evidence, attention, inventoryAge, compliance, platform, nexus).join();
+        CompletableFuture<Object> policyInstall = section(() -> policyInstall(fleet, now));
+        CompletableFuture.allOf(evidence, attention, inventoryAge, compliance, platform, nexus, policyInstall).join();
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("generated_at", now.toString());
@@ -95,6 +159,7 @@ public class OverviewService {
         body.put("compliance", compliance.join());
         body.put("platform", platform.join());
         body.put("nexus", nexus.join());
+        body.put("policy_install", policyInstall.join());
         return body;
     }
 

@@ -57,6 +57,25 @@ public final class DeviceRegistrationController {
     private final DeviceDeletionService deviceDeletionService;
     private final DeviceQueryService deviceQueryService;
     private final DevicePlatformFactsRepository platformFactsRepository;
+    private com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository policyInstallRepository =
+            com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository.NONE;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPolicyInstallRepository(com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository repository) {
+        this.policyInstallRepository = repository;
+    }
+
+    /** The installed policy (V60): name, install time as reported and parsed, and when it was read; null when unread. */
+    static void putPolicyInstall(Map<String, Object> body,
+            Optional<com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstall> p) {
+        body.put("policy_name", p.flatMap(com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstall::policyName).orElse(null));
+        body.put("policy_installed_at", p.flatMap(com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstall::installedAt)
+                .map(Object::toString).orElse(null));
+        body.put("policy_installed_at_text", p.flatMap(com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstall::installedAtText)
+                .orElse(null));
+        body.put("policy_read_at", p.flatMap(com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstall::observedAt)
+                .map(Object::toString).orElse(null));
+    }
     private com.securityexpert.nexus.ui2.service.overview.OverviewService overviewService;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -172,17 +191,20 @@ public final class DeviceRegistrationController {
         DeviceQueryService.DetailOutcome.Found found = (DeviceQueryService.DetailOutcome.Found) outcome;
         Map<String, Object> body = toDetailBody(found.device(), found.facts(), found.job());
         putPlatformFacts(body, platformFactsRepository.find(deviceId));
+        putPolicyInstall(body, policyInstallRepository.find(deviceId));
         return ResponseEntity.ok(body);
     }
 
     @GetMapping("/devices")
     public ResponseEntity<Map<String, Object>> listDevices() {
         Map<String, DevicePlatformFacts> platformFacts = platformFactsRepository.findAll();
+        Map<String, com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstall> policies = policyInstallRepository.findAll();
         Map<String, java.time.Instant> inventoryAt = overviewService == null ? Map.of() : overviewService.latestInventoryAll();
         List<Map<String, Object>> devices = deviceQueryService.listDevices().stream()
                 .map(summary -> {
                     Map<String, Object> body = toSummaryBody(summary);
                     putPlatformFacts(body, Optional.ofNullable(platformFacts.get(summary.deviceId())));
+                    putPolicyInstall(body, Optional.ofNullable(policies.get(summary.deviceId())));
                     java.time.Instant inv = inventoryAt.get(summary.deviceId());
                     body.put("inventory_collected_at", inv == null ? null : inv.toString());
                     return body;

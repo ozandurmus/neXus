@@ -59,6 +59,15 @@ public final class InventoryJobExecutor {
     private final DeviceInventoryRepository deviceInventoryRepository;
     private final InventoryCapabilityExecutor inventoryExecutor;
     private final DevicePlatformFactsRepository platformFactsRepository;
+    private com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository policyInstallRepository =
+            com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository.NONE;
+
+    /** Where the installed-policy read goes (V60); unset, it is dropped. */
+    public InventoryJobExecutor withPolicyInstallRepository(
+            com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository repository) {
+        this.policyInstallRepository = Objects.requireNonNull(repository, "repository");
+        return this;
+    }
 
     public InventoryJobExecutor(JobLeaseRepository leaseRepository, JobStepAttemptRepository attemptRepository,
             DeviceEnrollmentReadPort deviceEnrollmentReadPort, DeviceRepository deviceRepository,
@@ -155,6 +164,15 @@ public final class InventoryJobExecutor {
             } catch (RuntimeException factsFailed) {
                 LOG.log(System.Logger.Level.WARNING, "[PLATFORM_FACTS_WRITE_FAILED] Inventory job {0} for device {1}: {2}",
                         jobId, targetDeviceId, factsFailed.getMessage());
+            }
+            try {
+                policyInstallRepository.record(read.policyInstall().forDevice(targetDeviceId));
+                // safe telemetry (gate entry item 10): whether each part was read, never the values
+                LOG.log(System.Logger.Level.INFO, "[POLICY_INSTALL_READ] job {0}: source={1} name={2} time_text={3} time_parsed={4}",
+                        jobId, read.policyInstall().sourceRead(), read.policyInstall().policyName().isPresent(),
+                        read.policyInstall().installedAtText().isPresent(), read.policyInstall().installedAt().isPresent());
+            } catch (RuntimeException policyFailed) {
+                LOG.log(System.Logger.Level.WARNING, "[POLICY_INSTALL_WRITE_FAILED] Inventory job {0}: {1}", jobId, policyFailed.getMessage());
             }
         });
 

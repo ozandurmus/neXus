@@ -82,6 +82,8 @@ public final class InventoryReadPlan {
      *  login profile) and the command answered exit 0 with no output on every gateway (measured live 2026-09-22). */
     public static final String CP_CPINFO_HOTFIXES = "bash -lc 'cpinfo -y all'";
     public static final String CP_UPTIME = "uptime";
+    /** Installed policy name and install time (V60, POLICY_INSTALL_TIME_COMMAND_GATE_ENTRIES.md #1); a login shell like cpinfo. */
+    public static final String CP_CPSTAT_POLICY = "bash -lc 'cpstat -f policy fw'";
     public static final String CP_SHOW_ASSET_SYSTEM = "clish -c 'show asset system'";
 
     /** Physical read order (amended 2026-09-21, cp_vsx_interfaces_identical_to_physical): interfaces
@@ -145,6 +147,8 @@ public final class InventoryReadPlan {
     // -- Palo Alto -----------------------------------------------------------
 
     public static final String PAN_SHOW_SYSTEM_INFO = "<show><system><info/></system></show>";
+    /** The job list; the latest finished commit is the policy install time (V60, gate entry #2). Not a base step: optional. */
+    public static final String PAN_SHOW_JOBS_ALL = "<show><jobs><all/></jobs></show>";
     public static final String PAN_SHOW_HA_STATE = "<show><high-availability><state/></high-availability></show>";
     public static final String PAN_SHOW_INTERFACE_ALL = "<show><interface>all</interface></show>";
     public static final String PAN_SHOW_ROUTING_ROUTE = "<show><routing><route/></routing></show>";

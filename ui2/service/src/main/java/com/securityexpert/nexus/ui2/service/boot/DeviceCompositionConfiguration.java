@@ -122,6 +122,12 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
+    public com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository devicePolicyInstallRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePolicyInstallRepository(transactionBoundary);
+    }
+
+    @Bean
     public com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository devicePlatformFactsRepository(
             TransactionBoundary transactionBoundary) {
         return new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository(transactionBoundary);

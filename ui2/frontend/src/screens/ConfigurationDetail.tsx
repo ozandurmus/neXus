@@ -236,6 +236,13 @@ function identityTiles(device: DeviceSummary, collectedAt: string | null): Ident
     { label: isPaloAlto ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },
     { label: "Management address", value: device.management_ip ?? null, absent: "not recorded", mono: true },
     { label: "Enrollment", value: device.enrollment_state || null, absent: "not recorded" },
+    {
+      label: "Policy installed",
+      value: device.policy_installed_at
+        ? <><Ts at={device.policy_installed_at} />{device.policy_name ? ` · ${device.policy_name}` : ""}</>
+        : device.policy_installed_at_text ? `${device.policy_installed_at_text} (as reported)` : null,
+      absent: "not read yet -- read every evening at 23:00",
+    },
     { label: "Platform facts read", value: device.platform_facts_observed_at ? <Ts at={device.platform_facts_observed_at} /> : null, absent: "never" },
     { label: "Last configuration read", value: collectedAt ? <Ts at={collectedAt} /> : null, absent: "never" },
   ];

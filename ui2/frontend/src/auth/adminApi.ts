@@ -493,6 +493,11 @@ export interface DeviceSummary {
   readonly platform_facts_observed_at?: string | null;
   /** Which read produced the platform facts (read-kind token; amendment A-2026-09-23). */
   readonly platform_facts_source?: string | null;
+  /** Installed policy (V60), read every evening at 23:00 Europe/Istanbul: name (Check Point), time parsed and as reported, read time. */
+  readonly policy_name?: string | null;
+  readonly policy_installed_at?: string | null;
+  readonly policy_installed_at_text?: string | null;
+  readonly policy_read_at?: string | null;
   /** Newest inventory run of the device (Overview "inventory evidence age" filters). */
   readonly inventory_collected_at?: string | null;
 }
@@ -1342,6 +1347,11 @@ export interface OverviewView {
     hotfix_levels: Array<{ level: string | null; count: number }>; evidence_at: string | null; state?: EvidenceState;
     /** Per vendor: major (CP software version / PAN x.y) and minor (CP jumbo take / PAN full version); null label = UNKNOWN. */
     versions?: Record<"check_point" | "palo_alto", { major: VersionSlice[]; minor: VersionSlice[]; model?: VersionSlice[] }>;
+  };
+  readonly policy_install?: {
+    readonly state: EvidenceState; readonly of?: number; readonly today?: number; readonly yesterday?: number;
+    readonly days_2_7?: number; readonly older?: number; readonly unknown?: number;
+    readonly oldest_at?: string | null; readonly newest_at?: string | null; readonly last_read_at?: string | null;
   };
   readonly nexus: { completed_24h: number; running: number; oldest_running_submitted_at: string | null; last_inventory: { check_point: string | null; palo_alto: string | null }; state?: EvidenceState };
 }

@@ -280,6 +280,39 @@ function FailedJobsCard({ total, reasons, rows, allHref, latest = true }: {
   );
 }
 
+/**
+ * When each active gateway last had a policy installed, as the gateway reports it (read every evening at 23:00):
+ * counts per calendar day and the oldest date. Dates only -- no threshold, no "outdated" word (PO, 2026-09-23).
+ */
+function PolicyInstallCard({ p }: { readonly p: OverviewView["policy_install"] }) {
+  const buckets: Array<[string, number | undefined]> = [
+    ["Today", p?.today], ["Yesterday", p?.yesterday], ["2–7 days ago", p?.days_2_7], ["Earlier", p?.older], ["Not read yet", p?.unknown],
+  ];
+  return (
+    <Card sx={CARD}>
+      <SectionTitle icon="config" title="Policy installed" hint={`as each gateway reports it · read every evening 23:00${p?.last_read_at ? ` · last read ${relativeAge(p.last_read_at)}` : ""}`}
+        right={<Link href="?screen=configuration" sx={{ fontSize: 13 }}>Open Configuration</Link>} />
+      {!p || p.state !== "OK" ? (
+        <StatePanel variant="not_evaluated" title="Not read yet" body="The first read runs at 23:00 with the nightly inventory collection." />
+      ) : (
+        <>
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 1.5 }}>
+            {buckets.map(([label, n]) => (
+              <Box key={label} sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: "8px", px: 1.5, py: 1 }}>
+                <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{label}</Typography>
+                <Typography sx={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{n ?? 0}</Typography>
+              </Box>
+            ))}
+          </Box>
+          <Typography variant="body2" sx={{ mt: 1.25, color: m3.onSurfaceVar }}>
+            {p.of} gateways · oldest install {p.oldest_at ? <Ts at={p.oldest_at} /> : "UNKNOWN"} · newest {p.newest_at ? <Ts at={p.newest_at} /> : "UNKNOWN"}
+          </Typography>
+        </>
+      )}
+    </Card>
+  );
+}
+
 function ComplianceCard({ c, evidenceAt }: { readonly c: OverviewView["compliance"]; readonly evidenceAt: string | null | undefined }) {
   return (
     <Card sx={CARD}>
@@ -495,6 +528,8 @@ export function OverviewScreen() {
         <ComplianceCard c={c} evidenceAt={data.evidence.compliance?.at} />
         {failedCard}
       </Box>
+
+      <PolicyInstallCard p={data.policy_install} />
 
       {/* Row E -- inventory facts, below the fold */}
       <Box>

@@ -361,7 +361,10 @@ public final class InventoryCapabilityExecutor {
                     java.util.Map.of(),
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.uptime(
                             identityReadOutput(session, InventoryReadPlan.CP_UPTIME, preferInteractiveShell)),
-                    "cp_show_asset_system_cpinfo_hotfixes_uptime");
+                    "cp_show_asset_system_cpinfo_hotfixes_uptime")
+                    // installed policy (V60): optional, UNKNOWN when the read or the parse gives nothing
+                    .withPolicyInstall(com.securityexpert.nexus.ui2.worker.inventory.policy.CheckPointPolicyParser.parse(
+                            identityReadOutput(session, InventoryReadPlan.CP_CPSTAT_POLICY, preferInteractiveShell)));
             long totalElapsed = System.currentTimeMillis() - overallStart;
             LOG.log(System.Logger.Level.INFO,
                     "[INVENTORY_COLLECT_COMPLETE] target={0}:{1} completed in {2}ms, totalContexts={3}, totalInterfaces={4}",
@@ -505,7 +508,7 @@ public final class InventoryCapabilityExecutor {
         String virtualSystemsString = panVsNames.isEmpty() ? null : String.join(", ", panVsNames);
 
         return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
-                Optional.of(PlatformFactsRead.paloAlto(sysInfo)));
+                Optional.of(PlatformFactsRead.paloAlto(sysInfo).withPolicyInstall(panPolicyInstall(target, headers))));
     }
 
     private static boolean isValidPanVsys(String vsys) {
@@ -1134,6 +1137,20 @@ public final class InventoryCapabilityExecutor {
                 "[INVENTORY_EXEC_INTERACTIVE_FAILED] cmd=\"{0}\" produced no usable output after {1}ms",
                 command, elapsedMs);
         return null;
+    }
+
+    /** Installed policy (V60): the latest finished commit in the job list; any failure is UNKNOWN, never a failed inventory. */
+    private com.securityexpert.nexus.ui2.worker.inventory.policy.PolicyInstallRead panPolicyInstall(ApiTarget target,
+            Map<String, String> headers) {
+        try {
+            String jobs = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_JOBS_ALL, headers);
+            if (jobs == null || jobs.isBlank() || isXmlError(jobs)) {
+                return com.securityexpert.nexus.ui2.worker.inventory.policy.PolicyInstallRead.NONE;
+            }
+            return com.securityexpert.nexus.ui2.worker.inventory.policy.PaloAltoJobsParser.parse(jobs);
+        } catch (RuntimeException e) {
+            return com.securityexpert.nexus.ui2.worker.inventory.policy.PolicyInstallRead.NONE;
+        }
     }
 
     private String xmlApiOutput(ApiTarget target, String cmd, Map<String, String> headers) {
