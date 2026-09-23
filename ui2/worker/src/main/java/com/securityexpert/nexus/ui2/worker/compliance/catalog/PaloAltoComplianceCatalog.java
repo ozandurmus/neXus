@@ -17,6 +17,11 @@ import com.securityexpert.nexus.ui2.worker.compliance.model.VendorBinding;
  */
 public final class PaloAltoComplianceCatalog {
 
+    /**
+     * Bump on ANY change to a control, its assertion or the evaluator's logic: the service caches evaluations by
+     * configuration hash and this version (V59, ComplianceService rule-set fingerprint); an unbumped logic change stays
+     * invisible until the 6-hour backstop re-evaluates.
+     */
     public static final String CATALOG_VERSION = "2026.09.1";
 
     private PaloAltoComplianceCatalog() {
