@@ -241,6 +241,43 @@ export function inAgeBucket(device: DeviceSummary, bucket: string, now: number =
   }
 }
 
+/** The device list's view: flat (default) or nested under each management server (PO, 2026-09-23). Remembered per browser. */
+export type ListView = "flat" | "manager";
+const LIST_VIEW_KEY = "nexus.deviceListView";
+
+export function useListView(): [ListView, (v: ListView) => void] {
+  const [view, setView] = useState<ListView>(() => {
+    try {
+      return window.localStorage.getItem(LIST_VIEW_KEY) === "manager" ? "manager" : "flat";
+    } catch {
+      return "flat";
+    }
+  });
+  const set = (v: ListView) => {
+    setView(v);
+    try {
+      window.localStorage.setItem(LIST_VIEW_KEY, v);
+    } catch {
+      // storage unavailable: the choice lasts for this page only
+    }
+  };
+  return [view, set];
+}
+
+export function ListViewSelect({ value, onChange }: { readonly value: ListView; readonly onChange: (v: ListView) => void }) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+      <Typography variant="caption" color="text.secondary">View</Typography>
+      <Box component="select" value={value} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value as ListView)}
+        aria-label="Device list view"
+        sx={{ fontSize: "12px", color: m3.onSurface, bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, borderRadius: "6px", px: 1, py: 0.4, cursor: "pointer" }}>
+        <option value="flat">Flat list</option>
+        <option value="manager">By manager (MDS / Panorama)</option>
+      </Box>
+    </Box>
+  );
+}
+
 /** Which enrolled devices and clusters each management server's domains hold, from its managed-estate tree. */
 export function managerGroups(tree: ManagementTree): Array<{ domain: string | null; deviceIds: Set<string> }> {
   return tree.domains.map((d) => {
@@ -793,6 +830,7 @@ export function InventoryScreen() {
   // Overview model donuts: Check Point appliance family (show asset system) or Palo Alto model.
   const [modelFilter, setModelFilter] = useState<string | null>(() => urlParam("hw_model"));
   const [sortMode, setSortMode] = useState<"name_asc" | "name_desc" | "vendor">("name_asc");
+  const [listView, setListView] = useListView();
 
   const devices = data;
   const total = devices?.length ?? 0;
@@ -1052,6 +1090,7 @@ export function InventoryScreen() {
                 {devices === null ? "" : `${filteredCountLabel} · ${liveCount} Live (the state chip shows only when a device is not Live)`}
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                <ListViewSelect value={listView} onChange={setListView} />
                 <Typography variant="caption" color="text.secondary">
                   Sort
                 </Typography>
@@ -1093,7 +1132,7 @@ export function InventoryScreen() {
             )}
             {!error && devices !== null && filteredDevices.length > 0 && (
               <DeviceList
-                groupByManager={filteredDevices.length === (devices?.length ?? 0)}
+                groupByManager={listView === "manager" && filteredDevices.length === (devices?.length ?? 0)}
                 devices={sortedDevices}
                 selectedDeviceId={selectedDevice?.device_id ?? null}
                 selectedClusterRef={selectedCluster?.ref ?? null}

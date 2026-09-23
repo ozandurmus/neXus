@@ -12,7 +12,7 @@ import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { listConfigurations, listDevices, requestBulkConfigurationCollect, type ApiError, type ConfigurationDeviceListEntry, type DeviceSummary } from "../auth/adminApi";
-import { DeviceList, isDeviceLive } from "./InventoryScreen";
+import { DeviceList, ListViewSelect, isDeviceLive, useListView } from "./InventoryScreen";
 import { FilterRow } from "./DeviceShared";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
 
@@ -90,6 +90,7 @@ export function ConfigurationScreen() {
     getOverview().then((o) => setDiffRefs(new Set(o.exceptions?.cluster_diff?.all_refs ?? []))).catch(() => setDiffRefs(new Set()));
   }, []);
   const [vendorFilter, setVendorFilter] = useState<"all" | "check_point" | "palo_alto">("all");
+  const [listView, setListView] = useListView();
   // Design language section 2: the list is the inventory's own tree (cluster -> virtual systems),
   // read from /devices; /configuration only supplies each device's change state and filters.
   const summariesFetch = useFetchOnMount<DeviceSummary[]>(() => listDevices().then((r) => r.devices ?? []), describeApiError);
@@ -234,11 +235,15 @@ export function ConfigurationScreen() {
             )}
             {!error && devices !== null && devices.length > 0 && (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: "calc(100vh - 300px)", overflowY: "auto", pr: 0.5 }}>
+                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                  <ListViewSelect value={listView} onChange={setListView} />
+                </Box>
                 {summaries === null && !summariesFetch.error && <EmptyPanel title="Devices" body="Loading…" />}
                 {summariesFetch.error && <EmptyPanel title="Devices unavailable" body={summariesFetch.error} />}
                 {summaries !== null && treeDevices.length === 0 && <EmptyPanel title="No device matches" body="No device matches the filters." />}
                 {summaries !== null && treeDevices.length > 0 && (
                   <DeviceList
+                groupByManager={listView === "manager" && treeDevices.length === (summaries?.length ?? 0)}
                 showVirtualSystems={false}
                     devices={treeDevices}
                     selectedDeviceId={selectedDeviceId}
