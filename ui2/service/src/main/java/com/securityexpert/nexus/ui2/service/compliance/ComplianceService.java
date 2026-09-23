@@ -15,6 +15,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -32,6 +37,28 @@ import com.securityexpert.nexus.ui2.service.device.configuration.ConfigurationQu
  */
 public final class ComplianceService {
 
+    /**
+     * One device to evaluate: its latest configuration run's canonical hash is the cache key -- the evaluation is a
+     * pure function of the configuration text and the compliance service's rule set (no clock is read), so an
+     * unchanged configuration under an unchanged rule set needs no re-evaluation (2026-09-23: a 10-minute expiry
+     * made every Overview/Compliance open after 10 idle minutes re-evaluate ~100 devices one by one, ~15.6 s).
+     */
+    record Target(String deviceId, Optional<String> hostname, String vendor, Optional<String> canonicalHash) {
+    }
+
+    /** Backstop age: an entry is re-evaluated after this even with an unchanged configuration and rule set. */
+    static final Duration MAX_AGE = Duration.ofHours(6);
+    /** Concurrent evaluations when the cache cannot answer (the compliance service runs on virtual threads). */
+    static final int PARALLELISM = 8;
+
+    private final Supplier<List<Target>> targets;
+    private final Function<String, Optional<String>> sanitizedText;
+    private final Supplier<Instant> clock;
+    private final int parallelism;
+    private final Duration maxAge;
+    private volatile String rulesFingerprint = "";
+    private volatile Instant rulesFingerprintAt = Instant.EPOCH;
+
     private final String complianceServiceUrl;
     private final HttpClient httpClient;
     private final ObjectMapper mapper;
@@ -41,7 +68,8 @@ public final class ComplianceService {
     // Cache of device evaluation results to enable instant UI responsiveness
     private final Map<String, CachedEvaluation> evaluationCache = new ConcurrentHashMap<>();
 
-    private record CachedEvaluation(Instant timestamp, String configHash, String canonicalHash, Map<String, Object> result) {
+    private record CachedEvaluation(Instant timestamp, String configHash, String canonicalHash, String rulesFingerprint,
+            Map<String, Object> result) {
     }
 
     public ComplianceService(ConfigurationQueryService configurationQueryService,
@@ -52,6 +80,23 @@ public final class ComplianceService {
     public ComplianceService(ConfigurationQueryService configurationQueryService,
                              DeviceRepository deviceRepository,
                              String complianceServiceUrl) {
+        this(configurationQueryService, deviceRepository, complianceServiceUrl,
+                () -> configurationQueryService.listDevices().stream()
+                        .filter(d -> d.latestRun().isPresent())
+                        .map(d -> new Target(d.deviceId(), d.hostname(), d.vendor(), d.latestRun().map(r -> r.canonicalHash())))
+                        .toList(),
+                configurationQueryService::sanitizedText, Instant::now, PARALLELISM, MAX_AGE);
+    }
+
+    /** Test seam: the device list, the configuration text, the clock, parallelism and backstop age are injected. */
+    ComplianceService(ConfigurationQueryService configurationQueryService, DeviceRepository deviceRepository,
+            String complianceServiceUrl, Supplier<List<Target>> targets, Function<String, Optional<String>> sanitizedText,
+            Supplier<Instant> clock, int parallelism, Duration maxAge) {
+        this.targets = targets;
+        this.sanitizedText = sanitizedText;
+        this.clock = clock;
+        this.parallelism = Math.max(1, parallelism);
+        this.maxAge = maxAge;
         this.configurationQueryService = configurationQueryService;
         this.deviceRepository = deviceRepository;
         this.complianceServiceUrl = complianceServiceUrl != null && !complianceServiceUrl.isBlank()
@@ -74,12 +119,10 @@ public final class ComplianceService {
     }
 
     public Map<String, Object> getOverview() {
-        List<ConfigurationQueryService.DeviceListEntry> devices = configurationQueryService.listDevices();
-        List<ConfigurationQueryService.DeviceListEntry> evaluated = devices.stream()
-                .filter(d -> d.latestRun().isPresent() && ("check_point".equalsIgnoreCase(d.vendor()) || "palo_alto".equalsIgnoreCase(d.vendor())))
-                .toList();
+        List<Target> all = allDevices();
+        List<Target> evaluated = evaluable(all);
 
-        int totalDevices = devices.size();
+        int totalDevices = all.size();
         int evaluatedCount = evaluated.size();
 
         if (evaluatedCount == 0) {
@@ -99,8 +142,9 @@ public final class ComplianceService {
         frameworkStats.put("NIST SP 800-53", new int[]{0, 0, 0, 0});
         frameworkStats.put("Financial Baseline", new int[]{0, 0, 0, 0});
 
+        Map<String, Map<String, Object>> evaluations = evaluateAll(evaluated);
         for (var dev : evaluated) {
-            Map<String, Object> eval = evaluateDevice(dev.deviceId(), dev.latestRun().map(r -> r.canonicalHash()));
+            Map<String, Object> eval = evaluations.get(dev.deviceId());
             if (eval == null || eval.containsKey("error")) {
                 continue;
             }
@@ -178,28 +222,105 @@ public final class ComplianceService {
         if (evaluationCache.isEmpty()) {
             return false;
         }
-        Instant limit = Instant.now().minus(Duration.ofMinutes(10));
+        Instant limit = clock.get().minus(maxAge);
         return evaluationCache.values().stream().allMatch(c -> c.timestamp().isAfter(limit));
+    }
+
+    /** Evaluates every target not answered by the cache, {@link #PARALLELISM} at a time; results keyed by device id. */
+    Map<String, Map<String, Object>> evaluateAll(List<Target> evaluated) {
+        refreshRulesFingerprint();
+        Map<String, Map<String, Object>> out = new LinkedHashMap<>();
+        List<Target> misses = new ArrayList<>();
+        for (Target t : evaluated) {
+            Map<String, Object> hit = cachedResult(t.deviceId(), t.canonicalHash());
+            if (hit != null) {
+                out.put(t.deviceId(), hit);
+            } else {
+                misses.add(t);
+                out.put(t.deviceId(), null); // keep the caller's order
+            }
+        }
+        if (misses.size() <= 1 || parallelism == 1) {
+            misses.forEach(t -> out.put(t.deviceId(), evaluateDevice(t.deviceId(), t.canonicalHash())));
+        } else {
+            ExecutorService pool = Executors.newFixedThreadPool(Math.min(parallelism, misses.size()));
+            try {
+                List<Future<Map<String, Object>>> futures = new ArrayList<>();
+                for (Target t : misses) {
+                    futures.add(pool.submit(() -> evaluateDevice(t.deviceId(), t.canonicalHash())));
+                }
+                for (int i = 0; i < misses.size(); i++) {
+                    try {
+                        out.put(misses.get(i).deviceId(), futures.get(i).get());
+                    } catch (Exception e) {
+                        out.put(misses.get(i).deviceId(), evaluateDevice(misses.get(i).deviceId(), misses.get(i).canonicalHash()));
+                    }
+                }
+            } finally {
+                pool.shutdown();
+            }
+        }
+        return out;
+    }
+
+    private List<Target> allDevices() {
+        return targets.get();
+    }
+
+    private static List<Target> evaluable(List<Target> all) {
+        return all.stream()
+                .filter(d -> "check_point".equalsIgnoreCase(d.vendor()) || "palo_alto".equalsIgnoreCase(d.vendor()))
+                .toList();
+    }
+
+    /** A cached result for an unchanged configuration under an unchanged rule set, younger than the backstop age. */
+    private Map<String, Object> cachedResult(String deviceId, Optional<String> knownCanonicalHash) {
+        CachedEvaluation cached = evaluationCache.get(deviceId);
+        if (cached != null && knownCanonicalHash.isPresent() && knownCanonicalHash.get().equals(cached.canonicalHash())
+                && rulesFingerprint.equals(cached.rulesFingerprint())
+                && cached.timestamp().isAfter(clock.get().minus(maxAge))) {
+            return cached.result();
+        }
+        return null;
+    }
+
+    /**
+     * The compliance service's rule-set identity (catalog version and control count from its health endpoint), read at
+     * most once a minute. A change invalidates every cached evaluation; when it cannot be read the last value stands.
+     */
+    private void refreshRulesFingerprint() {
+        if (rulesFingerprintAt.isAfter(clock.get().minusSeconds(60))) {
+            return;
+        }
+        try {
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(complianceServiceUrl + "/healthz"))
+                    .timeout(Duration.ofSeconds(3)).GET().build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                JsonNode root = mapper.readTree(response.body());
+                rulesFingerprint = root.path("catalog_version").asText("") + "|" + root.path("controls_count").asText("")
+                        + "|" + root.path("controls_by_vendor").toString();
+            }
+        } catch (Exception ignored) {
+            // unreadable: keep the last fingerprint (an unreachable service also fails every evaluation below)
+        }
+        rulesFingerprintAt = clock.get();
     }
 
     public List<Map<String, Object>> getControls() {
         List<Map<String, Object>> catalog = fetchCatalog();
-        List<ConfigurationQueryService.DeviceListEntry> devices = configurationQueryService.listDevices();
-        List<ConfigurationQueryService.DeviceListEntry> evaluated = devices.stream()
-                .filter(d -> d.latestRun().isPresent() && ("check_point".equalsIgnoreCase(d.vendor()) || "palo_alto".equalsIgnoreCase(d.vendor())))
-                .toList();
+        List<Target> evaluated = evaluable(allDevices());
 
         // One evaluation per device, computed before the catalog loop. Measured live (2026-09-22): the
         // per-control loop below used to call evaluateDevice() for every control x every device, and
         // each call read and decrypted that device's sanitized artefact before consulting the cache --
         // ~50 controls x ~90 collected devices, several minutes per GET, so the screen never loaded.
         Map<String, Map<String, Object>> evaluationByDevice = new LinkedHashMap<>();
-        for (var dev : evaluated) {
-            Map<String, Object> eval = evaluateDevice(dev.deviceId(), dev.latestRun().map(r -> r.canonicalHash()));
+        evaluateAll(evaluated).forEach((id, eval) -> {
             if (eval != null) {
-                evaluationByDevice.put(dev.deviceId(), eval);
+                evaluationByDevice.put(id, eval);
             }
-        }
+        });
 
         List<Map<String, Object>> result = new ArrayList<>();
 
@@ -305,22 +426,21 @@ public final class ComplianceService {
      *     sanitized artefact at all; the artefact is read only when the cache cannot answer.
      */
     public Map<String, Object> evaluateDevice(String deviceId, Optional<String> knownCanonicalHash) {
-        CachedEvaluation cached = evaluationCache.get(deviceId);
-        if (cached != null && knownCanonicalHash.isPresent() && knownCanonicalHash.get().equals(cached.canonicalHash())
-                && Duration.between(cached.timestamp(), Instant.now()).toMinutes() < 10) {
-            return cached.result();
+        Map<String, Object> hit = cachedResult(deviceId, knownCanonicalHash);
+        if (hit != null) {
+            return hit;
         }
+        CachedEvaluation cached = evaluationCache.get(deviceId);
 
         Optional<DeviceRecord> device = deviceRepository.find(deviceId);
         String vendor = device.map(DeviceRecord::vendorHint).orElse("check_point");
 
-        Optional<String> sanitizedConfig = configurationQueryService.sanitizedText(deviceId);
+        Optional<String> sanitizedConfig = sanitizedText.apply(deviceId);
         String configText = sanitizedConfig.orElse("");
 
-        if (cached != null && cached.configHash().equals(String.valueOf(configText.hashCode()))) {
-            if (Duration.between(cached.timestamp(), Instant.now()).toMinutes() < 10) {
-                return cached.result();
-            }
+        if (cached != null && cached.configHash().equals(String.valueOf(configText.hashCode()))
+                && rulesFingerprint.equals(cached.rulesFingerprint()) && cached.timestamp().isAfter(clock.get().minus(maxAge))) {
+            return cached.result();
         }
 
         try {
@@ -335,8 +455,8 @@ public final class ComplianceService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
                 Map<String, Object> parsed = mapper.readValue(response.body(), new TypeReference<Map<String, Object>>() {});
-                evaluationCache.put(deviceId, new CachedEvaluation(Instant.now(), String.valueOf(configText.hashCode()),
-                        knownCanonicalHash.orElse(null), parsed));
+                evaluationCache.put(deviceId, new CachedEvaluation(clock.get(), String.valueOf(configText.hashCode()),
+                        knownCanonicalHash.orElse(null), rulesFingerprint, parsed));
                 return parsed;
             }
         } catch (Exception ignored) {
