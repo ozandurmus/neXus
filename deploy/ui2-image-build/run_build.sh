@@ -75,8 +75,25 @@ echo "Digest is $IMAGE_DIGEST"
 
 echo "Updating deployments..."
 kubectl -n ui2 set image deployment/ui2-service service="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
-kubectl -n ui2 set image deployment/ui2-worker worker="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
 kubectl -n ui2 set image deployment/ui2-compliance compliance="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
+
+# PO, 2026-09-24: never replace the worker under a running job (a rollout drains it and a long job -- an MDS export --
+# is cut off). The check sits here, right before the worker changes, not at the start: a job started during the build
+# is seen. Waits up to WORKER_WAIT_LIMIT_S (default 4 h), then leaves the worker on the old image and says so.
+inflight() {
+  kubectl -n ui2 exec ui2-db-0 -- sh -c "psql -U \"\$POSTGRES_USER\" -d ui2 -Atc \"select count(*) from jobs where state in ('CLAIMED','EXECUTING')\""
+}
+waited=0
+while n="$(inflight)" && [ "$n" != "0" ]; do
+  if [ "$waited" -ge "${WORKER_WAIT_LIMIT_S:-14400}" ]; then
+    echo "Worker NOT updated: $n job(s) still in flight after ${waited}s; service and compliance are on the new image."
+    exit 5
+  fi
+  echo "Worker waiting: $n job(s) in flight; checking again in 30 s (waited ${waited}s)"
+  sleep 30
+  waited=$((waited + 30))
+done
+kubectl -n ui2 set image deployment/ui2-worker worker="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
 
 echo "Waiting for rollout..."
 kubectl -n ui2 rollout status deployment/ui2-service --timeout=600s

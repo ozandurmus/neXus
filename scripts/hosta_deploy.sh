@@ -14,6 +14,8 @@
 #        exit 2  a new pod in CrashLoopBackOff / Error (its migration / startup error shown)
 #        exit 3  over the time limit (12 min)
 #        exit 4  jobs in flight, not started
+#        exit 5  run_build.sh ended without "Done." (its last lines shown) -- e.g. the worker was left on the old
+#                image because a job stayed in flight (run_build.sh waits for running jobs before replacing it)
 #   5. on success prints the site status, the schema version and the image digest.
 # PO rule 2026-09-22: every job I start is followed to an end state; a build is ~100 s, a deploy ~3 min.
 set -uo pipefail
@@ -54,6 +56,12 @@ while true; do
   [ "$bname" = "$lastbuild" ] && bstate="(waiting for the new build pod)"
   new=$(kubectl -n ui2 get pods --no-headers 2>/dev/null | grep -E 'ui2-(service|worker)' | while read n r s rs rest; do case " $before " in *" $n "*) ;; *) echo "$n $r $s $rs";; esac; done)
   echo "t=${t}s build=$bstate new=[$(echo "$new" | tr '\n' ';')]"
+  # run_build.sh ended without "Done." -> it failed or stopped on purpose; say why instead of waiting out the limit
+  if ! pgrep -f "bash $HOME/run_build.sh" >/dev/null && ! pgrep -f "bash ~/run_build.sh" >/dev/null && ! grep -q '^Done\.' /tmp/nexus_build.log; then
+    echo "STOP: run_build.sh ended without Done."; tail -4 /tmp/nexus_build.log | cut -c1-220; exit 5
+  fi
+  # waiting for in-flight jobs before the worker changes: not a hang, and not counted against the limit
+  if tail -1 /tmp/nexus_build.log | grep -q '^Worker waiting'; then tail -1 /tmp/nexus_build.log; start=$(( $(date +%s) - t + 15 )); continue; fi
   if [ "$bname" != "$lastbuild" ] && [ "$bstate" = "Error" ]; then
     echo "STOP: build failed"; kubectl -n ui2-build logs "$bname" --tail=4 | cut -c1-220; exit 1
   fi
