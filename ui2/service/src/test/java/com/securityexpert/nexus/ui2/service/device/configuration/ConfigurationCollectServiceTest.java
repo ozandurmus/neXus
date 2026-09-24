@@ -181,9 +181,18 @@ class ConfigurationCollectServiceTest {
     }
 
     @Test
-    void aManagementServerIsRefusedNamingTheMissingGate() {
+    void aCheckPointManagementServerIsAdmittedForItsGaiaConfiguration() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.byId.put("device-1", enrolledManagementServer("device-1", "check_point"));
+        ConfigurationCollectService.Outcome outcome = serviceFor(devices).requestCollect("device-1", "actor", Optional.empty());
+        assertTrue(!(outcome instanceof ConfigurationCollectService.Outcome.AdmissionRefused refused)
+                || !"MANAGEMENT_SERVER_UNGATED".equals(refused.code()), "a Check Point MDS is no longer refused: " + outcome);
+    }
+
+    @Test
+    void aManagementServerIsRefusedNamingTheMissingGate() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("device-1", enrolledManagementServer("device-1", "palo_alto"));
         ConfigurationCollectService service = serviceFor(devices);
 
         ConfigurationCollectService.Outcome outcome = service.requestCollect("device-1", "actor", Optional.empty());

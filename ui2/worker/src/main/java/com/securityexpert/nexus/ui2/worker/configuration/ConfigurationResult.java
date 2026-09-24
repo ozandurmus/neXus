@@ -5,7 +5,15 @@ import java.util.List;
 /** One configuration-collect device-contact outcome -- mirrors {@code worker.inventory.InventoryResult}. */
 public sealed interface ConfigurationResult {
 
-    record Completed(List<ConfigurationRunData> runs) implements ConfigurationResult {
+    record Completed(List<ConfigurationRunData> runs, ObservedIdentity identity) implements ConfigurationResult {
+        public Completed(List<ConfigurationRunData> runs) {
+            this(runs, ObservedIdentity.NONE);
+        }
+    }
+
+    /** The CG-1 identity refresh as read in this run (hostname, Gaia version); fills a device's empty fields only. */
+    record ObservedIdentity(java.util.Optional<String> hostname, java.util.Optional<String> softwareVersion) {
+        public static final ObservedIdentity NONE = new ObservedIdentity(java.util.Optional.empty(), java.util.Optional.empty());
     }
 
     /** Refuses before any contact -- {@code connect}/the API key dance is never attempted. */

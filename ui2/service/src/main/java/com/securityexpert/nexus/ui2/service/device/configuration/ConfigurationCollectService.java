@@ -56,7 +56,10 @@ public final class ConfigurationCollectService {
             return new Outcome.DeviceNotFound();
         }
         String role = device.get().role();
-        if (!"gateway".equals(role)) {
+        // A Check Point management server (MDS) runs Gaia too: the same gated identity refresh and show configuration
+        // (PO, 2026-09-23: "config datası yok"). Other management servers stay unmeasured.
+        boolean checkPointManagement = "management_server".equals(role) && "check_point".equals(device.get().vendorHint());
+        if (!"gateway".equals(role) && !checkPointManagement) {
             if ("management_server".equals(role)) {
                 return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",
                         "device " + deviceId + " is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)");

@@ -119,9 +119,16 @@ public final class ConfigurationCapabilityExecutor {
                         "presented identity does not match the recorded baseline; strict posture refused the contact");
             }
 
+            // CG-1 identity refresh: read in every run; since 2026-09-24 kept, so a device whose first-contact read
+            // came back empty (an MDS) gets its hostname and version from here.
+            java.util.Map<String, String> identity = new java.util.HashMap<>();
             for (String read : ConfigurationReadPlan.CHECK_POINT_IDENTITY_READS) {
-                execOutput(session, read, IDENTITY_TIMEOUT);
+                identity.put(read, execOutput(session, read, IDENTITY_TIMEOUT));
             }
+            ConfigurationResult.ObservedIdentity observed = new ConfigurationResult.ObservedIdentity(
+                    parseHostname(identity.get(ConfigurationReadPlan.CP_SHOW_HOSTNAME)),
+                    com.securityexpert.nexus.ui2.worker.backup.BackupReadPlan.parseGaiaVersion(
+                            identity.get(ConfigurationReadPlan.CP_SHOW_VERSION_ALL)));
             String rawConfig = execOutput(session, ConfigurationReadPlan.CP_SHOW_CONFIGURATION, CP_CONFIG_TIMEOUT);
 
             CheckPointGaiaConfigProcessor.Processed processed = configServiceClient.parseCheckPoint(deviceId, rawConfig);
@@ -133,7 +140,7 @@ public final class ConfigurationCapabilityExecutor {
                 ConfigurationRunData runData = new ConfigurationRunData(ConfigurationReadKind.SHOW_CONFIGURATION, true,
                         processed.canonicalHash(), processed.withheldLineCount(), Optional.of(processed.sanitizedText()),
                         processed.index(), List.of(), toRecord(metadata, deviceId, jobId, "check_point"));
-                return new ConfigurationResult.Completed(List.of(runData));
+                return new ConfigurationResult.Completed(List.of(runData), observed);
             } catch (IOException e) {
                 closeQuietly(handle);
                 return new ConfigurationResult.ArtefactStoreFailed("artefact store write failed: " + e.getMessage());
@@ -287,6 +294,22 @@ public final class ConfigurationCapabilityExecutor {
         } catch (IOException ignored) {
             // best-effort cleanup of a temp artefact file after a write failure
         }
+    }
+
+    private static final java.util.regex.Pattern HOSTNAME_TOKEN = java.util.regex.Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$");
+
+    /** {@code show hostname}: one token on one line; anything else (a CLI error, a prompt) is no hostname. */
+    static java.util.Optional<String> parseHostname(String output) {
+        if (output == null) {
+            return java.util.Optional.empty();
+        }
+        for (String line : output.split("\\R")) {
+            String t = line.strip();
+            if (!t.isEmpty()) {
+                return HOSTNAME_TOKEN.matcher(t).matches() ? java.util.Optional.of(t) : java.util.Optional.empty();
+            }
+        }
+        return java.util.Optional.empty();
     }
 
     private String execOutput(TransportSession session, String command, java.time.Duration timeout) {

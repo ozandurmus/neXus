@@ -98,6 +98,12 @@ public interface DeviceRepository {
     /** The V12 facts a confirmed device carries, for a read model (GET /devices, GET /devices/{id}). */
     Optional<DeviceConfirmFacts> findConfirmFacts(String deviceId);
 
+    /** Sets observed hostname / software version only where they are still empty (a later read never overwrites). */
+    default boolean fillObservedIdentityIfAbsent(String deviceId, Optional<String> hostname, Optional<String> softwareVersion,
+            String actorFingerprint, String actionId) {
+        return false;
+    }
+
     /** GET /devices (DeviceSummary rows), newest first -- every device, its vendor and its observed facts. */
     List<DeviceSummaryRecord> listAll();
 

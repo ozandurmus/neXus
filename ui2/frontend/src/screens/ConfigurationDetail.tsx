@@ -232,7 +232,8 @@ function identityTiles(device: DeviceSummary, collectedAt: string | null): Ident
       ? { label: "Content versions", value: device.content_versions ? <ContentVersions versions={device.content_versions} /> : null, absent: "not read yet -- run Inventory collect" }
       : { label: "Hotfix / Jumbo take", value: device.hotfix_level ?? null, absent: needsGate },
     { label: "Uptime", value: device.uptime_text ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate },
-    { label: "HA role", value: device.ha_role ? <RoleChip role={device.ha_role} dense /> : null, absent: device.cluster_member_ref ? "not reported" : "standalone" },
+    { label: "HA role", value: device.ha_role ? <RoleChip role={device.ha_role} dense /> : null,
+      absent: device.role === "management_server" ? "not read -- MDS high availability needs its own read" : device.cluster_member_ref ? "not reported" : "standalone" },
     { label: isPaloAlto ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },
     { label: "Management address", value: device.management_ip ?? null, absent: "not recorded", mono: true },
     { label: "Enrollment", value: device.enrollment_state || null, absent: "not recorded" },
@@ -241,7 +242,9 @@ function identityTiles(device: DeviceSummary, collectedAt: string | null): Ident
       value: device.policy_installed_at
         ? <><Ts at={device.policy_installed_at} />{device.policy_name ? ` · ${device.policy_name}` : ""}</>
         : device.policy_installed_at_text ? `${device.policy_installed_at_text} (as reported)` : null,
-      absent: "not read yet -- read every evening at 23:00",
+      absent: device.role === "management_server"
+        ? "not applicable -- a management server installs policy on gateways, it has none of its own"
+        : "not read yet -- read every evening at 23:00",
     },
     { label: "Platform facts read", value: device.platform_facts_observed_at ? <Ts at={device.platform_facts_observed_at} /> : null, absent: "never" },
     { label: "Last configuration read", value: collectedAt ? <Ts at={collectedAt} /> : null, absent: "never" },

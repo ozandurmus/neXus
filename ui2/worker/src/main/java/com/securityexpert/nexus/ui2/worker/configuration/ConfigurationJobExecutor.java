@@ -135,6 +135,15 @@ public final class ConfigurationJobExecutor {
         }
 
         String vendor = request.vendor() == ConfigurationVendor.CHECK_POINT ? "check_point" : "palo_alto";
+        // Fill a device's empty hostname/version from this run's identity refresh; never overwrites a recorded value.
+        if (completed.identity().hostname().isPresent() || completed.identity().softwareVersion().isPresent()) {
+            try {
+                deviceRepository.fillObservedIdentityIfAbsent(targetDeviceId, completed.identity().hostname(),
+                        completed.identity().softwareVersion(), ACTOR, "configuration_identity_fill");
+            } catch (RuntimeException e) {
+                System.getLogger(ConfigurationJobExecutor.class.getName()).log(System.Logger.Level.WARNING, "[CONFIG_IDENTITY_FILL_FAILED] job {0}: {1}", jobId, e.getMessage());
+            }
+        }
         Instant now = Instant.now();
         List<String> overridePaths = new ArrayList<>();
         String primaryRunId = null;
