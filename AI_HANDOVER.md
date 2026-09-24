@@ -66,6 +66,16 @@ session: `hosta_rebuild_real_env_acceptance` (P0, in progress), `scheduled_fleet
 job failure reasons, aiview masking audit, cluster DIFF tuning, CP backup free-space parse, ...) are unchanged there.
 
 # Open items / risks
+- **Cyber Controller Backup Now fails after the rebuild (2026-09-25):** the Cyber Controller's known_hosts holds
+  HOST-A's old host key, so its OpenSSH client disables password auth and the SFTP push to `nexus-cc` never sends a
+  password (sshd DEBUG3: `next methods="publickey,password"`, then the client closes). Fix is on the Cyber Controller
+  (remove the stale known_hosts entry for HOST-A's address) -- PO's call; the old host keys are not in the export.
+  The 03:00 scheduled Cyber Controller backup will fail the same way until then. Runbook §6 records it.
+- aiview now also holds `role:backup_admin` and `role:compliance_admin` (PO 2026-09-25: aiview's boundary is
+  masking, not admin actions); `role:security_admin` deliberately withheld because it could revoke its own
+  `role:replay_viewer` binding and unmask itself.
+- ui2 pod limits raised on the dedicated host (service/worker 8Gi/4 CPU, compliance/configuration 2Gi/1 CPU) after
+  ui2-service was OOM-killed at 2Gi opening a device page; manifests in `deploy/ui2/` carry the same values.
 - `scripts/hosta_export_all.sh` does not export the `ui2-build` namespace (`corp-ca`); add it.
 - `tests/test_ui2_deployment_manifests.py`: 8 pre-existing failures (configuration/compliance manifests) — separate task.
 - The 98 GB export still sits in `/home/aiadmin/nexus-export-20260924T2026Z/` and on the PO's transfer server;

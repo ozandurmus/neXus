@@ -48,6 +48,9 @@ log limits are needed; the whole 1 TB disk is neXus's. Per
 
 From here the agent does section 4 itself, with sudo, asking first before any deleting or irreversible command.
 The host's SSH key changes with the reinstall: the agent's first connection removes the old known_hosts entry.
+**Restore the old host keys before the first Cyber Controller backup** (`ssh-host-keys.tar` from the export, see §6):
+the Cyber Controller's OpenSSH client keeps HOST-A's key in its known_hosts and, on a mismatch, disables password
+authentication instead of failing loudly -- every SFTP push then dies at `authenticating user nexus-cc [preauth]`.
 
 ## 4. Bring neXus back (agent, with sudo where marked)
 
@@ -107,6 +110,12 @@ The host's SSH key changes with the reinstall: the agent's first connection remo
 - **The artefact store** was restored by extracting the archive straight into the local-path volume directory with
   `sudo tar --same-owner --numeric-owner` (98 GB through `kubectl exec` stdin times out); files 185:0 0600.
 - **`ui2-configuration`** is not updated by `run_build.sh`; set its image to the same digest after a build.
+- **The SSH host keys were not exported** (2026-09-25 finding). The Cyber Controller's SFTP client (OpenSSH 8.9)
+  pins HOST-A's host key; after the reinstall it connected, sent the user name and closed without a password attempt
+  (OpenSSH disables password auth on a known-hosts mismatch under `StrictHostKeyChecking no`), so the first Backup Now
+  timed out in the export step. The export URL takes no port, so no HOST-A-side workaround exists: either the stale
+  entry is removed on the Cyber Controller or the old host keys are restored. `scripts/hosta_export_all.sh` now
+  archives `/etc/ssh/ssh_host_*` as `ssh-host-keys.tar`.
 - **Open after the rebuild:** the `nexus-cc` password (only the Product Owner sets it; it must equal the credential
   store entry "SFTP Receiver"), and the Product Owner's real-environment checks (aiview pseudonyms unchanged, a
   collect decrypts its credential, an old backup opens, a Cyber Controller backup completes).

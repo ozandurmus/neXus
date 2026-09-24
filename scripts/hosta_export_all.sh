@@ -52,6 +52,13 @@ echo "3/6 host-local files..."
 (cd ~ && tar -cf "$DIR/host-files.tar" --ignore-failed-read build-job-proxy.yaml flyway-bootstrap.yaml install-k3s.sh \
   registry.yaml run_build.sh .kube/config -C / etc/ssh/sshd_config etc/fstab 2>/dev/null) || true
 echo "    host-files.tar $(tar -tf "$DIR/host-files.tar" | wc -l) files"
+# The SSH host keys (root-only). Without them a reinstalled host presents a new key, and the Cyber Controller's
+# OpenSSH client -- which pins the old one in its known_hosts -- silently disables password authentication
+# (2026-09-25: every SFTP push closed at "authenticating user nexus-cc [preauth]" without a password attempt).
+sudo tar -cf "$DIR/ssh-host-keys.tar" -C / etc/ssh/ssh_host_ed25519_key etc/ssh/ssh_host_ed25519_key.pub \
+  etc/ssh/ssh_host_ecdsa_key etc/ssh/ssh_host_ecdsa_key.pub etc/ssh/ssh_host_rsa_key etc/ssh/ssh_host_rsa_key.pub \
+  && sudo chown "$(id -u):$(id -g)" "$DIR/ssh-host-keys.tar" && chmod 0600 "$DIR/ssh-host-keys.tar" \
+  && echo "    ssh-host-keys.tar (restore with: sudo tar -xf ssh-host-keys.tar -C / && sudo systemctl reload ssh)"
 
 echo "4/6 artefact store (temporary read-only pod)..."
 kubectl -n ui2 delete pod ui2-export --ignore-not-found >/dev/null
