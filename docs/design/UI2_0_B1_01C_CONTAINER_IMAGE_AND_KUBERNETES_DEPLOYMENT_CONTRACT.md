@@ -343,7 +343,7 @@ per-file conventions.
 | --- | --- | --- |
 | `OS-1` | No container runs as root: every container sets `runAsNonRoot: true` | grep over `deploy/ui2/`; a pod admitted and running |
 | `OS-2` | No fixed UID or GID: no manifest sets `runAsUser`, `runAsGroup` or `fsGroup` (FS-7) | grep matches nothing |
-| `OS-3` | No `hostPath` volume | grep matches nothing |
+| `OS-3` | No `hostPath` volume — except a vendor push inbox (`OS-3a`, amendment 2026-09-24) | grep matches nothing outside `OS-3a` |
 | `OS-4` | No `privileged: true`, and `allowPrivilegeEscalation: false` on every container | grep for the first matches nothing; the second is present on every container |
 | `OS-5` | No host networking: no `hostNetwork`, `hostPID`, `hostIPC`, `hostPort` | grep matches nothing |
 | `OS-6` | Resource **requests and limits** for cpu and memory on every container | every container has all four |
@@ -355,6 +355,32 @@ per-file conventions.
 A manifest that satisfies `OS-1`-`OS-10` is admissible under `restricted-v2`
 without amendment. That is the whole portability argument, and it is why these
 rules are applied on a local cluster that imposes none of them.
+
+#### Amendment 2026-09-24 — `OS-3a`, vendor push inboxes (Product Owner)
+
+Product Owner, 2026-09-24: "Sözleşmeye istisna değil, spesifik ürünler için sftp ile dosya gönderilecekse bunlara
+özel hostpath yazılabilir." Some products can only **push** their backup out (Radware Cyber Controller:
+`system backup config export … sftp://…`, no pull, no port choice — measured,
+RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md). For such a product, and only for it, a `hostPath` volume is
+permitted when every one of these holds:
+
+1. **Path:** `/var/lib/nexus-<product>/in` — the upload directory of a host SFTP account chrooted to
+   `/var/lib/nexus-<product>` (every path component root-owned, as sshd requires). One inbox per pushing product.
+2. **Type:** `Directory` — it must already exist; the cluster never creates a node path.
+3. **Owner:** mounted by the worker Deployment only; never the service, never another workload.
+4. **Access:** through the inbox's own group, granted to the worker pod as a `supplementalGroups` entry — no
+   `runAsUser`, `runAsGroup` or `fsGroup` (FS-7 unchanged), no root.
+5. **Purpose:** the worker reads each upload into the encrypted artefact store and deletes it; nothing else is read
+   from or written to the node.
+6. **Stage:** the base manifest set (HOST-A, k3s) only. The OpenShift overlay carries no `hostPath`; a pushing
+   product there needs another mechanism — `UNKNOWN`, decided when that stage is reached.
+7. **Record:** each inbox is listed below with its product and design document.
+
+| Inbox | Product | Design |
+| --- | --- | --- |
+| `/var/lib/nexus-cc/in` | Radware Cyber Controller (own configuration backup) | RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md |
+
+`tests/test_ui2_deployment_manifests.py` enforces 1–4 and 6 on the parsed manifests.
 
 ### 5.2 The kinds
 

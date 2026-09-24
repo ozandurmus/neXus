@@ -39,7 +39,7 @@ HOST_CONTAINER_TOOL = re.compile(r"docker |podman |buildah|nerdctl|/var/run/dock
 # §11 check 4: OS-2, OS-3, OS-4, OS-5, OS-9 and OS-10 as a single grep, which
 # is how the contract states the check.
 FORBIDDEN_CONSTRUCT = re.compile(
-    r"runAsUser|runAsGroup|fsGroup|hostPath|hostNetwork|hostPID|hostIPC"
+    r"runAsUser|runAsGroup|fsGroup|hostNetwork|hostPID|hostIPC"
     r"|hostPort|privileged: true|NodePort|LoadBalancer|:latest"
 )
 
@@ -343,6 +343,32 @@ def test_no_forbidden_construct_appears(path: Path):
     assert match is None, f"{path.name}: forbidden construct {match.group(0)!r}"
 
 
+# OS-3a (amendment 2026-09-24): the only hostPath is a vendor push inbox.
+PUSH_INBOX_PATH = re.compile(r"^/var/lib/nexus-[a-z0-9-]+/in$")
+WORKER_OWNER = "Deployment/ui2-worker"
+
+
+def _is_push_inbox(owner: str, volume: dict) -> bool:
+    host = volume.get("hostPath")
+    return (isinstance(host, dict) and owner == WORKER_OWNER and bool(PUSH_INBOX_PATH.match(str(host.get("path", ""))))
+            and host.get("type") == "Directory")
+
+
+def test_every_host_path_is_a_worker_push_inbox():
+    """OS-3 / OS-3a: a hostPath only as a worker-owned vendor push inbox, never in the OpenShift overlay."""
+    for path, owner, spec in _pod_specs():
+        for volume in spec.get("volumes") or []:
+            if "hostPath" in volume:
+                assert OPENSHIFT_DIR not in path.parents, f"{path.name}: the OpenShift overlay carries no hostPath (OS-3a.6)"
+                assert _is_push_inbox(owner, volume), (
+                    f"{path.name}: {owner} volume {volume.get('name')!r} is a hostPath that is not a worker push inbox "
+                    "(/var/lib/nexus-<product>/in, type Directory) -- OS-3a")
+    for path in _manifest_files():
+        text = path.read_text(encoding="utf-8")
+        for m in re.finditer(r"hostPath", text):
+            assert path.name == "52-worker-deployment.yaml", f"{path.name}: hostPath outside the worker Deployment (OS-3a.3)"
+
+
 def test_no_pod_spec_requests_a_fixed_identity():
     """FS-7 / OS-2, asserted on the parsed objects and not only on the text."""
     for path, owner, spec in _pod_specs():
@@ -414,8 +440,8 @@ def test_every_writable_path_is_supplied_as_a_mount():
                 name = mount.get("name")
                 assert name in volumes, f"{path.name}: {owner} mounts unknown volume {name!r}"
                 volume = volumes[name]
-                assert "hostPath" not in volume, f"{path.name}: {owner} mounts a node path"
-                assert set(volume) & {"emptyDir", "persistentVolumeClaim", "configMap", "secret"}, (
+                assert "hostPath" not in volume or _is_push_inbox(owner, volume), f"{path.name}: {owner} mounts a node path"
+                assert set(volume) & {"emptyDir", "persistentVolumeClaim", "configMap", "secret", "hostPath"}, (
                     f"{path.name}: {owner} mounts {name!r} from an unexpected source"
                 )
 

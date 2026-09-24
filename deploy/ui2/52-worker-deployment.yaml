@@ -32,6 +32,9 @@ spec:
       # image's numeric account is what it is validated against (FS-6).
       securityContext:
         runAsNonRoot: true
+        # OS-3a (amendment 2026-09-24): the group of the Radware Cyber Controller push inbox (HOST-A nexuscc, gid
+        # 2600), so the worker can read and delete its uploads -- a supplemental group, not a fixed uid/gid (FS-7).
+        supplementalGroups: [2600]
       priorityClassName: system-cluster-critical
       tolerations:
         - key: "node.kubernetes.io/disk-pressure"
@@ -120,6 +123,16 @@ spec:
             # (C1 §6.1), worker-only exactly like the artefact-store key.
             - name: UI2_HOSTNAME_FINGERPRINT_KEY_FILE
               value: /run/secrets/ui2-hostname-fingerprint/key
+            # V69 / OS-3a: the Radware Cyber Controller push inbox, and the address the Cyber Controller dials to reach
+            # HOST-A's SFTP receiver (local configuration in a ConfigMap, never a repository literal).
+            - name: UI2_CC_INBOX_DIR
+              value: /app/cc-inbox
+            - name: UI2_CC_RECEIVER_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-cc-receiver
+                  key: host
+                  optional: true
             # Dedicated ui2-configuration microservice internal ClusterIP endpoint
             - name: UI2_CONFIG_SERVICE_URL
               value: "http://ui2-configuration.ui2.svc.cluster.local:8084"
@@ -178,6 +191,8 @@ spec:
             # (tests/test_ui2_deployment_manifests.py asserts both halves).
             - name: artefact-store
               mountPath: /app/artefact-store
+            - name: cc-inbox
+              mountPath: /app/cc-inbox
       volumes:
         - name: tmp
           emptyDir: {}
@@ -206,3 +221,8 @@ spec:
         - name: artefact-store
           persistentVolumeClaim:
             claimName: ui2-artefact-store
+        # OS-3a: Radware Cyber Controller push inbox (RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md).
+        - name: cc-inbox
+          hostPath:
+            path: /var/lib/nexus-cc/in
+            type: Directory
