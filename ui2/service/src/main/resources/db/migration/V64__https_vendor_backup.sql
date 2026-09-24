@@ -9,12 +9,12 @@ DO $$
 DECLARE c text;
 BEGIN
   SELECT conname INTO c FROM pg_constraint
-   WHERE conrelid = 'backup_artefact_manifest'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%vendor%';
+   WHERE conrelid = 'backup_artefact'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%vendor%';
   IF c IS NOT NULL THEN
-    EXECUTE format('ALTER TABLE backup_artefact_manifest DROP CONSTRAINT %I', c);
+    EXECUTE format('ALTER TABLE backup_artefact DROP CONSTRAINT %I', c);
   END IF;
 END $$;
-ALTER TABLE backup_artefact_manifest ADD CONSTRAINT backup_artefact_manifest_vendor_check
+ALTER TABLE backup_artefact ADD CONSTRAINT backup_artefact_vendor_check
   CHECK (vendor IN ('check_point', 'palo_alto', 'infoblox', 'radware', 'fortinet', 'cisco_asa', 'pulse_secure', 'bluecoat'));
 
 CREATE TABLE device_secret_reference (
