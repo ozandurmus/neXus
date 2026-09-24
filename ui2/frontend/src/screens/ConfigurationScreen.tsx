@@ -12,7 +12,7 @@ import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { listConfigurations, listDevices, requestBulkConfigurationCollect, type ApiError, type ConfigurationDeviceListEntry, type DeviceSummary } from "../auth/adminApi";
 import { DeviceList, deviceMatchesSearch, isDeviceLive, useListView } from "./InventoryScreen";
 import { useListSearch } from "../shell/listSearch";
-import { FilterBar, FilterRow } from "./DeviceShared";
+import { FilterBar, FilterRow, ListSettingsMenu } from "./DeviceShared";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
 
 function describeApiError(err: unknown): string {
@@ -157,33 +157,6 @@ export function ConfigurationScreen() {
       <ScreenHeader
         title="Configuration"
         subtitle={devices === null ? "Loading…" : `${collectedCount} device${collectedCount === 1 ? "" : "s"} collected${uncollectedCount > 0 ? ` · ${uncollectedCount} not collected` : ""}`}
-        filters={
-          <FilterBar>
-          <FilterRow
-            dimension="Vendor"
-            value={vendorFilter}
-            onChange={setVendorFilter}
-            options={[
-              { value: "all", label: "All", count: summaries?.length ?? total },
-              { value: "check_point", label: "Check Point", count: vendorCount("check_point") },
-              { value: "palo_alto", label: "Palo Alto", count: vendorCount("palo_alto") },
-            ]}
-          />
-          <FilterRow
-            dimension="State"
-            value={filterMode}
-            onChange={setFilterMode}
-            options={[
-              { value: "all", label: "All", count: total },
-              { value: "changed", label: "Changed", count: changedCount },
-              { value: "first_run", label: "First run", count: firstRunCount },
-              { value: "uncollected", label: "Not collected", count: uncollectedCount },
-            ]}
-          />
-          <FilterRow dimension="View" plain value={listView} onChange={setListView}
-            options={[{ value: "flat", label: "Flat list" }, { value: "manager", label: "By manager" }]} />
-          </FilterBar>
-        }
         actions={
           <Stack direction="row" spacing={1.5}>
             <M3Button emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
@@ -209,6 +182,29 @@ export function ConfigurationScreen() {
                 <Box component="span" role="button" tabIndex={0} sx={{ cursor: "pointer", fontSize: 12, color: m3.primary }} onClick={() => setDiffRefs(null)}>clear</Box>
               </Box>
             )}
+            <FilterBar settings={<ListSettingsMenu settings={[{ title: "View", options: [{ value: "flat", label: "Flat list" }, { value: "manager", label: "By manager" }], value: listView, onChange: (x: string) => setListView(x as typeof listView) }]} />}>
+            <FilterRow
+              dimension="Vendor"
+              value={vendorFilter}
+              onChange={setVendorFilter}
+              options={[
+                { value: "all", label: "All", count: summaries?.length ?? total },
+                { value: "check_point", label: "Check Point", count: vendorCount("check_point") },
+                { value: "palo_alto", label: "Palo Alto", count: vendorCount("palo_alto") },
+              ]}
+            />
+            <FilterRow
+              dimension="State"
+              value={filterMode}
+              onChange={setFilterMode}
+              options={[
+                { value: "all", label: "All", count: total },
+                { value: "changed", label: "Changed", count: changedCount },
+                { value: "first_run", label: "First run", count: firstRunCount },
+                { value: "uncollected", label: "Not collected", count: uncollectedCount },
+              ]}
+            />
+            </FilterBar>
             <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
               title="A device row shows a state chip only when the device is not Live">
               {summaries === null ? "" : `${treeDevices.length} shown · ${treeDevices.filter(isDeviceLive).length} Live`}

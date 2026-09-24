@@ -1,4 +1,7 @@
-import { useState, type ReactNode, type ChangeEvent } from "react";
+import { useState, type ReactNode, type ChangeEvent, type MouseEvent } from "react";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import ListSubheader from "@mui/material/ListSubheader";
 import Box from "@mui/material/Box";
 import Link from "@mui/material/Link";
 import Table from "@mui/material/Table";
@@ -13,6 +16,7 @@ import Typography from "@mui/material/Typography";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip, Ts, Unknown } from "../shell/States";
 import { StatusChip } from "../shell/M3Widgets";
+import { Icon } from "../shell/Icon";
 import { deviceNameLabel } from "../shell/deviceCopy";
 import type { DeviceSummary } from "../auth/adminApi";
 
@@ -33,41 +37,74 @@ export interface FilterOption<T extends string> {
   readonly count?: number | string;
 }
 
-/** The filter dropdowns side by side on one row (PO, 2026-09-24: chips took half the list column). */
-export function FilterBar({ children }: { readonly children: ReactNode }) {
-  return <Box sx={{ display: "flex", gap: 0.75, "& > *": { flex: "0 1 150px", minWidth: 0 } }}>{children}</Box>;
+/** The list's filter dropdowns on one row above the list, with the view/sort menu at the end (PO, 2026-09-24). */
+export function FilterBar({ children, settings }: { readonly children: ReactNode; readonly settings?: ReactNode }) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+      <Box sx={{ display: "flex", gap: 0.75, flex: 1, minWidth: 0, "& > *": { flex: "1 1 0", minWidth: 0 } }}>{children}</Box>
+      {settings}
+    </Box>
+  );
 }
 
 /**
- * One filter dimension as a small labelled dropdown; each option reads "Label · n". A dimension narrowed away from
- * its first option ("All") is outlined in the accent colour, so an active filter is visible at a glance.
+ * One filter dimension as a compact dropdown. The unfiltered choice reads "Vendor · 105" (the dimension names itself),
+ * the others "Check Point · 65". A dimension narrowed away from its first option is filled in the accent colour, so an
+ * active filter is visible at a glance.
  */
-export function FilterRow<T extends string>({ dimension, options, value, onChange, plain = false }: {
+export function FilterRow<T extends string>({ dimension, options, value, onChange }: {
   readonly dimension: string;
-  /** A view setting (layout, sort), not a filter: never outlined as active. */
-  readonly plain?: boolean;
   readonly options: readonly FilterOption<T>[];
   readonly value: T;
   readonly onChange: (value: T) => void;
 }) {
-  const active = !plain && options.length > 0 && value !== options[0].value;
+  const active = options.length > 0 && value !== options[0].value;
   return (
-    <Box component="label" sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 0 }}>
-      <Typography component="span" sx={{ fontSize: 11, fontWeight: 600, color: m3.onSurfaceVar, pl: 0.25 }}>
-        {dimension}
-      </Typography>
-      <Box component="select" value={value} aria-label={dimension}
-        onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange(e.target.value as T)}
-        sx={{ width: "100%", minWidth: 0, height: 28, fontSize: 12, px: 0.75, borderRadius: "6px", cursor: "pointer",
-              textOverflow: "ellipsis", fontWeight: active ? 600 : 500,
-              color: active ? m3.onPrimaryContainer : m3.onSurface,
-              bgcolor: active ? m3.primaryContainer : m3.scLowest,
-              border: `1px solid ${active ? m3.primary : m3.outlineVar}` }}>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.count === undefined ? o.label : `${o.label} · ${o.count}`}</option>
-        ))}
-      </Box>
+    <Box component="select" value={value} aria-label={dimension} title={dimension}
+      onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange(e.target.value as T)}
+      sx={{ width: "100%", minWidth: 0, height: 30, fontSize: 12, px: 0.75, borderRadius: "8px", cursor: "pointer",
+            textOverflow: "ellipsis", fontWeight: active ? 600 : 500,
+            color: active ? m3.onPrimaryContainer : m3.onSurface,
+            bgcolor: active ? m3.primaryContainer : m3.scLowest,
+            border: `1px solid ${active ? m3.primary : m3.outlineVar}` }}>
+      {options.map((o, i) => {
+        const label = i === 0 ? dimension : o.label;
+        return <option key={o.value} value={o.value}>{o.count === undefined ? label : `${label} · ${o.count}`}</option>;
+      })}
     </Box>
+  );
+}
+
+export interface ListSetting<T extends string = string> {
+  readonly title: string;
+  readonly options: readonly { readonly value: T; readonly label: string }[];
+  readonly value: T;
+  readonly onChange: (value: T) => void;
+}
+
+/** View and Sort: layout choices, not filters, behind one small settings button at the end of the filter row. */
+export function ListSettingsMenu({ settings }: { readonly settings: readonly ListSetting[] }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  return (
+    <>
+      <Box component="button" type="button" aria-label="List view and sort" title="View and sort"
+        onClick={(e: MouseEvent<HTMLElement>) => setAnchor(e.currentTarget)}
+        sx={{ flex: "none", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+              borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLowest, color: m3.onSurfaceVar }}>
+        <Icon name="config" size={16} />
+      </Box>
+      <Menu anchorEl={anchor} open={anchor !== null} onClose={() => setAnchor(null)}>
+        {settings.flatMap((s) => [
+          <ListSubheader key={`h-${s.title}`} sx={{ fontSize: 11, fontWeight: 700, lineHeight: "28px" }}>{s.title}</ListSubheader>,
+          ...s.options.map((o) => (
+            <MenuItem key={`${s.title}-${o.value}`} dense selected={o.value === s.value}
+              onClick={() => { s.onChange(o.value); setAnchor(null); }} sx={{ fontSize: 13 }}>
+              {o.label}
+            </MenuItem>
+          )),
+        ])}
+      </Menu>
+    </>
   );
 }
 

@@ -11,7 +11,7 @@ import { Icon } from "../shell/Icon";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
-import { FilterBar, FilterRow, contentVersionText, downloadText, toCsv } from "./DeviceShared";
+import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, toCsv } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { useListSearch } from "../shell/listSearch";
 import { requestBulkInventoryCollect, listDevices, getManagementTree, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode } from "../auth/adminApi";
@@ -957,46 +957,6 @@ export function InventoryScreen() {
       <ScreenHeader
         title="Devices"
         subtitle={devices === null ? "Loading…" : `${total} device${total === 1 ? "" : "s"} enrolled`}
-        filters={
-          <FilterBar>
-          <FilterRow
-            dimension="Vendor"
-            value={vendorFilter}
-            onChange={setVendorFilter}
-            options={[
-              { value: "all", label: "All", count: total },
-              { value: "check_point", label: "Check Point", count: checkPointCount },
-              { value: "palo_alto", label: "Palo Alto", count: paloAltoCount },
-            ]}
-          />
-          <FilterRow
-            dimension="Scope"
-            value={scopeFilter}
-            onChange={setScopeFilter}
-            options={[
-              { value: "all", label: "All", count: total },
-              { value: "cluster", label: "Clusters", count: `${clusters.enrolled} enrolled · ${clusters.active} active` },
-            ]}
-          />
-          <FilterRow
-            dimension="State"
-            value={stateFilter}
-            onChange={setStateFilter}
-            options={[
-              { value: "all", label: "All", count: total },
-              { value: "draft", label: "Draft", count: draftCount },
-              // "Latest job failed" on ANY registered device, drafts included; Administration's "Last collection failed
-              // (enrolled)" counts enrolled devices only -- two populations, both named (review 2026-09-23).
-              { value: "failed", label: "Latest job failed", count: failedCount },
-              { value: "stale", label: "Stale", count: staleCount },
-            ]}
-          />
-          <FilterRow dimension="View" plain value={listView} onChange={setListView}
-            options={[{ value: "flat", label: "Flat list" }, { value: "manager", label: "By manager" }]} />
-          <FilterRow dimension="Sort" plain value={sortMode} onChange={setSortMode}
-            options={[{ value: "name_asc", label: "Name (A→Z)" }, { value: "name_desc", label: "Name (Z→A)" }, { value: "vendor", label: "Vendor (A→Z)" }]} />
-          </FilterBar>
-        }
         actions={
           <>
             <M3Button emphasis="tonal" icon="download" disabled={!devices || devices.length === 0}
@@ -1046,6 +1006,40 @@ export function InventoryScreen() {
                   onClick={() => { setAgeFilter(null); setHotfixFilter(null); setVersionFilter(null); setModelFilter(null); }}>clear</Box>
               </Box>
             )}
+            <FilterBar settings={<ListSettingsMenu settings={[{ title: "View", options: [{ value: "flat", label: "Flat list" }, { value: "manager", label: "By manager" }], value: listView, onChange: (x: string) => setListView(x as typeof listView) }, { title: "Sort", options: [{ value: "name_asc", label: "Name (A→Z)" }, { value: "name_desc", label: "Name (Z→A)" }, { value: "vendor", label: "Vendor (A→Z)" }], value: sortMode, onChange: (x: string) => setSortMode(x as typeof sortMode) }]} />}>
+            <FilterRow
+              dimension="Vendor"
+              value={vendorFilter}
+              onChange={setVendorFilter}
+              options={[
+                { value: "all", label: "All", count: total },
+                { value: "check_point", label: "Check Point", count: checkPointCount },
+                { value: "palo_alto", label: "Palo Alto", count: paloAltoCount },
+              ]}
+            />
+            <FilterRow
+              dimension="Scope"
+              value={scopeFilter}
+              onChange={setScopeFilter}
+              options={[
+                { value: "all", label: "All", count: total },
+                { value: "cluster", label: "Clusters", count: `${clusters.enrolled} enrolled · ${clusters.active} active` },
+              ]}
+            />
+            <FilterRow
+              dimension="State"
+              value={stateFilter}
+              onChange={setStateFilter}
+              options={[
+                { value: "all", label: "All", count: total },
+                { value: "draft", label: "Draft", count: draftCount },
+                // "Latest job failed" on ANY registered device, drafts included; Administration's "Last collection failed
+                // (enrolled)" counts enrolled devices only -- two populations, both named (review 2026-09-23).
+                { value: "failed", label: "Latest job failed", count: failedCount },
+                { value: "stale", label: "Stale", count: staleCount },
+              ]}
+            />
+            </FilterBar>
             <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
               title="A device row shows a state chip only when the device is not Live">
               {devices === null ? "" : `${filteredCountLabel} · ${liveCount} Live`}

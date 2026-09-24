@@ -89,10 +89,13 @@ describe("InventoryScreen device list", () => {
     // Default: Name (A->Z).
     expect(namesInOrder()).toEqual(["alpha-cp", "mid-cp", "zeta-pan"]);
 
-    fireEvent.change(screen.getByLabelText("Sort"), { target: { value: "name_desc" } });
+    // Sort lives in the list's view-and-sort menu.
+    fireEvent.click(screen.getByRole("button", { name: "List view and sort" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Name (Z→A)" }));
     expect(namesInOrder()).toEqual(["zeta-pan", "mid-cp", "alpha-cp"]);
 
-    fireEvent.change(screen.getByLabelText("Sort"), { target: { value: "vendor" } });
+    fireEvent.click(screen.getByRole("button", { name: "List view and sort" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Vendor (A→Z)" }));
     // Check Point sorts before Palo Alto alphabetically; within Check Point, name breaks the tie.
     expect(namesInOrder()).toEqual(["alpha-cp", "mid-cp", "zeta-pan"]);
   });

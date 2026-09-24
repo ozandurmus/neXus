@@ -52,7 +52,7 @@ describe("ConfigurationScreen device list", () => {
     expect(within(state).getByRole("option", { name: "Changed · 1" })).toBeInTheDocument();
     expect(within(state).getByRole("option", { name: "First run · 0" })).toBeInTheDocument();
     expect(within(state).getByRole("option", { name: "Not collected · 0" })).toBeInTheDocument();
-    expect(within(screen.getByRole("combobox", { name: "Vendor" })).getByRole("option", { name: "All · 1" })).toBeInTheDocument();
+    expect(within(screen.getByRole("combobox", { name: "Vendor" })).getByRole("option", { name: "Vendor · 1" })).toBeInTheDocument();
     expect(screen.getByText("1 device collected")).toBeInTheDocument();
   });
 
