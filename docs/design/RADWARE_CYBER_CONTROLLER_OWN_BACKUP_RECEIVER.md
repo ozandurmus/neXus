@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — PENDING PRODUCT OWNER APPROVAL AND A FIRST MEASUREMENT.** Requested by the Product Owner on 2026-09-24:
+**DRAFT — DESIGN CHOSEN AND MEASURED BY THE PRODUCT OWNER (2026-09-24); CLI GATE ENTRIES PENDING HIS APPROVAL.** Requested by the Product Owner on 2026-09-24:
 the Cyber Controller should push its own backup into a directory neXus owns ("direk kendi sunucumuzdaki bir dizine
 bırakıp"), not be pulled through an undocumented web download. He set the boundary: neXus takes no inbound traffic
 except from permitted addresses, on a specific port ("izinli şekilde belirli IP'lerden kabul ediyor… spesifik bir
@@ -16,42 +16,39 @@ unverified until the first live run records it.
 - `system backup config export <name> <target>` pushes only: `file://`, `ssh://`, `sftp://`, `ftp://`, `scp://`.
 - SSH with the AD account lands in the restricted Cyber Controller CLI; there is no SFTP/SCP pull.
 
-## Design
+## Design (revised 2026-09-24 after measurement — the Product Owner's choice)
 
-### The receiver
+**Measured:** the export URL takes no port — `sftp://user@host:/path` always goes to TCP 22 (Palo Alto traffic log:
+Cyber Controller → HOST-A, dst port 22, rule 333, allow). The Product Owner then chose **HOST-A's own SSH on its
+existing address** ("varolan IP'den sftp alalım. Backbox da böyle çalışıyor"), accepting that the file rests briefly
+unencrypted on HOST-A's disk and that HOST-A's sshd configuration changes (he configured it; the agent holds no sudo).
 
-- **Where:** inside the neXus worker (the process that already runs every backup job), an SFTP-only endpoint built
-  on Apache MINA SSHD (`sshd-core`, `sshd-sftp`; Apache Software Foundation, Maven Central — a new dependency).
-  Not the host's own SSH: nothing is configured on HOST-A itself, no sudo.
-- **Port:** one TCP port, exposed on HOST-A as a Kubernetes NodePort (proposed **30222**), with
-  `externalTrafficPolicy: Local` so the caller's real source address reaches the check below.
-- **Who may connect:** only the management address of an **enrolled, enabled Radware Cyber Controller** in neXus.
-  Checked when the TCP connection is accepted, before the SSH handshake; any other source is closed and logged
-  (address class only). The Product Owner's own network controls (firewall) stay in front of this.
-- **Authentication:** one user, `nexus-receiver`, password only, the password being a credential-store entry the
-  Product Owner names (never in the repository or a manifest). No keys, no keyboard-interactive.
-- **What it can do:** the SFTP subsystem only — no shell, no exec, no port or agent forwarding, no X11. A write-only
-  virtual file system: the one accepted operation is **create-and-write of `<token>.tgz`**, where `<token>` is a random
-  value a running backup job is waiting for. No read, list, stat of other names, rename, delete or directory.
-  Anything else is refused.
-- **Where the bytes go:** straight into the encrypted artefact store as they arrive (the same sink every backup uses).
-  **The backup never touches a disk in plaintext.** A size bound (proposed 2 GiB) refuses anything larger.
-- **When:** a token is valid only while its job waits (at most the job's deadline, proposed 30 min), for one upload.
-- **Host key:** the receiver's own ed25519 host key, generated once and kept in a Kubernetes Secret in `ui2`; its
-  fingerprint is shown in the product so the operator can compare it with what the Cyber Controller presents.
+### The receiver (HOST-A, configured by the Product Owner)
+
+- User `nexus-cc` (uid 1001, group `nexuscc` gid 2600, shell `/usr/sbin/nologin`), password in the neXus credential
+  store only.
+- Chroot `/var/lib/nexus-cc` (root:root 755; `/srv` was rejected by sshd — it is not root-owned and is left
+  untouched), upload directory `/var/lib/nexus-cc/in` (nexus-cc:nexuscc 2770).
+- `/etc/ssh/sshd_config`, appended at the end: `Match User nexus-cc Address <Cyber Controller>` → `ChrootDirectory`,
+  `ForceCommand internal-sftp -u 0027`, password auth, no forwarding, no TTY; `Match User nexus-cc Address
+  *,!<Cyber Controller>` → no password, no key, `ForceCommand /usr/sbin/nologin`. Backup copy
+  `sshd_config.bak-nexus`.
+- The worker mounts `/var/lib/nexus-cc/in` (hostPath) with supplemental group 2600: it reads the upload into the
+  encrypted artefact store and deletes it. Plaintext on disk only between the upload and that read.
 
 ### The job (worker, nightly and on demand)
 
-1. SSH to the Cyber Controller with its enrolled credential (the AD account), restricted CLI.
+1. SSH to the Cyber Controller (its enrolled credential, the AD account), restricted CLI.
 2. `system backup config create nexus-<token>`.
-3. `system backup config export nexus-<token> sftp://nexus-receiver@<HOST-A address>:<port>/<token>.tgz` — the CLI
-   is expected to ask to trust the receiver's host key and for the password; the worker answers from the Secret's
-   fingerprint and the credential store (MEASURE FIRST: the prompts, and whether the URL accepts a port).
-4. The receiver streams the upload into the artefact store; the job compares the received size with
-   `system backup config list`'s entry for `nexus-<token>`, and records the SHA-256 of what was stored.
-5. `system backup config delete nexus-<token>` — only after the file is stored (nothing is deleted before).
-6. Schedule: nightly, proposed **03:00 Europe/Istanbul** (after the 02:00 MDS export), plus Backup Now on the Cyber
-   Controller row. The Cyber Controller's own scheduler-generated backups are never touched.
+3. `system backup config export nexus-<token> sftp://nexus-cc@<HOST-A>:/in/<token>.tgz` — measured prompt
+   `Password:` (no host-key question); answered from the Cyber Controller's "backup receiver" credential. Success
+   text measured: `Export completed.` and `The configuration backup was successfully exported to <url>.tar` — the
+   Cyber Controller **appends `.tar`**, so the file is `/in/<token>.tgz.tar`.
+4. The worker streams `<token>.tgz.tar` into the artefact store (SHA-256 recorded), compares its size with
+   `system backup config list`'s entry, and deletes the upload.
+5. `system backup config delete nexus-<token>` — only after the file is stored.
+6. Schedule: nightly, proposed **03:00 Europe/Istanbul**, plus Backup Now on the Cyber Controller row. The Cyber
+   Controller's own scheduler-generated backups are never touched.
 
 ## CLI gate entries (Cyber Controller restricted CLI, interactive SSH session)
 
@@ -65,12 +62,13 @@ behaviour; 9 secret-bearing output risk; 10 safe telemetry.
 | 3 | `system backup config list` | size check of `nexus-<token>` | CLASS_0_READ | same | 60 s | none | once per job | same | name absent → size check UNKNOWN, recorded | backup names only | size of our entry |
 | 4 | `system backup config delete nexus-<token>` | leave nothing behind | CLASS_1 recovery-write (deletes only the file this job created, by exact name) | same | 120 s | once | once per job, after #2 stored or after a failure | same | failure → job ends CLEANUP_FAILED, named in the reason | none | outcome |
 
-## MEASURE FIRST
+## Measured (2026-09-24, run by the Product Owner)
 
-1. Whether the export URL accepts `:port` (if not, the design needs another answer before implementation).
-2. The export's prompts (host-key trust, password) and its success/failure text.
-3. That the Cyber Controller can reach HOST-A on the chosen port (network path).
-4. That `delete` exists under `system backup config` and removes by exact name.
+1. Port in the export URL: not supported (always 22). → HOST-A's own SSH.
+2. Prompts: `Password:` only; success text as above; `.tar` appended to the target name.
+3. Network path Cyber Controller → HOST-A:22: open (rule 333), upload of a ~36 MB config backup in about 2 s.
+4. Still MEASURE FIRST: `system backup config delete <name>` (existence and exact-name behaviour) and the failure
+   text of an export (wrong password, full disk).
 
 ## Not in this document
 
