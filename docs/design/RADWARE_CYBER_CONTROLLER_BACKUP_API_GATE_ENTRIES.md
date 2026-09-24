@@ -76,6 +76,21 @@ Commands and fields exactly as run (worker log `[CYBER_CONTROLLER]`, names and c
   10.13 change).
 - Call 3 (`getcfg`): not yet run — needs a DefensePro backup.
 
+## Measurement record — Cyber Controller's own backup, 2026-09-24 (run by the Product Owner on its CLI)
+
+Not gated; recorded for the entry that will be. Names/sizes only.
+
+- `system backup` offers `config`, `full`, `techSupport`.
+- `system backup config list`: config backups of **~35–37 MB** each; the Cyber Controller already keeps its own
+  scheduler-generated config backups (description "Scheduler-gene…"), across 10.12 and 10.13.
+- `system backup full` (one run by the PO): **~59 GiB (61,867,689 K), about one hour**, with a long "validating DB"
+  phase. PO: parked ("dursun kenarda") — too heavy for a routine; `config` is the candidate.
+- `system backup config export <name> <target>` pushes only: `file://path/name`, `ssh://`, `sftp://`, `ftp://`,
+  `scp://user@server:/path/name`.
+- SSH with the AD account lands in the Cyber Controller's restricted CLI; an SFTP client fails ("Cannot initialize
+  SFTP protocol", the CLI banner is read as a packet) — **no SFTP/SCP pull**. Pull candidate: `export … file://` into
+  the maintenance directory, then the web UI's "Maintenance Files" download over HTTPS (URL and method MEASURE FIRST).
+
 ## Not in this document
 
 - **Cyber Controller's own backup** (`system backup config|full create/export` on its CLI, SFTP export). Documented
