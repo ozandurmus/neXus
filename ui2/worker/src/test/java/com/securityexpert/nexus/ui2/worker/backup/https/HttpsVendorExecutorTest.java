@@ -108,7 +108,7 @@ class HttpsVendorExecutorTest {
         assertTrue(calls.log.contains("GET /mgmt/system/config/itemlist/alldevices"));
         assertTrue(calls.log.contains("GET-DL /mgmt/device/byip/192.0.2.41/config/getcfg?saveToDb=false&includePrivateKeys=true&passphrase=pw-pp"),
                 calls.log.toString());
-        assertEquals("POST /mgmt/system/config/itemlist/systemuser/logout {}", calls.log.get(calls.log.size() - 1));
+        assertEquals("POST /mgmt/system/user/logout {}", calls.log.get(calls.log.size() - 1));
     }
 
     @Test
@@ -116,7 +116,7 @@ class HttpsVendorExecutorTest {
         Optional<BackupResult> r = executor.backupViaCyberController(T, "cc", "192.0.2.99", Optional.of("pp"), "dev", "job-cc");
         assertTrue(r.isEmpty());
         assertTrue(calls.log.stream().noneMatch(l -> l.contains("getcfg")));
-        assertTrue(calls.log.get(calls.log.size() - 1).startsWith("POST /mgmt/system/config/itemlist/systemuser/logout"));
+        assertTrue(calls.log.get(calls.log.size() - 1).startsWith("POST /mgmt/system/user/logout"));
     }
 
     @Test

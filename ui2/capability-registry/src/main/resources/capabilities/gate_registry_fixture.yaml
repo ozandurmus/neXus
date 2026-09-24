@@ -1369,7 +1369,7 @@ gates:
     platform_role_scope: 'radware_cyber_controller'
     shell_context: 'not_applicable'
     transport_kind: 'HTTPS'
-    canonical_command_key: 'POST /mgmt/system/config/itemlist/systemuser/logout'
+    canonical_command_key: 'POST /mgmt/system/user/logout'
     action_class: 'read'
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 30
@@ -1379,4 +1379,4 @@ gates:
     unsupported_behavior_ref: 'failure ignored (session expires)'
     secret_output_risk: 'none'
     safe_telemetry_fields: []
-    source_document_pointer: 'Cyber Controller REST 10.3.0 logout'
+    source_document_pointer: 'Cyber Controller REST 10.3.0 Server Logout (V68: the V67 path answered 405 on 10.13)'

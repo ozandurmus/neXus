@@ -50,7 +50,7 @@ Ten items per entry: 1 why required; 2 class; 3 vendor / platform / context; 4 t
 | 1 | `POST /mgmt/system/user/login` (JSON `username`, `password`) | open a session; the response sets `JSESSIONID` | CLASS_0_READ (authentication) | Radware Cyber Controller, HTTPS, TLS not verified (internal estate, as V64) | 30 s | none | once per job | the job's own session only | non-2xx, or no `JSESSIONID` → `authentication_failed`, nothing further is called | request carries the password (from the store, in memory only); response body not persisted | HTTP status, session obtained yes/no |
 | 2 | `GET /mgmt/system/config/itemlist/alldevices` | confirm (identity/reachability) and map a DefensePro's management address to the Cyber Controller's device list | CLASS_0_READ | same | 60 s | none | once per confirm, once per backup job | same session | non-2xx → confirm failed; the DefensePro not listed → backup falls back to the direct path, stated in the job reason | device names and addresses (CLASS 1 identity); parsed to counts and a match yes/no; never persisted raw | device count by type, target listed yes/no |
 | 3 | `GET /mgmt/device/byip/{deviceIp}/config/getcfg?saveToDb=false&includePrivateKeys=true&passphrase=<from store>` | the DefensePro configuration file | CLASS_0_READ | same; `{deviceIp}` = the DefensePro's enrolled management address | 600 s | none | once per device per backup job | same session | non-2xx, empty or HTML body → backup failed with the HTTP status; no retry | **secret-bearing** (the configuration, private keys encrypted with the passphrase): streamed into the encrypted artefact store, digested, never logged; the passphrase travels in the query string over TLS and is never logged | bytes, SHA-256, HTTP status |
-| 4 | `POST /mgmt/system/config/itemlist/systemuser/logout` | close the session | CLASS_0_READ | same | 30 s | none | once per job, always (also after a failure) | same session | failure ignored (the session expires on its own) | none | status |
+| 4 | `POST /mgmt/system/user/logout` (V68; V67 carried `/mgmt/system/config/itemlist/systemuser/logout`, which answered 405) | close the session | CLASS_0_READ | same | 30 s | none | once per job, always (also after a failure) | same session | failure ignored (the session expires on its own) | none | status |
 
 ## MEASURE FIRST (the first live run records, names and counts only)
 
@@ -59,6 +59,22 @@ Ten items per entry: 1 why required; 2 class; 3 vendor / platform / context; 4 t
 3. The `getcfg` response: content type, a text configuration or an archive, typical size; that the passphrase in the
    query string is accepted as documented.
 4. Which Cyber Controller role is enough for calls 2–3.
+
+## Measurement record — first live run, 2026-09-24 (Cyber Controller 10.13.0-3 build 5)
+
+Commands and fields exactly as run (worker log `[CYBER_CONTROLLER]`, names and counts only):
+
+- Call 1, `POST /mgmt/system/user/login`, JSON body `{"username", "password"}`: **HTTP 200, `JSESSIONID` set.** The
+  AD account (credential store) is accepted.
+- Call 2, `GET /mgmt/system/config/itemlist/alldevices`: **HTTP 200, 1,261 bytes.** Field names across the objects:
+  `children, deleted, deviceVersion, formFactor, highAvailabilityPriorityEnum, managementIp, name, ormId, parentOrmId,
+  status, supportTemplate, treeType, type`. So the device list carries per device: name, management address, type,
+  software version, form factor, status and an HA priority — the discovery tree and inventory fields can bind to
+  these once a value sample (types and enum values only) is recorded.
+- Call 4, `POST /mgmt/system/config/itemlist/systemuser/logout`: **HTTP 405.** Corrected in V68 to the reference's
+  "Server Logout", `POST /mgmt/system/user/logout` (the earlier path was a transcription error on my part, not a
+  10.13 change).
+- Call 3 (`getcfg`): not yet run — needs a DefensePro backup.
 
 ## Not in this document
 

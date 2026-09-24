@@ -14,7 +14,7 @@ import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
-import { RoleChip, Ts, VendorBadge } from "../shell/States";
+import { RoleChip, Ts, VendorBadge, vendorDisplayName } from "../shell/States";
 import { ClusterContextStrip, DeviceIdentityTable, orderMembers } from "./DeviceShared";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import {
@@ -1571,12 +1571,13 @@ export function DeviceInventoryPanels({
               label={
                 device.cluster_member_ref
                   ? `${isPaloAlto ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"} · ${device.cluster_member_ref}`
-                  : `${isPaloAlto ? "Palo Alto" : "Check Point"} · Standalone`
+                  : `${isPaloAlto ? "Palo Alto" : vendorDisplayName(device.vendor_hint)} · ${device.role === "management_server" ? "Management server"
+                    : device.role === "appliance" ? "Appliance" : "Standalone"}`
               }
               dense
             />
             {device.software_version && (
-              <StatusChip tone="neutral" label={`${device.software_version} · ${isPaloAlto ? "PAN-OS" : "Gaia"}`} dense />
+              <StatusChip tone="neutral" label={`${device.software_version}${isPaloAlto ? " · PAN-OS" : device.vendor_hint === "check_point" ? " · Gaia" : ""}`} dense />
             )}
             {(device.model || device.platform_family) && <StatusChip tone="neutral" label={(device.model || device.platform_family)!} dense />}
             {device.ha_role && <RoleChip role={device.ha_role} dense />}

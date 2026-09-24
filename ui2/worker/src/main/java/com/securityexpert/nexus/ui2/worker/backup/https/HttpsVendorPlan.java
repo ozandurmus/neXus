@@ -26,9 +26,9 @@ public final class HttpsVendorPlan {
     public static final String CC_LOGIN = "/mgmt/system/user/login";
     public static final String CC_ALLDEVICES = "/mgmt/system/config/itemlist/alldevices";
     public static final String CC_GETCFG = "/mgmt/device/byip/%s/config/getcfg?saveToDb=false&includePrivateKeys=true&passphrase=%s";
-    public static final String CC_LOGOUT = "/mgmt/system/config/itemlist/systemuser/logout";
+    public static final String CC_LOGOUT = "/mgmt/system/user/logout";
     public static final List<String> CC_GATE_KEYS = List.of("POST /mgmt/system/user/login", "GET /mgmt/system/config/itemlist/alldevices",
-            "GET /mgmt/device/byip/<deviceIp>/config/getcfg", "POST /mgmt/system/config/itemlist/systemuser/logout");
+            "GET /mgmt/device/byip/<deviceIp>/config/getcfg", "POST /mgmt/system/user/logout");
 
     /** Gate keys: {@code METHOD path}, the version placeholder kept as {@code <ver>}. */
     public static final List<String> INFOBLOX_GATE_KEYS = List.of("GET /wapidoc/", "GET /wapi/v<ver>/grid",

@@ -104,14 +104,26 @@ export function RoleChip({ role, dense = false }: { readonly role: string | null
   );
 }
 
+/** The vendor's display name; the raw hint when the product does not know it (never guessed as Check Point). */
+export function vendorDisplayName(vendor: string | null | undefined): string {
+  switch (vendor) {
+    case "check_point": return "Check Point";
+    case "palo_alto": return "Palo Alto Networks";
+    case "radware": return "Radware";
+    case "infoblox": return "Infoblox";
+    default: return vendor ? vendor : "Vendor UNKNOWN";
+  }
+}
+
 export type VendorKind = "check_point" | "palo_alto" | "vsx" | string | null | undefined;
 
 /** The vendor monogram used on every screen: an outlined chip with an identity swatch; never a status colour. */
 export function VendorBadge({ vendor, vsx = false, size = 28 }: { readonly vendor: VendorKind; readonly vsx?: boolean; readonly size?: number }) {
-  const kind = vsx ? "vsx" : vendor === "check_point" ? "cp" : vendor === "palo_alto" ? "pan" : "unknown";
-  const label = kind === "cp" ? "CP" : kind === "pan" ? "PAN" : kind === "vsx" ? "VSX" : "?";
+  const kind = vsx ? "vsx" : vendor === "check_point" ? "cp" : vendor === "palo_alto" ? "pan"
+    : vendor === "radware" ? "rdw" : vendor === "infoblox" ? "ibx" : "unknown";
+  const label = kind === "cp" ? "CP" : kind === "pan" ? "PAN" : kind === "vsx" ? "VSX" : kind === "rdw" ? "RDW" : kind === "ibx" ? "IBX" : "?";
   const swatch = kind === "cp" ? m3.cp : kind === "pan" ? m3.pan : kind === "vsx" ? m3.vsx : m3.outline;
-  const name = kind === "cp" ? "Check Point" : kind === "pan" ? "Palo Alto Networks" : kind === "vsx" ? "Check Point VSX" : "Vendor UNKNOWN";
+  const name = kind === "vsx" ? "Check Point VSX" : kind === "unknown" ? "Vendor UNKNOWN" : vendorDisplayName(vendor);
   return (
     <Tooltip title={name}>
       <Box component="span" aria-label={name}
