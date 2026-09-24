@@ -323,6 +323,19 @@ public final class Ui2WorkerMain {
             }
         }, 10, 30, java.util.concurrent.TimeUnit.SECONDS);
 
+        // V70: deletion requests for backups whose device no longer exists (Backups screen), carried out every minute.
+        com.securityexpert.nexus.ui2.worker.backup.retention.OrphanArtefactPurger orphanPurger =
+                new com.securityexpert.nexus.ui2.worker.backup.retention.OrphanArtefactPurger(
+                        new com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactDeletionRequests(transactionBoundary), artefactStoreRoot);
+        reconcilerExecutor.scheduleWithFixedDelay(() -> {
+            try {
+                orphanPurger.runOnce();
+            } catch (Throwable t) {
+                System.getLogger(Ui2WorkerMain.class.getName())
+                        .log(System.Logger.Level.WARNING, "Orphan backup purge error: " + t.getMessage(), t);
+            }
+        }, 20, 60, java.util.concurrent.TimeUnit.SECONDS);
+
         // V44: retention pruning against the operator's policy row, hourly. Until now the executor was
         // composed with a null pruning service, so the 14-day horizon the screen showed never ran.
         com.securityexpert.nexus.ui2.persistence.artefact.BackupPolicyRepository backupPolicyRepository =

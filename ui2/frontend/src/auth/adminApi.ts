@@ -159,6 +159,11 @@ export interface BackupArtefact {
   readonly deviation_state: "unchanged" | "changed" | "first" | null;
 }
 
+/** V70: ask for a backup whose device no longer exists to be removed (the worker deletes it within a minute). */
+export function requestOrphanBackupDelete(artefactId: string, reason: string): Promise<{ queued: boolean }> {
+  return call(`/backups/${encodeURIComponent(artefactId)}/delete`, "POST", { reason });
+}
+
 export function listDeviceBackups(deviceId: string): Promise<{ backups: BackupArtefact[]; baseline_artefact_id?: string | null }> {
   return call(`/devices/${encodeURIComponent(deviceId)}/backups`, "GET");
 }

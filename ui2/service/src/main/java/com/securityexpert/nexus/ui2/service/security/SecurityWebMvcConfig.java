@@ -130,6 +130,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /backups/*/compare", ActionRegistry.DEVICE_BACKUP_READ),
             // "List now" decrypts on the service: gated like the download.
             Map.entry("POST /backups/*/relist", ActionRegistry.DEVICE_BACKUP_RETRIEVE),
+            // V70: remove a backup whose device no longer exists (the worker deletes it).
+            Map.entry("POST /backups/*/delete", ActionRegistry.DEVICE_BACKUP_ORPHAN_DELETE),
             // Measured live (2026-09-22): both routes answered 403 ACTION_MAPPING_REQUIRED, so the
             // Backups screen read "Policy unavailable" -- the routes existed, their mapping did not.
             Map.entry("GET /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_READ),

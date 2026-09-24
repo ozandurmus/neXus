@@ -31,6 +31,7 @@ import {
   requestBackupDownloadTicket,
   listBackupEntries,
   listDeviceBackups,
+  requestOrphanBackupDelete,
   relistBackupContents,
   listDevices,
   listFleetBackups,
@@ -147,6 +148,11 @@ export function BackupScreen() {
   // V44: per-device baseline artefact ids and the History dialog.
   const [baselines, setBaselines] = useState<Record<string, string>>({});
   const [historyFor, setHistoryFor] = useState<BackupDeviceItem | null>(null);
+  // V70: removing the backups of a device no longer in neXus
+  const [orphanFor, setOrphanFor] = useState<BackupDeviceItem | null>(null);
+  const [orphanReason, setOrphanReason] = useState("");
+  const [orphanBusy, setOrphanBusy] = useState(false);
+  const [orphanError, setOrphanError] = useState<string | null>(null);
   const [history, setHistory] = useState<BackupArtefact[] | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [baselineBusy, setBaselineBusy] = useState<string | null>(null);
@@ -499,6 +505,7 @@ export function BackupScreen() {
         onContents={(d) => void openContents(d)}
         onCompare={(d) => void openCompare(d)}
         onDownload={(d) => { setExportError(null); setSelectedDeviceExport(d); }}
+        onDeleteOrphan={(d) => { setOrphanFor(d); setOrphanReason(""); setOrphanError(null); }}
       />
 
       {/* Metric Cards, below the table (PO, 2026-09-24: at the top they pulled the eye from the work): a figure or the word for why there is none (UI review 2026-09-23) */}
@@ -534,6 +541,48 @@ export function BackupScreen() {
           reason="No comparison has run, so no deviation can be claimed or ruled out"
           note={deviations ? `${deviations.total_deviations_checked} comparison${deviations.total_deviations_checked === 1 ? "" : "s"} run` : "Deviation state unavailable"} />
       </MetricGrid>
+
+      {/* V70: remove the backups of a device that is no longer in neXus */}
+      <Dialog open={orphanFor !== null} onClose={() => !orphanBusy && setOrphanFor(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Delete backups of a removed device</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              This device is no longer in neXus. Every stored backup of it is removed from the backup store for good -- keep a
+              copy first (Download) if you need one. Who asked and why is recorded in the audit log.
+            </Typography>
+            <TextField label="Reason" value={orphanReason} onChange={(e) => setOrphanReason(e.target.value)} fullWidth size="small"
+              helperText="At least 8 characters" />
+            {orphanError && <Alert severity="error">{orphanError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOrphanFor(null)} disabled={orphanBusy}>Cancel</Button>
+          <Button color="error" variant="contained" disabled={orphanBusy || orphanReason.trim().length < 8}
+            onClick={async () => {
+              if (!orphanFor) return;
+              setOrphanBusy(true);
+              setOrphanError(null);
+              try {
+                const all = await listDeviceBackups(orphanFor.deviceId);
+                const ids = (all.backups ?? []).map((b) => b.artefact_id).filter(Boolean);
+                for (const id of ids.length ? ids : [orphanFor.artefactId]) {
+                  await requestOrphanBackupDelete(id, orphanReason.trim());
+                }
+                setOrphanFor(null);
+                // the worker removes them within a minute
+                window.setTimeout(() => void loadFleet(), 70000);
+              } catch (e) {
+                const body = (e as { body?: { reason?: string; error?: string } }).body;
+                setOrphanError(body?.reason ?? body?.error ?? String(e));
+              } finally {
+                setOrphanBusy(false);
+              }
+            }}>
+            {orphanBusy ? "Requesting…" : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Deviation Diff Modal */}
       {selectedDeviceDiff && (
@@ -927,7 +976,7 @@ type Show = "all" | "targets" | "without_archive";
  * Download, plus Snapshot Now on Check Point) are all kept.
  */
 function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetError, baselines, busyDeviceId,
-  onBackupNow, onHistory, onContents, onCompare, onDownload }: {
+  onBackupNow, onHistory, onContents, onCompare, onDownload, onDeleteOrphan }: {
   readonly version: number;
   readonly onTargetChanged: () => void;
   readonly fleet: readonly BackupDeviceItem[];
@@ -940,6 +989,8 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   readonly onContents: (d: BackupDeviceItem) => void;
   readonly onCompare: (d: BackupDeviceItem) => void;
   readonly onDownload: (d: BackupDeviceItem) => void;
+  /** V70: a device no longer in neXus -- its backups can be removed, with a reason. */
+  readonly onDeleteOrphan: (d: BackupDeviceItem) => void;
 }) {
   const [devices, setDevices] = useState<DeviceSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1100,6 +1151,11 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                         <Button size="small" disabled={!item?.artefactId} onClick={() => item && onContents(item)}>Contents</Button>
                         <Button size="small" disabled={!item?.artefactId} onClick={() => item && onCompare(item)}>Compare</Button>
                         <Button size="small" disabled={!item?.artefactId} onClick={() => item && onDownload(item)}>Download</Button>
+                        {!summary && item ? (
+                          <Tooltip title="This device is no longer in neXus: remove its stored backups (asks for a reason; audited)"><span>
+                            <Button size="small" color="error" onClick={() => onDeleteOrphan(item)}>Delete</Button>
+                          </span></Tooltip>
+                        ) : null}
                       </Stack>
                     </TableCell>
                   </TableRow>
