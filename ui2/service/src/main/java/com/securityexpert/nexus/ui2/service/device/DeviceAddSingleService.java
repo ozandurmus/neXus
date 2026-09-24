@@ -84,6 +84,16 @@ public final class DeviceAddSingleService {
     private final DeviceRegistrationService deviceRegistrationService;
     private final JobAdmissionService jobAdmissionService;
     private final DeviceRepository deviceRepository;
+    /** V64: a device's second secret (Radware's export passphrase), set in the same transaction as the device. */
+    private com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository secrets;
+
+    /** Radware only: the backup is refused without the export passphrase, so the device is refused without it too. */
+    static final String REASON_EXPORT_PASSPHRASE_REQUIRED = "export_passphrase_required";
+
+    public DeviceAddSingleService withSecrets(com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository secrets) {
+        this.secrets = secrets;
+        return this;
+    }
 
     public DeviceAddSingleService(TransactionBoundary transactionBoundary,
             DeviceRegistrationService deviceRegistrationService, JobAdmissionService jobAdmissionService,
@@ -127,15 +137,31 @@ public final class DeviceAddSingleService {
     }
 
     public Outcome addSingle(String actorFingerprint, String role, String address, String vendor, String credentialReferenceId) {
+        return addSingle(actorFingerprint, role, address, vendor, credentialReferenceId, Optional.empty());
+    }
+
+    /**
+     * One transaction for the device, its export passphrase and its confirm job (PO, 2026-09-24): a refusal at any
+     * step leaves no device behind -- a half-added device with no passphrase was the alternative.
+     */
+    public Outcome addSingle(String actorFingerprint, String role, String address, String vendor, String credentialReferenceId,
+            Optional<String> exportPassphraseReferenceId) {
         VendorMapping mapping = VENDOR_MAPPINGS.get(vendor);
         if (mapping == null) {
             return new Outcome.ValidationFailed(DeviceRegistrationService.REASON_VENDOR_HINT_INVALID);
+        }
+        Optional<String> passphrase = exportPassphraseReferenceId.filter(s -> !s.isBlank());
+        if ("radware".equals(vendor) && passphrase.isEmpty()) {
+            return new Outcome.ValidationFailed(REASON_EXPORT_PASSPHRASE_REQUIRED);
+        }
+        if (passphrase.isPresent() && (!"radware".equals(vendor) || secrets == null)) {
+            return new Outcome.ValidationFailed(REASON_EXPORT_PASSPHRASE_REQUIRED);
         }
 
         try {
             return transactionBoundary.inTransaction(dsl -> runInTransaction(actorFingerprint, role, address, vendor,
                     credentialReferenceId, mapping, "manual_registration", Optional.empty(), Optional.empty(),
-                    Optional.empty(), ActionRegistry.DEVICE_REGISTER));
+                    Optional.empty(), ActionRegistry.DEVICE_REGISTER, passphrase));
         } catch (ValidationFailedSignal signal) {
             return new Outcome.ValidationFailed(signal.reasonCode);
         } catch (AdmissionRefusedSignal signal) {
@@ -162,7 +188,7 @@ public final class DeviceAddSingleService {
         try {
             return transactionBoundary.inTransaction(dsl -> runInTransaction(actorFingerprint, role, address, vendor,
                     credentialReferenceId, mapping, "discovery_import", clusterMemberRef, virtualSystemRef,
-                    discoveryMatchKey, actionId));
+                    discoveryMatchKey, actionId, Optional.empty()));
         } catch (ValidationFailedSignal signal) {
             return new Outcome.ValidationFailed(signal.reasonCode);
         } catch (AdmissionRefusedSignal signal) {
@@ -173,7 +199,7 @@ public final class DeviceAddSingleService {
     private Outcome runInTransaction(String actorFingerprint, String role, String address, String vendor,
             String credentialReferenceId, VendorMapping mapping, String registrationSource,
             Optional<String> clusterMemberRef, Optional<String> virtualSystemRef, Optional<String> discoveryMatchKey,
-            String actionId) {
+            String actionId, Optional<String> exportPassphraseReferenceId) {
         // PO rule (2026-09-22): never a duplicate entry -- one address, one device.
         Optional.ofNullable(deviceRepository).flatMap(repository -> repository.findDeviceIdByEndpointAddress(address)).ifPresent(existing -> {
             throw new AdmissionRefusedSignal("DUPLICATE_ADDRESS",
@@ -187,6 +213,10 @@ public final class DeviceAddSingleService {
         }
         DeviceRegistrationService.Outcome.Registered registered =
                 (DeviceRegistrationService.Outcome.Registered) registration;
+        if (exportPassphraseReferenceId.isPresent()) {
+            secrets.set(registered.deviceId(), com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository.EXPORT_PASSPHRASE,
+                    exportPassphraseReferenceId.get(), actorFingerprint, actionId);
+        }
 
         AdmissionResult admission = jobAdmissionService.submit(mapping.capabilityId(), registered.deviceId(),
                 registered.deviceId(), actorFingerprint, actionId);

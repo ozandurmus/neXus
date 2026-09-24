@@ -108,6 +108,11 @@ public interface DeviceRepository {
     List<DeviceSummaryRecord> listAll();
 
     /** Backups > Backup targets: an audited devices UPDATE; false when the row is absent or already in that state. */
+    /** The device's login credential, replaced (PO, 2026-09-24); true when a row changed. */
+    default boolean setCredentialReference(String deviceId, String credentialReferenceId, String actorFingerprint, String actionId) {
+        throw new UnsupportedOperationException("setCredentialReference");
+    }
+
     default boolean setBackupTarget(String deviceId, boolean backupTarget, String actorFingerprint, String actionId) {
         throw new UnsupportedOperationException("setBackupTarget");
     }

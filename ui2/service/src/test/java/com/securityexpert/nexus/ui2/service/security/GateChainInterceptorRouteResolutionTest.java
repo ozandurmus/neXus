@@ -66,6 +66,8 @@ class GateChainInterceptorSecurityTest {
         method.setAccessible(true);
         assertEquals(ActionRegistry.DEVICE_REGISTER,
                 method.invoke(interceptor, "POST", "/devices/device-1/secrets/export_passphrase"));
+        assertEquals(ActionRegistry.DEVICE_REGISTER,
+                method.invoke(interceptor, "PUT", "/devices/device-1/credential"));
     }
 
     /** The interceptor wildcards one segment at a time: a two-"*" route never matches (V64, 2026-09-24). */

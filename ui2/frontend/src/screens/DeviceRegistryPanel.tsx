@@ -11,6 +11,7 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { CapabilityMenu, M3Button, StatusChip } from "../shell/M3Widgets";
+import { ChangeCredentialsDialog } from "../shell/ChangeCredentialsDialog";
 import { RestrictedPanel, StatePanel, Ts, VendorBadge, isRestricted } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
@@ -159,6 +160,7 @@ export function DeviceManagementPane() {
         deleteError={deleteError}
         onDelete={onDelete}
         onBulkDelete={onBulkDelete}
+        onChanged={refresh}
         total={total}
       />
       <Stack spacing={2}>
@@ -228,12 +230,14 @@ function DeviceRegistryCard({
   deleteError,
   onDelete,
   onBulkDelete,
+  onChanged,
   total,
 }: {
   readonly devices: DeviceSummary[] | null;
   readonly deleteError: string | null;
   readonly onDelete: (deviceId: string) => void;
   readonly onBulkDelete: (deviceIds: string[]) => Promise<boolean>;
+  readonly onChanged: () => void;
   readonly total: number;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -242,6 +246,7 @@ function DeviceRegistryCard({
   // bar's Delete for the current selection. The capability and its API call are unchanged; only the click a
   // stray tap can no longer trigger moved off the row (review "shows a filled Delete button on every row").
   const [confirmIds, setConfirmIds] = useState<string[] | null>(null);
+  const [credentialsFor, setCredentialsFor] = useState<DeviceSummary | null>(null);
 
   if (devices === null) {
     return <StatePanel variant="empty" title="Device registry" body="Loading…" />;
@@ -297,6 +302,9 @@ function DeviceRegistryCard({
       title={`Device registry · ${total} ${total === 1 ? "entry" : "entries"}`}
       body={total === 0 ? "No device has been enrolled yet." : `${total} device${total === 1 ? "" : "s"} in the registry.`}
     >
+      {credentialsFor && (
+        <ChangeCredentialsDialog device={credentialsFor} onClose={() => setCredentialsFor(null)} onChanged={onChanged} />
+      )}
       {confirmIds && (
         <ConfirmDeleteDialog
           names={confirmNames}
@@ -410,7 +418,8 @@ function DeviceRegistryCard({
                   <CapabilityMenu
                     ariaLabel={`${deviceNameLabel(device.hostname)} actions`}
                     items={[
-                      { label: "Delete", destructive: true, onSelect: () => setConfirmIds([device.device_id]) },
+                      { label: "Change credentials…", onSelect: () => setCredentialsFor(device) },
+                      { label: "Delete", destructive: true, dividerBefore: true, onSelect: () => setConfirmIds([device.device_id]) },
                     ]}
                   />
                 </Box>

@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -38,6 +39,24 @@ public final class DeviceSecretController {
     }
 
     public record SecretRequest(@JsonProperty("credential_reference_id") String credentialReferenceId) {
+    }
+
+    /**
+     * Replace the device's login credential (PO, 2026-09-24: "user değiştirme imkanım olmalı"). A reference only; the
+     * next job uses it. A draft whose confirm failed is re-confirmed by the caller with {@code POST /devices/{id}/confirm}.
+     */
+    @PutMapping("/devices/{deviceId}/credential")
+    public ResponseEntity<Map<String, Object>> setCredential(@PathVariable String deviceId, @RequestBody SecretRequest request,
+            HttpServletRequest servletRequest) {
+        if (devices.find(deviceId).isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "NOT_FOUND"));
+        }
+        if (request == null || request.credentialReferenceId() == null || !references.exists(request.credentialReferenceId())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "CREDENTIAL_REFERENCE_NOT_FOUND"));
+        }
+        String actor = (String) servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
+        boolean changed = devices.setCredentialReference(deviceId, request.credentialReferenceId(), actor, "device_credential_set");
+        return ResponseEntity.ok(Map.of("ok", true, "changed", changed));
     }
 
     @PostMapping("/devices/{deviceId}/secrets/{purpose}")

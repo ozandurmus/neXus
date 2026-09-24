@@ -522,13 +522,21 @@ export function addDeviceSingle(
   role: DeviceRole,
   vendor: Vendor,
   credentialReferenceId: string,
+  exportPassphraseCredentialReferenceId?: string,
 ): Promise<AddDeviceSingleResult> {
+  // One call, one transaction: the device, its export passphrase (Radware) and its confirm job, or none of them.
   return call("/devices/add-single", "POST", {
     address,
     role,
     vendor,
     credential_reference_id: credentialReferenceId,
+    ...(exportPassphraseCredentialReferenceId ? { export_passphrase_credential_reference_id: exportPassphraseCredentialReferenceId } : {}),
   });
+}
+
+/** Replace a device's login credential (a reference, never a value); the next job uses it. */
+export function setDeviceCredential(deviceId: string, credentialReferenceId: string): Promise<{ ok: boolean; changed: boolean }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/credential`, "PUT", { credential_reference_id: credentialReferenceId });
 }
 
 export function getDevice(deviceId: string): Promise<DeviceDetail> {

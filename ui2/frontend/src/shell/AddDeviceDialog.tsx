@@ -38,7 +38,8 @@ import {
   type DiscoveryImportResult,
   type DiscoveryRunView,
   type Vendor,
-  setDeviceSecret,
+  setDeviceCredential,
+  retryDeviceConfirm,
 } from "../auth/adminApi";
 import { enrollmentStateLabel, isTerminalJobState, jobPhaseLabel, peerFollowMessage } from "./deviceCopy";
 
@@ -68,6 +69,8 @@ function formatValidationReason(reason: string): string {
       return `${reason} (Please select a valid credential from the list)`;
     case "vendor_hint_invalid":
       return `${reason} (Selected vendor is invalid)`;
+    case "export_passphrase_required":
+      return `${reason} (Choose the export passphrase credential; nothing was added)`;
     case "role_invalid":
       return `${reason} (Selected role is invalid)`;
     case "unsupported_transport_kind":
@@ -302,6 +305,19 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
     }
   };
 
+  const retryWithCredential = async () => {
+    if (!deviceId) return;
+    setSubmitError(null);
+    try {
+      await setDeviceCredential(deviceId, credentialId);
+      const { job_id } = await retryDeviceConfirm(deviceId);
+      setActiveJobId(job_id);
+      setPhase("confirming");
+    } catch (err) {
+      setSubmitError(describeApiError(err));
+    }
+  };
+
   const handleSubmit = async () => {
     setSubmitError(null);
     setValidationReason(null);
@@ -309,10 +325,8 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
     if (mode === "single") {
       setPhase("submitting");
       try {
-        const result = await addDeviceSingle(trimmedAddress, HTTPS_VENDORS.has(vendor) ? "appliance" : role, vendor, credentialId);
-        if (vendor === "radware" && passphraseCredentialId) {
-          await setDeviceSecret(result.device_id, "export_passphrase", passphraseCredentialId);
-        }
+        const result = await addDeviceSingle(trimmedAddress, HTTPS_VENDORS.has(vendor) ? "appliance" : role, vendor, credentialId,
+          vendor === "radware" ? passphraseCredentialId : undefined);
         setDeviceId(result.device_id);
         setActiveJobId(result.job_id);
         setPhase("confirming");
@@ -634,6 +648,16 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               <Typography variant="body2" color="error">
                 {submitError ?? detail.job?.terminal_reason ?? "Enrollment did not complete."}
               </Typography>
+            )}
+            {!success && deviceId && detail.enrollment_state === "DRAFT" && (
+              // PO, 2026-09-24: a wrong credential is fixed here, not by deleting and re-adding the device.
+              <Stack spacing={1}>
+                <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Wrong credential? Choose another and check again.</Typography>
+                {credentialSelectorFragment}
+                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                  <Button variant="outlined" disabled={!credentialId} onClick={() => void retryWithCredential()}>Check again with this credential</Button>
+                </Box>
+              </Stack>
             )}
           </Stack>
         )}

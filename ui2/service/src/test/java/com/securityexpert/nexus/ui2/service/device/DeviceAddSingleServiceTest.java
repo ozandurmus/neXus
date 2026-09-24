@@ -288,4 +288,37 @@ class DeviceAddSingleServiceTest {
         assertTrue(devices.registered.isEmpty(), "a refused admission must leave no orphan DRAFT row (AC-1)");
         assertTrue(devices.byId.isEmpty(), "a refused admission must leave no orphan DRAFT row (AC-1)");
     }
+
+    @Test
+    void aRadwareDeviceWithoutItsExportPassphraseIsRefusedBeforeAnyWrite() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        DeviceRegistrationService registrationService =
+                new DeviceRegistrationService(devices, new FakeCredentialReferenceRepository());
+        JobAdmissionService jobAdmissionService = new JobAdmissionService(confirmCapabilityRegistry(),
+                readPortOver(devices), new InMemoryJobAdmissionRepository());
+        DeviceAddSingleService service =
+                new DeviceAddSingleService(new DirectTransactionBoundary(), registrationService, jobAdmissionService);
+
+        DeviceAddSingleService.Outcome outcome = service.addSingle(ACTOR, "appliance", ADDRESS, "radware", CREDENTIAL_REF, Optional.empty());
+
+        assertEquals(DeviceAddSingleService.REASON_EXPORT_PASSPHRASE_REQUIRED,
+                ((DeviceAddSingleService.Outcome.ValidationFailed) outcome).reasonCode());
+        assertTrue(devices.registered.isEmpty(), "no half-added device (PO, 2026-09-24)");
+    }
+
+    @Test
+    void anExportPassphraseIsRefusedForAVendorThatTakesNone() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        DeviceRegistrationService registrationService =
+                new DeviceRegistrationService(devices, new FakeCredentialReferenceRepository());
+        JobAdmissionService jobAdmissionService = new JobAdmissionService(confirmCapabilityRegistry(),
+                readPortOver(devices), new InMemoryJobAdmissionRepository());
+        DeviceAddSingleService service =
+                new DeviceAddSingleService(new DirectTransactionBoundary(), registrationService, jobAdmissionService);
+
+        DeviceAddSingleService.Outcome outcome = service.addSingle(ACTOR, "gateway", ADDRESS, "check_point", CREDENTIAL_REF, Optional.of("cred-ref-2"));
+
+        assertTrue(outcome instanceof DeviceAddSingleService.Outcome.ValidationFailed, "expected ValidationFailed, got " + outcome);
+        assertTrue(devices.registered.isEmpty());
+    }
 }

@@ -47,7 +47,8 @@ public final class DeviceRegistrationController {
             @JsonProperty("address") String address,
             @JsonProperty("role") String role,
             @JsonProperty("vendor") String vendor,
-            @JsonProperty("credential_reference_id") String credentialReferenceId) {
+            @JsonProperty("credential_reference_id") String credentialReferenceId,
+            @JsonProperty("export_passphrase_credential_reference_id") String exportPassphraseCredentialReferenceId) {
     }
 
     public record DeleteRequest(@JsonProperty("backup_disposition") BackupDisposition backupDisposition) {
@@ -105,7 +106,8 @@ public final class DeviceRegistrationController {
             HttpServletRequest servletRequest) {
         String actorFingerprint = actingUser(servletRequest);
         DeviceAddSingleService.Outcome outcome = deviceAddSingleService.addSingle(actorFingerprint, request.role(), request.address(),
-                request.vendor(), request.credentialReferenceId());
+                request.vendor(), request.credentialReferenceId(),
+                java.util.Optional.ofNullable(request.exportPassphraseCredentialReferenceId()));
         return switch (outcome) {
             case DeviceAddSingleService.Outcome.Admitted admitted -> {
                 Map<String, Object> body = new LinkedHashMap<>();

@@ -246,6 +246,14 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public boolean setCredentialReference(String deviceId, String credentialReferenceId, String actorFingerprint, String actionId) {
+        int updated = auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> dsl.execute(
+                "update devices set credential_reference_id = {0} where device_id = {1} and credential_reference_id <> {0}",
+                credentialReferenceId, deviceId));
+        return updated == 1;
+    }
+
+    @Override
     public boolean setBackupTarget(String deviceId, boolean backupTarget, String actorFingerprint, String actionId) {
         int updated = auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> dsl.execute(
                 "update devices set backup_target = {0} where device_id = {1} and backup_target <> {0}",

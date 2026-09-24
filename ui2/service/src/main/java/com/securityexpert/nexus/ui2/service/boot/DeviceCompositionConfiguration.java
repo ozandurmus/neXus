@@ -433,9 +433,10 @@ public class DeviceCompositionConfiguration {
     @Bean
     public DeviceAddSingleService deviceAddSingleService(TransactionBoundary transactionBoundary,
             DeviceRegistrationService deviceRegistrationService, JobAdmissionService jobAdmissionService,
-            DeviceRepository deviceRepository) {
+            DeviceRepository deviceRepository,
+            com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository deviceSecretReferenceRepository) {
         return new DeviceAddSingleService(transactionBoundary, deviceRegistrationService, jobAdmissionService,
-                deviceRepository);
+                deviceRepository).withSecrets(deviceSecretReferenceRepository);
     }
 
     @Bean
