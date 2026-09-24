@@ -71,7 +71,7 @@ The host's SSH key changes with the reinstall: the agent's first connection remo
    `scripts/hosta_deploy.sh` from then on.
 8. **Cyber Controller receiver** (sudo; RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md): user `nexus-cc` (group
    `nexuscc`, **gid 2600** — the worker manifest's supplemental group), `/var/lib/nexus-cc` root:root 755 and
-   `/var/lib/nexus-cc/in` nexus-cc:nexuscc 2770 **on the neXus volume**, the `Match User nexus-cc` block at the end of
+   `/var/lib/nexus-cc/in` nexus-cc:nexuscc 2770 (the whole disk is neXus's now), the `Match User nexus-cc` block at the end of
    `sshd_config` (the old one is in `host-files.tar`), the same password as the credential-store entry
    "SFTP Receiver".
 
