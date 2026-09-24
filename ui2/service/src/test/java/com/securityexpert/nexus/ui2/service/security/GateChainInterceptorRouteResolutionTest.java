@@ -60,6 +60,23 @@ class GateChainInterceptorSecurityTest {
     }
 
     @Test
+    void deviceSecretRouteResolvesToDeviceRegisterAction() throws Exception {
+        var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
+        var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
+        method.setAccessible(true);
+        assertEquals(ActionRegistry.DEVICE_REGISTER,
+                method.invoke(interceptor, "POST", "/devices/device-1/secrets/export_passphrase"));
+    }
+
+    /** The interceptor wildcards one segment at a time: a two-"*" route never matches (V64, 2026-09-24). */
+    @Test
+    void everyMappedRouteHasAtMostOneWildcard() {
+        for (String route : SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.keySet()) {
+            assertTrue(route.chars().filter(c -> c == '*').count() <= 1, route + " carries two wildcards and can never match");
+        }
+    }
+
+    @Test
     void deviceConfirmRouteResolvesToDeviceRegisterAction() throws Exception {
         var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
         var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);

@@ -30,7 +30,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /devices/*/confirm", ActionRegistry.DEVICE_REGISTER),
             Map.entry("POST /devices/*/delete", ActionRegistry.DEVICE_DELETE),
             // V64: a device's second secret (a credential-store reference, never a value)
-            Map.entry("POST /devices/*/secrets/*", ActionRegistry.DEVICE_REGISTER),
+            // One wildcard per route: the interceptor matches a single "*" segment (V64 shipped "secrets/*" and every call was refused).
+            Map.entry("POST /devices/*/secrets/export_passphrase", ActionRegistry.DEVICE_REGISTER),
             // GET /devices/{id} is this route map's first path-variable route --
             // "GET /devices/*" is GateChainInterceptor's one-segment wildcard
             // suffix, matched only after an exact-route lookup misses.
