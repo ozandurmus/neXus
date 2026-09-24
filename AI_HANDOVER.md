@@ -44,6 +44,15 @@ Not yet checked in the browser by the Product Owner (see "Exact next action").
    (no documented REST identity endpoint — research summary pending to the PO); DefensePro REST reads worth gating
    (policies `rsIDSNewRulesTable`, profiles, signature DB version via `/monitor?prop=`) — not yet proposed.
 
+# Backlog
+`project/QUEUE.md` is the planning source (write only through `scripts/project_queue.py`). Added 2026-09-25 from this
+session: `hosta_rebuild_real_env_acceptance` (P0, in progress), `scheduled_fleet_backup_enable_decision`,
+`cp_backup_empty_status_poll_loop`, `radware_defensepro_getcfg_measurement` (P1), `radware_cc_identity_and_defensepro_reads`,
+`mds_ha_second_mds_read`, `backup_remaining_vendors`, `hosta_export_include_build_namespace`,
+`deploy_manifest_tests_eight_failures` (P2), `run_build_sets_configuration_image`, `corporate_inspection_ca_verify_with_it`,
+`old_export_copies_disposal` (P3). Older open P0/P1 items (PAN serial identity, private replay, off-host key custody,
+job failure reasons, aiview masking audit, cluster DIFF tuning, CP backup free-space parse, ...) are unchanged there.
+
 # Open items / risks
 - `scripts/hosta_export_all.sh` does not export the `ui2-build` namespace (`corp-ca`); add it.
 - `tests/test_ui2_deployment_manifests.py`: 8 pre-existing failures (configuration/compliance manifests) — separate task.

@@ -927,6 +927,114 @@
       "priority": "P1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "hosta_rebuild_real_env_acceptance",
+      "category": "ui2",
+      "title": "HOST-A rebuilt 2026-09-25: PO browser acceptance under aiview -- pseudonyms unchanged, CP+PAN collect decrypts credentials, an old backup opens, Cyber Controller backup completes",
+      "status": "in_progress",
+      "priority": "P0",
+      "target": "docs/design/HOST_A_REBUILD_RUNBOOK.md section 5",
+      "note": ""
+    },
+    {
+      "id": "scheduled_fleet_backup_enable_decision",
+      "category": "backup",
+      "title": "Scheduled fleet backup is off (schedule_enabled=false); PO to decide whether the nightly fleet backup runs",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Backups > Retention & Policies",
+      "note": ""
+    },
+    {
+      "id": "cp_backup_empty_status_poll_loop",
+      "category": "backup",
+      "title": "Check Point backup polls an empty 'show backup status' until its 30-minute deadline instead of failing fast",
+      "status": "planned",
+      "priority": "P1",
+      "target": "BackupCapabilityExecutor status poll",
+      "note": ""
+    },
+    {
+      "id": "radware_defensepro_getcfg_measurement",
+      "category": "backup",
+      "title": "Measure DefensePro backup through the Cyber Controller (getcfg) on a live Backup Now; record content type and size",
+      "status": "planned",
+      "priority": "P1",
+      "target": "RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md MEASURE FIRST 3",
+      "note": ""
+    },
+    {
+      "id": "radware_cc_identity_and_defensepro_reads",
+      "category": "collection",
+      "title": "Radware: name/version for the Cyber Controller (no documented REST identity call) and gate DefensePro reads -- policies rsIDSNewRulesTable, protection profiles and actions, signature DB version via /monitor",
+      "status": "planned",
+      "priority": "P2",
+      "target": "research 2026-09-24; new gate document",
+      "note": ""
+    },
+    {
+      "id": "mds_ha_second_mds_read",
+      "category": "discovery",
+      "title": "MDS HA: read the second MDS / HA state (mdsstat or an MDS-level query) -- needs a gate entry",
+      "status": "planned",
+      "priority": "P2",
+      "target": "CP management plane",
+      "note": ""
+    },
+    {
+      "id": "backup_remaining_vendors",
+      "category": "backup",
+      "title": "Backup for the remaining contracted vendors: FortiGate, Panorama, Pulse Secure, Cisco ASA, Blue Coat",
+      "status": "planned",
+      "priority": "P2",
+      "target": "VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
+      "note": ""
+    },
+    {
+      "id": "hosta_export_include_build_namespace",
+      "category": "ui2",
+      "title": "hosta_export_all.sh does not export the ui2-build namespace (corp-ca ConfigMap) nor list the git-ignored ui2/.ca and Gradle zip",
+      "status": "planned",
+      "priority": "P2",
+      "target": "scripts/hosta_export_all.sh",
+      "note": ""
+    },
+    {
+      "id": "deploy_manifest_tests_eight_failures",
+      "category": "ui2",
+      "title": "tests/test_ui2_deployment_manifests.py: 8 pre-existing failures on the configuration/compliance manifests (:latest, runAsNonRoot, workload count, BK-17)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "deploy/ui2/54-*, 55-*",
+      "note": ""
+    },
+    {
+      "id": "run_build_sets_configuration_image",
+      "category": "ui2",
+      "title": "run_build.sh does not set the ui2-configuration image; it stays on :latest until set by hand",
+      "status": "planned",
+      "priority": "P3",
+      "target": "deploy/ui2-image-build/run_build.sh",
+      "note": ""
+    },
+    {
+      "id": "corporate_inspection_ca_verify_with_it",
+      "category": "security",
+      "title": "The corporate inspection CA in ui2/.ca was taken from the chain the firewall presents; confirm it against the CA IT publishes",
+      "status": "planned",
+      "priority": "P3",
+      "target": "HOST_A_REBUILD_RUNBOOK.md section 6",
+      "note": ""
+    },
+    {
+      "id": "old_export_copies_disposal",
+      "category": "security",
+      "title": "The 98 GB pre-reinstall export (keys included) sits on HOST-A and on the PO's transfer server; PO decides when to delete",
+      "status": "planned",
+      "priority": "P3",
+      "target": "/home/aiadmin/nexus-export-20260924T2026Z",
+      "note": ""
     }
   ]
 }
