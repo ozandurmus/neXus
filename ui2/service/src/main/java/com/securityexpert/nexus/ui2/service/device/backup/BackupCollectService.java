@@ -84,11 +84,12 @@ public final class BackupCollectService {
         boolean checkPointManagement = "management_server".equals(role) && "check_point".equals(device.get().vendorHint());
         // V64: appliances backed up over HTTPS (Infoblox, Radware) carry role "appliance"
         boolean httpsVendor = HTTPS_VENDORS.contains(device.get().vendorHint());
-        if (httpsVendor && "management_server".equals(role)) {
-            // V67: a Radware Cyber Controller is the path to its DefensePro backups; its own backup (CLI-only per
-            // Radware) is not gated yet.
-            return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED", "device " + deviceId + " is a Radware Cyber "
-                    + "Controller: it backs up the DefensePro devices it manages; its own backup is not gated yet, so nothing was issued");
+        // V69: a Radware management server is a Cyber Controller; its own configuration backup is pushed to HOST-A's
+        // SFTP receiver (the DefensePro devices it manages are backed up through it, V67).
+        boolean cyberController = "radware".equals(device.get().vendorHint()) && "management_server".equals(role);
+        if (!cyberController && httpsVendor && "management_server".equals(role)) {
+            return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED", "device " + deviceId + " is a management "
+                    + "server of a vendor with no gated backup for it, so nothing was issued");
         }
         if (!"gateway".equals(role) && !"firewall".equals(role) && !checkPointManagement && !httpsVendor) {
             if ("management_server".equals(role)) {
@@ -117,7 +118,9 @@ public final class BackupCollectService {
         }
 
         String capabilityId;
-        if (httpsVendor) {
+        if (cyberController) {
+            capabilityId = BackupCapabilityIds.RDW_CC_CONFIG_BACKUP;
+        } else if (httpsVendor) {
             capabilityId = BackupCapabilityIds.HTTPS_VENDOR_BACKUP;
         } else if ("mds_export".equalsIgnoreCase(backupType)) {
             if (!checkPointManagement) {

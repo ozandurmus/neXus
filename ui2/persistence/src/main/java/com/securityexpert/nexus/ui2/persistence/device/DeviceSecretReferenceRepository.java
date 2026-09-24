@@ -6,6 +6,8 @@ import java.util.Optional;
 public interface DeviceSecretReferenceRepository {
 
     String EXPORT_PASSPHRASE = "export_passphrase";
+    /** V69: a Radware Cyber Controller's SFTP receiver credential (HOST-A's chrooted nexus-cc). */
+    String BACKUP_RECEIVER = "backup_receiver";
 
     Optional<String> find(String deviceId, String purpose);
 

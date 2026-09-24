@@ -316,6 +316,32 @@ public final class SshExecTransport implements DeviceTransport {
         }
     }
 
+    /** {@link #execInteractive}, answering the command's questions on the way (replies never logged). */
+    @Override
+    public ExecResult execInteractiveAnswering(TransportSession session, ExecSpec spec,
+            java.util.List<com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer> answers, Duration timeout) {
+        if (!(session instanceof SshTransportSession sshSession)) {
+            return new ExecResult.ChannelFailed("not an ssh_exec session");
+        }
+        long startMs = System.currentTimeMillis();
+        try {
+            InteractiveShellSession.Result result = sshSession.interactiveShell().runAnswering(spec.command(), answers, (int) timeout.toMillis());
+            long elapsedMs = System.currentTimeMillis() - startMs;
+            LOG.log(System.Logger.Level.INFO, "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" answered, ended {1} in {2}ms",
+                    spec.command(), result.kind(), elapsedMs);
+            return switch (result.kind()) {
+                case TIMED_OUT -> new ExecResult.TimedOut();
+                case OUTPUT -> new ExecResult.Completed(result.text(), 0);
+                case EMPTY -> new ExecResult.ChannelFailed("empty output");
+                case CLI_ERROR -> new ExecResult.Completed(result.text(), 1);
+                case NOT_SENT -> new ExecResult.ChannelFailed("command not sent");
+            };
+        } catch (JSchException | IOException e) {
+            sshSession.closeInteractiveShell();
+            return new ExecResult.ChannelFailed(String.valueOf(e.getMessage()));
+        }
+    }
+
     @Override
     public FetchResult fetch(TransportSession session, FetchSpec spec, Duration timeout) {
         throw new TransportNotImplementedException("sftp_get/scp_get");

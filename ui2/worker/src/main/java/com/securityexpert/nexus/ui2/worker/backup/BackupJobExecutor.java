@@ -80,6 +80,14 @@ public final class BackupJobExecutor {
         return this;
     }
 
+    private com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupExecutor cyberControllerBackupExecutor;
+
+    /** V69: a Radware Cyber Controller's own configuration backup; unset, such a job fails closed. */
+    public BackupJobExecutor withCyberControllerBackupExecutor(com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupExecutor executor) {
+        this.cyberControllerBackupExecutor = executor;
+        return this;
+    }
+
     /** V61: the Check Point MDS export; unset, a cp_mds_export job fails closed (never falls back to the Gaia backup). */
     public BackupJobExecutor withMdsExportExecutor(com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor executor) {
         this.mdsExportExecutor = executor;
@@ -192,7 +200,12 @@ public final class BackupJobExecutor {
                 }
             }
         }
-        if (viaCyberController.isPresent()) {
+        if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.RDW_CC_CONFIG_BACKUP.equals(capabilityId)) {
+            result = cyberControllerBackupExecutor == null
+                    ? new BackupResult.ConnectFailed("cyber controller backup executor not configured in this worker")
+                    : cyberControllerBackupExecutor.collect(request, deviceSecrets.find(targetDeviceId,
+                            com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository.BACKUP_RECEIVER), targetDeviceId, jobId);
+        } else if (viaCyberController.isPresent()) {
             result = viaCyberController.get();
         } else if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(capabilityId)) {
             result = httpsVendorExecutor == null

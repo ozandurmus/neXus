@@ -155,6 +155,83 @@ final class InteractiveShellSession implements AutoCloseable {
         return new Result(Result.Kind.OUTPUT, stdout);
     }
 
+    /**
+     * {@link #runForResult} for a command that asks questions before its prompt returns: when the output so far ends
+     * with an answer's {@code promptSuffix} (case-insensitive), its reply is sent once. The reply is never echoed into
+     * the returned text by this method (a device that echoes it is a device problem; the Cyber Controller does not).
+     */
+    Result runAnswering(String command, List<com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer> answers, int timeoutMs) {
+        String normalized = command == null ? "" : command.strip();
+        if (normalized.isEmpty() || normalized.contains("\n") || normalized.contains("\r")) {
+            return new Result(Result.Kind.NOT_SENT, null);
+        }
+        drainReady();
+        try {
+            out.write((normalized + "\n").getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        } catch (IOException e) {
+            return new Result(Result.Kind.NOT_SENT, null);
+        }
+        boolean[] answered = new boolean[answers.size()];
+        StringBuilder raw = new StringBuilder();
+        long deadline = System.currentTimeMillis() + Math.max(1000, timeoutMs);
+        byte[] buf = new byte[4096];
+        boolean completed = false;
+        while (System.currentTimeMillis() < deadline) {
+            boolean got = false;
+            try {
+                while (in.available() > 0) {
+                    int n = in.read(buf);
+                    if (n < 0) {
+                        break;
+                    }
+                    raw.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+                    got = true;
+                }
+            } catch (IOException ignored) {
+                // the deadline still governs
+            }
+            if (got) {
+                String current = stripTerminalControl(raw.toString()).stripTrailing();
+                if (prompt != null && current.endsWith(prompt)) {
+                    completed = true;
+                    break;
+                }
+                String lower = current.toLowerCase(Locale.ROOT);
+                for (int i = 0; i < answers.size(); i++) {
+                    if (!answered[i] && lower.endsWith(answers.get(i).promptSuffix().toLowerCase(Locale.ROOT))) {
+                        try {
+                            out.write((new String(answers.get(i).reply()) + "\n").getBytes(StandardCharsets.UTF_8));
+                            out.flush();
+                        } catch (IOException e) {
+                            return new Result(Result.Kind.NOT_SENT, null);
+                        }
+                        answered[i] = true;
+                        raw.append('\n');
+                        break;
+                    }
+                }
+            }
+            sleepQuietly(40);
+        }
+        if (!completed) {
+            return new Result(Result.Kind.TIMED_OUT, null);
+        }
+        String text = stripTerminalControl(raw.toString());
+        List<String> lines = new ArrayList<>(List.of(text.split("\n", -1)));
+        if (!lines.isEmpty() && lines.get(0).strip().equals(normalized)) {
+            lines.remove(0);
+        }
+        if (prompt != null && !lines.isEmpty() && lines.get(lines.size() - 1).strip().equals(prompt)) {
+            lines.remove(lines.size() - 1);
+        }
+        String stdout = String.join("\n", lines).strip();
+        if (stdout.isEmpty()) {
+            return new Result(Result.Kind.EMPTY, "");
+        }
+        return new Result(looksLikeCliError(stdout) ? Result.Kind.CLI_ERROR : Result.Kind.OUTPUT, stdout);
+    }
+
     /** The command's output, or {@code null} for any non-output ending (the "try the next form" contract). */
     String run(String command, int timeoutMs) {
         Result r = runForResult(command, timeoutMs);

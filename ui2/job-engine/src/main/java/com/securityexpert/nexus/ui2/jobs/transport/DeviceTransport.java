@@ -38,6 +38,15 @@ public interface DeviceTransport {
         throw new TransportNotImplementedException("exec_interactive");
     }
 
+    /**
+     * {@link #execInteractive} for a command that asks questions before its prompt returns (Radware Cyber Controller
+     * {@code export}: "Password:"; {@code delete}: "(Y/N)?"). Default: not implemented, as for {@link #execInteractive}.
+     */
+    default ExecResult execInteractiveAnswering(TransportSession session, ExecSpec spec, java.util.List<PromptAnswer> answers,
+            Duration timeout) {
+        throw new TransportNotImplementedException("exec_interactive_answering");
+    }
+
     /** {@code sftp_get}/{@code scp_get} -- declared, not implemented at this movement. */
     FetchResult fetch(TransportSession session, FetchSpec spec, Duration timeout);
 

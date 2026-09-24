@@ -2,7 +2,9 @@
 
 ## Status
 
-**DRAFT — DESIGN CHOSEN AND MEASURED BY THE PRODUCT OWNER (2026-09-24); CLI GATE ENTRIES PENDING HIS APPROVAL.** Requested by the Product Owner on 2026-09-24:
+**APPROVED — PRODUCT OWNER, 2026-09-24** (the four CLI commands and the 03:00 schedule: "ok", after the design and
+the measurements below; implemented as V69). **OPEN: the worker's mount of `/var/lib/nexus-cc/in` is a `hostPath`,
+which the FROZEN deployment contract forbids (UI2_0_B1_01C OS-3) — not deployed until the Product Owner amends it.** Requested by the Product Owner on 2026-09-24:
 the Cyber Controller should push its own backup into a directory neXus owns ("direk kendi sunucumuzdaki bir dizine
 bırakıp"), not be pulled through an undocumented web download. He set the boundary: neXus takes no inbound traffic
 except from permitted addresses, on a specific port ("izinli şekilde belirli IP'lerden kabul ediyor… spesifik bir
@@ -67,8 +69,8 @@ behaviour; 9 secret-bearing output risk; 10 safe telemetry.
 1. Port in the export URL: not supported (always 22). → HOST-A's own SSH.
 2. Prompts: `Password:` only; success text as above; `.tar` appended to the target name.
 3. Network path Cyber Controller → HOST-A:22: open (rule 333), upload of a ~36 MB config backup in about 2 s.
-4. Still MEASURE FIRST: `system backup config delete <name>` (existence and exact-name behaviour) and the failure
-   text of an export (wrong password, full disk).
+4. `system backup config delete <name>`: prompt `Are you sure you want to delete this backup (Y/N)?`, answered `y`,
+   then `Remove completed.` Still MEASURE FIRST: the failure text of an export (wrong password, full disk).
 
 ## Not in this document
 

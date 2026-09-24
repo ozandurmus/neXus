@@ -432,7 +432,7 @@ export function deleteCredential(credentialId: string): Promise<{ credential_id:
 export type Vendor = "check_point" | "palo_alto" | "infoblox" | "radware";
 
 /** V64: bind a credential-store reference as a device's second secret (Radware's export passphrase); never a value. */
-export function setDeviceSecret(deviceId: string, purpose: "export_passphrase", credentialReferenceId: string): Promise<{ ok: boolean }> {
+export function setDeviceSecret(deviceId: string, purpose: "export_passphrase" | "backup_receiver", credentialReferenceId: string): Promise<{ ok: boolean }> {
   return call(`/devices/${encodeURIComponent(deviceId)}/secrets/${purpose}`, "POST", { credential_reference_id: credentialReferenceId });
 }
 

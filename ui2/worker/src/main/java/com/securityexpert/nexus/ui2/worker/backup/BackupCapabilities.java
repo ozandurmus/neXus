@@ -97,9 +97,22 @@ public final class BackupCapabilities {
         return new CapabilityRegistryLoader(gateRegistry).load(spec);
     }
 
+    /** Radware Cyber Controller's own configuration backup (V69): the closed set of {@code CyberControllerBackupPlan}. */
+    public static Capability radwareCyberControllerBackup(GateRegistryPort gateRegistry) {
+        List<CapabilityStep> steps = new java.util.ArrayList<>();
+        steps.add(connectStep());
+        for (String literal : com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupPlan.LITERALS) {
+            steps.add(new CapabilityStep(StepKind.EXEC, "cc_cli", literal, false, Optional.empty(), Optional.empty(), Optional.empty()));
+        }
+        CapabilitySpec spec = new CapabilitySpec(BackupCapabilityIds.RDW_CC_CONFIG_BACKUP, "radware", "radware_cyber_controller",
+                TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, List.copyOf(steps), List.of(disconnectStep()), "14H",
+                List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistry).load(spec);
+    }
+
     public static List<Capability> all(GateRegistryPort gateRegistry) {
         return List.of(checkPoint(gateRegistry), paloAlto(gateRegistry), paloAltoSetConfig(gateRegistry),
-                checkPointMdsExport(gateRegistry));
+                checkPointMdsExport(gateRegistry), radwareCyberControllerBackup(gateRegistry));
     }
 
     private static CapabilityStep xmlApiCallStep(String send) {

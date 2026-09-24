@@ -56,6 +56,14 @@ public final class CompositeDeviceTransport implements DeviceTransport {
     }
 
     @Override
+    public ExecResult execInteractiveAnswering(TransportSession session, ExecSpec spec,
+            java.util.List<com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer> answers, Duration timeout) {
+        return registry.find(TransportKind.SSH_EXEC)
+                .map(transport -> transport.execInteractiveAnswering(session, spec, answers, timeout))
+                .orElseGet(() -> new ExecResult.ChannelFailed(noAdapter(TransportKind.SSH_EXEC)));
+    }
+
+    @Override
     public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
         return registry.find(TransportKind.SSH_EXEC)
                 .map(transport -> transport.execInteractive(session, spec, timeout))

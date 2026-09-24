@@ -179,6 +179,7 @@ public class DeviceCompositionConfiguration {
                 paloAltoBackupCapability(gateRegistryPort),
                 paloAltoSetConfigCapability(gateRegistryPort),
                 checkPointMdsExportCapability(gateRegistryPort),
+                radwareCyberControllerBackupCapability(gateRegistryPort),
                 // 14F DR-1: admitted through JobAdmissionService#submitForRun
                 // against a discovery_run row, never a device -- same
                 // gate-free placeholder shape (StepExecutor never runs
@@ -308,6 +309,23 @@ public class DeviceCompositionConfiguration {
             "bash -lc 'cplic print -x' > %s/cplic.txt 2>&1", "netstat -rn > %s/netstat.txt", "uname -a > %s/uname.txt",
             "cd /var/log && setsid nohup bash -lc '$CPMDIR/scripts/mds_backup -b -l -d %1$s > %1$s/mds_backup.log 2>&1; echo $? > %1$s/mds_backup.rc' </dev/null >/dev/null 2>&1 &",
             "cat %s/mds_backup.rc", "ls %s", "cd %1$s && tar -czf %1$s.tgz .", "sha256sum %s.tgz", "rm -rf %1$s %1$s.tgz");
+
+    /** Mirrors {@code worker.backup.BackupCapabilities.radwareCyberControllerBackup} and {@code CyberControllerBackupPlan.LITERALS} (V69). */
+    static final List<String> CC_BACKUP_LITERALS = List.of("system backup config create %s", "system backup config export %s %s",
+            "system backup config list", "system backup config delete %s");
+
+    private static Capability radwareCyberControllerBackupCapability(GateRegistryPort gateRegistryPort) {
+        List<CapabilityStep> steps = new java.util.ArrayList<>();
+        steps.add(new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false, Optional.empty(), Optional.empty(), Optional.empty()));
+        for (String literal : CC_BACKUP_LITERALS) {
+            steps.add(new CapabilityStep(StepKind.EXEC, "cc_cli", literal, false, Optional.empty(), Optional.empty(), Optional.empty()));
+        }
+        CapabilitySpec spec = new CapabilitySpec(BackupCapabilityIds.RDW_CC_CONFIG_BACKUP, "radware", "radware_cyber_controller",
+                TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, List.copyOf(steps),
+                List.of(new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false, Optional.empty(), Optional.empty(), Optional.empty())),
+                "14H", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
+    }
 
     private static Capability checkPointMdsExportCapability(GateRegistryPort gateRegistryPort) {
         List<CapabilityStep> steps = new java.util.ArrayList<>();

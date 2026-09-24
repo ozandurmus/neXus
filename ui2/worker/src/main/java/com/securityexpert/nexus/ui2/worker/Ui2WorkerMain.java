@@ -249,6 +249,12 @@ public final class Ui2WorkerMain {
         com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor httpsConfirmJobExecutor =
                 new com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor(leaseRepository, attemptRepository,
                         deviceEnrollmentReadPort, deviceRepository, httpsVendorExecutor);
+        // V69: a Radware Cyber Controller's own configuration backup, pushed to HOST-A's chrooted SFTP receiver, whose
+        // upload directory is mounted here (UI2_CC_INBOX_DIR) and whose address the Cyber Controller dials (UI2_CC_RECEIVER_HOST).
+        String ccInbox = System.getenv("UI2_CC_INBOX_DIR");
+        backupJobExecutor.withCyberControllerBackupExecutor(new com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupExecutor(
+                compositeTransport, artefactStore, ccInbox == null || ccInbox.isBlank() ? null : java.nio.file.Path.of(ccInbox),
+                System.getenv("UI2_CC_RECEIVER_HOST"), ref -> panCredentialResolver.resolve(ref).password()));
         // V61: MDS export -- mds_backup of the whole server; its run time on this estate is still to be measured, so
         // the deadline is generous and configurable (UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS).
         backupJobExecutor.withMdsExportExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor(compositeTransport,

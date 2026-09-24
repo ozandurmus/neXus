@@ -25,7 +25,8 @@ import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 @RestController
 public final class DeviceSecretController {
 
-    private static final Set<String> PURPOSES = Set.of(DeviceSecretReferenceRepository.EXPORT_PASSPHRASE);
+    private static final Set<String> PURPOSES = Set.of(DeviceSecretReferenceRepository.EXPORT_PASSPHRASE,
+            DeviceSecretReferenceRepository.BACKUP_RECEIVER);
 
     private final DeviceRepository devices;
     private final DeviceSecretReferenceRepository secrets;

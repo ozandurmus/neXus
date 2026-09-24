@@ -45,7 +45,7 @@ public final class WorkerClaimLoop {
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
             BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, BackupCapabilityIds.CP_GAIA_SNAPSHOT,
-            BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, BackupCapabilityIds.CP_MDS_EXPORT);
+            BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, BackupCapabilityIds.CP_MDS_EXPORT, BackupCapabilityIds.RDW_CC_CONFIG_BACKUP);
     private static final int DEFAULT_SSH_PORT = 22;
 
     private final JobLeaseRepository leaseRepository;
@@ -270,6 +270,15 @@ public final class WorkerClaimLoop {
                 return true;
             }
 
+            if (BackupCapabilityIds.RDW_CC_CONFIG_BACKUP.equals(job.capabilityId())) {
+                // V69: the Cyber Controller's own login credential, SSH on 22 whatever port its HTTPS address carries.
+                String host = hostOf(endpoint.addressRef());
+                String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(host, DEFAULT_SSH_PORT);
+                BackupRequest ccRequest = new BackupRequest(new ConnectionTarget(endpoint.endpointId(), host, DEFAULT_SSH_PORT),
+                        Optional.ofNullable(device.credentialReferenceId()), trustRuleRef);
+                backupJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), ccRequest, job.capabilityId());
+                return true;
+            }
             if (BackupCapabilityIds.isBackupCapability(job.capabilityId())) {
                 // BK-11: the distinct backup credential, never device.credentialReferenceId() (the collection credential).
                 String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(

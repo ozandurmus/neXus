@@ -1380,3 +1380,67 @@ gates:
     secret_output_risk: 'none'
     safe_telemetry_fields: []
     source_document_pointer: 'Cyber Controller REST 10.3.0 Server Logout (V68: the V67 path answered 405 on 10.13)'
+  - gate_id: rdw_cc_backup_create
+    vendor: 'radware'
+    platform_role_scope: 'radware_cyber_controller'
+    shell_context: 'cc_cli'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'system backup config create %s'
+    action_class: 'recovery-write'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'none'
+    max_frequency: 'once per job'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'the backup is not listed afterwards -> refused, nothing to delete'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md #1; measured 2026-09-24'
+  - gate_id: rdw_cc_backup_export
+    vendor: 'radware'
+    platform_role_scope: 'radware_cyber_controller'
+    shell_context: 'cc_cli'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'system backup config export %s %s'
+    action_class: 'recovery-write'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'none'
+    max_frequency: 'once per job'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'no "Export completed." -> refused, the backup deleted'
+    secret_output_risk: 'prompt answer carries the receiver password (never logged)'
+    safe_telemetry_fields: []
+    source_document_pointer: '#2; measured: Password: prompt, "Export completed.", .tar appended'
+  - gate_id: rdw_cc_backup_list
+    vendor: 'radware'
+    platform_role_scope: 'radware_cyber_controller'
+    shell_context: 'cc_cli'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'system backup config list'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per job'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'our name absent -> refused'
+    secret_output_risk: 'backup names only'
+    safe_telemetry_fields: []
+    source_document_pointer: '#3'
+  - gate_id: rdw_cc_backup_delete
+    vendor: 'radware'
+    platform_role_scope: 'radware_cyber_controller'
+    shell_context: 'cc_cli'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'system backup config delete %s'
+    action_class: 'recovery-write'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 120
+    retry_rule: 'none'
+    max_frequency: 'once per job, after the store or after a failure'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'no "Remove completed." -> CLEANUP_FAILED'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: '#4; measured: (Y/N)? answered y, "Remove completed."'

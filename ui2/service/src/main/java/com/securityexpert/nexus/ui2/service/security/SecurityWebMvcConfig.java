@@ -32,6 +32,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // V64: a device's second secret (a credential-store reference, never a value)
             // One wildcard per route: the interceptor matches a single "*" segment (V64 shipped "secrets/*" and every call was refused).
             Map.entry("POST /devices/*/secrets/export_passphrase", ActionRegistry.DEVICE_REGISTER),
+            Map.entry("POST /devices/*/secrets/backup_receiver", ActionRegistry.DEVICE_REGISTER),
             // PO, 2026-09-24: a device's login credential can be changed after it is added.
             Map.entry("PUT /devices/*/credential", ActionRegistry.DEVICE_REGISTER),
             // GET /devices/{id} is this route map's first path-variable route --

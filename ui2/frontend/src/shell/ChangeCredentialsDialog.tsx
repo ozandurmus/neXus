@@ -32,7 +32,11 @@ export function ChangeCredentialsDialog({ device, onClose, onChanged }: {
   const [passphrase, setPassphrase] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const isRadware = device.vendor_hint === "radware";
+  // A Radware appliance is a DefensePro (export passphrase); a Radware management server is a Cyber Controller (its
+  // own backup is pushed to HOST-A's SFTP receiver, whose credential is set here -- V69).
+  const isRadware = device.vendor_hint === "radware" && device.role !== "management_server";
+  const isCyberController = device.vendor_hint === "radware" && device.role === "management_server";
+  const [receiver, setReceiver] = useState("");
   const isDraft = device.enrollment_state === "DRAFT";
   // Only Check Point is reached with an SSH key; every other vendor takes a username and password.
   const eligible = (credentials ?? []).filter((c: CredentialView) => device.vendor_hint === "check_point" || c.kind !== "ssh_private_key");
@@ -43,6 +47,7 @@ export function ChangeCredentialsDialog({ device, onClose, onChanged }: {
     try {
       if (login) await setDeviceCredential(device.device_id, login);
       if (isRadware && passphrase) await setDeviceSecret(device.device_id, "export_passphrase", passphrase);
+      if (isCyberController && receiver) await setDeviceSecret(device.device_id, "backup_receiver", receiver);
       if (login && isDraft) await retryDeviceConfirm(device.device_id);
       onChanged();
       onClose();
@@ -69,6 +74,13 @@ export function ChangeCredentialsDialog({ device, onClose, onChanged }: {
               {eligible.map((c) => <MenuItem key={c.credential_id} value={c.credential_reference_id}>{c.display_name}</MenuItem>)}
             </TextField>
           )}
+          {isCyberController && (
+            <TextField label="Backup receiver credential" select size="small" fullWidth value={receiver}
+              onChange={(e) => setReceiver(e.target.value)}
+              helperText="The HOST-A SFTP account the Cyber Controller pushes its own backup to. Leave empty to keep the current one.">
+              {eligible.map((c) => <MenuItem key={c.credential_id} value={c.credential_reference_id}>{c.display_name}</MenuItem>)}
+            </TextField>
+          )}
           {isDraft && login && (
             <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
               This device is not confirmed yet: saving checks it again with the new credential.
@@ -79,7 +91,7 @@ export function ChangeCredentialsDialog({ device, onClose, onChanged }: {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>Cancel</Button>
-        <Button variant="contained" onClick={() => void save()} disabled={busy || (!login && !passphrase)}>
+        <Button variant="contained" onClick={() => void save()} disabled={busy || (!login && !passphrase && !receiver)}>
           {busy ? "Saving…" : "Save"}
         </Button>
       </DialogActions>
