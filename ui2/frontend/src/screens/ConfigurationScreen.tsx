@@ -217,11 +217,13 @@ export function ConfigurationScreen() {
                 { value: "uncollected", label: "Not collected", count: uncollectedCount },
               ]}
             />
-            {summaries !== null && (
-              <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                {treeDevices.length} shown · {treeDevices.filter(isDeviceLive).length} Live (the state chip shows only when a device is not Live)
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: 1.5, rowGap: 0.75 }}>
+              <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
+                title="A device row shows a state chip only when the device is not Live">
+                {summaries === null ? "" : `${treeDevices.length} shown · ${treeDevices.filter(isDeviceLive).length} Live`}
               </Typography>
-            )}
+              <ListViewSelect value={listView} onChange={setListView} />
+            </Box>
             {error && (
               <EmptyPanel title="Configuration unavailable" body={error}>
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -235,9 +237,6 @@ export function ConfigurationScreen() {
             )}
             {!error && devices !== null && devices.length > 0 && (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: "calc(100vh - 300px)", overflowY: "auto", pr: 0.5 }}>
-                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                  <ListViewSelect value={listView} onChange={setListView} />
-                </Box>
                 {summaries === null && !summariesFetch.error && <EmptyPanel title="Devices" body="Loading…" />}
                 {summariesFetch.error && <EmptyPanel title="Devices unavailable" body={summariesFetch.error} />}
                 {summaries !== null && treeDevices.length === 0 && <EmptyPanel title="No device matches" body="No device matches the filters." />}

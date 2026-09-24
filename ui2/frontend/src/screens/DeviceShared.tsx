@@ -41,10 +41,11 @@ export function FilterRow<T extends string>({ dimension, options, value, onChang
   readonly onChange: (value: T) => void;
 }) {
   return (
-    <Box role="group" aria-label={dimension} sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
-      <Typography component="span" sx={{ fontSize: 12, fontWeight: 600, color: m3.onSurfaceVar, minWidth: 56 }}>
+    <Box role="group" aria-label={dimension} sx={{ display: "flex", alignItems: "flex-start", gap: 0.75 }}>
+      <Typography component="span" sx={{ fontSize: 12, fontWeight: 600, color: m3.onSurfaceVar, width: 56, flexShrink: 0, lineHeight: "26px" }}>
         {dimension}:
       </Typography>
+      <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", minWidth: 0 }}>
       {options.map((o) => {
         const selected = o.value === value;
         return (
@@ -58,6 +59,7 @@ export function FilterRow<T extends string>({ dimension, options, value, onChang
           </Box>
         );
       })}
+      </Box>
     </Box>
   );
 }

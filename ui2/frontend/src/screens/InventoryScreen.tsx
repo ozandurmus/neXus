@@ -272,7 +272,7 @@ export function ListViewSelect({ value, onChange }: { readonly value: ListView; 
         aria-label="Device list view"
         sx={{ fontSize: "12px", color: m3.onSurface, bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, borderRadius: "6px", px: 1, py: 0.4, cursor: "pointer" }}>
         <option value="flat">Flat list</option>
-        <option value="manager">By manager (MDS / Panorama)</option>
+        <option value="manager">By manager</option>
       </Box>
     </Box>
   );
@@ -986,6 +986,7 @@ export function InventoryScreen() {
               minHeight: 0,
               maxHeight: "calc(100vh - 160px)",
               overflowY: "auto",
+              overflowX: "hidden",
               position: "sticky",
               top: 16,
               pr: 0.5,
@@ -1085,11 +1086,12 @@ export function InventoryScreen() {
                 { value: "stale", label: "Stale", count: staleCount },
               ]}
             />
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 0.75 }}>
-              <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                {devices === null ? "" : `${filteredCountLabel} · ${liveCount} Live (the state chip shows only when a device is not Live)`}
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: 1.5, rowGap: 0.75 }}>
+              <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
+                title="A device row shows a state chip only when the device is not Live">
+                {devices === null ? "" : `${filteredCountLabel} · ${liveCount} Live`}
               </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
                 <ListViewSelect value={listView} onChange={setListView} />
                 <Typography variant="caption" color="text.secondary">
                   Sort
