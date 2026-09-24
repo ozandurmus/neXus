@@ -35,7 +35,7 @@ export interface FilterOption<T extends string> {
 
 /** The filter dropdowns side by side on one row (PO, 2026-09-24: chips took half the list column). */
 export function FilterBar({ children }: { readonly children: ReactNode }) {
-  return <Box sx={{ display: "flex", gap: 0.75, "& > *": { flex: "1 1 0", minWidth: 0 } }}>{children}</Box>;
+  return <Box sx={{ display: "flex", gap: 0.75, "& > *": { flex: "0 1 150px", minWidth: 0 } }}>{children}</Box>;
 }
 
 /**
