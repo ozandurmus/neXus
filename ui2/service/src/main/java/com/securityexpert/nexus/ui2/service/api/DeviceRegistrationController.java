@@ -117,12 +117,17 @@ public final class DeviceRegistrationController {
                 yield ResponseEntity.ok(body);
             }
             case DeviceAddSingleService.Outcome.ValidationFailed failed -> {
+                // codes only, never an address or credential (2026-09-24: refusals left no trace to diagnose from)
+                java.util.logging.Logger.getLogger(DeviceRegistrationController.class.getName())
+                        .info("[DEVICE_ADD] refused VALIDATION_FAILED " + failed.reasonCode());
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("error", "VALIDATION_FAILED");
                 body.put("reason_code", failed.reasonCode());
                 yield ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
             }
             case DeviceAddSingleService.Outcome.AdmissionRefused refused -> {
+                java.util.logging.Logger.getLogger(DeviceRegistrationController.class.getName())
+                        .info("[DEVICE_ADD] refused ADMISSION_REFUSED " + refused.code());
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("error", "ADMISSION_REFUSED");
                 body.put("code", refused.code());
@@ -167,12 +172,17 @@ public final class DeviceRegistrationController {
                 yield ResponseEntity.ok(body);
             }
             case DeviceAddSingleService.Outcome.ValidationFailed failed -> {
+                // codes only, never an address or credential (2026-09-24: refusals left no trace to diagnose from)
+                java.util.logging.Logger.getLogger(DeviceRegistrationController.class.getName())
+                        .info("[DEVICE_ADD] refused VALIDATION_FAILED " + failed.reasonCode());
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("error", "VALIDATION_FAILED");
                 body.put("reason_code", failed.reasonCode());
                 yield ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
             }
             case DeviceAddSingleService.Outcome.AdmissionRefused refused -> {
+                java.util.logging.Logger.getLogger(DeviceRegistrationController.class.getName())
+                        .info("[DEVICE_ADD] refused ADMISSION_REFUSED " + refused.code());
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("error", "ADMISSION_REFUSED");
                 body.put("code", refused.code());

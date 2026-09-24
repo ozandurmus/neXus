@@ -165,6 +165,10 @@ public final class DiscoveryController {
                         Optional.ofNullable(request.exportPassphraseCredentialReferenceId()));
         return switch (outcome) {
             case DiscoveryRunService.ImportOutcome.Results results -> {
+                // outcome and reason codes per candidate, never names or addresses
+                java.util.logging.Logger.getLogger(DiscoveryController.class.getName()).info("[DISCOVERY_IMPORT] "
+                        + results.results().stream().map(r -> r.outcome() + r.reason().map(x -> ":" + x).orElse(""))
+                                .collect(java.util.stream.Collectors.groupingBy(x -> x, java.util.TreeMap::new, java.util.stream.Collectors.counting())));
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("results", results.results().stream().map(DiscoveryController::toResultBody).toList());
                 yield ResponseEntity.ok(body);
