@@ -48,11 +48,11 @@ spec:
               type: RuntimeDefault
           resources:
             requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
+              cpu: 100m
               memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
           livenessProbe:
             httpGet:
               path: /healthz

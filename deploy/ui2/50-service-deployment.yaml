@@ -136,11 +136,11 @@ spec:
           # so the structure does not wait on the numbers.
           resources:
             requests:
-              cpu: 200m
-              memory: 512Mi
+              cpu: 500m
+              memory: 1Gi
             limits:
-              cpu: "1"
-              memory: 2Gi
+              cpu: "4"
+              memory: 8Gi
           startupProbe:
             httpGet:
               path: /healthz

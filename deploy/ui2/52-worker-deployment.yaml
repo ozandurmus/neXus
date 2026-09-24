@@ -152,11 +152,11 @@ spec:
           # values so the structure does not wait on the numbers).
           resources:
             requests:
-              cpu: 200m
-              memory: 512Mi
+              cpu: 500m
+              memory: 1Gi
             limits:
-              cpu: "1"
-              memory: 2Gi
+              cpu: "4"
+              memory: 8Gi
           # OS-8/FS-4: the root filesystem is read only and each declared
           # writable path of FS-3 — the JVM temporary directory and the
           # declared HOME — is supplied as an emptyDir. An image-layer path
