@@ -458,40 +458,6 @@ export function BackupScreen() {
         </Box>
       )}
 
-      {/* Metric Cards: a figure or the word for why there is none (UI review 2026-09-23) */}
-      <MetricGrid>
-        <MetricCard title="Devices with a stored backup" value={listLoaded && !listError ? devices.length : null}
-          state={listLoaded && !listError ? "ok" : "unknown"} reason={listError ?? undefined}
-          note={listError ? "Store unreadable" : "Counted from the artefact store, not from inventory"} />
-        <Card sx={{ p: 2.25, borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, boxShadow: "none", display: "flex", flexDirection: "column", gap: 1 }}>
-          <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>Scheduled fleet backup</Typography>
-          {!policy ? (
-            <Typography sx={{ fontSize: 22, lineHeight: "40px", fontWeight: 650, color: m3.neutralInk }}>UNKNOWN</Typography>
-          ) : policy.schedule_enabled ? (
-            <Typography sx={{ fontFamily: MONO, fontSize: 24, lineHeight: "40px", fontWeight: 600, color: m3.onSurface }}>{policy.daily_backup_cron}</Typography>
-          ) : (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 40 }}>
-              <StatusChip tone="warn" label="Not scheduled" />
-            </Box>
-          )}
-          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-            {policy
-              ? policy.schedule_enabled
-                ? <>Cron in UTC{cronLocal(policy.daily_backup_cron)} · last run {policy.last_scheduled_run_at ? <Ts at={policy.last_scheduled_run_at} seconds={false} /> : "never"}</>
-                : "No backup runs on its own. Enable the schedule under Retention & Policies."
-              : "Policy unavailable"}
-          </Typography>
-        </Card>
-        <MetricCard title="Retention policy" value={policy ? `${policy.backup_retention_days} days` : null} state={policy ? "ok" : "unknown"}
-          note={policy ? `Snapshot depth: ${policy.snapshot_retention_depth} retained` : "Policy unavailable"} />
-        {/* Zero deviations found and zero comparisons run look identical and mean opposite things. */}
-        <MetricCard title="Active major deviations"
-          value={deviations && deviations.total_deviations_checked > 0 ? deviations.active_major_deviations.length : null}
-          state={deviations && deviations.total_deviations_checked > 0 ? "ok" : "unknown"}
-          reason="No comparison has run, so no deviation can be claimed or ruled out"
-          note={deviations ? `${deviations.total_deviations_checked} comparison${deviations.total_deviations_checked === 1 ? "" : "s"} run` : "Deviation state unavailable"} />
-      </MetricGrid>
-
       <Dialog open={fleetOpen} onClose={() => (fleetBusy ? undefined : setFleetOpen(false))} fullWidth maxWidth="sm">
         <DialogTitle>Run Fleet Backup</DialogTitle>
         <DialogContent>
@@ -534,6 +500,40 @@ export function BackupScreen() {
         onCompare={(d) => void openCompare(d)}
         onDownload={(d) => { setExportError(null); setSelectedDeviceExport(d); }}
       />
+
+      {/* Metric Cards, below the table (PO, 2026-09-24: at the top they pulled the eye from the work): a figure or the word for why there is none (UI review 2026-09-23) */}
+      <MetricGrid>
+        <MetricCard title="Devices with a stored backup" value={listLoaded && !listError ? devices.length : null}
+          state={listLoaded && !listError ? "ok" : "unknown"} reason={listError ?? undefined}
+          note={listError ? "Store unreadable" : "Counted from the artefact store, not from inventory"} />
+        <Card sx={{ p: 2.25, borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, boxShadow: "none", display: "flex", flexDirection: "column", gap: 1 }}>
+          <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>Scheduled fleet backup</Typography>
+          {!policy ? (
+            <Typography sx={{ fontSize: 22, lineHeight: "40px", fontWeight: 650, color: m3.neutralInk }}>UNKNOWN</Typography>
+          ) : policy.schedule_enabled ? (
+            <Typography sx={{ fontFamily: MONO, fontSize: 24, lineHeight: "40px", fontWeight: 600, color: m3.onSurface }}>{policy.daily_backup_cron}</Typography>
+          ) : (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 40 }}>
+              <StatusChip tone="warn" label="Not scheduled" />
+            </Box>
+          )}
+          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+            {policy
+              ? policy.schedule_enabled
+                ? <>Cron in UTC{cronLocal(policy.daily_backup_cron)} · last run {policy.last_scheduled_run_at ? <Ts at={policy.last_scheduled_run_at} seconds={false} /> : "never"}</>
+                : "No backup runs on its own. Enable the schedule under Retention & Policies."
+              : "Policy unavailable"}
+          </Typography>
+        </Card>
+        <MetricCard title="Retention policy" value={policy ? `${policy.backup_retention_days} days` : null} state={policy ? "ok" : "unknown"}
+          note={policy ? `Snapshot depth: ${policy.snapshot_retention_depth} retained` : "Policy unavailable"} />
+        {/* Zero deviations found and zero comparisons run look identical and mean opposite things. */}
+        <MetricCard title="Active major deviations"
+          value={deviations && deviations.total_deviations_checked > 0 ? deviations.active_major_deviations.length : null}
+          state={deviations && deviations.total_deviations_checked > 0 ? "ok" : "unknown"}
+          reason="No comparison has run, so no deviation can be claimed or ruled out"
+          note={deviations ? `${deviations.total_deviations_checked} comparison${deviations.total_deviations_checked === 1 ? "" : "s"} run` : "Deviation state unavailable"} />
+      </MetricGrid>
 
       {/* Deviation Diff Modal */}
       {selectedDeviceDiff && (
