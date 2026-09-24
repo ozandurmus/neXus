@@ -48,6 +48,8 @@ public final class DeviceRegistrationService {
     public static final String REASON_VENDOR_HINT_INVALID = "vendor_hint_invalid";
     /** 14I MS-1: the role is not one of the two values the database will accept. */
     public static final String REASON_ROLE_INVALID = "role_invalid";
+    /** Vendors enrolled with role "appliance" (V64/V65). */
+    static final java.util.Set<String> APPLIANCE_VENDORS = java.util.Set.of("infoblox", "radware");
 
     private final DeviceRepository deviceRepository;
     private final CredentialReferenceRepository credentialReferenceRepository;
@@ -87,11 +89,15 @@ public final class DeviceRegistrationService {
             String addressRef, String credentialReferenceId, boolean isTestTarget, String registrationSource,
             Optional<String> clusterMemberRef, Optional<String> virtualSystemRef, Optional<String> discoveryMatchKey,
             String actionId) {
-        if (role == null || (!role.equals("gateway") && !role.equals("management_server"))) {
+        if (role == null || (!role.equals("gateway") && !role.equals("management_server") && !role.equals("appliance"))) {
             return new Outcome.ValidationFailed(REASON_ROLE_INVALID);
         }
         if (vendorHint == null || vendorHint.isBlank()) {
             return new Outcome.ValidationFailed(REASON_VENDOR_HINT_INVALID);
+        }
+        // V65: "appliance" is the role of the vendors reached over HTTPS (Infoblox, Radware) and only theirs.
+        if (role.equals("appliance") != APPLIANCE_VENDORS.contains(vendorHint)) {
+            return new Outcome.ValidationFailed(REASON_ROLE_INVALID);
         }
         if (!IMPLEMENTED_TRANSPORTS.contains(transportKind)) {
             return new Outcome.ValidationFailed(REASON_UNSUPPORTED_TRANSPORT);

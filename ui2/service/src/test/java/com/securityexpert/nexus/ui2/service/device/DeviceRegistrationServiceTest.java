@@ -241,6 +241,28 @@ class DeviceRegistrationServiceTest {
     }
 
     @Test
+    void applianceRoleIsAcceptedForHttpsVendorsOnly() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        FakeCredentialReferenceRepository credentials = new FakeCredentialReferenceRepository();
+        credentials.addExisting("cred-ref-1");
+        DeviceRegistrationService service = new DeviceRegistrationService(devices, credentials);
+
+        DeviceRegistrationService.Outcome infoblox =
+                service.register("actor-onboarding-1", "appliance", "infoblox", "https", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
+        assertFalse(infoblox instanceof DeviceRegistrationService.Outcome.ValidationFailed, String.valueOf(infoblox));
+
+        DeviceRegistrationService.Outcome checkPointAppliance =
+                service.register("actor-onboarding-1", "appliance", "check_point", "ssh_exec", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
+        assertEquals(DeviceRegistrationService.REASON_ROLE_INVALID,
+                ((DeviceRegistrationService.Outcome.ValidationFailed) checkPointAppliance).reasonCode());
+
+        DeviceRegistrationService.Outcome radwareGateway =
+                service.register("actor-onboarding-1", "gateway", "radware", "https", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
+        assertEquals(DeviceRegistrationService.REASON_ROLE_INVALID,
+                ((DeviceRegistrationService.Outcome.ValidationFailed) radwareGateway).reasonCode());
+    }
+
+    @Test
     void leadingAndTrailingWhitespaceInAddressRefIsTrimmed() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         FakeCredentialReferenceRepository credentials = new FakeCredentialReferenceRepository();
