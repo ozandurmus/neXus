@@ -34,3 +34,14 @@ are authorized to connect via SSH to `HOST-A` using the operator account for:
 
 The agent MUST NOT invoke `sudo`, modify `/etc` or system packages, touch
 incumbent workloads, or run commands outside the neXus development workspace.
+
+**PO Amendment (2026-09-24) — HOST-A becomes neXus's own host.** Per
+`PO_DECISION_RECORD_2026_09_24_HOST_A_OWNED_BY_NEXUS_AGENT_SUDO.md` (RATIFIED),
+once HOST-A is reinstalled with no other product on it: a dedicated neXus agent
+account with `sudo` for installing and maintaining neXus and the host; every
+deleting or irreversible command (`rm`, `truncate`, `mkfs`, partitioning, dropping
+data, deleting PVCs/namespaces/backups, reboot) asked for in chat first; HOST-A is
+never a jump server (no onward login, tunnel, forwarding or proxy); every sudo
+command logged on the host. The row above changes to: incumbent — none; posture —
+dedicated agent account with logged `sudo`; tier ceiling — `HOST_OWNED`. Until the
+reinstall, the 2026-09-19 amendment stands.

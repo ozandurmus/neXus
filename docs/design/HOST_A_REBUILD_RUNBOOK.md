@@ -34,17 +34,21 @@ host: `deploy/ui2/05-flyway-bootstrap.yaml`, `deploy/ui2-image-build/05-registry
 template `deploy/ui2-image-build/31-build-job-proxy.yaml.template` (its real proxy values are in `host-files.tar`).
 Versions running before the reinstall: **Ubuntu 24.04.4 LTS, k3s v1.36.4+k3s1**.
 
-## 3. The reinstall itself (Product Owner, with sudo)
+## 3. The reinstall itself (Product Owner)
 
-1. **Give neXus its own volume**, not a file on the shared root: at install time, a separate LVM logical volume (≥500 GB)
-   mounted at `/var/lib/rancher`, and bind or mount `/var/lib/kubelet` and `/var/log/pods` onto it too — then a full
-   root disk can no longer stop neXus pods from starting.
-2. **Cap the co-hosted product's logs** before it runs: `/etc/docker/daemon.json`
-   `{"log-driver":"json-file","log-opts":{"max-size":"100m","max-file":"3"}}` (the writer on 2026-09-24 was
-   `opinnate_clickhouse`, ~6–8 GB/min).
-3. The SSH user and its `~/.kube/config` (from k3s), and the neXus agent's SSH key as before.
+The host becomes neXus's alone (PO, 2026-09-24: "bütün sunucu bizim olacak 1 tb") — no separate volume or co-hosted
+log limits are needed; the whole 1 TB disk is neXus's. Per
+`PO_DECISION_RECORD_2026_09_24_HOST_A_OWNED_BY_NEXUS_AGENT_SUDO.md`:
 
-## 4. Bring neXus back (agent, no sudo, except where marked)
+1. Ubuntu 24.04 LTS, same address.
+2. A dedicated neXus agent account in the `sudo` group, with the agent's SSH public key in its `authorized_keys`, and
+   sudo logging: `/etc/sudoers.d/nexus-agent` → `Defaults:<account> logfile=/var/log/sudo.log, log_input, log_output`.
+3. The export copied onto the host; tell the agent its path.
+
+From here the agent does section 4 itself, with sudo, asking first before any deleting or irreversible command.
+The host's SSH key changes with the reinstall: the agent's first connection removes the old known_hosts entry.
+
+## 4. Bring neXus back (agent, with sudo where marked)
 
 1. **k3s** (sudo): `curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.36.4+k3s1 sh -`; copy
    `/etc/rancher/k3s/k3s.yaml` to `~/.kube/config` for the SSH user.
@@ -78,4 +82,4 @@ Versions running before the reinstall: **Ubuntu 24.04.4 LTS, k3s v1.36.4+k3s1**.
 - a Check Point and a Palo Alto collect succeed (credentials decrypt — credential key restored);
 - a restored backup opens (Download or Contents — artefact key restored);
 - a Cyber Controller Backup Now completes (receiver rebuilt);
-- `df -h /` full does **not** stop a pod restart (the neXus volume is separate).
+- `/var/log/sudo.log` records the agent's privileged commands.
