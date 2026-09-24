@@ -1082,7 +1082,10 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                       {/* Compact actions: all six stay visible in the row (the full-size buttons clipped Compare and Download). */}
                       <Stack direction="row" spacing={0} justifyContent="flex-end" alignItems="center" sx={{ whiteSpace: "nowrap",
                         "& .MuiButton-root": { minWidth: 0, px: 0.9, py: 0.25, fontSize: 12.5, textTransform: "none", borderRadius: "6px" } }}>
-                        {item || summary?.backup_target ? (
+                        {vendor === "radware" && summary?.role === "management_server" ? (
+                          // V67: a Cyber Controller is the path to its DefensePro backups; its own backup is not gated yet.
+                          <Tooltip title="Cyber Controller: the DefensePro devices it manages are backed up through it (use Backup Now on each DefensePro). Its own backup is not available yet."><span><Button size="small" disabled sx={{ mr: 0.5 }}>Backup Now</Button></span></Tooltip>
+                        ) : item || summary?.backup_target ? (
                           <Tooltip title="Take a configuration and state backup of this device now (needs it switched on as a backup target)"><span><Button size="small" variant="contained" disableElevation disabled={busy || !summary?.backup_target}
                             sx={{ bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, "&:hover": { bgcolor: m3.secondaryContainer }, mr: 0.5 }}
                             onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "standard")}>
