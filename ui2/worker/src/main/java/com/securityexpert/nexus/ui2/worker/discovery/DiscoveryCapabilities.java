@@ -38,13 +38,13 @@ public final class DiscoveryCapabilities {
                 TransportKind.PAN_XML_API);
     }
 
-    public static Capability radware() {
-        return load(DiscoveryCapabilityIds.RDW_DISCOVERY_ENUMERATE, "radware", "radware_cyber_controller",
-                TransportKind.HTTPS);
-    }
-
+    /**
+     * The Radware discovery capability is registered on the service only, like the other HTTPS jobs
+     * (DEVICE_CONFIRM_HTTPS, HTTPS_VENDOR_BACKUP): the worker has no HTTPS transport adapter in its registry -- the
+     * HTTPS client is called directly -- so the startup transport check would refuse it (2026-09-24, crash on rollout).
+     */
     public static List<Capability> all() {
-        return List.of(checkPoint(), paloAlto(), radware());
+        return List.of(checkPoint(), paloAlto());
     }
 
     private static Capability load(String capabilityId, String vendor, String platformRoleScope,
