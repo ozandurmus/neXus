@@ -292,6 +292,7 @@ class DiscoveryRunServiceTest {
         return CapabilityRegistry.of(List.of(
                 gateFreeCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, "check_point", TransportKind.SSH_EXEC),
                 gateFreeCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO, "palo_alto", TransportKind.PAN_XML_API),
+                gateFreeCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, "radware", TransportKind.HTTPS),
                 gateFreeCapability(DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, "check_point", TransportKind.SSH_EXEC),
                 gateFreeCapability(DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE, "palo_alto", TransportKind.PAN_XML_API)));
     }
@@ -314,7 +315,17 @@ class DiscoveryRunServiceTest {
                 new PersistenceDiscoveryRunReadPort(runs), new InMemoryJobAdmissionRepository());
         DeviceRegistrationService registrationService = new DeviceRegistrationService(devices, credentials);
         DeviceAddSingleService addSingleService =
-                new DeviceAddSingleService(new DirectTransactionBoundary(), registrationService, jobAdmissionService);
+                new DeviceAddSingleService(new DirectTransactionBoundary(), registrationService, jobAdmissionService)
+                        .withSecrets(new com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository() {
+                            @Override
+                            public java.util.Optional<String> find(String deviceId, String purpose) {
+                                return java.util.Optional.empty();
+                            }
+
+                            @Override
+                            public void set(String deviceId, String purpose, String ref, String actor, String actionId) {
+                            }
+                        });
         DiscoveryRunService service = new DiscoveryRunService(new DirectTransactionBoundary(), runs,
                 jobAdmissionService, credentials, addSingleService, matches);
         return new Fixture(service, runs, devices, matches);
@@ -455,6 +466,26 @@ class DiscoveryRunServiceTest {
         assertEquals(1, fx.devices.registered.size());
         assertEquals("discovery_import", fx.devices.registered.get(0).registrationSource());
         assertEquals(Optional.of("check_point|global|uid-1"), fx.devices.registered.get(0).discoveryMatchKey());
+    }
+
+    @Test
+    void aRadwareDefenseProImportIsAnApplianceAndNeedsItsExportPassphrase() {
+        Fixture fx = fixture();
+        DiscoveryCandidateRecord dp = new DiscoveryCandidateRecord("cand-1", "run-1", "radware", "orm-1", Optional.of("SITE-A"),
+                "RADWARE_DEFENSEPRO", "DP-1", Optional.of("192.0.2.41"), Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty(), true, Optional.empty());
+        fx.runs.seedFinishedRun("run-1", "radware", List.of(dp));
+
+        var without = (DiscoveryRunService.ImportOutcome.Results) fx.service.importSelection(ACTOR, "run-1", List.of("cand-1"), Optional.empty());
+        assertEquals("refused", without.results().get(0).outcome());
+        assertEquals(Optional.of("export_passphrase_required"), without.results().get(0).reason());
+        assertTrue(fx.devices.registered.isEmpty());
+
+        var with = (DiscoveryRunService.ImportOutcome.Results) fx.service.importSelection(ACTOR, "run-1", List.of("cand-1"),
+                Optional.empty(), Optional.of(CREDENTIAL_REF));
+        assertEquals("new", with.results().get(0).outcome(), String.valueOf(with.results().get(0).reason()));
+        assertEquals("appliance", fx.devices.registered.get(0).role());
+        assertEquals(Optional.of("radware|orm-1"), fx.devices.registered.get(0).discoveryMatchKey());
     }
 
     @Test
