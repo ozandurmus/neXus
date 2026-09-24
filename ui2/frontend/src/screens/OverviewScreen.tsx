@@ -557,8 +557,9 @@ export function OverviewScreen() {
         <ListCard icon="config" title="Cluster member DIFF" total={ex.cluster_diff?.total ?? 0} rows={ex.cluster_diff?.rows ?? []}
           empty={ex.cluster_diff?.unknown ? `No member differences in comparable clusters; member comparison not available for ${ex.cluster_diff.unknown} cluster(s).` : "No member differences in comparable clusters."}
           cells={(r) => (
-            <Box sx={{ display: "grid", gridTemplateColumns: "140px 1fr auto", gap: 1.5, alignItems: "baseline" }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 600, fontFamily: MONO, whiteSpace: "nowrap" }}>{r.cluster_ref}</Typography>
+            <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 200px) minmax(0, 1fr) auto", gap: 1.5, alignItems: "baseline" }}>
+              {/* a long name is cut with an ellipsis (the full one on hover), never drawn over the sections */}
+              <Typography title={r.cluster_ref} sx={{ fontSize: 13, fontWeight: 600, fontFamily: MONO, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{r.cluster_ref}</Typography>
               <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{r.diff_sections.join(", ") || `${r.diff_section_count} sections`}</Typography>
               <Typography sx={{ fontSize: 13, fontWeight: 600, textAlign: "right" }}>{r.diff_setting_count}<Typography component="span" sx={{ fontSize: 11, color: m3.onSurfaceVar }}> settings</Typography></Typography>
             </Box>

@@ -51,7 +51,10 @@ public final class OverviewController {
             cached = new Cached(Instant.now(), body);
             cache.put(masked, cached);
         }
-        return ResponseEntity.ok().cacheControl(CacheControl.maxAge(java.time.Duration.ofSeconds(60)).cachePrivate())
+        // no-cache, never max-age: the browser must ask each time, so the server -- not a cached copy from another
+        // login in the same browser -- decides whether the body is masked (2026-09-24: real names showed under aiview
+        // for up to 60 s after an admin session). The ETag still spares the body when nothing changed.
+        return ResponseEntity.ok().cacheControl(CacheControl.noCache().cachePrivate()).header("Vary", "Cookie")
                 .eTag("\"" + cached.at().toEpochMilli() + (masked ? "m" : "u") + "\"").body(cached.body());
     }
 
