@@ -36,7 +36,9 @@ Product Owner for every privileged step of an install or a fix only slows recove
    no SOCKS or HTTP proxy for its own use). What stays allowed: the product's own device traffic (the worker's gated
    jobs) and the non-mutating reachability probes of the 2026-09-19 amendment (`ping`, `nc -z`, `traceroute`, `curl`
    status, SSH banner) toward managed devices, used to diagnose a product failure.
-6. **Every sudo command is recorded** on the host (`Defaults logfile=/var/log/sudo.log, log_input, log_output` for the
-   agent account), so what was run can be read back.
+6. **Every sudo command is recorded** on the host, so what was run can be read back. The reinstalled host runs
+   Ubuntu 26.04.1 LTS, whose `sudo` is `sudo-rs` (0.2.13): it has no `logfile`/`log_input` settings (measured
+   2026-09-25 — the line was refused) and records every invocation in the journal instead:
+   `journalctl _COMM=sudo` (the command line of each call, with the account).
 7. Unchanged: secrets never printed or copied off the host outside a Product Owner request; the product's device
    command gate, the network action taxonomy and every data-handling law apply as before.

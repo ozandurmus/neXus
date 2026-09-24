@@ -40,9 +40,10 @@ The host becomes neXus's alone (PO, 2026-09-24: "bütün sunucu bizim olacak 1 t
 log limits are needed; the whole 1 TB disk is neXus's. Per
 `PO_DECISION_RECORD_2026_09_24_HOST_A_OWNED_BY_NEXUS_AGENT_SUDO.md`:
 
-1. Ubuntu 24.04 LTS, same address.
+1. Ubuntu Server (installed 2026-09-25: **26.04.1 LTS**), same address, `/` on the whole 1 TB.
 2. A dedicated neXus agent account in the `sudo` group, with the agent's SSH public key in its `authorized_keys`, and
-   sudo logging: `/etc/sudoers.d/nexus-agent` → `Defaults:<account> logfile=/var/log/sudo.log, log_input, log_output`.
+   `/etc/sudoers.d/<account>` → `<account> ALL=(ALL) NOPASSWD:ALL` (Ubuntu 26.04's `sudo-rs` logs every call to the
+   journal: `journalctl _COMM=sudo`; it refuses the classic `logfile` setting).
 3. The export copied onto the host; tell the agent its path.
 
 From here the agent does section 4 itself, with sudo, asking first before any deleting or irreversible command.
@@ -82,4 +83,4 @@ The host's SSH key changes with the reinstall: the agent's first connection remo
 - a Check Point and a Palo Alto collect succeed (credentials decrypt — credential key restored);
 - a restored backup opens (Download or Contents — artefact key restored);
 - a Cyber Controller Backup Now completes (receiver rebuilt);
-- `/var/log/sudo.log` records the agent's privileged commands.
+- `journalctl _COMM=sudo` shows the agent's privileged commands.
