@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Service
+metadata: { name: registry, namespace: kube-system }
+spec:
+  selector: { app.kubernetes.io/component: registry }
+  ports: [{ name: http, port: 80, targetPort: 5000 }]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: registry-data, namespace: kube-system }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources: { requests: { storage: 20Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: registry, namespace: kube-system }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app.kubernetes.io/component: registry } }
+  template:
+    metadata: { labels: { app.kubernetes.io/component: registry } }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, fsGroup: 65532 }
+      containers:
+        - name: registry
+          image: registry:2.8.3
+          ports: [{ name: http, containerPort: 5000 }]
+          env:
+            - { name: REGISTRY_HTTP_ADDR, value: ":5000" }
+            - { name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY, value: /var/lib/registry }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts: [{ name: data, mountPath: /var/lib/registry }]
+          readinessProbe: { httpGet: { path: /v2/, port: http }, initialDelaySeconds: 3 }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: registry-data }

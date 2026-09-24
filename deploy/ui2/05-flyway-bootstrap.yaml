@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ui2-flyway-bootstrap
+  namespace: ui2
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: flyway
+          image: flyway/flyway:10.17.0
+          args: ["-connectRetries=10", "migrate"]
+          env:
+            - name: FLYWAY_URL
+              value: "jdbc:postgresql://ui2-db:5432/ui2"
+            - name: FLYWAY_USER
+              valueFrom: { secretKeyRef: { name: ui2-db, key: migrate-user } }
+            - name: FLYWAY_PASSWORD
+              valueFrom: { secretKeyRef: { name: ui2-db, key: migrate-password } }
+            - name: FLYWAY_LOCATIONS
+              value: "filesystem:/flyway/sql"
+          volumeMounts:
+            - { name: sql, mountPath: /flyway/sql }
+      volumes:
+        - name: sql
+          configMap: { name: ui2-migrations }

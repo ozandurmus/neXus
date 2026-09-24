@@ -1,0 +1,77 @@
+# The in-cluster image build as HOST-A runs it (~/build-job-proxy.yaml, applied by run_build.sh): the corporate proxy
+# for base-image pulls and Gradle. Template -- the host renders it with its own values (envsubst):
+#   NEXUS_PROXY_HOST, NEXUS_PROXY_PORT, NEXUS_NO_PROXY (the node address, pod/service CIDRs, .svc, .cluster.local).
+#   envsubst < deploy/ui2-image-build/31-build-job-proxy.yaml.template > ~/build-job-proxy.yaml
+# The real values are in the pre-reinstall export (host-files.tar), never in the repository (privacy gate).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app.kubernetes.io/component: image-build
+    app.kubernetes.io/part-of: nexus-ui2
+  name: ui2-image-build
+  namespace: ui2-build
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: image-build
+        app.kubernetes.io/part-of: nexus-ui2
+    spec:
+      priorityClassName: system-cluster-critical
+      containers:
+      - args:
+        - --context=dir:///workspace
+        - --dockerfile=/workspace/ui2/Containerfile
+        - --destination=registry.kube-system.svc.cluster.local/nexus-ui2-service:$(UI2_IMAGE_TAG)
+        - --digest-file=/workspace/image-digest.txt
+        - --insecure
+        - --skip-tls-verify
+        - --cache=false
+        - --cache-repo=registry.kube-system.svc.cluster.local/nexus-ui2-build-cache
+        - --cache-copy-layers
+        - --snapshot-mode=redo
+        - --log-format=text
+        - --verbosity=info
+        env:
+        - name: UI2_IMAGE_TAG
+          valueFrom:
+            configMapKeyRef:
+              key: image_tag
+              name: ui2-build-config
+        - name: HTTP_PROXY
+          value: http://${NEXUS_PROXY_HOST}:${NEXUS_PROXY_PORT}
+        - name: HTTPS_PROXY
+          value: http://${NEXUS_PROXY_HOST}:${NEXUS_PROXY_PORT}
+        - name: NO_PROXY
+          value: ${NEXUS_NO_PROXY}
+        - name: GRADLE_OPTS
+          value: -Dhttps.proxyHost=${NEXUS_PROXY_HOST} -Dhttps.proxyPort=${NEXUS_PROXY_PORT} -Dhttp.proxyHost=${NEXUS_PROXY_HOST}
+            -Dhttp.proxyPort=${NEXUS_PROXY_PORT}
+        image: gcr.io/kaniko-project/executor@sha256:4e7a52dd1f14872430652bb3b027405b8dfd17c4538751c620ac005741ef9698
+        name: builder
+        resources:
+          limits:
+            cpu: '3'
+            memory: 4Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+        volumeMounts:
+        - mountPath: /workspace
+          name: context
+        - mountPath: /kaniko/ssl/certs
+          name: corp-ca
+      restartPolicy: Never
+      tolerations:
+      - effect: NoSchedule
+        key: node.kubernetes.io/disk-pressure
+        operator: Exists
+      volumes:
+      - name: context
+        persistentVolumeClaim:
+          claimName: ui2-build-context
+      - configMap:
+          name: corp-ca
+        name: corp-ca
