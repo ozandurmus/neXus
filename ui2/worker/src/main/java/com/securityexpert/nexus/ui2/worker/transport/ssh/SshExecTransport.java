@@ -337,10 +337,11 @@ public final class SshExecTransport implements DeviceTransport {
             return new FetchStreamResult.Failed("not an ssh_exec session");
         }
         ChannelSftp channel = null;
+        BoundedCountingOutputStream bounded = null;
         try {
             channel = (ChannelSftp) sshSession.jschSession().openChannel("sftp");
             channel.connect((int) timeout.toMillis());
-            BoundedCountingOutputStream bounded = new BoundedCountingOutputStream(sink, spec.maxBytes());
+            bounded = new BoundedCountingOutputStream(sink, spec.maxBytes());
             channel.get(spec.remotePath(), bounded);
             return new FetchStreamResult.Fetched(bounded.count());
         } catch (JSchException | SftpException e) {
@@ -349,10 +350,40 @@ public final class SshExecTransport implements DeviceTransport {
             // are the reason then.
             String detail = e.getMessage() == null || e.getMessage().isBlank() ? "no message" : e.getMessage();
             String id = e instanceof SftpException sftp ? " id=" + sftp.id : "";
-            return new FetchStreamResult.Failed(e.getClass().getSimpleName() + id + ": " + detail);
+            // Diagnostics (2026-09-24, an MDS Gaia backup failed "id=4: no message"): how far the transfer got, the
+            // file's own size and mode on the device, and whether the product's size bound was reached -- never the path.
+            long received = bounded == null ? -1 : bounded.count();
+            String remote = describeRemote(sshSession, spec.remotePath(), timeout);
+            boolean boundReached = received >= 0 && received >= spec.maxBytes();
+            LOG.log(System.Logger.Level.WARNING, "[SFTP_FETCH_FAILED] {0}{1}: {2} received={3} bound={4} bound_reached={5} remote={6} cause={7}",
+                    e.getClass().getSimpleName(), id, detail, received, spec.maxBytes(), boundReached, remote,
+                    e.getCause() == null ? "-" : e.getCause().getClass().getSimpleName() + ": " + e.getCause().getMessage());
+            if (boundReached) {
+                return new FetchStreamResult.Failed("archive larger than the product's fetch bound of " + spec.maxBytes() + " bytes");
+            }
+            return new FetchStreamResult.Failed(e.getClass().getSimpleName() + id + ": " + detail + " (received " + received
+                    + " bytes; remote " + remote + ")");
         } finally {
             if (channel != null) {
                 channel.disconnect();
+            }
+        }
+    }
+
+    /** Size and permission bits of the remote file, over a fresh SFTP channel -- for a failure's diagnosis only. */
+    private static String describeRemote(SshTransportSession session, String path, Duration timeout) {
+        ChannelSftp probe = null;
+        try {
+            probe = (ChannelSftp) session.jschSession().openChannel("sftp");
+            probe.connect((int) Math.min(timeout.toMillis(), 30_000));
+            com.jcraft.jsch.SftpATTRS a = probe.lstat(path);
+            return "size=" + a.getSize() + " mode=" + a.getPermissionsString() + " uid=" + a.getUId();
+        } catch (JSchException | SftpException e) {
+            return "stat failed (" + e.getClass().getSimpleName()
+                    + (e instanceof SftpException x ? " id=" + x.id : "") + ")";
+        } finally {
+            if (probe != null) {
+                probe.disconnect();
             }
         }
     }

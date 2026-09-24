@@ -46,7 +46,9 @@ public final class BackupCapabilityExecutor {
     private static final Duration DELETE_TIMEOUT = Duration.ofSeconds(60);
     private static final Duration FETCH_TIMEOUT = Duration.ofSeconds(900);
     /** A generous safety bound on the SFTP fetch (entry 5's own timeout column) -- never a vendor-stated archive size limit. */
-    private static final long MAX_ARCHIVE_BYTES = 5L * 1024 * 1024 * 1024;
+    // 2026-09-24: 5 GB -> 50 GB (UI2_BACKUP_MAX_ARCHIVE_BYTES): a Multi-Domain Server's Gaia backup carries every domain.
+    private static final long MAX_ARCHIVE_BYTES = Long.parseLong(
+            System.getenv().getOrDefault("UI2_BACKUP_MAX_ARCHIVE_BYTES", String.valueOf(50L * 1024 * 1024 * 1024)));
 
     private static final Pattern ARCHIVE_NAME = Pattern.compile("([\\w][\\w.\\-]*\\.tgz)");
     private static final Pattern FIRST_INTEGER = Pattern.compile("(\\d+)");
