@@ -48,8 +48,8 @@ export function FilterBar({ children, settings }: { readonly children: ReactNode
 }
 
 /**
- * One filter dimension as a compact dropdown. The unfiltered choice reads "Vendor · 105" (the dimension names itself),
- * the others "Check Point · 65". A dimension narrowed away from its first option is filled in the accent colour, so an
+ * One filter dimension as a compact dropdown. The unfiltered choice is the dimension's own name ("Vendor"), the others
+ * read "Check Point · 65". A dimension narrowed away from its first option is filled in the accent colour, so an
  * active filter is visible at a glance.
  */
 export function FilterRow<T extends string>({ dimension, options, value, onChange }: {
@@ -68,8 +68,8 @@ export function FilterRow<T extends string>({ dimension, options, value, onChang
             bgcolor: active ? m3.primaryContainer : m3.scLowest,
             border: `1px solid ${active ? m3.primary : m3.outlineVar}` }}>
       {options.map((o, i) => {
-        const label = i === 0 ? dimension : o.label;
-        return <option key={o.value} value={o.value}>{o.count === undefined ? label : `${label} · ${o.count}`}</option>;
+        const text = i === 0 ? dimension : o.count === undefined ? o.label : `${o.label} · ${o.count}`;
+        return <option key={o.value} value={o.value}>{text}</option>;
       })}
     </Box>
   );
