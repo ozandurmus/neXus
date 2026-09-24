@@ -2255,11 +2255,11 @@
     {
       "id": "java_vendor_expansion",
       "title": "More vendors (backup first)",
-      "status": "planned",
-      "introduced": null,
+      "status": "in_progress",
+      "introduced": "NXS-LOCAL-0369",
       "weight": 2,
-      "summary": "Contracts written for Radware, Pulse, Panorama, Infoblox, FortiGate, ASA, Provider-1/MDS and ProxySG; each needs its measurement before implementation.",
-      "evidence": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
+      "summary": "Contracts written for eight vendors. Built 2026-09-23..25: Provider-1/MDS export (one live export), Radware through the Cyber Controller (the controller's own backup ran live; a DefensePro getcfg not yet), Infoblox over HTTPS (not yet run live).",
+      "evidence": "docs/history/builds/NXS-LOCAL-0369.md",
       "criteria": [
         {
           "id": "contracts",
@@ -2298,7 +2298,7 @@
         },
         {
           "id": "provider1",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {

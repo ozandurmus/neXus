@@ -1,0 +1,162 @@
+{
+  "created_at": "2026-09-21T08:21:10Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A Spring-context-backed test (not a direct `new SessionAdminController(...)`) proves GET /sessions returns 200 for an authorized caller and POST /sessions/revoke is dispatched to the controller, not 404",
+          "The full :service:test suite is green with no other route's reachability changed",
+          "Repository privacy gate reports 0 findings"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN, PRODUCT OWNER APPROVED, 2026-09-09), section 3.3 row 6: role:security_admin ends another session, ACTIVE -> REVOKED(revoked_by_admin). SessionAdminController implements exactly that action and is already gated to role:security_admin in SecurityWebMvcConfig. Ui2Application.java documents, in its own class-level comment above @ComponentScan, that this controller was deliberately excluded from bean registration pending its collaborators becoming real beans: 'SessionAdminController stays excluded: its own collaborator (a session-admin service) is untouched by this movement and remains out of scope. It is excluded, not deleted: a route that 404s because its controller was never registered is honest, while one that 500s on every call is not.' That stated blocker no longer holds (see engineering).",
+          "engineering": "The exclusion comment's own stated blocker -- 'its own collaborator (a session-admin service) is untouched' -- no longer holds. SessionAdminController's constructor now takes exactly SessionRepository and LocalIdentityResolver, and both are already real, wired Spring beans: SessionRepository backs GateChain everywhere, and LocalIdentityResolver has its own @Bean method in LocalAuthenticationConfiguration (localIdentityResolver(LocalCredentialsRepository)). Nothing else in the codebase depends on SessionAdminController being absent from the context; PAN_DISCOVERY_TRUST_PINNED_FINGERPRINT_SHA256 and SecurityWebMvcConfig's ACTION_ID_BY_ROUTE entries for GET /sessions and POST /sessions/revoke are already correct and only need the controller bean to exist to take effect.",
+          "observed": "Measured directly against the live deployment after NXS-LOCAL-0362 shipped a Sessions admin screen calling GET /sessions and wiring the existing POST /sessions/revoke: both routes return 404 even from inside the pod with no authentication at all, meaning SessionAdminController was never registered as a Spring bean. Ui2Application.java's own @ComponentScan excludeFilters regex names it explicitly. NXS-LOCAL-0362's own test suite passed because SessionAdminControllerTest constructs the controller directly (new SessionAdminController(...)) rather than through a real Spring context, so the exclusion was invisible to it."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "The backup, discovery, and failover planes"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/wire-session-admin-controller"
+        },
+        "invariants": [
+          "A route that is not yet wired must 404, never 500 -- unchanged principle, this movement is about finishing the wiring for this one controller, not weakening the rule for any other",
+          "GET /sessions and POST /sessions/revoke keep the exact gating (role:security_admin via ActionRegistry.SESSION_REVOKE) already configured in SecurityWebMvcConfig -- unchanged"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Register SessionAdminController as a real Spring bean so GET /sessions and POST /sessions/revoke actually serve requests instead of 404ing, closing the gap NXS-LOCAL-0362 built a screen against but never wired live.",
+        "output_contract": [
+          "SessionAdminController registered as a live Spring bean",
+          "GET /sessions and POST /sessions/revoke reachable, proven by a real-context test",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "A one-line component-scan exclusion removal whose collaborators are already proven real beans; the only real work is proving reachability through an actual Spring context rather than a direct construction test.",
+          "tier": "Main engineer"
+        },
+        "requirements": [
+          "SessionAdminController is a registered Spring bean after this movement",
+          "GET /sessions and POST /sessions/revoke are reachable through the full application context, proven by a test that does not construct the controller directly",
+          "No other currently-excluded controller is un-excluded by this movement",
+          "The comment documenting the exclusion history is updated to state SessionAdminController is now wired, following the exact pattern already used for the four controllers the comment already lists as resolved"
+        ],
+        "risks": [
+          "This is a Gradle checkout: use ./gradlew, not mvn.",
+          "Do not touch the exclusion filter's regex for any controller other than SessionAdminController -- if the regex currently only ever named this one class, say so in the report rather than assuming.",
+          "Prove reachability with a real context-loading test (@SpringBootTest, @WebMvcTest, or the pattern this codebase already uses for LoginController/RoleBindingAdminController's own wiring proof) -- a unit test that instantiates the controller directly proves nothing new, since that is exactly what already passed while the route was dead."
+        ],
+        "scope": {
+          "in": [
+            "Ui2Application.java: remove SessionAdminController from the @ComponentScan excludeFilters regex (and update the explanatory comment to say it is now wired, following the same pattern the comment already documents for LoginController/RoleBindingAdminController/DeviceRegistrationController)",
+            "A test that starts a real (or minimally sliced) Spring context and proves GET /sessions and POST /sessions/revoke are reachable -- not merely that the controller class compiles or behaves correctly when constructed directly"
+          ],
+          "out": [
+            "Any change to SessionAdminController's own logic, the GET /sessions response shape, or the revoke semantics -- NXS-LOCAL-0362 already built and tested those correctly at the unit level",
+            "Any other controller still named in the exclusion filter's history, if any others remain (do not touch what this movement was not asked to touch)",
+            "GateChain, RBAC, or the session-lifetime constants"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "backend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-21T08:21:10Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Removed the final component-scan exclusion, which named only SessionAdminController, and updated the composition-root history comment.",
+          "Added a Spring MVC context-backed test proving GET /sessions returns 200 and POST /sessions/revoke dispatches to SessionRepository.revoke with the post-gate actor identity."
+        ],
+        "completed": [
+          "SessionAdminController is eligible for registration as a real Spring bean.",
+          "The full service test suite passed.",
+          "The repository privacy gate passed with 0 findings.",
+          "Pull request 447 is open against main; it was not merged."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "The existing Sessions admin screen can now reach GET /sessions and POST /sessions/revoke instead of receiving 404 from an absent controller bean."
+        },
+        "integration": {
+          "branch": "feature/wire-session-admin-controller",
+          "ci": "Local required validation passed; orchestrator verification pending.",
+          "head_sha": "181674d",
+          "merge_commit": null,
+          "merge_decision": "Do not merge in worker session; merge-mode orchestrator owns merge after verification.",
+          "merge_state": "OPEN",
+          "pr": 447,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/447"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0364 orchestrator merge gate",
+          "movement_type": "VALIDATION",
+          "objective": "Run orchestrator verification and merge pull request 447 only if its gates pass.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "SessionAdminController logic, GET response shape, and revoke semantics are unchanged.",
+          "GateChain, RBAC, and session-lifetime constants are unchanged.",
+          "No other controller exclusion changed; the removed regex named only SessionAdminController."
+        ],
+        "recommended_reasoning": {
+          "reason": "Only routine verification and orchestrator-owned integration remain.",
+          "tier": "Main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Real-environment validation was not run because the dispatch limited this movement to local validation."
+        ],
+        "validation": {
+          "affected": "PASS: SessionAdminControllerTest failed against the pre-change exclusion and passed after the wiring change.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "PASS: GRADLE_USER_HOME=/tmp/nxs-local-0364-gradle ui2/gradlew -p ui2 :service:test (BUILD SUCCESSFUL).",
+          "privacy": "PASS: python3 main.py --repository-privacy-check; 0 findings.",
+          "real_environment": "NOT_RUN: deployment direction was local validation only.",
+          "state_consistency": "NOT_APPLICABLE: no project-state files were in the authorized scope.",
+          "targeted": "PASS: Spring MVC context serves GET /sessions with 200 and dispatches POST /sessions/revoke to the controller repository call."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-21T08:30:52Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0364",
+  "movement": "NXS-LOCAL-0364",
+  "next_actor": null,
+  "refs": [
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/Ui2Application.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/SessionAdminController.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/LocalAuthenticationConfiguration.java"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-21T08:30:52Z"
+}

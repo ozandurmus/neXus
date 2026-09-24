@@ -1,0 +1,180 @@
+{
+  "created_at": "2026-09-21T05:58:49Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A certificate from an issuer other than Palo Alto Networks, chaining to a trusted root, is accepted, proven by a test",
+          "A certificate that does not chain to any trusted root is rejected, proven by a test",
+          "An expired certificate is rejected, proven by a test",
+          "The pinned-fingerprint path still short-circuits verification exactly as before, proven by a test",
+          "The rejection outcome carries a fingerprint and carries no distinguished name, proven by a test asserting the absence",
+          "The report states, as measured rather than assumed, whether the runtime JVM trust store contains the corporate CA material",
+          "Backend tests and the repository privacy gate are green"
+        ],
+        "baseline": {
+          "authority": "AGENTS.md, Palo Alto section: direct firewall evidence requires identity verification wherever the product contract defines an identity gate, and production TLS requires trusted corporate CA verification. The rule names the corporate CA as the trust root. It does not name the certificate's issuer organisation as an identity gate, and no FROZEN contract does.",
+          "engineering": "main is at b360ef9. ui2/Containerfile installs corporate CA material into the OS trust store at /etc/pki/ca-trust/source/anchors and runs update-ca-trust, in both the build and the runtime stage. Whether the JVM's default trust manager reads that store depends on the base image and must be determined, not assumed. The failure message currently embeds the certificate's subject distinguished name, which is then stored in the discovery failure summary; that is tracked separately as discovery_failure_summary_stores_certificate_subject and is in scope here because this movement owns that message.",
+          "observed": "Adding a Palo Alto device fails with 'Discovery did not complete'. PanXmlApiTransport's trust manager refuses any certificate whose issuer or subject distinguished name does not contain the literal 'O=Palo Alto Networks'. An enterprise firewall presents a certificate issued by the corporate CA, so that string is absent and every connection is refused before any request is sent. The check is a string match on a distinguished name, not a trust decision: it does not verify a chain, does not consult any trust store, and would accept a self-signed certificate that merely carried the right organisation name. The Product Owner's direction, recorded 2026-09-20: do not invent this control, verify against the corporate CA if it is present, and otherwise surface the situation rather than refusing on the product's own initiative."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "The backup, failover and compliance planes"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pan-tls-trust-corporate-ca"
+        },
+        "invariants": [
+          "Trust is a verified chain, never a string match on a name",
+          "Collection failure is not a known-bad state: a certificate that cannot be verified is reported as unverifiable, not as a compromised device",
+          "Sensitive identity values are compared locally and reported as a relationship; a distinguished name is an identity value and does not belong in a stored summary",
+          "The product does not decide on the operator's behalf that a reachable device must not be reached"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Let a Palo Alto device behind a corporate certificate be reached, by verifying against the trust the platform actually holds instead of matching a vendor name in a distinguished name, and by reporting an unverifiable certificate rather than silently refusing it.",
+        "output_contract": [
+          "A PAN transport that verifies a chain instead of matching a vendor name",
+          "An unverifiable certificate reported with its fingerprint and no identity values",
+          "A measured statement on whether the runtime JVM trusts the corporate CA",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "A TLS trust boundary in the device transport, where the wrong shape of fix silently weakens verification rather than failing loudly.",
+          "tier": "Strong implementation"
+        },
+        "requirements": [
+          "A certificate issued by a CA the platform trusts is accepted, whatever organisation name it carries",
+          "A certificate that fails chain verification or validity is not silently accepted",
+          "The organisation-name string match is gone; no code decides trust from a distinguished name",
+          "When verification fails, the recorded outcome names the failure class and carries the certificate's SHA-256 fingerprint, so the operator can pin it through the existing pinned-fingerprint path",
+          "No distinguished name, subject, host name or address reaches a stored failure summary",
+          "If the JVM does not see the corporate CA material the image installs, that is fixed here and the fix is stated in the report"
+        ],
+        "risks": [
+          "Do not replace one invented control with another. If chain verification cannot be performed, say so and report it; do not fall back to a name check, a host name check, or an accept-all manager.",
+          "The fingerprint is an identifier: render and record it exactly as computed, never shortened or reformatted.",
+          "The frontend test runner needs node_modules, which a fresh worktree does not carry. If a frontend command is needed and cannot start, link or install ui2/frontend dependencies and run it rather than reporting BLOCKED with work unvalidated.",
+          "mvn test is the gate here; a green compile is not a green gate."
+        ],
+        "scope": {
+          "in": [
+            "The trust manager in PanXmlApiTransport: replace the organisation-name refusal with real chain verification against the platform trust store",
+            "Determining whether the JVM trust store includes the corporate CA material the Containerfile installs, and wiring it if it does not",
+            "What is reported when a certificate cannot be verified: a stable, non-identifying outcome plus the fingerprint, so an operator can pin it",
+            "Removing the certificate subject from the stored failure summary",
+            "Tests over a certificate from a non-Palo-Alto issuer, an expired certificate, and a certificate that fails chain verification"
+          ],
+          "out": [
+            "The existing pinned-fingerprint path, which already works and stays as the strongest rule",
+            "Turning verification off, accepting all certificates, or adding a trust-everything switch",
+            "PAN authentication transport convergence, which is a separate hardening concern",
+            "Anything in the Check Point transport",
+            "Discovery parsing, enumeration, or what is collected once the connection succeeds"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "mvn",
+              "-q",
+              "-f",
+              "ui2/pom.xml",
+              "test"
+            ],
+            "name": "backend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-21T05:58:49Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/xmlapi/PanXmlApiTransport.java",
+          "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/transport/xmlapi/PanXmlApiTransportTest.java",
+          "ui2/Containerfile"
+        ],
+        "completed": [
+          "Replaced PAN distinguished-name matching with platform X.509 chain verification.",
+          "Added stable unverifiable-certificate reporting with the exact SHA-256 fingerprint and no distinguished name.",
+          "Added tests for a trusted non-Palo-Alto issuer, an untrusted chain, expiry, fingerprint-pin short-circuiting, and sanitized outcome mapping.",
+          "Wired optional corporate CA anchors into the runtime image and explicitly selected the RHEL Java trust store."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Unchanged.",
+          "ui": "No UI source or rendered behavior changed; the runtime Containerfile trust configuration changed."
+        },
+        "integration": {
+          "branch": "feature/pan-tls-trust-corporate-ca",
+          "ci": "NOT RUN: no PR; local merge gates are not fully green.",
+          "head_sha": "b360ef9",
+          "merge_commit": null,
+          "merge_decision": "Do not merge. The orchestrator merge mode remains authoritative after validation and PR creation.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0359",
+          "movement_type": "VALIDATION",
+          "objective": "Provide writable Git object storage and a usable container-backed validation environment, run the corrected backend and runtime trust-store gates, then commit, push, and open the PR.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Fingerprint pinning remains the strongest path and retains its prior certificate-validity behavior.",
+          "No trust-all switch, Check Point transport, authentication convergence, discovery parsing, deployment, device, or production data was changed."
+        ],
+        "recommended_reasoning": {
+          "reason": "Implementation is scoped and tested; remaining work is environment-backed verification and Git publication.",
+          "tier": "Standard validation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The post-change runtime JVM trust-store membership must be measured in a built image containing the authorized corporate CA material.",
+          "The required backend gate must be rerun with the repository's actual executable gate or a corrected dispatch command.",
+          "The completed source changes are uncommitted because the managed sandbox denies writes to the common Git object database."
+        ],
+        "validation": {
+          "affected": "PASS: complete :worker:test suite.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "BLOCKED: dispatched mvn command cannot run because mvn and ui2/pom.xml are absent. Gradle full test also found unrelated environment/state failures: unavailable container runtime and one pre-existing backlog classification warning.",
+          "privacy": "PASS: repository privacy gate scanned 2240 files with 0 findings.",
+          "real_environment": "UNVERIFIED: current build context has no corporate CA PEM, and no Podman machine exists to build and inspect the runtime image. Before the change the runtime stage did not copy ui2/.ca, so build-supplied corporate CA material was absent.",
+          "state_consistency": "NOT APPLICABLE: project state files were out of scope; existing project-state convergence test remains red on orchestrator_worktree_lacks_frontend_dependencies.",
+          "targeted": "PASS: PanXmlApiTransportTest, including trusted chain, untrusted chain, expired certificate, pin short-circuit, fingerprint, and DN absence."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-21T06:10:01Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0359",
+  "movement": "NXS-LOCAL-0359",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/xmlapi/PanXmlApiTransport.java",
+    "ui2/Containerfile"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-21T06:10:01Z"
+}

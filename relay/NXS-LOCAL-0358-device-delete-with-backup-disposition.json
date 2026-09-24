@@ -1,0 +1,191 @@
+{
+  "created_at": "2026-09-21T05:47:38Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A device with artefacts, deleted with the keep disposition, leaves its artefacts and ledger rows present, proven by a persistence test",
+          "The same device deleted with the remove disposition leaves its ledger rows present and its artefact rows gone, proven by a persistence test",
+          "A delete with no disposition against a device with artefacts returns the exact count and changes nothing, proven by a test",
+          "A delete against a device with no artefacts succeeds with no disposition, proven by a test",
+          "The migration is additive to what deletion may do and grants nothing new on the retention ledger, stated in the movement report with the grant unchanged",
+          "The confirmation dialog states the artefact count and offers keep and remove as two explicit choices, proven by a frontend test",
+          "Backend tests, frontend tests and the repository privacy gate are green"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (FROZEN, 2026-09-09). Section 3.5 defines the retention ledger and states, in the column comment on artefact_id, that the identifier is 'kept even after backup_artefact's row is gone'. The ledger is therefore specified to outlive the artefact row, and its append-only grant (REVOKE UPDATE, DELETE; GRANT SELECT, INSERT) is what makes that possible rather than what obstructs it.",
+          "engineering": "main carries NXS-LOCAL-0357 at 1c6acb5. NXS-LOCAL-0356's worktree holds an uncommitted attempt whose test file does not compile: ui2/service/src/test/java/.../device/DeviceDeletionServiceTest.java declares a FakeRepository implementing DeviceRepository but imports only DeviceConfirmFacts, DeviceRecord, DeviceRepository and DeviceSummaryRecord, while its overrides also reference EndpointRecord and DeviceDraft. Those two live in the same package as DeviceRepository and are resolvable from it, but the test is in a different package and never imports them. That is the whole compile failure. Do not treat the 0356 branch as a base: it was cut before NXS-LOCAL-0354 and NXS-LOCAL-0357 landed and its diff reverses both. Start from origin/main.",
+          "observed": "Deleting a device from the UI fails with Internal Server Error, and the row returns to the list. The cause is that device deletion attempts to remove rows the ledger grant forbids removing, so the transaction aborts. A previous movement, NXS-LOCAL-0356, produced a working shape for this and then reported BLOCKED. Its work was not merged and is superseded by this movement, but its diagnosis is carried forward below and should not be re-derived."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "The discovery, failover and compliance planes"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/device-delete-with-backup-disposition"
+        },
+        "invariants": [
+          "The retention ledger is append-only. It is written by INSERT and read by SELECT, and this movement never widens that",
+          "Identifiers are opaque: a device, artefact or ledger identifier is never parsed, shortened or normalised",
+          "Absence of evidence is not evidence of absence: a device whose artefact count cannot be read is not treated as having none",
+          "Deletion is the operator's decision. The product states what will be lost and asks; it neither refuses an administrator nor decides for them"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make device deletion succeed, with the operator told what backup artefacts exist and asked explicitly whether to keep them or remove them, and with the retention ledger's recorded history surviving either choice.",
+        "output_contract": [
+          "Device deletion succeeding, with the operator asked keep or remove when artefacts exist",
+          "A retention ledger whose rows survive either choice, with its append-only grant unchanged",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "A schema migration across a frozen contract boundary plus a behaviour change spanning persistence, service, API and UI, with the transactional ordering load-bearing.",
+          "tier": "Strong implementation"
+        },
+        "requirements": [
+          "Deleting a device with no backup artefacts succeeds without asking anything",
+          "Deleting a device that has backup artefacts, with no disposition supplied, does not delete anything and reports how many artefacts exist",
+          "With the keep disposition, the device row is removed and every backup artefact and ledger row for it survives, readable afterwards",
+          "With the remove disposition, the device row and the artefact rows are removed and the ledger rows that recorded them survive",
+          "No statement in this movement deletes or updates a retention ledger row",
+          "The artefact count reported to the operator is the counted number, never an estimate or a capped value",
+          "The operator's choice is explicit: no default disposition is applied on their behalf"
+        ],
+        "risks": [
+          "The frontend test runner needs node_modules, which a fresh worktree does not carry. If npm test cannot start, link or install ui2/frontend dependencies in the worktree and run it; do not report BLOCKED with the work unvalidated.",
+          "The 0356 attempt dropped three foreign key constraints to let artefacts and ledger rows outlive their parents. That direction matches the authority above, which states the ledger keeps the artefact identifier after the artefact row is gone. Take the direction, but re-derive the exact constraint set against the current schema rather than copying the earlier statements.",
+          "Counting artefacts and deleting the device must see the same state. Do the count inside the deleting transaction, not before it."
+        ],
+        "scope": {
+          "in": [
+            "Device deletion in the persistence layer, the service, and the registration controller",
+            "An explicit backup disposition on the delete request, with the artefact count reported back when the disposition is missing and artefacts exist",
+            "The delete confirmation in DeviceRegistryPanel: state the artefact count and require the operator to choose keep or remove",
+            "A migration that lets an artefact and its ledger rows outlive the device row, per the authority above",
+            "Tests for both dispositions, for the missing-disposition path, and for the ledger surviving a delete"
+          ],
+          "out": [
+            "The append-only grant on the retention ledger. It stays exactly as the contract states; nothing in this movement may grant UPDATE or DELETE on it",
+            "Restore, which stays hard-gated and untouched",
+            "Retention policy evaluation, the GFS counts, and the floor invariant",
+            "Any change to what a backup contains or how one is taken",
+            "The backup plane separation, which is a separate contract still in draft"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "mvn",
+              "-q",
+              "-f",
+              "ui2/pom.xml",
+              "test"
+            ],
+            "name": "backend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-21T05:47:38Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Extended the device repository, deletion service, registration controller, and frontend API with backup disposition and structured deletion outcomes.",
+          "Added V34 to drop six current-schema foreign keys so artefacts and immutable history may outlive their former parents.",
+          "Added unit, frontend, and real-PostgreSQL persistence coverage for keep, remove, missing disposition, no artefacts, and ledger survival."
+        ],
+        "completed": [
+          "Counted backup artefacts inside the device-deletion transaction and returned the exact count without mutation when a disposition is required.",
+          "Implemented explicit KEEP and REMOVE dispositions; KEEP retains artefacts and REMOVE deletes artefacts while history rows survive.",
+          "Added a Device Registry dialog that states the artefact count and offers explicit Keep artefacts and Remove artefacts actions.",
+          "Opened pull request 441 against main without merging it."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Unchanged.",
+          "ui": "DeviceRegistryPanel now reports backup artefact count and requires explicit keep or remove choice before deleting a device that has artefacts."
+        },
+        "integration": {
+          "branch": "feature/device-delete-with-backup-disposition",
+          "ci": "Orchestrator verification pending; local scoped checks are recorded above.",
+          "head_sha": "a0415f23b3c12ad07f63e53a30701fac09c4d7da",
+          "merge_commit": null,
+          "merge_decision": "Do not merge in this worker session; merge-mode orchestrator decides after its verification passes.",
+          "merge_state": "OPEN",
+          "pr": 441,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/441"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0358 orchestrator verification and merge",
+          "movement_type": "VALIDATION",
+          "objective": "Run the PostgreSQL persistence test and repository verification, then merge PR 441 if all orchestrator gates pass.",
+          "status": "complete_with_followup"
+        },
+        "preserved": [
+          "The retention ledger grant remains SELECT and INSERT only; no UPDATE or DELETE grant or statement was added.",
+          "Restore, retention policy evaluation, GFS counts, backup contents, and backup plane separation were untouched.",
+          "Identifiers remain opaque and a failed artefact count fails the transaction rather than being treated as zero."
+        ],
+        "recommended_reasoning": {
+          "reason": "Implementation and scoped automated checks are complete; only environment-backed persistence verification and orchestrator merge gating remain.",
+          "tier": "Focused validation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The orchestrator must run DeviceDeletionPersistenceTest with PostgreSQL 16 before merge.",
+          "The baseline ProjectPlanReaderTest backlog-classification failure remains outside this movement."
+        ],
+        "validation": {
+          "affected": "PASS: migration lint and Java compilation for persistence, service, and integration tests.",
+          "diff_check": "PASS: git diff --check origin/main before commit.",
+          "full_regression": "Frontend PASS 123/123. The dispatched Maven command is invalid for this Gradle checkout because mvn and ui2/pom.xml are absent. The unfiltered service suite passed 289 tests and hit one pre-existing ProjectPlanReaderTest backlog-classification failure outside this scope.",
+          "privacy": "PASS: repository privacy gate scanned 1954 files with zero findings.",
+          "real_environment": "UNVERIFIED: the committed PostgreSQL persistence test compiles, but local execution had neither UI2_TEST_JDBC_URL nor a container runtime. No deployment or production data was touched.",
+          "state_consistency": "No project state was changed; WORKER.md restricted this movement to the named implementation and tests.",
+          "targeted": "PASS: all persistence unit tests and scoped service device/API unit tests; Device Registry test passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-21T06:06:54Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0358",
+  "movement": "NXS-LOCAL-0358",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/DeviceDeletionService.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/DeviceRegistrationController.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceRepository.java",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/JooqDeviceRepository.java",
+    "ui2/frontend/src/screens/DeviceRegistryPanel.tsx"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-21T06:06:54Z"
+}

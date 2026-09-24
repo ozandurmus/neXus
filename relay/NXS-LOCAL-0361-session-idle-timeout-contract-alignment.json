@@ -1,0 +1,162 @@
+{
+  "created_at": "2026-09-21T07:04:41Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "LocalAuthenticationConfigurationTest asserts Duration.ofMinutes(30) for IDLE_TIMEOUT",
+          "GateChainTest and any other test that depends on the idle-timeout value continues to pass or is updated consistently with the new number",
+          "Backend tests and the repository privacy gate are green"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN, PRODUCT OWNER APPROVED, 2026-09-09), section 3: 'idle timeout 30 minutes from last_seen_at, recomputed into idle_deadline_at on every request that passes E1; absolute lifetime 10 hours from created_at, fixed at creation and never extended by activity' -- named there as a proposed default, PO-tunable.",
+          "engineering": "GateChain.evaluate refreshes idle_deadline_at on every request that passes E1 (session_reconcile heartbeat), so an idle session is one with no gated request in flight -- exactly what happens while an operator is filling in form fields, reading an error, or looking up a credential between requests. This is a one-value configuration correction inside an already-frozen contract; the contract's own §3 already states the correct number, so no new decision is being made here.",
+          "observed": "LocalAuthenticationConfiguration.IDLE_TIMEOUT is Duration.ofMinutes(5), not the 30 minutes the frozen contract names. LocalAuthenticationConfigurationTest asserts the wrong 5-minute value, locking the deviation in rather than catching it. The Product Owner reported SESSION_EXPIRED repeatedly while working through the multi-step Add Device flow -- a wizard with credential entry, discovery polling, and candidate review that routinely exceeds 5 idle minutes between one gated request and the next. ABSOLUTE_LIFETIME is already correct at 10 hours and is out of scope here."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "The backup, discovery, and failover planes"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/session-idle-timeout-contract-alignment"
+        },
+        "invariants": [
+          "Absolute lifetime is fixed at session creation and is never extended by activity -- unchanged",
+          "Idle timeout is recomputed on every request that passes E1 -- unchanged mechanism, only the duration constant moves"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Bring the idle session timeout into agreement with the frozen contract's own stated default, so ordinary interactive work (a multi-step device-add flow, reading a validation error, switching to check a credential) does not lose the session mid-task.",
+        "output_contract": [
+          "IDLE_TIMEOUT at 30 minutes, matching the frozen C3 contract",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "A single configuration constant corrected to match its own already-frozen contract; no new decision, no architecture.",
+          "tier": "Main engineer"
+        },
+        "requirements": [
+          "IDLE_TIMEOUT is 30 minutes, matching the frozen contract's own stated default",
+          "The existing test that asserted the old 5-minute value now asserts 30 minutes, and the change is visible as a diff against that test, not a silent drop of the assertion",
+          "No other session-duration behaviour changes: absolute lifetime, CSRF checks, session-superseded/session-revoked handling are all unchanged"
+        ],
+        "risks": [
+          "This is a Gradle checkout: use ./gradlew, not mvn.",
+          "Grep the full repository for any other hardcoded '5 minutes' / Duration.ofMinutes(5) reference to LocalAuthenticationConfiguration.IDLE_TIMEOUT specifically before declaring done -- do not touch unrelated 5-minute constants (ClockHealthCheck.MAX_EVIDENCE_AGE, PreflightService.REPORT_DISPLAY_TTL, or any failover lease/lockout duration), which are different concerns with their own values and are out of scope."
+        ],
+        "scope": {
+          "in": [
+            "LocalAuthenticationConfiguration.IDLE_TIMEOUT: 5 minutes to 30 minutes",
+            "LocalAuthenticationConfigurationTest: the assertion locking in the old value",
+            "Its own doc comment naming '5 minutes idle' explicitly"
+          ],
+          "out": [
+            "ABSOLUTE_LIFETIME, which already matches the contract at 10 hours",
+            "The E1-E6 gate chain's own logic, which is correct and unchanged",
+            "Any other session-lifetime constant (LDAP re-validation interval, failover lease tokens, lockout duration) -- none of those are this contract's idle-session number and none are in scope"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "backend_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-21T07:04:41Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "LocalAuthenticationConfiguration.IDLE_TIMEOUT changed from Duration.ofMinutes(5) to Duration.ofMinutes(30).",
+          "LocalAuthenticationConfigurationTest now asserts Duration.ofMinutes(30) and names the thirty-minute behavior."
+        ],
+        "completed": [
+          "Aligned LocalAuthenticationConfiguration.IDLE_TIMEOUT with the frozen 30-minute default.",
+          "Updated the locking test and explicit duration comment.",
+          "Committed the two-file change as 4b2114af3b99bd7d2b65d146a2d2072b97e751ce."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "Unchanged; used only to run the repository privacy gate.",
+          "ui": "No UI source or behavior changed."
+        },
+        "integration": {
+          "branch": "feature/session-idle-timeout-contract-alignment",
+          "ci": "Not started because the required local backend validation gate is red.",
+          "head_sha": "4b2114af3b99bd7d2b65d146a2d2072b97e751ce",
+          "merge_commit": null,
+          "merge_decision": "No PR was opened and no merge was attempted; orchestrator merge mode remains authoritative after a future green verification.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "Resolve the project-state convergence gate, then rerun validation and open the PR for NXS-LOCAL-0361.",
+          "movement_type": "ROOT_CAUSE",
+          "objective": "Resolve or explicitly waive the pre-existing orchestrator_worktree_lacks_frontend_dependencies classification failure without broadening NXS-LOCAL-0361.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "ABSOLUTE_LIFETIME remains 10 hours.",
+          "Gate-chain mechanics and all unrelated five-minute constants remain unchanged.",
+          "No project-state, deployment, device, or production data was changed."
+        ],
+        "recommended_reasoning": {
+          "reason": "The implementation is complete; only a bounded project-state convergence failure prevents the required green validation and PR.",
+          "tier": "Main engineer"
+        },
+        "state_updates": [
+          "No durable project-state files were updated because the movement does not change scope, sequencing, or delivery state and the dispatch forbids project/*.json access."
+        ],
+        "unresolved_risks": [
+          "The required backend suite is not green because of the unrelated project-state convergence failure, so the PR gate is not satisfied.",
+          "The first relay append was rejected because the temporary report did not use the canonical SESSION_CLOSE schema; no relay or repository state changed, and this report corrects the error."
+        ],
+        "validation": {
+          "affected": "PASS: production and test sources compile; the scoped timeout and gate-chain tests pass.",
+          "diff_check": "PASS: git diff --check origin/main returned no findings before commit.",
+          "full_regression": "FAIL: :service:test ran 291 tests with one reproducible unrelated failure in ProjectPlanReaderTest.readsTheRealCheckedOutRepositoryFilesWithoutThrowing: Backlog classification missing or invalid: orchestrator_worktree_lacks_frontend_dependencies.",
+          "privacy": "PASS: repository privacy gate scanned 1816 files with 0 findings.",
+          "real_environment": "Not required; deployment direction is local validation only.",
+          "state_consistency": "FAIL outside movement scope: the project-state convergence test reports the missing/invalid orchestrator_worktree_lacks_frontend_dependencies backlog classification; project/*.json is explicitly forbidden by this dispatch.",
+          "targeted": "PASS: LocalAuthenticationConfigurationTest and all *GateChainTest tests."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-21T07:10:51Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0361",
+  "movement": "NXS-LOCAL-0361",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/LocalAuthenticationConfiguration.java",
+    "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/boot/LocalAuthenticationConfigurationTest.java"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-21T07:10:51Z"
+}

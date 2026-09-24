@@ -497,7 +497,7 @@ or access incumbent workloads (`HOST_X`).
 `docs/design/PO_DECISION_RECORD_2026_09_24_HOST_A_OWNED_BY_NEXUS_AGENT_SUDO.md` (RATIFIED), once HOST-A is
 reinstalled for neXus alone, the agent works there through a dedicated account with logged `sudo`; it asks the
 Product Owner first for any deleting or irreversible command and never uses HOST-A as a jump server. The
-2026-09-19 limits apply until that reinstall.
+2026-09-19 limits applied until that reinstall; the reinstall was done on 2026-09-25, so this amendment is in effect.
 
 ## Architectural invariants (test-enforced, not merely current)
 

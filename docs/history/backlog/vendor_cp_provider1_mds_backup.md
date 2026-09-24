@@ -7,3 +7,5 @@ Backbox reference (trail 34410129, 2026-09-22): 'Check Point -> Provider-1 -> R8
 2026-09-22: measurement record written from the Backbox trail -- docs/design/VENDOR_BACKUP_MEASUREMENTS_2026_09_22.md (transport, sequence, artefact, secret risk, neXus fit). Prerequisites before this vendor's contract: Add-device vendor value + endpoint kind, a confirm (identity) capability, the vendor CHECK constraints (V16/V17 allow only check_point/palo_alto), and for HTTPS vendors the generic HTTPS client. Proposed order in the record.
 
 2026-09-22 PO tried to add an MDS through Add device: it enrolls (read collection only) and reports 'Peer not confirmed: ADDRESS_MISSING' -- the first-contact peer follow found no peer address, which for a single MDS is the expected result, but the wording reads as an error. Provider-1/MDS needs its own first-contact and inventory contract (domains, CMAs) before backup; measure first.
+
+NXS-LOCAL-0369: mds_backup export as a second backup type (V61/V62); one live export completed 2026-09-24. Second MDS of an HA pair not read (mds_ha_second_mds_read).

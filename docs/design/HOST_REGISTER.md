@@ -14,7 +14,7 @@ CLASS 2). A reader who needs to reach a host asks its credential holder.
 
 | Token | Incumbent workload owner | Agent account posture | Credential holder | Admitted | Tier ceiling | Profile | Incident route |
 |---|---|---|---|---|---|---|---|
-| `HOST-A` | A second product of the same company, whose logger workload runs there today | Dedicated, **no** `sudo`, not in `docker`/`adm`/`wheel` — or operator account used without sudo per 2026-09-19 Amendment | Product Owner | 2026-09-15 | `HOST_W1 + TROUBLESHOOT` | `DEV` | Product Owner |
+| `HOST-A` | None — reinstalled 2026-09-25 for neXus alone | Dedicated neXus agent account with journal-logged `sudo` (2026-09-24 Amendment) | Product Owner | 2026-09-15 | `HOST_OWNED` | `DEV` | Product Owner |
 
 ## Notes on `HOST-A`
 
@@ -40,8 +40,14 @@ incumbent workloads, or run commands outside the neXus development workspace.
 once HOST-A is reinstalled with no other product on it: a dedicated neXus agent
 account with `sudo` for installing and maintaining neXus and the host; every
 deleting or irreversible command (`rm`, `truncate`, `mkfs`, partitioning, dropping
-data, deleting PVCs/namespaces/backups, reboot) asked for in chat first; HOST-A is
+data, deleting PVCs/namespaces/backups) asked for in chat first — a reboot, the
+host proxy and inbound 443 forwarding need no prior ask; HOST-A is
 never a jump server (no onward login, tunnel, forwarding or proxy); every sudo
-command logged on the host. The row above changes to: incumbent — none; posture —
+command logged on the host (`journalctl _COMM=sudo`; Ubuntu 26.04's `sudo-rs`). The row above changes to: incumbent — none; posture —
 dedicated agent account with logged `sudo`; tier ceiling — `HOST_OWNED`. Until the
 reinstall, the 2026-09-19 amendment stands.
+
+**In effect since 2026-09-25.** The Product Owner reinstalled HOST-A (Ubuntu
+26.04.1) with no other product on it and created the agent account; the row
+above shows the current posture. The 2026-09-19 limits and the notes on an
+incumbent workload above are historical for this host.

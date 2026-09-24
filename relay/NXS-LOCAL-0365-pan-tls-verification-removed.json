@@ -1,0 +1,195 @@
+{
+  "created_at": "2026-09-21T08:48:38Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A test connection against a self-signed Palo Alto certificate succeeds, proven by a test replacing the prior 'untrusted chain fails' assertion",
+          "A test connection against an expired Palo Alto certificate still fails, proven by a test",
+          "The prior UnverifiableCertificateException / per-device enrollment code paths for Palo Alto are gone, proven by their absence and by updated/removed tests that asserted them",
+          "The frontend no longer renders 'Certificate trust authorization' for a Palo Alto device, proven by a test",
+          "Backend tests, frontend tests, and the repository privacy gate are green"
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_21_PAN_TLS_VERIFICATION_DISABLED.md (RATIFIED, 2026-09-21), which supersedes AGENTS.md's Palo Alto TLS clause for this deployment and directs that PanXmlApiTransport accept whatever certificate a Palo Alto device presents, with no chain verification and no per-device enrollment step.",
+          "engineering": "PanXmlApiTransport.paloAltoDeviceTrustManager currently: tries chain verification first, then a per-device stored/pinned fingerprint, then rejects as UnverifiableCertificateException carrying only the fingerprint. This movement removes the rejection path entirely for the no-verification case; a device certificate is accepted once presented, still subject to basic X.509 structural validity (not expired, well-formed) but not to chain trust or fingerprint matching.",
+          "observed": "NXS-LOCAL-0359 (chain verification) and NXS-LOCAL-0363 (per-device certificate enrollment) are both live. Every one of the 39 enumerated Palo Alto devices in this internal-only environment presents its own self-signed certificate, so every connection reports unverifiable and requires an enrollment the Product Owner has decided is unwanted friction for this environment. This movement reverses that behaviour for Palo Alto specifically, per the ratified decision."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "The backup, discovery, and failover planes"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pan-tls-verification-removed"
+        },
+        "invariants": [
+          "History is never deleted or rewritten: management_endpoint_pan_cert_trust's existing rows, and every audit_log row referencing it, are untouched",
+          "An expired or structurally invalid certificate is still refused -- basic X.509 well-formedness is the only remaining check",
+          "Check Point's own trust model is entirely out of scope and must show zero diff"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Accept any Palo Alto device certificate without chain verification or per-device enrollment, per the ratified Product Owner decision, while leaving Check Point's SSH trust model, the retention/audit tables, and everything else this decision does not name untouched.",
+        "output_contract": [
+          "Palo Alto connections succeed regardless of certificate trust chain",
+          "An expired certificate still fails",
+          "The Palo Alto enrollment UI step removed",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "A bounded reversal of a just-shipped trust model, precisely scoped by a ratified decision record; no new architecture.",
+          "tier": "Main engineer"
+        },
+        "requirements": [
+          "A Palo Alto device presenting a self-signed certificate, or one that does not chain to any trusted root, connects successfully",
+          "A Palo Alto device presenting an expired certificate is still refused -- accept-any does not mean accept-invalid",
+          "No environment variable, database lookup, or enrollment step gates a Palo Alto connection's trust decision any longer",
+          "The frontend no longer offers a certificate trust authorization step for Palo Alto",
+          "Nothing in management_endpoint_pan_cert_trust or any audit/history table is deleted, altered, or bypassed at the database level"
+        ],
+        "risks": [
+          "Do not touch management_endpoint_ssh_trust, its migration, or AddDeviceDialog's Check Point SSH trust step -- only the Palo Alto certificate path is in scope.",
+          "This is a Gradle checkout: use ./gradlew, not mvn.",
+          "The frontend test runner needs node_modules, which a fresh worktree does not carry. If npm test or tsc cannot start, link or install ui2/frontend dependencies in the worktree and run them; do not report BLOCKED with the work unvalidated.",
+          "Leave management_endpoint_pan_cert_trust's schema and grants exactly as NXS-LOCAL-0363 created them -- this movement changes what the worker does with the data, not the data's own storage contract."
+        ],
+        "scope": {
+          "in": [
+            "PanXmlApiTransport's trust manager: remove chain verification and per-device/pinned-fingerprint consultation for Palo Alto; accept any presented certificate whose basic X.509 validity (not expired, parseable) holds",
+            "EnvironmentPanTrustRuleResolver / TrustResolution: simplify to reflect that Palo Alto trust is now accept-any, removing the now-dead CA-bundle, pinned-fingerprint, and per-device-repository code paths for Palo Alto specifically",
+            "AddDeviceDialog.tsx: remove the 'Certificate trust authorization' step for Palo Alto -- there is nothing left to enroll",
+            "Tests proving an untrusted, self-signed, and previously-unverifiable certificate now succeeds, and that a structurally invalid or expired certificate still fails"
+          ],
+          "out": [
+            "management_endpoint_pan_cert_trust and its migration/audit trigger: not dropped, not touched. Existing rows are historical and the append-only grant makes them undeletable regardless -- this movement does not attempt to delete or alter any row or table",
+            "Check Point's SSH host-key trust enrollment (C10) and management_endpoint_ssh_trust -- entirely unrelated, entirely unchanged",
+            "Any audit_log or trust ledger row -- history is never deleted or rewritten by this movement",
+            "PAN authentication transport convergence, discovery parsing, or anything about what is collected once a connection succeeds"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "backend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "npx",
+              "--prefix",
+              "ui2/frontend",
+              "tsc",
+              "--noEmit"
+            ],
+            "name": "frontend_typecheck"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-21T08:48:38Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Replaced Palo Alto chain and fingerprint verification with a validity-only X.509 trust manager.",
+          "Simplified TrustResolution and EnvironmentPanTrustRuleResolver to one accept-any-valid-certificate path.",
+          "Removed Palo Alto certificate trust authorization controls and requests from AddDeviceDialog.",
+          "Updated backend, source-scan, discovery, and frontend tests for the ratified behavior."
+        ],
+        "completed": [
+          "Palo Alto now accepts self-signed and otherwise untrusted certificates after X.509 structure and validity checks.",
+          "Expired, missing, and structurally invalid certificate chains remain rejected.",
+          "Palo Alto certificate trust enrollment was removed from the backend resolution path and frontend.",
+          "Pull request 448 was opened against main and was not merged."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "Palo Alto no longer renders certificate trust authorization; Check Point SSH trust UI is unchanged."
+        },
+        "integration": {
+          "branch": "feature/pan-tls-verification-removed",
+          "ci": "Orchestrator-owned verification pending.",
+          "head_sha": "634deea0317032b6bba5a6732173efe72b54a5f2",
+          "merge_commit": null,
+          "merge_decision": "Do not merge in worker session; merge-mode orchestrator performs integration after its verification passes.",
+          "merge_state": "OPEN",
+          "pr": 448,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/448"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0365 orchestrator verification and merge",
+          "movement_type": "VALIDATION",
+          "objective": "Run orchestrator-owned verification for PR 448 and merge only if its gates pass.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "management_endpoint_pan_cert_trust, its migration, grants, and audit history were not changed.",
+          "Check Point SSH host-key trust enrollment and management_endpoint_ssh_trust were not changed.",
+          "PAN authentication, discovery parsing, and collected payload behavior were not changed."
+        ],
+        "recommended_reasoning": {
+          "reason": "The bounded implementation is complete; only independent verification and orchestrator-controlled integration remain.",
+          "tier": "Main reviewer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Managed-sandbox Chromium restrictions prevented the optional Playwright render smoke and browser-dashboard tests from launching.",
+          "The broader Python suite retains unrelated pre-existing snapshot, deployment-manifest, and documentation consistency failures."
+        ],
+        "validation": {
+          "affected": "PASS: npm --prefix ui2/frontend test (17 files, 128 tests); TypeScript passed with explicit checked-in config.",
+          "diff_check": "PASS: git diff --check origin/main; worktree clean.",
+          "full_regression": "NON_GREEN outside movement scope: 3757 passed, 25 skipped, 26 existing snapshot/deployment failures, and 10 Chromium sandbox launch errors. The HTML harness static checks passed; Playwright launch was denied by the managed sandbox.",
+          "privacy": "PASS: repository privacy gate scanned 1945 files with 0 findings after validation-generated runtime artifacts were moved outside the checkout.",
+          "real_environment": "NOT PERFORMED: dispatch authorized local validation only.",
+          "state_consistency": "PASS: no durable project-state update was required by the approved worker scope; protected history and trust tables have zero diff.",
+          "targeted": "PASS: ui2/gradlew -p ui2 :worker:test; self-signed and untrusted certificates accepted, expired and invalid chains rejected."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-21T09:13:30Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0365",
+  "movement": "NXS-LOCAL-0365",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_21_PAN_TLS_VERIFICATION_DISABLED.md",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/xmlapi/PanXmlApiTransport.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/pan/EnvironmentPanTrustRuleResolver.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/xmlapi/TrustResolution.java",
+    "ui2/frontend/src/shell/AddDeviceDialog.tsx"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-21T09:13:30Z"
+}

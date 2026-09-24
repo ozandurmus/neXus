@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-24T23:35:39Z
+Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-24T23:40:45Z
 
 ## Now
-- NXS-LOCAL-0368 — Overview rebuilt as an exception-and-evidence screen; collision-free aiview pseudonyms (automated_validated)
+- NXS-LOCAL-0369 — Radware via Cyber Controller, device-list and backup UI, deploy safety, HOST-A rebuilt as neXus's own host (automated_validated)
 ## Next
 - overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -25,6 +25,8 @@ Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-24T23:35:39Z
 - P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, sing (target: workflow §5 B1-3)
 - P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, s (target: workflow §5 B1-4)
 - P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
+- P1/in_progress vendor_infoblox_grid_backup — Infoblox Grid Manager: grid backup via WAPI fileop getgrid (target: )
+- P1/in_progress vendor_radware_defensepro_backup — Radware DefensePro: configuration backup (HTTPS) (target: )
 - P1/planned aiview_masked_readonly_admin — aiview as a masked read-only administrator (PO 2026-09-23) (target: )
 - P1/planned aiview_masking_leak_audit — Masking leak audit: compare aiview responses against the r (target: PO 2026-09-22 proposal (separate masked)
 - P1/planned backup_plane_separate_service — Deliver the backup plane as the independent service the re (target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITEC)
@@ -77,12 +79,9 @@ Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-24T23:35:39Z
 - P1/planned vault_has_no_enforced_quota_on_a_shared_host — The artefact/recovery store has no enforced quota: local-p (target: deploy/ui2/35-artefact-store-pvc.yaml; s)
 - P1/planned vendor_bluecoat_proxysg_backup — Blue Coat / Symantec ProxySG: configuration backup (target: )
 - P1/planned vendor_cisco_asa_backup — Cisco ASA: running/startup config + native backup tar over (target: )
-- P1/planned vendor_cp_provider1_mds_backup — Check Point Provider-1 (MDS): mds_backup over SSH (target: )
 - P1/planned vendor_fortinet_fortigate_backup — Fortinet FortiGate: full configuration backup over SSH inc (target: )
-- P1/planned vendor_infoblox_grid_backup — Infoblox Grid Manager: grid backup via WAPI fileop getgrid (target: )
 - P1/planned vendor_panorama_backup — Palo Alto Panorama: device-bundle export + running config (target: )
 - P1/planned vendor_pulse_secure_backup — Pulse Secure (Ivanti) Secure Access: system/users/IVS conf (target: )
-- P1/planned vendor_radware_defensepro_backup — Radware DefensePro: configuration backup (HTTPS) (target: )
 - P1/planned version_advisory_exposure — Security advisories and critical bugs for the versions the (target: )
 - P2/in_progress cp_spark_exec_channel_rejected
 - P2/in_progress cp_vsx_interfaces_identical_to_physical
@@ -166,8 +165,8 @@ Build: NXS-LOCAL-0368 · Track: PCP.x · Generated: 2026-09-24T23:35:39Z
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
+- NXS-LOCAL-0369 (automated_validated)
 - NXS-LOCAL-0368 (automated_validated)
 - NXS-LOCAL-0367 (automated_validated)
 - NXS-LOCAL-0366 (automated_validated)
 - NXS-LOCAL-0365 (automated_validated)
-- NXS-LOCAL-0364 (automated_validated)

@@ -1,0 +1,68 @@
+{
+  "completed": [
+    "Devices and Configuration lists: one compact filter row (Vendor, Scope, State dropdowns) with a View/Sort menu above the list; the top-bar search is the only search and filters the list.",
+    "Backups: summary cards below the table; Cyber Controller listed; orphan backups deletable with a reason (V70).",
+    "Add device: 'Security device' role label, role appliance (V65), vendor-free credentials (V66), all-or-nothing add-single, credentials changeable after adding, failed add retryable or abandonable.",
+    "Radware: DefensePro confirm and backup through the Cyber Controller REST API (V67, V68); Cyber Controller discovery tree with DefensePro import; the Cyber Controller's own configuration backup pushed by SFTP to a HOST-A receiver and scheduled nightly (V69, OS-3a); first live run completed (37 MB).",
+    "Overview response no longer browser-cacheable, closing a window where aiview could see an administrator's unmasked copy.",
+    "Deploy never replaces the worker while a job is CLAIMED or EXECUTING; hosta_deploy stops at once on a failed build and pushes code to the host's own repository.",
+    "HOST-A exported (database, keys, configuration, 98 GB store, checksums verified), reinstalled by the Product Owner for neXus alone, and restored by the agent: site 200, schema 70, 110 devices, 901 artefact rows and 1,515 store files, all pods 1/1.",
+    "Project state: build NXS-LOCAL-0369, 12 backlog items, vendor backup items and the vendor-expansion feature updated, CURRENT_STATE and AI_HANDOVER rewritten, relay records of earlier movements committed."
+  ],
+  "changed": [
+    "ui2/frontend: InventoryScreen, ConfigurationScreen, DeviceShared, BackupScreen, AddDeviceDialog, ChangeCredentialsDialog (new), GlobalSearch, listSearch (new), adminApi and related tests.",
+    "ui2 service, worker, job-engine, persistence: Radware Cyber Controller client and executors, discovery mapper, interactive prompt answering, orphan purge, device secret and credential routes.",
+    "ui2 migrations V65-V70.",
+    "deploy/ui2 worker manifest (cc inbox hostPath, supplemental group), flyway bootstrap, registry and proxy build-job template; deploy/ui2-image-build/run_build.sh; scripts/hosta_deploy.sh, scripts/hosta_export_all.sh.",
+    "docs/design: Radware gate entries and receiver design (APPROVED), OS-3a amendment, HOST_A_REBUILD_RUNBOOK (EXECUTED), PO decision record 2026-09-24 (RATIFIED), HOST_REGISTER and AGENTS.md host amendments."
+  ],
+  "preserved": [
+    "Restore stays disabled; the scheduled fleet backup stays off.",
+    "No raw hostnames, addresses, serials or usernames in commits, docs or chat.",
+    "Check Point and Palo Alto collection and backup behaviour unchanged apart from the deploy wait.",
+    "Encryption keys and pseudonym key restored unchanged, so stored credentials, backups and aiview names stay valid."
+  ],
+  "validation": {
+    "targeted": "PASS: tests added with each change (route guard, device registration, add-single, discovery import, Radware mapper and plan, Cyber Controller backup plan, overview no-cache, change-credentials dialog).",
+    "affected": "PASS: service, worker and persistence suites; frontend vitest 205 tests.",
+    "full_regression": "NON_GREEN outside scope: tests/test_ui2_deployment_manifests.py has 8 failures that predate this build (backlog deploy_manifest_tests_eight_failures).",
+    "privacy": "PASS: repository privacy gate before the closing commit.",
+    "real_environment": "PARTIAL: host-side checks after the rebuild pass; Cyber Controller own backup ran live before the rebuild; the Product Owner's aiview acceptance on the rebuilt host and a real DefensePro getcfg are pending.",
+    "state_consistency": "PASS: scripts/project_queue.py check."
+  },
+  "unresolved_risks": [
+    "The Product Owner has not yet accepted the rebuilt host in the browser (pseudonyms, collects, an old backup, a Cyber Controller Backup Now).",
+    "The export does not include the ui2-build namespace (corp-ca); run_build.sh does not update ui2-configuration.",
+    "The corporate inspection CA was taken from the chain the firewall presents, not from IT.",
+    "The 98 GB export copies remain on HOST-A and on the Product Owner's transfer server until he decides.",
+    "Relay ids and build ids diverged: builds 0366-0368 have no relay file, so this movement's relay record is NXS-LOCAL-0366 carrying movement NXS-LOCAL-0369."
+  ],
+  "state_updates": [
+    "project/build_history.json: NXS-LOCAL-0369 added (automated_validated); roadmap now_next.now and current_build -> NXS-LOCAL-0369.",
+    "project/backlog.json: 12 items added; vendor_radware_defensepro_backup and vendor_infoblox_grid_backup -> in_progress; vendor_cp_provider1_mds_backup -> automated_validated; notes on each.",
+    "project/feature_registry.json: java_vendor_expansion -> in_progress, provider1 criterion done.",
+    "CURRENT_STATE.md active build and host section; AI_HANDOVER.md rewritten."
+  ],
+  "next": {
+    "movement": "hosta_rebuild_real_env_acceptance",
+    "movement_type": "VALIDATION",
+    "objective": "Product Owner aiview acceptance on the rebuilt HOST-A, then watch the first night's schedules and run a DefensePro Backup Now.",
+    "status": "planned"
+  },
+  "continuation": "NEW_SESSION",
+  "effects": {
+    "main_py": "UNCHANGED",
+    "ui": "CHANGED: Devices/Configuration filter row and single search, Backups layout and orphan delete, Add device and Change credentials dialogs, Radware in discovery and backups."
+  },
+  "integration": {
+    "branch": "main",
+    "ci": "NOT_RUN: direct main in a Product Owner-directed hands-on session",
+    "merge_decision": "PO_IN_SESSION",
+    "merge_state": "MERGED",
+    "pr": null
+  },
+  "recommended_reasoning": {
+    "tier": "Main engineer",
+    "reason": "Acceptance follow-up and small script fixes; escalate only for new vendor semantics."
+  }
+}

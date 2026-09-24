@@ -1302,6 +1302,15 @@
       "priority": "P2",
       "target": "Point the readiness panel at the inventory's cluster list or state plainly what it needs",
       "note": ""
+    },
+    {
+      "id": "vendor_cp_provider1_mds_backup",
+      "category": "collection",
+      "title": "Check Point Provider-1 (MDS): mds_backup over SSH",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }

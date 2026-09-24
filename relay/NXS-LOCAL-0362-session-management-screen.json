@@ -1,0 +1,197 @@
+{
+  "created_at": "2026-09-21T07:07:03Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "GET /sessions is refused for a caller without role:security_admin, proven by a test",
+          "GET /sessions returns exactly the AuditPresentationAllowlist-safe column set for 'sessions', proven by a test asserting no other field is present",
+          "A session past its idle or absolute deadline does not appear in the list, proven by a test",
+          "The Sessions tab renders the active session table, the total count, and a per-identity count, proven by a frontend test",
+          "Clicking Revoke on a row calls POST /sessions/revoke with that session's id and refreshes the list, proven by a frontend test",
+          "Backend tests, frontend tests, and the repository privacy gate are green"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN, PRODUCT OWNER APPROVED, 2026-09-09), section 3.3: a session ends role:security_admin-revoked, idle_timeout, absolute_lifetime, login_elsewhere, or access_group_lost, and the C3-gated SESSION_REVOKE action already exists exactly on that authority. AuditPresentationAllowlist already names the sessions columns safe to render in full: session_id, actor_fingerprint, created_at, last_seen_at, idle_deadline_at, absolute_expires_at, state, end_reason, ended_by_actor_fingerprint, superseded_by_session_id.",
+          "engineering": "NXS-LOCAL-0361 (in flight, separate movement) corrects IDLE_TIMEOUT to the contract's stated 30 minutes; this movement does not depend on that value and must not duplicate or re-litigate it. Session identity display: reuse whatever the existing Administration screen already uses to turn an actor_fingerprint into a human-readable label for the Local identities tab -- do not invent a second resolution path.",
+          "observed": "SessionAdminController already exposes POST /sessions/revoke, gated to role:security_admin, and SessionRepository already models exactly the fields a session list needs. But there is no list endpoint (SessionRepository has no findAll/listActive method) and no frontend screen at all: the product can end a session but cannot show one. The Product Owner asked for a Session management screen: current session count, concurrent sessions, and the ability to see and act on them -- the backend capability to act (revoke) already exists; only visibility is missing."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "The backup, discovery, and failover planes"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/session-management-screen"
+        },
+        "invariants": [
+          "Presentation identity is never a join key: the identity label shown is for display only and every action still keys off the opaque session_id",
+          "A raw actor_fingerprint or session_id is never masked into a fabricated name -- if no label can be resolved, the row states that plainly rather than inventing one",
+          "The audited-in-full column allowlist is the ceiling: this movement does not add a new column to that allowlist and does not read a sessions column outside it"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "UI",
+        "objective": "Give the Product Owner visibility into active sessions and the concurrent-session count, wired to the revoke capability that already exists, without touching session lifetime values or the login/session-supersede mechanism itself.",
+        "output_contract": [
+          "A Sessions screen showing active sessions, total and per-identity counts, and a working Revoke action",
+          "A read-only display of the current idle timeout and absolute lifetime values",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "A bounded read-and-display screen over an existing, already-gated backend capability; no new security decision, no schema change.",
+          "tier": "Main engineer"
+        },
+        "requirements": [
+          "The session list endpoint returns only the columns already named safe in AuditPresentationAllowlist for 'sessions' -- no column outside that set",
+          "The endpoint is gated exactly as /sessions/revoke is: role:security_admin, the same E1-E4 chain, no separate authorization path invented",
+          "A session already past its deadline is never listed as active -- the same expire-before-read discipline the existing repository methods already use",
+          "The identity shown for a session reuses the existing actor_fingerprint-to-label resolution already used elsewhere on the Administration screen; it does not invent a new one",
+          "The revoke action in the new screen calls the existing POST /sessions/revoke unchanged",
+          "The idle timeout and absolute lifetime values shown are read-only display, not an editable control"
+        ],
+        "risks": [
+          "Do not add a hidden findAll that bypasses expirePastDeadline's semantics -- reuse that discipline exactly, or the list will show sessions the rest of the product already treats as gone.",
+          "This is a Gradle checkout: use ./gradlew, not mvn.",
+          "The frontend test runner needs node_modules, which a fresh worktree does not carry. If npm test or tsc cannot start, link or install ui2/frontend dependencies in the worktree and run them; do not report BLOCKED with the work unvalidated.",
+          "Do not touch NXS-LOCAL-0361's IDLE_TIMEOUT change if it has already landed on main by the time this movement starts -- read whatever value is current and display it; do not hardcode 5 or 30 minutes into this movement's own code or tests."
+        ],
+        "scope": {
+          "in": [
+            "SessionRepository: an additional read method listing active sessions (as-of now, expiring past-deadline ones first exactly as the existing findBySessionId/findActiveByActor defaults already do, so the list never shows a session that is actually already expired)",
+            "A new GET /sessions endpoint, gated to role:security_admin exactly like /sessions/revoke, returning only the columns AuditPresentationAllowlist already names safe for 'sessions' in full",
+            "A new 'Sessions' tab or section on the Administration screen: a table of active sessions (identity label, created_at, last_seen_at, idle_deadline_at, absolute_expires_at) with a Revoke action per row wired to the existing POST /sessions/revoke",
+            "A header metric: total active session count, and each identity's own active session count next to its row",
+            "A read-only display of the two current session-duration values (idle timeout, absolute lifetime) as currently configured -- no control to change them",
+            "Tests for the list endpoint's gating, its field set, and the frontend table plus revoke wiring"
+          ],
+          "out": [
+            "Making idle timeout or absolute lifetime editable from the UI or from any endpoint -- that turns a fixed value into a runtime-mutable security parameter and needs its own decision before it is built, not implied by this ask",
+            "Any change to login, session creation, supersede-on-login-elsewhere, or the E1-E6 gate chain",
+            "NXS-LOCAL-0361's IDLE_TIMEOUT correction, which is a separate, already-dispatched movement",
+            "Revoking a session other than through the existing endpoint, or any new revoke semantics"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./gradlew",
+              "-p",
+              "ui2",
+              ":service:test",
+              ":persistence:test"
+            ],
+            "name": "backend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "npx",
+              "--prefix",
+              "ui2/frontend",
+              "tsc",
+              "--noEmit"
+            ],
+            "name": "frontend_typecheck"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-21T07:07:03Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "SessionRepository and JooqSessionRepository now list active sessions only after expire-before-read reconciliation.",
+          "GET /sessions reuses the SESSION_REVOKE security-admin gate and emits exactly the existing audit-safe session columns, separate resolved labels, and current duration metadata.",
+          "Administration now has a Sessions tab with total and per-identity counts and POST /sessions/revoke refresh behavior.",
+          "Added focused backend and frontend acceptance tests."
+        ],
+        "completed": [
+          "Added security-admin session visibility, concurrent counts, configured lifetime display, and existing revoke wiring.",
+          "Opened pull request 444 against main without merging it."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No product source change; used only for the repository privacy gate.",
+          "ui": "Administration gains a Sessions tab with active session visibility, counts, current read-only lifetimes, and existing revoke action wiring."
+        },
+        "integration": {
+          "branch": "feature/session-management-screen",
+          "ci": "Local changed-path gates pass; orchestrator verification pending with the recorded baseline project-state and sandbox Playwright exceptions.",
+          "head_sha": "3a31849",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator merge mode: worker opened the PR and did not merge.",
+          "merge_state": "OPEN",
+          "pr": 444,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/444"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0362 orchestrator verification and merge gate",
+          "movement_type": "VALIDATION",
+          "objective": "Run independent verification, resolve or accept the recorded baseline and sandbox exceptions, and merge pull request 444 if the orchestrator gate passes.",
+          "status": "in_progress"
+        },
+        "preserved": [
+          "Revoke actions still key only on opaque session_id.",
+          "Unresolved identities display Identity unavailable rather than a fabricated name.",
+          "Session duration values, login and supersede behavior, the E1-E6 chain, and revoke semantics are unchanged."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded independent verification and merge decision; no new architecture or security semantics.",
+          "tier": "Main engineer"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The full backend command retains one unrelated project-state classification failure.",
+          "The optional Playwright render smoke requires an environment that permits Chromium launch."
+        ],
+        "validation": {
+          "affected": "PASS: frontend TypeScript check with the explicit frontend tsconfig; HTML render static checks 5 passed and 1 skipped.",
+          "diff_check": "PASS: git diff --check origin/main; worktree clean after commit.",
+          "full_regression": "Frontend PASS: 17 files and 127 tests. Backend compiled and ran 294 service tests; one unrelated baseline ProjectPlanReaderTest assertion failed because backlog classification orchestrator_worktree_lacks_frontend_dependencies is missing or invalid. All changed backend tests pass.",
+          "privacy": "PASS: repository privacy gate scanned 1825 files with 0 findings.",
+          "real_environment": "UNVERIFIED: local validation only. Playwright Chromium could not launch in the managed macOS sandbox because MachPortRendezvousServer registration was denied.",
+          "state_consistency": "No project authority file changed. The unrelated ProjectPlanReaderTest baseline classification failure remains for orchestrator review.",
+          "targeted": "PASS: SessionAdminControllerTest, GateChainTest, GateChainInterceptorSecurityTest, SessionExpiryOnReadTest, and AdministrationScreen.test.tsx."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-21T07:23:26Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0362",
+  "movement": "NXS-LOCAL-0362",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/identity/SessionRepository.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/SessionAdminController.java",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/audit/AuditPresentationAllowlist.java",
+    "ui2/frontend/src/screens/AdministrationScreen.tsx"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-21T07:23:26Z"
+}

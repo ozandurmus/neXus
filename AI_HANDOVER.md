@@ -4,8 +4,20 @@
 HOST-A was reinstalled for neXus alone (Ubuntu 26.04.1, k3s v1.36.4) and neXus restored from the 2026-09-24 export:
 site 200 (80/443), schema 70, 110 devices (108 enrolled), 901 artefact rows / 1,515 store files, no startup errors.
 Pod limits raised (service/worker 8Gi·4CPU, compliance/configuration 2Gi·1CPU) after an OOM at 2Gi.
-Local `main`, `origin/main` and the host's `~/nexus.git` are the same commit (2dfb6b9).
+Build `NXS-LOCAL-0369` (automated_validated); details: `docs/history/builds/NXS-LOCAL-0369.md`.
 Not yet checked in the browser by the Product Owner (see "Exact next action").
+
+# Who did this and how (2026-09-23 .. 25)
+One Claude engineering session (`ENGINEER` role), hands-on with the Product Owner in Turkish chat — not the `nexus-po`
+skill, no workers. Loop: PO reports what aiview shows → agent changes code → tests → `hosta_deploy.sh` watched → PO
+checks. PO decisions went straight into decision records / contract amendments in the commit that used them.
+Relay record: `relay/NXS-LOCAL-0366-radware-ui-deploy-safety-hosta-rebuild.json` (movement NXS-LOCAL-0369; the
+SESSION CLOSE report is `relay/NXS-LOCAL-0366-session-close-report.json`, next actor: PO).
+
+# What owning HOST-A changes
+No other product and no shared disk any more (the cause of the 2026-09-24 outages is gone). The host layer — k3s and
+its proxy env, registry mirror, SFTP receiver accounts for pushing products, build inputs — is now neXus's to keep and
+is recorded in the runbook. The agent has logged sudo, asks first before deleting anything, never jumps onward.
 
 # How to work on HOST-A now (read these first)
 - Access: `ssh aiadmin@<host>` — the host is the first line of `~/.config/nexus/hosta`. Never echo the address.

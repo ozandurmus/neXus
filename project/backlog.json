@@ -707,7 +707,7 @@
       "id": "vendor_radware_defensepro_backup",
       "category": "collection",
       "title": "Radware DefensePro: configuration backup (HTTPS)",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P1",
       "target": "",
       "note": ""
@@ -734,7 +734,7 @@
       "id": "vendor_infoblox_grid_backup",
       "category": "collection",
       "title": "Infoblox Grid Manager: grid backup via WAPI fileop getgriddata (HTTPS)",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P1",
       "target": "",
       "note": ""
@@ -752,15 +752,6 @@
       "id": "vendor_cisco_asa_backup",
       "category": "collection",
       "title": "Cisco ASA: running/startup config + native backup tar over SSH/SCP (priv 15)",
-      "status": "planned",
-      "priority": "P1",
-      "target": "",
-      "note": ""
-    },
-    {
-      "id": "vendor_cp_provider1_mds_backup",
-      "category": "collection",
-      "title": "Check Point Provider-1 (MDS): mds_backup over SSH",
       "status": "planned",
       "priority": "P1",
       "target": "",

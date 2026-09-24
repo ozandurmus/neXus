@@ -6,14 +6,15 @@ the generated project data it represents; contract succession is in
 
 ## Product today
 
-neXus (UI2, Java) runs on HOST-A against the live estate — 105 devices, 39
-clusters — and the Product Owner uses it daily under the `aiview` persona.
-Inventory (with serial, version, hotfix / content versions, uptime),
+neXus (UI2, Java) runs on HOST-A against the live estate — 110 devices in the
+registry (108 enrolled) — and the Product Owner uses it daily under the `aiview`
+persona. Inventory (with serial, version, hotfix / content versions, uptime),
 configuration (section projection, cluster member DIFF, change detection),
-compliance (four frameworks over 102 firewalls), Check Point and Palo Alto
-backups (encrypted, downloadable under RBAC, listed and compared), jobs with
-filters and export, nexus-cli, notifications (syslog / SMTP relay, built but
-not yet pointed at real targets), a service and storage view, and the
+compliance (four frameworks), backups (Check Point, Palo Alto, Check Point MDS
+export, Radware through the Cyber Controller and the Cyber Controller's own
+configuration; encrypted, downloadable under RBAC, listed and compared, orphan
+backups deletable), jobs with filters and export, nexus-cli, notifications
+(built, not yet pointed at real targets), a service and storage view, and the
 Overview (exception-and-evidence screen, frozen contract) are deployed.
 Restore is deliberately disabled. Backup scheduling exists; the fleet
 schedule is not switched on. Evidence-weighted progress of the Java roadmap:
@@ -21,13 +22,15 @@ schedule is not switched on. Evidence-weighted progress of the Java roadmap:
 
 ## Active build
 
-`NXS-LOCAL-0368` — `automated_validated` (2026-09-23, deployed on HOST-A):
-Overview rebuilt per `docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md`
-(FROZEN), collision-free aiview pseudonyms (V53), and the menu-tour fixes of
-`NXS-LOCAL-0367` (heap exhaustion, speed, notifications, service view). The
-open gate is the Product Owner's aiview acceptance of the Overview. NEXT:
-Overview acceptance and per-member settings not counted as drift (38 of 39
-clusters show a member DIFF today). Records in `project/build_history.json`.
+`NXS-LOCAL-0369` — `automated_validated` (2026-09-23..25, deployed on HOST-A):
+Radware backup and discovery through the Cyber Controller and the controller's
+own SFTP-pushed backup (V65–V70), device-list / backup / add-device rework,
+deploys that never replace the worker under a running job, and HOST-A
+reinstalled for neXus alone and restored from a verified export
+(`docs/design/HOST_A_REBUILD_RUNBOOK.md`). Open gate: the Product Owner's aiview
+acceptance on the rebuilt host (backlog `hosta_rebuild_real_env_acceptance`).
+Predecessor `NXS-LOCAL-0368` (Overview, collision-free pseudonyms): Overview
+acceptance still open. Records in `project/build_history.json`.
 
 ## Open Product Owner decisions
 
@@ -39,12 +42,17 @@ restore or scheduling.
 
 ## Development environment
 
-HOST-A (k3s, namespace `ui2`) is the development and pilot host; builds run in
-the cluster (kaniko) and are deployed with `scripts/hosta_deploy.sh`, which
-refuses with jobs in flight and stops at the first failure. What an agent may
-execute there is fixed by the host register and the 2026-09-19 amendment in
-`AGENTS.md`. The repository on GitHub is public; the Product Owner's decision
-on visibility is open (`docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md` §4).
+HOST-A is neXus's own host since its 2026-09-25 reinstall (Ubuntu 26.04.1,
+k3s v1.36.4, namespaces `ui2` and `ui2-build`, the whole 1 TB disk; no other
+product on it). Builds run in the cluster (kaniko) through the corporate proxy
+and are deployed with `scripts/hosta_deploy.sh`, which pushes the code to the
+host's own repository, stops at the first failure and replaces the worker only
+when no job is running. The agent works there through its own account with
+journal-logged sudo; deleting or irreversible commands need the Product Owner's
+yes first, and the host is never a jump server
+(`docs/design/PO_DECISION_RECORD_2026_09_24_HOST_A_OWNED_BY_NEXUS_AGENT_SUDO.md`).
+The repository on GitHub is public; the Product Owner's decision on visibility
+is open (`docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md` §4).
 
 ## Production and real-environment posture
 

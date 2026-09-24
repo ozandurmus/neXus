@@ -1,0 +1,86 @@
+{
+  "created_at": "2026-09-24T23:41:32Z",
+  "entries": [
+    {
+      "actor": "engineer",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Each Product Owner request is visible on HOST-A under aiview after a watched deploy",
+          "Automated suites green before each deploy",
+          "Every new migration dry-run on the live database before rollout",
+          "After a rebuild: site 200, schema 70, device and artefact counts equal to the export"
+        ],
+        "baseline": {
+          "authority": "CURRENT_STATE.md at NXS-LOCAL-0368; docs/design/RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md and RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md (approved during the session); PO_DECISION_RECORD_2026_09_24_HOST_A_OWNED_BY_NEXUS_AGENT_SUDO.md (ratified during the session).",
+          "engineering": "Java UI2 on k3s on HOST-A, schema V64, deployed with scripts/hosta_deploy.sh. ENGINEER session (Claude) working hands-on with the Product Owner; not the nexus-po skill; no workers dispatched.",
+          "observed": "Product Owner feedback from the browser under aiview, reported in chat."
+        },
+        "context_not_loaded": [
+          "docs/history/** except the named build records",
+          "credential stores and artefact contents"
+        ],
+        "deployment_direction": "production-gated",
+        "git": {
+          "base": "main",
+          "lane": "direct main (Product Owner-directed hands-on session)"
+        },
+        "invariants": [
+          "aiview masking: no raw hostnames, addresses, serials or usernames in chat, commits or docs",
+          "secrets only in the credential store or Kubernetes Secrets",
+          "every new migration dry-run in BEGIN/ROLLBACK on the live database",
+          "deleting or irreversible host commands only after the Product Owner's yes",
+          "HOST-A is never a jump server"
+        ],
+        "merge_gate": "Product Owner in session; automated suites green before each deploy",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Work directly with the Product Owner on HOST-A: simplify the device-list, backup and add-device screens; bring Radware (Cyber Controller and DefensePro) into backup and discovery; make deploys safe for running jobs; export neXus and rebuild it on HOST-A once the host became neXus's own.",
+        "output_contract": [
+          "Commits on main pushed to origin and the host repository; decision records and contract amendments with the change that uses them; build record NXS-LOCAL-0369 and this relay record at the end."
+        ],
+        "recommended_reasoning": {
+          "reason": "Cross-subsystem vendor, deploy and host work with live debugging.",
+          "tier": "Main engineer"
+        },
+        "requirements": [
+          "Product Owner requests as given in chat, one at a time",
+          "Vendor semantics only from vendor documentation plus a live measurement recorded in the repository"
+        ],
+        "risks": [
+          "deploys interrupting running backup jobs",
+          "shared-disk exhaustion by the co-hosted product (resolved by the reinstall)",
+          "loss of keys making restored rows unreadable"
+        ],
+        "scope": {
+          "in": [
+            "ui2 frontend screens named by the Product Owner",
+            "service, worker, persistence and migrations V65-V70",
+            "deploy scripts and manifests",
+            "HOST-A export, reinstall restore and host setup under the 2026-09-24 decision"
+          ],
+          "out": [
+            "restore to devices",
+            "enabling the scheduled fleet backup",
+            "other products' data on the host"
+          ]
+        },
+        "validation_plan": [
+          "Targeted tests per change, module suites before each deploy, live check on HOST-A, Product Owner aiview check in the browser."
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-24T23:41:32Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0366",
+  "movement": "NXS-LOCAL-0369",
+  "next_actor": "po",
+  "refs": [
+    "docs/history/builds/NXS-LOCAL-0369.md",
+    "docs/design/HOST_A_REBUILD_RUNBOOK.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_24_HOST_A_OWNED_BY_NEXUS_AGENT_SUDO.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-24T23:41:32Z"
+}

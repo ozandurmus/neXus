@@ -1,0 +1,194 @@
+{
+  "created_at": "2026-09-21T07:26:55Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A first connection to a device with a self-signed certificate is rejected with the fingerprint reported, then succeeds after the operator enrolls that exact fingerprint, proven by a test",
+          "A connection presenting a fingerprint different from the one enrolled for that address/port is rejected, proven by a test",
+          "A connection whose certificate verifies by chain succeeds without any enrollment lookup, proven by a test",
+          "POST /discovery/pan-trust/enroll and /re-enroll are refused without the required role, proven by a test, mirroring the existing ssh-trust gating test",
+          "The frontend enrollment step renders the observed fingerprint and requires explicit confirmation before submitting, proven by a test",
+          "Backend tests, frontend tests, and the repository privacy gate are green"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C10_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md (FROZEN, 2026-09-15). Its own model, restated for a second vendor and a second key shape rather than reopened: an unverified endpoint identity is never silently trusted and never blindly refused -- the operator is shown what was observed, explicitly authorizes it once, and the product remembers that authorization per endpoint. C10's schema (management_endpoint_ssh_trust) is SSH-host-key-shaped by design (key_algorithm, ssh key fingerprint) and is vendor-locked to CHECK_POINT by its own CHECK constraint; this movement does not alter that table or that constraint. It builds the same pattern as a sibling table shaped for an X.509 certificate fingerprint, for Palo Alto.",
+          "engineering": "AGENTS.md's Palo Alto section: 'Production TLS requires trusted corporate CA verification. Historical POC TLS-verification exceptions are technical debt, never production design.' This movement does not create a bypass or a POC exception: it keeps NXS-LOCAL-0359's chain verification exactly as the first, default check, and adds an explicit, audited, per-device operator authorization as the second path for a certificate that cannot chain to a trusted root -- the identical shape C10 already established and that this constitution already accepts for Check Point. No certificate is ever accepted silently.",
+          "observed": "NXS-LOCAL-0359 (merged) replaced PanXmlApiTransport's name-matching certificate check with real chain verification, which is correct and stays. What it exposed: every enumerated Palo Alto firewall in this environment presents its own default, self-signed certificate -- not one issued by the corporate CA that verifies Panorama's own certificate. All 39 currently-enumerated PAN devices report FAILED with a distinct, correct fingerprint each. The only existing escape hatch, PAN_DISCOVERY_TRUST_PINNED_FINGERPRINT_SHA256, is a single global environment variable: it can pin exactly one fingerprint, never 39 distinct per-device ones, so it cannot be the real mechanism here. The Product Owner's direction, given directly in this session: this is exactly the trust-once-then-remember model C10 already built for Check Point SSH host keys, and Palo Alto needs the same thing, not a bypass."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "The backup, failover, and compliance planes"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pan-cert-trust-enrollment"
+        },
+        "invariants": [
+          "No certificate is ever trusted silently: chain verification or an explicit, audited, per-device operator enrollment -- there is no third path",
+          "A fingerprint is an opaque identifier: stored, compared, and displayed exactly as computed, never shortened or reformatted",
+          "History is append-only and immutable, mirroring management_endpoint_ssh_trust's own audit trigger exactly -- superseding a trust entry never deletes the prior one",
+          "Presentation identity (a device's display name) is never the trust key -- management address and port are, exactly as C10 already establishes for Check Point"
+        ],
+        "merge_gate": "Open a pull request against main when the validation plan is green, and report its number in the SESSION_CLOSE. Do not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Let an operator authorize a specific Palo Alto firewall's own certificate fingerprint, once, per device, with the authorization recorded and audited -- exactly C10's model, applied to Palo Alto TLS certificates instead of Check Point SSH host keys.",
+        "output_contract": [
+          "A per-device Palo Alto certificate trust store, enrolled and re-enrolled through two new gated endpoints",
+          "A frontend step that shows the observed fingerprint and requires explicit operator confirmation before trusting it",
+          "Chain verification unchanged and still tried first",
+          "An open pull request number against main"
+        ],
+        "recommended_reasoning": {
+          "reason": "A new trust-store schema and its audit trigger, plus a worker-side trust-resolution change and a UI enrollment flow, all mirroring an already-frozen, already-proven pattern for a second vendor -- bounded by precedent, but touching a security boundary.",
+          "tier": "Strong implementation"
+        },
+        "requirements": [
+          "A certificate that verifies by chain (the corporate CA case) never needs enrollment and is unaffected by this movement",
+          "A certificate that cannot verify by chain is rejected until the operator explicitly enrolls its exact fingerprint for that management address and port",
+          "An enrolled fingerprint is stored per device, never applied globally to every Palo Alto device",
+          "A later connection presenting a different fingerprint than the one enrolled is rejected, not silently re-trusted -- re-enrollment is its own explicit action, exactly as C10 already requires for Check Point",
+          "Every enrollment and re-enrollment is audited: who, when, what was observed, matching C10's existing audit shape",
+          "The environment-variable pinned-fingerprint path keeps working unchanged for whoever still relies on it"
+        ],
+        "risks": [
+          "This is a new table and a new pair of gated actions, not a schema change to the existing CHECK_POINT-locked table -- do not widen management_endpoint_ssh_trust's vendor CHECK constraint to fit Palo Alto; that table's shape (SSH key_algorithm) does not fit a certificate anyway.",
+          "Do not let the new per-device store silently override a certificate that already verifies by chain -- chain verification stays first and is not bypassed for a device that happens to have a stored (and now unnecessary) trust entry.",
+          "This is a Gradle checkout: use ./gradlew, not mvn.",
+          "The frontend test runner needs node_modules, which a fresh worktree does not carry. If npm test or tsc cannot start, link or install ui2/frontend dependencies in the worktree and run them; do not report BLOCKED with the work unvalidated.",
+          "39 already-enumerated Palo Alto devices exist in the live environment with FAILED collection state and a known fingerprint each -- this movement's job is to make enrollment possible, not to enroll any of them; that is the Product Owner's own action once this ships."
+        ],
+        "scope": {
+          "in": [
+            "A new migration: management_endpoint_pan_cert_trust, shaped like management_endpoint_ssh_trust (trust_entry_id, management_address, management_port, fingerprint_sha256, status ACTIVE/SUPERSEDED, authorized_by, authorized_at, observed_at, superseded_by), vendor fixed to PALO_ALTO, with the same append-only-history audit trigger pattern C10 already uses -- a new table, not a change to the CHECK_POINT-only management_endpoint_ssh_trust",
+            "A new gated action pair (enroll / re-enroll) and two new endpoints, POST /discovery/pan-trust/enroll and POST /discovery/pan-trust/re-enroll, mirroring the existing ssh-trust ones exactly in shape and gating",
+            "PanXmlApiTransport / EnvironmentPanTrustRuleResolver: before falling back to the environment-variable pinned fingerprint (kept for compatibility, not removed), look up a stored ACTIVE trust entry for the device's management address and port; if the presented certificate's fingerprint matches the stored one, trust it -- otherwise still verify by chain first, exactly as NXS-LOCAL-0359 already does",
+            "A frontend enrollment step in the PAN add/discovery flow, presenting the observed fingerprint and requiring the operator's explicit confirmation, mirroring the existing SSH trust step in AddDeviceDialog.tsx",
+            "Tests for a first enrollment, a fingerprint mismatch on re-enroll, chain-verified certificates bypassing enrollment entirely (unchanged NXS-LOCAL-0359 path), and the endpoint gating"
+          ],
+          "out": [
+            "Any change to management_endpoint_ssh_trust, its CHECK_POINT constraint, or the Check Point trust flow",
+            "Any change to NXS-LOCAL-0359's chain-verification logic itself -- it stays the first, default path",
+            "Removing or weakening the PAN_DISCOVERY_TRUST_PINNED_FINGERPRINT_SHA256 environment escape hatch -- it stays as a deploy-time override, unrelated to this per-device store",
+            "Bulk-trusting multiple devices from one action, or auto-enrolling a certificate without an explicit per-device operator action",
+            "PAN authentication transport convergence, discovery parsing, or anything about what is collected once a connection succeeds"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./gradlew",
+              "-p",
+              "ui2",
+              ":service:test",
+              ":persistence:test",
+              ":worker:test"
+            ],
+            "name": "backend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "npx",
+              "--prefix",
+              "ui2/frontend",
+              "tsc",
+              "--noEmit"
+            ],
+            "name": "frontend_typecheck"
+          },
+          {
+            "argv": [
+              "python3",
+              "main.py",
+              "--repository-privacy-check"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-21T07:26:55Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Source, tests, and V35 migration on feature/pan-cert-trust-enrollment."
+        ],
+        "completed": [
+          "Implemented and validated per-device Palo Alto certificate trust enrollment."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "AddDeviceDialog now includes explicit Palo Alto certificate trust confirmation."
+        },
+        "integration": {
+          "branch": "feature/pan-cert-trust-enrollment",
+          "ci": "Orchestrator verification pending.",
+          "head_sha": "3a84557e83746c0e41266518ab06cb7faf6e337f",
+          "merge_commit": null,
+          "merge_decision": "Orchestrator owns merge after verification.",
+          "merge_state": "OPEN",
+          "pr": 446,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/446"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0363",
+          "movement_type": "VALIDATION",
+          "objective": "Orchestrator verification and merge of PR 446.",
+          "status": "planned"
+        },
+        "preserved": [
+          "Chain verification remains first.",
+          "Check Point trust flow is unchanged."
+        ],
+        "recommended_reasoning": {
+          "reason": "Implementation and required local gates are complete; only independent orchestrator verification remains.",
+          "tier": "Standard validation"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "Frontend tests passed: 17 files and 127 tests; TypeScript typecheck passed.",
+          "diff_check": "PASS: git diff --check origin/main.",
+          "full_regression": "Not required by the approved validation plan.",
+          "privacy": "PASS: repository privacy gate, 0 findings.",
+          "real_environment": "Not performed; local validation only.",
+          "state_consistency": "No project state update was required by the approved scope.",
+          "targeted": "Backend service, persistence, and worker tests passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-21T07:42:00Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0363",
+  "movement": "NXS-LOCAL-0363",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C10_DISCOVERY_SSH_TRUST_ENROLLMENT_CONTRACT.md",
+    "ui2/service/src/main/resources/db/migration/V24__management_endpoint_ssh_trust.sql",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/api/DiscoveryController.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/discovery/pan/EnvironmentPanTrustRuleResolver.java",
+    "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/xmlapi/PanXmlApiTransport.java",
+    "ui2/frontend/src/shell/AddDeviceDialog.tsx"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-21T07:42:00Z"
+}
