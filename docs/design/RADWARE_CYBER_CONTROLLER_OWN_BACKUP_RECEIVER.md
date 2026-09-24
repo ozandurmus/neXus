@@ -72,6 +72,15 @@ behaviour; 9 secret-bearing output risk; 10 safe telemetry.
 4. `system backup config delete <name>`: prompt `Are you sure you want to delete this backup (Y/N)?`, answered `y`,
    then `Remove completed.` Still MEASURE FIRST: the failure text of an export (wrong password, full disk).
 
+## First live run (2026-09-24, Backup Now by the Product Owner)
+
+- Run 1: create (11 s, 36,136 K listed) → export answered `Password:` but HOST-A logged `Failed password for
+  nexus-cc` (the stored credential did not match the account's password) → no upload → the run deleted its own
+  backup (`Remove completed.`). Nothing left on either side. The PO reset the password on both sides.
+- Run 2: **COMPLETED.** create → export `Export completed.` → upload present → **37,027,872 bytes stored** (the
+  listed 36,136 K plus the `.tar` wrapper) → upload deleted (inbox empty afterwards) → `Remove completed.` on the
+  Cyber Controller. Nightly 03:00 now runs for it (backup target on).
+
 ## Not in this document
 
 - The `full` backup (59 GiB / 1 h) — parked by the Product Owner.
