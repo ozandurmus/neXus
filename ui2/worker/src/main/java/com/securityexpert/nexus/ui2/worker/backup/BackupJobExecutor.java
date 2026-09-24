@@ -183,30 +183,10 @@ public final class BackupJobExecutor {
             // only when no enrolled Cyber Controller lists it.
             Optional<String> passphrase = deviceSecrets.find(targetDeviceId,
                     com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository.EXPORT_PASSPHRASE);
-            for (com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord cc : deviceRepository.listAll()) {
-                if (!"radware".equals(cc.vendorHint()) || !"management_server".equals(cc.role())
-                        || cc.enrollmentState() != com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.ENROLLED) {
-                    continue;
-                }
-                Optional<com.securityexpert.nexus.ui2.persistence.device.DeviceRecord> ccRecord = deviceRepository.find(cc.deviceId());
-                Optional<com.securityexpert.nexus.ui2.persistence.device.EndpointRecord> ccEndpoint = deviceRepository.findEndpointByDeviceId(cc.deviceId());
-                if (ccRecord.isEmpty() || ccRecord.get().disabled() || ccEndpoint.isEmpty()) {
-                    continue;
-                }
-                String address = ccEndpoint.get().addressRef();
-                int colon = address.lastIndexOf(':');
-                int port = 443;
-                if (colon >= 0) {
-                    try {
-                        port = Integer.parseInt(address.substring(colon + 1));
-                        address = address.substring(0, colon);
-                    } catch (NumberFormatException notAPort) {
-                        // a bare host
-                    }
-                }
-                viaCyberController = httpsVendorExecutor.backupViaCyberController(
-                        new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(address, port),
-                        ccRecord.get().credentialReferenceId(), request.connectionTarget().host(), passphrase, targetDeviceId, jobId);
+            for (com.securityexpert.nexus.ui2.worker.backup.https.CyberControllers.Ref cc
+                    : com.securityexpert.nexus.ui2.worker.backup.https.CyberControllers.enrolled(deviceRepository)) {
+                viaCyberController = httpsVendorExecutor.backupViaCyberController(cc.target(), cc.credentialRef(),
+                        request.connectionTarget().host(), passphrase, targetDeviceId, jobId);
                 if (viaCyberController.isPresent()) {
                     break;
                 }

@@ -176,6 +176,35 @@ public final class HttpsVendorExecutor {
     }
 
     /**
+     * A DefensePro confirmed by the Cyber Controller that lists its address -- management-plane evidence, not a read
+     * from the device itself, and the identity says so. Empty when that Cyber Controller does not list it or cannot be
+     * read (the caller then reads the device directly).
+     */
+    public Optional<ConfirmOutcome> confirmViaCyberController(Target cc, String ccCredentialRef, String deviceAddress) {
+        try {
+            CcLogin login = ccLogin(cc, credentials.apply(ccCredentialRef));
+            if (login.session().isEmpty()) {
+                LOG.log(System.Logger.Level.WARNING, "[CYBER_CONTROLLER] confirm via Cyber Controller not possible: {0}", login.reason());
+                return Optional.empty();
+            }
+            try (CcSession s = login.session().get()) {
+                Optional<JsonNode> devices = ccDevices(s);
+                if (devices.isEmpty() || !HttpsVendorPlan.listsAddress(devices.get(), deviceAddress)) {
+                    return Optional.empty();
+                }
+                return Optional.of(new ConfirmOutcome.Confirmed(new Identity(Optional.empty(),
+                        Optional.of("Radware DefensePro (listed by Cyber Controller)"), Optional.empty())));
+            }
+        } catch (RuntimeException | IOException e) {
+            LOG.log(System.Logger.Level.WARNING, "[CYBER_CONTROLLER] confirm via Cyber Controller failed: {0}", e.getClass().getSimpleName());
+            return Optional.empty();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        }
+    }
+
+    /**
      * A DefensePro backup through the Cyber Controller that manages it (PO, 2026-09-24): its {@code getcfg}, keys
      * included and encrypted with the device's export passphrase, streamed here ({@code saveToDb=false}: nothing is
      * written to the Cyber Controller's own backup slots). Empty when the Cyber Controller does not list the device --

@@ -36,6 +36,9 @@ response shape (memory rule: measurement record before contract).
    exactly as the direct path does. `saveToDb=false` always: the file streams to neXus and nothing is written to the
    Cyber Controller's own per-device backup slots (5–10 per device), so the customer's own backups are never evicted.
 4. No lock/unlock call, no configuration change, no call beyond the four below.
+5. (PO, 2026-09-24, "Gayet uygun devam".) A DefensePro the Cyber Controller lists is **confirmed** by that listing —
+   management-plane evidence, labelled "listed by Cyber Controller" on the device, never presented as a direct read;
+   the device's own HTTPS read only when no enrolled Cyber Controller lists it. Calls 1, 2 and 4 serve that confirm.
 
 ## The entries
 

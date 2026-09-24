@@ -55,7 +55,21 @@ public final class HttpsVendorConfirmJobExecutor {
             return new JobOutcome.ZombieStopped();
         }
         long start = System.currentTimeMillis();
-        HttpsVendorExecutor.ConfirmOutcome outcome = executor.confirm(vendor, target, credentialRef);
+        // PO, 2026-09-24: a DefensePro an enrolled Cyber Controller lists is confirmed by that listing (management-plane
+        // evidence, labelled as such); the direct device read only when no Cyber Controller lists it.
+        HttpsVendorExecutor.ConfirmOutcome outcome = null;
+        if ("radware".equals(vendor)) {
+            for (CyberControllers.Ref cc : CyberControllers.enrolled(devices)) {
+                Optional<HttpsVendorExecutor.ConfirmOutcome> viaCc = executor.confirmViaCyberController(cc.target(), cc.credentialRef(), target.host());
+                if (viaCc.isPresent()) {
+                    outcome = viaCc.get();
+                    break;
+                }
+            }
+        }
+        if (outcome == null) {
+            outcome = executor.confirm(vendor, target, credentialRef);
+        }
         attempts.writeOutcome(attemptId, leaseEpoch, outcome instanceof HttpsVendorExecutor.ConfirmOutcome.Confirmed ? "MATCHED" : "EXPECTATION_UNMET",
                 null, 0L, 0L, outcome.getClass().getSimpleName());
         long ms = System.currentTimeMillis() - start;

@@ -120,6 +120,16 @@ class HttpsVendorExecutorTest {
     }
 
     @Test
+    void aDefenseProTheCyberControllerListsIsConfirmedAndLabelledAsManagementPlaneEvidence() {
+        Optional<HttpsVendorExecutor.ConfirmOutcome> listed = executor.confirmViaCyberController(T, "cc", "192.0.2.41");
+        assertTrue(listed.isPresent() && listed.get() instanceof HttpsVendorExecutor.ConfirmOutcome.Confirmed c
+                && c.identity().model().orElse("").contains("listed by Cyber Controller"), String.valueOf(listed));
+        assertTrue(executor.confirmViaCyberController(T, "cc", "192.0.2.99").isEmpty());
+        calls.loginStatus = 401;
+        assertTrue(executor.confirmViaCyberController(T, "cc", "192.0.2.41").isEmpty(), "an unusable Cyber Controller falls back to the device");
+    }
+
+    @Test
     void aRefusedCyberControllerLoginCallsNothingElse() {
         calls.loginStatus = 401;
         assertTrue(executor.confirm("radware_cyber_controller", T, "cc") instanceof HttpsVendorExecutor.ConfirmOutcome.AuthenticationFailed);
