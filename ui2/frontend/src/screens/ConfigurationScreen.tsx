@@ -2,17 +2,16 @@ import { useEffect, useState, useMemo } from "react";
 import { urlParam } from "../shell/urlParams";
 import { getOverview } from "../auth/adminApi";
 import Box from "@mui/material/Box";
-import InputBase from "@mui/material/InputBase";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
 import { ScreenHeader, ListDetail, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
-import { Icon } from "../shell/Icon";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { listConfigurations, listDevices, requestBulkConfigurationCollect, type ApiError, type ConfigurationDeviceListEntry, type DeviceSummary } from "../auth/adminApi";
-import { DeviceList, ListViewSelect, isDeviceLive, useListView } from "./InventoryScreen";
+import { DeviceList, deviceMatchesSearch, isDeviceLive, useListView } from "./InventoryScreen";
+import { useListSearch } from "../shell/listSearch";
 import { FilterBar, FilterRow } from "./DeviceShared";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
 
@@ -80,7 +79,8 @@ export function ConfigurationScreen() {
   );
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(() => urlParam("device_id"));
   const [selectedCluster, setSelectedCluster] = useState<{ ref: string; members: DeviceSummary[] } | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  // The top bar's search narrows this list (one search box, PO 2026-09-24).
+  const searchQuery = useListSearch();
   const [filterMode, setFilterMode] = useState<"all" | "changed" | "first_run" | "uncollected">(() => (urlParam("change_state") === "changed" ? "changed" : "all"));
   // Overview links: clusters whose members differ (the Overview's own list), or one cluster to open.
   const [diffRefs, setDiffRefs] = useState<ReadonlySet<string> | null>(null);
@@ -126,17 +126,12 @@ export function ConfigurationScreen() {
   const filteredDevices = useMemo(() => {
     if (!devices) return [];
     return devices.filter((d) => {
-      const matchSearch =
-        !searchQuery ||
-        (d.hostname ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        d.device_id.toLowerCase().includes(searchQuery.toLowerCase());
-      if (!matchSearch) return false;
       if (filterMode === "changed") return d.change_state === "changed";
       if (filterMode === "first_run") return d.change_state === "first_run";
       if (filterMode === "uncollected") return d.change_state === null;
       return true;
     });
-  }, [devices, searchQuery, filterMode]);
+  }, [devices, filterMode]);
 
   const selectedDevice = devices?.find((d) => d.device_id === selectedDeviceId) ?? null;
 
@@ -144,8 +139,9 @@ export function ConfigurationScreen() {
     if (!summaries) return [];
     const allowed = new Set(filteredDevices.map((d) => d.device_id));
     return summaries.filter((d) => allowed.has(d.device_id) && (vendorFilter === "all" || d.vendor_hint === vendorFilter)
+      && deviceMatchesSearch(d, searchQuery)
       && (diffRefs === null || (d.cluster_member_ref !== null && diffRefs.has(d.cluster_member_ref))));
-  }, [summaries, filteredDevices, vendorFilter, diffRefs]);
+  }, [summaries, filteredDevices, vendorFilter, diffRefs, searchQuery]);
 
   // Open the cluster an Overview row named, once the device list is in.
   useEffect(() => {
@@ -161,6 +157,33 @@ export function ConfigurationScreen() {
       <ScreenHeader
         title="Configuration"
         subtitle={devices === null ? "Loading…" : `${collectedCount} device${collectedCount === 1 ? "" : "s"} collected${uncollectedCount > 0 ? ` · ${uncollectedCount} not collected` : ""}`}
+        filters={
+          <FilterBar>
+          <FilterRow
+            dimension="Vendor"
+            value={vendorFilter}
+            onChange={setVendorFilter}
+            options={[
+              { value: "all", label: "All", count: summaries?.length ?? total },
+              { value: "check_point", label: "Check Point", count: vendorCount("check_point") },
+              { value: "palo_alto", label: "Palo Alto", count: vendorCount("palo_alto") },
+            ]}
+          />
+          <FilterRow
+            dimension="State"
+            value={filterMode}
+            onChange={setFilterMode}
+            options={[
+              { value: "all", label: "All", count: total },
+              { value: "changed", label: "Changed", count: changedCount },
+              { value: "first_run", label: "First run", count: firstRunCount },
+              { value: "uncollected", label: "Not collected", count: uncollectedCount },
+            ]}
+          />
+          <FilterRow dimension="View" plain value={listView} onChange={setListView}
+            options={[{ value: "flat", label: "Flat list" }, { value: "manager", label: "By manager" }]} />
+          </FilterBar>
+        }
         actions={
           <Stack direction="row" spacing={1.5}>
             <M3Button emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
@@ -186,46 +209,10 @@ export function ConfigurationScreen() {
                 <Box component="span" role="button" tabIndex={0} sx={{ cursor: "pointer", fontSize: 12, color: m3.primary }} onClick={() => setDiffRefs(null)}>clear</Box>
               </Box>
             )}
-            <Box sx={{ height: 40, display: "flex", alignItems: "center", gap: 1.5, px: 2,
-                       borderRadius: "20px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, fontSize: 14 }}>
-              <Icon name="search" size={20} />
-              <InputBase
-                placeholder="Device, serial or model"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                sx={{ flex: 1, fontSize: 14, color: "inherit" }}
-              />
-            </Box>
-            <FilterBar>
-            <FilterRow
-              dimension="Vendor"
-              value={vendorFilter}
-              onChange={setVendorFilter}
-              options={[
-                { value: "all", label: "All", count: summaries?.length ?? total },
-                { value: "check_point", label: "Check Point", count: vendorCount("check_point") },
-                { value: "palo_alto", label: "Palo Alto", count: vendorCount("palo_alto") },
-              ]}
-            />
-            <FilterRow
-              dimension="State"
-              value={filterMode}
-              onChange={setFilterMode}
-              options={[
-                { value: "all", label: "All", count: total },
-                { value: "changed", label: "Changed", count: changedCount },
-                { value: "first_run", label: "First run", count: firstRunCount },
-                { value: "uncollected", label: "Not collected", count: uncollectedCount },
-              ]}
-            />
-            </FilterBar>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: 1.5, rowGap: 0.75 }}>
-              <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
-                title="A device row shows a state chip only when the device is not Live">
-                {summaries === null ? "" : `${treeDevices.length} shown · ${treeDevices.filter(isDeviceLive).length} Live`}
-              </Typography>
-              <ListViewSelect value={listView} onChange={setListView} />
-            </Box>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
+              title="A device row shows a state chip only when the device is not Live">
+              {summaries === null ? "" : `${treeDevices.length} shown · ${treeDevices.filter(isDeviceLive).length} Live`}
+            </Typography>
             {error && (
               <EmptyPanel title="Configuration unavailable" body={error}>
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>

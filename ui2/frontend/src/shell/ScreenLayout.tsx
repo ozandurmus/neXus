@@ -10,18 +10,22 @@ import { m3 } from "../theme/m3Theme";
 export function ScreenHeader({
   title,
   subtitle,
+  filters,
   actions,
 }: {
   readonly title: string;
   readonly subtitle: string;
+  /** List filters beside the title (PO, 2026-09-24): they narrow the screen's list, never its detail. */
+  readonly filters?: ReactNode;
   readonly actions?: ReactNode;
 }) {
   return (
-    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 3, px: 0.5, pb: 0.5 }}>
-      <Stack spacing={0.75}>
+    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", columnGap: 3, rowGap: 1.5, px: 0.5, pb: 0.5 }}>
+      <Stack spacing={0.75} sx={{ flex: "none" }}>
         <Typography variant="h2">{title}</Typography>
         <Typography variant="body1" sx={{ color: m3.onSurfaceVar }}>{subtitle}</Typography>
       </Stack>
+      {filters ? <Box sx={{ flex: "1 1 520px", minWidth: 0, maxWidth: 760 }}>{filters}</Box> : null}
       {actions ? <Box sx={{ display: "flex", gap: 1.25, alignItems: "center", flex: "none" }}>{actions}</Box> : null}
     </Box>
   );

@@ -42,13 +42,15 @@ export function FilterBar({ children }: { readonly children: ReactNode }) {
  * One filter dimension as a small labelled dropdown; each option reads "Label · n". A dimension narrowed away from
  * its first option ("All") is outlined in the accent colour, so an active filter is visible at a glance.
  */
-export function FilterRow<T extends string>({ dimension, options, value, onChange }: {
+export function FilterRow<T extends string>({ dimension, options, value, onChange, plain = false }: {
   readonly dimension: string;
+  /** A view setting (layout, sort), not a filter: never outlined as active. */
+  readonly plain?: boolean;
   readonly options: readonly FilterOption<T>[];
   readonly value: T;
   readonly onChange: (value: T) => void;
 }) {
-  const active = options.length > 0 && value !== options[0].value;
+  const active = !plain && options.length > 0 && value !== options[0].value;
   return (
     <Box component="label" sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 0 }}>
       <Typography component="span" sx={{ fontSize: 11, fontWeight: 600, color: m3.onSurfaceVar, pl: 0.25 }}>

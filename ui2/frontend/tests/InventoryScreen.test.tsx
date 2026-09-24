@@ -1,9 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { InventoryScreen } from "../src/screens/InventoryScreen";
 import { deriveClusterTitle } from "../src/screens/InventoryPanels";
+import { GlobalSearch } from "../src/shell/GlobalSearch";
+import { setListSearchTerm } from "../src/shell/listSearch";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -87,10 +89,10 @@ describe("InventoryScreen device list", () => {
     // Default: Name (A->Z).
     expect(namesInOrder()).toEqual(["alpha-cp", "mid-cp", "zeta-pan"]);
 
-    fireEvent.change(screen.getByLabelText("Sort devices"), { target: { value: "name_desc" } });
+    fireEvent.change(screen.getByLabelText("Sort"), { target: { value: "name_desc" } });
     expect(namesInOrder()).toEqual(["zeta-pan", "mid-cp", "alpha-cp"]);
 
-    fireEvent.change(screen.getByLabelText("Sort devices"), { target: { value: "vendor" } });
+    fireEvent.change(screen.getByLabelText("Sort"), { target: { value: "vendor" } });
     // Check Point sorts before Palo Alto alphabetically; within Check Point, name breaks the tie.
     expect(namesInOrder()).toEqual(["alpha-cp", "mid-cp", "zeta-pan"]);
   });
@@ -701,5 +703,31 @@ describe("deriveClusterTitle", () => {
       { device_id: "2", vendor_hint: "palo_alto" },
     ] as any;
     expect(deriveClusterTitle("024409002545|024409002564", members)).toBe("024409002545|024409002564");
+  });
+});
+
+describe("One search box (PO, 2026-09-24)", () => {
+  afterEach(() => {
+    act(() => setListSearchTerm(""));
+    vi.unstubAllGlobals();
+  });
+
+  it("narrows the device list from the top bar's search, by address as well as name, and clears with the ✕", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, {
+      devices: [
+        { device_id: "a", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "alpha-cp", model: null, software_version: null, ha_role: null, cluster_member_ref: null, management_ip: "192.0.2.10" },
+        { device_id: "b", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "bravo-pan", model: null, software_version: null, ha_role: null, cluster_member_ref: null, management_ip: "198.51.100.7" },
+      ],
+    }))));
+    render(withTheme(<><GlobalSearch /><InventoryScreen /></>));
+    await waitFor(() => expect(screen.getByText("bravo-pan")).toBeInTheDocument());
+    const input = screen.getByRole("textbox", { name: "Search devices, settings and evidence" });
+    expect(input).toHaveAttribute("placeholder", "Filter this list, or search everything…");
+    fireEvent.change(input, { target: { value: "192.0.2" } });
+    expect(screen.queryByText("bravo-pan")).toBeNull();
+    expect(screen.getAllByText("alpha-cp").length).toBeGreaterThan(0);
+    expect(screen.getByText("filtering list")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(screen.getByText("bravo-pan")).toBeInTheDocument();
   });
 });

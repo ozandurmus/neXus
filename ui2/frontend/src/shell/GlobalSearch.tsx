@@ -9,6 +9,7 @@ import Typography from "@mui/material/Typography";
 import { MONO, m3 } from "../theme/m3Theme";
 import { Icon } from "./Icon";
 import { StatePanel, isRestricted, VendorBadge } from "./States";
+import { setListSearchTerm, useListSearchState } from "./listSearch";
 import { globalSearch, listDevices, type DeviceSummary, type GlobalSearchResponse } from "../auth/adminApi";
 
 /** The device and screen shortcuts stay immediate; stored settings and evidence arrive after the typing pause. */
@@ -71,7 +72,9 @@ function grouped(local: readonly Hit[], remote: GlobalSearchResponse | null): Di
 }
 
 export function GlobalSearch() {
-  const [term, setTerm] = useState("");
+  // The term lives in the shared list-search store: on Devices and Configuration it also narrows the list.
+  const { term, filtersList } = useListSearchState();
+  const setTerm = setListSearchTerm;
   const [open, setOpen] = useState(false);
   const [devices, setDevices] = useState<readonly DeviceSummary[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -109,7 +112,7 @@ export function GlobalSearch() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, height: 36, px: 1.5, borderRadius: "8px",
                  border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLowest, color: m3.onSurfaceVar }}>
         <Icon name="search" size={18} />
-        <InputBase value={term} placeholder="Search devices, settings, evidence…" inputProps={{ "aria-label": "Search devices, settings and evidence" }}
+        <InputBase value={term} placeholder={filtersList ? "Filter this list, or search everything…" : "Search devices, settings, evidence…"} inputProps={{ "aria-label": "Search devices, settings and evidence" }}
           onFocus={() => setOpen(true)} onChange={(e) => { setTerm(e.target.value); setOpen(true); }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -120,10 +123,28 @@ export function GlobalSearch() {
             if (e.key === "Escape") setOpen(false);
           }}
           sx={{ flex: 1, fontSize: 13, color: m3.onSurface }} />
+        {filtersList && term.trim() && (
+          <Typography component="span" sx={{ fontSize: 11, fontWeight: 600, color: m3.onPrimaryContainer, bgcolor: m3.primaryContainer,
+                                             borderRadius: "4px", px: 0.75, whiteSpace: "nowrap" }}>
+            filtering list
+          </Typography>
+        )}
+        {term && (
+          <Box component="button" type="button" aria-label="Clear search" onClick={() => { setTerm(""); setOpen(false); }}
+            sx={{ border: "none", bgcolor: "transparent", cursor: "pointer", p: 0.25, color: m3.onSurfaceVar, fontSize: 14 }}>
+            ✕
+          </Box>
+        )}
       </Box>
+
       {open && term.trim() && (
         <Paper role="listbox" sx={{ position: "absolute", top: 40, left: 0, width: { xs: "calc(100vw - 32px)", md: 560 }, zIndex: 1300, border: `1px solid ${m3.outlineVar}`,
                                     boxShadow: m3.e2, borderRadius: "10px", py: 0.5, maxHeight: 520, overflow: "auto", bgcolor: m3.scLowest }}>
+          {filtersList && (
+            <Typography sx={{ px: 1.5, pt: 0.75, pb: 0.25, fontSize: 12, color: m3.primary }}>
+              The list on this screen is filtered as you type. Pick a result below to jump to it; Esc keeps the filter.
+            </Typography>
+          )}
           {failed && <StatePanel variant="error" title="The device list could not be read" action={<Button onClick={() => { setFailed(false); setDevices(null); }}>Retry</Button>} />}
           {!failed && devices === null && <Typography variant="body2" sx={{ px: 1.5, py: 1 }}>Reading the device list…</Typography>}
           {devices !== null && entries.length === 0 && !remoteError && <StatePanel variant="empty" title="No matches" />}

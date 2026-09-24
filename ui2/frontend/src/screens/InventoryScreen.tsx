@@ -13,6 +13,7 @@ import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
 import { FilterBar, FilterRow, contentVersionText, downloadText, toCsv } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
+import { useListSearch } from "../shell/listSearch";
 import { requestBulkInventoryCollect, listDevices, getManagementTree, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode } from "../auth/adminApi";
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
@@ -92,6 +93,15 @@ function clusterHealthLabel(members: readonly DeviceSummary[]): string {
   const allEnrolled = members.every((m) => m.enrollment_state === "ENROLLED");
   if (!allEnrolled) return "Not enrolled";
   return clusterHasCollectedEvidence(members) ? "Live" : "Confirmed · Not collected";
+}
+
+/** The list search: name, id, model, version, cluster, serial, management address or any interface address. */
+export function deviceMatchesSearch(device: DeviceSummary, searchTerm: string): boolean {
+  const term = searchTerm.toLowerCase().trim();
+  if (!term) return true;
+  return [device.hostname, device.device_id, device.model, device.platform_family, device.software_version,
+    device.cluster_member_ref, device.serial_number, device.management_ip, device.ip_addresses, device.virtual_systems]
+    .some((f) => Boolean(f && String(f).toLowerCase().includes(term)));
 }
 
 function DeviceRow({
@@ -812,7 +822,8 @@ export function InventoryScreen() {
   const clusterCacheRef = useRef<Map<string, ClusterInventory>>(new Map());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ enrolled_devices: number; admitted: number; refused: number } | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  // The top bar's search narrows this list (one search box, PO 2026-09-24).
+  const searchTerm = useListSearch();
   // Review §4: one chip row per filter dimension, each labelled; the dimensions combine.
   const [vendorFilter, setVendorFilter] = useState<"all" | "check_point" | "palo_alto">(
     () => (urlParam("vendor") === "check_point" ? "check_point" : urlParam("vendor") === "palo_alto" ? "palo_alto" : "all"));
@@ -913,16 +924,7 @@ export function InventoryScreen() {
       if (modelFilter === "unknown" ? model !== null : model !== modelFilter) return false;
     }
 
-    if (!searchTerm.trim()) return true;
-    const term = searchTerm.toLowerCase().trim();
-    const matchHostname = device.hostname?.toLowerCase().includes(term);
-    const matchId = device.device_id.toLowerCase().includes(term);
-    const matchModel = device.model?.toLowerCase().includes(term);
-    const matchVersion = device.software_version?.toLowerCase().includes(term);
-    const matchCluster = device.cluster_member_ref?.toLowerCase().includes(term);
-    const matchMgmtIp = device.management_ip?.toLowerCase().includes(term);
-    const matchIps = device.ip_addresses?.toLowerCase().includes(term);
-    return Boolean(matchHostname || matchId || matchModel || matchVersion || matchCluster || matchMgmtIp || matchIps);
+    return deviceMatchesSearch(device, searchTerm);
   });
 
   const filteredCountLabel = `${filteredDevices.length} device${filteredDevices.length === 1 ? "" : "s"}`;
@@ -955,6 +957,46 @@ export function InventoryScreen() {
       <ScreenHeader
         title="Devices"
         subtitle={devices === null ? "Loading…" : `${total} device${total === 1 ? "" : "s"} enrolled`}
+        filters={
+          <FilterBar>
+          <FilterRow
+            dimension="Vendor"
+            value={vendorFilter}
+            onChange={setVendorFilter}
+            options={[
+              { value: "all", label: "All", count: total },
+              { value: "check_point", label: "Check Point", count: checkPointCount },
+              { value: "palo_alto", label: "Palo Alto", count: paloAltoCount },
+            ]}
+          />
+          <FilterRow
+            dimension="Scope"
+            value={scopeFilter}
+            onChange={setScopeFilter}
+            options={[
+              { value: "all", label: "All", count: total },
+              { value: "cluster", label: "Clusters", count: `${clusters.enrolled} enrolled · ${clusters.active} active` },
+            ]}
+          />
+          <FilterRow
+            dimension="State"
+            value={stateFilter}
+            onChange={setStateFilter}
+            options={[
+              { value: "all", label: "All", count: total },
+              { value: "draft", label: "Draft", count: draftCount },
+              // "Latest job failed" on ANY registered device, drafts included; Administration's "Last collection failed
+              // (enrolled)" counts enrolled devices only -- two populations, both named (review 2026-09-23).
+              { value: "failed", label: "Latest job failed", count: failedCount },
+              { value: "stale", label: "Stale", count: staleCount },
+            ]}
+          />
+          <FilterRow dimension="View" plain value={listView} onChange={setListView}
+            options={[{ value: "flat", label: "Flat list" }, { value: "manager", label: "By manager" }]} />
+          <FilterRow dimension="Sort" plain value={sortMode} onChange={setSortMode}
+            options={[{ value: "name_asc", label: "Name (A→Z)" }, { value: "name_desc", label: "Name (Z→A)" }, { value: "vendor", label: "Vendor (A→Z)" }]} />
+          </FilterBar>
+        }
         actions={
           <>
             <M3Button emphasis="tonal" icon="download" disabled={!devices || devices.length === 0}
@@ -1004,122 +1046,10 @@ export function InventoryScreen() {
                   onClick={() => { setAgeFilter(null); setHotfixFilter(null); setVersionFilter(null); setModelFilter(null); }}>clear</Box>
               </Box>
             )}
-            <Box
-              sx={{
-                height: 40,
-                display: "flex",
-                alignItems: "center",
-                gap: 1.25,
-                px: 2,
-                borderRadius: "20px",
-                bgcolor: m3.scLowest,
-                border: `1px solid ${m3.outlineVar}`,
-                color: m3.onSurface,
-                "&:focus-within": {
-                  borderColor: m3.primary,
-                  boxShadow: `0 0 0 2px ${m3.primaryContainer}`,
-                },
-              }}
-            >
-              <Icon name="search" size={18} />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Subnet, device, serial or IP"
-                style={{
-                  border: "none",
-                  outline: "none",
-                  background: "transparent",
-                  width: "100%",
-                  fontSize: "13px",
-                  color: "inherit",
-                }}
-              />
-              {searchTerm && (
-                <Box
-                  component="button"
-                  onClick={() => setSearchTerm("")}
-                  aria-label="Clear search"
-                  sx={{
-                    border: "none",
-                    bgcolor: "transparent",
-                    cursor: "pointer",
-                    p: 0.25,
-                    color: m3.onSurfaceVar,
-                    fontSize: 14,
-                  }}
-                >
-                  ✕
-                </Box>
-              )}
-            </Box>
-            <FilterBar>
-            <FilterRow
-              dimension="Vendor"
-              value={vendorFilter}
-              onChange={setVendorFilter}
-              options={[
-                { value: "all", label: "All", count: total },
-                { value: "check_point", label: "Check Point", count: checkPointCount },
-                { value: "palo_alto", label: "Palo Alto", count: paloAltoCount },
-              ]}
-            />
-            <FilterRow
-              dimension="Scope"
-              value={scopeFilter}
-              onChange={setScopeFilter}
-              options={[
-                { value: "all", label: "All", count: total },
-                { value: "cluster", label: "Clusters", count: `${clusters.enrolled} enrolled · ${clusters.active} active` },
-              ]}
-            />
-            <FilterRow
-              dimension="State"
-              value={stateFilter}
-              onChange={setStateFilter}
-              options={[
-                { value: "all", label: "All", count: total },
-                { value: "draft", label: "Draft", count: draftCount },
-                // "Latest job failed" on ANY registered device, drafts included; Administration's "Last collection failed
-                // (enrolled)" counts enrolled devices only -- two populations, both named (review 2026-09-23).
-                { value: "failed", label: "Latest job failed", count: failedCount },
-                { value: "stale", label: "Stale", count: staleCount },
-              ]}
-            />
-            </FilterBar>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: 1.5, rowGap: 0.75 }}>
-              <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
-                title="A device row shows a state chip only when the device is not Live">
-                {devices === null ? "" : `${filteredCountLabel} · ${liveCount} Live`}
-              </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
-                <ListViewSelect value={listView} onChange={setListView} />
-                <Typography variant="caption" color="text.secondary">
-                  Sort
-                </Typography>
-                <Box
-                  component="select"
-                  value={sortMode}
-                  onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
-                  aria-label="Sort devices"
-                  sx={{
-                    fontSize: "12px",
-                    color: m3.onSurface,
-                    bgcolor: m3.scLowest,
-                    border: `1px solid ${m3.outlineVar}`,
-                    borderRadius: "6px",
-                    px: 1,
-                    py: 0.4,
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value="name_asc">Name (A→Z)</option>
-                  <option value="name_desc">Name (Z→A)</option>
-                  <option value="vendor">Vendor (A→Z)</option>
-                </Box>
-              </Box>
-            </Box>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
+              title="A device row shows a state chip only when the device is not Live">
+              {devices === null ? "" : `${filteredCountLabel} · ${liveCount} Live`}
+            </Typography>
             {error && (
               <EmptyPanel title="Inventory unavailable" body={error}>
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
