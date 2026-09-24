@@ -181,6 +181,9 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
   // vendor reached with a key -- Palo Alto and the HTTPS vendors take a username and password.
   const eligibleCredentials = credentials.filter((c) => vendor === "check_point" || c.kind !== "ssh_private_key");
   const [passphraseCredentialId, setPassphraseCredentialId] = useState("");
+  // V67: a Radware address is a DefensePro (appliance) or the Cyber Controller that manages them (management server).
+  const [radwareKind, setRadwareKind] = useState<"defensepro" | "cyber_controller">("defensepro");
+  const defensePro = vendor === "radware" && radwareKind === "defensepro";
 
   // Keep the credential selection valid as the vendor (and therefore the
   // eligible list) changes; never leave a stale id from another vendor selected.
@@ -325,8 +328,10 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
     if (mode === "single") {
       setPhase("submitting");
       try {
-        const result = await addDeviceSingle(trimmedAddress, HTTPS_VENDORS.has(vendor) ? "appliance" : role, vendor, credentialId,
-          vendor === "radware" ? passphraseCredentialId : undefined);
+        const effectiveRole: DeviceRole = vendor === "radware" && radwareKind === "cyber_controller" ? "management_server"
+          : HTTPS_VENDORS.has(vendor) ? "appliance" : role;
+        const result = await addDeviceSingle(trimmedAddress, effectiveRole, vendor, credentialId,
+          defensePro ? passphraseCredentialId : undefined);
         setDeviceId(result.device_id);
         setActiveJobId(result.job_id);
         setPhase("confirming");
@@ -454,7 +459,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
 
   const canSubmit = !trustBusy && (
     mode === "single"
-      ? address.trim().length > 0 && credentialId.length > 0 && phase === "form"
+      ? address.trim().length > 0 && credentialId.length > 0 && phase === "form" && (!defensePro || passphraseCredentialId.length > 0)
       : address.trim().length > 0 && credentialId.length > 0 && discoveryPhase === "form");
   const success = detail !== null && detail.enrollment_state === "ENROLLED";
   const mismatchOpen = detail !== null && detail.identity_mismatch_state === "OPEN";
@@ -586,10 +591,20 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               <MenuItem value="check_point">Check Point</MenuItem>
               <MenuItem value="palo_alto">Palo Alto</MenuItem>
               <MenuItem value="infoblox">Infoblox Grid Manager (HTTPS)</MenuItem>
-              <MenuItem value="radware">Radware DefensePro (HTTPS)</MenuItem>
+              <MenuItem value="radware">Radware (HTTPS)</MenuItem>
             </TextField>
-            {credentialSelectorFragment}
             {vendor === "radware" && (
+              <TextField label="Radware device" select size="small" fullWidth value={radwareKind}
+                onChange={(e) => setRadwareKind(e.target.value as "defensepro" | "cyber_controller")}
+                helperText={radwareKind === "cyber_controller"
+                  ? "DefensePro devices it manages are backed up through it; add each DefensePro too."
+                  : "Backed up through the Cyber Controller that lists it, or directly when none does."}>
+                <MenuItem value="defensepro">DefensePro</MenuItem>
+                <MenuItem value="cyber_controller">Cyber Controller</MenuItem>
+              </TextField>
+            )}
+            {credentialSelectorFragment}
+            {defensePro && (
               <TextField label="Export passphrase credential" select size="small" fullWidth value={passphraseCredentialId}
                 onChange={(e) => setPassphraseCredentialId(e.target.value)}
                 helperText="The backup includes the private keys, encrypted with this credential's password (IncludePKeys=on). Without it the backup is refused, never taken without keys.">

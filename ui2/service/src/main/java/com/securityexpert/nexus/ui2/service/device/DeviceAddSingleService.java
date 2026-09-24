@@ -151,10 +151,12 @@ public final class DeviceAddSingleService {
             return new Outcome.ValidationFailed(DeviceRegistrationService.REASON_VENDOR_HINT_INVALID);
         }
         Optional<String> passphrase = exportPassphraseReferenceId.filter(s -> !s.isBlank());
-        if ("radware".equals(vendor) && passphrase.isEmpty()) {
+        // A DefensePro carries the passphrase that encrypts its keys; a Cyber Controller (management server) does not.
+        boolean defensePro = "radware".equals(vendor) && "appliance".equals(role);
+        if (defensePro && passphrase.isEmpty()) {
             return new Outcome.ValidationFailed(REASON_EXPORT_PASSPHRASE_REQUIRED);
         }
-        if (passphrase.isPresent() && (!"radware".equals(vendor) || secrets == null)) {
+        if (passphrase.isPresent() && (!defensePro || secrets == null)) {
             return new Outcome.ValidationFailed(REASON_EXPORT_PASSPHRASE_REQUIRED);
         }
 

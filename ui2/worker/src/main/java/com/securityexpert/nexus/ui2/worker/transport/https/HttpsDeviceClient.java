@@ -37,6 +37,19 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
         String basic() {
             return "Basic " + Base64.getEncoder().encodeToString((username + ":" + new String(password)).getBytes(StandardCharsets.UTF_8));
         }
+
+        /** A session obtained by {@link HttpsDeviceCalls#login}: sent as its cookie, never as basic auth. */
+        public static Credentials session(String cookie) {
+            return new Credentials(null, cookie.toCharArray());
+        }
+
+        boolean isSession() {
+            return username == null;
+        }
+    }
+
+    /** {@code cookie} is "NAME=value" of the session cookie the login set (JSESSIONID), never logged. */
+    public record SessionLogin(int status, Optional<String> cookie) {
     }
 
     /** A text answer, bounded: {@code body} is at most {@code maxBytes} long; {@code truncated} says when more came. */
@@ -96,6 +109,18 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
     public TextResponse postJson(Target target, String path, String json, Credentials creds, Duration timeout, int maxBytes)
             throws IOException, InterruptedException {
         return text(target, "POST", path, "application/json", json, creds, timeout, maxBytes);
+    }
+
+    @Override
+    public SessionLogin login(Target target, String path, String json, Duration timeout) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder(target.uri(path)).timeout(timeout).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8)).build();
+        HttpResponse<Void> r = client.send(request, HttpResponse.BodyHandlers.discarding());
+        Optional<String> cookie = r.headers().allValues("Set-Cookie").stream()
+                .map(v -> v.split(";", 2)[0].strip())
+                .filter(v -> v.toUpperCase(Locale.ROOT).startsWith("JSESSIONID="))
+                .findFirst();
+        return new SessionLogin(r.statusCode(), cookie);
     }
 
     /** Streams a GET or form POST answer into {@code sink}, refusing past {@code maxBytes}; never buffered whole. */
@@ -163,7 +188,12 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
             Duration timeout, HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
         String current = path;
         for (int hop = 0; ; hop++) {
-            HttpRequest.Builder b = HttpRequest.newBuilder(target.uri(current)).timeout(timeout).header("Authorization", creds.basic());
+            HttpRequest.Builder b = HttpRequest.newBuilder(target.uri(current)).timeout(timeout);
+            if (creds.isSession()) {
+                b.header("Cookie", new String(creds.password()));
+            } else {
+                b.header("Authorization", creds.basic());
+            }
             if ("POST".equals(method) && hop == 0) {
                 b.POST(HttpRequest.BodyPublishers.ofString(body == null ? "" : body, StandardCharsets.UTF_8));
                 if (contentType != null) {

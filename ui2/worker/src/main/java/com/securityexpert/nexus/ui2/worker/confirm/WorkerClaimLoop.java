@@ -238,7 +238,10 @@ public final class WorkerClaimLoop {
                             "no HTTPS confirm executor in this worker");
                     return true;
                 }
-                httpsConfirmJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), device.vendorHint(),
+                // A Radware management server is a Cyber Controller: its confirm is the REST login and device list (V67).
+                String httpsVendor = "radware".equals(device.vendorHint()) && "management_server".equals(device.role())
+                        ? "radware_cyber_controller" : device.vendorHint();
+                httpsConfirmJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), httpsVendor,
                         new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(hostOf(endpoint.addressRef()),
                                 httpsPortOf(endpoint.addressRef())), device.credentialReferenceId());
                 return true;

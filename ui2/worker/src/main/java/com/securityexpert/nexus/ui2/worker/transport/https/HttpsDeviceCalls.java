@@ -18,6 +18,9 @@ public interface HttpsDeviceCalls {
     TextResponse postJson(Target target, String path, String json, Credentials creds, Duration timeout, int maxBytes)
             throws IOException, InterruptedException;
 
+    /** A session login (Radware Cyber Controller): JSON body, no Authorization header; the session cookie it set, if any. */
+    HttpsDeviceClient.SessionLogin login(Target target, String path, String json, Duration timeout) throws IOException, InterruptedException;
+
     DownloadResult download(Target target, String method, String path, Map<String, String> form, Credentials creds,
             OutputStream sink, long maxBytes, Duration timeout);
 }

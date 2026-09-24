@@ -95,8 +95,13 @@ public final class DeviceRegistrationService {
         if (vendorHint == null || vendorHint.isBlank()) {
             return new Outcome.ValidationFailed(REASON_VENDOR_HINT_INVALID);
         }
-        // V65: "appliance" is the role of the vendors reached over HTTPS (Infoblox, Radware) and only theirs.
-        if (role.equals("appliance") != APPLIANCE_VENDORS.contains(vendorHint)) {
+        // V65: "appliance" is the role of the vendors reached over HTTPS (Infoblox, Radware) and only theirs; V67: a
+        // Radware management server is a Cyber Controller.
+        boolean applianceVendor = APPLIANCE_VENDORS.contains(vendorHint);
+        boolean roleFits = applianceVendor
+                ? role.equals("appliance") || ("radware".equals(vendorHint) && role.equals("management_server"))
+                : !role.equals("appliance");
+        if (!roleFits) {
             return new Outcome.ValidationFailed(REASON_ROLE_INVALID);
         }
         if (!IMPLEMENTED_TRANSPORTS.contains(transportKind)) {

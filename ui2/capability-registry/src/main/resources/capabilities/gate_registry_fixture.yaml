@@ -1316,3 +1316,67 @@ gates:
     secret_output_risk: 'private keys encrypted with the passphrase (encrypted at rest)'
     safe_telemetry_fields: []
     source_document_pointer: 'trail 34095224: form DownloadFormat=cli&IncludePKeys=on&passphrase=<credential store>'
+  - gate_id: radware_cc_login
+    vendor: 'radware'
+    platform_role_scope: 'radware_cyber_controller'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /mgmt/system/user/login'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per job'
+    session_reuse_rule: 'the jobs own session only'
+    unsupported_behavior_ref: 'non-2xx or no JSESSIONID -> authentication_failed, nothing further'
+    secret_output_risk: 'request carries the password (credential store, memory only)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cyber Controller REST 10.3.0 Server Login; 10.13 MEASURE FIRST'
+  - gate_id: radware_cc_alldevices
+    vendor: 'radware'
+    platform_role_scope: 'radware_cyber_controller'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /mgmt/system/config/itemlist/alldevices'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per confirm, once per backup job'
+    session_reuse_rule: 'same session'
+    unsupported_behavior_ref: 'non-2xx -> confirm failed; target not listed -> direct DefensePro path'
+    secret_output_risk: 'device names and addresses (parsed to a match yes/no and counts; never persisted)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cyber Controller REST 10.3.0 alldevices; shape MEASURE FIRST'
+  - gate_id: radware_cc_getcfg
+    vendor: 'radware'
+    platform_role_scope: 'radware_cyber_controller'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /mgmt/device/byip/<deviceIp>/config/getcfg'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'none'
+    max_frequency: 'once per device per backup job'
+    session_reuse_rule: 'same session'
+    unsupported_behavior_ref: 'non-2xx, empty or HTML body -> backup failed, no retry'
+    secret_output_risk: 'DefensePro configuration, private keys encrypted with the passphrase (encrypted at rest); saveToDb=false, includePrivateKeys=true'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cyber Controller REST 10.3.0 getcfg (also Vision 5.1.0)'
+  - gate_id: radware_cc_logout
+    vendor: 'radware'
+    platform_role_scope: 'radware_cyber_controller'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /mgmt/system/config/itemlist/systemuser/logout'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per job, always'
+    session_reuse_rule: 'same session'
+    unsupported_behavior_ref: 'failure ignored (session expires)'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cyber Controller REST 10.3.0 logout'

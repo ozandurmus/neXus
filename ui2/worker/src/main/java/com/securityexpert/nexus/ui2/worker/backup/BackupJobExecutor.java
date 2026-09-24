@@ -176,7 +176,45 @@ public final class BackupJobExecutor {
         String vendor = deviceRecord.map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::vendorHint).orElse(VENDOR);
 
         BackupResult result;
-        if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(capabilityId)) {
+        Optional<BackupResult> viaCyberController = Optional.empty();
+        if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(capabilityId)
+                && "radware".equals(vendor) && httpsVendorExecutor != null) {
+            // PO, 2026-09-24: a DefensePro is backed up through the Cyber Controller that manages it; the direct path
+            // only when no enrolled Cyber Controller lists it.
+            Optional<String> passphrase = deviceSecrets.find(targetDeviceId,
+                    com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository.EXPORT_PASSPHRASE);
+            for (com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord cc : deviceRepository.listAll()) {
+                if (!"radware".equals(cc.vendorHint()) || !"management_server".equals(cc.role())
+                        || cc.enrollmentState() != com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.ENROLLED) {
+                    continue;
+                }
+                Optional<com.securityexpert.nexus.ui2.persistence.device.DeviceRecord> ccRecord = deviceRepository.find(cc.deviceId());
+                Optional<com.securityexpert.nexus.ui2.persistence.device.EndpointRecord> ccEndpoint = deviceRepository.findEndpointByDeviceId(cc.deviceId());
+                if (ccRecord.isEmpty() || ccRecord.get().disabled() || ccEndpoint.isEmpty()) {
+                    continue;
+                }
+                String address = ccEndpoint.get().addressRef();
+                int colon = address.lastIndexOf(':');
+                int port = 443;
+                if (colon >= 0) {
+                    try {
+                        port = Integer.parseInt(address.substring(colon + 1));
+                        address = address.substring(0, colon);
+                    } catch (NumberFormatException notAPort) {
+                        // a bare host
+                    }
+                }
+                viaCyberController = httpsVendorExecutor.backupViaCyberController(
+                        new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(address, port),
+                        ccRecord.get().credentialReferenceId(), request.connectionTarget().host(), passphrase, targetDeviceId, jobId);
+                if (viaCyberController.isPresent()) {
+                    break;
+                }
+            }
+        }
+        if (viaCyberController.isPresent()) {
+            result = viaCyberController.get();
+        } else if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(capabilityId)) {
             result = httpsVendorExecutor == null
                     ? new BackupResult.ConnectFailed("https vendor executor not configured in this worker")
                     : httpsVendorExecutor.backup(vendor,

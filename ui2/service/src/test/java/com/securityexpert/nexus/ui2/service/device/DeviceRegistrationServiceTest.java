@@ -256,6 +256,15 @@ class DeviceRegistrationServiceTest {
         assertEquals(DeviceRegistrationService.REASON_ROLE_INVALID,
                 ((DeviceRegistrationService.Outcome.ValidationFailed) checkPointAppliance).reasonCode());
 
+        DeviceRegistrationService.Outcome cyberController =
+                service.register("actor-onboarding-1", "management_server", "radware", "https", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
+        assertFalse(cyberController instanceof DeviceRegistrationService.Outcome.ValidationFailed, String.valueOf(cyberController));
+
+        DeviceRegistrationService.Outcome infobloxManagement =
+                service.register("actor-onboarding-1", "management_server", "infoblox", "https", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
+        assertEquals(DeviceRegistrationService.REASON_ROLE_INVALID,
+                ((DeviceRegistrationService.Outcome.ValidationFailed) infobloxManagement).reasonCode());
+
         DeviceRegistrationService.Outcome radwareGateway =
                 service.register("actor-onboarding-1", "gateway", "radware", "https", SYNTHETIC_ADDRESS_REF, "cred-ref-1", false);
         assertEquals(DeviceRegistrationService.REASON_ROLE_INVALID,

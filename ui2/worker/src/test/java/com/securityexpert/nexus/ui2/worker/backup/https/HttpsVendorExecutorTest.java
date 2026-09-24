@@ -100,15 +100,59 @@ class HttpsVendorExecutorTest {
         assertEquals(Optional.empty(), HttpsDeviceClient.sameHostPath(T, "http://192.0.2.30/a"));
     }
 
+    @Test
+    void aListedDefenseProIsFetchedThroughTheCyberControllerWithKeysAndNothingSavedThere() {
+        Optional<BackupResult> r = executor.backupViaCyberController(T, "cc", "192.0.2.41", Optional.of("pp"), "dev", "job-cc");
+        assertTrue(r.isPresent() && r.get() instanceof BackupResult.Completed, String.valueOf(r));
+        assertTrue(calls.log.get(0).startsWith("LOGIN /mgmt/system/user/login {"), calls.log.toString());
+        assertTrue(calls.log.contains("GET /mgmt/system/config/itemlist/alldevices"));
+        assertTrue(calls.log.contains("GET-DL /mgmt/device/byip/192.0.2.41/config/getcfg?saveToDb=false&includePrivateKeys=true&passphrase=pw-pp"),
+                calls.log.toString());
+        assertEquals("POST /mgmt/system/config/itemlist/systemuser/logout {}", calls.log.get(calls.log.size() - 1));
+    }
+
+    @Test
+    void aDefenseProTheCyberControllerDoesNotListFallsBackAndTheSessionIsStillClosed() {
+        Optional<BackupResult> r = executor.backupViaCyberController(T, "cc", "192.0.2.99", Optional.of("pp"), "dev", "job-cc");
+        assertTrue(r.isEmpty());
+        assertTrue(calls.log.stream().noneMatch(l -> l.contains("getcfg")));
+        assertTrue(calls.log.get(calls.log.size() - 1).startsWith("POST /mgmt/system/config/itemlist/systemuser/logout"));
+    }
+
+    @Test
+    void aRefusedCyberControllerLoginCallsNothingElse() {
+        calls.loginStatus = 401;
+        assertTrue(executor.confirm("radware_cyber_controller", T, "cc") instanceof HttpsVendorExecutor.ConfirmOutcome.AuthenticationFailed);
+        assertEquals(1, calls.log.size());
+    }
+
+    @Test
+    void theDeviceListMatchIsAWholeValueNeverAPrefix() throws Exception {
+        var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree("[{\"ip\": \"192.0.2.410\"}]");
+        assertFalse(HttpsVendorPlan.listsAddress(node, "192.0.2.41"));
+        assertTrue(HttpsVendorPlan.listsAddress(node, "192.0.2.410"));
+    }
+
     private static final class Scripted implements HttpsDeviceCalls {
         final List<String> log = new ArrayList<>();
         String downloadHost = "192.0.2.30";
+        int loginStatus = 200;
+        String deviceList = "{\"DefensePro Devices\": [{\"name\": \"DP-A\", \"managementIp\": \"192.0.2.41\"}]}";
+
+        @Override
+        public HttpsDeviceClient.SessionLogin login(Target target, String path, String json, Duration timeout) {
+            log.add("LOGIN " + path + " " + json);
+            return new HttpsDeviceClient.SessionLogin(loginStatus, loginStatus == 200 ? Optional.of("JSESSIONID=s1") : Optional.empty());
+        }
 
         @Override
         public TextResponse get(Target target, String path, Credentials creds, Duration timeout, int maxBytes) {
             log.add("GET " + path);
             if (path.equals("/wapidoc/")) {
                 return new TextResponse(200, Optional.of("text/html"), "var DOCUMENTATION_OPTIONS = {\n VERSION: '2.13.5',\n", false);
+            }
+            if (path.equals(HttpsVendorPlan.CC_ALLDEVICES)) {
+                return new TextResponse(200, Optional.of("application/json"), deviceList, false);
             }
             if (path.startsWith("/wapi/v2.13.5/grid")) {
                 return new TextResponse(200, Optional.of("application/json"), "[{\"_ref\": \"grid/x\", \"name\": \"GRID-A\"}]", false);

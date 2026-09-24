@@ -84,6 +84,12 @@ public final class BackupCollectService {
         boolean checkPointManagement = "management_server".equals(role) && "check_point".equals(device.get().vendorHint());
         // V64: appliances backed up over HTTPS (Infoblox, Radware) carry role "appliance"
         boolean httpsVendor = HTTPS_VENDORS.contains(device.get().vendorHint());
+        if (httpsVendor && "management_server".equals(role)) {
+            // V67: a Radware Cyber Controller is the path to its DefensePro backups; its own backup (CLI-only per
+            // Radware) is not gated yet.
+            return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED", "device " + deviceId + " is a Radware Cyber "
+                    + "Controller: it backs up the DefensePro devices it manages; its own backup is not gated yet, so nothing was issued");
+        }
         if (!"gateway".equals(role) && !"firewall".equals(role) && !checkPointManagement && !httpsVendor) {
             if ("management_server".equals(role)) {
                 return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",

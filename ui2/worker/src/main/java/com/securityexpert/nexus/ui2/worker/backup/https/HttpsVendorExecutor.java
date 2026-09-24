@@ -72,6 +72,7 @@ public final class HttpsVendorExecutor {
             return switch (vendor) {
                 case "infoblox" -> confirmInfoblox(target, creds);
                 case "radware" -> confirmRadware(target, creds);
+                case "radware_cyber_controller" -> confirmCyberController(target, creds);
                 default -> new ConfirmOutcome.Failed("no HTTPS confirm for vendor " + vendor);
             };
         } catch (IOException e) {
@@ -101,6 +102,123 @@ public final class HttpsVendorExecutor {
             name = Optional.of(node.get(0).get("name").asText());
         }
         return new ConfirmOutcome.Confirmed(new Identity(name, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())));
+    }
+
+    // ------------------------------------------------------------------------------------------------ Cyber Controller
+
+    /** A logged-in Cyber Controller session; {@link #close} always logs out. */
+    private final class CcSession implements AutoCloseable {
+        final Target target;
+        final Credentials session;
+
+        CcSession(Target target, Credentials session) {
+            this.target = target;
+            this.session = session;
+        }
+
+        @Override
+        public void close() {
+            try {
+                TextResponse r = client.postJson(target, HttpsVendorPlan.CC_LOGOUT, "{}", session, SHORT, 64 * 1024);
+                LOG.log(System.Logger.Level.INFO, "[CYBER_CONTROLLER] logout HTTP {0}", r.status());
+            } catch (IOException e) {
+                LOG.log(System.Logger.Level.WARNING, "[CYBER_CONTROLLER] logout failed: {0}", e.getClass().getSimpleName());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /** Either a session, or why there is none ("authentication_failed: ..." when the Cyber Controller refused the login). */
+    private record CcLogin(Optional<CcSession> session, String reason) {
+    }
+
+    private CcLogin ccLogin(Target target, Credentials creds) throws IOException, InterruptedException {
+        String body = JSON.writeValueAsString(Map.of("username", creds.username(), "password", new String(creds.password())));
+        HttpsDeviceClient.SessionLogin login = client.login(target, HttpsVendorPlan.CC_LOGIN, body, SHORT);
+        LOG.log(System.Logger.Level.INFO, "[CYBER_CONTROLLER] login HTTP {0}, session={1}", login.status(), login.cookie().isPresent());
+        if (login.status() == 401 || login.status() == 403) {
+            return new CcLogin(Optional.empty(), "authentication_failed: HTTP " + login.status());
+        }
+        if (login.status() < 200 || login.status() >= 300 || login.cookie().isEmpty()) {
+            return new CcLogin(Optional.empty(), "the Cyber Controller login answered HTTP " + login.status()
+                    + (login.cookie().isEmpty() ? " without a session cookie" : ""));
+        }
+        return new CcLogin(Optional.of(new CcSession(target, Credentials.session(login.cookie().get()))), "");
+    }
+
+    /** The device list, or empty when it could not be read; logs field names and size only (MEASURE FIRST). */
+    private Optional<JsonNode> ccDevices(CcSession s) throws IOException, InterruptedException {
+        TextResponse list = client.get(s.target, HttpsVendorPlan.CC_ALLDEVICES, s.session, Duration.ofSeconds(60), 8 * 1024 * 1024);
+        if (!list.ok()) {
+            LOG.log(System.Logger.Level.WARNING, "[CYBER_CONTROLLER] alldevices HTTP {0}", list.status());
+            return Optional.empty();
+        }
+        JsonNode node = JSON.readTree(list.body());
+        LOG.log(System.Logger.Level.INFO, "[CYBER_CONTROLLER] alldevices HTTP {0}, {1} bytes, field names {2}", list.status(),
+                list.body().length(), HttpsVendorPlan.fieldNames(node));
+        return Optional.of(node);
+    }
+
+    private ConfirmOutcome confirmCyberController(Target target, Credentials creds) throws IOException, InterruptedException {
+        CcLogin login = ccLogin(target, creds);
+        if (login.session().isEmpty()) {
+            return login.reason().startsWith("authentication_failed")
+                    ? new ConfirmOutcome.AuthenticationFailed(login.reason().substring("authentication_failed: ".length()))
+                    : new ConfirmOutcome.Failed(login.reason());
+        }
+        try (CcSession s = login.session().get()) {
+            if (ccDevices(s).isEmpty()) {
+                return new ConfirmOutcome.Failed("the Cyber Controller device list could not be read");
+            }
+            return new ConfirmOutcome.Confirmed(new Identity(Optional.empty(), Optional.of("Radware Cyber Controller"), Optional.empty()));
+        }
+    }
+
+    /**
+     * A DefensePro backup through the Cyber Controller that manages it (PO, 2026-09-24): its {@code getcfg}, keys
+     * included and encrypted with the device's export passphrase, streamed here ({@code saveToDb=false}: nothing is
+     * written to the Cyber Controller's own backup slots). Empty when the Cyber Controller does not list the device --
+     * the caller then takes the direct path.
+     */
+    public Optional<BackupResult> backupViaCyberController(Target cc, String ccCredentialRef, String deviceAddress,
+            Optional<String> passphraseRef, String deviceId, String jobId) {
+        if (passphraseRef.isEmpty()) {
+            return Optional.of(new BackupResult.CredentialUnresolvable("no export passphrase credential is set for this Radware device: "
+                    + "the export carries the private keys encrypted with it -- refused rather than a backup without keys"));
+        }
+        Credentials creds;
+        String passphrase;
+        try {
+            creds = credentials.apply(ccCredentialRef);
+            passphrase = new String(credentials.apply(passphraseRef.get()).password());
+        } catch (RuntimeException e) {
+            return Optional.of(new BackupResult.CredentialUnresolvable("Cyber Controller or passphrase credential not resolvable"));
+        }
+        try {
+            CcLogin login = ccLogin(cc, creds);
+            if (login.session().isEmpty()) {
+                return Optional.of(new BackupResult.ConnectFailed("cyber controller: " + login.reason()));
+            }
+            try (CcSession s = login.session().get()) {
+                Optional<JsonNode> devices = ccDevices(s);
+                if (devices.isEmpty()) {
+                    return Optional.of(new BackupResult.ConnectFailed("cyber controller: the device list could not be read"));
+                }
+                if (!HttpsVendorPlan.listsAddress(devices.get(), deviceAddress)) {
+                    LOG.log(System.Logger.Level.INFO, "[CYBER_CONTROLLER] device {0} not listed; direct path", deviceId);
+                    return Optional.empty();
+                }
+                BackupResult r = fetch(cc, "GET", HttpsVendorPlan.ccGetcfg(deviceAddress, passphrase), null, s.session, deviceId, jobId,
+                        "radware", "DefensePro_configuration_via_cyber_controller", 256);
+                return Optional.of(r);
+            }
+        } catch (IOException e) {
+            return Optional.of(new BackupResult.ConnectFailed("cyber controller https: " + e.getClass().getSimpleName()));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.of(new BackupResult.ConnectFailed("interrupted"));
+        }
     }
 
     private ConfirmOutcome confirmRadware(Target target, Credentials creds) throws IOException, InterruptedException {
@@ -215,7 +333,8 @@ public final class HttpsVendorExecutor {
             return r instanceof DownloadResult.Refused refused && (refused.status() == 401 || refused.status() == 403)
                     ? new BackupResult.ConnectFailed("authentication_failed: HTTP " + refused.status())
                     : new BackupResult.SubmitRefused("download: " + (r instanceof DownloadResult.Refused x ? x.reason()
-                            : ((DownloadResult.Failed) r).reason()));
+                            // an exception's text may echo the request (the getcfg query holds the passphrase): class only
+                            : ((DownloadResult.Failed) r).reason().split(":", 2)[0]));
         }
         if (d.bytes() < minBytes) {
             closeQuietly(handle);

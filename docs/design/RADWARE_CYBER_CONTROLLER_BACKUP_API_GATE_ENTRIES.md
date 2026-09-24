@@ -2,7 +2,9 @@
 
 ## Status
 
-**DRAFT — PENDING PRODUCT OWNER GATE APPROVAL AND A FIRST MEASUREMENT.** Requested by the Product Owner on
+**APPROVED — PRODUCT OWNER, 2026-09-24** ("AD useri bu işi yapar": the four calls, run with the existing AD
+account's credential-store entry; implemented as V67). **FIELD BINDINGS UNVERIFIED UNTIL THE FIRST MEASUREMENT.**
+(Was: DRAFT — PENDING PRODUCT OWNER GATE APPROVAL AND A FIRST MEASUREMENT.) Requested by the Product Owner on
 2026-09-24 ("cyber controllerdan alma şansı varsa burdan alalım"). The estate has one Radware Cyber Controller
 (reported version 10.13.0-3, build 5) managing several DefensePro appliances. This document records, for
 `docs/AI_DEVELOPMENT_PROTOCOL.md`'s network-device command gate, the ten items for each call. **It authorizes nothing
