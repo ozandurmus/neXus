@@ -884,7 +884,8 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
           </M3Button>
         )}
         {mode === "discovery" && discoveryPhase === "candidates" && (
-          <M3Button emphasis="filled" onClick={handleImport} disabled={selectedCandidateIds.size === 0}>
+          <M3Button emphasis="filled" onClick={handleImport}
+            disabled={selectedCandidateIds.size === 0 || (vendor === "radware" && !passphraseCredentialId)}>
             {selectedCandidateIds.size > 0 ? `Import (${selectedCandidateIds.size})` : "Import"}
           </M3Button>
         )}
@@ -984,11 +985,17 @@ function CandidateRows({
         {done && (
           <TableCell>
             {result ? (
-              <StatusChip
-                tone={result.outcome === "new" ? "ok" : result.outcome === "refused" ? "bad" : "warn"}
-                label={result.outcome}
-                dense
-              />
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+                <StatusChip
+                  tone={result.outcome === "new" ? "ok" : result.outcome === "refused" ? "bad" : "warn"}
+                  label={result.outcome}
+                  dense
+                />
+                {/* a refusal says why (2026-09-24: four Radware refusals showed no reason) */}
+                {result.reason && (
+                  <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{formatValidationReason(result.reason)}</Typography>
+                )}
+              </Box>
             ) : (
               "—"
             )}
