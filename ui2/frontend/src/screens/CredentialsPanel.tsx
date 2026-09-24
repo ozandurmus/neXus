@@ -1,12 +1,10 @@
 import { useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Checkbox from "@mui/material/Checkbox";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
-import FormControlLabel from "@mui/material/FormControlLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
@@ -30,13 +28,6 @@ const KIND_LABEL: Record<CredentialView["kind"], string> = {
   ssh_private_key: "SSH private key",
   api_password: "API password",
 };
-
-function vendorLabel(view: CredentialView): string {
-  const vendors: string[] = [];
-  if (view.allows_check_point) vendors.push("Check Point");
-  if (view.allows_palo_alto) vendors.push("Palo Alto");
-  return vendors.join(", ");
-}
 
 /**
  * 2026-09-14 PO decision record section 3 (CS-1..CS-5): the operator's own
@@ -131,7 +122,6 @@ export function CredentialsPanel() {
               )}
             </Box>
             <Stack direction="row" spacing={1} alignItems="center">
-              <StatusChip tone="neutral" label={vendorLabel(credential)} dense />
               <Button size="small" onClick={() => setReplaceSecretFor(credential)}>
                 Replace secret
               </Button>
@@ -167,16 +157,15 @@ function describeError(err: ApiError): string {
   return serverError ?? `request failed (status ${err.status})`;
 }
 
-export function CreateCredentialDialog({ onClose, onCreated, initialVendor }: {
+export function CreateCredentialDialog({ onClose, onCreated }: {
   readonly onClose: () => void;
   readonly onCreated: (credential: CredentialView) => void;
-  readonly initialVendor?: "check_point" | "palo_alto";
+  /** Kept for callers; a credential is no longer tied to a vendor (PO, 2026-09-24). */
+  readonly initialVendor?: string;
 }) {
   const [displayName, setDisplayName] = useState("");
   const [kind, setKind] = useState<CredentialView["kind"]>("ssh_password");
   const [username, setUsername] = useState("");
-  const [allowsCheckPoint, setAllowsCheckPoint] = useState(initialVendor === "check_point");
-  const [allowsPaloAlto, setAllowsPaloAlto] = useState(initialVendor === "palo_alto");
   const [secret, setSecret] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -193,16 +182,6 @@ export function CreateCredentialDialog({ onClose, onCreated, initialVendor }: {
             <MenuItem value="api_password">API password</MenuItem>
           </TextField>
           <TextField label="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
-          <Stack direction="row" spacing={1}>
-            <FormControlLabel
-              control={<Checkbox checked={allowsCheckPoint} onChange={(e) => setAllowsCheckPoint(e.target.checked)} />}
-              label="Check Point"
-            />
-            <FormControlLabel
-              control={<Checkbox checked={allowsPaloAlto} onChange={(e) => setAllowsPaloAlto(e.target.checked)} />}
-              label="Palo Alto"
-            />
-          </Stack>
           <TextField
             label={kind === "ssh_private_key" ? "Private key (PEM)" : "Secret"}
             type={kind === "ssh_private_key" ? "text" : "password"}
@@ -226,9 +205,9 @@ export function CreateCredentialDialog({ onClose, onCreated, initialVendor }: {
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="contained"
-          disabled={!allowsCheckPoint && !allowsPaloAlto}
+          disabled={!displayName.trim() || !username.trim() || !secret}
           onClick={() =>
-            createCredential(displayName, kind, username, allowsCheckPoint, allowsPaloAlto, secret, passphrase)
+            createCredential(displayName, kind, username, false, false, secret, passphrase)
               .then((credential) => {
                 onCreated(credential);
                 onClose();

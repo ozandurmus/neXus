@@ -174,9 +174,9 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
   const credentials = createdCredential && !(credentialsData ?? []).some((credential) => credential.credential_id === createdCredential.credential_id)
     ? [...(credentialsData ?? []), createdCredential]
     : credentialsData ?? [];
-  const eligibleCredentials = credentials.filter((c) =>
-    vendor === "check_point" ? c.allows_check_point : c.allows_palo_alto, // HTTPS vendors take a username + password, like PAN
-  );
+  // A credential is not tied to a vendor (PO, 2026-09-24); only an SSH private key is limited to Check Point, the one
+  // vendor reached with a key -- Palo Alto and the HTTPS vendors take a username and password.
+  const eligibleCredentials = credentials.filter((c) => vendor === "check_point" || c.kind !== "ssh_private_key");
   const [passphraseCredentialId, setPassphraseCredentialId] = useState("");
 
   // Keep the credential selection valid as the vendor (and therefore the
