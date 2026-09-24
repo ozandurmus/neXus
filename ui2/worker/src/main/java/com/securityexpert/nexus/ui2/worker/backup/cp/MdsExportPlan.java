@@ -20,8 +20,10 @@ public final class MdsExportPlan {
     public static final String ROUTES = "netstat -rn > %s/netstat.txt";
     public static final String UNAME = "uname -a > %s/uname.txt";
     /** Started in the background from /var/log (outside the product tree, as the vendor requires); exit code to a file. */
-    public static final String MDS_BACKUP_START = "cd /var/log && nohup bash -lc '$CPMDIR/scripts/mds_backup -b -l -d %1$s "
-            + "> %1$s/mds_backup.log 2>&1; echo $? > %1$s/mds_backup.rc' >/dev/null 2>&1 &";
+    /** Detached from the SSH channel (setsid, stdin from /dev/null): measured 2026-09-24, without it the exec
+     * channel stayed open on the background process's stdin and the start "timed out" while mds_backup ran. */
+    public static final String MDS_BACKUP_START = "cd /var/log && setsid nohup bash -lc '$CPMDIR/scripts/mds_backup -b -l -d %1$s "
+            + "> %1$s/mds_backup.log 2>&1; echo $? > %1$s/mds_backup.rc' </dev/null >/dev/null 2>&1 &";
     public static final String MDS_BACKUP_POLL = "cat %s/mds_backup.rc";
     public static final String LIST = "ls %s";
     public static final String BUNDLE = "cd %1$s && tar -czf %1$s.tgz .";

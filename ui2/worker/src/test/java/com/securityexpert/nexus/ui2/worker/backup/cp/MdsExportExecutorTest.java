@@ -106,12 +106,25 @@ class MdsExportExecutorTest {
         assertFalse(transport.issued.stream().anyMatch(c -> c.startsWith("mkdir")));
     }
 
+    @Test
+    void aTimedOutStartIsPolledNeverCleanedUpUnderARunningBackup() {
+        transport.startTimesOut = true;
+        BackupResult r = executor.collect(request, "dev", JOB);
+        assertTrue(r instanceof BackupResult.Completed, "a timed-out start that did start is followed to its exit code: " + r);
+        transport.rc = null;
+        transport.issued.clear();
+        BackupResult unknown = executor.collect(request, "dev", JOB);
+        assertTrue(unknown instanceof BackupResult.OutcomeUnknown, String.valueOf(unknown));
+        assertFalse(transport.issued.stream().anyMatch(c -> c.startsWith("rm -rf")));
+    }
+
     private static final class Scripted implements DeviceTransport {
         final List<String> issued = new ArrayList<>();
         String rc = "0";
         String dfAvailableKb = "52428800";
         String digest;
         String fetchedPath;
+        boolean startTimesOut;
 
         Scripted() {
             try {
@@ -133,6 +146,9 @@ class MdsExportExecutorTest {
         public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
             String c = spec.command();
             issued.add(c);
+            if (startTimesOut && c.contains("mds_backup -b")) {
+                return new ExecResult.TimedOut();
+            }
             if (c.equals(MdsExportPlan.DF_VAR_LOG)) {
                 return new ExecResult.Completed("Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/x 100000000 1 "
                         + dfAvailableKb + " 1% /var/log\n", 0);

@@ -101,10 +101,13 @@ public final class MdsExportExecutor {
 
         // mds_backup: started once, never retried; its exit code is the truth.
         ExecOutcome start = exec(session, MdsExportPlan.with(MdsExportPlan.MDS_BACKUP_START, dir), SHORT);
-        if (!start.succeeded()) {
+        if (!start.succeeded() && !start.timedOut()) {
+            // an explicit refusal (non-zero exit, channel failure): nothing started, the directory is ours to remove
             remove(session, dir);
             return new BackupResult.SubmitRefused("mds_backup could not be started");
         }
+        // A timed-out start may well have started mds_backup (2026-09-24): never remove the directory under it --
+        // poll for its exit code like any other run.
         Instant started = Instant.now();
         Optional<Integer> rc = Optional.empty();
         Instant deadline = started.plus(runDeadline);
@@ -205,13 +208,13 @@ public final class MdsExportExecutor {
     private ExecOutcome exec(TransportSession session, String command, Duration timeout) {
         ExecResult result = transport.exec(session, new ExecSpec(command), timeout);
         return switch (result) {
-            case ExecResult.Completed c -> new ExecOutcome(c.output(), c.exitStatus() == 0);
-            case ExecResult.TimedOut t -> new ExecOutcome("", false);
-            case ExecResult.ChannelFailed f -> new ExecOutcome(String.valueOf(f.reason()), false);
+            case ExecResult.Completed c -> new ExecOutcome(c.output(), c.exitStatus() == 0, false);
+            case ExecResult.TimedOut t -> new ExecOutcome("", false, true);
+            case ExecResult.ChannelFailed f -> new ExecOutcome(String.valueOf(f.reason()), false, false);
         };
     }
 
-    private record ExecOutcome(String output, boolean succeeded) {
+    private record ExecOutcome(String output, boolean succeeded, boolean timedOut) {
     }
 
     private static void closeQuietly(ArtefactStore.ArtefactHandle handle) {

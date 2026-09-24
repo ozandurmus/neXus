@@ -1097,7 +1097,7 @@ gates:
     platform_role_scope: 'cp_multi_domain_server'
     shell_context: 'expert'
     transport_kind: 'SSH_EXEC'
-    canonical_command_key: 'cd /var/log && nohup bash -lc ''$CPMDIR/scripts/mds_backup -b -l -d %1$s > %1$s/mds_backup.log 2>&1; echo $? > %1$s/mds_backup.rc'' >/dev/null 2>&1 &'
+    canonical_command_key: 'cd /var/log && setsid nohup bash -lc ''$CPMDIR/scripts/mds_backup -b -l -d %1$s > %1$s/mds_backup.log 2>&1; echo $? > %1$s/mds_backup.rc'' </dev/null >/dev/null 2>&1 &'
     action_class: 'recovery-write'
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 60
