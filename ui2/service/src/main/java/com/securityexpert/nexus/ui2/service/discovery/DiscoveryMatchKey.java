@@ -25,6 +25,8 @@ final class DiscoveryMatchKey {
             case "check_point" -> "check_point|" + candidate.owningDomain().orElse("") + "|"
                     + candidate.stableIdentifier();
             case "palo_alto" -> "palo_alto|" + candidate.stableIdentifier();
+            // Radware discovery (2026-09-24): the Cyber Controller's own opaque device id (ormId), never parsed.
+            case "radware" -> "radware|" + candidate.stableIdentifier();
             default -> throw new IllegalArgumentException("unsupported vendor: " + candidate.vendor());
         };
     }

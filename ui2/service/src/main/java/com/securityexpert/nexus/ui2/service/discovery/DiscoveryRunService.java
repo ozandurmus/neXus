@@ -107,7 +107,8 @@ public final class DiscoveryRunService {
 
     private static final Map<String, String> START_CAPABILITY_BY_VENDOR = Map.of(
             "check_point", DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE,
-            "palo_alto", DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE);
+            "palo_alto", DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
+            "radware", DiscoveryCapabilityIds.RDW_DISCOVERY_ENUMERATE);
 
     /** CP-DISCOVERY K-5/K-6/K-7: a cluster object, never importable itself -- RD-1 expands a selection of it to its members. */
     private static final Set<String> CP_CLUSTER_KINDS =
@@ -227,6 +228,12 @@ public final class DiscoveryRunService {
     /** 14F section 2: {@code POST /discovery/runs/{run_id}/import}. */
     public ImportOutcome importSelection(String actorFingerprint, String runId, List<String> candidateIds,
             Optional<String> credentialReferenceIdOverride) {
+        return importSelection(actorFingerprint, runId, candidateIds, credentialReferenceIdOverride, Optional.empty());
+    }
+
+    /** Radware discovery (2026-09-24): a Radware DefensePro import also carries its export passphrase credential (one for the selection). */
+    public ImportOutcome importSelection(String actorFingerprint, String runId, List<String> candidateIds,
+            Optional<String> credentialReferenceIdOverride, Optional<String> exportPassphraseReferenceId) {
         Optional<DiscoveryRun> runOpt = discoveryRunRepository.findRun(runId);
         if (runOpt.isEmpty()) {
             return new ImportOutcome.RunNotFound();
@@ -265,20 +272,20 @@ public final class DiscoveryRunService {
                 }
                 for (DiscoveryCandidateRecord member : members) {
                     if (alreadyProcessed.add(member.candidateId())) {
-                        results.add(importOneCandidate(actorFingerprint, member, credentialReferenceId));
+                        results.add(importOneCandidate(actorFingerprint, member, credentialReferenceId, exportPassphraseReferenceId));
                     }
                 }
                 continue;
             }
             if (alreadyProcessed.add(candidate.candidateId())) {
-                results.add(importOneCandidate(actorFingerprint, candidate, credentialReferenceId));
+                results.add(importOneCandidate(actorFingerprint, candidate, credentialReferenceId, exportPassphraseReferenceId));
             }
         }
         return new ImportOutcome.Results(results);
     }
 
     private CandidateImportResult importOneCandidate(String actorFingerprint, DiscoveryCandidateRecord candidate,
-            String credentialReferenceId) {
+            String credentialReferenceId, Optional<String> exportPassphraseReferenceId) {
         if (!candidate.importable()) {
             return new CandidateImportResult(candidate.candidateId(), "refused", Optional.empty(), Optional.empty(),
                     Optional.of("not_importable_kind:" + candidate.kind()));
@@ -304,9 +311,12 @@ public final class DiscoveryRunService {
         Optional<String> virtualSystemRef = isVirtualSystem ? Optional.of(candidate.stableIdentifier()) : Optional.empty();
         Optional<String> clusterMemberRef = isVirtualSystem ? Optional.empty() : candidate.clusterReference();
 
+        // Radware discovery (2026-09-24): what a Radware Cyber Controller lists (and neXus imports) is a DefensePro -- an appliance.
+        String role = "radware".equals(candidate.vendor()) ? "appliance" : "gateway";
         DeviceAddSingleService.Outcome outcome = deviceAddSingleService.addFromDiscoveryImport(actorFingerprint,
-                "gateway", addressRef.get(), candidate.vendor(), credentialReferenceId, clusterMemberRef, virtualSystemRef,
-                Optional.of(matchKey), ActionRegistry.DISCOVERY_RUN_IMPORT);
+                role, addressRef.get(), candidate.vendor(), credentialReferenceId, clusterMemberRef, virtualSystemRef,
+                Optional.of(matchKey), ActionRegistry.DISCOVERY_RUN_IMPORT,
+                "radware".equals(candidate.vendor()) ? exportPassphraseReferenceId : Optional.empty());
         return switch (outcome) {
             case DeviceAddSingleService.Outcome.Admitted admitted -> {
                 discoveryRunRepository.markImportOutcome(candidate.candidateId(), "new", actorFingerprint,

@@ -175,6 +175,31 @@ public final class HttpsVendorExecutor {
         }
     }
 
+    /** A Cyber Controller's device list, or why there is none ({@code failureClass}: AUTH_FAILED, UNREACHABLE, LIST_FAILED). */
+    public record CcDeviceList(Optional<JsonNode> list, String failureClass) {
+    }
+
+    /** Login, the device list, logout (V67 calls 1, 2, 4) -- for discovery. */
+    public CcDeviceList ccDeviceList(Target cc, String ccCredentialRef) {
+        try {
+            CcLogin login = ccLogin(cc, credentials.apply(ccCredentialRef));
+            if (login.session().isEmpty()) {
+                return new CcDeviceList(Optional.empty(), login.reason().startsWith("authentication_failed") ? "AUTH_FAILED" : "LOGIN_FAILED");
+            }
+            try (CcSession s = login.session().get()) {
+                Optional<JsonNode> list = ccDevices(s);
+                return new CcDeviceList(list, list.isPresent() ? "" : "LIST_FAILED");
+            }
+        } catch (RuntimeException e) {
+            return new CcDeviceList(Optional.empty(), "CREDENTIAL_UNRESOLVABLE");
+        } catch (IOException e) {
+            return new CcDeviceList(Optional.empty(), "UNREACHABLE");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new CcDeviceList(Optional.empty(), "INTERRUPTED");
+        }
+    }
+
     /**
      * A DefensePro confirmed by the Cyber Controller that lists its address -- management-plane evidence, not a read
      * from the device itself, and the identity says so. Empty when that Cyber Controller does not list it or cannot be

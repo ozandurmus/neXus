@@ -446,7 +446,8 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
     setDiscoveryPhase("importing");
     setSubmitError(null);
     try {
-      const result = await importDiscoveryCandidates(runId, Array.from(selectedCandidateIds), importCredentialId);
+      const result = await importDiscoveryCandidates(runId, Array.from(selectedCandidateIds), importCredentialId,
+        vendor === "radware" ? passphraseCredentialId : undefined);
       const byId: Record<string, DiscoveryImportResult> = {};
       result.results.forEach((r) => (byId[r.candidate_id] = r));
       setImportResults(byId);
@@ -700,6 +701,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
             >
               <MenuItem value="check_point">Check Point (multi-domain server)</MenuItem>
               <MenuItem value="palo_alto">Palo Alto (Panorama)</MenuItem>
+              <MenuItem value="radware">Radware (Cyber Controller)</MenuItem>
             </TextField>
             {credentialSelectorFragment}
             {sshTrustAuthorization}
@@ -752,6 +754,15 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
                   <MenuItem key={c.credential_id} value={c.credential_reference_id}>
                     {c.display_name}
                   </MenuItem>
+                ))}
+              </TextField>
+            )}
+            {discoveryPhase !== "done" && vendor === "radware" && (
+              <TextField label="Export passphrase credential (DefensePro)" select size="small" fullWidth value={passphraseCredentialId}
+                onChange={(e) => setPassphraseCredentialId(e.target.value)}
+                helperText="Encrypts the private keys in each imported DefensePro's backup; required -- without it nothing is imported.">
+                {credentials.filter((c) => c.kind !== "ssh_private_key").map((c) => (
+                  <MenuItem key={c.credential_reference_id} value={c.credential_reference_id}>{c.display_name}</MenuItem>
                 ))}
               </TextField>
             )}

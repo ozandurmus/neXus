@@ -269,7 +269,8 @@ public final class Ui2WorkerMain {
         PanoramaEnumerationAdapter paloAltoDiscoveryAdapter =
                 new PanoramaEnumerationAdapter(compositeTransport, panCredentialResolver, panTrustRuleResolver);
         DiscoveryJobExecutor discoveryJobExecutor = new DiscoveryJobExecutor(leaseRepository, attemptRepository,
-                discoveryRunRepository, checkPointDiscoveryAdapter, paloAltoDiscoveryAdapter);
+                discoveryRunRepository, checkPointDiscoveryAdapter, paloAltoDiscoveryAdapter)
+                .withRadwareCyberController(httpsVendorExecutor);
 
         JobRecordDao jobRecordDao = new JooqJobRecordDao(transactionBoundary);
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);

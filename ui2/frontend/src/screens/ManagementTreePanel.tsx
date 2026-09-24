@@ -42,6 +42,7 @@ export const KIND_LABEL: Readonly<Record<string, string>> = {
   STANDALONE_VIRTUAL_SYSTEM: "Virtual system",
   PALO_ALTO_HA_PAIR_CLUSTER: "HA pair",
   PALO_ALTO_DEVICE: "Firewall",
+  RADWARE_DEFENSEPRO: "DefensePro",
   PALO_ALTO_VIRTUAL_SYSTEM: "Virtual system (VSYS)",
 };
 
@@ -255,9 +256,10 @@ export function ManagementTreePanel({ deviceId, onOpenDevice, onOpenCluster }: {
     <Card sx={CARD} aria-label="Managed estate">
       <Box sx={{ px: 2, pt: 1.5, pb: 1.25 }}>
         <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Managed estate · from discovery</Typography>
-        <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>{t.vendor === "palo_alto" ? "Firewalls and HA pairs" : "Domains, clusters and gateways"}</Typography>
+        <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>{t.vendor === "palo_alto" ? "Firewalls and HA pairs" : t.vendor === "radware" ? "Sites and managed devices" : "Domains, clusters and gateways"}</Typography>
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mt: 0.5 }}>
-          {t.vendor === "palo_alto" ? "" : `${c.domains ?? 0} domains · `}{c.clusters ?? 0} clusters · {c.gateways ?? 0} gateways · {c.virtual_systems ?? 0} virtual systems
+          {t.vendor === "radware" ? `${c.domains ?? 0} sites · ${c.gateways ?? 0} devices`
+            : <>{t.vendor === "palo_alto" ? "" : `${c.domains ?? 0} domains · `}{c.clusters ?? 0} clusters · {c.gateways ?? 0} gateways · {c.virtual_systems ?? 0} virtual systems</>}
           {c.management_appliances ? ` · ${c.management_appliances} management / log servers` : ""} · {c.imported ?? 0} in neXus ·
           discovered <Ts at={t.discovered_at} relative />
         </Typography>
@@ -299,7 +301,7 @@ export function ManagementTreePanel({ deviceId, onOpenDevice, onOpenCluster }: {
               sx={{ width: "100%", height: 44, display: "flex", alignItems: "center", gap: 1, px: 2, border: "none", bgcolor: expanded ? m3.scLow : "transparent",
                 font: "inherit", cursor: "pointer", color: m3.onSurface, textAlign: "left" }}>
               <Box component="span" sx={{ color: m3.onSurfaceVar, width: 12 }}>{expanded ? "▾" : "▸"}</Box>
-              <Box component="span" sx={{ fontWeight: 600, fontSize: 13.5, flex: 1 }}>{d.domain ?? (t.vendor === "palo_alto" ? "Managed firewalls" : "No domain")}</Box>
+              <Box component="span" sx={{ fontWeight: 600, fontSize: 13.5, flex: 1 }}>{d.domain ?? (t.vendor === "palo_alto" ? "Managed firewalls" : t.vendor === "radware" ? "Managed devices" : "No domain")}</Box>
               {dc.missing > 0 && <StatusChip tone="warn" label={`${dc.missing} not in neXus`} dense />}
               <Box component="span" sx={{ fontSize: 12, color: m3.onSurfaceVar, fontVariantNumeric: "tabular-nums" }}>
                 {dc.clusters} clusters · {dc.gateways} gateways{dc.vs > 0 ? ` · ${dc.vs} virtual systems` : ""}

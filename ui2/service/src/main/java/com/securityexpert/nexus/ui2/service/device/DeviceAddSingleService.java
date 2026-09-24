@@ -182,15 +182,31 @@ public final class DeviceAddSingleService {
     public Outcome addFromDiscoveryImport(String actorFingerprint, String role, String address, String vendor,
             String credentialReferenceId, Optional<String> clusterMemberRef, Optional<String> virtualSystemRef,
             Optional<String> discoveryMatchKey, String actionId) {
+        return addFromDiscoveryImport(actorFingerprint, role, address, vendor, credentialReferenceId, clusterMemberRef,
+                virtualSystemRef, discoveryMatchKey, actionId, Optional.empty());
+    }
+
+    /** As above; a DefensePro import carries its export passphrase, set in the same transaction (or no device). */
+    public Outcome addFromDiscoveryImport(String actorFingerprint, String role, String address, String vendor,
+            String credentialReferenceId, Optional<String> clusterMemberRef, Optional<String> virtualSystemRef,
+            Optional<String> discoveryMatchKey, String actionId, Optional<String> exportPassphraseReferenceId) {
         VendorMapping mapping = VENDOR_MAPPINGS.get(vendor);
         if (mapping == null) {
             return new Outcome.ValidationFailed(DeviceRegistrationService.REASON_VENDOR_HINT_INVALID);
+        }
+        Optional<String> passphrase = exportPassphraseReferenceId.filter(v -> !v.isBlank());
+        boolean defensePro = "radware".equals(vendor) && "appliance".equals(role);
+        if (defensePro && passphrase.isEmpty()) {
+            return new Outcome.ValidationFailed(REASON_EXPORT_PASSPHRASE_REQUIRED);
+        }
+        if (passphrase.isPresent() && (!defensePro || secrets == null)) {
+            return new Outcome.ValidationFailed(REASON_EXPORT_PASSPHRASE_REQUIRED);
         }
 
         try {
             return transactionBoundary.inTransaction(dsl -> runInTransaction(actorFingerprint, role, address, vendor,
                     credentialReferenceId, mapping, "discovery_import", clusterMemberRef, virtualSystemRef,
-                    discoveryMatchKey, actionId, Optional.empty()));
+                    discoveryMatchKey, actionId, passphrase));
         } catch (ValidationFailedSignal signal) {
             return new Outcome.ValidationFailed(signal.reasonCode);
         } catch (AdmissionRefusedSignal signal) {

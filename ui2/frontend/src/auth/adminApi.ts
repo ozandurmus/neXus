@@ -843,10 +843,13 @@ export function importDiscoveryCandidates(
   runId: string,
   candidateIds: string[],
   credentialReferenceId?: string,
+  exportPassphraseCredentialReferenceId?: string,
 ): Promise<{ results: DiscoveryImportResult[] }> {
   return call(`/discovery/runs/${encodeURIComponent(runId)}/import`, "POST", {
     candidate_ids: candidateIds,
     credential_reference_id: credentialReferenceId,
+    // Radware discovery (2026-09-24): Radware DefensePro imports carry the export passphrase credential (one for the selection)
+    ...(exportPassphraseCredentialReferenceId ? { export_passphrase_credential_reference_id: exportPassphraseCredentialReferenceId } : {}),
   });
 }
 

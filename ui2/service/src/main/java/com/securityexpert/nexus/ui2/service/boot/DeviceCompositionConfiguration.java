@@ -189,7 +189,9 @@ public class DeviceCompositionConfiguration {
                 confirmCapability(DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, "check_point",
                         "cp_multi_domain_server", TransportKind.SSH_EXEC),
                 confirmCapability(DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE, "palo_alto", "panorama",
-                        TransportKind.PAN_XML_API)));
+                        TransportKind.PAN_XML_API),
+                confirmCapability(DiscoveryCapabilityIds.RDW_DISCOVERY_ENUMERATE, "radware", "radware_cyber_controller",
+                        TransportKind.HTTPS)));
     }
 
     private static Capability confirmCapability(String capabilityId, String vendor, String platformRoleScope,

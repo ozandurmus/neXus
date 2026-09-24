@@ -210,8 +210,12 @@ public class ManagementTreeService {
     record Candidate(String id, String parent, String vendor, String domain, String kind, String displayName,
             String clusterReference, String stableIdentifier, String model) {
         String matchKey() {
-            return "palo_alto".equals(vendor) ? "palo_alto|" + stableIdentifier
-                    : "check_point|" + (domain == null ? "" : domain) + "|" + stableIdentifier;
+            // Same keys as DiscoveryMatchKey (radware added 2026-09-24; before it every non-PAN vendor was keyed as Check Point).
+            return switch (vendor == null ? "" : vendor) {
+                case "palo_alto" -> "palo_alto|" + stableIdentifier;
+                case "radware" -> "radware|" + stableIdentifier;
+                default -> "check_point|" + (domain == null ? "" : domain) + "|" + stableIdentifier;
+            };
         }
 
         boolean isCluster() {

@@ -70,6 +70,13 @@ public final class DiscoveryJobExecutor {
     private final DiscoveryRunRepository discoveryRunRepository;
     private final ManagementPlaneEnumeration checkPointEnumeration;
     private final PanoramaEnumeration paloAltoEnumeration;
+    /** Radware discovery (2026-09-24): Radware Cyber Controller device list (the V67 REST calls); unset, a radware run fails UNSUPPORTED_VENDOR. */
+    private com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor radwareCyberController;
+
+    public DiscoveryJobExecutor withRadwareCyberController(com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor executor) {
+        this.radwareCyberController = executor;
+        return this;
+    }
 
     public DiscoveryJobExecutor(JobLeaseRepository leaseRepository, JobStepAttemptRepository attemptRepository,
             DiscoveryRunRepository discoveryRunRepository, ManagementPlaneEnumeration checkPointEnumeration,
@@ -143,6 +150,7 @@ public final class DiscoveryJobExecutor {
         return switch (run.vendor()) {
             case "check_point" -> enumerateCheckPoint(run);
             case "palo_alto" -> enumeratePaloAlto(run);
+            case "radware" -> radwareCyberController == null ? EnumerationOutcome.failed("UNSUPPORTED_VENDOR") : enumerateRadware(run);
             default -> EnumerationOutcome.failed("UNSUPPORTED_VENDOR");
         };
     }
@@ -164,6 +172,29 @@ public final class DiscoveryJobExecutor {
                 yield EnumerationOutcome.succeeded(records, CheckPointDiscoveryCandidateMapper.outcomeSummary(rows));
             }
         };
+    }
+
+    private EnumerationOutcome enumerateRadware(DiscoveryRun run) {
+        String address = run.managementAddress();
+        int port = DEFAULT_PAN_HTTPS_PORT;
+        int colon = address.lastIndexOf(':');
+        if (colon >= 0) {
+            try {
+                port = Integer.parseInt(address.substring(colon + 1));
+                address = address.substring(0, colon);
+            } catch (NumberFormatException bareHost) {
+                // no port
+            }
+        }
+        var result = radwareCyberController.ccDeviceList(
+                new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(address, port), run.credentialReferenceId());
+        if (result.list().isEmpty()) {
+            return EnumerationOutcome.failed(result.failureClass());
+        }
+        java.util.logging.Logger.getLogger(DiscoveryJobExecutor.class.getName()).info(
+                "[RADWARE_DISCOVERY] categorical values " + RadwareDiscoveryCandidateMapper.categoricalValues(result.list().get()));
+        var records = RadwareDiscoveryCandidateMapper.map(run.runId(), result.list().get());
+        return EnumerationOutcome.succeeded(records, RadwareDiscoveryCandidateMapper.outcomeSummary(records));
     }
 
     private EnumerationOutcome enumeratePaloAlto(DiscoveryRun run) {

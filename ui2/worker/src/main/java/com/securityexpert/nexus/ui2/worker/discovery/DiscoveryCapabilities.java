@@ -38,8 +38,13 @@ public final class DiscoveryCapabilities {
                 TransportKind.PAN_XML_API);
     }
 
+    public static Capability radware() {
+        return load(DiscoveryCapabilityIds.RDW_DISCOVERY_ENUMERATE, "radware", "radware_cyber_controller",
+                TransportKind.HTTPS);
+    }
+
     public static List<Capability> all() {
-        return List.of(checkPoint(), paloAlto());
+        return List.of(checkPoint(), paloAlto(), radware());
     }
 
     private static Capability load(String capabilityId, String vendor, String platformRoleScope,

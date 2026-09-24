@@ -40,7 +40,8 @@ public final class DiscoveryController {
 
     public record ImportRequest(
             @JsonProperty("candidate_ids") List<String> candidateIds,
-            @JsonProperty("credential_reference_id") String credentialReferenceId) {
+            @JsonProperty("credential_reference_id") String credentialReferenceId,
+            @JsonProperty("export_passphrase_credential_reference_id") String exportPassphraseCredentialReferenceId) {
     }
 
     public record TrustRequest(
@@ -160,7 +161,8 @@ public final class DiscoveryController {
         List<String> candidateIds = request.candidateIds() == null ? List.of() : request.candidateIds();
         Optional<String> credentialOverride = Optional.ofNullable(request.credentialReferenceId());
         DiscoveryRunService.ImportOutcome outcome =
-                discoveryRunService.importSelection(actorFingerprint, runId, candidateIds, credentialOverride);
+                discoveryRunService.importSelection(actorFingerprint, runId, candidateIds, credentialOverride,
+                        Optional.ofNullable(request.exportPassphraseCredentialReferenceId()));
         return switch (outcome) {
             case DiscoveryRunService.ImportOutcome.Results results -> {
                 Map<String, Object> body = new LinkedHashMap<>();
