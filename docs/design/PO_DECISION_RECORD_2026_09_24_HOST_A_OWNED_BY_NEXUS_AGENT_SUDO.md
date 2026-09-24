@@ -17,21 +17,26 @@ Product Owner for every privileged step of an install or a fix only slows recove
 
 ## Decision
 
-1. **Account.** A dedicated neXus agent account on HOST-A, in the sudo group, reached with the agent's own SSH key.
-   Its name and key live in the operator's store, never in the repository (HOST_REGISTER.md).
+1. **Account.** A dedicated neXus agent account on HOST-A (the Product Owner named it), in the sudo group, reached
+   with the agent's own SSH key. Its address and key live in the operator's store, never in the repository.
 2. **What sudo is for.** Installing and maintaining neXus and the host it runs on: packages and updates, k3s and its
    configuration, storage and mounts, the SFTP receiver accounts and `sshd` blocks for pushing products
    (e.g. `nexus-cc`), firewall on the host, service restarts, logs.
 3. **Ask first, in chat, and wait for a clear yes** — for any command that deletes or irreversibly changes data:
    `rm` of any kind, `truncate`, `shred`, `dd`, `mkfs`, partitioning or `lvremove`/`vgremove`, dropping or truncating
    database objects, `kubectl delete` of a PersistentVolumeClaim, PersistentVolume or namespace, deleting backups or
-   artefacts, and a host reboot. The request names the exact command and what it removes.
-4. **Never: HOST-A as a jump server.** The agent does not log in to, authenticate to, tunnel to, proxy through, or
+   artefacts. The request names the exact command and what it removes. **A host reboot needs no prior ask** (PO,
+   2026-09-24: "yeniden başlatabilirsin sorun yok").
+4. **Allowed on the host itself** (PO, 2026-09-24): configuring the corporate proxy for the host's own outbound
+   traffic (package installs, image pulls, builds), and forwarding inbound 443 to whatever neXus serves inside
+   (ingress / port forwarding on the host) — "Sunucuda proxy konfigüre edebiliriz, port yönlendirme dışarıdan gelen
+   443'ü içeride neye yönlendirirsen bu da ok."
+5. **Never: HOST-A as a jump server.** The agent does not log in to, authenticate to, tunnel to, proxy through, or
    forward ports to any other system from HOST-A (no `ssh`/`scp`/`sftp`/`rdp` onward, no `-L`/`-R`/`-D` forwarding,
    no SOCKS or HTTP proxy for its own use). What stays allowed: the product's own device traffic (the worker's gated
    jobs) and the non-mutating reachability probes of the 2026-09-19 amendment (`ping`, `nc -z`, `traceroute`, `curl`
    status, SSH banner) toward managed devices, used to diagnose a product failure.
-5. **Every sudo command is recorded** on the host (`Defaults logfile=/var/log/sudo.log, log_input, log_output` for the
+6. **Every sudo command is recorded** on the host (`Defaults logfile=/var/log/sudo.log, log_input, log_output` for the
    agent account), so what was run can be read back.
-6. Unchanged: secrets never printed or copied off the host outside a Product Owner request; the product's device
+7. Unchanged: secrets never printed or copied off the host outside a Product Owner request; the product's device
    command gate, the network action taxonomy and every data-handling law apply as before.
