@@ -134,3 +134,24 @@ and Panorama-over-HTTPS.
 8. Blue Coat — after the Product Owner names the device.
 
 Each vendor also carries the onboarding items above (Add device, confirm read, screen label).
+
+## Addendum 2026-09-24 — exact fields recovered from the trails (secrets withheld)
+
+The summaries above shortened two load-bearing values to "…". Re-read from the Product Owner's trail files
+(`trail_34095224.log`, `trail_34411065.log`); credentials, addresses, tokens and passphrases are withheld.
+
+- **Radware DefensePro (34095224):** `POST https://<device>:443/dynamic/File/Configuration/ReceivefromDevice`,
+  basic auth sent pre-emptively (`--auth-no-challenge`), TLS not verified, form body
+  `DownloadFormat=cli&IncludePKeys=on&passphrase=<passphrase>`. `IncludePKeys=on` puts the private keys in the
+  export, encrypted with that passphrase — so the passphrase is a **second secret** (credential store), never a
+  literal in a gate row or in code. Output: one text file.
+- **Infoblox Grid Manager (34411065):**
+  1. `GET /wapidoc/` → 302 to `/wapidoc/index.html` (≈176 KB HTML); the WAPI version is the single-quoted value on
+     the line containing `VERSION` (Sphinx `VERSION: '2.13.5'` on this appliance).
+  2. `POST /wapi/v<ver>/fileop?_function=getgriddata`, `Content-Type: application/json`, body `{"type": "BACKUP"}`
+     → JSON with `token` and `url` (the `url` is on the same appliance host).
+  3. `GET <url>` → `database.bak`, ≈ 1 MB on this grid (996 KB) — so a "size > 1 MB" check is wrong; any non-empty
+     body with the expected magic is the check.
+  4. `POST /wapi/v<ver>/fileop?_function=downloadcomplete` with `{"token": "<token>"}`. **Backbox sends this to
+     `/wapi/v/fileop` (empty version) and the appliance answers "Unknown WAPI version" — its cleanup fails on every
+     run.** neXus sends it with the version read in step 1.
