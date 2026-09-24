@@ -18,8 +18,10 @@ import java.util.regex.Pattern;
  */
 public final class CheckPointPolicyParser {
 
-    private static final Pattern NAME = Pattern.compile("(?im)^\\s*policy\\s+name\\s*:\\s*(\\S.*?)\\s*$");
-    private static final Pattern TIME = Pattern.compile("(?im)^\\s*(?:policy\\s+)?install\\s+time\\s*:\\s*(\\S.*?)\\s*$");
+    // [ \t] not \s around the colon: measured 2026-09-24, an empty "Install time:" line let \s cross the newline and
+    // read the next line ("Num. connections: N") as the time. An empty value stays empty.
+    private static final Pattern NAME = Pattern.compile("(?im)^[ \\t]*policy[ \\t]+name[ \\t]*:[ \\t]*(\\S[^\\r\\n]*?)[ \\t]*$");
+    private static final Pattern TIME = Pattern.compile("(?im)^[ \\t]*(?:policy[ \\t]+)?install[ \\t]+time[ \\t]*:[ \\t]*(\\S[^\\r\\n]*?)[ \\t]*$");
     private static final List<DateTimeFormatter> FORMATS = List.of(
             DateTimeFormatter.ofPattern("EEE MMM d HH:mm:ss yyyy", Locale.ENGLISH),
             DateTimeFormatter.ofPattern("EEE MMM  d HH:mm:ss yyyy", Locale.ENGLISH),

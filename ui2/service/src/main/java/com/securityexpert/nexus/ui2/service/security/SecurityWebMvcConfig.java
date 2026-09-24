@@ -117,6 +117,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("PUT /devices/*/backup-target", ActionRegistry.DEVICE_BACKUP_TARGET_SET),
             // PO decision record 2026-09-22: the one route that returns artefact bytes, role-gated.
             Map.entry("POST /backups/*/download", ActionRegistry.DEVICE_BACKUP_RETRIEVE),
+            Map.entry("POST /backups/*/download-ticket", ActionRegistry.DEVICE_BACKUP_RETRIEVE),
+            Map.entry("GET /backups/*/download", ActionRegistry.DEVICE_BACKUP_RETRIEVE),
             // V41 content listing and compare: posture reads (names/sizes/digests, never content).
             Map.entry("GET /backups/*/entries", ActionRegistry.DEVICE_BACKUP_READ),
             Map.entry("GET /backups/*/compare", ActionRegistry.DEVICE_BACKUP_READ),

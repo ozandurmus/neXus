@@ -78,6 +78,60 @@ public final class BackupController {
      * vendor, the opaque id's prefix and the collection time -- never a
      * hostname or an address.
      */
+    /** One pending browser download: who asked, why, for which artefact, until when (single use). */
+    private record DownloadTicket(String artefactId, String actorFingerprint, String reason, java.time.Instant expiresAt) {
+    }
+
+    private static final java.time.Duration TICKET_TTL = java.time.Duration.ofSeconds(60);
+    private final Map<String, DownloadTicket> tickets = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
+
+    /**
+     * Step one of a browser-native download (2026-09-24: a 5.8 GB MDS backup could not be buffered in the page):
+     * the same route gate as the download (role + CSRF), the reason checked here; returns a single-use ticket valid
+     * for 60 s. The audit row is still written by the download itself, before the first byte.
+     */
+    @PostMapping("/backups/{artefactId}/download-ticket")
+    public ResponseEntity<Map<String, Object>> downloadTicket(@PathVariable String artefactId,
+            @RequestBody(required = false) DownloadRequest request, HttpServletRequest servletRequest) {
+        if (artefactId == null || !ARTEFACT_ID.matcher(artefactId).matches()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "INVALID_ARTEFACT_ID", "reason", "Artefact identifier must be an opaque id"));
+        }
+        String actor = actingUser(servletRequest);
+        if (actor == null || actor.isBlank()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "AUTHENTICATION_REQUIRED",
+                    "reason", "An authenticated actor fingerprint is required to download a backup"));
+        }
+        String reason = request == null || request.reason() == null ? "" : request.reason().strip();
+        if (reason.length() < 8) {
+            return ResponseEntity.badRequest().body(Map.of("error", "REASON_REQUIRED", "code", "REASON_TOO_SHORT",
+                    "reason", "A reason of at least 8 characters is required (BK-12)"));
+        }
+        java.time.Instant now = java.time.Instant.now();
+        tickets.values().removeIf(t -> t.expiresAt().isBefore(now));
+        byte[] raw = new byte[24];
+        RANDOM.nextBytes(raw);
+        String ticket = java.util.HexFormat.of().formatHex(raw);
+        tickets.put(ticket, new DownloadTicket(artefactId, actor, reason, now.plus(TICKET_TTL)));
+        return ResponseEntity.ok(Map.of("ticket", ticket, "expires_in_s", TICKET_TTL.toSeconds(),
+                "href", "/backups/" + artefactId + "/download?ticket=" + ticket));
+    }
+
+    /** Step two: the browser's own download (streamed to disk, its own progress bar). Same actor, same artefact, once. */
+    @GetMapping("/backups/{artefactId}/download")
+    public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> downloadWithTicket(
+            @PathVariable String artefactId, @org.springframework.web.bind.annotation.RequestParam String ticket,
+            HttpServletRequest servletRequest) {
+        DownloadTicket t = ticket == null ? null : tickets.remove(ticket);
+        String actor = actingUser(servletRequest);
+        if (t == null || t.expiresAt().isBefore(java.time.Instant.now()) || !t.artefactId().equals(artefactId)
+                || actor == null || !actor.equals(t.actorFingerprint())) {
+            return refusal(HttpStatus.FORBIDDEN, "TICKET_INVALID", "TICKET_INVALID",
+                    "The download ticket is missing, used, expired, or not yours; start the download again");
+        }
+        return download(artefactId, new DownloadRequest(t.reason()), servletRequest);
+    }
+
     @PostMapping("/backups/{artefactId}/download")
     public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> download(
             @PathVariable String artefactId,

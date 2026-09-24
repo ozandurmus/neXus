@@ -34,6 +34,13 @@ class PolicyInstallParsersTest {
     }
 
     @Test
+    void anEmptyInstallTimeLineStaysEmptyAndNeverReadsTheNextLine() {
+        PolicyInstallRead r = CheckPointPolicyParser.parse("Policy name:          Standard\nInstall time:\nNum. connections:     12\n");
+        assertEquals(Optional.of("Standard"), r.policyName());
+        assertTrue(r.installedAtText().isEmpty());
+    }
+
+    @Test
     void paloAltoLatestFinishedSuccessfulCommitWinsAndTheUserIsNeverRead() {
         PolicyInstallRead r = PaloAltoJobsParser.parse("""
                 <response status="success"><result>

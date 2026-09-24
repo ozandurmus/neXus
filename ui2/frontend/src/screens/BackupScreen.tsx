@@ -28,7 +28,7 @@ import {
   setBackupBaseline,
   collectDeviceBackup,
   compareBackups,
-  downloadBackupArtefact,
+  requestBackupDownloadTicket,
   listBackupEntries,
   listDeviceBackups,
   relistBackupContents,
@@ -258,19 +258,18 @@ export function BackupScreen() {
     setExportBusy(true);
     setExportError(null);
     try {
-      const { blob, fileName } = await downloadBackupArtefact(device.artefactId, exportReason.trim());
-      const url = URL.createObjectURL(blob);
+      // Browser-native download: the page never holds the archive (a 5.8 GB MDS backup broke the in-page buffer).
+      const { href } = await requestBackupDownloadTicket(device.artefactId, exportReason.trim());
       const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = fileName;
+      anchor.href = href;
+      anchor.rel = "noopener";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      URL.revokeObjectURL(url);
       setSelectedDeviceExport(null);
       setExportReason("");
-      setSuccessMessage(`Downloaded ${fileName} (${formatBytes(blob.size)}); the retrieval is on the audit log.`);
-      setTimeout(() => setSuccessMessage(null), 8000);
+      setSuccessMessage(`Download started (${formatBytes(device.sizeBytes)}). Follow its progress in your browser's downloads panel; the retrieval is on the audit log.`);
+      setTimeout(() => setSuccessMessage(null), 12000);
     } catch (error) {
       const status = (error as { status?: number }).status;
       const body = (error as { body?: { code?: string; reason?: string } }).body;

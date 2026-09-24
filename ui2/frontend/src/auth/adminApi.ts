@@ -274,6 +274,14 @@ export interface BackupDownload {
  * decrypted archive itself, so it is read as a Blob, never JSON-parsed; the file name comes from
  * the server's Content-Disposition (vendor + opaque id prefix + collection time).
  */
+/**
+ * A browser-native download (2026-09-24): a single-use ticket for this artefact and reason, then the browser's own
+ * download manager fetches it -- streamed to disk with its own progress bar, never buffered in the page.
+ */
+export function requestBackupDownloadTicket(artefactId: string, reason: string): Promise<{ ticket: string; href: string; expires_in_s: number }> {
+  return call(`/backups/${encodeURIComponent(artefactId)}/download-ticket`, "POST", { reason });
+}
+
 export async function downloadBackupArtefact(artefactId: string, reason: string): Promise<BackupDownload> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const token = await csrfToken();

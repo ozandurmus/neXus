@@ -16,6 +16,11 @@ server:
 spring:
   application:
     name: nexus-ui2
+  mvc:
+    async:
+      # A streamed backup download is an async request; the container default (30 s) cut a 5.8 GB MDS backup at
+      # ~150 MB (measured 2026-09-24). Six hours covers the largest archive on a slow link.
+      request-timeout: ${UI2_ASYNC_REQUEST_TIMEOUT_MS:21600000}
   flyway:
     enabled: false
   web:

@@ -29,27 +29,31 @@ import com.securityexpert.nexus.ui2.service.security.SecurityWebMvcConfigTestAcc
 class BackupDownloadRouteGateTest {
 
     private static final Pattern SUSPECT_ROUTE = Pattern.compile(
-            "@(?:Get|Post)Mapping\\(\\s*\"([^\"]*(?:retriev|download|decrypt|/backup/read|/backup/fetch)[^\"]*)\"",
+            "@(Get|Post)Mapping\\(\\s*\"([^\"]*(?:retriev|download|decrypt|/backup/read|/backup/fetch)[^\"]*)\"",
             Pattern.CASE_INSENSITIVE);
 
     @Test
     void everyDownloadRouteIsMappedToARoleBackupAdminAction() throws IOException {
         Path serviceMain = Path.of(System.getProperty("user.dir")).resolve("src/main/java");
         List<String> routes = new ArrayList<>();
+        List<String> methodRoutes = new ArrayList<>();
         try (Stream<Path> files = Files.walk(serviceMain)) {
             for (Path path : files.filter(p -> p.toString().endsWith(".java")).toList()) {
                 Matcher matcher = SUSPECT_ROUTE.matcher(Files.readString(path));
                 while (matcher.find()) {
-                    routes.add(matcher.group(1));
+                    routes.add(matcher.group(2));
+                    methodRoutes.add(matcher.group(1).toUpperCase() + " " + matcher.group(2));
                 }
             }
         }
-        assertEquals(List.of("/backups/{artefactId}/download"), routes,
-                "the decision record names exactly one download route");
+        // Amendment A (2026-09-24): the ticket step and the browser-native GET join the original POST -- all three gated.
+        assertEquals(List.of("/backups/{artefactId}/download", "/backups/{artefactId}/download",
+                "/backups/{artefactId}/download-ticket").stream().sorted().toList(), routes.stream().sorted().toList(),
+                "the decision record (with amendment A) names these download routes and no other");
 
         ActionRegistry registry = new ActionRegistry();
-        for (String route : routes) {
-            String pattern = "POST " + route.replaceAll("\\{[^}]+}", "*");
+        for (String methodRoute : methodRoutes) {
+            String pattern = methodRoute.replaceAll("\\{[^}]+}", "*");
             String actionId = SecurityWebMvcConfigTestAccess.actionIdFor(pattern);
             assertTrue(actionId != null, "download route " + pattern + " has no action mapping (would fail closed)");
             Optional<ActionDescriptor> descriptor = registry.find(actionId);

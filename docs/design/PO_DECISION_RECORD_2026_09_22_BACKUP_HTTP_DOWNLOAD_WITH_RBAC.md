@@ -58,3 +58,21 @@ browser) can download every backup the fleet has taken, from anywhere the UI is
 reachable. Under the CLI-only model the same attacker also needed a shell on the
 worker node. The Product Owner assessed this as acceptable for an environment
 where the same person already holds direct device access.
+
+## Amendment A — 2026-09-24 (Product Owner): browser-native download for large archives
+
+A 5.8 GB Multi-Domain Server Gaia backup could not be downloaded: the page buffered the whole archive
+(`response.blob()`), and the container's default 30-second async timeout cut the stream at ~150 MB. The Product
+Owner asked for a download that shows progress like a download manager.
+
+- The download becomes two gated steps; the original route stays:
+  - `POST /backups/{artefactId}/download-ticket` — same action as the download (`device_backup_retrieve`,
+    `role:backup_admin`, CSRF); the reason (≥ 8 characters) is checked here; returns a single-use ticket valid for
+    60 seconds, bound to the requesting actor and artefact.
+  - `GET /backups/{artefactId}/download?ticket=…` — same action; the ticket is consumed on first use, refused if
+    expired, used, for another artefact or another actor. It then runs the original download: the audit row with
+    the reason is written before the first byte; the archive streams to the browser's own download manager (its
+    progress bar, pause/resume), never buffered in the page.
+- The async request timeout is 6 hours (`UI2_ASYNC_REQUEST_TIMEOUT_MS`).
+- `BackupDownloadRouteGateTest` asserts exactly these three routes and checks each method's own route mapping
+  requires `role:backup_admin`.
