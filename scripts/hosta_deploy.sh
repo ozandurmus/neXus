@@ -38,6 +38,10 @@ done
 APPLY_NAMES=""
 for m in "${APPLY[@]:-}"; do [ -n "$m" ] && APPLY_NAMES="$APPLY_NAMES /tmp/$(basename "$m")"; done
 
+# Since the 2026-09-25 reinstall the host holds no GitHub credential: the code reaches it by a push to its own bare
+# repository (~/nexus.git), which ~/nexus (run_build.sh's checkout) pulls from.
+git -C "$(dirname "$0")/.." push -q "ssh://$HOST/~/nexus.git" main || { echo "STOP: push to the host repository failed" >&2; exit 6; }
+
 ssh -o ConnectTimeout=10 "$HOST" "LIMIT=$LIMIT APPLY_NAMES='$APPLY_NAMES' bash -s" <<'REMOTE'
 set -uo pipefail
 export KUBECONFIG=$HOME/.kube/config

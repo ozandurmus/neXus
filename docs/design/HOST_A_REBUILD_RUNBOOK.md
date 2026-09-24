@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — WRITTEN 2026-09-24 BEFORE THE REINSTALL; STEPS ARE VERIFIED ONLY WHEN THE REBUILD RUNS.** The Product Owner is
+**EXECUTED 2026-09-24/25 — neXus restored on the reinstalled host (site 200, schema 70, 110 devices, 901 artefact rows / 1,515 files, no startup errors). Section 6 records what the steps needed in practice.** The Product Owner is
 reinstalling HOST-A from scratch (same machine, same address, fresh Ubuntu) because a co-hosted product filled the
 shared root disk repeatedly and took neXus down (pods cannot start without space for `/var/log/pods`). Everything on
 the host is erased, including neXus's 500 GB loop volume (a file on that disk).
@@ -84,3 +84,29 @@ The host's SSH key changes with the reinstall: the agent's first connection remo
 - a restored backup opens (Download or Contents — artefact key restored);
 - a Cyber Controller Backup Now completes (receiver rebuilt);
 - `journalctl _COMM=sudo` shows the agent's privileged commands.
+
+## 6. What the rebuild actually needed (2026-09-25, Ubuntu 26.04.1)
+
+- **Outbound only through the corporate proxy.** Direct HTTPS to GitHub is intercepted by the corporate firewall and
+  re-signed by `T.GARANTI BANKASI` (issued by `TURKIYE GARANTI BANKASI INTERNAL ENTERPRISE CA1`); through
+  `tekprxv2:80` the public chains arrive. The k3s installer therefore runs with the proxy variables, which the
+  installer also writes to `/etc/systemd/system/k3s.service.env` (NO_PROXY: localhost, the node address, the RFC 1918
+  ranges, `.svc`, `.cluster.local`, the corporate domain).
+- **`sudo-rs` drops `-E`.** Pass variables explicitly: `sudo env HTTP_PROXY=… HTTPS_PROXY=… NO_PROXY=… sh install.sh`.
+- **The image build needs two host-local, git-ignored inputs** (the reason the 2026-09-15 build failed the same way):
+  `ui2/.ca/*.pem` — the corporate inspection CA, taken from the chain the firewall presents
+  (`openssl s_client -connect github.com:443 -showcerts`, second certificate; SHA-256
+  `10:BF:DE:4E:…:80:DA:29:42`, valid to 2030) — and the Gradle distribution at
+  `ui2/.gradle-home/wrapper/dists/gradle-8.14.3-bin/cv11ve7ro1n3o1j4so8xd9n66/gradle-8.14.3-bin.zip`, downloaded on
+  the host through the proxy (the hash directory is base36(MD5(distributionUrl)); recompute on a version change).
+- **`corp-ca` ConfigMap in `ui2-build`** (mounted at `/kaniko/ssl/certs`, it replaces kaniko's own bundle): created
+  from the host's `/etc/ssl/certs/ca-certificates.crt`. It lived only in the `ui2-build` namespace, which the export did
+  not cover — the export script should include it next time.
+- **No GitHub credential on the host.** The code is pushed to a bare repository on the host (`~/nexus.git`, HEAD →
+  `main`); `~/nexus` is its clone; `scripts/hosta_deploy.sh` pushes before building.
+- **The artefact store** was restored by extracting the archive straight into the local-path volume directory with
+  `sudo tar --same-owner --numeric-owner` (98 GB through `kubectl exec` stdin times out); files 185:0 0600.
+- **`ui2-configuration`** is not updated by `run_build.sh`; set its image to the same digest after a build.
+- **Open after the rebuild:** the `nexus-cc` password (only the Product Owner sets it; it must equal the credential
+  store entry "SFTP Receiver"), and the Product Owner's real-environment checks (aiview pseudonyms unchanged, a
+  collect decrypts its credential, an old backup opens, a Cyber Controller backup completes).
