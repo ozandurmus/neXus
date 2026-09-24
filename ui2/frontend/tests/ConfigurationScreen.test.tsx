@@ -47,13 +47,12 @@ describe("ConfigurationScreen device list", () => {
     render(withTheme(<ConfigurationScreen />));
 
     await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
-    // Review §3: labelled filter rows, counts written "Label · n".
-    const state = screen.getByRole("group", { name: "State" });
-    expect(within(state).getByText("State:")).toBeInTheDocument();
-    expect(within(state).getByRole("button", { name: "Changed · 1" })).toBeInTheDocument();
-    expect(within(state).getByRole("button", { name: "First run · 0" })).toBeInTheDocument();
-    expect(within(state).getByRole("button", { name: "Not collected · 0" })).toBeInTheDocument();
-    expect(within(screen.getByRole("group", { name: "Vendor" })).getByRole("button", { name: "All · 1" })).toBeInTheDocument();
+    // Labelled filter dropdowns (PO, 2026-09-24), options written "Label · n".
+    const state = screen.getByRole("combobox", { name: "State" });
+    expect(within(state).getByRole("option", { name: "Changed · 1" })).toBeInTheDocument();
+    expect(within(state).getByRole("option", { name: "First run · 0" })).toBeInTheDocument();
+    expect(within(state).getByRole("option", { name: "Not collected · 0" })).toBeInTheDocument();
+    expect(within(screen.getByRole("combobox", { name: "Vendor" })).getByRole("option", { name: "All · 1" })).toBeInTheDocument();
     expect(screen.getByText("1 device collected")).toBeInTheDocument();
   });
 

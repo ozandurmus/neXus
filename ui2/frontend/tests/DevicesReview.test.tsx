@@ -64,9 +64,9 @@ describe("Devices screen after the Fable review", () => {
     stubFleet();
     render(withTheme(<InventoryScreen />));
     await waitFor(() => expect(screen.getByText("FW-BRAVO-02")).toBeInTheDocument());
-    const scope = screen.getByRole("group", { name: "Scope" });
-    expect(within(scope).getByRole("button", { name: "Clusters · 2 enrolled · 1 active" })).toBeInTheDocument();
-    expect(within(screen.getByRole("group", { name: "Vendor" })).getByRole("button", { name: "Palo Alto · 1" })).toBeInTheDocument();
+    const scope = screen.getByRole("combobox", { name: "Scope" });
+    expect(within(scope).getByRole("option", { name: "Clusters · 2 enrolled · 1 active" })).toBeInTheDocument();
+    expect(within(screen.getByRole("combobox", { name: "Vendor" })).getByRole("option", { name: "Palo Alto · 1" })).toBeInTheDocument();
     // The Live chip is gone from Live rows; a row that is not Live still carries its state word.
     expect(screen.queryByText("Live")).toBeNull();
     expect(screen.getByText("Not enrolled")).toBeInTheDocument();

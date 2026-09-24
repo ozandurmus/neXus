@@ -11,7 +11,7 @@ import { Icon } from "../shell/Icon";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
-import { FilterRow, contentVersionText, downloadText, toCsv } from "./DeviceShared";
+import { FilterBar, FilterRow, contentVersionText, downloadText, toCsv } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { requestBulkInventoryCollect, listDevices, getManagementTree, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode } from "../auth/adminApi";
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
@@ -1054,6 +1054,7 @@ export function InventoryScreen() {
                 </Box>
               )}
             </Box>
+            <FilterBar>
             <FilterRow
               dimension="Vendor"
               value={vendorFilter}
@@ -1086,6 +1087,7 @@ export function InventoryScreen() {
                 { value: "stale", label: "Stale", count: staleCount },
               ]}
             />
+            </FilterBar>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: 1.5, rowGap: 0.75 }}>
               <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
                 title="A device row shows a state chip only when the device is not Live">

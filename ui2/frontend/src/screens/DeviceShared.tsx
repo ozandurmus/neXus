@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode, type ChangeEvent } from "react";
 import Box from "@mui/material/Box";
 import Link from "@mui/material/Link";
 import Table from "@mui/material/Table";
@@ -33,32 +33,37 @@ export interface FilterOption<T extends string> {
   readonly count?: number | string;
 }
 
-/** One filter dimension: "Vendor:" followed by its chips; the selected chip is the accent-soft container. */
+/** The filter dropdowns side by side on one row (PO, 2026-09-24: chips took half the list column). */
+export function FilterBar({ children }: { readonly children: ReactNode }) {
+  return <Box sx={{ display: "flex", gap: 0.75, "& > *": { flex: "1 1 0", minWidth: 0 } }}>{children}</Box>;
+}
+
+/**
+ * One filter dimension as a small labelled dropdown; each option reads "Label · n". A dimension narrowed away from
+ * its first option ("All") is outlined in the accent colour, so an active filter is visible at a glance.
+ */
 export function FilterRow<T extends string>({ dimension, options, value, onChange }: {
   readonly dimension: string;
   readonly options: readonly FilterOption<T>[];
   readonly value: T;
   readonly onChange: (value: T) => void;
 }) {
+  const active = options.length > 0 && value !== options[0].value;
   return (
-    <Box role="group" aria-label={dimension} sx={{ display: "flex", alignItems: "flex-start", gap: 0.75 }}>
-      <Typography component="span" sx={{ fontSize: 12, fontWeight: 600, color: m3.onSurfaceVar, width: 56, flexShrink: 0, lineHeight: "26px" }}>
-        {dimension}:
+    <Box component="label" sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 0 }}>
+      <Typography component="span" sx={{ fontSize: 11, fontWeight: 600, color: m3.onSurfaceVar, pl: 0.25 }}>
+        {dimension}
       </Typography>
-      <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", minWidth: 0 }}>
-      {options.map((o) => {
-        const selected = o.value === value;
-        return (
-          <Box key={o.value} component="button" type="button" aria-pressed={selected} onClick={() => onChange(o.value)}
-            sx={{ height: 26, px: 1.25, borderRadius: "6px", cursor: "pointer", font: "inherit", fontSize: 12,
-                  fontWeight: selected ? 600 : 500, whiteSpace: "nowrap",
-                  border: `1px solid ${selected ? m3.primaryContainer : m3.outlineVar}`,
-                  bgcolor: selected ? m3.primaryContainer : m3.scLowest,
-                  color: selected ? m3.onPrimaryContainer : m3.onSurface }}>
-            {o.count === undefined ? o.label : `${o.label} · ${o.count}`}
-          </Box>
-        );
-      })}
+      <Box component="select" value={value} aria-label={dimension}
+        onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange(e.target.value as T)}
+        sx={{ width: "100%", minWidth: 0, height: 28, fontSize: 12, px: 0.75, borderRadius: "6px", cursor: "pointer",
+              textOverflow: "ellipsis", fontWeight: active ? 600 : 500,
+              color: active ? m3.onPrimaryContainer : m3.onSurface,
+              bgcolor: active ? m3.primaryContainer : m3.scLowest,
+              border: `1px solid ${active ? m3.primary : m3.outlineVar}` }}>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.count === undefined ? o.label : `${o.label} · ${o.count}`}</option>
+        ))}
       </Box>
     </Box>
   );

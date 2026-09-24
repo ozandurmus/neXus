@@ -111,23 +111,22 @@ describe("InventoryScreen device list", () => {
     expect(screen.getByText("Collection attempt failed · Recorded failure")).toBeInTheDocument();
     expect(screen.getByText("Not yet collected")).toBeInTheDocument();
 
-    // Review §4: each chip row is labelled with its dimension and counts read "Label · n".
-    const stateRow = screen.getByRole("group", { name: "State" });
-    expect(within(stateRow).getByText("State:")).toBeInTheDocument();
-    expect(within(screen.getByRole("group", { name: "Vendor" })).getByRole("button", { name: "Check Point · 4" })).toBeInTheDocument();
+    // Each filter is a labelled dropdown (PO, 2026-09-24) whose options read "Label · n".
+    const stateRow = screen.getByRole("combobox", { name: "State" }) as HTMLSelectElement;
+    expect(within(screen.getByRole("combobox", { name: "Vendor" })).getByRole("option", { name: "Check Point · 4" })).toBeInTheDocument();
 
-    fireEvent.click(within(stateRow).getByRole("button", { name: "Latest job failed · 2" }));
-    expect(within(stateRow).getByRole("button", { name: "Latest job failed · 2" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.change(stateRow, { target: { value: "failed" } });
+    expect(stateRow.value).toBe("failed");
     expect(screen.getByText("failed-device")).toBeInTheDocument();
     expect(screen.getByText("unknown-failure-device")).toBeInTheDocument();
     expect(screen.queryByText("done-device")).toBeNull();
     expect(screen.queryByText("new-device")).toBeNull();
 
-    fireEvent.click(within(stateRow).getByRole("button", { name: "All · 4" }));
+    fireEvent.change(stateRow, { target: { value: "all" } });
     expect(screen.getByText("done-device")).toBeInTheDocument();
     expect(screen.getByText("new-device")).toBeInTheDocument();
 
-    fireEvent.click(within(stateRow).getByRole("button", { name: "Draft · 3" }));
+    fireEvent.change(stateRow, { target: { value: "draft" } });
     expect(screen.getByText("failed-device")).toBeInTheDocument();
     expect(screen.getByText("unknown-failure-device")).toBeInTheDocument();
     expect(screen.getByText("new-device")).toBeInTheDocument();

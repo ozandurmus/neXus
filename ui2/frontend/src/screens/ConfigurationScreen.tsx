@@ -13,7 +13,7 @@ import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { listConfigurations, listDevices, requestBulkConfigurationCollect, type ApiError, type ConfigurationDeviceListEntry, type DeviceSummary } from "../auth/adminApi";
 import { DeviceList, ListViewSelect, isDeviceLive, useListView } from "./InventoryScreen";
-import { FilterRow } from "./DeviceShared";
+import { FilterBar, FilterRow } from "./DeviceShared";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
 
 function describeApiError(err: unknown): string {
@@ -196,6 +196,7 @@ export function ConfigurationScreen() {
                 sx={{ flex: 1, fontSize: 14, color: "inherit" }}
               />
             </Box>
+            <FilterBar>
             <FilterRow
               dimension="Vendor"
               value={vendorFilter}
@@ -217,6 +218,7 @@ export function ConfigurationScreen() {
                 { value: "uncollected", label: "Not collected", count: uncollectedCount },
               ]}
             />
+            </FilterBar>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: 1.5, rowGap: 0.75 }}>
               <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
                 title="A device row shows a state chip only when the device is not Live">
