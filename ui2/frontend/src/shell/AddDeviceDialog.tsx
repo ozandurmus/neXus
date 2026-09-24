@@ -553,7 +553,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               value={role}
               onChange={(e) => setRole(e.target.value as DeviceRole)}
             >
-              <MenuItem value="gateway">Firewall</MenuItem>
+              <MenuItem value="gateway">Security device</MenuItem>
               <MenuItem value="management_server">Management server</MenuItem>
             </TextField>}
             {role === "management_server" && (
