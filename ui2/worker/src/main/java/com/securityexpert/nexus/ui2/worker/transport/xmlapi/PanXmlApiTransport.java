@@ -210,7 +210,7 @@ public final class PanXmlApiTransport implements DeviceTransport {
         }
     }
 
-    static X509ExtendedTrustManager paloAltoDeviceTrustManager() {
+    public static X509ExtendedTrustManager paloAltoDeviceTrustManager() {
         return new X509ExtendedTrustManager() {
             @Override
             public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {

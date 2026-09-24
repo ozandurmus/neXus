@@ -52,6 +52,8 @@ export { contentVersionText } from "./DeviceShared";
 function vendorLabel(vendorHint: string | null | undefined): string {
   if (vendorHint === "check_point") return "Check Point";
   if (vendorHint === "palo_alto") return "Palo Alto Networks";
+  if (vendorHint === "infoblox") return "Infoblox";
+  if (vendorHint === "radware") return "Radware";
   return vendorHint ?? "Unknown vendor";
 }
 

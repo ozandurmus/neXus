@@ -429,7 +429,12 @@ export function deleteCredential(credentialId: string): Promise<{ credential_id:
  * knows about. `job.state` is a C2 job state machine -- callers must treat
  * an unrecognized value as `OUTCOME_UNKNOWN`-shaped rather than throwing.
  */
-export type Vendor = "check_point" | "palo_alto";
+export type Vendor = "check_point" | "palo_alto" | "infoblox" | "radware";
+
+/** V64: bind a credential-store reference as a device's second secret (Radware's export passphrase); never a value. */
+export function setDeviceSecret(deviceId: string, purpose: "export_passphrase", credentialReferenceId: string): Promise<{ ok: boolean }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/secrets/${purpose}`, "POST", { credential_reference_id: credentialReferenceId });
+}
 
 export type JobState =
   | "REQUESTED"
@@ -510,7 +515,7 @@ export interface DeviceSummary {
   readonly inventory_collected_at?: string | null;
 }
 
-export type DeviceRole = "gateway" | "management_server";
+export type DeviceRole = "gateway" | "management_server" | "appliance";
 
 export function addDeviceSingle(
   address: string,

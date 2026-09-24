@@ -234,3 +234,22 @@ the existing `cp_gateway_backup`, now admitted for a Check Point management serv
   at 02:00 Europe/Istanbul (`MdsExportScheduler`), and only for a server whose first MDS export an operator started
   and saw complete (run time measured under watch).
 - **Measurement still open:** mds_backup run time and bundle size on this estate (logged as `[MDS_EXPORT]`).
+
+## Amendment 2026-09-24 — §0.2, §1, §4 implemented (V64)
+
+- **HTTPS transport:** `HttpsDeviceClient` (worker) — basic auth pre-emptive, form and JSON POST, streamed download
+  with a size bound, redirects only on the same host and port, TLS per the PAN decision record. No cookie state is
+  needed by Infoblox or Radware and none is kept.
+- **Onboarding:** vendors `infoblox` and `radware`, role `appliance`, transport `https`, confirm capability
+  `device_confirm_https` (the SSH/XML-API confirm's lifecycle without the Check Point / Palo Alto identity-mismatch and
+  HA peer-follow steps). Infoblox confirm reads the WAPI version (`/wapidoc/`) and the grid name
+  (`/wapi/v<ver>/grid`); Radware confirm proves reachability and the credential only (identity MEASURE FIRST).
+- **Backup:** one capability `https_vendor_backup` routed by vendor through the existing backup job (envelope
+  encryption, manifest, retention, deviation, download unchanged). Infoblox as measured (version read, not assumed;
+  `downloadcomplete` always sent, with the version — Backbox sends it without one and fails); a download URL on
+  another host or port is refused. Radware sends the measured form with `IncludePKeys=on`; the passphrase is the
+  password of the credential bound as the device's `export_passphrase` second secret (`device_secret_reference`,
+  audited); without it the run is refused rather than taken without keys.
+- **Verify:** non-empty (Infoblox) / ≥ 1 KB (Radware); the gzip magic is logged, not enforced, until a live run
+  records the real format (the grid backup on file was 996 KB, so the earlier "> 1 MB" check is withdrawn).
+- **Open:** first live run of each (real_env_validated); Radware identity read; the other six vendors follow §5–§8.

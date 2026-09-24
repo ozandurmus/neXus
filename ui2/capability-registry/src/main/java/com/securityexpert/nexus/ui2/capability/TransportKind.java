@@ -12,7 +12,9 @@ package com.securityexpert.nexus.ui2.capability;
 public enum TransportKind {
     SSH_EXEC,
     SSH_INTERACTIVE,
-    PAN_XML_API;
+    PAN_XML_API,
+    /** Vendors backed up over HTTPS (V64): Infoblox WAPI, Radware DefensePro. */
+    HTTPS;
 
     public static TransportKind fromSpecValue(String value) {
         if (value == null) {
@@ -22,6 +24,7 @@ public enum TransportKind {
             case "ssh_exec" -> SSH_EXEC;
             case "ssh_interactive" -> SSH_INTERACTIVE;
             case "xml_api", "pan_xml_api" -> PAN_XML_API;
+            case "https" -> HTTPS;
             default -> throw new IllegalArgumentException("unrecognized transport.kind: " + value);
         };
     }

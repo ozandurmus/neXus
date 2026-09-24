@@ -122,6 +122,12 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
+    public com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository deviceSecretReferenceRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(transactionBoundary);
+    }
+
+    @Bean
     public com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository devicePolicyInstallRepository(
             TransactionBoundary transactionBoundary) {
         return new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePolicyInstallRepository(transactionBoundary);
@@ -161,6 +167,10 @@ public class DeviceCompositionConfiguration {
                         TransportKind.SSH_EXEC),
                 confirmCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO, "palo_alto", "pan_firewall",
                         TransportKind.PAN_XML_API),
+                // V64: HTTPS vendors -- confirm and backup run by the worker's HttpsVendorExecutor over the closed
+                // request set in HttpsVendorPlan (gate rows V64); placeholder steps, as for discovery below.
+                confirmCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, "https_vendor", "https_appliance", TransportKind.HTTPS),
+                confirmCapability(BackupCapabilityIds.HTTPS_VENDOR_BACKUP, "https_vendor", "https_appliance", TransportKind.HTTPS),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),

@@ -53,7 +53,10 @@ public final class DeviceAddSingleService {
 
     private static final Map<String, VendorMapping> VENDOR_MAPPINGS = Map.of(
             "check_point", new VendorMapping("ssh_exec", ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT),
-            "palo_alto", new VendorMapping("pan_xml_api", ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO));
+            "palo_alto", new VendorMapping("pan_xml_api", ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO),
+            // V64: vendors reached over HTTPS (VENDOR_BACKUP_CONTRACTS_2026_09_22.md §1, §4)
+            "infoblox", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS),
+            "radware", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS));
 
     /** Unwinds {@link #runInTransaction} to roll back the whole outer transaction on a validation refusal. */
     private static final class ValidationFailedSignal extends RuntimeException {

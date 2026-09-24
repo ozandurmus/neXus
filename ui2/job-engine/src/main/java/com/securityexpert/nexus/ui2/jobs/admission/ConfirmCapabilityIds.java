@@ -17,7 +17,10 @@ public final class ConfirmCapabilityIds {
     public static final String DEVICE_CONFIRM_CHECK_POINT = "device_confirm_check_point";
     public static final String DEVICE_CONFIRM_PALO_ALTO = "device_confirm_palo_alto";
 
-    public static final Set<String> ALL = Set.of(DEVICE_CONFIRM_CHECK_POINT, DEVICE_CONFIRM_PALO_ALTO);
+    /** Vendors reached over HTTPS (V64): Infoblox, Radware -- routed by the device's vendor. */
+    public static final String DEVICE_CONFIRM_HTTPS = "device_confirm_https";
+
+    public static final Set<String> ALL = Set.of(DEVICE_CONFIRM_CHECK_POINT, DEVICE_CONFIRM_PALO_ALTO, DEVICE_CONFIRM_HTTPS);
 
     private ConfirmCapabilityIds() {
     }

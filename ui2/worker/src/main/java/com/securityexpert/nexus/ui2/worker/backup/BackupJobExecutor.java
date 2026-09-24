@@ -68,6 +68,17 @@ public final class BackupJobExecutor {
     private final BackupCapabilityExecutor backupExecutor;
     private final com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor snapshotExecutor;
     private com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor mdsExportExecutor;
+    private com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor httpsVendorExecutor;
+    private com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository deviceSecrets =
+            com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository.NONE;
+
+    /** V64: vendors backed up over HTTPS, and the store of their second secrets (Radware's export passphrase). */
+    public BackupJobExecutor withHttpsVendorExecutor(com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor executor,
+            com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository secrets) {
+        this.httpsVendorExecutor = executor;
+        this.deviceSecrets = secrets;
+        return this;
+    }
 
     /** V61: the Check Point MDS export; unset, a cp_mds_export job fails closed (never falls back to the Gaia backup). */
     public BackupJobExecutor withMdsExportExecutor(com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor executor) {
@@ -165,7 +176,16 @@ public final class BackupJobExecutor {
         String vendor = deviceRecord.map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::vendorHint).orElse(VENDOR);
 
         BackupResult result;
-        if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_MDS_EXPORT.equals(capabilityId)) {
+        if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(capabilityId)) {
+            result = httpsVendorExecutor == null
+                    ? new BackupResult.ConnectFailed("https vendor executor not configured in this worker")
+                    : httpsVendorExecutor.backup(vendor,
+                            new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(
+                                    request.connectionTarget().host(), request.connectionTarget().port()),
+                            request.credentialRef().orElse(""),
+                            deviceSecrets.find(targetDeviceId, com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository.EXPORT_PASSPHRASE),
+                            targetDeviceId, jobId);
+        } else if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_MDS_EXPORT.equals(capabilityId)) {
             result = mdsExportExecutor == null
                     ? new BackupResult.ConnectFailed("mds export executor not configured in this worker")
                     : mdsExportExecutor.collect(request, targetDeviceId, jobId);

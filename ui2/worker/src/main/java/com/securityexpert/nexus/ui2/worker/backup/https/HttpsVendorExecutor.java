@@ -1,0 +1,274 @@
+package com.securityexpert.nexus.ui2.worker.backup.https;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Function;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
+import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
+import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient;
+import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials;
+import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.DownloadResult;
+import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target;
+import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.TextResponse;
+
+/**
+ * Confirm and backup for vendors reached over HTTPS: Infoblox Grid Manager (WAPI) and Radware DefensePro
+ * (VENDOR_BACKUP_CONTRACTS_2026_09_22.md §1 and §4, measurements addendum 2026-09-24). Nothing the device answered is
+ * persisted outside the artefact; credentials and the Radware export passphrase come from the credential store.
+ */
+public final class HttpsVendorExecutor {
+
+    private static final System.Logger LOG = System.getLogger(HttpsVendorExecutor.class.getName());
+    private static final Duration SHORT = Duration.ofSeconds(30);
+    private static final Duration LONG = Duration.ofSeconds(600);
+    private static final int TEXT_MAX = 1024 * 1024;
+    private static final long MAX_ARCHIVE = 20L * 1024 * 1024 * 1024;
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    /** The identity a confirm read returns; every field optional. */
+    public record Identity(Optional<String> name, Optional<String> model, Optional<String> version) {
+    }
+
+    public sealed interface ConfirmOutcome {
+        record Confirmed(Identity identity) implements ConfirmOutcome {
+        }
+
+        record AuthenticationFailed(String reason) implements ConfirmOutcome {
+        }
+
+        record Failed(String reason) implements ConfirmOutcome {
+        }
+    }
+
+    private final com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceCalls client;
+    private final ArtefactStore artefactStore;
+    private final Function<String, Credentials> credentials;
+
+    public HttpsVendorExecutor(com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceCalls client, ArtefactStore artefactStore, Function<String, Credentials> credentials) {
+        this.client = Objects.requireNonNull(client, "client");
+        this.artefactStore = Objects.requireNonNull(artefactStore, "artefactStore");
+        this.credentials = Objects.requireNonNull(credentials, "credentials");
+    }
+
+    // ------------------------------------------------------------------------------------------------ confirm
+
+    public ConfirmOutcome confirm(String vendor, Target target, String credentialRef) {
+        Credentials creds;
+        try {
+            creds = credentials.apply(credentialRef);
+        } catch (RuntimeException e) {
+            return new ConfirmOutcome.Failed("credential reference not resolvable");
+        }
+        try {
+            return switch (vendor) {
+                case "infoblox" -> confirmInfoblox(target, creds);
+                case "radware" -> confirmRadware(target, creds);
+                default -> new ConfirmOutcome.Failed("no HTTPS confirm for vendor " + vendor);
+            };
+        } catch (IOException e) {
+            return new ConfirmOutcome.Failed("https: " + e.getClass().getSimpleName());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new ConfirmOutcome.Failed("interrupted");
+        }
+    }
+
+    private ConfirmOutcome confirmInfoblox(Target target, Credentials creds) throws IOException, InterruptedException {
+        TextResponse doc = client.get(target, HttpsVendorPlan.INFOBLOX_WAPIDOC, creds, SHORT, TEXT_MAX);
+        Optional<String> version = HttpsVendorPlan.parseWapiVersion(doc.body());
+        if (version.isEmpty()) {
+            return new ConfirmOutcome.Failed("the WAPI version could not be read from /wapidoc/ (HTTP " + doc.status() + ")");
+        }
+        TextResponse grid = client.get(target, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_GRID, version.get()), creds, SHORT, TEXT_MAX);
+        if (grid.status() == 401 || grid.status() == 403) {
+            return new ConfirmOutcome.AuthenticationFailed("HTTP " + grid.status());
+        }
+        if (!grid.ok()) {
+            return new ConfirmOutcome.Failed("grid read answered HTTP " + grid.status());
+        }
+        Optional<String> name = Optional.empty();
+        JsonNode node = JSON.readTree(grid.body());
+        if (node.isArray() && node.size() > 0 && node.get(0).hasNonNull("name")) {
+            name = Optional.of(node.get(0).get("name").asText());
+        }
+        return new ConfirmOutcome.Confirmed(new Identity(name, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())));
+    }
+
+    private ConfirmOutcome confirmRadware(Target target, Credentials creds) throws IOException, InterruptedException {
+        // MEASURE FIRST (contract §1): no read is measured for model/version; the confirm proves reachability and the
+        // credential only. Identity stays UNKNOWN.
+        TextResponse root = client.get(target, HttpsVendorPlan.RADWARE_ROOT, creds, SHORT, 64 * 1024);
+        if (root.status() == 401 || root.status() == 403) {
+            return new ConfirmOutcome.AuthenticationFailed("HTTP " + root.status());
+        }
+        if (root.status() >= 500 || root.status() == 0) {
+            return new ConfirmOutcome.Failed("the device answered HTTP " + root.status());
+        }
+        return new ConfirmOutcome.Confirmed(new Identity(Optional.empty(), Optional.of("Radware DefensePro"), Optional.empty()));
+    }
+
+    // ------------------------------------------------------------------------------------------------ backup
+
+    /** @param passphraseRef Radware only: the credential whose password encrypts the private keys in the export */
+    public BackupResult backup(String vendor, Target target, String credentialRef, Optional<String> passphraseRef,
+            String deviceId, String jobId) {
+        Credentials creds;
+        try {
+            creds = credentials.apply(credentialRef);
+        } catch (RuntimeException e) {
+            return new BackupResult.CredentialUnresolvable("credential reference not resolvable -- refused before any device contact");
+        }
+        try {
+            return switch (vendor) {
+                case "infoblox" -> backupInfoblox(target, creds, deviceId, jobId);
+                case "radware" -> backupRadware(target, creds, passphraseRef, deviceId, jobId);
+                default -> new BackupResult.ConnectFailed("no HTTPS backup for vendor " + vendor);
+            };
+        } catch (IOException e) {
+            return new BackupResult.ConnectFailed("https: " + e.getClass().getSimpleName());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new BackupResult.ConnectFailed("interrupted");
+        }
+    }
+
+    private BackupResult backupInfoblox(Target target, Credentials creds, String deviceId, String jobId)
+            throws IOException, InterruptedException {
+        TextResponse doc = client.get(target, HttpsVendorPlan.INFOBLOX_WAPIDOC, creds, SHORT, TEXT_MAX);
+        Optional<String> version = HttpsVendorPlan.parseWapiVersion(doc.body());
+        if (version.isEmpty()) {
+            return new BackupResult.ConnectFailed("the WAPI version could not be read from /wapidoc/ (HTTP " + doc.status() + ")");
+        }
+        String ver = version.get();
+        TextResponse start = client.postJson(target, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_GETGRIDDATA, ver),
+                HttpsVendorPlan.INFOBLOX_GETGRIDDATA_BODY, creds, LONG, TEXT_MAX);
+        if (start.status() == 401 || start.status() == 403) {
+            return new BackupResult.ConnectFailed("authentication_failed: HTTP " + start.status());
+        }
+        if (!start.ok()) {
+            return new BackupResult.SubmitRefused("getgriddata answered HTTP " + start.status());
+        }
+        JsonNode node = JSON.readTree(start.body());
+        String token = node.path("token").asText("");
+        String url = node.path("url").asText("");
+        if (token.isEmpty() || url.isEmpty()) {
+            return new BackupResult.SubmitOutputUnparseable("getgriddata named no token or url");
+        }
+        try {
+            Optional<String> path = HttpsDeviceClient.sameHostPath(target, url);
+            if (path.isEmpty()) {
+                return new BackupResult.SubmitRefused("the download url is not on the same appliance; refused");
+            }
+            return fetch(target, "GET", path.get(), null, creds, deviceId, jobId, "infoblox", "database.bak", 1);
+        } finally {
+            // Always -- the appliance holds the file until told (Backbox sends this without a version and fails).
+            try {
+                TextResponse done = client.postJson(target, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_DOWNLOADCOMPLETE, ver),
+                        JSON.writeValueAsString(Map.of("token", token)), creds, SHORT, 64 * 1024);
+                LOG.log(System.Logger.Level.INFO, "[HTTPS_BACKUP] infoblox downloadcomplete HTTP {0}", done.status());
+            } catch (IOException e) {
+                LOG.log(System.Logger.Level.WARNING, "[HTTPS_BACKUP] infoblox downloadcomplete failed: {0}", e.getClass().getSimpleName());
+            }
+        }
+    }
+
+    private BackupResult backupRadware(Target target, Credentials creds, Optional<String> passphraseRef, String deviceId, String jobId) {
+        if (passphraseRef.isEmpty()) {
+            return new BackupResult.CredentialUnresolvable("no export passphrase credential is set for this Radware device: the "
+                    + "export carries the private keys encrypted with it (IncludePKeys=on) -- refused rather than a backup without keys");
+        }
+        String passphrase;
+        try {
+            passphrase = new String(credentials.apply(passphraseRef.get()).password());
+        } catch (RuntimeException e) {
+            return new BackupResult.CredentialUnresolvable("export passphrase credential not resolvable");
+        }
+        Map<String, String> form = new LinkedHashMap<>();
+        form.put("DownloadFormat", "cli");
+        form.put("IncludePKeys", "on");
+        form.put("passphrase", passphrase);
+        return fetch(target, "POST", HttpsVendorPlan.RADWARE_RECEIVE_CONFIGURATION, form, creds, deviceId, jobId, "radware",
+                "DefensePro_backup_configuration.txt", 1024);
+    }
+
+    private BackupResult fetch(Target target, String method, String path, Map<String, String> form, Credentials creds,
+            String deviceId, String jobId, String vendor, String memberName, long minBytes) {
+        ArtefactStore.ArtefactHandle handle;
+        try {
+            handle = artefactStore.open(deviceId, jobId, vendor, false);
+        } catch (IOException e) {
+            return new BackupResult.ArtefactStoreFailed("artefact store open failed: " + e.getMessage());
+        }
+        HeadCapture head = new HeadCapture(handle.sink());
+        DownloadResult r = client.download(target, method, path, form, creds, head, MAX_ARCHIVE, LONG);
+        if (!(r instanceof DownloadResult.Downloaded d)) {
+            closeQuietly(handle);
+            return r instanceof DownloadResult.Refused refused && (refused.status() == 401 || refused.status() == 403)
+                    ? new BackupResult.ConnectFailed("authentication_failed: HTTP " + refused.status())
+                    : new BackupResult.SubmitRefused("download: " + (r instanceof DownloadResult.Refused x ? x.reason()
+                            : ((DownloadResult.Failed) r).reason()));
+        }
+        if (d.bytes() < minBytes) {
+            closeQuietly(handle);
+            return new BackupResult.SubmitOutputUnparseable("the export was " + d.bytes() + " bytes; not a backup");
+        }
+        ArtefactStore.ArtefactMetadata metadata;
+        try {
+            metadata = handle.finish();
+        } catch (IOException e) {
+            closeQuietly(handle);
+            return new BackupResult.ArtefactStoreFailed("artefact store finish failed: " + e.getMessage());
+        }
+        LOG.log(System.Logger.Level.INFO, "[HTTPS_BACKUP] {0} {1} bytes, content-type={2}, gzip_magic={3}", vendor, d.bytes(),
+                d.contentType().orElse("-"), head.gzip());
+        return new BackupResult.Completed(metadata, memberName, Optional.empty(), Optional.empty());
+    }
+
+    /** Passes bytes through, remembering the first two for a format check (gzip magic) -- nothing else is kept. */
+    private static final class HeadCapture extends OutputStream {
+        private final OutputStream out;
+        private final ByteArrayOutputStream head = new ByteArrayOutputStream(2);
+
+        HeadCapture(OutputStream out) {
+            this.out = out;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            if (head.size() < 2) {
+                head.write(b);
+            }
+            out.write(b);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            for (int i = 0; i < len && head.size() < 2; i++) {
+                head.write(b[off + i]);
+            }
+            out.write(b, off, len);
+        }
+
+        boolean gzip() {
+            byte[] h = head.toByteArray();
+            return h.length == 2 && (h[0] & 0xff) == 0x1f && (h[1] & 0xff) == 0x8b;
+        }
+    }
+
+    private static void closeQuietly(ArtefactStore.ArtefactHandle h) {
+        try {
+            h.close();
+        } catch (IOException ignored) {
+            // best effort
+        }
+    }
+}

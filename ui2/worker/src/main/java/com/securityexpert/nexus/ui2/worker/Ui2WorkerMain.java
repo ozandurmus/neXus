@@ -237,6 +237,18 @@ public final class Ui2WorkerMain {
                 deviceEnrollmentReadPort, deviceRepository, backupCapabilityExecutor, snapshotExecutor,
                 paloAltoBackupExecutor, deviationEngine, null, backupArtefactManifestRepository,
                 backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString(), contentListing);
+        // V64: vendors backed up over HTTPS (Infoblox, Radware) -- credentials resolved like the PAN API password.
+        com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor httpsVendorExecutor =
+                new com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor(
+                        new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient(), artefactStore, ref -> {
+                            var m = panCredentialResolver.resolve(ref);
+                            return new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials(m.username(), m.password());
+                        });
+        backupJobExecutor.withHttpsVendorExecutor(httpsVendorExecutor,
+                new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(transactionBoundary));
+        com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor httpsConfirmJobExecutor =
+                new com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor(leaseRepository, attemptRepository,
+                        deviceEnrollmentReadPort, deviceRepository, httpsVendorExecutor);
         // V61: MDS export -- mds_backup of the whole server; its run time on this estate is still to be measured, so
         // the deadline is generous and configurable (UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS).
         backupJobExecutor.withMdsExportExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor(compositeTransport,
@@ -260,7 +272,8 @@ public final class Ui2WorkerMain {
             WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
                     confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
                     backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofMinutes(10), checkPointTrustRuleRef,
-                    paloAltoTrustRuleRef, backupCredentialRef);
+                    paloAltoTrustRuleRef, backupCredentialRef)
+                    .withHttpsConfirm(httpsConfirmJobExecutor);
             claimLoops.add(claimLoop);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));
         }

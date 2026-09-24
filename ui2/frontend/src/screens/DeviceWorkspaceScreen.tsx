@@ -19,7 +19,7 @@ function describeApiError(err: unknown): string {
 }
 
 function vendorLabel(vendorHint: string): string {
-  return vendorHint === "check_point" ? "Check Point" : vendorHint === "palo_alto" ? "Palo Alto" : vendorHint;
+  return ({ check_point: "Check Point", palo_alto: "Palo Alto", infoblox: "Infoblox", radware: "Radware" } as Record<string, string>)[vendorHint] ?? vendorHint;
 }
 
 function enrollmentStateCopy(state: string): string {

@@ -1204,3 +1204,115 @@ gates:
     secret_output_risk: 'none'
     safe_telemetry_fields: []
     source_document_pointer: 'CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md entry 2 (same literal, MDS scope)'
+  - gate_id: infoblox_wapidoc_version
+    vendor: 'infoblox'
+    platform_role_scope: 'infoblox_grid_manager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /wapidoc/'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'no VERSION line -> refused'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'measurements addendum 2026-09-24, trail 34411065 step 2-3'
+  - gate_id: infoblox_grid_identity
+    vendor: 'infoblox'
+    platform_role_scope: 'infoblox_grid_manager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /wapi/v<ver>/grid'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per confirm'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'no name -> identity UNKNOWN'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §4 confirm'
+  - gate_id: infoblox_fileop_getgriddata
+    vendor: 'infoblox'
+    platform_role_scope: 'infoblox_grid_manager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /wapi/v<ver>/fileop?_function=getgriddata'
+    action_class: 'recovery-write'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'never retried'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'no token/url -> refused'
+    secret_output_risk: 'token (never persisted)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'trail 34411065 step 5'
+  - gate_id: infoblox_download
+    vendor: 'infoblox'
+    platform_role_scope: 'infoblox_grid_manager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET <getgriddata url, same host>'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'off-host url -> refused'
+    secret_output_risk: 'secret-bearing grid backup (encrypted at rest)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'trail 34411065 step 9'
+  - gate_id: infoblox_fileop_downloadcomplete
+    vendor: 'infoblox'
+    platform_role_scope: 'infoblox_grid_manager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /wapi/v<ver>/fileop?_function=downloadcomplete'
+    action_class: 'recovery-write'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'always, after every getgriddata'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'failure logged'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'trail 34411065 step 12 -- sent with the read version (Backbox sends v/ and fails)'
+  - gate_id: radware_root_reachability
+    vendor: 'radware'
+    platform_role_scope: 'radware_defensepro'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per confirm'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'identity UNKNOWN (MEASURE FIRST)'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §1 confirm'
+  - gate_id: radware_backup_receive_configuration
+    vendor: 'radware'
+    platform_role_scope: 'radware_defensepro'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /dynamic/File/Configuration/ReceivefromDevice'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 120
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'under 1 KB -> not a backup'
+    secret_output_risk: 'private keys encrypted with the passphrase (encrypted at rest)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'trail 34095224: form DownloadFormat=cli&IncludePKeys=on&passphrase=<credential store>'

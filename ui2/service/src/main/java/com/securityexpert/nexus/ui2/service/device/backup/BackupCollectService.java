@@ -60,6 +60,9 @@ public final class BackupCollectService {
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
+    /** V64: vendors whose backup runs over HTTPS (one capability, routed by vendor in the worker). */
+    static final java.util.Set<String> HTTPS_VENDORS = java.util.Set.of("infoblox", "radware");
+
     public Outcome requestCollect(String deviceId, String actorFingerprint, String reason, Optional<String> clientNonce) {
         return requestCollect(deviceId, actorFingerprint, reason, clientNonce, "backup");
     }
@@ -79,7 +82,9 @@ public final class BackupCollectService {
         // A Check Point management server (MDS) takes the same Gaia backup a gateway does (PO, 2026-09-23: "normal
         // backup"); its MDS export (mds_backup) is a separate type. Other management servers stay unmeasured.
         boolean checkPointManagement = "management_server".equals(role) && "check_point".equals(device.get().vendorHint());
-        if (!"gateway".equals(role) && !"firewall".equals(role) && !checkPointManagement) {
+        // V64: appliances backed up over HTTPS (Infoblox, Radware) carry role "appliance"
+        boolean httpsVendor = HTTPS_VENDORS.contains(device.get().vendorHint());
+        if (!"gateway".equals(role) && !"firewall".equals(role) && !checkPointManagement && !httpsVendor) {
             if ("management_server".equals(role)) {
                 return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",
                         "device " + deviceId + " is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)");
@@ -88,7 +93,7 @@ public final class BackupCollectService {
                     "device " + deviceId + " carries role '" + role + "', which is not one the product knows how to collect from, so nothing was issued");
         }
         String vendorHint = device.get().vendorHint();
-        if (!"check_point".equals(vendorHint) && !"palo_alto".equals(vendorHint)) {
+        if (!"check_point".equals(vendorHint) && !"palo_alto".equals(vendorHint) && !httpsVendor) {
             return new Outcome.AdmissionRefused("VENDOR_UNSUPPORTED", "device " + deviceId + " vendor_hint="
                     + vendorHint + " has no registered backup capability (14H BK-9: Check Point gateway only)");
         }
@@ -106,7 +111,9 @@ public final class BackupCollectService {
         }
 
         String capabilityId;
-        if ("mds_export".equalsIgnoreCase(backupType)) {
+        if (httpsVendor) {
+            capabilityId = BackupCapabilityIds.HTTPS_VENDOR_BACKUP;
+        } else if ("mds_export".equalsIgnoreCase(backupType)) {
             if (!checkPointManagement) {
                 return new Outcome.AdmissionRefused("MDS_EXPORT_NOT_APPLICABLE",
                         "an MDS export applies only to a Check Point Multi-Domain Server; device " + deviceId + " is not one");

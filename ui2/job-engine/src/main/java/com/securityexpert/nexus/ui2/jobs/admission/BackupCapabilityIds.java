@@ -20,7 +20,10 @@ public final class BackupCapabilityIds {
 
     /** Check Point Multi-Domain Server export: one mds_backup of the whole server, every domain (V61, PO 2026-09-23). */
     public static final String CP_MDS_EXPORT = "cp_mds_export";
-    public static final Set<String> ALL = Set.of(CP_GAIA_BACKUP_LOCAL, CP_GAIA_SNAPSHOT, PAN_DEVICE_STATE_BACKUP, CP_MDS_EXPORT);
+    /** Vendors backed up over HTTPS (V64): Infoblox Grid Manager, Radware DefensePro -- one capability, routed by vendor. */
+    public static final String HTTPS_VENDOR_BACKUP = "https_vendor_backup";
+    public static final Set<String> ALL = Set.of(CP_GAIA_BACKUP_LOCAL, CP_GAIA_SNAPSHOT, PAN_DEVICE_STATE_BACKUP, CP_MDS_EXPORT,
+            HTTPS_VENDOR_BACKUP);
 
     private BackupCapabilityIds() {
     }

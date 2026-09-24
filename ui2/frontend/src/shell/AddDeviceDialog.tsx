@@ -38,6 +38,7 @@ import {
   type DiscoveryImportResult,
   type DiscoveryRunView,
   type Vendor,
+  setDeviceSecret,
 } from "../auth/adminApi";
 import { enrollmentStateLabel, isTerminalJobState, jobPhaseLabel, peerFollowMessage } from "./deviceCopy";
 
@@ -52,7 +53,12 @@ const DISCOVERY_FAILURE_COPY: Record<string, string> = {
 const VENDOR_LABEL: Record<Vendor, string> = {
   check_point: "Check Point",
   palo_alto: "Palo Alto",
+  infoblox: "Infoblox",
+  radware: "Radware",
 };
+
+/** V64: vendors reached over HTTPS -- an appliance role, a password credential; Radware also an export passphrase. */
+const HTTPS_VENDORS: ReadonlySet<Vendor> = new Set<Vendor>(["infoblox", "radware"]);
 
 function formatValidationReason(reason: string): string {
   switch (reason) {
@@ -169,8 +175,9 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
     ? [...(credentialsData ?? []), createdCredential]
     : credentialsData ?? [];
   const eligibleCredentials = credentials.filter((c) =>
-    vendor === "check_point" ? c.allows_check_point : c.allows_palo_alto,
+    vendor === "check_point" ? c.allows_check_point : c.allows_palo_alto, // HTTPS vendors take a username + password, like PAN
   );
+  const [passphraseCredentialId, setPassphraseCredentialId] = useState("");
 
   // Keep the credential selection valid as the vendor (and therefore the
   // eligible list) changes; never leave a stale id from another vendor selected.
@@ -302,7 +309,10 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
     if (mode === "single") {
       setPhase("submitting");
       try {
-        const result = await addDeviceSingle(trimmedAddress, role, vendor, credentialId);
+        const result = await addDeviceSingle(trimmedAddress, HTTPS_VENDORS.has(vendor) ? "appliance" : role, vendor, credentialId);
+        if (vendor === "radware" && passphraseCredentialId) {
+          await setDeviceSecret(result.device_id, "export_passphrase", passphraseCredentialId);
+        }
         setDeviceId(result.device_id);
         setActiveJobId(result.job_id);
         setPhase("confirming");
@@ -535,7 +545,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               onChange={(e) => setAddress(e.target.value)}
               autoFocus
             />
-            <TextField
+            {!HTTPS_VENDORS.has(vendor) && <TextField
               label="Role"
               select
               size="small"
@@ -545,7 +555,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
             >
               <MenuItem value="gateway">Firewall</MenuItem>
               <MenuItem value="management_server">Management server</MenuItem>
-            </TextField>
+            </TextField>}
             {role === "management_server" && (
               <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
                 A management server can be added and confirmed, but collection from it is refused until its read sets are gated.
@@ -561,8 +571,20 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
             >
               <MenuItem value="check_point">Check Point</MenuItem>
               <MenuItem value="palo_alto">Palo Alto</MenuItem>
+              <MenuItem value="infoblox">Infoblox Grid Manager (HTTPS)</MenuItem>
+              <MenuItem value="radware">Radware DefensePro (HTTPS)</MenuItem>
             </TextField>
             {credentialSelectorFragment}
+            {vendor === "radware" && (
+              <TextField label="Export passphrase credential" select size="small" fullWidth value={passphraseCredentialId}
+                onChange={(e) => setPassphraseCredentialId(e.target.value)}
+                helperText="The backup includes the private keys, encrypted with this credential's password (IncludePKeys=on). Without it the backup is refused, never taken without keys.">
+                <MenuItem value="">None yet</MenuItem>
+                {credentials.filter((c) => c.kind !== "ssh_private_key").map((c) => (
+                  <MenuItem key={c.credential_reference_id} value={c.credential_reference_id}>{c.display_name}</MenuItem>
+                ))}
+              </TextField>
+            )}
             {sshTrustAuthorization}
             {validationReason && (
               <Typography variant="body2" color="error">
@@ -784,7 +806,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
       </DialogContent>
       {createCredentialOpen && (
         <CreateCredentialDialog
-          initialVendor={vendor}
+          initialVendor={vendor === "check_point" ? "check_point" : "palo_alto" /* HTTPS vendors use a password credential, like PAN */}
           onClose={() => setCreateCredentialOpen(false)}
           onCreated={(credential) => {
             setCreatedCredential(credential);

@@ -40,6 +40,7 @@ public final class WorkerClaimLoop {
 
     private static final List<String> ELIGIBLE_CAPABILITY_IDS = List.of(
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
+            ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
             InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT,
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
@@ -55,6 +56,26 @@ public final class WorkerClaimLoop {
     private final ConfigurationJobExecutor configurationJobExecutor;
     private final DiscoveryJobExecutor discoveryJobExecutor;
     private final BackupJobExecutor backupJobExecutor;
+    private com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor httpsConfirmJobExecutor;
+
+    /** V64: the enrollment confirm for vendors reached over HTTPS (Infoblox, Radware). */
+    public WorkerClaimLoop withHttpsConfirm(com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor executor) {
+        this.httpsConfirmJobExecutor = executor;
+        return this;
+    }
+
+    /** An HTTPS endpoint's port: the one in the address, else 443 (never the SSH default). */
+    static int httpsPortOf(String addressRef) {
+        int colon = addressRef.lastIndexOf(':');
+        if (colon < 0) {
+            return 443;
+        }
+        try {
+            return Integer.parseInt(addressRef.substring(colon + 1));
+        } catch (NumberFormatException notAPort) {
+            return 443;
+        }
+    }
     private final String workerId;
     private final Duration leaseDuration;
     private final String checkPointTrustRuleRef;
@@ -210,6 +231,24 @@ public final class WorkerClaimLoop {
         EndpointRecord endpoint = endpointOpt.get();
 
         try {
+            if (ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS.equals(job.capabilityId())) {
+                if (httpsConfirmJobExecutor == null) {
+                    leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                            com.securityexpert.nexus.ui2.jobs.JobState.FAILED, "system:worker", "claim_https_check",
+                            "no HTTPS confirm executor in this worker");
+                    return true;
+                }
+                httpsConfirmJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), device.vendorHint(),
+                        new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(hostOf(endpoint.addressRef()),
+                                httpsPortOf(endpoint.addressRef())), device.credentialReferenceId());
+                return true;
+            }
+            if (BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(job.capabilityId())) {
+                BackupRequest httpsRequest = new BackupRequest(new ConnectionTarget(endpoint.endpointId(), hostOf(endpoint.addressRef()),
+                        httpsPortOf(endpoint.addressRef())), Optional.ofNullable(device.credentialReferenceId()), "https");
+                backupJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), httpsRequest, job.capabilityId());
+                return true;
+            }
             if (InventoryCapabilityIds.isInventoryCapability(job.capabilityId())) {
                 Optional<String> inventoryModelHint = deviceRepository.findSummary(job.targetDeviceId())
                         .flatMap(com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedModel);

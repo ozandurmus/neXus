@@ -32,7 +32,7 @@ public final class DeviceRegistrationService {
      * serves (NXS-LOCAL-0158 -- both vendors in one worker process, Check
      * Point over {@code ssh_exec} and Palo Alto over {@code pan_xml_api}).
      */
-    private static final Set<String> IMPLEMENTED_TRANSPORTS = Set.of("ssh_exec", "pan_xml_api");
+    private static final Set<String> IMPLEMENTED_TRANSPORTS = Set.of("ssh_exec", "pan_xml_api", "https");
 
     public sealed interface Outcome {
         record Registered(String deviceId, String endpointId) implements Outcome {
