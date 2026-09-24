@@ -29,4 +29,12 @@ class BackupReadPlanTest {
         assertEquals("clish -c \"delete backup backup_2026-09-14.tgz\"",
                 BackupReadPlan.deleteBackupCommand("backup_2026-09-14.tgz"));
     }
+
+    @org.junit.jupiter.api.Test
+    void gaiaVersionIsReadFromTheProductVersionLine() {
+        org.junit.jupiter.api.Assertions.assertEquals(java.util.Optional.of("R81.20"), BackupReadPlan.parseGaiaVersion(
+                "Product version Check Point Gaia R81.20\nOS build 631\nOS kernel version 3.10.0-957.21.3cpx86_64\nOS edition 64-bit\n"));
+        org.junit.jupiter.api.Assertions.assertEquals(java.util.Optional.empty(), BackupReadPlan.parseGaiaVersion("CLINFR0329  Invalid command"));
+        org.junit.jupiter.api.Assertions.assertEquals(java.util.Optional.empty(), BackupReadPlan.parseGaiaVersion(""));
+    }
 }

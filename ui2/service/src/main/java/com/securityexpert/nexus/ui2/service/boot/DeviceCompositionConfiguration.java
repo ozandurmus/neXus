@@ -293,7 +293,7 @@ public class DeviceCompositionConfiguration {
     }
 
     /** Mirrors {@code worker.backup.BackupCapabilities.checkPointMdsExport} and {@code MdsExportPlan.LITERALS} exactly (V61). */
-    static final List<String> MDS_EXPORT_LITERALS = List.of("df -P /var/log", "mkdir -p %s",
+    static final List<String> MDS_EXPORT_LITERALS = List.of("clish -c 'show version all'", "df -P /var/log", "mkdir -p %s",
             "bash -lc 'mdsstat' > %s/mdsstat.txt 2>&1", "clish -c 'show configuration' > %s/gaia_config.txt",
             "bash -lc 'cplic print -x' > %s/cplic.txt 2>&1", "netstat -rn > %s/netstat.txt", "uname -a > %s/uname.txt",
             "cd /var/log && setsid nohup bash -lc '$CPMDIR/scripts/mds_backup -b -l -d %1$s > %1$s/mds_backup.log 2>&1; echo $? > %1$s/mds_backup.rc' </dev/null >/dev/null 2>&1 &",
@@ -339,6 +339,9 @@ public class DeviceCompositionConfiguration {
         CapabilityStep sftpGet = new CapabilityStep(StepKind.SFTP_GET, "not_applicable", null, true, Optional.empty(),
                 Optional.empty(), Optional.empty());
         List<CapabilityStep> steps = List.of(connect,
+                // cp_configuration_show_version_all: the run's own version read (C7 §3.3); mirrors BackupCapabilities.checkPoint.
+                new CapabilityStep(StepKind.EXEC, "expert", "clish -c 'show version all'", false,
+                        Optional.empty(), Optional.empty(), Optional.empty()),
                 new CapabilityStep(StepKind.EXEC, "expert", CHECK_POINT_BACKUP_LITERALS.get(0), false,
                         Optional.empty(), Optional.empty(), Optional.empty()),
                 // cp_backup_df_var_log (V40): the Expert fallback entry 1 names; mirrors BackupCapabilities.checkPoint.

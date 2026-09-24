@@ -36,6 +36,7 @@ public final class BackupCapabilities {
     public static Capability checkPoint(GateRegistryPort gateRegistry) {
         List<CapabilityStep> steps = List.of(
                 connectStep(),
+                execStep(BackupReadPlan.CP_SHOW_VERSION_ALL),
                 execStep(BackupReadPlan.CP_SHOW_DISKSPACE),
                 execStep(BackupReadPlan.CP_DF_VAR_LOG),
                 execStep(BackupReadPlan.CP_ADD_BACKUP_LOCAL),

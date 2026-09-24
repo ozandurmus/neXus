@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 public final class MdsExportPlan {
 
     public static final String DF_VAR_LOG = "df -P /var/log";
+    public static final String SHOW_VERSION_ALL = "clish -c 'show version all'";
     public static final String MKDIR = "mkdir -p %s";
     public static final String MDSSTAT = "bash -lc 'mdsstat' > %s/mdsstat.txt 2>&1";
     public static final String GAIA_CONFIGURATION = "clish -c 'show configuration' > %s/gaia_config.txt";
@@ -30,7 +31,7 @@ public final class MdsExportPlan {
     public static final String DIGEST = "sha256sum %s.tgz";
     public static final String REMOVE = "rm -rf %1$s %1$s.tgz";
 
-    public static final List<String> LITERALS = List.of(DF_VAR_LOG, MKDIR, MDSSTAT, GAIA_CONFIGURATION, LICENSES, ROUTES, UNAME,
+    public static final List<String> LITERALS = List.of(SHOW_VERSION_ALL, DF_VAR_LOG, MKDIR, MDSSTAT, GAIA_CONFIGURATION, LICENSES, ROUTES, UNAME,
             MDS_BACKUP_START, MDS_BACKUP_POLL, LIST, BUNDLE, DIGEST, REMOVE);
 
     private static final Pattern NOT_TOKEN = Pattern.compile("[^a-f0-9-]");

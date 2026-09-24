@@ -29,6 +29,26 @@ public final class BackupReadPlan {
     }
 
     public static final String CP_SHOW_DISKSPACE = "clish -c \"show diskspace\"";
+    /** The run's own software-version observation (C7 §3.3's third source), gated as cp_configuration_show_version_all. */
+    public static final String CP_SHOW_VERSION_ALL = "clish -c 'show version all'";
+    private static final java.util.regex.Pattern GAIA_VERSION = java.util.regex.Pattern.compile("\\b(R\\d+(?:\\.\\d+)*)\\b");
+
+    /** "Product version Check Point Gaia R81.20" -> R81.20; the Product version line first, else the first R-number. */
+    public static java.util.Optional<String> parseGaiaVersion(String output) {
+        if (output == null || output.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        for (String line : output.split("\\R")) {
+            if (line.toLowerCase(java.util.Locale.ROOT).contains("product version")) {
+                java.util.regex.Matcher m = GAIA_VERSION.matcher(line);
+                if (m.find()) {
+                    return java.util.Optional.of(m.group(1));
+                }
+            }
+        }
+        java.util.regex.Matcher any = GAIA_VERSION.matcher(output);
+        return any.find() ? java.util.Optional.of(any.group(1)) : java.util.Optional.empty();
+    }
     public static final String CP_DF_VAR_LOG = "df -P /var/log";
     public static final String CP_ADD_BACKUP_LOCAL = "clish -c \"add backup local\"";
     public static final String CP_SHOW_BACKUP_STATUS = "clish -c \"show backup status\"";

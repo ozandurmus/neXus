@@ -1188,3 +1188,19 @@ gates:
     secret_output_risk: 'none'
     safe_telemetry_fields: []
     source_document_pointer: 'the run''s own work directory and bundle, by exact name'
+  - gate_id: mds_show_version_all
+    vendor: 'check_point'
+    platform_role_scope: 'cp_multi_domain_server'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'clish -c ''show version all'''
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session for the run'
+    unsupported_behavior_ref: 'no version -> the store refuses (C7 §3.3)'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md entry 2 (same literal, MDS scope)'

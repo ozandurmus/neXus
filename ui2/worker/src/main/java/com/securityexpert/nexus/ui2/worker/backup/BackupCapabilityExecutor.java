@@ -114,6 +114,10 @@ public final class BackupCapabilityExecutor {
         // earlier run of ours left on this device -- exactly the names the ledger holds open, and only
         // those `show backups` still lists. Best effort: a failure here is logged, never the run's fate.
         cleanupStaleArchives(session, deviceId);
+        // C7 §3.3's third version source: the run's own read (2026-09-24: an MDS had no version from confirm or
+        // inventory and its verified backup was refused at the store).
+        Optional<String> observedVersion = BackupReadPlan.parseGaiaVersion(
+                exec(session, BackupReadPlan.CP_SHOW_VERSION_ALL, DISKSPACE_TIMEOUT).output());
 
         // Entry 1 (BK-6): free-space precondition. Gate row cp_backup_show_diskspace, BK-7: "if the
         // Clish form fails, the Expert fallback df -P /var/log becomes primary". Measured live on the
@@ -245,7 +249,7 @@ public final class BackupCapabilityExecutor {
             }
         }
 
-        return new BackupResult.Completed(metadata, name, Optional.empty(), Optional.empty());
+        return new BackupResult.Completed(metadata, name, observedVersion, Optional.empty());
     }
 
     private void cleanupStaleArchives(TransportSession session, String deviceId) {

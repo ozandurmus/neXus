@@ -79,6 +79,8 @@ public final class MdsExportExecutor {
 
     private BackupResult run(TransportSession session, String deviceId, String jobId) {
         String dir = MdsExportPlan.workDir(jobId);
+        Optional<String> observedVersion = com.securityexpert.nexus.ui2.worker.backup.BackupReadPlan.parseGaiaVersion(
+                exec(session, MdsExportPlan.SHOW_VERSION_ALL, SHORT).output());
 
         Optional<Long> free = com.securityexpert.nexus.ui2.worker.backup.BackupCapabilityExecutor
                 .parseDfAvailableBytes(exec(session, MdsExportPlan.DF_VAR_LOG, SHORT).output());
@@ -181,7 +183,7 @@ public final class MdsExportExecutor {
             return new BackupResult.CleanupFailed(metadata, "provider1-" + jobId + ".tgz",
                     "removing the work directory and bundle failed after one retry");
         }
-        return new BackupResult.Completed(metadata, "provider1-" + jobId + ".tgz", Optional.empty(), Optional.empty());
+        return new BackupResult.Completed(metadata, "provider1-" + jobId + ".tgz", observedVersion, Optional.empty());
     }
 
     private boolean remove(TransportSession session, String dir) {
