@@ -231,7 +231,7 @@ export function DeviceIdentityTable({ devices, ariaLabel = "Member identity" }: 
             <TableRow key={m.device_id} hover sx={{ verticalAlign: "top" }}>
               <TableCell sx={{ fontWeight: 600, fontSize: 12.5, whiteSpace: "nowrap" }}>{deviceNameLabel(m.hostname)}</TableCell>
               <TableCell sx={{ fontFamily: MONO, fontSize: 12 }}>{m.serial_number ?? <Unknown reason={gated} />}</TableCell>
-              <TableCell>{m.model ?? <Unknown reason="Not read at first contact." />}</TableCell>
+              <TableCell>{m.model || m.platform_family || <Unknown reason="Not read yet." />}</TableCell>
               <TableCell sx={{ fontFamily: MONO, fontSize: 12, bgcolor: versionDiff ? m3.errorContainer : undefined }}>
                 <Box sx={{ display: "flex", gap: 0.75, alignItems: "center" }}>
                   {m.software_version ?? <Unknown reason="Not read at first contact." />}

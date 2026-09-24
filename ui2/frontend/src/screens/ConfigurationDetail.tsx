@@ -224,8 +224,10 @@ function identityTiles(device: DeviceSummary, collectedAt: string | null): Ident
   const isPaloAlto = device.vendor_hint === "palo_alto";
   const needsGate = "not collected -- needs its own gated read";
   return [
-    { label: "Vendor", value: device.platform_family ? `${vendorLabel(device.vendor_hint)} · ${device.platform_family}` : vendorLabel(device.vendor_hint) },
-    { label: "Model", value: device.model, absent: "not read at first contact" },
+    // PO, 2026-09-24: the Check Point appliance family ("Smart-1 5150 (ST-4150-00)", from show asset system) IS the
+    // model -- shown under Model, not appended to the vendor; the first-contact model wins when both exist.
+    { label: "Vendor", value: vendorLabel(device.vendor_hint) },
+    { label: "Model", value: device.model || device.platform_family || null, absent: "not read yet" },
     { label: "Serial number", value: device.serial_number ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate, mono: true },
     { label: "Software version", value: device.software_version, absent: "not read at first contact" },
     isPaloAlto

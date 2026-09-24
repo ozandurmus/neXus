@@ -1578,7 +1578,7 @@ export function DeviceInventoryPanels({
             {device.software_version && (
               <StatusChip tone="neutral" label={`${device.software_version} · ${isPaloAlto ? "PAN-OS" : "Gaia"}`} dense />
             )}
-            {device.model && <StatusChip tone="neutral" label={device.model} dense />}
+            {(device.model || device.platform_family) && <StatusChip tone="neutral" label={(device.model || device.platform_family)!} dense />}
             {device.ha_role && <RoleChip role={device.ha_role} dense />}
             <StatusChip tone="neutral" label={`${deviceIfaceCount} interfaces · ${deviceRouteCount} routes`} dense />
             {isCluster && clusterInventory && <ClusterMembersMarker inventory={clusterInventory} />}
@@ -1781,7 +1781,7 @@ export function ClusterDetailPanels({
             {firstMember?.software_version && (
               <StatusChip tone="neutral" label={`${firstMember.software_version} · ${firstMember?.vendor_hint === "palo_alto" ? "PAN-OS" : "Gaia"}`} dense />
             )}
-            {firstMember?.model && <StatusChip tone="neutral" label={firstMember.model} dense />}
+            {(firstMember?.model || firstMember?.platform_family) && <StatusChip tone="neutral" label={(firstMember?.model || firstMember?.platform_family)!} dense />}
             <StatusChip tone="neutral" label={`${ifaceCount} interfaces · ${routeCount} routes`} dense />
           </>
         }
