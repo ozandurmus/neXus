@@ -232,6 +232,8 @@ def test_app_js_has_discovery_render_function_and_wiring():
     assert "function renderDiscoveryModule()" in APP
     assert '"discovery"' in APP
     assert "renderDiscoveryModule();" in APP
+    assert 'id="discoverySelectAll"' in APP
+    assert 'class="discovery-candidate-checkbox"' in APP
 
 
 def test_html_export_wires_discovery_payload():
@@ -274,4 +276,3 @@ def test_run_html_export_embeds_discovery_payload_without_leftover_placeholder(t
     assert "__DISCOVERY_JSON_PLACEHOLDER__" not in html
     assert "discoveryUiData" in html
     assert "DEV-Z" in html  # sanitized canonical_id, consistent with other inventory UI modules
-

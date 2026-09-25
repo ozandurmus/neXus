@@ -88,10 +88,12 @@ function renderDiscoveryModule() {
     if (entityHost) {
         entityHost.innerHTML = entities.length
             ? `<div class="table-wrap"><table class="data-table"><thead><tr>
+                <th><input id="discoverySelectAll" type="checkbox" aria-label="Select all discovery candidates"></th>
                 <th>Vendor</th><th>Entity</th><th>Lifecycle</th><th>Confidence</th>
                 <th>Platform</th><th>Shell</th><th>Planned mode</th><th>Allowed</th><th>Reason</th>
             </tr></thead><tbody>${entities.map(row => `
                 <tr>
+                    <td><input class="discovery-candidate-checkbox" type="checkbox" aria-label="Select discovery candidate"></td>
                     <td>${escapeHtml(row.vendor)}</td>
                     <td>${escapeHtml(row.canonical_id)}</td>
                     <td>${statusPill(lifecycleLabels[row.lifecycle_state] || row.lifecycle_state, lifecycleStateTone(row.lifecycle_state))}</td>
@@ -104,6 +106,20 @@ function renderDiscoveryModule() {
                 </tr>
             `).join("")}</tbody></table></div>`
             : `<div class="empty-state compact"><span>No discovery lifecycle records available yet. Populated once Phase 4 wires collectors through the coordinator.</span></div>`;
+
+        const selectAll = entityHost.querySelector("#discoverySelectAll");
+        const candidateCheckboxes = [...entityHost.querySelectorAll(".discovery-candidate-checkbox")];
+        if (selectAll) {
+            selectAll.addEventListener("change", () => {
+                candidateCheckboxes.forEach(checkbox => { checkbox.checked = selectAll.checked; });
+                selectAll.indeterminate = false;
+            });
+            candidateCheckboxes.forEach(checkbox => checkbox.addEventListener("change", () => {
+                const selectedCount = candidateCheckboxes.filter(candidate => candidate.checked).length;
+                selectAll.checked = selectedCount === candidateCheckboxes.length;
+                selectAll.indeterminate = selectedCount > 0 && selectedCount < candidateCheckboxes.length;
+            }));
+        }
     }
 
     const jobsHost = document.getElementById("discoveryRecentJobs");
@@ -167,4 +183,3 @@ function renderExclusionsModule() {
             : `<div class="empty-state compact"><span>No inventory exclusions active. Add entries to data/state/inventory_exclusions.json (local RuntimeRoot policy, not the repository) to exclude identities from direct polling.</span></div>`;
     }
 }
-
