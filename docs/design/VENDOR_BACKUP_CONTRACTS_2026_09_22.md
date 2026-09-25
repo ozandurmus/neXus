@@ -245,9 +245,14 @@ Read with the Product Owner's MC web session, GET only, nothing changed on the M
   **`#(config)` prompt** -- so only exact read literals may ever be sent (`show version`, `show configuration`);
   anything else could be a configuration change. This path needs no ProxySG credential of neXus's own and no
   job on the MC.
-- Proposed gate rows (not yet signed off): `bluecoat_mc_command_show_version`,
-  `bluecoat_mc_command_show_configuration` -- `PUT /api/devices/{uuid}/command` with exactly that body, action class
-  read, one per device per run, first run on the test proxy only.
+- Gate rows `bluecoat_mc_command_show_version`, `bluecoat_mc_command_show_configuration` (V76) -- `PUT
+  /api/devices/{uuid}/command` with exactly that body, action class read. First real backup 2026-09-25: 4 of 4
+  ProxySG, 9 s, one encrypted bundle of 4.6 MB.
+- `show configuration expanded` (§8's second member) measured on the test proxy (SGOS 7.4.15.1), read-only: the
+  same 71,938 configuration lines as `show configuration`; after normalising the per-output inline terminators
+  (`end-<random>-inline`) 53 lines differ -- and two consecutive plain `show configuration` runs differ in the same
+  53 lines (re-encrypted secret blocks). On this SGOS the plain form is already the expanded one, so the bundle
+  carries it once; `expanded` is not sent (it would double the device load and the stored size for no new data).
 
 ## 9. Order of work (Product Owner: "start from the top")
 
