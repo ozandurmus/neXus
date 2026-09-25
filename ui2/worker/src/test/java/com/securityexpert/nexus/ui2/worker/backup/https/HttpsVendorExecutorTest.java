@@ -65,7 +65,7 @@ class HttpsVendorExecutorTest {
     @Test
     void infobloxBackupReadsTheVersionFetchesSameHostAndAlwaysSignalsDownloadComplete() {
         List<String> handed = new java.util.ArrayList<>();
-        executor.withMemberSink((d, j, m) -> handed.addAll(List.of(d, j, String.join(",", m))));
+        executor.withMemberSink((d, j, m) -> handed.addAll(List.of(d, j, m.stream().map(x -> x.hostName()).collect(java.util.stream.Collectors.joining(",")))));
         BackupResult r = executor.backup("infoblox", T, "cred", Optional.empty(), "dev", "job-1");
         assertTrue(r instanceof BackupResult.Completed, String.valueOf(r));
         assertEquals(List.of("dev", "job-1", "gm.example,ns2.example"), handed, "a completed backup refreshes the member list");
@@ -96,6 +96,26 @@ class HttpsVendorExecutorTest {
                 calls.log.get(0));
     }
 
+    /** Shape measured on the production grid 2026-09-25 (WAPI 2.13.7), values fictional. */
+    static final String MEMBERS_JSON = "["
+            + "{\"_ref\": \"member/a\", \"host_name\": \"ns2.example\", \"platform\": \"VNIOS\", \"master_candidate\": false, \"enable_ha\": false,"
+            + " \"vip_setting\": {\"address\": \"192.0.2.12\"},"
+            + " \"node_info\": [{\"ha_status\": \"NOT_CONFIGURED\", \"hwtype\": \"IB-V2326\", \"hwmodel\": \"\", \"hypervisor\": \"VMware\", \"service_status\": ["
+            + "   {\"service\": \"NODE_STATUS\", \"status\": \"WORKING\", \"description\": \"Running\"},"
+            + "   {\"service\": \"DISK_USAGE\", \"status\": \"WORKING\", \"description\": \"24% - Primary drive usage is OK.\"},"
+            + "   {\"service\": \"MEMORY\", \"status\": \"WORKING\", \"description\": \"38% - System memory usage is OK.\"},"
+            + "   {\"service\": \"CPU_USAGE\", \"status\": \"WORKING\", \"description\": \"CPU Usage: 37%\"},"
+            + "   {\"service\": \"DB_OBJECT\", \"status\": \"WORKING\", \"description\": \"0% - Database capacity usage is OK.\"},"
+            + "   {\"service\": \"REPLICATION\", \"status\": \"WORKING\", \"description\": \"Online\"},"
+            + "   {\"service\": \"ENET_LAN\", \"status\": \"WORKING\", \"description\": \"192.0.2.12\"}]}],"
+            + " \"service_status\": [{\"service\": \"DNS\", \"status\": \"WORKING\", \"description\": \"DNS Service is working\"},"
+            + "   {\"service\": \"DHCP\", \"status\": \"INACTIVE\", \"description\": \"DHCP Service is inactive\"},"
+            + "   {\"service\": \"ATP\", \"status\": \"WARNING\", \"description\": \"monitoring mode\"}]},"
+            + "{\"_ref\": \"member/b\", \"host_name\": \"gm.example\", \"platform\": \"VNIOS\", \"master_candidate\": true, \"enable_ha\": false,"
+            + " \"vip_setting\": {\"address\": \"192.0.2.30\"}, \"node_info\": [{\"ha_status\": \"NOT_CONFIGURED\", \"hwtype\": \"IB-V1516\", \"hypervisor\": \"VMware\"}],"
+            + " \"service_status\": [{\"service\": \"DNS\", \"status\": \"WORKING\"}]},"
+            + "{\"_ref\": \"member/c\", \"platform\": \"VNIOS\"}]";
+
     @Test
     void infobloxConfirmNamesTheGridAndTheWapiVersion() {
         HttpsVendorExecutor.ConfirmOutcome c = executor.confirm("infoblox", T, "cred");
@@ -103,8 +123,25 @@ class HttpsVendorExecutorTest {
         HttpsVendorExecutor.Identity id = ((HttpsVendorExecutor.ConfirmOutcome.Confirmed) c).identity();
         assertEquals(Optional.of("GRID-A"), id.name());
         assertEquals(Optional.of("WAPI 2.13.5"), id.version());
-        assertEquals(List.of("gm.example", "ns2.example"), id.members(), "members by host name, sorted; a nameless entry skipped");
-        assertTrue(calls.log.contains("GET /wapi/v2.13.5/member?_return_fields=host_name,platform"), String.valueOf(calls.log));
+        assertEquals(List.of("gm.example", "ns2.example"), id.members().stream().map(m -> m.hostName()).toList(),
+                "the Grid Master first, then candidates, then by name; a nameless entry skipped");
+        var gm = id.members().get(0);
+        assertTrue(gm.gridMaster(), "the member whose VIP is the dialled address is the Grid Master");
+        assertTrue(gm.masterCandidate());
+        assertEquals(Optional.of("IB-V1516"), gm.hardwareType());
+        var ns2 = id.members().get(1);
+        assertEquals(Optional.of(24), ns2.diskPercent());
+        assertEquals(Optional.of(38), ns2.memoryPercent());
+        assertEquals(Optional.of(37), ns2.cpuPercent());
+        assertEquals(Optional.of(0), ns2.dbPercent());
+        assertEquals(Optional.of("Online"), ns2.replication());
+        assertEquals(Optional.of("WORKING"), ns2.nodeStatus());
+        assertEquals(Optional.of("VMware"), ns2.hypervisor());
+        assertEquals(Optional.of("NOT_CONFIGURED"), ns2.haStatus());
+        assertEquals(List.of("DNS=WORKING", "DHCP=INACTIVE", "ATP=WARNING"),
+                ns2.services().stream().map(sv -> sv.service() + "=" + sv.status()).toList());
+        assertTrue(calls.log.stream().anyMatch(l -> l.startsWith("GET /wapi/v2.13.5/member?_return_fields=host_name,platform,master_candidate")),
+                String.valueOf(calls.log));
     }
 
     @Test
@@ -183,10 +220,7 @@ class HttpsVendorExecutorTest {
                 return new TextResponse(200, Optional.of("application/json"), "[{\"_ref\": \"grid/x\", \"name\": \"GRID-A\"}]", false);
             }
             if (path.startsWith("/wapi/v2.13.5/member")) {
-                return new TextResponse(200, Optional.of("application/json"),
-                        "[{\"_ref\": \"member/a\", \"host_name\": \"ns2.example\", \"platform\": \"VNIOS\"},"
-                        + " {\"_ref\": \"member/b\", \"host_name\": \"gm.example\", \"platform\": \"VNIOS\"},"
-                        + " {\"_ref\": \"member/c\", \"platform\": \"VNIOS\"}]", false);
+                return new TextResponse(200, Optional.of("application/json"), MEMBERS_JSON, false);
             }
             return new TextResponse(200, Optional.of("text/html"), "<html/>", false);
         }

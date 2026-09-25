@@ -650,12 +650,33 @@ export interface InventoryContext {
   readonly ha: InventoryHa | null;
 }
 
+/** V72: one Infoblox grid member as the Grid Manager reports it; the name arrives masked for aiview like a virtual system. */
+export interface GridMemberView {
+  readonly virtual_system: string;
+  readonly address: string | null;
+  readonly platform: string | null;
+  readonly hardware_type: string | null;
+  readonly hypervisor: string | null;
+  readonly grid_master: boolean;
+  readonly master_candidate: boolean;
+  readonly ha_enabled: boolean;
+  readonly ha_status: string | null;
+  readonly node_status: string | null;
+  readonly replication: string | null;
+  readonly disk_percent: number | null;
+  readonly memory_percent: number | null;
+  readonly cpu_percent: number | null;
+  readonly db_percent: number | null;
+  readonly services: readonly { readonly service: string; readonly status: string }[];
+}
+
 export interface DeviceInventory {
   readonly device_id: string;
   readonly collected_at: string | null;
   readonly job: JobView | null;
   readonly contexts: InventoryContext[];
   readonly virtual_systems?: readonly string[] | string | null;
+  readonly grid_members?: readonly GridMemberView[];
 }
 
 export interface ClusterMember {

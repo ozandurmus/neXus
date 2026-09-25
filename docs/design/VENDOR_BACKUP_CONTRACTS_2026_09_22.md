@@ -127,6 +127,17 @@ alignment test, and a first live run recorded in the backlog note before
   members"; aiview sees them masked like any virtual system. Members are not
   devices: the grid backup already carries every member's configuration, and a
   member exposes no WAPI of its own. A failed member read never fails the run.
+- Member facts (PO 2026-09-25, V72, measured on the production grid, WAPI 2.13.7): the
+  same read carries `master_candidate`, `enable_ha`, `vip_setting`, `node_info` and
+  `service_status`; per member neXus keeps platform, hardware type (`node_info[0].hwtype`,
+  `hwmodel` is empty on VNIOS), hypervisor, Grid Master (the member whose VIP is the
+  address dialled -- nothing else identifies the master), master candidate, HA
+  (`enable_ha`, `ha_status`), node status and replication, disk / memory / CPU / DB
+  capacity percentages parsed from the node service descriptions, and every
+  member-level service as `service=status` (`WORKING`, `INACTIVE`, `WARNING`,
+  `UNKNOWN`). Free-text descriptions are not stored (they carry addresses). Shown
+  under the Grid Manager as the "Grid members" tab; the member name is masked for
+  aiview as a virtual system, the VIP as an address.
 - Gate rows: `infoblox_wapidoc_version`, `infoblox_grid_identity`,
   `infoblox_member_list`, `infoblox_fileop_getgriddata`, `infoblox_download`,
   `infoblox_fileop_downloadcomplete`.

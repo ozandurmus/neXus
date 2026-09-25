@@ -40,6 +40,17 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
                     run.runId(), run.deviceId(), run.jobId(), Timestamp.from(run.collectedAt()), run.contextCount(),
                     run.virtualSystems().orElse(null));
 
+            for (GridMember m : run.gridMembers()) {
+                dsl.execute("insert into grid_member(member_id, run_id, host_name, vip_address, platform, hardware_type, hypervisor, "
+                        + "grid_master, master_candidate, ha_enabled, ha_status, node_status, replication, disk_percent, memory_percent, "
+                        + "cpu_percent, db_percent, services) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, "
+                        + "{13}, {14}, {15}, {16}, {17})",
+                        m.memberId(), run.runId(), m.hostName(), m.vipAddress().orElse(null), m.platform().orElse(null),
+                        m.hardwareType().orElse(null), m.hypervisor().orElse(null), m.gridMaster(), m.masterCandidate(), m.haEnabled(),
+                        m.haStatus().orElse(null), m.nodeStatus().orElse(null), m.replication().orElse(null),
+                        m.diskPercent().orElse(null), m.memoryPercent().orElse(null), m.cpuPercent().orElse(null), m.dbPercent().orElse(null),
+                        m.services().stream().map(sv -> sv.service() + "=" + sv.status()).collect(java.util.stream.Collectors.joining(",")));
+            }
             for (InventoryContext context : run.contexts()) {
                 for (InventoryInterface iface : context.interfaces()) {
                     dsl.execute("insert into device_interface(interface_id, run_id, context, name, parent, kind, "
@@ -157,8 +168,36 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
                 ? Optional.ofNullable(runRow.get("virtual_systems", String.class))
                 : Optional.empty();
 
+        Result<Record> memberRows = dsl.fetch("select member_id, host_name, vip_address, platform, hardware_type, hypervisor, grid_master, "
+                + "master_candidate, ha_enabled, ha_status, node_status, replication, disk_percent, memory_percent, cpu_percent, db_percent, "
+                + "services from grid_member where run_id = {0} order by grid_master desc, master_candidate desc, host_name", runId);
+        List<GridMember> gridMembers = memberRows.stream().map(row -> new GridMember(row.get("member_id", String.class),
+                row.get("host_name", String.class), Optional.ofNullable(row.get("vip_address", String.class)),
+                Optional.ofNullable(row.get("platform", String.class)), Optional.ofNullable(row.get("hardware_type", String.class)),
+                Optional.ofNullable(row.get("hypervisor", String.class)), Boolean.TRUE.equals(row.get("grid_master", Boolean.class)),
+                Boolean.TRUE.equals(row.get("master_candidate", Boolean.class)), Boolean.TRUE.equals(row.get("ha_enabled", Boolean.class)),
+                Optional.ofNullable(row.get("ha_status", String.class)), Optional.ofNullable(row.get("node_status", String.class)),
+                Optional.ofNullable(row.get("replication", String.class)), Optional.ofNullable(row.get("disk_percent", Integer.class)),
+                Optional.ofNullable(row.get("memory_percent", Integer.class)), Optional.ofNullable(row.get("cpu_percent", Integer.class)),
+                Optional.ofNullable(row.get("db_percent", Integer.class)), parseServices(row.get("services", String.class)))).toList();
+
         return new InventoryRun(runId, runRow.get("device_id", String.class), runRow.get("job_id", String.class),
                 runRow.get("collected_at", Timestamp.class).toInstant(), runRow.get("context_count", Integer.class),
-                contexts, haFacts, virtualSystems);
+                contexts, haFacts, virtualSystems, gridMembers);
+    }
+
+    /** {@code DNS=WORKING,DHCP=INACTIVE} back to pairs; malformed items skipped. */
+    static List<GridMember.ServiceStatus> parseServices(String packed) {
+        if (packed == null || packed.isBlank()) {
+            return List.of();
+        }
+        List<GridMember.ServiceStatus> out = new ArrayList<>();
+        for (String item : packed.split(",")) {
+            int eq = item.indexOf('=');
+            if (eq > 0 && eq < item.length() - 1) {
+                out.add(new GridMember.ServiceStatus(item.substring(0, eq).trim(), item.substring(eq + 1).trim()));
+            }
+        }
+        return List.copyOf(out);
     }
 }

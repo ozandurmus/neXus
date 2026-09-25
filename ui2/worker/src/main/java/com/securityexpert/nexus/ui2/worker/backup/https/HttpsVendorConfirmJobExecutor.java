@@ -103,7 +103,8 @@ public final class HttpsVendorConfirmJobExecutor {
             // PO 2026-09-25: an Infoblox grid's members are shown under the Grid Manager the way a firewall's virtual
             // systems are -- one inventory run carrying only the member names (no interfaces, routes or HA facts).
             inventory.recordRun(new InventoryRun(UUID.randomUUID().toString(), deviceId, jobId, Instant.now(), 0, List.of(),
-                    List.of(), Optional.of(String.join(", ", id.members()))), ACTOR, "confirm_completed");
+                    List.of(), Optional.of(id.members().stream().map(m -> m.hostName()).sorted().collect(java.util.stream.Collectors.joining(", "))),
+                    id.members()), ACTOR, "confirm_completed");
         }
         leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR, "confirm_completed",
                 "completed in " + ms + "ms");

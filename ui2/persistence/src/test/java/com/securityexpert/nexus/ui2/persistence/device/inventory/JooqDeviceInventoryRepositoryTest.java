@@ -42,8 +42,19 @@ class JooqDeviceInventoryRepositoryTest {
         InventoryContext physical = new InventoryContext(InventoryContext.PHYSICAL, List.of(eth0), List.of(route));
         InventoryHaFact haFact = new InventoryHaFact("ha-1", InventoryContext.PHYSICAL, "ACTIVE",
                 Optional.of("High Availability"), InventoryHaFact.SOURCE_CP_CPHAPROB_STAT);
+        GridMember member = new GridMember("member-1", "gm.example", Optional.of("192.0.2.41"), Optional.of("VNIOS"),
+                Optional.of("IB-V1516"), Optional.of("VMware"), true, true, false, Optional.of("NOT_CONFIGURED"), Optional.of("WORKING"),
+                Optional.of("Online"), Optional.of(16), Optional.of(48), Optional.of(8), Optional.of(9),
+                List.of(new GridMember.ServiceStatus("DNS", "WORKING"), new GridMember.ServiceStatus("DHCP", "INACTIVE")));
         return new InventoryRun("run-1", "device-1", "job-1", Instant.parse("2026-09-14T00:00:00Z"), 1,
-                List.of(physical), List.of(haFact));
+                List.of(physical), List.of(haFact), Optional.empty(), List.of(member));
+    }
+
+    @Test
+    void servicesPackAsServiceEqualsStatusPairs() {
+        assertEquals(List.of(new GridMember.ServiceStatus("DNS", "WORKING"), new GridMember.ServiceStatus("DHCP", "INACTIVE")),
+                JooqDeviceInventoryRepository.parseServices("DNS=WORKING,DHCP=INACTIVE,broken"));
+        assertEquals(List.of(), JooqDeviceInventoryRepository.parseServices(""));
     }
 
     @Test
@@ -65,6 +76,8 @@ class JooqDeviceInventoryRepositoryTest {
                 "AC-4: the VLAN id column is written");
         assertEquals(2, executedSql.stream().filter(sql -> sql.contains("insert into device_interface_address")).count());
         assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into device_route")).count());
+        assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into grid_member(")).count(),
+                "V72: one grid_member row per member in the same audited transaction");
         assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into device_inventory_ha")).count(),
                 "AC-4: the HA fact is written");
         assertTrue(executedSql.get(0).contains("SET LOCAL app.actor_fingerprint"),

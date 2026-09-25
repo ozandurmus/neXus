@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
@@ -85,7 +86,31 @@ public final class InventoryController {
                 .map(context -> toContextBody(context, haByContext.get(context.context()), vsNamesByContext.get(context.context())))
                 .toList())
                 .orElse(List.of()));
+        // V72: an Infoblox Grid Manager's members as facts; the member name goes out under "virtual_system" so aiview sees
+        // the same pseudonym the Devices tree shows, and the VIP under "address" so it is masked as an address.
+        body.put("grid_members", run.map(r -> r.gridMembers().stream().map(InventoryController::toGridMemberBody).toList()).orElse(List.of()));
         return ResponseEntity.ok(body);
+    }
+
+    private static Map<String, Object> toGridMemberBody(GridMember m) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("virtual_system", m.hostName());
+        body.put("address", m.vipAddress().orElse(null));
+        body.put("platform", m.platform().orElse(null));
+        body.put("hardware_type", m.hardwareType().orElse(null));
+        body.put("hypervisor", m.hypervisor().orElse(null));
+        body.put("grid_master", m.gridMaster());
+        body.put("master_candidate", m.masterCandidate());
+        body.put("ha_enabled", m.haEnabled());
+        body.put("ha_status", m.haStatus().orElse(null));
+        body.put("node_status", m.nodeStatus().orElse(null));
+        body.put("replication", m.replication().orElse(null));
+        body.put("disk_percent", m.diskPercent().orElse(null));
+        body.put("memory_percent", m.memoryPercent().orElse(null));
+        body.put("cpu_percent", m.cpuPercent().orElse(null));
+        body.put("db_percent", m.dbPercent().orElse(null));
+        body.put("services", m.services().stream().map(sv -> Map.of("service", sv.service(), "status", sv.status())).toList());
+        return body;
     }
 
     @GetMapping("/clusters/{clusterMemberRef}/inventory")

@@ -14,6 +14,7 @@ import java.util.function.Function;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember;
 import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials;
@@ -36,8 +37,8 @@ public final class HttpsVendorExecutor {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /** The identity a confirm read returns; every field optional. */
-    /** {@code members}: the grid members an Infoblox Grid Manager lists (host names, sorted); empty for every other vendor. */
-    public record Identity(Optional<String> name, Optional<String> model, Optional<String> version, List<String> members) {
+    /** {@code members}: the grid members an Infoblox Grid Manager lists (facts, ordered); empty for every other vendor. */
+    public record Identity(Optional<String> name, Optional<String> model, Optional<String> version, List<GridMember> members) {
         public Identity {
             members = members == null ? List.of() : List.copyOf(members);
         }
@@ -72,7 +73,7 @@ public final class HttpsVendorExecutor {
     /** Where a backup run hands the grid members it listed (device, job, sorted host names); the worker records them. */
     @FunctionalInterface
     public interface MemberSink {
-        void members(String deviceId, String jobId, List<String> members);
+        void members(String deviceId, String jobId, List<GridMember> members);
     }
 
     private volatile MemberSink memberSink = (d, j, m) -> { };
@@ -129,29 +130,20 @@ public final class HttpsVendorExecutor {
     }
 
     /**
-     * The grid's members (PO 2026-09-25): {@code GET /wapi/v<ver>/member}, host names sorted. A failure here never fails
-     * the confirm -- the identity is already established -- it only leaves the member list empty (logged).
+     * The grid's members (PO 2026-09-25, V72): {@code GET /wapi/v<ver>/member} with identity, grid role, hardware, HA,
+     * node health and services. The member whose VIP is the address this run dialled is the Grid Master. A failure here
+     * never fails the run -- the identity is already established -- it only leaves the member list empty (logged).
      */
-    private List<String> infobloxMembers(Target target, Credentials creds, String version) throws InterruptedException {
+    private List<GridMember> infobloxMembers(Target target, Credentials creds, String version) throws InterruptedException {
         try {
             TextResponse r = client.get(target, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_MEMBERS, version), creds, SHORT, TEXT_MAX);
             if (!r.ok()) {
                 LOG.log(System.Logger.Level.WARNING, "[HTTPS_CONFIRM] infoblox member list answered HTTP {0}", r.status());
                 return List.of();
             }
-            JsonNode members = JSON.readTree(r.body());
-            if (!members.isArray()) {
-                return List.of();
-            }
-            List<String> names = new java.util.ArrayList<>();
-            for (JsonNode m : members) {
-                if (m.hasNonNull("host_name") && !m.get("host_name").asText().isBlank()) {
-                    names.add(m.get("host_name").asText().trim());
-                }
-            }
-            java.util.Collections.sort(names);
-            LOG.log(System.Logger.Level.INFO, "[HTTPS_CONFIRM] infoblox grid lists {0} member(s)", names.size());
-            return List.copyOf(names);
+            List<GridMember> members = InfobloxMembers.parse(JSON.readTree(r.body()), target.host());
+            LOG.log(System.Logger.Level.INFO, "[HTTPS_CONFIRM] infoblox grid lists {0} member(s)", members.size());
+            return members;
         } catch (IOException e) {
             LOG.log(System.Logger.Level.WARNING, "[HTTPS_CONFIRM] infoblox member list failed: {0}", e.getClass().getSimpleName());
             return List.of();
@@ -398,7 +390,7 @@ public final class HttpsVendorExecutor {
                     "infoblox", "database.bak", 1);
             if (result instanceof BackupResult.Completed) {
                 // PO 2026-09-25: the member list is refreshed by every backup run, not only by the one-time confirm.
-                List<String> members = infobloxMembers(target, creds, ver);
+                List<GridMember> members = infobloxMembers(target, creds, ver);
                 if (!members.isEmpty()) {
                     memberSink.members(deviceId, jobId, members);
                 }

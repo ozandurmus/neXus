@@ -17,7 +17,8 @@ import java.util.Optional;
  * built and proven against fixtures before any live run).
  */
 public record InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,
-        List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems) {
+        List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
+        List<GridMember> gridMembers) {
 
     public InventoryRun {
         Objects.requireNonNull(runId, "runId");
@@ -27,6 +28,13 @@ public record InventoryRun(String runId, String deviceId, String jobId, Instant 
         contexts = contexts == null ? List.of() : List.copyOf(contexts);
         haFacts = haFacts == null ? List.of() : List.copyOf(haFacts);
         virtualSystems = virtualSystems == null ? Optional.empty() : virtualSystems;
+        gridMembers = gridMembers == null ? List.of() : List.copyOf(gridMembers);
+    }
+
+    /** Pre-V72 shape: no grid members (every firewall run). */
+    public InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,
+            List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems) {
+        this(runId, deviceId, jobId, collectedAt, contextCount, contexts, haFacts, virtualSystems, List.of());
     }
 
     public InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,

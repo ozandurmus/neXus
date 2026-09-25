@@ -5,12 +5,14 @@ import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
+import type { Tone } from "../shell/tone";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
@@ -31,6 +33,7 @@ import {
   type ClusterInventory,
   type ClusterRoute,
   type DeviceInventory,
+  type GridMemberView,
   type DeviceSummary,
   type InventoryAddress,
   type InventoryContext,
@@ -43,6 +46,107 @@ import {
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 
 const POLL_INTERVAL_MS = 1750;
+
+/** The services worth a chip on a grid member row, in display order; everything else is counted only. */
+const GRID_MEMBER_SERVICES = ["DNS", "DHCP", "NTP", "DOT_DOH", "DFP", "ATP", "ANALYTICS", "REPORTING", "TAXII"] as const;
+
+function serviceTone(status: string): Tone {
+  if (status === "WORKING") return "ok";
+  if (status === "WARNING") return "warn";
+  if (status === "FAILED" || status === "ERROR") return "bad";
+  return "neutral";
+}
+
+function percentTone(value: number | null): Tone {
+  if (value === null) return "neutral";
+  if (value >= 90) return "bad";
+  if (value >= 75) return "warn";
+  return "ok";
+}
+
+/** V72: an Infoblox Grid Manager's members -- role in the grid, hardware, HA, node health and services, as reported. */
+function GridMembersPanel({ members }: { readonly members: readonly GridMemberView[] }) {
+  if (members.length === 0) {
+    return (
+      <EmptyPanel
+        title="No grid member evidence"
+        body="The member list is read when the Grid Manager is confirmed and after every completed backup; none has been recorded yet."
+      />
+    );
+  }
+  const pct = (v: number | null) => (v === null ? "\u2014" : `${v}%`);
+  return (
+    <Stack spacing={1.5}>
+      <Typography variant="caption" color="text.secondary">
+        {members.length} members · {members.filter((m) => m.grid_master).length} Grid Master ·{" "}
+        {members.filter((m) => m.master_candidate && !m.grid_master).length} master candidates ·{" "}
+        {members.filter((m) => m.ha_enabled).length} HA pairs · read from the Grid Manager, nothing inferred
+      </Typography>
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Member</TableCell>
+              <TableCell>Role</TableCell>
+              <TableCell>Hardware</TableCell>
+              <TableCell>HA</TableCell>
+              <TableCell>Node</TableCell>
+              <TableCell align="right">Disk</TableCell>
+              <TableCell align="right">Memory</TableCell>
+              <TableCell align="right">CPU</TableCell>
+              <TableCell align="right">DB</TableCell>
+              <TableCell>Services</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {members.map((m) => {
+              const byService = new Map(m.services.map((s) => [s.service, s.status] as const));
+              const shown = GRID_MEMBER_SERVICES.filter((s) => byService.has(s));
+              const active = m.services.filter((s) => s.status === "WORKING" || s.status === "WARNING").length;
+              return (
+                <TableRow key={m.virtual_system}>
+                  <TableCell sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>{m.virtual_system}</TableCell>
+                  <TableCell>
+                    {m.grid_master ? <StatusChip tone="mem" label="Grid Master" dense />
+                      : m.master_candidate ? <StatusChip tone="neutral" label="Master candidate" dense />
+                      : <Typography variant="caption" color="text.secondary">member</Typography>}
+                  </TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>
+                    <Typography variant="body2">{m.hardware_type ?? "\u2014"}</Typography>
+                    <Typography variant="caption" color="text.secondary">{[m.platform, m.hypervisor].filter(Boolean).join(" · ")}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    {m.ha_enabled
+                      ? <StatusChip tone={m.ha_status === "ACTIVE" || m.ha_status === "PASSIVE" ? "ok" : "warn"} label={m.ha_status ?? "HA"} dense />
+                      : <Typography variant="caption" color="text.secondary">single node</Typography>}
+                  </TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>
+                    <StatusChip tone={m.node_status === "WORKING" ? "ok" : m.node_status ? "warn" : "neutral"} label={m.node_status ?? "unknown"} dense />
+                    {m.replication && (
+                      <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>replication {m.replication}</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell align="right"><StatusChip tone={percentTone(m.disk_percent)} label={pct(m.disk_percent)} dense /></TableCell>
+                  <TableCell align="right"><StatusChip tone={percentTone(m.memory_percent)} label={pct(m.memory_percent)} dense /></TableCell>
+                  <TableCell align="right"><StatusChip tone={percentTone(m.cpu_percent)} label={pct(m.cpu_percent)} dense /></TableCell>
+                  <TableCell align="right"><StatusChip tone={percentTone(m.db_percent)} label={pct(m.db_percent)} dense /></TableCell>
+                  <TableCell>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, alignItems: "center" }}>
+                      {shown.map((svc) => (
+                        <StatusChip key={svc} tone={serviceTone(byService.get(svc)!)} label={svc.replace("_", "/")} dense />
+                      ))}
+                      <Typography variant="caption" color="text.secondary">{active} of {m.services.length} active</Typography>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Stack>
+  );
+}
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -1610,8 +1714,10 @@ export function DeviceInventoryPanels({
               : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} />,
           },
           {
-            label: "Cluster members",
-            panel: isCluster && clusterInventory
+            label: device.vendor_hint === "infoblox" ? "Grid members" : "Cluster members",
+            panel: device.vendor_hint === "infoblox"
+              ? <GridMembersPanel members={deviceInventory?.grid_members ?? []} />
+              : isCluster && clusterInventory
               ? (
                 <Stack spacing={2}>
                   <Table size="small">

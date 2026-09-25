@@ -247,7 +247,9 @@ public final class Ui2WorkerMain {
         // V71: an Infoblox backup also refreshes the grid member list shown under the Grid Manager.
         httpsVendorExecutor.withMemberSink((deviceId, jobId, members) -> deviceInventoryRepository.recordRun(
                 new com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun(java.util.UUID.randomUUID().toString(), deviceId, jobId,
-                        java.time.Instant.now(), 0, java.util.List.of(), java.util.List.of(), java.util.Optional.of(String.join(", ", members))),
+                        java.time.Instant.now(), 0, java.util.List.of(), java.util.List.of(),
+                        java.util.Optional.of(members.stream().map(m -> m.hostName()).sorted().collect(java.util.stream.Collectors.joining(", "))),
+                        members),
                 "system:worker", "backup_completed"));
         backupJobExecutor.withHttpsVendorExecutor(httpsVendorExecutor,
                 new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(transactionBoundary));
