@@ -1073,10 +1073,19 @@
       "note": ""
     },
     {
-      "id": "bluecoat_proxysg_via_management_center",
+      "id": "device_onboarding_flow",
+      "category": "product",
+      "title": "Add device = one flow of separate jobs (PO 2026-09-25: half-filled devices are not acceptable): identity (confirm) -> inventory (Collect) -> configuration where the vendor has one; one progress view, stop at the failing step with its reason, retry that step only; discovery imports use the same flow; backup never in the flow (a write; offered as an opt-in at the end). Acceptance: minutes after adding, no Unknown field without a stated reason. Design note first, PO approval, then code (~1 day)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "ui2/frontend/src/shell/AddDeviceDialog.tsx",
+      "note": ""
+    },
+    {
+      "id": "bluecoat_proxysg_backup_path",
       "category": "collection",
-      "title": "Blue Coat ProxySG via Symantec Management Center (PO 2026-09-25): MC REST on 8082 (basic or X-Auth-Token), GET /devices lists 4 ProxySG (SGOS 7.4.15.1), a Reporter and 2 WSS entries; the on-box API guide /help/api needs a login; backup through MC's own device backup or SSH show configuration -- decide after reading the on-box guide; first target the test proxy",
-      "status": "in_progress",
+      "title": "ProxySG backup (PO 2026-09-25): Management Center measured (fwadm, GET /api/devices: 4 ProxySG sgos6x, 1 Reporter, 2 WSS; fields incl. uuid, osVersion, build, serialNumber, managementStatus, deploymentStatus). Choose: MC device-backup job + backup retrieval (paths from the on-box guide, needs an MC web session) or SSH show configuration per ProxySG (gate rows in VENDOR_BACKUP_CONTRACTS §8). First target: the test proxy",
+      "status": "planned",
       "priority": "P1",
       "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
       "note": ""
