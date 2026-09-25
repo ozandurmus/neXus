@@ -150,6 +150,9 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             }
 
             switch (key) {
+                // Product facts, never identities (2026-09-25): a four-part version such as "7.4.15.1" read as an address
+                // by the IP masker, and a type label equal to a device name ("Reporter") read as that name.
+                case "platform", "hardware_type", "hypervisor", "software_version", "model", "platform_family" -> result.put(key, value);
                 case "cluster_member_ref" -> {
                     if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskClusterName(s));

@@ -88,6 +88,28 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void productFactsAreNeverReadAsAddressesOrNames() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> member = new LinkedHashMap<>();
+        member.put("virtual_system", "SG-EXAMPLEBANK-1");
+        member.put("address", "192.168.230.14");
+        member.put("platform", "Reporter");
+        member.put("hardware_type", "SG-Enterprise");
+        member.put("hypervisor", "SGOS 7.4.15.1 SWG Edition (build 307841)");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) advice.beforeBodyWrite(Map.of("grid_members", List.of(member)), null, null,
+                null, serverRequest, null);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> masked = ((List<Map<String, Object>>) result.get("grid_members")).get(0);
+        assertThat((String) masked.get("virtual_system")).doesNotContain("EXAMPLEBANK");
+        assertThat((String) masked.get("address")).doesNotContain("192.168.230.14");
+        assertThat(masked.get("platform")).isEqualTo("Reporter");
+        assertThat(masked.get("hardware_type")).isEqualTo("SG-Enterprise");
+        assertThat(masked.get("hypervisor")).isEqualTo("SGOS 7.4.15.1 SWG Edition (build 307841)");
+    }
+
+    @Test
     void masksDeviceSummaryListForReplayViewer() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
 

@@ -1691,7 +1691,9 @@ export function DeviceInventoryPanels({
   const deviceIfaceCount = deviceContexts.reduce((acc, c) => acc + c.interfaces.length, 0);
   const deviceRouteCount = deviceContexts.reduce((acc, c) => acc + c.routes.length, 0);
   const isEnrolledDevice = device.enrollment_state === "ENROLLED";
-  const isLiveDevice = isEnrolledDevice && Boolean(device.ip_addresses);
+  // Live = device evidence has been read: interface addresses, or (HTTPS appliances and management servers whose
+  // evidence is members / managed devices, not interfaces) a completed inventory run.
+  const isLiveDevice = isEnrolledDevice && (Boolean(device.ip_addresses) || Boolean(deviceInventory?.collected_at));
 
   return (
     <Stack spacing={2}>
