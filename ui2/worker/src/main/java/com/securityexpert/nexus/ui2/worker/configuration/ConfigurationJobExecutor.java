@@ -135,13 +135,18 @@ public final class ConfigurationJobExecutor {
         }
 
         String vendor = request.vendor() == ConfigurationVendor.CHECK_POINT ? "check_point" : "palo_alto";
-        // Fill a device's empty hostname/version from this run's identity refresh; never overwrites a recorded value.
+        // PO 2026-09-25: this run's identity refresh updates the device's observed hostname / version whenever they
+        // differ (an MDS upgrade must show after the next read); the identity baseline stays untouched.
         if (completed.identity().hostname().isPresent() || completed.identity().softwareVersion().isPresent()) {
             try {
-                deviceRepository.fillObservedIdentityIfAbsent(targetDeviceId, completed.identity().hostname(),
-                        completed.identity().softwareVersion(), ACTOR, "configuration_identity_fill");
+                boolean changed = deviceRepository.refreshObservedFacts(targetDeviceId, completed.identity().hostname(), Optional.empty(),
+                        completed.identity().softwareVersion(), ACTOR, "configuration_identity_refresh");
+                if (changed) {
+                    System.getLogger(ConfigurationJobExecutor.class.getName()).log(System.Logger.Level.INFO,
+                            "[OBSERVED_FACTS_REFRESHED] job {0}: hostname/version changed on this read", jobId);
+                }
             } catch (RuntimeException e) {
-                System.getLogger(ConfigurationJobExecutor.class.getName()).log(System.Logger.Level.WARNING, "[CONFIG_IDENTITY_FILL_FAILED] job {0}: {1}", jobId, e.getMessage());
+                System.getLogger(ConfigurationJobExecutor.class.getName()).log(System.Logger.Level.WARNING, "[CONFIG_IDENTITY_REFRESH_FAILED] job {0}: {1}", jobId, e.getMessage());
             }
         }
         Instant now = Instant.now();

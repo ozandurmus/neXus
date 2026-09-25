@@ -157,6 +157,18 @@ public final class InventoryJobExecutor {
                     ACTION_FAILED, reasonWithTime);
             return new JobOutcome.Failed("inventory_run_write_failed: " + recordFailed.getMessage());
         }
+        // PO 2026-09-25: the device row's observed hostname / model / version follow this read whenever they differ.
+        if (!completed.observedIdentity().isEmpty()) {
+            try {
+                boolean changed = deviceRepository.refreshObservedFacts(targetDeviceId, completed.observedIdentity().hostname(),
+                        completed.observedIdentity().model(), completed.observedIdentity().softwareVersion(), ACTOR, "inventory_identity_refresh");
+                if (changed) {
+                    LOG.log(System.Logger.Level.INFO, "[OBSERVED_FACTS_REFRESHED] Inventory job {0}: hostname/model/version changed on this read", jobId);
+                }
+            } catch (RuntimeException refreshFailed) {
+                LOG.log(System.Logger.Level.WARNING, "[OBSERVED_FACTS_REFRESH_FAILED] Inventory job {0}: {1}", jobId, refreshFailed.getMessage());
+            }
+        }
         // Platform identity facts (V46): the run is the record; a facts write that fails is logged, never fails the job.
         completed.platformFacts().ifPresent(read -> {
             try {

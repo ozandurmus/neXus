@@ -9,15 +9,36 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact
 /** One inventory-collect device-contact outcome, mirrors {@code worker.confirm.ConfirmResult}'s shape. */
 public sealed interface InventoryResult {
 
+    /** What this read observed about the device itself (PO 2026-09-25: refreshed on every read, never filled once). */
+    record ObservedIdentity(Optional<String> hostname, Optional<String> model, Optional<String> softwareVersion) {
+        public static final ObservedIdentity NONE = new ObservedIdentity(Optional.empty(), Optional.empty(), Optional.empty());
+
+        public ObservedIdentity {
+            hostname = hostname == null ? Optional.empty() : hostname.filter(v -> !v.isBlank());
+            model = model == null ? Optional.empty() : model.filter(v -> !v.isBlank());
+            softwareVersion = softwareVersion == null ? Optional.empty() : softwareVersion.filter(v -> !v.isBlank());
+        }
+
+        public boolean isEmpty() {
+            return hostname.isEmpty() && model.isEmpty() && softwareVersion.isEmpty();
+        }
+    }
+
     /** {@code haFacts} (migration V17): every {@link InventoryHaFact} the contact produced, across every context. */
     record Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
-            Optional<PlatformFactsRead> platformFacts) implements InventoryResult {
+            Optional<PlatformFactsRead> platformFacts, ObservedIdentity observedIdentity) implements InventoryResult {
 
         public Completed {
             contexts = contexts == null ? List.of() : List.copyOf(contexts);
             haFacts = haFacts == null ? List.of() : List.copyOf(haFacts);
             virtualSystems = virtualSystems == null ? Optional.empty() : virtualSystems;
             platformFacts = platformFacts == null ? Optional.empty() : platformFacts;
+            observedIdentity = observedIdentity == null ? ObservedIdentity.NONE : observedIdentity;
+        }
+
+        public Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
+                Optional<PlatformFactsRead> platformFacts) {
+            this(contexts, haFacts, virtualSystems, platformFacts, ObservedIdentity.NONE);
         }
 
         public Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts) {

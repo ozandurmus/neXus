@@ -17,6 +17,7 @@ public final class PaloAltoSystemInfoParser {
     private static final Pattern SW_VERSION_TAG = tag("sw-version");
     private static final Pattern SERIAL_TAG = tag("serial");
     private static final Pattern MODEL_TAG = tag("model");
+    private static final Pattern HOSTNAME_TAG = tag("hostname");
     private static final Pattern FAMILY_TAG = tag("family");
     private static final Pattern UPTIME_TAG = tag("uptime");
 
@@ -40,7 +41,7 @@ public final class PaloAltoSystemInfoParser {
         for (String name : CONTENT_VERSION_ORDER) {
             firstMatch(CONTENT_VERSION_TAGS.get(name), xml).ifPresent(v -> contentVersions.put(name, v));
         }
-        return new SystemInfo(serial, swVersion, model, firstMatch(FAMILY_TAG, xml), contentVersions,
+        return new SystemInfo(serial, swVersion, model, firstMatch(FAMILY_TAG, xml), contentVersions, firstMatch(HOSTNAME_TAG, xml),
                 firstMatch(UPTIME_TAG, xml));
     }
 
@@ -57,14 +58,15 @@ public final class PaloAltoSystemInfoParser {
     }
 
     public record SystemInfo(String serial, Optional<String> swVersion, Optional<String> model,
-            Optional<String> family, Map<String, String> contentVersions, Optional<String> uptime) {
+            Optional<String> family, Map<String, String> contentVersions, Optional<String> hostname, Optional<String> uptime) {
 
         public SystemInfo {
             contentVersions = contentVersions == null ? Map.of() : Map.copyOf(contentVersions);
+            hostname = hostname == null ? Optional.empty() : hostname;
         }
 
         public SystemInfo(String serial, Optional<String> swVersion, Optional<String> model) {
-            this(serial, swVersion, model, Optional.empty(), Map.of(), Optional.empty());
+            this(serial, swVersion, model, Optional.empty(), Map.of(), Optional.empty(), Optional.empty());
         }
     }
 }

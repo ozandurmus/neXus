@@ -370,8 +370,21 @@ public final class InventoryCapabilityExecutor {
                     "[INVENTORY_COLLECT_COMPLETE] target={0}:{1} completed in {2}ms, totalContexts={3}, totalInterfaces={4}",
                     target.host(), target.port(), totalElapsed, contexts.size(),
                     contexts.stream().mapToInt(c -> c.interfaces().size()).sum());
+            // PO 2026-09-25: hostname (the presented identity), model (the asset family) and the Gaia version are
+            // observed on every read and refreshed on the device row by the job executor; a failed version read leaves
+            // the version unknown for this run and never fails the inventory.
+            Optional<String> gaiaVersion;
+            try {
+                gaiaVersion = com.securityexpert.nexus.ui2.worker.backup.BackupReadPlan.parseGaiaVersion(
+                        identityReadOutput(session, InventoryReadPlan.CP_SHOW_VERSION_ALL, preferInteractiveShell));
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "[INVENTORY_VERSION_READ_FAILED] {0}", e.getClass().getSimpleName());
+                gaiaVersion = Optional.empty();
+            }
+            InventoryResult.ObservedIdentity observed = new InventoryResult.ObservedIdentity(session.presentedIdentity(),
+                    platformFacts.platformFamily(), gaiaVersion);
             return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
-                    Optional.of(platformFacts));
+                    Optional.of(platformFacts), observed);
         } finally {
             transport.disconnect(session);
         }
@@ -508,7 +521,8 @@ public final class InventoryCapabilityExecutor {
         String virtualSystemsString = panVsNames.isEmpty() ? null : String.join(", ", panVsNames);
 
         return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
-                Optional.of(PlatformFactsRead.paloAlto(sysInfo).withPolicyInstall(panPolicyInstall(target, headers))));
+                Optional.of(PlatformFactsRead.paloAlto(sysInfo).withPolicyInstall(panPolicyInstall(target, headers))),
+                new InventoryResult.ObservedIdentity(sysInfo.hostname(), sysInfo.model(), sysInfo.swVersion()));
     }
 
     private static boolean isValidPanVsys(String vsys) {

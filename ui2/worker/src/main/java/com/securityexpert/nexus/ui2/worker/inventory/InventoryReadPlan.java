@@ -85,6 +85,8 @@ public final class InventoryReadPlan {
     /** Installed policy name and install time (V60, POLICY_INSTALL_TIME_COMMAND_GATE_ENTRIES.md #1); a login shell like cpinfo. */
     public static final String CP_CPSTAT_POLICY = "bash -lc 'cpstat -f policy fw'";
     public static final String CP_SHOW_ASSET_SYSTEM = "clish -c 'show asset system'";
+    /** The Gaia version (PO 2026-09-25: observed facts follow every read); the configuration path's gated literal. */
+    public static final String CP_SHOW_VERSION_ALL = "clish -c 'show version all'";
 
     /** Physical read order (amended 2026-09-21, cp_vsx_interfaces_identical_to_physical): interfaces
      * ({@code fw getifs}, superseding the old v4/v6 {@code ip addr show} pair), routes, HA state, cluster

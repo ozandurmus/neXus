@@ -140,6 +140,15 @@ final class InventoryJobExecutorFakes {
     /** Only {@link #findConfirmFacts} is meaningful here; every other method is unused by these tests. */
     static final class FakeDeviceRepository implements DeviceRepository {
         Optional<DeviceConfirmFacts> confirmFacts = Optional.empty();
+        /** PO 2026-09-25: every completed read refreshes the observed facts; "hostname|model|version" per call. */
+        final java.util.List<String> observedFactRefreshes = new java.util.ArrayList<>();
+
+        @Override
+        public boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,
+                Optional<String> softwareVersion, String actorFingerprint, String actionId) {
+            observedFactRefreshes.add(hostname.orElse("") + "|" + model.orElse("") + "|" + softwareVersion.orElse(""));
+            return true;
+        }
 
         @Override
         public Optional<DeviceRecord> find(String deviceId) {

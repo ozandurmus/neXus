@@ -139,14 +139,19 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
-    public boolean fillObservedIdentityIfAbsent(String deviceId, Optional<String> hostname, Optional<String> softwareVersion,
-            String actorFingerprint, String actionId) {
+    public boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,
+            Optional<String> softwareVersion, String actorFingerprint, String actionId) {
+        if (hostname.isEmpty() && model.isEmpty() && softwareVersion.isEmpty()) {
+            return false;
+        }
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, (DSLContext dsl) -> dsl.execute(
-                "update devices set observed_hostname = coalesce(observed_hostname, {1}), "
-                        + "observed_software_version = coalesce(observed_software_version, {2}) "
-                        + "where device_id = {0} and ((observed_hostname is null and {1}::text is not null) "
-                        + "or (observed_software_version is null and {2}::text is not null))",
-                deviceId, hostname.orElse(null), softwareVersion.orElse(null))) == 1;
+                "update devices set observed_hostname = coalesce({1}, observed_hostname), "
+                        + "observed_model = coalesce({2}, observed_model), "
+                        + "observed_software_version = coalesce({3}, observed_software_version) "
+                        + "where device_id = {0} and (observed_hostname is distinct from coalesce({1}, observed_hostname) "
+                        + "or observed_model is distinct from coalesce({2}, observed_model) "
+                        + "or observed_software_version is distinct from coalesce({3}, observed_software_version))",
+                deviceId, hostname.orElse(null), model.orElse(null), softwareVersion.orElse(null))) == 1;
     }
 
     @Override

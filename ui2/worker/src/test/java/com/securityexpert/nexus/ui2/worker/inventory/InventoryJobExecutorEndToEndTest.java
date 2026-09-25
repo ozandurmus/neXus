@@ -362,7 +362,8 @@ class InventoryJobExecutorEndToEndTest {
                 + "<interface>ethernet1/3</interface><virtual-router>VR-DMZ</virtual-router><flags>A C</flags></entry>"
                 + "</result></response>";
         Map<String, String> outputByCmd = Map.of(
-                InventoryReadPlan.PAN_SHOW_SYSTEM_INFO, "<response><result><system><serial>0011223344</serial></system></result></response>",
+                InventoryReadPlan.PAN_SHOW_SYSTEM_INFO, "<response><result><system><hostname>fw-a</hostname><serial>0011223344</serial>"
+                        + "<model>PA-3440</model><sw-version>11.1.10-h7</sw-version></system></result></response>",
                 InventoryReadPlan.PAN_SHOW_HA_STATE, "<response><result><enabled>no</enabled></result></response>",
                 InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, interfaceXml,
                 InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, routeXml);
@@ -390,6 +391,8 @@ class InventoryJobExecutorEndToEndTest {
 
         InventoryRun run = inventoryRepository.lastRecordedRun;
         assertEquals(3, run.contexts().size(), "physical (no hw ports in this scripted response) + vsys 1 + vsys 2");
+        assertEquals(java.util.List.of("fw-a|PA-3440|11.1.10-h7"), deviceRepository.observedFactRefreshes,
+                "PO 2026-09-25: the read's hostname, model and version refresh the device row every time");
 
         InventoryContext physical = contextNamed(run, InventoryContext.PHYSICAL);
         assertTrue(physical.interfaces().isEmpty(), "no <hw> block in this scripted response");

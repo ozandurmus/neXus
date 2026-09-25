@@ -110,8 +110,13 @@ class JooqDeviceInventoryRepositoryTest {
                 new String[] { "ha_id", "context", "role", "cluster_mode", "source" },
                 new String[] { "ha-1", "physical", "ACTIVE", "High Availability", "cp_cphaprob_stat" });
 
+        // V72: the grid_member read comes last and answers empty for a firewall run.
+        Result<Record> gridMemberResult = create.fetchFromStringData(
+                new String[] { "member_id", "host_name", "vip_address", "platform", "hardware_type", "hypervisor", "grid_master",
+                        "master_candidate", "ha_enabled", "ha_status", "node_status", "replication", "disk_percent", "memory_percent",
+                        "cpu_percent", "db_percent", "services" });
         List<Result<Record>> queue =
-                new ArrayList<>(List.of(runResult, addressResult, interfaceResult, routeResult, haResult));
+                new ArrayList<>(List.of(runResult, addressResult, interfaceResult, routeResult, haResult, gridMemberResult));
         MockDataProvider provider = ctx -> {
             Result<Record> next = queue.remove(0);
             return new MockResult[] { new MockResult(next.size(), next) };
@@ -133,6 +138,7 @@ class JooqDeviceInventoryRepositoryTest {
         assertEquals(2, context.interfaces().get(0).addresses().size());
         assertEquals(Optional.of(100), context.interfaces().get(0).vlanId(), "AC-4: the VLAN id round-trips");
         assertEquals(1, context.routes().size());
+        assertTrue(run.gridMembers().isEmpty(), "a firewall run carries no grid members");
         assertEquals("default", context.routes().get(0).protocol());
         assertEquals(1, run.haFacts().size(), "AC-4: the HA fact round-trips");
         InventoryHaFact haFact = run.haFacts().get(0);

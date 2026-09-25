@@ -98,9 +98,13 @@ public interface DeviceRepository {
     /** The V12 facts a confirmed device carries, for a read model (GET /devices, GET /devices/{id}). */
     Optional<DeviceConfirmFacts> findConfirmFacts(String deviceId);
 
-    /** Sets observed hostname / software version only where they are still empty (a later read never overwrites). */
-    default boolean fillObservedIdentityIfAbsent(String deviceId, Optional<String> hostname, Optional<String> softwareVersion,
-            String actorFingerprint, String actionId) {
+    /**
+     * PO 2026-09-25: observed facts follow every completed read. Each present value replaces the stored one when it
+     * differs (an absent value leaves the stored one alone); the identity baseline (recorded_identity_*) is untouched.
+     * True when the row changed. The fill-if-absent rule that preceded this hid an MDS upgrade for three days.
+     */
+    default boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,
+            Optional<String> softwareVersion, String actorFingerprint, String actionId) {
         return false;
     }
 
