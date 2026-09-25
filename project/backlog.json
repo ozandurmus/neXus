@@ -1080,6 +1080,24 @@
       "priority": "P2",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "asa_fortinet_cluster_view",
+      "category": "vendor",
+      "title": "Cluster view for Cisco ASA failover pairs and FortiGate HA clusters",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "asa_fortinet_configuration_plane",
+      "category": "vendor",
+      "title": "Configuration plane for Cisco ASA and FortiGate (sections, settings, compliance input)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }
