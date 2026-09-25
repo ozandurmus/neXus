@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.worker.backup.https;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -308,6 +309,106 @@ public final class HttpsVendorExecutor {
                 new Identity(r.peerName(), Optional.of("Symantec Management Center"), Optional.empty()));
     }
 
+    /**
+     * ProxySG backup through the Symantec Management Center (PO 2026-09-25; VENDOR_BACKUP_CONTRACTS §8a, measured on
+     * the test proxy): for every ProxySG the MC lists, {@code show version} and {@code show configuration} through
+     * {@code PUT /api/devices/{uuid}/command} -- exactly these literals, never another (the MC's session is at
+     * #(config)). One gzip tar bundle: {@code <uuid>/show-version.txt}, {@code <uuid>/configuration.txt} per ProxySG and
+     * {@code manifest.txt} (uuid, name, type) inside the encrypted artefact; member paths carry opaque ids only.
+     * A ProxySG whose read fails is named in the manifest as failed; the run fails only when none succeeded.
+     */
+    private BackupResult backupManagementCenter(Target target, Credentials creds, String deviceId, String jobId)
+            throws IOException, InterruptedException {
+        TextResponse list = client.get(target, HttpsVendorPlan.MC_DEVICES, creds, SHORT, 8 * 1024 * 1024);
+        if (list.status() == 401 || list.status() == 403) {
+            return new BackupResult.ConnectFailed("authentication_failed: HTTP " + list.status());
+        }
+        if (!list.ok()) {
+            return new BackupResult.ConnectFailed("the Management Center device list answered HTTP " + list.status());
+        }
+        List<JsonNode> proxies = new java.util.ArrayList<>();
+        for (JsonNode d : JSON.readTree(list.body())) {
+            if (HttpsVendorPlan.MC_TYPE_PROXYSG.equals(d.path("type").asText()) && d.hasNonNull("uuid")) {
+                proxies.add(d);
+            }
+        }
+        if (proxies.isEmpty()) {
+            return new BackupResult.SubmitRefused("the Management Center lists no ProxySG (type " + HttpsVendorPlan.MC_TYPE_PROXYSG + ")");
+        }
+        StringBuilder manifest = new StringBuilder("# ProxySG configuration backup through the Management Center\n# uuid\tname\tresult\n");
+        java.util.LinkedHashMap<String, byte[]> members = new java.util.LinkedHashMap<>();
+        int ok = 0;
+        for (JsonNode p : proxies) {
+            String uuid = p.get("uuid").asText();
+            String name = p.path("name").asText("");
+            String result;
+            try {
+                String version = mcCommand(target, creds, uuid, HttpsVendorPlan.MC_CMD_SHOW_VERSION);
+                String config = mcCommand(target, creds, uuid, HttpsVendorPlan.MC_CMD_SHOW_CONFIGURATION);
+                if (!config.contains("!- BEGIN") || !config.contains("!- END")) {
+                    result = "configuration without BEGIN/END section markers -- not stored";
+                } else {
+                    members.put(uuid + "/show-version.txt", version.getBytes(StandardCharsets.UTF_8));
+                    members.put(uuid + "/configuration.txt", config.getBytes(StandardCharsets.UTF_8));
+                    result = "ok " + config.length() + " bytes";
+                    ok++;
+                }
+            } catch (McCommandFailed e) {
+                result = "failed: " + e.getMessage();
+            }
+            manifest.append(uuid).append('\t').append(name).append('\t').append(result).append('\n');
+            LOG.log(System.Logger.Level.INFO, "[MC_BACKUP] proxysg {0}: {1}", uuid, result.startsWith("ok") ? "ok" : result);
+        }
+        if (ok == 0) {
+            return new BackupResult.SubmitRefused("no ProxySG configuration could be read through the Management Center ("
+                    + proxies.size() + " tried)");
+        }
+        ArtefactStore.ArtefactHandle handle = artefactStore.open(deviceId, jobId, "bluecoat", false);
+        try {
+            try (com.securityexpert.nexus.ui2.persistence.artefact.content.TarWriter tar =
+                    new com.securityexpert.nexus.ui2.persistence.artefact.content.TarWriter(new java.util.zip.GZIPOutputStream(handle.sink()))) {
+                tar.file("manifest.txt", manifest.toString().getBytes(StandardCharsets.UTF_8));
+                for (var e : members.entrySet()) {
+                    tar.file(e.getKey(), e.getValue());
+                }
+            }
+            ArtefactStore.ArtefactMetadata metadata = handle.finish();
+            LOG.log(System.Logger.Level.INFO, "[MC_BACKUP] stored {0} of {1} ProxySG configuration(s), {2} bytes", ok, proxies.size(),
+                    metadata.plaintextBytes());
+            return new BackupResult.Completed(metadata, "proxysg-configurations.tgz", Optional.empty(), Optional.empty());
+        } catch (IOException e) {
+            closeQuietly(handle);
+            return new BackupResult.ArtefactStoreFailed("bundle could not be stored: " + e.getClass().getSimpleName());
+        }
+    }
+
+    private static final class McCommandFailed extends Exception {
+        McCommandFailed(String message) {
+            super(message, null, false, false);
+        }
+    }
+
+    /** One exact read literal through the MC; the device's reply text, or why there is none. */
+    private String mcCommand(Target target, Credentials creds, String uuid, String command) throws IOException, InterruptedException,
+            McCommandFailed {
+        if (!HttpsVendorPlan.MC_CMD_SHOW_VERSION.equals(command) && !HttpsVendorPlan.MC_CMD_SHOW_CONFIGURATION.equals(command)) {
+            throw new IllegalArgumentException("not a gated Management Center command");
+        }
+        TextResponse r = client.putRaw(target, HttpsVendorPlan.mcDeviceCommand(uuid), command, creds, Duration.ofSeconds(120),
+                64 * 1024 * 1024);
+        if (!r.ok()) {
+            throw new McCommandFailed("HTTP " + r.status());
+        }
+        if (r.truncated()) {
+            throw new McCommandFailed("reply larger than 64 MB");
+        }
+        JsonNode j = JSON.readTree(r.body());
+        if (!"SUCCESS".equals(j.path("status").asText())) {
+            throw new McCommandFailed("status " + j.path("status").asText("?") + ", " + j.path("messages").size() + " message(s)");
+        }
+        return j.path("reply").asText("");
+    }
+
     // ------------------------------------------------------------------------------------------------ Cyber Controller
 
     /** A logged-in Cyber Controller session; {@link #close} always logs out. */
@@ -510,6 +611,7 @@ public final class HttpsVendorExecutor {
             return switch (vendor) {
                 case "infoblox" -> backupInfoblox(target, creds, deviceId, jobId);
                 case "radware" -> backupRadware(target, creds, passphraseRef, deviceId, jobId);
+                case "bluecoat" -> backupManagementCenter(target, creds, deviceId, jobId);
                 default -> new BackupResult.ConnectFailed("no HTTPS backup for vendor " + vendor);
             };
         } catch (IOException e) {

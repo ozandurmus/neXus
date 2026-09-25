@@ -288,7 +288,8 @@ public final class WorkerClaimLoop {
             }
             if (BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(job.capabilityId())) {
                 BackupRequest httpsRequest = new BackupRequest(new ConnectionTarget(endpoint.endpointId(), hostOf(endpoint.addressRef()),
-                        httpsPortOf(endpoint.addressRef())), Optional.ofNullable(device.credentialReferenceId()), "https");
+                        httpsPortOf(endpoint.addressRef(), httpsVendorOf(device.vendorHint(), device.role()))),
+                        Optional.ofNullable(device.credentialReferenceId()), "https");
                 backupJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), httpsRequest, job.capabilityId());
                 return true;
             }

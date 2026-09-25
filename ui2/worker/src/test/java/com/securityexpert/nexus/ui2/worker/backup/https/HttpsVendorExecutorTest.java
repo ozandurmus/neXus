@@ -224,6 +224,19 @@ class HttpsVendorExecutorTest {
         assertEquals(Optional.of("MANAGED"), sgB.nodeStatus());
     }
 
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON_WRITER = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    @Test
+    void aManagementCenterBacksUpEachProxySgWithExactlyTheTwoReadCommands() throws Exception {
+        BackupResult r = executor.backup("bluecoat", T, "cred", Optional.empty(), "mc-dev", "job-mc");
+        assertTrue(r instanceof BackupResult.Completed, String.valueOf(r));
+        List<String> puts = calls.log.stream().filter(l -> l.startsWith("PUT ")).toList();
+        assertTrue(puts.stream().allMatch(l -> l.endsWith(" show version") || l.endsWith(" show configuration")),
+                "only the two gated literals are ever sent: " + puts);
+        assertTrue(puts.stream().noneMatch(l -> l.contains("C3055376")), "the Reporter (not a ProxySG) is never commanded");
+        assertEquals(3, puts.size(), "the healthy ProxySG gets both commands; the failing one stops after its failed show version: " + puts);
+    }
+
     @Test
     void cidrFromAddressAndDottedMask() {
         assertEquals(Optional.of("10.0.0.12/24"), InfobloxMembers.cidr(Optional.of("10.0.0.12"), Optional.of("255.255.255.0")));
@@ -291,6 +304,22 @@ class HttpsVendorExecutorTest {
         String deviceList = "{\"DefensePro Devices\": [{\"name\": \"DP-A\", \"managementIp\": \"192.0.2.41\"}]}";
 
         @Override
+        public TextResponse putRaw(Target target, String path, String body, Credentials creds, Duration timeout, int maxBytes) {
+            log.add("PUT " + path + " " + body);
+            String reply = body.equals("show version") ? "!- connected to device\r\nSG#(config)show version\r\nVersion: SGOS 7.4.15.1\r\n"
+                    : "!- connected to device\r\nSG#(config)show configuration\r\n!- BEGIN networking\r\ninterface 0:0\r\n!- END networking\r\n";
+            if (path.contains("B2055376")) {
+                return new TextResponse(200, Optional.of("application/json"), "{\"reply\": \"x\", \"messages\": [], \"status\": \"FAILURE\"}", false);
+            }
+            try {
+                return new TextResponse(200, Optional.of("application/json"),
+                        JSON_WRITER.writeValueAsString(java.util.Map.of("reply", reply, "messages", List.of(), "status", "SUCCESS")), false);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        @Override
         public HttpsDeviceClient.SessionLogin login(Target target, String path, String json, Duration timeout) {
             log.add("LOGIN " + path + " " + json);
             return new HttpsDeviceClient.SessionLogin(loginStatus, loginStatus == 200 ? Optional.of("JSESSIONID=s1") : Optional.empty(),
@@ -305,9 +334,9 @@ class HttpsVendorExecutorTest {
             }
             if (path.equals(HttpsVendorPlan.MC_DEVICES)) {
                 return new TextResponse(200, Optional.of("application/json"),
-                        "[{\"uuid\": \"u1\", \"name\": \"SG-B\", \"type\": \"sgos6x\", \"osVersion\": \"7.4.15.1\", \"build\": \"12345\","
+                        "[{\"uuid\": \"A1055376-3448-4A94-82DB-D9BD30BBB421\", \"name\": \"SG-B\", \"type\": \"sgos6x\", \"osVersion\": \"7.4.15.1\", \"build\": \"12345\","
                         + " \"model\": \"VA-20\", \"managementStatus\": \"Managed\", \"deploymentStatus\": \"Deployed\"},"
-                        + " {\"uuid\": \"u2\", \"name\": \"SG-A\", \"type\": \"sgos6x\"}, {\"uuid\": \"u3\", \"name\": \"Reporter\", \"type\": \"rptr\"}]",
+                        + " {\"uuid\": \"B2055376-3448-4A94-82DB-D9BD30BBB422\", \"name\": \"SG-A\", \"type\": \"sgos6x\"}, {\"uuid\": \"C3055376-3448-4A94-82DB-D9BD30BBB423\", \"name\": \"Reporter\", \"type\": \"rptr\"}]",
                         false, Optional.of("mc.example"));
             }
             if (path.equals(HttpsVendorPlan.CC_ALLDEVICES)) {

@@ -1238,6 +1238,38 @@ gates:
     secret_output_risk: 'device names and addresses (names shown masked to aiview; addresses never persisted)'
     safe_telemetry_fields: []
     source_document_pointer: 'Broadcom TechDocs: Management Center REST API, Best Practices (GET /devices); PO 2026-09-25'
+  - gate_id: bluecoat_mc_command_show_version
+    vendor: 'bluecoat'
+    platform_role_scope: 'bluecoat_management_center'
+    shell_context: 'config_mode_via_mc'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'PUT /api/devices/{uuid}/command "show version"'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 120
+    retry_rule: 'none'
+    max_frequency: 'once per ProxySG per backup job'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'status != SUCCESS -> that ProxySG failed, named in the manifest'
+    secret_output_risk: 'serial number (encrypted at rest)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §8a; PO 2026-09-25'
+  - gate_id: bluecoat_mc_command_show_configuration
+    vendor: 'bluecoat'
+    platform_role_scope: 'bluecoat_management_center'
+    shell_context: 'config_mode_via_mc'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'PUT /api/devices/{uuid}/command "show configuration"'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 120
+    retry_rule: 'none'
+    max_frequency: 'once per ProxySG per backup job'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'status != SUCCESS -> that ProxySG failed, named in the manifest'
+    secret_output_risk: 'the configuration, including hashed secrets (encrypted at rest, never logged)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §8a; PO 2026-09-25'
   - gate_id: infoblox_wapidoc_version
     vendor: 'infoblox'
     platform_role_scope: 'infoblox_grid_manager'

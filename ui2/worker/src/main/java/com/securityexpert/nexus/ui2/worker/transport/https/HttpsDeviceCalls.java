@@ -18,6 +18,12 @@ public interface HttpsDeviceCalls {
     TextResponse postJson(Target target, String path, String json, Credentials creds, Duration timeout, int maxBytes)
             throws IOException, InterruptedException;
 
+    /** A PUT with a raw body (the Management Center's device command: the body is the command itself, not JSON-quoted). */
+    default TextResponse putRaw(Target target, String path, String body, Credentials creds, Duration timeout, int maxBytes)
+            throws IOException, InterruptedException {
+        throw new UnsupportedOperationException("putRaw");
+    }
+
     /** A session login (Radware Cyber Controller): JSON body, no Authorization header; the session cookie it set, if any. */
     HttpsDeviceClient.SessionLogin login(Target target, String path, String json, Duration timeout) throws IOException, InterruptedException;
 

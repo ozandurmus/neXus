@@ -61,7 +61,7 @@ public final class BackupCollectService {
     }
 
     /** V64: vendors whose backup runs over HTTPS (one capability, routed by vendor in the worker). */
-    static final java.util.Set<String> HTTPS_VENDORS = java.util.Set.of("infoblox", "radware");
+    static final java.util.Set<String> HTTPS_VENDORS = java.util.Set.of("infoblox", "radware", "bluecoat");
 
     public Outcome requestCollect(String deviceId, String actorFingerprint, String reason, Optional<String> clientNonce) {
         return requestCollect(deviceId, actorFingerprint, reason, clientNonce, "backup");
@@ -87,7 +87,9 @@ public final class BackupCollectService {
         // V69: a Radware management server is a Cyber Controller; its own configuration backup is pushed to HOST-A's
         // SFTP receiver (the DefensePro devices it manages are backed up through it, V67).
         boolean cyberController = "radware".equals(device.get().vendorHint()) && "management_server".equals(role);
-        if (!cyberController && httpsVendor && "management_server".equals(role)) {
+        // PO 2026-09-25: a Symantec Management Center backs up the ProxySGs it manages (show configuration through it).
+        boolean managementCenter = "bluecoat".equals(device.get().vendorHint()) && "management_server".equals(role);
+        if (!cyberController && !managementCenter && httpsVendor && "management_server".equals(role)) {
             return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED", "device " + deviceId + " is a management "
                     + "server of a vendor with no gated backup for it, so nothing was issued");
         }

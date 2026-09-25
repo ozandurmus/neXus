@@ -133,6 +133,12 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
     }
 
     @Override
+    public TextResponse putRaw(Target target, String path, String body, Credentials creds, Duration timeout, int maxBytes)
+            throws IOException, InterruptedException {
+        return text(target, "PUT", path, "application/json", body, creds, timeout, maxBytes);
+    }
+
+    @Override
     public SessionLogin login(Target target, String path, String json, Duration timeout) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder(target.uri(path)).timeout(timeout).header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8)).build();
@@ -253,6 +259,11 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
             }
             if ("POST".equals(method) && hop == 0) {
                 b.POST(HttpRequest.BodyPublishers.ofString(body == null ? "" : body, StandardCharsets.UTF_8));
+                if (contentType != null) {
+                    b.header("Content-Type", contentType);
+                }
+            } else if ("PUT".equals(method) && hop == 0) {
+                b.PUT(HttpRequest.BodyPublishers.ofString(body == null ? "" : body, StandardCharsets.UTF_8));
                 if (contentType != null) {
                     b.header("Content-Type", contentType);
                 }

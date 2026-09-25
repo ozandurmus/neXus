@@ -31,6 +31,20 @@ public final class HttpsVendorPlan {
     /** Symantec (Blue Coat) Management Center REST (PO 2026-09-25; basic auth): the managed device list (gate bluecoat_mc_devices). */
     public static final String MC_DEVICES = "/api/devices";
     public static final int MC_DEFAULT_PORT = 8082;
+    /** {@code PUT /api/devices/{uuid}/command}: one CLI command through the MC. Its session is at {@code #(config)}, so
+     *  only these exact read literals are ever sent (gates bluecoat_mc_command_show_version / _show_configuration). */
+    public static final String MC_DEVICE_COMMAND = "/api/devices/%s/command";
+    public static final String MC_CMD_SHOW_VERSION = "show version";
+    public static final String MC_CMD_SHOW_CONFIGURATION = "show configuration";
+    /** The MC's type code for a ProxySG (measured 2026-09-25). */
+    public static final String MC_TYPE_PROXYSG = "sgos6x";
+
+    public static String mcDeviceCommand(String uuid) {
+        if (uuid == null || !uuid.matches("[0-9A-Fa-f-]{16,64}")) {
+            throw new IllegalArgumentException("not a Management Center device uuid");
+        }
+        return String.format(MC_DEVICE_COMMAND, uuid);
+    }
     public static final String CC_LOGIN = "/mgmt/system/user/login";
     public static final String CC_ALLDEVICES = "/mgmt/system/config/itemlist/alldevices";
     public static final String CC_GETCFG = "/mgmt/device/byip/%s/config/getcfg?saveToDb=false&includePrivateKeys=true&passphrase=%s";
