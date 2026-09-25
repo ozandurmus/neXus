@@ -97,6 +97,7 @@ describe("AddDeviceDialog", () => {
             peer_follow_reason: null,
             identity_mismatch_state: "NONE",
             cluster_member_ref: null,
+            onboarding: { state: "RUNNING", step: "inventory", step_number: 2, step_total: 3, step_job_id: "job-2", reason: null, skipped: [], source: "manual_registration", started_at: null, completed_at: null },
             job: { job_id: "job-1", state: "COMPLETED", outcome: "SUCCESS", terminal_reason: null },
           },
         },
@@ -111,6 +112,7 @@ describe("AddDeviceDialog", () => {
             peer_follow_reason: null,
             identity_mismatch_state: "NONE",
             cluster_member_ref: null,
+            onboarding: { state: "RUNNING", step: "configuration", step_number: 3, step_total: 3, step_job_id: "job-3", reason: null, skipped: [], source: "manual_registration", started_at: null, completed_at: null },
             job: { job_id: "job-2", state: "EXECUTING", outcome: null, terminal_reason: null },
           },
         },
@@ -125,6 +127,7 @@ describe("AddDeviceDialog", () => {
             peer_follow_reason: null,
             identity_mismatch_state: "NONE",
             cluster_member_ref: null,
+            onboarding: { state: "COMPLETED", step: "configuration", step_number: 3, step_total: 3, step_job_id: "job-3", reason: null, skipped: [], source: "manual_registration", started_at: null, completed_at: null },
             job: { job_id: "job-2", state: "COMPLETED", outcome: "SUCCESS", terminal_reason: null },
           },
         },
@@ -137,7 +140,7 @@ describe("AddDeviceDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Enrol" }));
 
-    await waitFor(() => expect(screen.getByText("Enrolled")).toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(screen.getByText("Enrolled")).toBeInTheDocument(), { timeout: 9000 });
     expect(screen.getByText(/fw-edge-1/)).toBeInTheDocument();
     expect(screen.getByText(/Quantum/)).toBeInTheDocument();
     expect(screen.getByText("Corroborated with peer")).toBeInTheDocument();
@@ -149,11 +152,13 @@ describe("AddDeviceDialog", () => {
     expect(addCall).toBeDefined();
     const body = JSON.parse(addCall![1].body as string);
     expect(body.role).toBe("gateway");
+    // V77: the service chains inventory and configuration itself; the browser never requests a collect.
+    expect(screen.getByText("3/3 Configuration")).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
       return url.split("?")[0] === "/devices/dev-1/inventory/collect";
-    })).toBe(true);
-  }, 10000);
+    })).toBe(false);
+  }, 15000);
 
   it("shows the 422 reason_code inline and never opens a polling loop", async () => {
     const fetchMock = routedFetch({

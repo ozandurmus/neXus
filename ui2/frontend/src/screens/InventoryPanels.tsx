@@ -14,7 +14,7 @@ import Typography from "@mui/material/Typography";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import type { Tone } from "../shell/tone";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
-import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel } from "../shell/deviceCopy";
+import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel, onboardingChip } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip, Ts, VendorBadge, vendorDisplayName } from "../shell/States";
 import { ClusterContextStrip, DeviceIdentityTable, orderMembers } from "./DeviceShared";
@@ -1711,11 +1711,17 @@ export function DeviceInventoryPanels({
               terminalReason={device.latest_job_terminal_reason}
               size="medium"
             />
-            <StatusChip
-              tone={isLiveDevice ? "ok" : "warn"}
-              label={!isEnrolledDevice ? enrollmentStateLabel(device.enrollment_state) : isLiveDevice ? "Live" : "Confirmed · Not collected"}
-              dense
-            />
+            {onboardingChip(device.onboarding) ? (
+              <span title={onboardingChip(device.onboarding)?.title}>
+                <StatusChip tone={onboardingChip(device.onboarding)!.tone} label={onboardingChip(device.onboarding)!.label} dense />
+              </span>
+            ) : (
+              <StatusChip
+                tone={isLiveDevice ? "ok" : "warn"}
+                label={!isEnrolledDevice ? enrollmentStateLabel(device.enrollment_state) : isLiveDevice ? "Live" : "Confirmed · Not collected"}
+                dense
+              />
+            )}
             {isEnrolledDevice && <StatusChip tone="ok" label="✓ Identity verified" dense />}
             <StatusChip
               tone="neutral"

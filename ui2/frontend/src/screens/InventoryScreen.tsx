@@ -112,6 +112,15 @@ export function deviceMatchesSearch(device: DeviceSummary, searchTerm: string): 
     .some((f) => Boolean(f && String(f).toLowerCase().includes(term)));
 }
 
+/** The sidebar's manager kind by vendor (a Management Center is not an MDS). */
+const MANAGER_KIND: Record<string, string> = {
+  check_point: "Management server (MDS)",
+  palo_alto: "Panorama",
+  bluecoat: "Management Center",
+  radware: "Cyber Controller",
+  infoblox: "Grid Manager",
+};
+
 function DeviceRow({
   device,
   indented = false,
@@ -382,10 +391,13 @@ export function DeviceList(props: DeviceListProps) {
                   {manager.hostname ?? "UNKNOWN"}
                 </Typography>
                 <Typography sx={{ fontSize: 11, color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>
-                  {manager.vendor_hint === "palo_alto" ? "Panorama" : "Management server (MDS)"}
+                  {MANAGER_KIND[manager.vendor_hint] ?? "Management server"}
                 </Typography>
               </Box>
-              <StatusChip tone="neutral" label={`${total} managed`} dense />
+              {/* An HTTPS manager's devices are its inventory's member list, not neXus devices: no count here. */}
+              {(total > 0 || manager.vendor_hint === "check_point" || manager.vendor_hint === "palo_alto") && (
+                <StatusChip tone="neutral" label={`${total} managed`} dense />
+              )}
             </Box>
             {expanded && (
               <Box sx={{ pl: 2, display: "flex", flexDirection: "column", gap: 1, borderLeft: `2px solid ${m3.outlineVar}`, ml: 1 }}>

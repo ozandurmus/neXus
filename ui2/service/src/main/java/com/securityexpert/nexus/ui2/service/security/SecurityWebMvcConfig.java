@@ -28,6 +28,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /sessions/revoke", ActionRegistry.SESSION_REVOKE),
             Map.entry("POST /devices/add-single", ActionRegistry.DEVICE_REGISTER),
             Map.entry("POST /devices/*/confirm", ActionRegistry.DEVICE_REGISTER),
+            // V77: re-admit the step a stopped onboarding flow stopped at.
+            Map.entry("POST /devices/*/onboarding/retry", ActionRegistry.DEVICE_REGISTER),
             Map.entry("POST /devices/*/delete", ActionRegistry.DEVICE_DELETE),
             // V64: a device's second secret (a credential-store reference, never a value)
             // One wildcard per route: the interceptor matches a single "*" segment (V64 shipped "secrets/*" and every call was refused).

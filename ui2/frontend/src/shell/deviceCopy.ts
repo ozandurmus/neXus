@@ -1,5 +1,5 @@
 import type { Tone } from "./tone";
-import type { DeviceDetail } from "../auth/adminApi";
+import type { DeviceDetail, OnboardingView } from "../auth/adminApi";
 
 /**
  * Shared copy/tone conventions for `enrollment_state` and job-state
@@ -87,4 +87,16 @@ export function peerFollowMessage(detail: Pick<DeviceDetail, "peer_follow_outcom
     return detail.peer_follow_reason ? `Peer not confirmed: ${detail.peer_follow_reason}` : "Peer not confirmed";
   }
   return null;
+}
+
+/**
+ * V77 onboarding flow chip (DEVICE_ONBOARDING_FLOW_CONTRACT): "Onboarding · n/3" while it runs, "Onboarding stopped"
+ * with the step and reason as the title when it stopped; null once complete or for a device added before the flow.
+ */
+export function onboardingChip(flow: OnboardingView | null | undefined): { tone: Tone; label: string; title: string } | null {
+  if (!flow || flow.state === "COMPLETED") return null;
+  if (flow.state === "STOPPED") {
+    return { tone: "bad", label: "Onboarding stopped", title: `Stopped at ${flow.step}: ${flow.reason ?? "no reason recorded"}` };
+  }
+  return { tone: "warn", label: `Onboarding · ${flow.step_number}/${flow.step_total}`, title: `Running: ${flow.step}` };
 }

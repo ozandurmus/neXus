@@ -92,6 +92,15 @@ public final class DeviceAddSingleService {
     /** Radware only: the backup is refused without the export passphrase, so the device is refused without it too. */
     static final String REASON_EXPORT_PASSPHRASE_REQUIRED = "export_passphrase_required";
 
+    /** V77: the onboarding flow row, started in the same transaction as the device and its confirm job. */
+    private com.securityexpert.nexus.ui2.persistence.device.DeviceOnboardingRepository onboarding =
+            com.securityexpert.nexus.ui2.persistence.device.DeviceOnboardingRepository.NONE;
+
+    public DeviceAddSingleService withOnboarding(com.securityexpert.nexus.ui2.persistence.device.DeviceOnboardingRepository onboarding) {
+        this.onboarding = Objects.requireNonNull(onboarding, "onboarding");
+        return this;
+    }
+
     public DeviceAddSingleService withSecrets(com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository secrets) {
         this.secrets = secrets;
         return this;
@@ -131,11 +140,17 @@ public final class DeviceAddSingleService {
         String idempotencyKey = deviceId + ":confirm:" + UUID.randomUUID();
         AdmissionResult admission = jobAdmissionService.submit(mapping.capabilityId(), deviceId, idempotencyKey,
                 actorFingerprint, ActionRegistry.DEVICE_REGISTER);
-        return switch (admission) {
+        Outcome outcome = switch (admission) {
             case AdmissionResult.Admitted admitted -> new Outcome.Admitted(deviceId, admitted.jobId());
             case AdmissionResult.Deduplicated deduplicated -> new Outcome.Admitted(deviceId, deduplicated.jobId());
             case AdmissionResult.Refused refused -> new Outcome.AdmissionRefused(refused.code(), refused.reason());
         };
+        // A retried confirm restarts the device's onboarding flow at the identity step (V77).
+        if (outcome instanceof Outcome.Admitted admitted) {
+            onboarding.find(deviceId).ifPresent(flow -> onboarding.start(deviceId, flow.source(), admitted.jobId(),
+                    actorFingerprint, ActionRegistry.DEVICE_REGISTER));
+        }
+        return outcome;
     }
 
     public Outcome addSingle(String actorFingerprint, String role, String address, String vendor, String credentialReferenceId) {
@@ -245,6 +260,7 @@ public final class DeviceAddSingleService {
             case AdmissionResult.Deduplicated deduplicated -> deduplicated.jobId();
             case AdmissionResult.Refused refused -> throw new AdmissionRefusedSignal(refused.code(), refused.reason());
         };
+        onboarding.start(registered.deviceId(), registrationSource, jobId, actorFingerprint, actionId);
         return new Outcome.Admitted(registered.deviceId(), jobId);
     }
 }

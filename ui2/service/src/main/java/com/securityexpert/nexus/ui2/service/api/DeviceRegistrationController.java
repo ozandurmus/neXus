@@ -79,6 +79,70 @@ public final class DeviceRegistrationController {
     }
     private com.securityexpert.nexus.ui2.service.overview.OverviewService overviewService;
 
+    /** V77: the onboarding flow (docs/design/DEVICE_ONBOARDING_FLOW_CONTRACT.md). */
+    private com.securityexpert.nexus.ui2.persistence.device.DeviceOnboardingRepository onboardingRepository =
+            com.securityexpert.nexus.ui2.persistence.device.DeviceOnboardingRepository.NONE;
+    private com.securityexpert.nexus.ui2.service.device.onboarding.OnboardingFlowService onboardingFlowService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setOnboarding(com.securityexpert.nexus.ui2.persistence.device.DeviceOnboardingRepository repository,
+            com.securityexpert.nexus.ui2.service.device.onboarding.OnboardingFlowService flowService) {
+        this.onboardingRepository = repository;
+        this.onboardingFlowService = flowService;
+    }
+
+    /** {@code null} for a device with no flow (enrolled before V77) -- treated as onboarded. */
+    static Map<String, Object> toOnboardingBody(com.securityexpert.nexus.ui2.persistence.device.DeviceOnboarding flow) {
+        if (flow == null) {
+            return null;
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("state", flow.state());
+        body.put("step", flow.step());
+        body.put("step_number", flow.stepNumber());
+        body.put("step_total", 3);
+        body.put("step_job_id", flow.stepJobId().orElse(null));
+        body.put("reason", flow.reason().orElse(null));
+        body.put("skipped", flow.skipped() == null || flow.skipped().isBlank() ? List.of()
+                : List.of(flow.skipped().split(",")));
+        body.put("source", flow.source());
+        body.put("started_at", flow.startedAt() == null ? null : flow.startedAt().toString());
+        body.put("completed_at", flow.completedAt().map(Object::toString).orElse(null));
+        return body;
+    }
+
+    /** Re-admits only the step a STOPPED onboarding flow stopped at. */
+    @PostMapping("/devices/{deviceId}/onboarding/retry")
+    public ResponseEntity<Map<String, Object>> retryOnboarding(@PathVariable String deviceId,
+            HttpServletRequest servletRequest) {
+        if (onboardingFlowService == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "NOT_FOUND"));
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        return switch (onboardingFlowService.retry(deviceId, actingUser(servletRequest))) {
+            case com.securityexpert.nexus.ui2.service.device.onboarding.OnboardingFlowService.RetryOutcome.Retried r -> {
+                body.put("admitted", true);
+                body.put("step", r.step());
+                body.put("job_id", r.jobId());
+                yield ResponseEntity.ok(body);
+            }
+            case com.securityexpert.nexus.ui2.service.device.onboarding.OnboardingFlowService.RetryOutcome.NotFound n -> {
+                body.put("error", "NOT_FOUND");
+                yield ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+            }
+            case com.securityexpert.nexus.ui2.service.device.onboarding.OnboardingFlowService.RetryOutcome.NotStopped n -> {
+                body.put("error", "NOT_STOPPED");
+                yield ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+            }
+            case com.securityexpert.nexus.ui2.service.device.onboarding.OnboardingFlowService.RetryOutcome.Refused r -> {
+                body.put("error", "ADMISSION_REFUSED");
+                body.put("code", r.code());
+                body.put("reason", r.reason());
+                yield ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+            }
+        };
+    }
+
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setOverviewService(com.securityexpert.nexus.ui2.service.overview.OverviewService overviewService) {
         this.overviewService = overviewService;
@@ -204,6 +268,7 @@ public final class DeviceRegistrationController {
         Map<String, Object> body = toDetailBody(found.device(), found.facts(), found.job());
         putPlatformFacts(body, platformFactsRepository.find(deviceId));
         putPolicyInstall(body, policyInstallRepository.find(deviceId));
+        body.put("onboarding", toOnboardingBody(onboardingRepository.find(deviceId).orElse(null)));
         return ResponseEntity.ok(body);
     }
 
@@ -212,6 +277,8 @@ public final class DeviceRegistrationController {
         Map<String, DevicePlatformFacts> platformFacts = platformFactsRepository.findAll();
         Map<String, com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstall> policies = policyInstallRepository.findAll();
         Map<String, java.time.Instant> inventoryAt = overviewService == null ? Map.of() : overviewService.latestInventoryAll();
+        Map<String, com.securityexpert.nexus.ui2.persistence.device.DeviceOnboarding> openFlows = new java.util.HashMap<>();
+        onboardingRepository.findOpen().forEach(flow -> openFlows.put(flow.deviceId(), flow));
         List<Map<String, Object>> devices = deviceQueryService.listDevices().stream()
                 .map(summary -> {
                     Map<String, Object> body = toSummaryBody(summary);
@@ -219,6 +286,7 @@ public final class DeviceRegistrationController {
                     putPolicyInstall(body, Optional.ofNullable(policies.get(summary.deviceId())));
                     java.time.Instant inv = inventoryAt.get(summary.deviceId());
                     body.put("inventory_collected_at", inv == null ? null : inv.toString());
+                    body.put("onboarding", toOnboardingBody(openFlows.get(summary.deviceId())));
                     return body;
                 })
                 .toList();

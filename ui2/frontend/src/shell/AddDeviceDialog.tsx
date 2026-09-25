@@ -28,12 +28,14 @@ import {
   getDiscoveryRun,
   importDiscoveryCandidates,
   listCredentials,
-  requestInventoryCollect,
+  retryOnboarding,
+  setBackupTarget,
   startDiscoveryRun,
   type ApiError,
   type CredentialView,
   type DeviceDetail,
   type DeviceRole,
+  type OnboardingView,
   type DiscoveryCandidate,
   type DiscoveryImportResult,
   type DiscoveryRunView,
@@ -119,7 +121,7 @@ export function AddDeviceDialogTrigger() {
   );
 }
 
-type Phase = "form" | "submitting" | "confirming" | "collecting" | "terminal";
+type Phase = "form" | "submitting" | "confirming" | "terminal";
 type DiscoveryPhase = "form" | "starting" | "polling" | "failed" | "candidates" | "importing" | "done";
 
 /**
@@ -199,40 +201,24 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendor, credentials.length]);
 
-  // Poll GET /devices/{device_id} on a cancellable interval while a job is
-  // in flight; cleared on unmount, dialog close (which unmounts this
-  // component) or reaching a terminal state.
+  // Poll GET /devices/{device_id} while the device's onboarding flow runs (V77, DEVICE_ONBOARDING_FLOW_CONTRACT):
+  // the service chains identity -> inventory -> configuration itself, so closing this dialog never breaks the flow.
   useEffect(() => {
-    if ((phase !== "confirming" && phase !== "collecting") || !deviceId || !activeJobId) return undefined;
+    if (phase !== "confirming" || !deviceId) return undefined;
     let cancelled = false;
-    let requestingInventory = false;
 
     const tick = () => {
       getDevice(deviceId)
         .then((result) => {
           if (cancelled) return;
           setDetail(result);
-          if (result.job?.job_id !== activeJobId || !isTerminalJobState(result.job.state) || requestingInventory) {
+          const flow = result.onboarding;
+          if (flow) {
+            if (flow.state !== "RUNNING") setPhase("terminal");
             return;
           }
-          if (phase === "confirming" && result.enrollment_state === "ENROLLED" && result.job.state === "COMPLETED") {
-            requestingInventory = true;
-            requestInventoryCollect(deviceId)
-              .then(({ job_id }) => {
-                if (cancelled) return;
-                setActiveJobId(job_id);
-                setPhase("collecting");
-              })
-              .catch((err) => {
-                if (cancelled) return;
-                setSubmitError(describeApiError(err));
-                setPhase("terminal");
-              });
-            return;
-          }
-          if (phase === "collecting" || result.job.outcome !== "SUCCESS") {
-            setPhase("terminal");
-          }
+          // No flow row (a service without V77): the confirm alone decides, as before.
+          if (result.job?.job_id === activeJobId && isTerminalJobState(result.job.state)) setPhase("terminal");
         })
         .catch(() => {
           // Transient poll failure: keep polling rather than abandoning the flow.
@@ -246,6 +232,30 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
       clearInterval(intervalId);
     };
   }, [phase, deviceId, activeJobId]);
+
+  const retryStoppedStep = async () => {
+    if (!deviceId) return;
+    setSubmitError(null);
+    try {
+      const { job_id } = await retryOnboarding(deviceId);
+      setActiveJobId(job_id);
+      setPhase("confirming");
+    } catch (err) {
+      setSubmitError(describeApiError(err));
+    }
+  };
+
+  const [backupOptIn, setBackupOptIn] = useState<"idle" | "busy" | "done" | "failed">("idle");
+  const makeBackupTarget = async () => {
+    if (!deviceId) return;
+    setBackupOptIn("busy");
+    try {
+      await setBackupTarget(deviceId, true);
+      setBackupOptIn("done");
+    } catch {
+      setBackupOptIn("failed");
+    }
+  };
 
   // 14F section 3: poll GET /discovery/runs/{run_id} until FINISHED/FAILED.
   useEffect(() => {
@@ -470,7 +480,6 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
   const dialogBusy =
     trustBusy || phase === "submitting" ||
     phase === "confirming" ||
-    phase === "collecting" ||
     discoveryPhase === "starting" ||
     discoveryPhase === "polling" ||
     discoveryPhase === "importing";
@@ -639,15 +648,14 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
           </Stack>
         )}
 
-        {mode === "single" && (phase === "submitting" || phase === "confirming" || phase === "collecting") && (
-          <Stack spacing={1.5} alignItems="center" sx={{ py: 2 }}>
+        {mode === "single" && (phase === "submitting" || phase === "confirming") && (
+          <Stack spacing={1.5} sx={{ py: 2 }}>
             <Typography variant="body1">
-              {phase === "submitting" ? "Starting credential check…"
-                : phase === "confirming" ? `Checking credentials: ${jobPhaseLabel(detail?.job?.state ?? "REQUESTED")}`
-                  : `Collecting inventory: ${jobPhaseLabel(detail?.job?.state ?? "REQUESTED")}`}
+              {phase === "submitting" ? "Starting onboarding…" : "Onboarding the device"}
             </Typography>
+            <OnboardingSteps flow={detail?.onboarding ?? null} confirmState={detail?.job?.state ?? "REQUESTED"} />
             <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-              {address}
+              {address} · the flow continues on the server if you close this window.
             </Typography>
           </Stack>
         )}
@@ -658,13 +666,39 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               <StatusChip tone={success ? "ok" : "bad"} label={enrollmentStateLabel(detail.enrollment_state)} dense />
               {mismatchOpen && <StatusChip tone="warn" label="Identity mismatch open" dense />}
             </Box>
+            {detail.onboarding && <OnboardingSteps flow={detail.onboarding} confirmState={detail.job?.state ?? "COMPLETED"} />}
             {success && detail.facts && (
               <Stack spacing={0.5}>
-                <Typography variant="body2">Hostname: {detail.facts.hostname ?? "Unknown"}</Typography>
-                <Typography variant="body2">Model: {detail.facts.model ?? "Unknown"}</Typography>
-                <Typography variant="body2">Software version: {detail.facts.software_version ?? "Unknown"}</Typography>
-                <Typography variant="body2">HA role: {detail.facts.ha_role ?? "Unknown"}</Typography>
+                <Typography variant="body2">Hostname: {detail.facts.hostname ?? "Not reported by the device"}</Typography>
+                <Typography variant="body2">Model: {detail.facts.model ?? "Not reported by the device"}</Typography>
+                <Typography variant="body2">Software version: {detail.facts.software_version ?? "Not reported by the device"}</Typography>
+                {detail.facts.ha_role && <Typography variant="body2">HA role: {detail.facts.ha_role}</Typography>}
               </Stack>
+            )}
+            {success && detail.onboarding?.state === "STOPPED" && (
+              <Stack spacing={1}>
+                <Typography variant="body2" color="error">
+                  Stopped at {detail.onboarding.step}: {detail.onboarding.reason ?? "no reason recorded"}
+                </Typography>
+                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                  <Button variant="outlined" onClick={() => void retryStoppedStep()}>Retry {detail.onboarding.step}</Button>
+                </Box>
+              </Stack>
+            )}
+            {success && detail.onboarding?.state === "COMPLETED" && (
+              // Backup is never part of onboarding (it writes a file on the device); it is offered here, off by default.
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, justifyContent: "space-between" }}>
+                <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                  {backupOptIn === "done" ? "Added to the nightly backups."
+                    : backupOptIn === "failed" ? "Could not change the backup setting."
+                      : "Not a backup target. Nightly backups are opt-in."}
+                </Typography>
+                {backupOptIn !== "done" && (
+                  <Button size="small" variant="text" disabled={backupOptIn === "busy"} onClick={() => void makeBackupTarget()}>
+                    Make it a backup target
+                  </Button>
+                )}
+              </Box>
             )}
             {success && peerMessage && <Typography variant="body2">{peerMessage}</Typography>}
             {!success && (
@@ -1024,5 +1058,46 @@ function CandidateRows({
         />
       ))}
     </>
+  );
+}
+
+const STEP_LABELS: Record<OnboardingView["step"], string> = {
+  identity: "Identity check",
+  inventory: "Inventory",
+  configuration: "Configuration",
+};
+const STEP_ORDER: readonly OnboardingView["step"][] = ["identity", "inventory", "configuration"];
+
+/** The three onboarding steps with their state; a skipped step names why (the vendor has no such read yet). */
+function OnboardingSteps({ flow, confirmState }: { readonly flow: OnboardingView | null; readonly confirmState: string }) {
+  return (
+    <Stack spacing={0.5}>
+      {STEP_ORDER.map((step, index) => {
+        const skip = flow?.skipped.find((s) => s.startsWith(step + ":"));
+        const current = flow ? flow.step === step : step === "identity";
+        const before = flow ? index < flow.step_number - 1 : false;
+        let tone: "ok" | "bad" | "warn" | "neutral" = "neutral";
+        let label = "Waiting";
+        if (skip) {
+          tone = "neutral";
+          label = "Not available for this device";
+        } else if (before || flow?.state === "COMPLETED") {
+          tone = "ok";
+          label = "Done";
+        } else if (current && flow?.state === "STOPPED") {
+          tone = "bad";
+          label = "Stopped";
+        } else if (current) {
+          tone = "warn";
+          label = flow ? "Running" : jobPhaseLabel(confirmState);
+        }
+        return (
+          <Box key={step} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography variant="body2" sx={{ minWidth: 150 }}>{index + 1}/3 {STEP_LABELS[step]}</Typography>
+            <StatusChip tone={tone} label={label} dense />
+          </Box>
+        );
+      })}
+    </Stack>
   );
 }

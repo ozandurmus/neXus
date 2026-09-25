@@ -456,9 +456,32 @@ public class DeviceCompositionConfiguration {
     public DeviceAddSingleService deviceAddSingleService(TransactionBoundary transactionBoundary,
             DeviceRegistrationService deviceRegistrationService, JobAdmissionService jobAdmissionService,
             DeviceRepository deviceRepository,
-            com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository deviceSecretReferenceRepository) {
+            com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository deviceSecretReferenceRepository,
+            com.securityexpert.nexus.ui2.persistence.device.DeviceOnboardingRepository deviceOnboardingRepository) {
         return new DeviceAddSingleService(transactionBoundary, deviceRegistrationService, jobAdmissionService,
-                deviceRepository).withSecrets(deviceSecretReferenceRepository);
+                deviceRepository).withSecrets(deviceSecretReferenceRepository).withOnboarding(deviceOnboardingRepository);
+    }
+
+    /** V77: the device onboarding flow (docs/design/DEVICE_ONBOARDING_FLOW_CONTRACT.md). */
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.device.DeviceOnboardingRepository deviceOnboardingRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceOnboardingRepository(transactionBoundary);
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.device.onboarding.OnboardingFlowService onboardingFlowService(
+            com.securityexpert.nexus.ui2.persistence.device.DeviceOnboardingRepository deviceOnboardingRepository,
+            DeviceRepository deviceRepository, JobRecordDao jobRecordDao, InventoryCollectService inventoryCollectService,
+            ConfigurationCollectService configurationCollectService, DeviceAddSingleService deviceAddSingleService) {
+        return new com.securityexpert.nexus.ui2.service.device.onboarding.OnboardingFlowService(deviceOnboardingRepository,
+                deviceRepository, jobRecordDao, inventoryCollectService, configurationCollectService, deviceAddSingleService);
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.device.onboarding.OnboardingFlowScheduler onboardingFlowScheduler(
+            com.securityexpert.nexus.ui2.service.device.onboarding.OnboardingFlowService onboardingFlowService) {
+        return new com.securityexpert.nexus.ui2.service.device.onboarding.OnboardingFlowScheduler(onboardingFlowService);
     }
 
     @Bean

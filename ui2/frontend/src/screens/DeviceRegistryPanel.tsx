@@ -16,7 +16,7 @@ import { RestrictedPanel, StatePanel, Ts, VendorBadge, isRestricted } from "../s
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { deleteDevice, listDevices, type ApiError, type BackupDisposition, type DeviceSummary } from "../auth/adminApi";
-import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone, missingHostnameReason } from "../shell/deviceCopy";
+import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone, missingHostnameReason, onboardingChip } from "../shell/deviceCopy";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -411,7 +411,12 @@ function DeviceRegistryCard({
                 <VendorBadge vendor={device.vendor_hint} size={24} />
                 <HostnameCell device={device} />
                 <Box>
-                  <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />
+                  {(() => {
+                    const chip = onboardingChip(device.onboarding);
+                    return chip
+                      ? <span title={chip.title}><StatusChip tone={chip.tone} label={chip.label} dense /></span>
+                      : <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />;
+                  })()}
                 </Box>
                 <Ts at={device.inventory_collected_at} relative />
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>

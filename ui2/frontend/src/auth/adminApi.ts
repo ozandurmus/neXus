@@ -472,6 +472,25 @@ export interface AddDeviceSingleResult {
   readonly enrollment_state: "DRAFT";
 }
 
+/** V77 onboarding flow (DEVICE_ONBOARDING_FLOW_CONTRACT): identity, then inventory, then configuration. */
+export interface OnboardingView {
+  readonly state: "RUNNING" | "COMPLETED" | "STOPPED";
+  readonly step: "identity" | "inventory" | "configuration";
+  readonly step_number: number;
+  readonly step_total: number;
+  readonly step_job_id: string | null;
+  readonly reason: string | null;
+  /** Steps this vendor/role has no read for, "step:CODE". */
+  readonly skipped: readonly string[];
+  readonly source: string;
+  readonly started_at: string | null;
+  readonly completed_at: string | null;
+}
+
+export function retryOnboarding(deviceId: string): Promise<{ admitted: boolean; step: string; job_id: string }> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/onboarding/retry`, "POST", {});
+}
+
 export interface DeviceDetail {
   readonly device_id: string;
   readonly vendor_hint: string;
@@ -483,6 +502,8 @@ export interface DeviceDetail {
   readonly identity_mismatch_state: "NONE" | "OPEN";
   readonly cluster_member_ref: string | null;
   readonly job: JobView | null;
+  /** null for a device added before the flow existed (treated as onboarded). */
+  readonly onboarding?: OnboardingView | null;
 }
 
 export interface DeviceSummary {
@@ -518,6 +539,8 @@ export interface DeviceSummary {
   readonly policy_read_at?: string | null;
   /** Newest inventory run of the device (Overview "inventory evidence age" filters). */
   readonly inventory_collected_at?: string | null;
+  /** Present only while the device's onboarding flow is RUNNING or STOPPED. */
+  readonly onboarding?: OnboardingView | null;
 }
 
 export type DeviceRole = "gateway" | "management_server" | "appliance";
