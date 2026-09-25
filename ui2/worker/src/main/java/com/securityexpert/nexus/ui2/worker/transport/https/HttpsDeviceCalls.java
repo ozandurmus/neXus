@@ -23,4 +23,14 @@ public interface HttpsDeviceCalls {
 
     DownloadResult download(Target target, String method, String path, Map<String, String> form, Credentials creds,
             OutputStream sink, long maxBytes, Duration timeout);
+
+    /**
+     * The same download with a request {@code Content-Type} the appliance insists on even for a GET (Infoblox file
+     * downloads answer 415 without {@code application/force-download}, measured 2026-09-25). Implementations that
+     * cannot set it fall back to the plain download.
+     */
+    default DownloadResult download(Target target, String method, String path, Map<String, String> form, Credentials creds,
+            String requestContentType, OutputStream sink, long maxBytes, Duration timeout) {
+        return download(target, method, path, form, creds, sink, maxBytes, timeout);
+    }
 }

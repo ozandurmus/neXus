@@ -154,7 +154,8 @@ The summaries above shortened two load-bearing values to "…". Re-read from the
   2. `POST /wapi/v<ver>/fileop?_function=getgriddata`, `Content-Type: application/json`, body `{"type": "BACKUP"}`
      → JSON with `token` and `url` (the `url` is on the same appliance host).
   3. `GET <url>` → `database.bak`, ≈ 1 MB on this grid (996 KB) — so a "size > 1 MB" check is wrong; any non-empty
-     body with the expected magic is the check.
+     body with the expected magic is the check. The GET must carry `Content-Type: application/force-download`
+     (as the Backbox trail does): measured 2026-09-25 on the production grid, the appliance answers **415** without it.
   4. `POST /wapi/v<ver>/fileop?_function=downloadcomplete` with `{"token": "<token>"}`. **Backbox sends this to
      `/wapi/v/fileop` (empty version) and the appliance answers "Unknown WAPI version" — its cleanup fails on every
      run.** neXus sends it with the version read in step 1.

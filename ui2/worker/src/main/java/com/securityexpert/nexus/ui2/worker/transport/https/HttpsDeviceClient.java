@@ -127,9 +127,16 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
     @Override
     public DownloadResult download(Target target, String method, String path, Map<String, String> form, Credentials creds,
             OutputStream sink, long maxBytes, Duration timeout) {
+        return download(target, method, path, form, creds, null, sink, maxBytes, timeout);
+    }
+
+    @Override
+    public DownloadResult download(Target target, String method, String path, Map<String, String> form, Credentials creds,
+            String requestContentType, OutputStream sink, long maxBytes, Duration timeout) {
         try {
             String body = form == null ? null : formEncode(form);
-            HttpResponse<InputStream> r = send(target, method, path, body == null ? null : "application/x-www-form-urlencoded", body,
+            String contentType = body != null ? "application/x-www-form-urlencoded" : requestContentType;
+            HttpResponse<InputStream> r = send(target, method, path, contentType, body,
                     creds, timeout, HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream in = r.body()) {
                 if (r.statusCode() < 200 || r.statusCode() >= 300) {
@@ -201,6 +208,10 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
                 }
             } else {
                 b.GET();
+                if (contentType != null) {
+                    // Infoblox file downloads: the appliance answers 415 unless the GET names application/force-download.
+                    b.header("Content-Type", contentType);
+                }
             }
             HttpResponse<T> r = client.send(b.build(), handler);
             int s = r.statusCode();

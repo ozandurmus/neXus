@@ -17,6 +17,8 @@ public final class HttpsVendorPlan {
     public static final String INFOBLOX_GETGRIDDATA = "/wapi/v%s/fileop?_function=getgriddata";
     public static final String INFOBLOX_GETGRIDDATA_BODY = "{\"type\": \"BACKUP\"}";
     public static final String INFOBLOX_DOWNLOADCOMPLETE = "/wapi/v%s/fileop?_function=downloadcomplete";
+    /** The request Content-Type the getgriddata download demands (trail 34411065; 415 without it, measured 2026-09-25). */
+    public static final String INFOBLOX_DOWNLOAD_CONTENT_TYPE = "application/force-download";
 
     // Radware DefensePro (trail 34095224)
     public static final String RADWARE_ROOT = "/";

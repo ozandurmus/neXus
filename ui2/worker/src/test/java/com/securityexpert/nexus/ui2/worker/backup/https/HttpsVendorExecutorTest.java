@@ -67,7 +67,8 @@ class HttpsVendorExecutorTest {
         BackupResult r = executor.backup("infoblox", T, "cred", Optional.empty(), "dev", "job-1");
         assertTrue(r instanceof BackupResult.Completed, String.valueOf(r));
         assertTrue(calls.log.contains("POST /wapi/v2.13.5/fileop?_function=getgriddata {\"type\": \"BACKUP\"}"));
-        assertTrue(calls.log.contains("GET-DL /http_direct_file_io/req_id-DOWNLOAD-1/database.bak"));
+        assertTrue(calls.log.contains("GET-DL /http_direct_file_io/req_id-DOWNLOAD-1/database.bak content-type=application/force-download"),
+                "the download names application/force-download (415 without it): " + calls.log);
         assertTrue(calls.log.stream().anyMatch(l -> l.startsWith("POST /wapi/v2.13.5/fileop?_function=downloadcomplete") && l.contains("tok-1")),
                 "cleanup with the version read (Backbox sends /wapi/v/ and fails): " + calls.log);
     }
@@ -192,7 +193,14 @@ class HttpsVendorExecutorTest {
         @Override
         public DownloadResult download(Target target, String method, String path, Map<String, String> form, Credentials creds,
                 OutputStream sink, long maxBytes, Duration timeout) {
-            log.add(method + "-DL " + path + (form == null ? "" : " " + form));
+            return download(target, method, path, form, creds, null, sink, maxBytes, timeout);
+        }
+
+        @Override
+        public DownloadResult download(Target target, String method, String path, Map<String, String> form, Credentials creds,
+                String requestContentType, OutputStream sink, long maxBytes, Duration timeout) {
+            log.add(method + "-DL " + path + (form == null ? "" : " " + form)
+                    + (requestContentType == null ? "" : " content-type=" + requestContentType));
             try {
                 byte[] body = new byte[2048];
                 body[0] = 0x1f;

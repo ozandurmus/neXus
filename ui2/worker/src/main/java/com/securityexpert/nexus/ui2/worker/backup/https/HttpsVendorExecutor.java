@@ -263,7 +263,7 @@ public final class HttpsVendorExecutor {
                     LOG.log(System.Logger.Level.INFO, "[CYBER_CONTROLLER] device {0} not listed; direct path", deviceId);
                     return Optional.empty();
                 }
-                BackupResult r = fetch(cc, "GET", HttpsVendorPlan.ccGetcfg(deviceAddress, passphrase), null, s.session, deviceId, jobId,
+                BackupResult r = fetch(cc, "GET", HttpsVendorPlan.ccGetcfg(deviceAddress, passphrase), null, s.session, null, deviceId, jobId,
                         "radware", "DefensePro_configuration_via_cyber_controller", 256);
                 return Optional.of(r);
             }
@@ -340,7 +340,8 @@ public final class HttpsVendorExecutor {
             if (path.isEmpty()) {
                 return new BackupResult.SubmitRefused("the download url is not on the same appliance; refused");
             }
-            return fetch(target, "GET", path.get(), null, creds, deviceId, jobId, "infoblox", "database.bak", 1);
+            return fetch(target, "GET", path.get(), null, creds, HttpsVendorPlan.INFOBLOX_DOWNLOAD_CONTENT_TYPE, deviceId, jobId,
+                    "infoblox", "database.bak", 1);
         } finally {
             // Always -- the appliance holds the file until told (Backbox sends this without a version and fails).
             try {
@@ -368,12 +369,12 @@ public final class HttpsVendorExecutor {
         form.put("DownloadFormat", "cli");
         form.put("IncludePKeys", "on");
         form.put("passphrase", passphrase);
-        return fetch(target, "POST", HttpsVendorPlan.RADWARE_RECEIVE_CONFIGURATION, form, creds, deviceId, jobId, "radware",
+        return fetch(target, "POST", HttpsVendorPlan.RADWARE_RECEIVE_CONFIGURATION, form, creds, null, deviceId, jobId, "radware",
                 "DefensePro_backup_configuration.txt", 1024);
     }
 
     private BackupResult fetch(Target target, String method, String path, Map<String, String> form, Credentials creds,
-            String deviceId, String jobId, String vendor, String memberName, long minBytes) {
+            String requestContentType, String deviceId, String jobId, String vendor, String memberName, long minBytes) {
         ArtefactStore.ArtefactHandle handle;
         try {
             handle = artefactStore.open(deviceId, jobId, vendor, false);
@@ -381,7 +382,7 @@ public final class HttpsVendorExecutor {
             return new BackupResult.ArtefactStoreFailed("artefact store open failed: " + e.getMessage());
         }
         HeadCapture head = new HeadCapture(handle.sink());
-        DownloadResult r = client.download(target, method, path, form, creds, head, MAX_ARCHIVE, LONG);
+        DownloadResult r = client.download(target, method, path, form, creds, requestContentType, head, MAX_ARCHIVE, LONG);
         if (!(r instanceof DownloadResult.Downloaded d)) {
             closeQuietly(handle);
             return r instanceof DownloadResult.Refused refused && (refused.status() == 401 || refused.status() == 403)
