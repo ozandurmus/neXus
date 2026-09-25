@@ -1037,15 +1037,6 @@
       "note": ""
     },
     {
-      "id": "observed_facts_refresh_every_read",
-      "category": "collection",
-      "title": "Observed device facts follow every completed read: hostname, model, software version (and hotfix/platform facts) are refreshed by confirm, inventory and configuration runs whenever they differ -- the fill-if-absent rule is removed (PO 2026-09-25: an MDS upgrade was not reflected)",
-      "status": "in_progress",
-      "priority": "P0",
-      "target": "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceRepository.java",
-      "note": ""
-    },
-    {
       "id": "https_inventory_collect_infoblox",
       "category": "collection",
       "title": "Infoblox Collect: a real https_inventory_collect job (Collect now + 23:00 schedule) reads grid members, each member's interfaces (LAN VIP, MGMT, LAN2, additional IPs) and static routes into inventory runs; member reads leave the confirm and backup paths (backup only backs up)",

@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:21:18Z
+Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:25:51Z
 
 ## Now
 - NXS-LOCAL-0369 — Radware via Cyber Controller, device-list and backup UI, deploy safety, HOST-A rebuilt as neXus's own host (automated_validated)
@@ -9,7 +9,6 @@ Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:21:18Z
 - P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the reins (target: docs/design/HOST_A_REBUILD_RUNBOOK.md)
 - P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under aiv (target: docs/design/HOST_A_REBUILD_RUNBOOK.md se)
 - P0/in_progress https_inventory_collect_infoblox — Infoblox Collect: a real https_inventory_collect job (Coll (target: docs/design/VENDOR_BACKUP_CONTRACTS_2026)
-- P0/in_progress observed_facts_refresh_every_read — Observed device facts follow every completed read: hostnam (target: ui2/persistence/src/main/java/com/securi)
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a c (target: PanXmlApiTransport certificate verificat)
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test env (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)

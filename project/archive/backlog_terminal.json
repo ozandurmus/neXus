@@ -1338,6 +1338,15 @@
       "priority": "P1",
       "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/backup/https/HttpsVendorExecutor.java",
       "note": ""
+    },
+    {
+      "id": "observed_facts_refresh_every_read",
+      "category": "collection",
+      "title": "Observed device facts follow every completed read: hostname, model, software version (and hotfix/platform facts) are refreshed by confirm, inventory and configuration runs whenever they differ -- the fill-if-absent rule is removed (PO 2026-09-25: an MDS upgrade was not reflected)",
+      "status": "real_env_validated",
+      "priority": "P0",
+      "target": "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceRepository.java",
+      "note": ""
     }
   ]
 }
