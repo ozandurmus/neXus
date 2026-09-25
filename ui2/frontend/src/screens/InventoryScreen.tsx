@@ -84,6 +84,7 @@ function clusterHasCollectedEvidence(members: readonly DeviceSummary[]): boolean
 function childLabels(vendorHint: string | null | undefined): { heading: string; chip: string; tag: string } {
   if (vendorHint === "palo_alto") return { heading: "Virtual Systems (VSYS)", chip: "VSYS", tag: "PAN-OS" };
   if (vendorHint === "infoblox") return { heading: "Grid members", chip: "MEMBER", tag: "NIOS" };
+  if (vendorHint === "bluecoat") return { heading: "Managed devices", chip: "DEVICE", tag: "MC" };
   return { heading: "Virtual Systems (VSX)", chip: "VS", tag: "VSX" };
 }
 

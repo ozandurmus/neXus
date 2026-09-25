@@ -65,7 +65,16 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
     }
 
     /** A text answer, bounded: {@code body} is at most {@code maxBytes} long; {@code truncated} says when more came. */
-    public record TextResponse(int status, Optional<String> contentType, String body, boolean truncated) {
+    /** {@code peerName}: the name the appliance's TLS certificate carries (see {@link #peerCertificateName}), if any. */
+    public record TextResponse(int status, Optional<String> contentType, String body, boolean truncated, Optional<String> peerName) {
+        public TextResponse {
+            peerName = peerName == null ? Optional.empty() : peerName;
+        }
+
+        public TextResponse(int status, Optional<String> contentType, String body, boolean truncated) {
+            this(status, contentType, body, truncated, Optional.empty());
+        }
+
         public boolean ok() {
             return status >= 200 && status < 300;
         }
@@ -227,7 +236,8 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
             byte[] bytes = in.readNBytes(maxBytes + 1);
             boolean truncated = bytes.length > maxBytes;
             String s = new String(bytes, 0, Math.min(bytes.length, maxBytes), StandardCharsets.UTF_8);
-            return new TextResponse(r.statusCode(), r.headers().firstValue("Content-Type"), s, truncated);
+            return new TextResponse(r.statusCode(), r.headers().firstValue("Content-Type"), s, truncated,
+                    r.sslSession().flatMap(HttpsDeviceClient::peerCertificateName));
         }
     }
 

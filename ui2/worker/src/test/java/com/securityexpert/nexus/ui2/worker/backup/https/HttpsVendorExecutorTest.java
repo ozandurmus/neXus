@@ -216,6 +216,12 @@ class HttpsVendorExecutorTest {
         var o = (HttpsVendorExecutor.InventoryOutcome.Completed) executor.inventory("bluecoat_mc", T, "cred");
         assertEquals(Optional.of("Reporter, SG-A, SG-B"), o.virtualSystems());
         assertEquals(Optional.of("Symantec Management Center"), o.identity().model());
+        assertEquals(Optional.of("mc.example"), o.identity().name(), "the MC is named by its certificate");
+        var sgB = o.members().stream().filter(m -> m.hostName().equals("SG-B")).findFirst().orElseThrow();
+        assertEquals(Optional.of("ProxySG"), sgB.platform());
+        assertEquals(Optional.of("VA-20"), sgB.hardwareType());
+        assertEquals(Optional.of("7.4.15.1 (build 12345)"), sgB.hypervisor(), "the version rides in the second fact column");
+        assertEquals(Optional.of("MANAGED"), sgB.nodeStatus());
     }
 
     @Test
@@ -299,8 +305,10 @@ class HttpsVendorExecutorTest {
             }
             if (path.equals(HttpsVendorPlan.MC_DEVICES)) {
                 return new TextResponse(200, Optional.of("application/json"),
-                        "[{\"uuid\": \"u1\", \"name\": \"SG-B\", \"type\": \"SG\", \"osVersion\": \"7.4.15.1\"},"
-                        + " {\"uuid\": \"u2\", \"name\": \"SG-A\", \"type\": \"SG\"}, {\"uuid\": \"u3\", \"name\": \"Reporter\", \"type\": \"REPORTER\"}]", false);
+                        "[{\"uuid\": \"u1\", \"name\": \"SG-B\", \"type\": \"sgos6x\", \"osVersion\": \"7.4.15.1\", \"build\": \"12345\","
+                        + " \"model\": \"VA-20\", \"managementStatus\": \"Managed\", \"deploymentStatus\": \"Deployed\"},"
+                        + " {\"uuid\": \"u2\", \"name\": \"SG-A\", \"type\": \"sgos6x\"}, {\"uuid\": \"u3\", \"name\": \"Reporter\", \"type\": \"rptr\"}]",
+                        false, Optional.of("mc.example"));
             }
             if (path.equals(HttpsVendorPlan.CC_ALLDEVICES)) {
                 return new TextResponse(200, Optional.of("application/json"), deviceList, false);

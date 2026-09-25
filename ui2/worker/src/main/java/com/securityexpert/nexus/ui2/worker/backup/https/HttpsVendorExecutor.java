@@ -280,7 +280,8 @@ public final class HttpsVendorExecutor {
         JsonNode list = JSON.readTree(r.body());
         LOG.log(System.Logger.Level.INFO, "[MANAGEMENT_CENTER] devices HTTP {0}, {1} bytes, {2} entries, field names {3}", r.status(),
                 r.body().length(), list.isArray() ? list.size() : -1, HttpsVendorPlan.fieldNames(list));
-        return new ConfirmOutcome.Confirmed(new Identity(Optional.empty(), Optional.of("Symantec Management Center"), Optional.empty()));
+        // The MC is not in its own list (measured 2026-09-25: types cp, rptr, sgos6x): its certificate names it.
+        return new ConfirmOutcome.Confirmed(new Identity(r.peerName(), Optional.of("Symantec Management Center"), Optional.empty()));
     }
 
     /**
@@ -297,29 +298,14 @@ public final class HttpsVendorExecutor {
             return new InventoryOutcome.Failed("the Management Center device list answered HTTP " + r.status());
         }
         JsonNode list = JSON.readTree(r.body());
-        Iterable<JsonNode> items = list.isArray() ? list : list.path("devices").isArray() ? list.path("devices")
-                : list.path("results").isArray() ? list.path("results") : List.of();
-        List<String> names = new java.util.ArrayList<>();
-        java.util.Map<String, Integer> types = new java.util.TreeMap<>();
-        for (JsonNode d : items) {
-            for (String key : List.of("name", "deviceName", "displayName")) {
-                if (d.hasNonNull(key) && d.get(key).isTextual() && !d.get(key).asText().isBlank()) {
-                    names.add(d.get(key).asText().trim());
-                    break;
-                }
-            }
-            for (String key : List.of("type", "deviceType", "osType")) {
-                if (d.hasNonNull(key) && d.get(key).isValueNode()) {
-                    types.merge(d.get(key).asText(), 1, Integer::sum);
-                    break;
-                }
-            }
-        }
-        names.sort(String.CASE_INSENSITIVE_ORDER);
+        List<GridMember> managed = ManagementCenterDevices.parse(list);
         LOG.log(System.Logger.Level.INFO, "[HTTPS_INVENTORY] management center lists {0} device(s), types {1}, field names {2}",
-                names.size(), types, HttpsVendorPlan.fieldNames(list));
-        return new InventoryOutcome.Completed(List.of(), List.of(), names.isEmpty() ? Optional.empty() : Optional.of(String.join(", ", names)),
-                new Identity(Optional.empty(), Optional.of("Symantec Management Center"), Optional.empty()));
+                managed.size(), ManagementCenterDevices.typeCounts(list), HttpsVendorPlan.fieldNames(list));
+        Optional<String> names = managed.isEmpty() ? Optional.empty()
+                : Optional.of(managed.stream().map(GridMember::hostName).sorted(String.CASE_INSENSITIVE_ORDER)
+                        .collect(java.util.stream.Collectors.joining(", ")));
+        return new InventoryOutcome.Completed(List.of(), managed, names,
+                new Identity(r.peerName(), Optional.of("Symantec Management Center"), Optional.empty()));
     }
 
     // ------------------------------------------------------------------------------------------------ Cyber Controller

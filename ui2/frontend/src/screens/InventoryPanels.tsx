@@ -148,6 +148,47 @@ function GridMembersPanel({ members }: { readonly members: readonly GridMemberVi
   );
 }
 
+/** A Symantec Management Center's managed devices (ProxySG, Reporter, WSS) as it lists them; values read, never inferred. */
+function ManagedDevicesPanel({ members }: { readonly members: readonly GridMemberView[] }) {
+  if (members.length === 0) {
+    return <EmptyPanel title="No managed-device evidence" body="Collect reads the Management Center's device list; none has been recorded yet." />;
+  }
+  const deployment = (m: GridMemberView) => m.services.find((s) => s.service === "DEPLOYMENT")?.status ?? null;
+  return (
+    <Stack spacing={1.5}>
+      <Typography variant="caption" color="text.secondary">
+        {members.length} devices · {members.filter((m) => m.platform === "ProxySG").length} ProxySG · read from the Management Center, nothing inferred
+      </Typography>
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Device</TableCell>
+              <TableCell>Type</TableCell>
+              <TableCell>Model</TableCell>
+              <TableCell>OS version</TableCell>
+              <TableCell>Management</TableCell>
+              <TableCell>Deployment</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {members.map((m) => (
+              <TableRow key={m.virtual_system}>
+                <TableCell sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>{m.virtual_system}</TableCell>
+                <TableCell>{m.platform ?? "\u2014"}</TableCell>
+                <TableCell>{m.hardware_type ?? "\u2014"}</TableCell>
+                <TableCell sx={{ whiteSpace: "nowrap" }}>{m.hypervisor ?? "\u2014"}</TableCell>
+                <TableCell>{m.node_status ? <StatusChip tone={m.node_status === "MANAGED" ? "ok" : "warn"} label={m.node_status} dense /> : "\u2014"}</TableCell>
+                <TableCell>{deployment(m) ?? "\u2014"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Stack>
+  );
+}
+
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
   const code = typeof apiErr.body?.code === "string" ? (apiErr.body.code as string) : undefined;
@@ -1718,9 +1759,11 @@ export function DeviceInventoryPanels({
               : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} />,
           },
           {
-            label: device.vendor_hint === "infoblox" ? "Grid members" : "Cluster members",
+            label: device.vendor_hint === "infoblox" ? "Grid members" : device.vendor_hint === "bluecoat" ? "Managed devices" : "Cluster members",
             panel: device.vendor_hint === "infoblox"
               ? <GridMembersPanel members={deviceInventory?.grid_members ?? []} />
+              : device.vendor_hint === "bluecoat"
+              ? <ManagedDevicesPanel members={deviceInventory?.grid_members ?? []} />
               : isCluster && clusterInventory
               ? (
                 <Stack spacing={2}>
