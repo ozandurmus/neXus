@@ -93,7 +93,9 @@ public final class InventoryCollectService {
             // routes and platform identity come from the same Expert reads the gateway path issues (fw
             // getifs, ip route, cpinfo, uptime, show asset system), all gated; the cluster probe answers
             // "standalone". Panorama is not a Gaia host: its read set is still unmeasured (14I MS-2).
-            if ("management_server".equals(role) && !"check_point".equalsIgnoreCase(device.get().vendorHint())) {
+            // PO 2026-09-25: a Panorama is inventoried too -- its management interface and HA state from show system info.
+            if ("management_server".equals(role) && !"check_point".equalsIgnoreCase(device.get().vendorHint())
+                    && !"palo_alto".equalsIgnoreCase(device.get().vendorHint())) {
                 return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",
                         "device " + deviceId + " is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)");
             }

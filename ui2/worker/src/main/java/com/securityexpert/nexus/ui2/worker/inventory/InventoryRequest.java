@@ -55,6 +55,12 @@ public record InventoryRequest(
                 trustRuleRef, modelHint);
     }
 
+    /** A Panorama (PO 2026-09-25): no dataplane interfaces or routing table; its management interface from system info. */
+    public static InventoryRequest panorama(ApiTarget target, String credentialRef) {
+        return new InventoryRequest(InventoryVendor.PALO_ALTO, Optional.empty(), Optional.of(target), credentialRef,
+                "", Optional.empty(), true);
+    }
+
     public static InventoryRequest paloAlto(ApiTarget target, String credentialRef) {
         return new InventoryRequest(InventoryVendor.PALO_ALTO, Optional.empty(), Optional.of(target), credentialRef,
                 "", Optional.empty());

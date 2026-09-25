@@ -392,7 +392,8 @@ public final class WorkerClaimLoop {
                     : InventoryRequest.checkPoint(target, credentialRef, trustRuleRef, modelHint);
         }
         if (InventoryCapabilityIds.PAN_INVENTORY_COLLECT.equals(capabilityId)) {
-            return InventoryRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
+            return managementServer ? InventoryRequest.panorama(new ApiTarget(endpointId, addressRef), credentialRef)
+                    : InventoryRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
         }
         throw new IllegalStateException("claimed job for an inventory capability the worker does not recognize: "
                 + capabilityId);

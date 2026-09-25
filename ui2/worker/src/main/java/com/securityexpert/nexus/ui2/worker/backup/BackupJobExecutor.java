@@ -243,8 +243,12 @@ public final class BackupJobExecutor {
             String credentialRef = deviceRecord.map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::credentialReferenceId).orElse("");
             com.securityexpert.nexus.ui2.jobs.transport.ApiTarget target =
                     new com.securityexpert.nexus.ui2.jobs.transport.ApiTarget(targetDeviceId, request.connectionTarget().host());
-            var panResult = panBackupExecutor.executeBackup(target, credentialRef, targetDeviceId, jobId, "");
-            if (panResult.success() && panResult.metadata() != null) {
+            boolean panorama = deviceRecord.map(r -> "management_server".equals(r.role())).orElse(false);
+            var panResult = panorama ? panBackupExecutor.executePanoramaBackup(target, credentialRef, targetDeviceId, jobId, "")
+                    : panBackupExecutor.executeBackup(target, credentialRef, targetDeviceId, jobId, "");
+            if (panResult.success() && panResult.metadata() != null && panResult.missing() != null) {
+                result = new BackupResult.Partial(panResult.metadata(), panResult.artefactId(), panResult.missing());
+            } else if (panResult.success() && panResult.metadata() != null) {
                 result = new BackupResult.Completed(panResult.metadata(), panResult.artefactId(), Optional.empty(), Optional.empty());
             } else {
                 result = new BackupResult.ConnectFailed(panResult.errorMessage() != null ? panResult.errorMessage() : "PAN-OS XML API export failed");

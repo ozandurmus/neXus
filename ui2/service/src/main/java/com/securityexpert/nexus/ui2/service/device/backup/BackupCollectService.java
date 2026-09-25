@@ -82,6 +82,8 @@ public final class BackupCollectService {
         // A Check Point management server (MDS) takes the same Gaia backup a gateway does (PO, 2026-09-23: "normal
         // backup"); its MDS export (mds_backup) is a separate type. Other management servers stay unmeasured.
         boolean checkPointManagement = "management_server".equals(role) && "check_point".equals(device.get().vendorHint());
+        // PO 2026-09-25: a Panorama takes the Palo Alto backup (device-state, else its running configuration XML).
+        boolean panorama = "management_server".equals(role) && "palo_alto".equals(device.get().vendorHint());
         // V64: appliances backed up over HTTPS (Infoblox, Radware) carry role "appliance"
         boolean httpsVendor = HTTPS_VENDORS.contains(device.get().vendorHint());
         // V69: a Radware management server is a Cyber Controller; its own configuration backup is pushed to HOST-A's
@@ -93,7 +95,7 @@ public final class BackupCollectService {
             return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED", "device " + deviceId + " is a management "
                     + "server of a vendor with no gated backup for it, so nothing was issued");
         }
-        if (!"gateway".equals(role) && !"firewall".equals(role) && !checkPointManagement && !httpsVendor) {
+        if (!"gateway".equals(role) && !"firewall".equals(role) && !checkPointManagement && !httpsVendor && !panorama) {
             if ("management_server".equals(role)) {
                 return new Outcome.AdmissionRefused("MANAGEMENT_SERVER_UNGATED",
                         "device " + deviceId + " is a management server; its per-vendor read set has not been measured or gated yet, so nothing was issued (14I MS-2)");

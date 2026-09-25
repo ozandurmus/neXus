@@ -1008,7 +1008,9 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
             // a Check Point management server (MDS) takes the Gaia backup too
             || (d.role === "management_server" && (d.vendor_hint === "check_point" || d.vendor_hint === "radware"
               // a Symantec Management Center backs up its ProxySGs (without it the row read "not enrolled" with Delete)
-              || d.vendor_hint === "bluecoat"))
+              || d.vendor_hint === "bluecoat"
+              // a Panorama: device-state, else its running configuration XML (PO 2026-09-25)
+              || d.vendor_hint === "palo_alto"))
             // V64: appliances backed up over HTTPS
             || d.role === "appliance")));
           setError(null);

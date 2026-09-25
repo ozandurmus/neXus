@@ -620,7 +620,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
             )}
             {role === "management_server" && vendor === "palo_alto" && (
               <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-                A Panorama can be added and confirmed; its own inventory read set is not gated yet, so its Collect is refused.
+                A Panorama: its management interface, HA state and backup are read over the XML API; use discovery to bring in the firewalls it manages.
               </Typography>
             )}
             <TextField

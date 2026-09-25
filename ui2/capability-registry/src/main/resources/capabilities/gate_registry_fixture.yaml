@@ -1958,3 +1958,67 @@ gates:
     secret_output_risk: 'route destinations and gateways (masked to aiview)'
     safe_telemetry_fields: []
     source_document_pointer: 'SGOS CLI reference (show ip-route-table); PO 2026-09-25'
+  - gate_id: pan_panorama_show_system_info
+    vendor: 'palo_alto'
+    platform_role_scope: 'panorama'
+    shell_context: 'not_applicable'
+    transport_kind: 'PAN_XML_API'
+    canonical_command_key: '<show><system><info/></system></show>'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one key per run'
+    unsupported_behavior_ref: 'no serial -> inventory failed'
+    secret_output_risk: 'serial, hostname, management address (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'PAN-OS XML API (op show system info); the firewall read, Panorama scope'
+  - gate_id: pan_panorama_show_ha_state
+    vendor: 'palo_alto'
+    platform_role_scope: 'panorama'
+    shell_context: 'not_applicable'
+    transport_kind: 'PAN_XML_API'
+    canonical_command_key: '<show><high-availability><state/></high-availability></show>'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one key per run'
+    unsupported_behavior_ref: 'no HA -> standalone'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'PAN-OS XML API; Panorama scope'
+  - gate_id: pan_panorama_export_device_state
+    vendor: 'palo_alto'
+    platform_role_scope: 'panorama'
+    shell_context: 'not_applicable'
+    transport_kind: 'PAN_XML_API'
+    canonical_command_key: 'type=export&category=device-state'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 300
+    retry_rule: 'none'
+    max_frequency: 'once per backup'
+    session_reuse_rule: 'one key per run'
+    unsupported_behavior_ref: 'refused -> the running configuration XML is the member (logged)'
+    secret_output_risk: 'configuration with keys: inside the encrypted artefact only'
+    safe_telemetry_fields: []
+    source_document_pointer: 'VENDOR_BACKUP_CONTRACTS §3 (measure first)'
+  - gate_id: pan_panorama_config_show
+    vendor: 'palo_alto'
+    platform_role_scope: 'panorama'
+    shell_context: 'not_applicable'
+    transport_kind: 'PAN_XML_API'
+    canonical_command_key: 'type=config&action=show'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 120
+    retry_rule: 'none'
+    max_frequency: 'once per backup'
+    session_reuse_rule: 'one key per run'
+    unsupported_behavior_ref: 'refused and device-state refused -> backup failed'
+    secret_output_risk: 'configuration: inside the encrypted artefact only'
+    safe_telemetry_fields: []
+    source_document_pointer: 'PAN-OS XML API (config show); Panorama scope'

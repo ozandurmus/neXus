@@ -58,8 +58,22 @@ public final class PaloAltoBackupExecutor {
             String artefactId,
             ArtefactStore.ArtefactMetadata metadata,
             SemanticDeviationEngine.DeviationOutcome deviationOutcome,
-            String errorMessage
-    ) {}
+            String errorMessage,
+            /** A part of the bundle that could not be read (stored without it; the job reports it). */
+            String missing
+    ) {
+        public PanBackupResult(boolean success, String artefactId, ArtefactStore.ArtefactMetadata metadata,
+                SemanticDeviationEngine.DeviationOutcome deviationOutcome, String errorMessage) {
+            this(success, artefactId, metadata, deviationOutcome, errorMessage, null);
+        }
+    }
+
+    public static final String BUNDLE_RUNNING_CONFIG_XML = "running-config.xml";
+
+    /** A Panorama (PO 2026-09-25): device-state first, its running configuration XML when that is refused. */
+    public PanBackupResult executePanoramaBackup(ApiTarget target, String credentialRef, String deviceId, String jobId, String previousConfigXml) {
+        return executeBackup(target, credentialRef, deviceId, jobId, previousConfigXml, true);
+    }
 
     /**
      * @param credentialRef the device's credential reference (Admin > Credentials), resolved here
@@ -68,6 +82,11 @@ public final class PaloAltoBackupExecutor {
      *     a 108-byte XML error which was then stored as a "V1 backup".
      */
     public PanBackupResult executeBackup(ApiTarget target, String credentialRef, String deviceId, String jobId, String previousConfigXml) {
+        return executeBackup(target, credentialRef, deviceId, jobId, previousConfigXml, false);
+    }
+
+    private PanBackupResult executeBackup(ApiTarget target, String credentialRef, String deviceId, String jobId, String previousConfigXml,
+            boolean panorama) {
         SemanticDeviationEngine.DeviationOutcome noDeviation = deviationEngine.evaluate("palo_alto", previousConfigXml, "");
         if (credentialResolver == null) {
             return new PanBackupResult(false, null, null, noDeviation, "PAN credential resolver not configured; refusing (fail-closed)");
@@ -151,11 +170,19 @@ public final class PaloAltoBackupExecutor {
         // A device-state export is a gzip archive; anything else (an XML <response status="error">
         // for a wrong key, a role without export rights, an unknown category...) is a refusal and
         // is never stored as a backup (measured live, 2026-09-22: 108-byte XML errors stored as V1).
+        boolean deviceStateOk = true;
         if (completed.httpStatus() != 200 || export.xmlErrorSnippet() != null || !export.gzip() || export.bytes() <= 0) {
             String why = export.xmlErrorSnippet() != null
                     ? describeXmlError(export.xmlErrorSnippet(), "HTTP " + completed.httpStatus())
                     : "HTTP " + completed.httpStatus() + ", " + export.bytes() + " bytes, gzip=" + export.gzip();
-            return new PanBackupResult(false, null, null, deviationOutcome, "device-state export refused by the device: " + why);
+            if (!panorama || currentConfigXml.isEmpty()) {
+                return new PanBackupResult(false, null, null, deviationOutcome, "device-state export refused by the device: " + why);
+            }
+            // MEASURE FIRST (VENDOR_BACKUP_CONTRACTS §3): a Panorama that refuses device-state is backed up by its
+            // running configuration XML, already read above; logged so the first run records which one it answered.
+            java.util.logging.Logger.getLogger(PaloAltoBackupExecutor.class.getName())
+                    .info("[PANORAMA_BACKUP] device-state refused (" + why + "); running configuration XML is the member");
+            deviceStateOk = false;
         }
 
         // 3. The set-format running configuration over the CLI (Product Owner P0, 2026-09-22: "PAN'daki
@@ -166,9 +193,16 @@ public final class PaloAltoBackupExecutor {
         String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver
                 .scopeRef(sshHost, SSH_PORT);
         PanSetConfigReader.Outcome setConfig = new PanSetConfigReader(transport).read(sshTarget, credentialRef, trustRuleRef);
-        if (!(setConfig instanceof PanSetConfigReader.Outcome.Read read)) {
+        String setText = null;
+        String missing = null;
+        if (setConfig instanceof PanSetConfigReader.Outcome.Read read) {
+            setText = read.setFormatText();
+        } else {
             String why = ((PanSetConfigReader.Outcome.Unavailable) setConfig).reason();
-            return new PanBackupResult(false, null, null, deviationOutcome, "pan_set_config_unavailable: " + why);
+            if (!panorama) {
+                return new PanBackupResult(false, null, null, deviationOutcome, "pan_set_config_unavailable: " + why);
+            }
+            missing = "running-config.set (" + why + ")"; // a Panorama backup keeps its XML and names the gap
         }
 
         // 4. One bundle artefact: a gzip tar holding both members, so the download is one file, the
@@ -181,11 +215,18 @@ public final class PaloAltoBackupExecutor {
         }
         try {
             try (TarWriter tar = new TarWriter(new java.util.zip.GZIPOutputStream(handle.sink()))) {
-                tar.file(BUNDLE_DEVICE_STATE, deviceState.toByteArray());
-                tar.file(BUNDLE_RUNNING_CONFIG_SET, read.setFormatText().getBytes(StandardCharsets.UTF_8));
+                if (deviceStateOk) {
+                    tar.file(BUNDLE_DEVICE_STATE, deviceState.toByteArray());
+                }
+                if (panorama && !currentConfigXml.isEmpty()) {
+                    tar.file(BUNDLE_RUNNING_CONFIG_XML, currentConfigXml.getBytes(StandardCharsets.UTF_8));
+                }
+                if (setText != null) {
+                    tar.file(BUNDLE_RUNNING_CONFIG_SET, setText.getBytes(StandardCharsets.UTF_8));
+                }
             }
             ArtefactStore.ArtefactMetadata metadata = handle.finish();
-            return new PanBackupResult(true, metadata.ref().value(), metadata, deviationOutcome, null);
+            return new PanBackupResult(true, metadata.ref().value(), metadata, deviationOutcome, null, missing);
         } catch (Exception e) {
             try {
                 handle.close();

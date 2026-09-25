@@ -467,6 +467,9 @@ public final class InventoryCapabilityExecutor {
         }
 
         String haStateOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_HA_STATE, headers);
+        if (request.managementServer()) {
+            return panoramaInventory(identityOutput, sysInfo, haStateOutput);
+        }
         String interfaceOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, headers);
         String routeOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, headers);
 
@@ -556,6 +559,53 @@ public final class InventoryCapabilityExecutor {
 
         return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
                 Optional.of(PlatformFactsRead.paloAlto(sysInfo).withPolicyInstall(panPolicyInstall(target, headers))),
+                new InventoryResult.ObservedIdentity(sysInfo.hostname(), sysInfo.model(), sysInfo.swVersion()));
+    }
+
+    private static final java.util.regex.Pattern PAN_TAG = java.util.regex.Pattern.compile("<(ip-address|netmask|default-gateway|ipv6-address|ipv6-default-gateway)>\\s*([^<]*?)\\s*</\\1>");
+
+    /**
+     * Panorama (PO 2026-09-25: "Panoramayı halledelim"): it has no dataplane, so the firewall reads (show interface all,
+     * show routing route) do not apply. Its management interface -- address, mask, IPv6 -- and default gateway come from
+     * the same show system info the identity read already returned; HA from show high-availability state.
+     */
+    static InventoryResult panoramaInventory(String identityOutput, PaloAltoSystemInfoParser.SystemInfo sysInfo, String haStateOutput) {
+        Map<String, String> tags = new java.util.HashMap<>();
+        java.util.regex.Matcher m = PAN_TAG.matcher(identityOutput);
+        while (m.find()) {
+            tags.putIfAbsent(m.group(1), m.group(2));
+        }
+        List<InventoryAddress> addresses = new ArrayList<>();
+        String ip = tags.get("ip-address");
+        String mask = tags.get("netmask");
+        if (ip != null && ip.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) {
+            int len = 32;
+            if (mask != null && mask.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) {
+                len = 0;
+                for (String part : mask.split("\\.")) {
+                    len += Integer.bitCount(Integer.parseInt(part) & 0xff);
+                }
+            }
+            addresses.add(new InventoryAddress(UUID.randomUUID().toString(), ip + "/" + len, InventoryAddress.FAMILY_IPV4,
+                    InventoryAddress.ROLE_MEMBER));
+        }
+        String v6 = tags.get("ipv6-address");
+        if (v6 != null && v6.contains(":") && !v6.equalsIgnoreCase("unknown")) {
+            addresses.add(new InventoryAddress(UUID.randomUUID().toString(), v6, InventoryAddress.FAMILY_IPV6, InventoryAddress.ROLE_MEMBER));
+        }
+        List<InventoryInterface> interfaces = List.of(new InventoryInterface(UUID.randomUUID().toString(), "management",
+                Optional.empty(), InventoryInterface.KIND_PHYSICAL, InventoryInterface.STATE_UP, addresses));
+        List<InventoryRoute> routes = new ArrayList<>();
+        String gw = tags.get("default-gateway");
+        if (gw != null && gw.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) {
+            routes.add(new InventoryRoute(UUID.randomUUID().toString(), "0.0.0.0/0", Optional.of(gw), Optional.of("management"),
+                    InventoryRoute.PROTOCOL_DEFAULT, Optional.empty()));
+        }
+        PaloAltoHaStateParser.HaState haState = PaloAltoHaStateParser.parse(haStateOutput);
+        List<InventoryHaFact> haFacts = List.of(new InventoryHaFact(UUID.randomUUID().toString(),
+                InventoryContext.PHYSICAL, haState.role(), haState.clusterMode(), InventoryHaFact.SOURCE_PAN_HIGH_AVAILABILITY_STATE));
+        return new InventoryResult.Completed(List.of(new InventoryContext(InventoryContext.PHYSICAL, interfaces, routes)), haFacts,
+                Optional.empty(), Optional.of(PlatformFactsRead.paloAlto(sysInfo)),
                 new InventoryResult.ObservedIdentity(sysInfo.hostname(), sysInfo.model(), sysInfo.swVersion()));
     }
 
