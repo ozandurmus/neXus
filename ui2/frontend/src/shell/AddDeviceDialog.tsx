@@ -566,7 +566,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               onChange={(e) => setAddress(e.target.value)}
               autoFocus
             />
-            {!HTTPS_VENDORS.has(vendor) && <TextField
+            {!HTTPS_VENDORS.has(vendor) ? <TextField
               label="Role"
               select
               size="small"
@@ -576,10 +576,15 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
             >
               <MenuItem value="gateway">Security device</MenuItem>
               <MenuItem value="management_server">Management server</MenuItem>
-            </TextField>}
-            {role === "management_server" && (
+            </TextField> : (
+              // HTTPS vendors: the role follows from what the address is -- say it, never leave "Security device" implied.
+              <TextField label="Role" size="small" fullWidth disabled
+                value={vendor === "bluecoat" || (vendor === "radware" && radwareKind === "cyber_controller") ? "Management server" : "Appliance"}
+                helperText={vendor === "bluecoat" ? "A Symantec Management Center: its ProxySG, Reporter and WSS devices are read through it." : undefined} />
+            )}
+            {role === "management_server" && vendor === "palo_alto" && (
               <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-                A management server can be added and confirmed, but collection from it is refused until its read sets are gated.
+                A Panorama can be added and confirmed; its own inventory read set is not gated yet, so its Collect is refused.
               </Typography>
             )}
             <TextField
