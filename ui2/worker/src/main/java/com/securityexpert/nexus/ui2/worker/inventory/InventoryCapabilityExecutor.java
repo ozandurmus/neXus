@@ -374,14 +374,19 @@ public final class InventoryCapabilityExecutor {
             // observed on every read and refreshed on the device row by the job executor; a failed version read leaves
             // the version unknown for this run and never fails the inventory.
             Optional<String> gaiaVersion;
+            Optional<String> gaiaHostname;
             try {
                 gaiaVersion = com.securityexpert.nexus.ui2.worker.backup.BackupReadPlan.parseGaiaVersion(
                         identityReadOutput(session, InventoryReadPlan.CP_SHOW_VERSION_ALL, preferInteractiveShell));
+                gaiaHostname = com.securityexpert.nexus.ui2.worker.configuration.ConfigurationCapabilityExecutor.parseHostname(
+                        identityReadOutput(session, InventoryReadPlan.CP_SHOW_HOSTNAME, preferInteractiveShell));
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "[INVENTORY_VERSION_READ_FAILED] {0}", e.getClass().getSimpleName());
+                LOG.log(System.Logger.Level.WARNING, "[INVENTORY_IDENTITY_READ_FAILED] {0}", e.getClass().getSimpleName());
                 gaiaVersion = Optional.empty();
+                gaiaHostname = Optional.empty();
             }
-            InventoryResult.ObservedIdentity observed = new InventoryResult.ObservedIdentity(session.presentedIdentity(),
+            // The presented SSH identity is not a hostname (a host-key fingerprint on this estate): the name is read.
+            InventoryResult.ObservedIdentity observed = new InventoryResult.ObservedIdentity(gaiaHostname,
                     platformFacts.platformFamily(), gaiaVersion);
             return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
                     Optional.of(platformFacts), observed);

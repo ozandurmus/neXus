@@ -299,7 +299,7 @@ public final class ConfigurationCapabilityExecutor {
     private static final java.util.regex.Pattern HOSTNAME_TOKEN = java.util.regex.Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$");
 
     /** {@code show hostname}: one token on one line; anything else (a CLI error, a prompt) is no hostname. */
-    static java.util.Optional<String> parseHostname(String output) {
+    public static java.util.Optional<String> parseHostname(String output) {
         if (output == null) {
             return java.util.Optional.empty();
         }
