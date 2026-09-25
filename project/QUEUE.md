@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T09:27:03Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T09:56:08Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -32,7 +32,6 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T09:27:03Z
 - P1/planned aiview_masked_readonly_admin — aiview as a masked read-only administrator (PO 2026-09-23) (target: )
 - P1/planned aiview_masking_leak_audit — Masking leak audit: compare aiview responses against the r (target: PO 2026-09-22 proposal (separate masked)
 - P1/planned backup_plane_separate_service — Deliver the backup plane as the independent service the re (target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITEC)
-- P1/planned bluecoat_proxysg_backup_path — ProxySG backup (PO 2026-09-25): Management Center measured (target: docs/design/VENDOR_BACKUP_CONTRACTS_2026)
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
 - P1/planned cluster_diff_member_specific_tuning — Cluster DIFF: 38 of 39 clusters show member differences (2 (target: Overview contract; configurationProjecti)
 - P1/planned cluster_member_model_needs_second_query — Cluster members carry no hardware field in the gateway enu (target: Check Point management plane enumeration)
