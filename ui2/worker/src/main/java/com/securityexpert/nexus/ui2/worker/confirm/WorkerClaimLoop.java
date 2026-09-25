@@ -42,6 +42,7 @@ public final class WorkerClaimLoop {
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
             ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA, InventoryCapabilityIds.ASA_INVENTORY_COLLECT, BackupCapabilityIds.ASA_CONFIG_BACKUP,
+            ConfirmCapabilityIds.DEVICE_CONFIRM_FORTIGATE, InventoryCapabilityIds.FGT_INVENTORY_COLLECT, BackupCapabilityIds.FGT_CONFIG_BACKUP,
             InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT, InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
@@ -83,12 +84,15 @@ public final class WorkerClaimLoop {
         if ("management_server".equals(role) && "bluecoat".equals(vendorHint)) {
             return "bluecoat_mc";
         }
+        if ("management_server".equals(role) && "fortinet".equals(vendorHint)) {
+            return "fortimanager";
+        }
         return vendorHint;
     }
 
     /** A Management Center's REST listens on 8082 unless the address names a port. */
     static int httpsPortOf(String addressRef, String httpsVendor) {
-        if ("cisco_asa".equals(httpsVendor)) {
+        if ("cisco_asa".equals(httpsVendor) || "fortinet".equals(httpsVendor)) {
             return portOf(addressRef);
         }
         if ("bluecoat_mc".equals(httpsVendor) && addressRef.lastIndexOf(':') < 0) {
@@ -264,7 +268,8 @@ public final class WorkerClaimLoop {
 
         try {
             if (ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS.equals(job.capabilityId())
-                    || ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA.equals(job.capabilityId())) {
+                    || ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA.equals(job.capabilityId())
+                    || ConfirmCapabilityIds.DEVICE_CONFIRM_FORTIGATE.equals(job.capabilityId())) {
                 if (httpsConfirmJobExecutor == null) {
                     leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
                             com.securityexpert.nexus.ui2.jobs.JobState.FAILED, "system:worker", "claim_https_check",
@@ -279,7 +284,8 @@ public final class WorkerClaimLoop {
                 return true;
             }
             if (InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT.equals(job.capabilityId())
-                    || InventoryCapabilityIds.ASA_INVENTORY_COLLECT.equals(job.capabilityId())) {
+                    || InventoryCapabilityIds.ASA_INVENTORY_COLLECT.equals(job.capabilityId())
+                    || InventoryCapabilityIds.FGT_INVENTORY_COLLECT.equals(job.capabilityId())) {
                 if (httpsInventoryJobExecutor == null) {
                     leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
                             com.securityexpert.nexus.ui2.jobs.JobState.FAILED, "system:worker", "claim_https_check",
@@ -293,7 +299,8 @@ public final class WorkerClaimLoop {
                 return true;
             }
             if (BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(job.capabilityId())
-                    || BackupCapabilityIds.ASA_CONFIG_BACKUP.equals(job.capabilityId())) {
+                    || BackupCapabilityIds.ASA_CONFIG_BACKUP.equals(job.capabilityId())
+                    || BackupCapabilityIds.FGT_CONFIG_BACKUP.equals(job.capabilityId())) {
                 BackupRequest httpsRequest = new BackupRequest(new ConnectionTarget(endpoint.endpointId(), hostOf(endpoint.addressRef()),
                         httpsPortOf(endpoint.addressRef(), httpsVendorOf(device.vendorHint(), device.role()))),
                         Optional.ofNullable(device.credentialReferenceId()), "https");

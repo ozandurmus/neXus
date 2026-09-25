@@ -35,6 +35,8 @@ final class InteractiveShellSession implements AutoCloseable {
     private static final Pattern ANSI_ESCAPE = Pattern.compile("(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])");
     private static final List<String> CLI_ERROR_PATTERNS = List.of(
             "command not found", "unknown command", "invalid command", "syntax error",
+            // FortiOS
+            "command fail. return code", "command parse error", "unknown action",
             "not a valid command", "permission denied", "not authorized", "authorization failed");
 
     private final ChannelShell channel;
@@ -118,7 +120,22 @@ final class InteractiveShellSession implements AutoCloseable {
             if (got) {
                 lastData = System.currentTimeMillis();
                 String current = stripTerminalControl(raw.toString());
-                if (prompt != null && current.stripTrailing().endsWith(prompt)) {
+                // FortiOS pages at the terminal height with " --More-- " and waits: answer with a space, drop the
+                // marker, keep reading (no console setting is changed on the device).
+                if (current.stripTrailing().endsWith(MORE)) {
+                    int at = raw.lastIndexOf(MORE);
+                    if (at >= 0) {
+                        raw.delete(at, raw.length());
+                    }
+                    try {
+                        out.write(' ');
+                        out.flush();
+                    } catch (IOException e) {
+                        return new Result(Result.Kind.NOT_SENT, null);
+                    }
+                    continue;
+                }
+                if (prompt != null && (current.stripTrailing().endsWith(prompt) || isPromptVariant(lastLine(current)))) {
                     completed = true;
                     break;
                 }
@@ -142,7 +159,8 @@ final class InteractiveShellSession implements AutoCloseable {
         if (!lines.isEmpty() && lines.get(0).strip().equals(normalized)) {
             lines.remove(0);
         }
-        if (prompt != null && !lines.isEmpty() && lines.get(lines.size() - 1).strip().equals(prompt)) {
+        if (prompt != null && !lines.isEmpty() && (lines.get(lines.size() - 1).strip().equals(prompt)
+                || isPromptVariant(lines.get(lines.size() - 1).strip()))) {
             lines.remove(lines.size() - 1);
         }
         String stdout = String.join("\n", lines).strip();
@@ -310,6 +328,33 @@ final class InteractiveShellSession implements AutoCloseable {
             }
         }
         return null;
+    }
+
+    private static final String MORE = "--More--";
+
+    private static String lastLine(String text) {
+        String t = text.stripTrailing();
+        int nl = t.lastIndexOf('\n');
+        return (nl < 0 ? t : t.substring(nl + 1)).strip();
+    }
+
+    /**
+     * The learned prompt with a mode in brackets ("FGT # " -> "FGT (global) # ", "FGT (root) # "): FortiOS shows the
+     * context it is in; the host part must be the learned one, so device output is not mistaken for a prompt.
+     */
+    boolean isPromptVariant(String line) {
+        return isPromptVariant(prompt, line);
+    }
+
+    static boolean isPromptVariant(String prompt, String line) {
+        if (prompt == null || line == null || line.isEmpty()) {
+            return false;
+        }
+        String stem = prompt.replaceAll("\\s*[#>$]\\s*$", "").replaceAll("\\s*\\([^)]*\\)$", "").strip();
+        if (stem.length() < 2) {
+            return false;
+        }
+        return line.matches(java.util.regex.Pattern.quote(stem) + "(\\s*\\([^)]*\\))?\\s*[#>$]");
     }
 
     private static boolean looksLikeCliError(String stdout) {

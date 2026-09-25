@@ -23,7 +23,10 @@ public final class InventoryCapabilityIds {
 
     /** Cisco ASA over SSH (V78, CISCO_ASA_CONTRACT.md): interfaces, routes and failover role. */
     public static final String ASA_INVENTORY_COLLECT = "asa_inventory_collect";
-    public static final Set<String> ALL = Set.of(CP_INVENTORY_COLLECT, PAN_INVENTORY_COLLECT, HTTPS_INVENTORY_COLLECT, ASA_INVENTORY_COLLECT);
+    /** FortiGate over SSH (V80): interfaces per VDOM and each VDOM's routing table. */
+    public static final String FGT_INVENTORY_COLLECT = "fgt_inventory_collect";
+    public static final Set<String> ALL = Set.of(CP_INVENTORY_COLLECT, PAN_INVENTORY_COLLECT, HTTPS_INVENTORY_COLLECT, ASA_INVENTORY_COLLECT,
+            FGT_INVENTORY_COLLECT);
 
     private InventoryCapabilityIds() {
     }

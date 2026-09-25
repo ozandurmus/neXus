@@ -177,6 +177,10 @@ public class DeviceCompositionConfiguration {
                 confirmCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA, "cisco_asa", "cisco_asa_firewall", TransportKind.SSH_EXEC),
                 confirmCapability(InventoryCapabilityIds.ASA_INVENTORY_COLLECT, "cisco_asa", "cisco_asa_firewall", TransportKind.SSH_EXEC),
                 confirmCapability(BackupCapabilityIds.ASA_CONFIG_BACKUP, "cisco_asa", "cisco_asa_firewall", TransportKind.SSH_EXEC),
+                // FortiGate over SSH (FORTINET_CONTRACT.md, gate rows V80); a FortiManager uses the HTTPS jobs above.
+                confirmCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_FORTIGATE, "fortinet", "fortigate", TransportKind.SSH_EXEC),
+                confirmCapability(InventoryCapabilityIds.FGT_INVENTORY_COLLECT, "fortinet", "fortigate", TransportKind.SSH_EXEC),
+                confirmCapability(BackupCapabilityIds.FGT_CONFIG_BACKUP, "fortinet", "fortigate", TransportKind.SSH_EXEC),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),

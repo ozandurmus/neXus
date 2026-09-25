@@ -82,12 +82,37 @@ public final class HttpsVendorExecutor {
 
     private static final String CISCO = "cisco_asa";
 
+    /** Fortinet (FORTINET_CONTRACT.md): FortiGate over SSH, FortiManager over JSON-RPC -- the same vendor jobs. */
+    private com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGateExecutor fortiGate;
+    private com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor fortiManager;
+
+    public HttpsVendorExecutor withFortinet(com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGateExecutor gate,
+            com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor manager) {
+        this.fortiGate = gate;
+        this.fortiManager = manager;
+        return this;
+    }
+
+    private static final String FORTIGATE = "fortinet";
+    private static final String FORTIMANAGER = "fortimanager";
+
+    /** The FortiManager executor over this executor's own HTTPS client and credential resolver. */
+    public com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor newFortiManagerExecutor() {
+        return new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor(client, credentials);
+    }
+
 
     // ------------------------------------------------------------------------------------------------ confirm
 
     public ConfirmOutcome confirm(String vendor, Target target, String credentialRef) {
         if (CISCO.equals(vendor)) {
             return ciscoAsa == null ? new ConfirmOutcome.Failed("no Cisco ASA executor in this worker") : ciscoAsa.confirm(target, credentialRef);
+        }
+        if (FORTIGATE.equals(vendor)) {
+            return fortiGate == null ? new ConfirmOutcome.Failed("no FortiGate executor in this worker") : fortiGate.confirm(target, credentialRef);
+        }
+        if (FORTIMANAGER.equals(vendor)) {
+            return fortiManager == null ? new ConfirmOutcome.Failed("no FortiManager executor in this worker") : fortiManager.confirm(target, credentialRef);
         }
         Credentials creds;
         try {
@@ -152,6 +177,12 @@ public final class HttpsVendorExecutor {
     public InventoryOutcome inventory(String vendor, Target target, String credentialRef) {
         if (CISCO.equals(vendor)) {
             return ciscoAsa == null ? new InventoryOutcome.Failed("no Cisco ASA executor in this worker") : ciscoAsa.inventory(target, credentialRef);
+        }
+        if (FORTIGATE.equals(vendor)) {
+            return fortiGate == null ? new InventoryOutcome.Failed("no FortiGate executor in this worker") : fortiGate.inventory(target, credentialRef);
+        }
+        if (FORTIMANAGER.equals(vendor)) {
+            return fortiManager == null ? new InventoryOutcome.Failed("no FortiManager executor in this worker") : fortiManager.inventory(target, credentialRef);
         }
         try {
             Credentials creds = credentials.apply(credentialRef);
@@ -620,6 +651,10 @@ public final class HttpsVendorExecutor {
         if (CISCO.equals(vendor)) {
             return ciscoAsa == null ? new BackupResult.ConnectFailed("no Cisco ASA executor in this worker")
                     : ciscoAsa.backup(target, credentialRef, deviceId, jobId);
+        }
+        if (FORTIGATE.equals(vendor)) {
+            return fortiGate == null ? new BackupResult.ConnectFailed("no FortiGate executor in this worker")
+                    : fortiGate.backup(target, credentialRef, deviceId, jobId);
         }
         Credentials creds;
         try {

@@ -60,6 +60,7 @@ const VENDOR_LABEL: Record<Vendor, string> = {
   radware: "Radware",
   bluecoat: "Blue Coat",
   cisco_asa: "Cisco ASA",
+  fortinet: "Fortinet",
 };
 
 /** V64: vendors reached over HTTPS -- an appliance role, a password credential; Radware also an export passphrase. */
@@ -188,6 +189,8 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
   // V67: a Radware address is a DefensePro (appliance) or the Cyber Controller that manages them (management server).
   const [radwareKind, setRadwareKind] = useState<"defensepro" | "cyber_controller">("defensepro");
   const defensePro = vendor === "radware" && radwareKind === "defensepro";
+  // FORTINET_CONTRACT.md: a FortiGate is read over SSH, a FortiManager over its JSON-RPC API (HTTPS).
+  const [fortiKind, setFortiKind] = useState<"fortigate" | "fortimanager">("fortigate");
 
   // Keep the credential selection valid as the vendor (and therefore the
   // eligible list) changes; never leave a stale id from another vendor selected.
@@ -341,7 +344,8 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
       setPhase("submitting");
       try {
         const effectiveRole: DeviceRole = (vendor === "radware" && radwareKind === "cyber_controller") || vendor === "bluecoat" ? "management_server"
-          : HTTPS_VENDORS.has(vendor) ? "appliance" : vendor === "cisco_asa" ? "gateway" : role;
+          : HTTPS_VENDORS.has(vendor) ? "appliance" : vendor === "cisco_asa" ? "gateway"
+            : vendor === "fortinet" ? (fortiKind === "fortimanager" ? "management_server" : "gateway") : role;
         const result = await addDeviceSingle(trimmedAddress, effectiveRole, vendor, credentialId,
           defensePro ? passphraseCredentialId : undefined);
         setDeviceId(result.device_id);
@@ -577,9 +581,17 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               autoFocus
             />
             {vendor === "cisco_asa" ? (
-              // CISCO_ASA_CONTRACT.md: a firewall, read over SSH with a privilege-15 account; nothing is written to it.
+              // CISCO_ASA_CONTRACT.md: a firewall over SSH with a privilege-15 account.
               <TextField label="Role" size="small" fullWidth disabled value="Security device"
-                helperText="SSH with a privilege-15 account. Reads only: version, interfaces, routes, failover; backup is the configuration text." />
+                helperText="SSH with a privilege-15 account. Backup: configuration text, then the ASA archive over SCP (ssh scopy enabled)." />
+            ) : vendor === "fortinet" ? (
+              <TextField label="Fortinet device" select size="small" fullWidth value={fortiKind}
+                onChange={(e) => setFortiKind(e.target.value as "fortigate" | "fortimanager")}
+                helperText={fortiKind === "fortimanager" ? "Read over its JSON-RPC API (HTTPS): status and the FortiGates it manages."
+                  : "Read over SSH: status, interfaces and routes per VDOM; backup is the whole configuration."}>
+                <MenuItem value="fortigate">FortiGate (SSH)</MenuItem>
+                <MenuItem value="fortimanager">FortiManager (HTTPS)</MenuItem>
+              </TextField>
             ) : !HTTPS_VENDORS.has(vendor) ? <TextField
               label="Role"
               select
@@ -615,6 +627,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               <MenuItem value="radware">Radware (HTTPS)</MenuItem>
               <MenuItem value="bluecoat">Blue Coat Management Center (HTTPS, port 8082)</MenuItem>
               <MenuItem value="cisco_asa">Cisco ASA (SSH)</MenuItem>
+              <MenuItem value="fortinet">Fortinet (FortiGate / FortiManager)</MenuItem>
             </TextField>
             {vendor === "radware" && (
               <TextField label="Radware device" select size="small" fullWidth value={radwareKind}

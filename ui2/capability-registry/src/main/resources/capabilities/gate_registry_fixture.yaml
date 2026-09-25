@@ -1734,3 +1734,131 @@ gates:
     secret_output_risk: 'none'
     safe_telemetry_fields: []
     source_document_pointer: 'Cisco ASA command reference (delete); name restricted to nexus-<hex>.tar.gz'
+  - gate_id: fgt_get_system_status
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'top_or_global'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'get system status'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'once inside config global when refused at the top level'
+    max_frequency: 'once per confirm, inventory and backup'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no "Version: Forti..." -> not a FortiGate, failed'
+    secret_output_risk: 'serial number and hostname (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference (get system status); Backbox FortiGate SSH (VDOM) trail 23488971'
+  - gate_id: fgt_context_moves
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'context'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'config global | config vdom | edit <vdom> | end'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'as the reads need'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'a refused move leaves the next read to fail on its own'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference (VDOM contexts); Backbox trail 23488971; VDOM names checked against [A-Za-z0-9_.-]{1,31}'
+  - gate_id: fgt_show_system_interface
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'global'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show system interface'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 180
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no edit blocks -> no interfaces recorded'
+    secret_output_risk: 'interface addresses (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference (system interface)'
+  - gate_id: fgt_get_routing_table
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'vdom'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'get router info routing-table all'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 180
+    retry_rule: 'none'
+    max_frequency: 'once per VDOM per inventory'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no rows -> no routes for that VDOM'
+    secret_output_risk: 'route destinations and next hops (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference (router info routing-table)'
+  - gate_id: fgt_show_configuration
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'top'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'none'
+    max_frequency: 'once per backup'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no "#config-version=" header -> backup refused, nothing stored'
+    secret_output_risk: 'full configuration: stored only inside the encrypted backup artefact, never logged'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 23488971 (the same top-level show); FortiOS CLI reference'
+  - gate_id: fmg_jsonrpc_login_logout
+    vendor: 'fortinet'
+    platform_role_scope: 'fortimanager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /jsonrpc exec /sys/login/user, /sys/logout'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per confirm and inventory'
+    session_reuse_rule: 'one session per run'
+    unsupported_behavior_ref: 'status code != 0 -> authentication_failed'
+    secret_output_risk: 'the password is in the login body, never logged; the session token lives for the run only'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiManager JSON API reference (sys/login/user)'
+  - gate_id: fmg_jsonrpc_sys_status
+    vendor: 'fortinet'
+    platform_role_scope: 'fortimanager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /jsonrpc get /sys/status'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per confirm and inventory'
+    session_reuse_rule: 'one session per run'
+    unsupported_behavior_ref: 'no Version -> not a FortiManager, failed'
+    secret_output_risk: 'serial number and hostname (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiManager JSON API reference (sys/status)'
+  - gate_id: fmg_jsonrpc_dvmdb_device
+    vendor: 'fortinet'
+    platform_role_scope: 'fortimanager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /jsonrpc get /dvmdb/device'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one session per run'
+    unsupported_behavior_ref: 'status code != 0 -> inventory failed'
+    secret_output_risk: 'managed device names and addresses (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiManager JSON API reference (dvmdb/device)'

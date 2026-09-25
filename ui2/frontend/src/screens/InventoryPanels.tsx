@@ -1767,10 +1767,11 @@ export function DeviceInventoryPanels({
               : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} />,
           },
           {
-            label: device.vendor_hint === "infoblox" ? "Grid members" : device.vendor_hint === "bluecoat" ? "Managed devices" : "Cluster members",
+            label: device.vendor_hint === "infoblox" ? "Grid members"
+              : device.vendor_hint === "bluecoat" || (device.vendor_hint === "fortinet" && device.role === "management_server") ? "Managed devices" : "Cluster members",
             panel: device.vendor_hint === "infoblox"
               ? <GridMembersPanel members={deviceInventory?.grid_members ?? []} />
-              : device.vendor_hint === "bluecoat"
+              : device.vendor_hint === "bluecoat" || (device.vendor_hint === "fortinet" && device.role === "management_server")
               ? <ManagedDevicesPanel members={deviceInventory?.grid_members ?? []} />
               : isCluster && clusterInventory
               ? (

@@ -81,10 +81,12 @@ function clusterHasCollectedEvidence(members: readonly DeviceSummary[]): boolean
 }
 
 /** Labels for the child list under a device: Palo Alto vsys, Check Point VSX virtual systems, Infoblox grid members. */
-function childLabels(vendorHint: string | null | undefined): { heading: string; chip: string; tag: string } {
+function childLabels(vendorHint: string | null | undefined, role?: string | null): { heading: string; chip: string; tag: string } {
   if (vendorHint === "palo_alto") return { heading: "Virtual Systems (VSYS)", chip: "VSYS", tag: "PAN-OS" };
   if (vendorHint === "infoblox") return { heading: "Grid members", chip: "MEMBER", tag: "NIOS" };
   if (vendorHint === "bluecoat") return { heading: "Managed devices", chip: "DEVICE", tag: "MC" };
+  if (vendorHint === "fortinet" && role === "management_server") return { heading: "Managed FortiGates", chip: "FGT", tag: "FMG" };
+  if (vendorHint === "fortinet") return { heading: "VDOMs", chip: "VDOM", tag: "FortiOS" };
   return { heading: "Virtual Systems (VSX)", chip: "VS", tag: "VSX" };
 }
 
@@ -117,6 +119,7 @@ const MANAGER_KIND: Record<string, string> = {
   check_point: "Management server (MDS)",
   palo_alto: "Panorama",
   bluecoat: "Management Center",
+  fortinet: "FortiManager",
   radware: "Cyber Controller",
   infoblox: "Grid Manager",
 };
@@ -681,7 +684,7 @@ function FlatDeviceList({
         );
       })}
       {!clusterOnly && standalone.map((device) => {
-        const labels = childLabels(device.vendor_hint);
+        const labels = childLabels(device.vendor_hint, device.role);
         const standaloneVsList = device.virtual_systems
           ? device.virtual_systems.split(/,\s*/).filter(Boolean)
           : [];
@@ -1113,7 +1116,7 @@ export function InventoryScreen() {
               />
             ) : selectedDevice ? (
               <Stack spacing={2}>
-                {selectedDevice.role === "management_server" && selectedDevice.vendor_hint !== "bluecoat" && (
+                {selectedDevice.role === "management_server" && selectedDevice.vendor_hint !== "bluecoat" && selectedDevice.vendor_hint !== "fortinet" && (
                   <ManagementTreePanel
                     deviceId={selectedDevice.device_id}
                     onOpenDevice={(id) => {

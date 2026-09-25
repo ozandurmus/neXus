@@ -60,7 +60,19 @@ public final class DeviceAddSingleService {
             // PO 2026-09-25: a Symantec (Blue Coat) Management Center, over its REST API on 8082.
             "bluecoat", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS),
             // PO 2026-09-25: Cisco ASA over SSH (CISCO_ASA_CONTRACT.md), role gateway.
-            "cisco_asa", new VendorMapping("ssh_exec", ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA));
+            "cisco_asa", new VendorMapping("ssh_exec", ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA),
+            // FORTINET_CONTRACT.md: a FortiGate over SSH; a FortiManager (management server) over its JSON-RPC API.
+            "fortinet", new VendorMapping("ssh_exec", ConfirmCapabilityIds.DEVICE_CONFIRM_FORTIGATE));
+
+    private static final VendorMapping FORTIMANAGER = new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS);
+
+    /** The vendor's mapping, by role where the role changes the protocol (a FortiManager is not a FortiGate). */
+    private static VendorMapping mappingFor(String vendor, String role) {
+        if ("fortinet".equals(vendor) && "management_server".equals(role)) {
+            return FORTIMANAGER;
+        }
+        return VENDOR_MAPPINGS.get(vendor);
+    }
 
     /** Unwinds {@link #runInTransaction} to roll back the whole outer transaction on a validation refusal. */
     private static final class ValidationFailedSignal extends RuntimeException {
@@ -135,7 +147,7 @@ public final class DeviceAddSingleService {
         if (device.enrollmentState() != com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.DRAFT) {
             return new Outcome.ValidationFailed("DEVICE_NOT_DRAFT");
         }
-        VendorMapping mapping = VENDOR_MAPPINGS.get(device.vendorHint());
+        VendorMapping mapping = mappingFor(device.vendorHint(), device.role());
         if (mapping == null) {
             return new Outcome.ValidationFailed(DeviceRegistrationService.REASON_VENDOR_HINT_INVALID);
         }
@@ -165,7 +177,7 @@ public final class DeviceAddSingleService {
      */
     public Outcome addSingle(String actorFingerprint, String role, String address, String vendor, String credentialReferenceId,
             Optional<String> exportPassphraseReferenceId) {
-        VendorMapping mapping = VENDOR_MAPPINGS.get(vendor);
+        VendorMapping mapping = mappingFor(vendor, role);
         if (mapping == null) {
             return new Outcome.ValidationFailed(DeviceRegistrationService.REASON_VENDOR_HINT_INVALID);
         }
@@ -209,7 +221,7 @@ public final class DeviceAddSingleService {
     public Outcome addFromDiscoveryImport(String actorFingerprint, String role, String address, String vendor,
             String credentialReferenceId, Optional<String> clusterMemberRef, Optional<String> virtualSystemRef,
             Optional<String> discoveryMatchKey, String actionId, Optional<String> exportPassphraseReferenceId) {
-        VendorMapping mapping = VENDOR_MAPPINGS.get(vendor);
+        VendorMapping mapping = mappingFor(vendor, role);
         if (mapping == null) {
             return new Outcome.ValidationFailed(DeviceRegistrationService.REASON_VENDOR_HINT_INVALID);
         }

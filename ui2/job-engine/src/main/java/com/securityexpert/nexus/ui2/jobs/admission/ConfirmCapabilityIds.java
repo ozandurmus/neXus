@@ -23,8 +23,11 @@ public final class ConfirmCapabilityIds {
     /** Cisco ASA over SSH (V78, CISCO_ASA_CONTRACT.md): show version on an interactive shell. */
     public static final String DEVICE_CONFIRM_CISCO_ASA = "device_confirm_cisco_asa";
 
+    /** FortiGate over SSH (V80, FORTINET_CONTRACT.md): get system status on an interactive shell. */
+    public static final String DEVICE_CONFIRM_FORTIGATE = "device_confirm_fortigate";
+
     public static final Set<String> ALL = Set.of(DEVICE_CONFIRM_CHECK_POINT, DEVICE_CONFIRM_PALO_ALTO, DEVICE_CONFIRM_HTTPS,
-            DEVICE_CONFIRM_CISCO_ASA);
+            DEVICE_CONFIRM_CISCO_ASA, DEVICE_CONFIRM_FORTIGATE);
 
     private ConfirmCapabilityIds() {
     }

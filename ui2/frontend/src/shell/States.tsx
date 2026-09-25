@@ -113,6 +113,7 @@ export function vendorDisplayName(vendor: string | null | undefined): string {
     case "infoblox": return "Infoblox";
     case "bluecoat": return "Blue Coat";
     case "cisco_asa": return "Cisco ASA";
+    case "fortinet": return "Fortinet";
     default: return vendor ? vendor : "Vendor UNKNOWN";
   }
 }
@@ -122,8 +123,8 @@ export type VendorKind = "check_point" | "palo_alto" | "vsx" | string | null | u
 /** The vendor monogram used on every screen: an outlined chip with an identity swatch; never a status colour. */
 export function VendorBadge({ vendor, vsx = false, size = 28 }: { readonly vendor: VendorKind; readonly vsx?: boolean; readonly size?: number }) {
   const kind = vsx ? "vsx" : vendor === "check_point" ? "cp" : vendor === "palo_alto" ? "pan"
-    : vendor === "radware" ? "rdw" : vendor === "infoblox" ? "ibx" : vendor === "bluecoat" ? "bc" : vendor === "cisco_asa" ? "asa" : "unknown";
-  const label = kind === "cp" ? "CP" : kind === "pan" ? "PAN" : kind === "vsx" ? "VSX" : kind === "rdw" ? "RDW" : kind === "ibx" ? "IBX" : kind === "bc" ? "BC" : kind === "asa" ? "ASA" : "?";
+    : vendor === "radware" ? "rdw" : vendor === "infoblox" ? "ibx" : vendor === "bluecoat" ? "bc" : vendor === "cisco_asa" ? "asa" : vendor === "fortinet" ? "ftnt" : "unknown";
+  const label = kind === "cp" ? "CP" : kind === "pan" ? "PAN" : kind === "vsx" ? "VSX" : kind === "rdw" ? "RDW" : kind === "ibx" ? "IBX" : kind === "bc" ? "BC" : kind === "asa" ? "ASA" : kind === "ftnt" ? "FTNT" : "?";
   const swatch = kind === "cp" ? m3.cp : kind === "pan" ? m3.pan : kind === "vsx" ? m3.vsx : m3.outline;
   const name = kind === "vsx" ? "Check Point VSX" : kind === "unknown" ? "Vendor UNKNOWN" : vendorDisplayName(vendor);
   return (
