@@ -66,6 +66,11 @@ session: `hosta_rebuild_real_env_acceptance` (P0, in progress), `scheduled_fleet
 job failure reasons, aiview masking audit, cluster DIFF tuning, CP backup free-space parse, ...) are unchanged there.
 
 # Open items / risks
+- Infoblox (2026-09-25, night): Grid Manager enrolled and backed up for real (1,019,189 bytes, gzip verified); two
+  fixes on the day (WAPI version from the page title; `application/force-download` on the download GET) and V71
+  grid-member listing (7 members shown under the Grid Manager as GRID MEMBERS, masked to aiview). PO next: make the
+  member data meaningful (backlog `infoblox_member_facts`); the Grid Manager row still says "Not collected" with a
+  Collect now button that has no HTTPS inventory job behind it.
 - **Cyber Controller Backup Now fails after the rebuild (2026-09-25):** the Cyber Controller's known_hosts holds
   HOST-A's old host key, so its OpenSSH client disables password auth and the SFTP push to `nexus-cc` never sends a
   password (sshd DEBUG3: `next methods="publickey,password"`, then the client closes). Fix is on the Cyber Controller

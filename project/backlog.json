@@ -1028,10 +1028,10 @@
       "note": ""
     },
     {
-      "id": "infoblox_grid_member_discovery",
+      "id": "infoblox_member_facts",
       "category": "collection",
-      "title": "Infoblox: enumerate grid members (GET /wapi/v<ver>/member) so the Grid Manager's members appear under it; needs a gate entry and a discovery-tree mapping; the grid backup already covers the whole grid database",
-      "status": "in_progress",
+      "title": "Infoblox: make the grid member list meaningful -- platform/model, grid master vs candidate, HA pairing, DNS/DHCP service status per member (wider _return_fields on the existing member read, member detail under the Grid Manager); and give the Grid Manager an honest Collect state (no HTTPS inventory job exists: hide or implement)",
+      "status": "planned",
       "priority": "P2",
       "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
       "note": ""

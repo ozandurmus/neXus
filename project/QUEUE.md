@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T00:50:55Z
+Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T00:55:24Z
 
 ## Now
 - NXS-LOCAL-0369 — Radware via Cyber Controller, device-list and backup UI, deploy safety, HOST-A rebuilt as neXus's own host (automated_validated)
@@ -85,7 +85,6 @@ Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T00:50:55Z
 - P1/planned version_advisory_exposure — Security advisories and critical bugs for the versions the (target: )
 - P2/in_progress cp_spark_exec_channel_rejected
 - P2/in_progress cp_vsx_interfaces_identical_to_physical
-- P2/in_progress infoblox_grid_member_discovery
 - P2/in_progress ui2_m3_design_transfer_pass
 - P2/planned antigravity_provider_adapter
 - P2/planned auth_radius_mechanism
@@ -99,6 +98,7 @@ Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T00:50:55Z
 - P2/planned failover_phase_d_has_no_build_record
 - P2/planned gov_orch_turn_counter_blind_to_codex_stream
 - P2/planned hosta_export_include_build_namespace
+- P2/planned infoblox_member_facts
 - P2/planned java_product_plan_build_selection_is_stale
 - P2/planned m3_design_alignment_review
 - P2/planned mds_ha_second_mds_read
