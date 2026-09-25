@@ -22,21 +22,15 @@ schedule is not switched on. Evidence-weighted progress of the Java roadmap:
 
 ## Active build
 
-`NXS-LOCAL-0369` — `automated_validated` (2026-09-23..25, deployed on HOST-A; schema 72 after the 2026-09-25 night:
-Infoblox backup fixes, grid members and member facts (V71/V72), observed facts refreshed on every read, the HTTPS
-inventory job -- see `AI_HANDOVER.md`; a build record for these is still to be written):
-Radware backup and discovery through the Cyber Controller and the controller's
-own SFTP-pushed backup (V65–V70), device-list / backup / add-device rework,
-deploys that never replace the worker under a running job, and HOST-A
-reinstalled for neXus alone and restored from a verified export
-(`docs/design/HOST_A_REBUILD_RUNBOOK.md`). Open gate: the Product Owner's aiview
-acceptance on the rebuilt host (backlog `hosta_rebuild_real_env_acceptance`):
-on 2026-09-25 three of its four checks passed (pseudonyms unchanged, Check
-Point and Palo Alto Collect, an old backup's Contents); the Cyber Controller's
-SFTP push to HOST-A fails because the controller pins the host's pre-reinstall
-SSH host key (backlog `cyber_controller_known_hosts_after_hosta_rebuild`).
-Predecessor `NXS-LOCAL-0368` (Overview, collision-free pseudonyms): Overview
-acceptance still open. Records in `project/build_history.json`.
+`NXS-LOCAL-0370` — `automated_validated` (2026-09-25, deployed on HOST-A, schema 72):
+the Infoblox Grid Manager enrolled, backed up and collected for real (grid
+members and member facts, V71/V72), observed device facts refreshed on every
+read (the upgraded MDS shows R82), `https_inventory_collect` for Infoblox and
+the Radware Cyber Controller, backups only back up. Open gates: the Cyber
+Controller Backup Now (stale known_hosts on the controller), DefensePro live
+reads, configuration reads for HTTPS vendors. Predecessor `NXS-LOCAL-0369`
+(Radware via Cyber Controller, HOST-A rebuilt): three of four rebuild
+acceptance checks passed. Records in `project/build_history.json`.
 
 ## Open Product Owner decisions
 

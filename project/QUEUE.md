@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:40:45Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T07:25:48Z
 
 ## Now
-- NXS-LOCAL-0369 — Radware via Cyber Controller, device-list and backup UI, deploy safety, HOST-A rebuilt as neXus's own host (automated_validated)
+- NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
 ## Next
 - overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -168,8 +168,8 @@ Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:40:45Z
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
+- NXS-LOCAL-0370 (automated_validated)
 - NXS-LOCAL-0369 (automated_validated)
 - NXS-LOCAL-0368 (automated_validated)
 - NXS-LOCAL-0367 (automated_validated)
 - NXS-LOCAL-0366 (automated_validated)
-- NXS-LOCAL-0365 (automated_validated)
