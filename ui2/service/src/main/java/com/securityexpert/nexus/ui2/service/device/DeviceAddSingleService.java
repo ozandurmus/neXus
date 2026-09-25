@@ -62,7 +62,9 @@ public final class DeviceAddSingleService {
             // PO 2026-09-25: Cisco ASA over SSH (CISCO_ASA_CONTRACT.md), role gateway.
             "cisco_asa", new VendorMapping("ssh_exec", ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA),
             // FORTINET_CONTRACT.md: a FortiGate over SSH; a FortiManager (management server) over its JSON-RPC API.
-            "fortinet", new VendorMapping("ssh_exec", ConfirmCapabilityIds.DEVICE_CONFIRM_FORTIGATE));
+            "fortinet", new VendorMapping("ssh_exec", ConfirmCapabilityIds.DEVICE_CONFIRM_FORTIGATE),
+            // VENDOR_BACKUP_CONTRACTS §2: Pulse Secure / Ivanti over its admin web session (role appliance).
+            "pulse_secure", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS));
 
     private static final VendorMapping FORTIMANAGER = new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS);
 
@@ -187,7 +189,9 @@ public final class DeviceAddSingleService {
         if (defensePro && passphrase.isEmpty()) {
             return new Outcome.ValidationFailed(REASON_EXPORT_PASSPHRASE_REQUIRED);
         }
-        if (passphrase.isPresent() && (!defensePro || secrets == null)) {
+        // Pulse Secure: the export passphrase is optional at add (its backup refuses without it); a DefensePro requires it.
+        boolean pulse = "pulse_secure".equals(vendor);
+        if (passphrase.isPresent() && (!(defensePro || pulse) || secrets == null)) {
             return new Outcome.ValidationFailed(REASON_EXPORT_PASSPHRASE_REQUIRED);
         }
 
@@ -230,7 +234,9 @@ public final class DeviceAddSingleService {
         if (defensePro && passphrase.isEmpty()) {
             return new Outcome.ValidationFailed(REASON_EXPORT_PASSPHRASE_REQUIRED);
         }
-        if (passphrase.isPresent() && (!defensePro || secrets == null)) {
+        // Pulse Secure: the export passphrase is optional at add (its backup refuses without it); a DefensePro requires it.
+        boolean pulse = "pulse_secure".equals(vendor);
+        if (passphrase.isPresent() && (!(defensePro || pulse) || secrets == null)) {
             return new Outcome.ValidationFailed(REASON_EXPORT_PASSPHRASE_REQUIRED);
         }
 

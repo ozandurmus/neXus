@@ -24,6 +24,16 @@ public interface HttpsDeviceCalls {
         throw new UnsupportedOperationException("putRaw");
     }
 
+    /**
+     * A form-based web session (Pulse Secure / Ivanti, PO 2026-09-25): one request, no redirect followed, the cookies it
+     * sets and its Location returned so the caller keeps its own cookie jar. {@code cookies} is the Cookie header value
+     * to send ("A=1; B=2"), never logged; {@code form} null means GET.
+     */
+    default HttpsDeviceClient.FormReply formRequest(Target target, String path, Map<String, String> form, String cookies,
+            Duration timeout, int maxBytes) throws IOException, InterruptedException {
+        throw new UnsupportedOperationException("formRequest");
+    }
+
     /** A session login (Radware Cyber Controller): JSON body, no Authorization header; the session cookie it set, if any. */
     HttpsDeviceClient.SessionLogin login(Target target, String path, String json, Duration timeout) throws IOException, InterruptedException;
 

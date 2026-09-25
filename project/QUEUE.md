@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T12:22:05Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T16:30:54Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -87,7 +87,6 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T12:22:05Z
 - P1/planned vendor_cisco_asa_backup — Cisco ASA: running/startup config + native backup tar over (target: )
 - P1/planned vendor_fortinet_fortigate_backup — Fortinet FortiGate: full configuration backup over SSH inc (target: )
 - P1/planned vendor_panorama_backup — Palo Alto Panorama: device-bundle export + running config (target: )
-- P1/planned vendor_pulse_secure_backup — Pulse Secure (Ivanti) Secure Access: system/users/IVS conf (target: )
 - P1/planned version_advisory_exposure — Security advisories and critical bugs for the versions the (target: )
 - P2/in_progress cp_spark_exec_channel_rejected
 - P2/in_progress cp_vsx_interfaces_identical_to_physical

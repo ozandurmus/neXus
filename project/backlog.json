@@ -713,15 +713,6 @@
       "note": ""
     },
     {
-      "id": "vendor_pulse_secure_backup",
-      "category": "collection",
-      "title": "Pulse Secure (Ivanti) Secure Access: system/users/IVS config export (HTTPS)",
-      "status": "planned",
-      "priority": "P1",
-      "target": "",
-      "note": ""
-    },
-    {
       "id": "vendor_panorama_backup",
       "category": "collection",
       "title": "Palo Alto Panorama: device-bundle export + running config (HTTPS + SSH)",

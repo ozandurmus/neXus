@@ -138,6 +138,40 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
         return text(target, "PUT", path, "application/json", body, creds, timeout, maxBytes);
     }
 
+    /** One form/GET exchange of a web session: status, the cookies it set ("NAME=value"), its Location, a capped body. */
+    public record FormReply(int status, java.util.List<String> setCookies, Optional<String> location, String body) {
+    }
+
+    @Override
+    public FormReply formRequest(Target target, String path, Map<String, String> form, String cookies, Duration timeout, int maxBytes)
+            throws IOException, InterruptedException {
+        HttpRequest.Builder b = HttpRequest.newBuilder(target.uri(path)).timeout(timeout);
+        if (cookies != null && !cookies.isBlank()) {
+            b.header("Cookie", cookies);
+        }
+        if (form == null) {
+            b.GET();
+        } else {
+            StringBuilder body = new StringBuilder();
+            for (Map.Entry<String, String> e : form.entrySet()) {
+                if (body.length() > 0) {
+                    body.append('&');
+                }
+                body.append(java.net.URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8)).append('=')
+                        .append(java.net.URLEncoder.encode(e.getValue() == null ? "" : e.getValue(), StandardCharsets.UTF_8));
+            }
+            b.header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8));
+        }
+        HttpResponse<java.io.InputStream> r = client.send(b.build(), HttpResponse.BodyHandlers.ofInputStream());
+        byte[] data;
+        try (java.io.InputStream in = r.body()) {
+            data = in.readNBytes(maxBytes);
+        }
+        java.util.List<String> set = r.headers().allValues("Set-Cookie").stream().map(v -> v.split(";", 2)[0].strip())
+                .filter(v -> v.contains("=")).toList();
+        return new FormReply(r.statusCode(), set, r.headers().firstValue("Location"), new String(data, StandardCharsets.UTF_8));
+    }
+
     @Override
     public SessionLogin login(Target target, String path, String json, Duration timeout) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder(target.uri(path)).timeout(timeout).header("Content-Type", "application/json")

@@ -2022,3 +2022,115 @@ gates:
     secret_output_risk: 'configuration: inside the encrypted artefact only'
     safe_telemetry_fields: []
     source_document_pointer: 'PAN-OS XML API (config show); Panorama scope'
+  - gate_id: pulse_login
+    vendor: 'pulse_secure'
+    platform_role_scope: 'pulse_appliance'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /dana-na/auth/url_admin/login.cgi'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'one session per run'
+    unsupported_behavior_ref: 'no DSID cookie -> authentication_failed'
+    secret_output_risk: 'the password is in the form only, never logged'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34411066; VENDOR_BACKUP_CONTRACTS §2'
+  - gate_id: pulse_continue_session
+    vendor: 'pulse_secure'
+    platform_role_scope: 'pulse_appliance'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /dana-na/auth/url_admin/login.cgi (btnContinue, FormDataStr)'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'when another admin session exists'
+    session_reuse_rule: 'the run session'
+    unsupported_behavior_ref: 'refused -> authentication_failed'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34411066'
+  - gate_id: pulse_xsauth
+    vendor: 'pulse_secure'
+    platform_role_scope: 'pulse_appliance'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /dana-admin/cached/config/config.cgi?type=system'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per run'
+    session_reuse_rule: 'the run session'
+    unsupported_behavior_ref: 'no xsauth -> failed'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34411066'
+  - gate_id: pulse_sysinfo
+    vendor: 'pulse_secure'
+    platform_role_scope: 'pulse_appliance'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /dana-admin/sysinfo/sysinfo.cgi'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per confirm and inventory'
+    session_reuse_rule: 'the run session'
+    unsupported_behavior_ref: 'no version -> not a Pulse/Ivanti, failed'
+    secret_output_risk: 'hostname, serial (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34411066'
+  - gate_id: pulse_export_network_xml
+    vendor: 'pulse_secure'
+    platform_role_scope: 'pulse_appliance'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /dana-admin/cached/config/config.cgi?type=exportxml (network sections)'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'the run session'
+    unsupported_behavior_ref: 'unparseable -> inventory without interfaces, element names logged'
+    secret_output_risk: 'addresses (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34411066 (subset of its flags)'
+  - gate_id: pulse_export_system_user_ivs_xml
+    vendor: 'pulse_secure'
+    platform_role_scope: 'pulse_appliance'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /dana-admin/download/{system,user,ivs}.cfg; POST config.cgi?type=exportxml'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'none'
+    max_frequency: 'once per backup'
+    session_reuse_rule: 'the run session'
+    unsupported_behavior_ref: 'an empty or HTML answer -> that export missing, backup partial'
+    secret_output_risk: 'configuration and users: inside the encrypted artefact only'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34411066; VENDOR_BACKUP_CONTRACTS §2'
+  - gate_id: pulse_logout
+    vendor: 'pulse_secure'
+    platform_role_scope: 'pulse_appliance'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /dana-na/auth/logout.cgi?xsauth='
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per run, always'
+    session_reuse_rule: 'the run session'
+    unsupported_behavior_ref: 'failure ignored (the session times out)'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox trail 34411066'

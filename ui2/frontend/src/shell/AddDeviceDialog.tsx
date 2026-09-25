@@ -61,6 +61,7 @@ const VENDOR_LABEL: Record<Vendor, string> = {
   bluecoat: "Blue Coat",
   cisco_asa: "Cisco ASA",
   fortinet: "Fortinet",
+  pulse_secure: "Pulse Secure",
 };
 
 /** V64: vendors reached over HTTPS -- an appliance role, a password credential; Radware also an export passphrase. */
@@ -74,7 +75,7 @@ const KIND_LABEL: Record<string, string> = {
   BLUECOAT_CP: "Cloud (WSS)",
 };
 
-const HTTPS_VENDORS: ReadonlySet<Vendor> = new Set<Vendor>(["infoblox", "radware", "bluecoat"]);
+const HTTPS_VENDORS: ReadonlySet<Vendor> = new Set<Vendor>(["infoblox", "radware", "bluecoat", "pulse_secure"]);
 
 function formatValidationReason(reason: string): string {
   switch (reason) {
@@ -199,6 +200,8 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
   // V67: a Radware address is a DefensePro (appliance) or the Cyber Controller that manages them (management server).
   const [radwareKind, setRadwareKind] = useState<"defensepro" | "cyber_controller">("defensepro");
   const defensePro = vendor === "radware" && radwareKind === "defensepro";
+  // Pulse Secure: the .cfg exports are protected with this passphrase; optional at add, required for its backup.
+  const pulseSecure = vendor === "pulse_secure";
   // FORTINET_CONTRACT.md: a FortiGate is read over SSH, a FortiManager over its JSON-RPC API (HTTPS).
   const [fortiKind, setFortiKind] = useState<"fortigate" | "fortimanager">("fortigate");
 
@@ -357,7 +360,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
           : HTTPS_VENDORS.has(vendor) ? "appliance" : vendor === "cisco_asa" ? "gateway"
             : vendor === "fortinet" ? (fortiKind === "fortimanager" ? "management_server" : "gateway") : role;
         const result = await addDeviceSingle(trimmedAddress, effectiveRole, vendor, credentialId,
-          defensePro ? passphraseCredentialId : undefined);
+          defensePro || (pulseSecure && passphraseCredentialId) ? passphraseCredentialId : undefined);
         setDeviceId(result.device_id);
         setActiveJobId(result.job_id);
         setPhase("confirming");
@@ -637,6 +640,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               <MenuItem value="radware">Radware (HTTPS)</MenuItem>
               <MenuItem value="bluecoat">Blue Coat Management Center (HTTPS, port 8082)</MenuItem>
               <MenuItem value="cisco_asa">Cisco ASA (SSH)</MenuItem>
+              <MenuItem value="pulse_secure">Pulse Secure / Ivanti Connect Secure (HTTPS)</MenuItem>
               <MenuItem value="fortinet">Fortinet (FortiGate / FortiManager)</MenuItem>
             </TextField>
             {vendor === "radware" && (
@@ -650,10 +654,12 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               </TextField>
             )}
             {credentialSelectorFragment}
-            {defensePro && (
+            {(defensePro || pulseSecure) && (
               <TextField label="Export passphrase credential" select size="small" fullWidth value={passphraseCredentialId}
                 onChange={(e) => setPassphraseCredentialId(e.target.value)}
-                helperText="The backup includes the private keys, encrypted with this credential's password (IncludePKeys=on). Without it the backup is refused, never taken without keys.">
+                helperText={pulseSecure
+                  ? "Protects the system, user and IVS exports. Optional now; the backup is refused until it is set."
+                  : "The backup includes the private keys, encrypted with this credential's password (IncludePKeys=on). Without it the backup is refused, never taken without keys."}>
                 <MenuItem value="">None yet</MenuItem>
                 {credentials.filter((c) => c.kind !== "ssh_private_key").map((c) => (
                   <MenuItem key={c.credential_reference_id} value={c.credential_reference_id}>{c.display_name}</MenuItem>

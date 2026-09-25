@@ -49,7 +49,7 @@ public final class DeviceRegistrationService {
     /** 14I MS-1: the role is not one of the two values the database will accept. */
     public static final String REASON_ROLE_INVALID = "role_invalid";
     /** Vendors enrolled with role "appliance" (V64/V65). */
-    static final java.util.Set<String> APPLIANCE_VENDORS = java.util.Set.of("infoblox", "radware");
+    static final java.util.Set<String> APPLIANCE_VENDORS = java.util.Set.of("infoblox", "radware", "pulse_secure");
 
     private final DeviceRepository deviceRepository;
     private final CredentialReferenceRepository credentialReferenceRepository;

@@ -81,6 +81,12 @@ public final class HttpsVendorExecutor {
     }
 
     private static final String CISCO = "cisco_asa";
+    private static final String PULSE = "pulse_secure";
+
+    /** Pulse Secure / Ivanti over its admin web session (VENDOR_BACKUP_CONTRACTS §2, PO 2026-09-25). */
+    private PulseSecureExecutor pulse() {
+        return new PulseSecureExecutor(client, credentials, artefactStore);
+    }
 
     /** Fortinet (FORTINET_CONTRACT.md): FortiGate over SSH, FortiManager over JSON-RPC -- the same vendor jobs. */
     private com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGateExecutor fortiGate;
@@ -107,6 +113,9 @@ public final class HttpsVendorExecutor {
     public ConfirmOutcome confirm(String vendor, Target target, String credentialRef) {
         if (CISCO.equals(vendor)) {
             return ciscoAsa == null ? new ConfirmOutcome.Failed("no Cisco ASA executor in this worker") : ciscoAsa.confirm(target, credentialRef);
+        }
+        if (PULSE.equals(vendor)) {
+            return pulse().confirm(target, credentialRef);
         }
         if (FORTIGATE.equals(vendor)) {
             return fortiGate == null ? new ConfirmOutcome.Failed("no FortiGate executor in this worker") : fortiGate.confirm(target, credentialRef);
@@ -177,6 +186,9 @@ public final class HttpsVendorExecutor {
     public InventoryOutcome inventory(String vendor, Target target, String credentialRef) {
         if (CISCO.equals(vendor)) {
             return ciscoAsa == null ? new InventoryOutcome.Failed("no Cisco ASA executor in this worker") : ciscoAsa.inventory(target, credentialRef);
+        }
+        if (PULSE.equals(vendor)) {
+            return pulse().inventory(target, credentialRef);
         }
         if (FORTIGATE.equals(vendor)) {
             return fortiGate == null ? new InventoryOutcome.Failed("no FortiGate executor in this worker") : fortiGate.inventory(target, credentialRef);
@@ -789,6 +801,9 @@ public final class HttpsVendorExecutor {
         if (CISCO.equals(vendor)) {
             return ciscoAsa == null ? new BackupResult.ConnectFailed("no Cisco ASA executor in this worker")
                     : ciscoAsa.backup(target, credentialRef, deviceId, jobId);
+        }
+        if (PULSE.equals(vendor)) {
+            return pulse().backup(target, credentialRef, passphraseRef, deviceId, jobId);
         }
         if (FORTIGATE.equals(vendor)) {
             return fortiGate == null ? new BackupResult.ConnectFailed("no FortiGate executor in this worker")

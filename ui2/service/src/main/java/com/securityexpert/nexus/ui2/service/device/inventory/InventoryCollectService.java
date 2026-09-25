@@ -47,9 +47,10 @@ public final class InventoryCollectService {
             "radware", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
             "bluecoat", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
             "cisco_asa", InventoryCapabilityIds.ASA_INVENTORY_COLLECT,
-            "fortinet", InventoryCapabilityIds.FGT_INVENTORY_COLLECT);
+            "fortinet", InventoryCapabilityIds.FGT_INVENTORY_COLLECT,
+            "pulse_secure", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT);
     /** Vendors whose appliances and management servers are collected over HTTPS (V64 role "appliance"). */
-    private static final java.util.Set<String> HTTPS_VENDORS = java.util.Set.of("infoblox", "radware", "bluecoat");
+    private static final java.util.Set<String> HTTPS_VENDORS = java.util.Set.of("infoblox", "radware", "bluecoat", "pulse_secure");
 
     private final DeviceRepository deviceRepository;
     private final JobAdmissionService jobAdmissionService;
@@ -83,7 +84,8 @@ public final class InventoryCollectService {
         boolean httpsCollectable = ("infoblox".equals(vendorHint) && "appliance".equals(role))
                 || ("radware".equals(vendorHint) && ("management_server".equals(role) || "appliance".equals(role)))
                 || ("bluecoat".equals(vendorHint) && "management_server".equals(role))
-                || ("fortinet".equals(vendorHint) && "management_server".equals(role));
+                || ("fortinet".equals(vendorHint) && "management_server".equals(role))
+                || ("pulse_secure".equals(vendorHint) && "appliance".equals(role));
         if (!"gateway".equals(role) && !httpsCollectable) {
             if (HTTPS_VENDORS.contains(vendorHint) && "appliance".equals(role)) {
                 return new Outcome.AdmissionRefused("VENDOR_READ_SET_UNGATED",

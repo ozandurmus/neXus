@@ -61,7 +61,7 @@ public final class BackupCollectService {
     }
 
     /** V64: vendors whose backup runs over HTTPS (one capability, routed by vendor in the worker). */
-    static final java.util.Set<String> HTTPS_VENDORS = java.util.Set.of("infoblox", "radware", "bluecoat");
+    static final java.util.Set<String> HTTPS_VENDORS = java.util.Set.of("infoblox", "radware", "bluecoat", "pulse_secure");
 
     public Outcome requestCollect(String deviceId, String actorFingerprint, String reason, Optional<String> clientNonce) {
         return requestCollect(deviceId, actorFingerprint, reason, clientNonce, "backup");
