@@ -1926,3 +1926,35 @@ gates:
     secret_output_risk: 'device names, serials, addresses (masked to aiview)'
     safe_telemetry_fields: []
     source_document_pointer: 'FortiManager JSON API reference (dvmdb/adom/{adom}/device)'
+  - gate_id: bluecoat_mc_command_show_interface_all
+    vendor: 'bluecoat'
+    platform_role_scope: 'bluecoat_management_center'
+    shell_context: 'config_mode_via_mc'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'PUT /api/devices/{uuid}/command "show interface all"'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 120
+    retry_rule: 'none'
+    max_frequency: 'once per ProxySG per inventory'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'status != SUCCESS -> inventory failed with the MC status'
+    secret_output_risk: 'interface addresses (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'SGOS CLI reference (show interface); PO 2026-09-25'
+  - gate_id: bluecoat_mc_command_show_ip_route_table
+    vendor: 'bluecoat'
+    platform_role_scope: 'bluecoat_management_center'
+    shell_context: 'config_mode_via_mc'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'PUT /api/devices/{uuid}/command "show ip-route-table"'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 120
+    retry_rule: 'none'
+    max_frequency: 'once per ProxySG per inventory'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'status != SUCCESS -> inventory failed with the MC status'
+    secret_output_risk: 'route destinations and gateways (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'SGOS CLI reference (show ip-route-table); PO 2026-09-25'

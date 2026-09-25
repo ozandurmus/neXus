@@ -84,7 +84,7 @@ function clusterHasCollectedEvidence(members: readonly DeviceSummary[]): boolean
 function childLabels(vendorHint: string | null | undefined, role?: string | null): { heading: string; chip: string; tag: string } {
   if (vendorHint === "palo_alto") return { heading: "Virtual Systems (VSYS)", chip: "VSYS", tag: "PAN-OS" };
   if (vendorHint === "infoblox") return { heading: "Grid members", chip: "MEMBER", tag: "NIOS" };
-  if (vendorHint === "bluecoat") return { heading: "Managed devices", chip: "DEVICE", tag: "MC" };
+  if (vendorHint === "bluecoat" && role === "management_server") return { heading: "Managed devices", chip: "DEVICE", tag: "MC" };
   if (vendorHint === "fortinet" && role === "management_server") return { heading: "Managed FortiGates", chip: "FGT", tag: "FMG" };
   if (vendorHint === "fortinet") return { heading: "VDOMs", chip: "VDOM", tag: "FortiOS" };
   return { heading: "Virtual Systems (VSX)", chip: "VS", tag: "VSX" };

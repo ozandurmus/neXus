@@ -200,6 +200,21 @@ public final class BackupJobExecutor {
                 }
             }
         }
+        // A ProxySG (bluecoat gateway) is backed up through the enrolled Management Center that lists it (V82).
+        if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(capabilityId)
+                && "bluecoat".equals(vendor) && httpsVendorExecutor != null
+                && deviceRecord.map(r -> "gateway".equals(r.role())).orElse(false)) {
+            viaCyberController = Optional.of(new BackupResult.ConnectFailed("no enrolled Management Center lists this ProxySG"));
+            for (com.securityexpert.nexus.ui2.worker.backup.https.CyberControllers.Ref mc
+                    : com.securityexpert.nexus.ui2.worker.backup.https.CyberControllers.managers(deviceRepository, "bluecoat")) {
+                Optional<BackupResult> viaMc = httpsVendorExecutor.backupProxySgViaManagementCenter(mc.target(), mc.credentialRef(),
+                        request.connectionTarget().host(), targetDeviceId, jobId);
+                if (viaMc.isPresent()) {
+                    viaCyberController = viaMc;
+                    break;
+                }
+            }
+        }
         if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.RDW_CC_CONFIG_BACKUP.equals(capabilityId)) {
             result = cyberControllerBackupExecutor == null
                     ? new BackupResult.ConnectFailed("cyber controller backup executor not configured in this worker")

@@ -1768,10 +1768,10 @@ export function DeviceInventoryPanels({
           },
           {
             label: device.vendor_hint === "infoblox" ? "Grid members"
-              : device.vendor_hint === "bluecoat" || (device.vendor_hint === "fortinet" && device.role === "management_server") ? "Managed devices" : "Cluster members",
+              : (device.vendor_hint === "bluecoat" || device.vendor_hint === "fortinet") && device.role === "management_server" ? "Managed devices" : "Cluster members",
             panel: device.vendor_hint === "infoblox"
               ? <GridMembersPanel members={deviceInventory?.grid_members ?? []} />
-              : device.vendor_hint === "bluecoat" || (device.vendor_hint === "fortinet" && device.role === "management_server")
+              : (device.vendor_hint === "bluecoat" || device.vendor_hint === "fortinet") && device.role === "management_server"
               ? <ManagedDevicesPanel members={deviceInventory?.grid_members ?? []} />
               : isCluster && clusterInventory
               ? (

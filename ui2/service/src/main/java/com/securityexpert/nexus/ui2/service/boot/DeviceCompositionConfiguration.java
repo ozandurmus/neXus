@@ -203,6 +203,8 @@ public class DeviceCompositionConfiguration {
                 confirmCapability(DiscoveryCapabilityIds.RDW_DISCOVERY_ENUMERATE, "radware", "radware_cyber_controller",
                         TransportKind.HTTPS),
                 confirmCapability(DiscoveryCapabilityIds.FMG_DISCOVERY_ENUMERATE, "fortinet", "fortimanager",
+                        TransportKind.HTTPS),
+                confirmCapability(DiscoveryCapabilityIds.BCMC_DISCOVERY_ENUMERATE, "bluecoat", "bluecoat_management_center",
                         TransportKind.HTTPS)));
     }
 

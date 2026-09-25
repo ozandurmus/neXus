@@ -69,6 +69,9 @@ const KIND_LABEL: Record<string, string> = {
   FORTINET_FORTIGATE: "FortiGate",
   FORTINET_HA_CLUSTER: "FortiGate HA cluster (imported at its management address)",
   FORTINET_HA_MEMBER: "HA member",
+  BLUECOAT_PROXYSG: "ProxySG (read through the Management Center)",
+  BLUECOAT_RPTR: "Reporter",
+  BLUECOAT_CP: "Cloud (WSS)",
 };
 
 const HTTPS_VENDORS: ReadonlySet<Vendor> = new Set<Vendor>(["infoblox", "radware", "bluecoat"]);
@@ -770,6 +773,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               <MenuItem value="palo_alto">Palo Alto (Panorama)</MenuItem>
               <MenuItem value="radware">Radware (Cyber Controller)</MenuItem>
               <MenuItem value="fortinet">Fortinet (FortiManager)</MenuItem>
+              <MenuItem value="bluecoat">Blue Coat (Management Center, port 8082)</MenuItem>
             </TextField>
             {credentialSelectorFragment}
             {sshTrustAuthorization}

@@ -47,6 +47,7 @@ public final class WorkerClaimLoop {
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
             DiscoveryCapabilityIds.RDW_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.FMG_DISCOVERY_ENUMERATE,
+            DiscoveryCapabilityIds.BCMC_DISCOVERY_ENUMERATE,
             BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, BackupCapabilityIds.CP_GAIA_SNAPSHOT,
             BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, BackupCapabilityIds.CP_MDS_EXPORT, BackupCapabilityIds.RDW_CC_CONFIG_BACKUP);
     private static final int DEFAULT_SSH_PORT = 22;
@@ -86,6 +87,9 @@ public final class WorkerClaimLoop {
         }
         if ("management_server".equals(role) && "fortinet".equals(vendorHint)) {
             return "fortimanager";
+        }
+        if ("gateway".equals(role) && "bluecoat".equals(vendorHint)) {
+            return "bluecoat_proxysg"; // read through its Management Center
         }
         return vendorHint;
     }

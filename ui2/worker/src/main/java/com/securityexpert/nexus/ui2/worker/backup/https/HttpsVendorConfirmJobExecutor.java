@@ -67,6 +67,17 @@ public final class HttpsVendorConfirmJobExecutor {
                 }
             }
         }
+        if ("bluecoat_proxysg".equals(vendor)) {
+            // A ProxySG is confirmed by the enrolled Management Center that lists it (read through the MC, V82).
+            outcome = new HttpsVendorExecutor.ConfirmOutcome.Failed("no enrolled Management Center lists this ProxySG");
+            for (CyberControllers.Ref mc : CyberControllers.managers(devices, "bluecoat")) {
+                Optional<HttpsVendorExecutor.ConfirmOutcome> viaMc = executor.confirmProxySgViaManagementCenter(mc.target(), mc.credentialRef(), target.host());
+                if (viaMc.isPresent()) {
+                    outcome = viaMc.get();
+                    break;
+                }
+            }
+        }
         if (outcome == null) {
             outcome = executor.confirm(vendor, target, credentialRef);
         }

@@ -429,6 +429,143 @@ public final class HttpsVendorExecutor {
         }
     }
 
+    // ------------------------------------------------------------------------------------------------ ProxySG via MC
+
+    /** The Management Center's device list, for discovery; empty with a failure class when it cannot be read. */
+    public CcDeviceList mcDeviceList(Target mc, String mcCredentialRef) {
+        try {
+            Credentials creds = credentials.apply(mcCredentialRef);
+            TextResponse r = client.get(mc, HttpsVendorPlan.MC_DEVICES, creds, SHORT, 8 * 1024 * 1024);
+            if (r.status() == 401 || r.status() == 403) {
+                return new CcDeviceList(Optional.empty(), "AUTH_FAILED");
+            }
+            if (!r.ok()) {
+                return new CcDeviceList(Optional.empty(), "REFUSED");
+            }
+            return new CcDeviceList(Optional.of(JSON.readTree(r.body())), "");
+        } catch (RuntimeException e) {
+            return new CcDeviceList(Optional.empty(), "CREDENTIAL_UNRESOLVABLE");
+        } catch (IOException e) {
+            return new CcDeviceList(Optional.empty(), "UNREACHABLE");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new CcDeviceList(Optional.empty(), "INTERRUPTED");
+        }
+    }
+
+    /** The MC's entry for the ProxySG at {@code host} (its "host" field, port ignored), if the MC lists it. */
+    private Optional<JsonNode> mcEntry(Target mc, Credentials creds, String host) throws IOException, InterruptedException {
+        TextResponse r = client.get(mc, HttpsVendorPlan.MC_DEVICES, creds, SHORT, 8 * 1024 * 1024);
+        if (!r.ok()) {
+            return Optional.empty();
+        }
+        for (JsonNode d : JSON.readTree(r.body())) {
+            String h = d.path("host").asText("");
+            int colon = h.lastIndexOf(':');
+            String bare = colon > 0 && h.indexOf(':') == colon ? h.substring(0, colon) : h;
+            if (!h.isEmpty() && (h.equalsIgnoreCase(host) || bare.equalsIgnoreCase(host)) && d.hasNonNull("uuid")) {
+                return Optional.of(d);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Identity proxySgIdentity(JsonNode d) {
+        Optional<String> name = Optional.ofNullable(d.path("name").asText(null)).filter(v -> !v.isBlank());
+        Optional<String> model = Optional.ofNullable(d.path("model").asText(null)).filter(v -> !v.isBlank());
+        Optional<String> version = Optional.ofNullable(d.path("osVersion").asText(null)).filter(v -> !v.isBlank());
+        return new Identity(name, model.map(m -> "ProxySG " + m).or(() -> Optional.of("ProxySG")), version);
+    }
+
+    /** Confirm a ProxySG by the enrolled Management Center that lists it (management-plane evidence, labelled as such). */
+    public Optional<ConfirmOutcome> confirmProxySgViaManagementCenter(Target mc, String mcCredentialRef, String host) {
+        try {
+            Credentials creds = credentials.apply(mcCredentialRef);
+            return mcEntry(mc, creds, host).map(d -> new ConfirmOutcome.Confirmed(proxySgIdentity(d)));
+        } catch (RuntimeException | IOException e) {
+            return Optional.empty();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        }
+    }
+
+    /** A ProxySG's interfaces and routes through the MC's command API (V82); shapes logged for the first-run record. */
+    public Optional<InventoryOutcome> inventoryProxySgViaManagementCenter(Target mc, String mcCredentialRef, String host) {
+        try {
+            Credentials creds = credentials.apply(mcCredentialRef);
+            Optional<JsonNode> entry = mcEntry(mc, creds, host);
+            if (entry.isEmpty()) {
+                return Optional.empty();
+            }
+            String uuid = entry.get().get("uuid").asText();
+            String ifs;
+            String rt;
+            try {
+                ifs = mcCommand(mc, creds, uuid, HttpsVendorPlan.MC_CMD_SHOW_INTERFACE_ALL);
+                rt = mcCommand(mc, creds, uuid, HttpsVendorPlan.MC_CMD_SHOW_IP_ROUTE_TABLE);
+            } catch (McCommandFailed f) {
+                return Optional.of(new InventoryOutcome.Failed("management center command: " + f.getMessage()));
+            }
+            var interfaces = ProxySgOutputs.interfaces(ifs);
+            var routes = ProxySgOutputs.routes(rt);
+            LOG.log(System.Logger.Level.INFO, "[PROXYSG] inventory via MC: interfaces={0} routes={1}; MEASURE interface shape: {2}; route shape: {3}",
+                    interfaces.size(), routes.size(), ProxySgOutputs.shape(ifs, 14), ProxySgOutputs.shape(rt, 10));
+            return Optional.of(new InventoryOutcome.Completed(
+                    List.of(new com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext(
+                            com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext.PHYSICAL, interfaces, routes)),
+                    List.of(), Optional.empty(), proxySgIdentity(entry.get())));
+        } catch (RuntimeException | IOException e) {
+            return Optional.of(new InventoryOutcome.Failed("management center: " + e.getClass().getSimpleName()));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.of(new InventoryOutcome.Failed("interrupted"));
+        }
+    }
+
+    /** One ProxySG's backup through the MC: show version and show configuration of that device only. */
+    public Optional<BackupResult> backupProxySgViaManagementCenter(Target mc, String mcCredentialRef, String host, String deviceId,
+            String jobId) {
+        try {
+            Credentials creds = credentials.apply(mcCredentialRef);
+            Optional<JsonNode> entry = mcEntry(mc, creds, host);
+            if (entry.isEmpty()) {
+                return Optional.empty();
+            }
+            String uuid = entry.get().get("uuid").asText();
+            String version;
+            String config;
+            try {
+                version = mcCommand(mc, creds, uuid, HttpsVendorPlan.MC_CMD_SHOW_VERSION);
+                config = mcCommand(mc, creds, uuid, HttpsVendorPlan.MC_CMD_SHOW_CONFIGURATION);
+            } catch (McCommandFailed f) {
+                return Optional.of(new BackupResult.SubmitRefused("management center command: " + f.getMessage()));
+            }
+            if (!config.contains("!- BEGIN") || !config.contains("!- END")) {
+                return Optional.of(new BackupResult.SubmitOutputUnparseable("configuration without BEGIN/END section markers"));
+            }
+            ArtefactStore.ArtefactHandle handle = artefactStore.open(deviceId, jobId, "bluecoat", false);
+            try {
+                try (com.securityexpert.nexus.ui2.persistence.artefact.content.TarWriter tar =
+                        new com.securityexpert.nexus.ui2.persistence.artefact.content.TarWriter(new java.util.zip.GZIPOutputStream(handle.sink()))) {
+                    tar.file("manifest.txt", ("# ProxySG configuration backup through the Management Center\nshow-version.txt\t"
+                            + version.length() + " chars\nconfiguration.txt\t" + config.length() + " chars\n").getBytes(StandardCharsets.UTF_8));
+                    tar.file("show-version.txt", version.getBytes(StandardCharsets.UTF_8));
+                    tar.file("configuration.txt", config.getBytes(StandardCharsets.UTF_8));
+                }
+                return Optional.of(new BackupResult.Completed(handle.finish(), "proxysg-configuration.tgz", Optional.empty(), Optional.empty()));
+            } catch (IOException e) {
+                closeQuietly(handle);
+                return Optional.of(new BackupResult.ArtefactStoreFailed("bundle could not be stored: " + e.getClass().getSimpleName()));
+            }
+        } catch (RuntimeException | IOException e) {
+            return Optional.of(new BackupResult.ConnectFailed("management center: " + e.getClass().getSimpleName()));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.of(new BackupResult.ConnectFailed("interrupted"));
+        }
+    }
+
     private static final class McCommandFailed extends Exception {
         McCommandFailed(String message) {
             super(message, null, false, false);
@@ -438,7 +575,8 @@ public final class HttpsVendorExecutor {
     /** One exact read literal through the MC; the device's reply text, or why there is none. */
     private String mcCommand(Target target, Credentials creds, String uuid, String command) throws IOException, InterruptedException,
             McCommandFailed {
-        if (!HttpsVendorPlan.MC_CMD_SHOW_VERSION.equals(command) && !HttpsVendorPlan.MC_CMD_SHOW_CONFIGURATION.equals(command)) {
+        if (!java.util.Set.of(HttpsVendorPlan.MC_CMD_SHOW_VERSION, HttpsVendorPlan.MC_CMD_SHOW_CONFIGURATION,
+                HttpsVendorPlan.MC_CMD_SHOW_INTERFACE_ALL, HttpsVendorPlan.MC_CMD_SHOW_IP_ROUTE_TABLE).contains(command)) {
             throw new IllegalArgumentException("not a gated Management Center command");
         }
         TextResponse r = client.putRaw(target, HttpsVendorPlan.mcDeviceCommand(uuid), command, creds, Duration.ofSeconds(120),

@@ -18,8 +18,10 @@ public final class DiscoveryCapabilityIds {
     public static final String RDW_DISCOVERY_ENUMERATE = "rdw_discovery_enumerate";
     /** FortiManager discovery (V81): its ADOMs and their FortiGates over JSON-RPC. */
     public static final String FMG_DISCOVERY_ENUMERATE = "fmg_discovery_enumerate";
+    /** Symantec Management Center discovery (V82): the ProxySGs it manages. */
+    public static final String BCMC_DISCOVERY_ENUMERATE = "bcmc_discovery_enumerate";
     public static final Set<String> ALL = Set.of(CP_DISCOVERY_ENUMERATE, PAN_DISCOVERY_ENUMERATE, RDW_DISCOVERY_ENUMERATE,
-            FMG_DISCOVERY_ENUMERATE);
+            FMG_DISCOVERY_ENUMERATE, BCMC_DISCOVERY_ENUMERATE);
 
     private DiscoveryCapabilityIds() {
     }

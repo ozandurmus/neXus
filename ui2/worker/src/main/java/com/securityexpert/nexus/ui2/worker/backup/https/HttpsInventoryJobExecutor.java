@@ -68,6 +68,16 @@ public final class HttpsInventoryJobExecutor {
                     break;
                 }
             }
+        } else if ("bluecoat_proxysg".equals(vendor)) {
+            // A ProxySG is read through the enrolled Management Center that lists it (V82).
+            outcome = new HttpsVendorExecutor.InventoryOutcome.Failed("no enrolled Management Center lists this ProxySG");
+            for (CyberControllers.Ref mc : CyberControllers.managers(devices, "bluecoat")) {
+                var viaMc = executor.inventoryProxySgViaManagementCenter(mc.target(), mc.credentialRef(), target.host());
+                if (viaMc.isPresent()) {
+                    outcome = viaMc.get();
+                    break;
+                }
+            }
         } else {
             outcome = executor.inventory(vendor, target, credentialRef);
         }

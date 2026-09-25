@@ -29,6 +29,8 @@ final class DiscoveryMatchKey {
             case "radware" -> "radware|" + candidate.stableIdentifier();
             // FortiManager discovery (2026-09-25): the FortiGate (or HA cluster) serial, never parsed.
             case "fortinet" -> "fortinet|" + candidate.stableIdentifier();
+            // Management Center discovery (2026-09-25): the MC's own device uuid, never parsed.
+            case "bluecoat" -> "bluecoat|" + candidate.stableIdentifier();
             default -> throw new IllegalArgumentException("unsupported vendor: " + candidate.vendor());
         };
     }

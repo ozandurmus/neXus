@@ -36,6 +36,9 @@ public final class HttpsVendorPlan {
     public static final String MC_DEVICE_COMMAND = "/api/devices/%s/command";
     public static final String MC_CMD_SHOW_VERSION = "show version";
     public static final String MC_CMD_SHOW_CONFIGURATION = "show configuration";
+    /** ProxySG inventory through the MC (V82, PO 2026-09-25): its interfaces and routing table. */
+    public static final String MC_CMD_SHOW_INTERFACE_ALL = "show interface all";
+    public static final String MC_CMD_SHOW_IP_ROUTE_TABLE = "show ip-route-table";
     /** The MC's type code for a ProxySG (measured 2026-09-25). */
     public static final String MC_TYPE_PROXYSG = "sgos6x";
 

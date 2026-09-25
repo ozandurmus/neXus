@@ -109,7 +109,8 @@ public final class DiscoveryRunService {
             "check_point", DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE,
             "palo_alto", DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
             "radware", DiscoveryCapabilityIds.RDW_DISCOVERY_ENUMERATE,
-            "fortinet", DiscoveryCapabilityIds.FMG_DISCOVERY_ENUMERATE);
+            "fortinet", DiscoveryCapabilityIds.FMG_DISCOVERY_ENUMERATE,
+            "bluecoat", DiscoveryCapabilityIds.BCMC_DISCOVERY_ENUMERATE);
 
     /** CP-DISCOVERY K-5/K-6/K-7: a cluster object, never importable itself -- RD-1 expands a selection of it to its members. */
     private static final Set<String> CP_CLUSTER_KINDS =

@@ -159,6 +159,7 @@ public final class DiscoveryJobExecutor {
             case "palo_alto" -> enumeratePaloAlto(run);
             case "radware" -> radwareCyberController == null ? EnumerationOutcome.failed("UNSUPPORTED_VENDOR") : enumerateRadware(run);
             case "fortinet" -> fortiManager == null ? EnumerationOutcome.failed("UNSUPPORTED_VENDOR") : enumerateFortinet(run);
+            case "bluecoat" -> radwareCyberController == null ? EnumerationOutcome.failed("UNSUPPORTED_VENDOR") : enumerateBlueCoat(run);
             default -> EnumerationOutcome.failed("UNSUPPORTED_VENDOR");
         };
     }
@@ -203,6 +204,28 @@ public final class DiscoveryJobExecutor {
                 "[RADWARE_DISCOVERY] categorical values " + RadwareDiscoveryCandidateMapper.categoricalValues(result.list().get()));
         var records = RadwareDiscoveryCandidateMapper.map(run.runId(), result.list().get());
         return EnumerationOutcome.succeeded(records, RadwareDiscoveryCandidateMapper.outcomeSummary(records));
+    }
+
+    /** Symantec Management Center discovery (2026-09-25): its device list on 8082 unless the address names a port. */
+    private EnumerationOutcome enumerateBlueCoat(DiscoveryRun run) {
+        String address = run.managementAddress();
+        int port = com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorPlan.MC_DEFAULT_PORT;
+        int colon = address.lastIndexOf(':');
+        if (colon >= 0) {
+            try {
+                port = Integer.parseInt(address.substring(colon + 1));
+                address = address.substring(0, colon);
+            } catch (NumberFormatException bareHost) {
+                // no port
+            }
+        }
+        var result = radwareCyberController.mcDeviceList(
+                new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(address, port), run.credentialReferenceId());
+        if (result.list().isEmpty()) {
+            return EnumerationOutcome.failed(result.failureClass());
+        }
+        var records = BlueCoatDiscoveryCandidateMapper.map(run.runId(), result.list().get());
+        return EnumerationOutcome.succeeded(records, BlueCoatDiscoveryCandidateMapper.outcomeSummary(records));
     }
 
     private EnumerationOutcome enumerateFortinet(DiscoveryRun run) {

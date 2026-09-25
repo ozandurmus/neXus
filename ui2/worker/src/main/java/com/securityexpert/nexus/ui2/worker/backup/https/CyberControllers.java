@@ -21,9 +21,14 @@ public final class CyberControllers {
     }
 
     public static List<Ref> enrolled(DeviceRepository devices) {
+        return managers(devices, "radware");
+    }
+
+    /** Enrolled, enabled management servers of a vendor (a Blue Coat one is a Management Center, reached on 8082). */
+    public static List<Ref> managers(DeviceRepository devices, String vendorHint) {
         List<Ref> out = new ArrayList<>();
         for (DeviceSummaryRecord s : devices.listAll()) {
-            if (!"radware".equals(s.vendorHint()) || !"management_server".equals(s.role())
+            if (!vendorHint.equals(s.vendorHint()) || !"management_server".equals(s.role())
                     || s.enrollmentState() != DeviceEnrollmentState.ENROLLED) {
                 continue;
             }
@@ -32,7 +37,11 @@ public final class CyberControllers {
             if (record.isEmpty() || record.get().disabled() || endpoint.isEmpty()) {
                 continue;
             }
-            out.add(new Ref(s.deviceId(), target(endpoint.get().addressRef()), record.get().credentialReferenceId()));
+            Target t = target(endpoint.get().addressRef());
+            if ("bluecoat".equals(vendorHint) && endpoint.get().addressRef().lastIndexOf(':') < 0) {
+                t = new Target(t.host(), HttpsVendorPlan.MC_DEFAULT_PORT);
+            }
+            out.add(new Ref(s.deviceId(), t, record.get().credentialReferenceId()));
         }
         return out;
     }
