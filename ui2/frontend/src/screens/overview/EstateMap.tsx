@@ -28,6 +28,19 @@ export const CONDITION: Record<EstateCondition, { label: string; bg: string; ord
   clear: { label: "Clear", bg: EXEC.green, order: 4 },
 };
 
+/** Critical findings in three shades by how many critical checks fail on the device (1, 2, 3 or more). */
+const CRITICAL_SHADES = [
+  { label: "1 critical check failing", min: 1, bg: "#eea0a0" },
+  { label: "2 failing", min: 2, bg: "#dd5a5a" },
+  { label: "3 or more failing", min: 3, bg: "#a51d1d" },
+] as const;
+
+function cellBg(d: { condition: EstateCondition; critical_fail: number | null }): string {
+  if (d.condition !== "critical") return CONDITION[d.condition].bg;
+  const n = d.critical_fail ?? 1;
+  return n >= 3 ? CRITICAL_SHADES[2].bg : n === 2 ? CRITICAL_SHADES[1].bg : CRITICAL_SHADES[0].bg;
+}
+
 const VENDOR_ORDER = ["check_point", "palo_alto", "fortinet", "cisco_asa", "infoblox", "radware", "bluecoat"];
 const q = (params: Record<string, string>) => `?${new URLSearchParams(params).toString()}`;
 
@@ -35,7 +48,7 @@ const q = (params: Record<string, string>) => `?${new URLSearchParams(params).to
  * Every device as one square, grouped by vendor in the vendor's own name and sorted by condition so colours form
  * blocks; a backup target without an archive carries a red ring. Hover names the device; a click opens it.
  */
-export function EstateMap({ estate, cell = 16 }: { readonly estate: EstateView; readonly cell?: number }) {
+export function EstateMap({ estate, cell = 20 }: { readonly estate: EstateView; readonly cell?: number }) {
   const groups = new Map<string, EstateView["devices"][number][]>();
   for (const d of estate.devices) {
     const list = groups.get(d.vendor) ?? [];
@@ -52,7 +65,7 @@ export function EstateMap({ estate, cell = 16 }: { readonly estate: EstateView; 
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "flex-start" }}>
         {vendors.map((v) => {
           const list = [...(groups.get(v) ?? [])].sort((a, b) => CONDITION[a.condition].order - CONDITION[b.condition].order
-            || Number(b.no_archive) - Number(a.no_archive));
+            || (b.critical_fail ?? 0) - (a.critical_fail ?? 0) || Number(b.no_archive) - Number(a.no_archive));
           const cols = Math.max(4, Math.ceil(Math.sqrt(list.length * 1.6)));
           return (
             <Box key={v} sx={{ minWidth: 0 }}>
@@ -71,7 +84,7 @@ export function EstateMap({ estate, cell = 16 }: { readonly estate: EstateView; 
                     </Box>}>
                     <Box component="a" href={q({ screen: "inventory", device_id: d.device_id })}
                       aria-label={`${d.hostname ?? d.device_id}: ${CONDITION[d.condition].label}`}
-                      sx={{ width: cell, height: cell, borderRadius: "3px", display: "block", background: CONDITION[d.condition].bg,
+                      sx={{ width: cell, height: cell, borderRadius: "3px", display: "block", background: cellBg(d),
                         boxShadow: d.no_archive ? `0 0 0 2px ${m3.scLowest}, 0 0 0 4px ${EXEC.red}` : "none",
                         transition: "transform 120ms", "&:hover": { transform: "scale(1.35)" } }} />
                   </Tooltip>
@@ -82,7 +95,16 @@ export function EstateMap({ estate, cell = 16 }: { readonly estate: EstateView; 
         })}
       </Box>
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2.25, alignItems: "center" }}>
-        {(Object.keys(CONDITION) as EstateCondition[]).filter((c) => (estate.counts[c] ?? 0) > 0).map((c) => (
+        {CRITICAL_SHADES.map((sh, i) => {
+          const n = estate.devices.filter((d) => d.condition === "critical" && (i === 2 ? (d.critical_fail ?? 1) >= 3 : (d.critical_fail ?? 1) === sh.min)).length;
+          return n > 0 ? (
+            <Box key={sh.label} sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+              <Box sx={{ width: 12, height: 12, borderRadius: "3px", background: sh.bg }} />
+              <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>{sh.label} <b style={{ color: m3.onSurface }}>{n}</b></Typography>
+            </Box>
+          ) : null;
+        })}
+        {(Object.keys(CONDITION) as EstateCondition[]).filter((c) => c !== "critical" && (estate.counts[c] ?? 0) > 0).map((c) => (
           <Box key={c} sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
             <Box sx={{ width: 12, height: 12, borderRadius: "3px", background: CONDITION[c].bg }} />
             <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>{CONDITION[c].label} <b style={{ color: m3.onSurface }}>{estate.counts[c]}</b></Typography>
