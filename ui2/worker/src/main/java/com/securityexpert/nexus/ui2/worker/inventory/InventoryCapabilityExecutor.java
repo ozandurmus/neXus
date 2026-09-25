@@ -152,7 +152,9 @@ public final class InventoryCapabilityExecutor {
             // VSX is not a Quantum Spark/Gaia Embedded capability (the pre-Java product's own
             // collector keeps VSX context out of its Spark path), so a discovery-known Spark model
             // skips the probe outright rather than sending a command its Clish cannot answer.
-            String vsxProbeOutput = preferInteractiveShell ? "" : execOutput(session, InventoryReadPlan.CP_VSX_STAT, false);
+            // A management server (SMS / MDS) has no VSX and no cluster: those probes hang until their timeout there.
+            boolean managementServer = request.managementServer();
+            String vsxProbeOutput = preferInteractiveShell || managementServer ? "" : execOutput(session, InventoryReadPlan.CP_VSX_STAT, false);
             CheckPointVsxStatParser.VsxStatResult vsxStat = CheckPointVsxStatParser.parse(vsxProbeOutput);
             boolean vsxHost = vsxStat.vsx();
             LOG.log(System.Logger.Level.INFO,
@@ -181,7 +183,7 @@ public final class InventoryCapabilityExecutor {
             // Single-session compound batch read: all physical + VSID reads in one subshell
             Map<String, String> batchSections = Map.of();
             String batchCmd = buildCheckPointBatchCommand(vsxHost);
-            String batchOutput = execOutput(session, batchCmd, preferInteractiveShell);
+            String batchOutput = managementServer ? "" : execOutput(session, batchCmd, preferInteractiveShell);
             if (!batchOutput.isBlank() && batchOutput.contains(BATCH_TAG)) {
                 batchSections = parseBatchSections(batchOutput);
                 LOG.log(System.Logger.Level.INFO,
@@ -197,6 +199,7 @@ public final class InventoryCapabilityExecutor {
                     : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_ROUTE_SHOW, vsxHost), preferInteractiveShell);
             String haStatOutput = batchSections.containsKey("ha")
                     ? batchSections.get("ha")
+                    : managementServer ? ""
                     : execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_CPHAPROB_STAT, vsxHost), preferInteractiveShell);
 
             long parseStart = System.currentTimeMillis();
@@ -262,7 +265,8 @@ public final class InventoryCapabilityExecutor {
             // 566 bytes / 4 VIPs over the persistent interactive shell (a real login terminal, which
             // is what the Product Owner's own manual reproduction always was). So this one read
             // starts on the interactive shell for every Check Point device, pty exec as the fallback.
-            String vipOutput = execOutputPty(session, faultTolerantVsenv0(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost), true);
+            String vipOutput = managementServer ? ""
+                    : execOutputPty(session, faultTolerantVsenv0(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, vsxHost), true);
             List<VirtualInterfaceAddress> physicalVips = CheckPointClusterVirtualInterfaceParser.parse(vipOutput);
             LOG.log(System.Logger.Level.INFO,
                     "[INVENTORY_VIP_PARSE] target={0}:{1} vip_output_len={2} vip_addresses_found={3}",

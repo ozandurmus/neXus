@@ -138,6 +138,36 @@ class InventoryJobExecutorEndToEndTest {
      * level (the fake transport throws on any command outside its scripted set, so this also proves
      * the executor does not call it here). */
     @Test
+    void aCheckPointManagementServerIsNeverSentTheVsxOrClusterProbes() {
+        // Measured 2026-09-25 on the MDS: vsx stat, cphaprob and the batched read hang until their 30 s timeout there.
+        Map<String, String> outputByCommand = Map.ofEntries(
+                Map.entry(InventoryReadPlan.CP_FW_GETIFS, "localhost eth0 192.0.2.30 255.255.255.0\n"),
+                Map.entry(InventoryReadPlan.CP_IP_ROUTE_SHOW, "default via 192.0.2.1 dev eth0 proto 7\n"),
+                Map.entry(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY, "2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"));
+        ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
+        InventoryJobExecutorFakes.FakeLeaseRepository leaseRepo =
+                new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
+        InventoryJobExecutorFakes.FakeStepAttemptRepository attemptRepo = new InventoryJobExecutorFakes.FakeStepAttemptRepository();
+        InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort devicePort = new InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort();
+        InventoryJobExecutorFakes.FakeDeviceRepository deviceRepository = new InventoryJobExecutorFakes.FakeDeviceRepository();
+        InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository =
+                new InventoryJobExecutorFakes.FakeDeviceInventoryRepository();
+        InventoryCapabilityExecutor capabilityExecutor =
+                new InventoryCapabilityExecutor(transport, ref -> { throw new IllegalStateException("not used"); });
+        InventoryJobExecutor executor = new InventoryJobExecutor(leaseRepo, attemptRepo, devicePort, deviceRepository,
+                inventoryRepository, capabilityExecutor);
+        InventoryRequest request = InventoryRequest.checkPointManagementServer(new ConnectionTarget("ep-1", "mds-host", 22), "cred-1",
+                "trust-1", Optional.empty());
+
+        JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request, false);
+
+        assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        assertTrue(transport.commands.stream().noneMatch(c -> c.contains("vsx stat") || c.contains("cphaprob") || c.contains("NEXUS_SECTION")),
+                "no VSX probe, cluster read or batched read on a management server: " + transport.commands);
+        assertTrue(transport.commands.stream().anyMatch(c -> c.contains("fw getifs")), transport.commands.toString());
+    }
+
+    @Test
     void checkPointStandaloneVsxHostUsesFwGetifsPerVsidNeverCphaprob() {
         Map<String, String> outputByCommand = Map.ofEntries(
                 Map.entry(InventoryReadPlan.CP_VSX_STAT, "ID | Type | Name\n0 | S | VS0\n3 | S | vs-lab\n"),

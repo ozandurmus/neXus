@@ -17,7 +17,25 @@ public record InventoryRequest(
         Optional<ApiTarget> apiTarget,
         String credentialRef,
         String trustRuleRef,
-        Optional<String> modelHint) {
+        Optional<String> modelHint,
+        boolean managementServer) {
+
+    /** Pre-2026-09-25 shape: a gateway read. */
+    public InventoryRequest(InventoryVendor vendor, Optional<ConnectionTarget> connectionTarget, Optional<ApiTarget> apiTarget,
+            String credentialRef, String trustRuleRef, Optional<String> modelHint) {
+        this(vendor, connectionTarget, apiTarget, credentialRef, trustRuleRef, modelHint, false);
+    }
+
+    /**
+     * A Check Point management server (SMS / MDS, PO 2026-09-22): the Gaia reads apply, but the VSX probe, the cluster
+     * reads and the batched read do not exist there and hang until their timeout (measured 2026-09-25 on the MDS:
+     * 243 s of which 240 s were such timeouts), so they are skipped.
+     */
+    public static InventoryRequest checkPointManagementServer(ConnectionTarget target, String credentialRef, String trustRuleRef,
+            Optional<String> modelHint) {
+        return new InventoryRequest(InventoryVendor.CHECK_POINT, Optional.of(target), Optional.empty(), credentialRef,
+                trustRuleRef, modelHint, true);
+    }
 
     public static InventoryRequest checkPoint(ConnectionTarget target, String credentialRef, String trustRuleRef) {
         return checkPoint(target, credentialRef, trustRuleRef, Optional.empty());

@@ -279,7 +279,8 @@ public final class WorkerClaimLoop {
                 Optional<String> inventoryModelHint = deviceRepository.findSummary(job.targetDeviceId())
                         .flatMap(com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedModel);
                 InventoryRequest inventoryRequest = buildInventoryRequest(job.capabilityId(), endpoint.endpointId(),
-                        endpoint.addressRef(), device.credentialReferenceId(), inventoryModelHint);
+                        endpoint.addressRef(), device.credentialReferenceId(), inventoryModelHint,
+                        "management_server".equals(device.role()));
                 inventoryJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), inventoryRequest,
                         false);
                 return true;
@@ -345,12 +346,14 @@ public final class WorkerClaimLoop {
     }
 
     private InventoryRequest buildInventoryRequest(String capabilityId, String endpointId, String addressRef,
-            String credentialRef, Optional<String> modelHint) {
+            String credentialRef, Optional<String> modelHint, boolean managementServer) {
         if (InventoryCapabilityIds.CP_INVENTORY_COLLECT.equals(capabilityId)) {
             String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
                     hostOf(addressRef), portOf(addressRef));
-            return InventoryRequest.checkPoint(new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef)),
-                    credentialRef, trustRuleRef, modelHint);
+            ConnectionTarget target = new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef));
+            return managementServer
+                    ? InventoryRequest.checkPointManagementServer(target, credentialRef, trustRuleRef, modelHint)
+                    : InventoryRequest.checkPoint(target, credentialRef, trustRuleRef, modelHint);
         }
         if (InventoryCapabilityIds.PAN_INVENTORY_COLLECT.equals(capabilityId)) {
             return InventoryRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
