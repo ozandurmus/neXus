@@ -1006,7 +1006,9 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
         if (!cancelled) {
           setDevices(r.devices.filter((d) => d.enrollment_state === "ENROLLED" && (d.role === undefined || d.role === "gateway" || d.role === "firewall"
             // a Check Point management server (MDS) takes the Gaia backup too
-            || (d.role === "management_server" && (d.vendor_hint === "check_point" || d.vendor_hint === "radware"))
+            || (d.role === "management_server" && (d.vendor_hint === "check_point" || d.vendor_hint === "radware"
+              // a Symantec Management Center backs up its ProxySGs (without it the row read "not enrolled" with Delete)
+              || d.vendor_hint === "bluecoat"))
             // V64: appliances backed up over HTTPS
             || d.role === "appliance")));
           setError(null);

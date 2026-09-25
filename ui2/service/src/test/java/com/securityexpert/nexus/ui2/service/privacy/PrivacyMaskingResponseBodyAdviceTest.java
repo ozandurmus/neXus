@@ -181,6 +181,21 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void masksTheJobLogPageForReplayViewer() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        JobEvent event = new JobEvent("job-1", "cp_inventory_collect", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
+                "real-gateway-name-7", "COMPLETED", "SUCCESS", null, Instant.now(), null, null);
+        var page = new com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage(List.of(event), 1, 50, 1);
+
+        var result = (com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage)
+                advice.beforeBodyWrite(page, null, null, null, serverRequest, null);
+
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(result.items().get(0).deviceName()).isNotEqualTo("real-gateway-name-7");
+        assertThat(result.items().get(0).targetDeviceId()).isEqualTo("148bd45b-e5b4-490b-95c5-54862e2d63d0");
+    }
+
+    @Test
     void masksJobEventsForReplayViewer() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
 

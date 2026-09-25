@@ -121,6 +121,18 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     jobEvent.finishedAt(),
                     jobEvent.durationMs());
         }
+        // The job log page (Operations > Jobs) is a record, not a Map: before 2026-09-25 it passed through unmasked and
+        // showed real device names to the aiview persona.
+        if (obj instanceof com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage page) {
+            List<JobEvent> items = new ArrayList<>(page.items() == null ? 0 : page.items().size());
+            if (page.items() != null) {
+                for (JobEvent event : page.items()) {
+                    items.add((JobEvent) maskObject(event, parentContextRef));
+                }
+            }
+            return new com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage(items, page.page(),
+                    page.pageSize(), page.total());
+        }
         if (obj instanceof Map<?, ?> map) {
             return maskMap((Map<?, ?>) map, parentContextRef);
         }
