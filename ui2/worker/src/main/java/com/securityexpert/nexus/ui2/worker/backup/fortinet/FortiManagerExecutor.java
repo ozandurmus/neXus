@@ -249,7 +249,18 @@ public final class FortiManagerExecutor {
                 List<com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface> interfaces = List.of();
                 List<com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute> routes = List.of();
                 try {
-                    interfaces = interfaces(call(target, s, "get", Map.of("url", "/cli/global/system/interface")));
+                    JsonNode rawInterfaces = call(target, s, "get", Map.of("url", "/cli/global/system/interface"));
+                    interfaces = interfaces(rawInterfaces);
+                    // MEASURE FIRST (2026-09-25: every state read "unknown"): the status values and the field names only.
+                    java.util.Set<String> statuses = new java.util.TreeSet<>();
+                    java.util.Set<String> fields = new java.util.TreeSet<>();
+                    if (rawInterfaces.isArray()) {
+                        for (JsonNode i : rawInterfaces) {
+                            statuses.add(i.path("status").toString());
+                            i.fieldNames().forEachRemaining(fields::add);
+                        }
+                    }
+                    LOG.log(System.Logger.Level.INFO, "[FMG] interface status values={0} fields={1}", statuses, fields);
                 } catch (IOException e) {
                     LOG.log(System.Logger.Level.INFO, "[FMG] interfaces not read: {0}", String.valueOf(e.getMessage()));
                 }

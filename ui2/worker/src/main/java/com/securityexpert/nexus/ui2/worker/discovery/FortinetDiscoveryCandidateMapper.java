@@ -26,8 +26,16 @@ public final class FortinetDiscoveryCandidateMapper {
     private FortinetDiscoveryCandidateMapper() {
     }
 
+    /**
+     * A member's stable identifier: FortiManager records an HA cluster under its primary's serial and lists that primary
+     * again among the members, so a member serial alone would repeat the cluster's (measured 2026-09-25: the candidate
+     * write failed on the per-run unique identifier). Prefixed, still opaque.
+     */
+    static final String MEMBER_PREFIX = "ha_member|";
+
     public static List<DiscoveryCandidateRecord> map(String runId, List<FortiManagerExecutor.Discovered> devices) {
         List<DiscoveryCandidateRecord> out = new ArrayList<>();
+        java.util.Set<String> ids = new java.util.HashSet<>();
         for (FortiManagerExecutor.Discovered found : devices) {
             JsonNode d = found.device();
             Optional<String> sn = text(d, "sn");
@@ -45,6 +53,9 @@ public final class FortinetDiscoveryCandidateMapper {
             });
             JsonNode members = d.path("ha_slave");
             boolean cluster = d.path("ha_mode").asInt(0) != 0 && members.isArray() && members.size() > 1;
+            if (!ids.add(sn.get())) {
+                continue;
+            }
             String candidateId = OpaqueId.random().value();
             out.add(new DiscoveryCandidateRecord(candidateId, runId, "fortinet", sn.get(), Optional.of(found.adom()),
                     cluster ? KIND_HA_CLUSTER : KIND_FORTIGATE, name, address, Optional.empty(), Optional.empty(), Optional.empty(),
@@ -52,11 +63,11 @@ public final class FortinetDiscoveryCandidateMapper {
             if (cluster) {
                 for (JsonNode m : members) {
                     Optional<String> msn = text(m, "sn");
-                    if (msn.isEmpty()) {
+                    if (msn.isEmpty() || !ids.add(MEMBER_PREFIX + msn.get())) {
                         continue;
                     }
                     String role = m.path("role").asInt(-1) == 1 ? "PRIMARY" : m.path("role").asInt(-1) == 0 ? "SECONDARY" : "UNKNOWN";
-                    out.add(new DiscoveryCandidateRecord(OpaqueId.random().value(), runId, "fortinet", msn.get(), Optional.of(found.adom()),
+                    out.add(new DiscoveryCandidateRecord(OpaqueId.random().value(), runId, "fortinet", MEMBER_PREFIX + msn.get(), Optional.of(found.adom()),
                             KIND_HA_MEMBER, text(m, "name").orElse(msn.get()), Optional.empty(), Optional.empty(), Optional.of(name),
                             Optional.of(candidateId), model, version, Optional.of(role), false, Optional.empty()));
                 }

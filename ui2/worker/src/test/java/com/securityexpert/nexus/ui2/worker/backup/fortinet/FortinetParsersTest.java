@@ -154,5 +154,7 @@ class FortinetParsersTest {
         assertFalse(member.importable());
         assertEquals(Optional.of(cluster.candidateId()), member.parentCandidateId());
         assertEquals(Optional.of("SECONDARY"), member.connectionState());
+        // the primary is listed as a member with the cluster's own serial: identifiers stay unique within the run
+        assertEquals(records.size(), records.stream().map(r -> r.stableIdentifier()).distinct().count());
     }
 }
