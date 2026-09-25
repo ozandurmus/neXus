@@ -140,11 +140,18 @@ class InventoryJobExecutorEndToEndTest {
     @Test
     void aCheckPointManagementServerIsNeverSentTheVsxOrClusterProbes() {
         // Measured 2026-09-25 on the MDS: vsx stat, cphaprob and the batched read hang until their 30 s timeout there.
+        // An MDS: fw getifs answers nothing (no firewall kernel); the interfaces come from ip -4 addr show.
         Map<String, String> outputByCommand = Map.ofEntries(
-                Map.entry(InventoryReadPlan.CP_FW_GETIFS, "localhost eth0 192.0.2.30 255.255.255.0\n"),
-                Map.entry(InventoryReadPlan.CP_IP_ROUTE_SHOW, "default via 192.0.2.1 dev eth0 proto 7\n"),
-                Map.entry(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY, "2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n"));
+                Map.entry(InventoryReadPlan.CP_FW_GETIFS, ""),
+                Map.entry("show interfaces all", ""),
+                Map.entry("show interfaces table", ""),
+                Map.entry("clish -c 'show interfaces all'", ""),
+                Map.entry(InventoryReadPlan.CP_IP_ROUTE_SHOW, "default via 192.0.2.1 dev Mgmt proto 7\n192.0.2.0/24 dev Mgmt proto kernel scope link src 192.0.2.30\n"),
+                Map.entry(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY,
+                        "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN\n    inet 127.0.0.1/8 scope host lo\n"
+                        + "2: Mgmt: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 192.0.2.30/24 brd 192.0.2.255 scope global Mgmt\n"));
         ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
+        transport.allowExecInteractiveWithoutRejection();
         InventoryJobExecutorFakes.FakeLeaseRepository leaseRepo =
                 new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
         InventoryJobExecutorFakes.FakeStepAttemptRepository attemptRepo = new InventoryJobExecutorFakes.FakeStepAttemptRepository();
@@ -165,6 +172,11 @@ class InventoryJobExecutorEndToEndTest {
         assertTrue(transport.commands.stream().noneMatch(c -> c.contains("vsx stat") || c.contains("cphaprob") || c.contains("NEXUS_SECTION")),
                 "no VSX probe, cluster read or batched read on a management server: " + transport.commands);
         assertTrue(transport.commands.stream().anyMatch(c -> c.contains("fw getifs")), transport.commands.toString());
+        assertTrue(transport.commands.stream().noneMatch(c -> c.contains("cpstat -f policy")), "a management server holds no policy");
+        InventoryRun run = inventoryRepository.lastRecordedRun;
+        assertEquals(java.util.List.of("Mgmt"), run.contexts().get(0).interfaces().stream().map(i -> i.name()).toList(),
+                "interfaces from ip -4 addr show when fw getifs and clish give none; lo skipped");
+        assertEquals("192.0.2.30/24", run.contexts().get(0).interfaces().get(0).addresses().get(0).address());
     }
 
     @Test

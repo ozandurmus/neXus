@@ -288,6 +288,20 @@ public final class InventoryCapabilityExecutor {
                 }
             }
 
+            // A management server has no firewall kernel (fw getifs answers nothing) and its clish interface reads are not
+            // reliable over exec (measured 2026-09-25 on the MDS: empty in one run, 5 interfaces in the previous one).
+            // The same session's "ip -4 addr show" carries every interface with its address: use it when nothing else did.
+            if (physicalInterfaces.isEmpty() && !physicalStateOnlyOutput.isBlank()) {
+                List<ParsedInterface> fromIpAddr = CheckPointIpAddrParser.parse(physicalStateOnlyOutput, "").stream()
+                        .filter(i -> !"lo".equals(i.name()))
+                        .toList();
+                if (!fromIpAddr.isEmpty()) {
+                    LOG.log(System.Logger.Level.INFO, "[INVENTORY_IF_FROM_IP_ADDR] target={0}:{1} interfaces={2} (fw getifs and clish gave none)",
+                            target.host(), target.port(), fromIpAddr.size());
+                    physicalInterfaces = applyConnectedRoutePrefixes(fromIpAddr, physicalRoutes);
+                }
+            }
+
             List<InventoryContext> contexts = new ArrayList<>();
             contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
                     toInventoryInterfaces(applyInterfaceStates(mergeVirtualAddresses(physicalInterfaces, physicalVips), physicalStates)),
@@ -359,16 +373,19 @@ public final class InventoryCapabilityExecutor {
             String assetOutput = identityReadOutput(session, InventoryReadPlan.CP_SHOW_ASSET_SYSTEM, preferInteractiveShell);
             PlatformFactsRead platformFacts = new PlatformFactsRead(
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.assetSerial(assetOutput),
+                    // Measured 2026-09-25 on the MDS: cpinfo hangs over exec (30 s) and answers interactively in 4 s.
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.jumboTake(
-                            identityReadOutput(session, InventoryReadPlan.CP_CPINFO_HOTFIXES, preferInteractiveShell)),
+                            identityReadOutput(session, InventoryReadPlan.CP_CPINFO_HOTFIXES, preferInteractiveShell || managementServer)),
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.assetFamily(assetOutput),
                     java.util.Map.of(),
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.uptime(
                             identityReadOutput(session, InventoryReadPlan.CP_UPTIME, preferInteractiveShell)),
                     "cp_show_asset_system_cpinfo_hotfixes_uptime")
                     // installed policy (V60): optional, UNKNOWN when the read or the parse gives nothing
-                    .withPolicyInstall(com.securityexpert.nexus.ui2.worker.inventory.policy.CheckPointPolicyParser.parse(
-                            identityReadOutput(session, InventoryReadPlan.CP_CPSTAT_POLICY, preferInteractiveShell)));
+                    // A management server installs policy, it holds none: cpstat policy hangs there both ways (60 s measured).
+                    .withPolicyInstall(managementServer ? com.securityexpert.nexus.ui2.worker.inventory.policy.PolicyInstallRead.NONE
+                            : com.securityexpert.nexus.ui2.worker.inventory.policy.CheckPointPolicyParser.parse(
+                                    identityReadOutput(session, InventoryReadPlan.CP_CPSTAT_POLICY, preferInteractiveShell)));
             long totalElapsed = System.currentTimeMillis() - overallStart;
             LOG.log(System.Logger.Level.INFO,
                     "[INVENTORY_COLLECT_COMPLETE] target={0}:{1} completed in {2}ms, totalContexts={3}, totalInterfaces={4}",
