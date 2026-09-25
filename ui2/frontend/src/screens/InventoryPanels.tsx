@@ -178,7 +178,7 @@ function ManagedDevicesPanel({ members }: { readonly members: readonly GridMembe
                 <TableCell>{m.platform ?? "\u2014"}</TableCell>
                 <TableCell>{m.hardware_type ?? "\u2014"}</TableCell>
                 <TableCell sx={{ whiteSpace: "nowrap" }}>{m.hypervisor ?? "\u2014"}</TableCell>
-                <TableCell>{m.node_status ? <StatusChip tone={m.node_status === "MANAGED" ? "ok" : "warn"} label={m.node_status} dense /> : "\u2014"}</TableCell>
+                <TableCell>{m.node_status ? <StatusChip tone={/MANAGED$/.test(m.node_status) && !/UNMANAGED/.test(m.node_status) ? "ok" : "warn"} label={m.node_status.replace("_", " ")} dense /> : "\u2014"}</TableCell>
                 <TableCell>{deployment(m) ?? "\u2014"}</TableCell>
               </TableRow>
             ))}
