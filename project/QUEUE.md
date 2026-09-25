@@ -1,11 +1,12 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-24T23:40:45Z
+Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T00:12:01Z
 
 ## Now
 - NXS-LOCAL-0369 — Radware via Cyber Controller, device-list and backup UI, deploy safety, HOST-A rebuilt as neXus's own host (automated_validated)
 ## Next
 - overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
+- P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the reins (target: docs/design/HOST_A_REBUILD_RUNBOOK.md)
 - P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under aiv (target: docs/design/HOST_A_REBUILD_RUNBOOK.md se)
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a c (target: PanXmlApiTransport certificate verificat)

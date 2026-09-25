@@ -28,7 +28,11 @@ own SFTP-pushed backup (V65–V70), device-list / backup / add-device rework,
 deploys that never replace the worker under a running job, and HOST-A
 reinstalled for neXus alone and restored from a verified export
 (`docs/design/HOST_A_REBUILD_RUNBOOK.md`). Open gate: the Product Owner's aiview
-acceptance on the rebuilt host (backlog `hosta_rebuild_real_env_acceptance`).
+acceptance on the rebuilt host (backlog `hosta_rebuild_real_env_acceptance`):
+on 2026-09-25 three of its four checks passed (pseudonyms unchanged, Check
+Point and Palo Alto Collect, an old backup's Contents); the Cyber Controller's
+SFTP push to HOST-A fails because the controller pins the host's pre-reinstall
+SSH host key (backlog `cyber_controller_known_hosts_after_hosta_rebuild`).
 Predecessor `NXS-LOCAL-0368` (Overview, collision-free pseudonyms): Overview
 acceptance still open. Records in `project/build_history.json`.
 

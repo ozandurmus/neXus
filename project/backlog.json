@@ -1026,6 +1026,15 @@
       "priority": "P3",
       "target": "/home/aiadmin/nexus-export-20260924T2026Z",
       "note": ""
+    },
+    {
+      "id": "cyber_controller_known_hosts_after_hosta_rebuild",
+      "category": "operations",
+      "title": "Cyber Controller SFTP push to HOST-A fails after the reinstall: stale known_hosts entry on the controller disables password auth; clear it (case with Radware) or switch the receiver address spelling; then delete leftover backup nexus-4ae0578d8cd2c6c4 and re-run Backup Now",
+      "status": "in_progress",
+      "priority": "P0",
+      "target": "docs/design/HOST_A_REBUILD_RUNBOOK.md",
+      "note": ""
     }
   ]
 }
