@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T11:21:40Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T11:27:46Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -90,6 +90,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T11:21:40Z
 - P2/in_progress cp_spark_exec_channel_rejected
 - P2/in_progress cp_vsx_interfaces_identical_to_physical
 - P2/in_progress ui2_m3_design_transfer_pass
+- P2/in_progress ui_device_workspace_and_overview
 - P2/planned antigravity_provider_adapter
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
@@ -146,7 +147,6 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T11:21:40Z
 - P2 per_vendor_worker_split
 - P2 policy_rule_hygiene_and_path_placement_brief
 - P2 snmpv3_fast_telemetry_plane
-- P2 ui_device_workspace_and_overview
 - P4 pan_ha_peer_ipv6_pairing
 ## Open decisions
 - op_track_id — Track id: keep OP.x as a dedicated OPERATE track, or fold into 1.x after

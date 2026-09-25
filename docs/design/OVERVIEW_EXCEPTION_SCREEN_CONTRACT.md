@@ -308,3 +308,18 @@ tag `ui-baseline-2026-09-23`). Hard constraint carried from that direction: no l
 
 **Unchanged.** Every figure, percentage, click target and evidence time of §3; UNKNOWN written out; zero neutral;
 no composite score; no "outdated" judgement; the endpoint, cache and masking rules.
+
+## Amendment C (Product Owner, 2026-09-25) — executive summary
+Supersedes the layout rows B–F for the normal (non-wall) view. The Overview is a manager's summary of five facts, each
+a big number, one plain sentence, at most three named items and one link:
+1. **Recoverability** — backup targets holding a stored backup, of all targets; how many have none.
+2. **Compliance** — share of checks passing (assured), open critical findings, the three most failed critical/high
+   checks by plain title.
+3. **Configuration changes** — devices changed since their previous read; the latest three.
+4. **Cluster consistency** — clusters whose members carry different settings; the top three.
+5. **Versions and patches** — devices behind the newest build of their own line, in each vendor's terms (Check Point
+   hotfix take within a major; Palo Alto maintenance build within a feature release). Shown only when a vendor has
+   such facts; a vendor without them adds nothing.
+Job failures, connection errors and raw reasons are not on the Overview (Operations owns them). Software/hardware
+distributions, policy install ages and evidence age stay under a collapsed "Fleet details". The `?wall=1` view is
+unchanged. Council record: `UI_EFFECTIVENESS_COUNCIL_2026_09_25_SYNTHESIS.md`.

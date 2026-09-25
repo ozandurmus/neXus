@@ -48,85 +48,71 @@ function stub(body: OverviewView) {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200 })));
 }
 
-describe("Overview -- exception-and-evidence screen (OVERVIEW_EXCEPTION_SCREEN_CONTRACT)", () => {
-  it("shows six posture tiles with denominators, status words, deltas and filtered links", async () => {
-    stub(overview({ attention: { ...overview().attention, failed_jobs_24h: { count: 7, terminal_24h: 212, previous: 4, state: "OK" } } }));
+function stubWithControls(body: OverviewView, controls: unknown[] = []) {
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+    const payload = url.includes("/compliance/controls") ? { total_controls: controls.length, controls } : body;
+    return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
+  }));
+}
+
+describe("Overview -- executive summary (PO 2026-09-25: five facts)", () => {
+  it("shows recoverability, changes and cluster consistency as plain facts with one link each", async () => {
+    stubWithControls(overview());
     render(<OverviewScreen />);
-    expect((await screen.findAllByText("Act now")).length).toBeGreaterThan(1);
-    const backup = screen.getByText("Backup targets without archive").closest("a")!;
-    expect(backup.getAttribute("href")).toBe("?screen=backups&artefact=none");
-    expect(backup.textContent).toContain("19");
-    expect(backup.textContent).toContain("of 102");
-    const failedTile = screen.getByText("Failed jobs, 24 h").closest("a")!;
-    expect(failedTile.getAttribute("href")).toBe("?screen=operations&tab=jobs&state=FAILED&since_hours=24");
-    expect(failedTile.textContent).toContain("+3 since yesterday");
-    expect(screen.getByText("Clusters with member differences").closest("a")!.textContent).toContain("8 not comparable");
-    // zero is neutral: the stale-inventory tile says Clear, not a status colour word
-    expect(screen.getByText("Devices without evidence, 24 h").closest("a")!.textContent).toContain("Clear");
-    // no stored history for configuration changes
-    expect(screen.getByText("Configuration changed").closest("a")!.textContent).toContain("no history");
+    expect(await screen.findByText("Recoverability")).toBeInTheDocument();
+    expect(screen.getByText(/19 have none yet/)).toBeInTheDocument();
+    expect(screen.getByText("Devices without a backup →").getAttribute("href")).toBe("?screen=backups&artefact=none");
+    expect(screen.getByText("83")).toBeInTheDocument(); // 102 targets - 19 without
+    expect(screen.getByText(/clusters whose two members carry different settings/)).toBeInTheDocument();
+    expect(screen.getByText("CLS-ROMEO-01").getAttribute("href")).toBe("?screen=configuration&cluster_ref=CLS-ROMEO-01");
   });
 
-  it("writes the headline as three lines: Act now, Review, Evidence", async () => {
-    stub(overview());
+  it("keeps job failures and connection errors off the executive summary", async () => {
+    stubWithControls(overview());
     render(<OverviewScreen />);
-    expect(await screen.findByText(/7 of 212 jobs failed in 24 h/)).toBeInTheDocument();
-    expect(screen.getByText(/19 of 102 backup targets have no archive/)).toBeInTheDocument();
-    expect(screen.getAllByText("Review").length).toBeGreaterThan(1);
-    expect(screen.getByText(/3 of 31 active clusters show member differences/)).toBeInTheDocument();
-    expect(screen.getByText("Evidence")).toBeInTheDocument();
+    await screen.findByText("Recoverability");
+    expect(document.body.textContent).not.toContain("connect_failed");
+    expect(document.body.textContent).not.toMatch(/jobs failed/);
   });
 
   it("writes UNKNOWN, never 0, for what is not evidenced", async () => {
-    stub(overview({ attention: { ...overview().attention, stale_inventory: { count: 0, of: 0, state: "UNKNOWN" } } }));
+    stubWithControls(overview({ attention: { ...overview().attention, backup_missing: { count: 0, of: 0, state: "UNKNOWN" } } }));
     render(<OverviewScreen />);
     expect(await screen.findByText(/Compliance has not been evaluated yet/)).toBeInTheDocument();
-    expect(screen.getByText("Devices without evidence, 24 h").closest("a")!.textContent).toContain("UNKNOWN");
-    expect(screen.getByText("Compliance deficiencies").closest("a")!.textContent).toContain("UNKNOWN");
-    expect(screen.getByText(/1 UNKNOWN/)).toBeInTheDocument();
+    expect(screen.getByText(/Backup coverage has not been read/)).toBeInTheDocument();
   });
 
-  it("groups failed jobs by cause, shows the three latest and links to the whole list", async () => {
-    stub(overview());
+  it("names the most failed critical checks under compliance", async () => {
+    stubWithControls(overview({ compliance: { state: "OK", reason: null, evaluated: 102, of_firewalls: 105, observed_pct: 34.7, assured_pct: 28.9,
+      coverage_pct: 82.5, critical_deficiencies: 172, data_gaps: 428, frameworks: [] } }), [
+      { control_id: "c1", title: "Enforce SSH Protocol Version 2 Only", severity: "CRITICAL", fail_count: 62, status: "FAIL" },
+      { control_id: "c2", title: "Enforce Minimum Password Length", severity: "HIGH", fail_count: 32, status: "FAIL" },
+      { control_id: "c3", title: "Telnet disabled", severity: "CRITICAL", fail_count: 0, status: "PASS" },
+    ]);
     render(<OverviewScreen />);
-    expect(await screen.findByText("Show all · 7")).toBeInTheDocument();
-    const cause = screen.getByText("connect_failed: palo alto key generation did not return a usable key").closest("a")!;
-    expect(cause.textContent).toContain("3 devices");
-    expect(cause.getAttribute("href")).toBe("?screen=operations&tab=jobs&state=FAILED&since_hours=24&q=connect_failed%3A+palo+alto+key+generation+did+not+return+a+usable+key");
-    expect(screen.getByText("unhandled_exception: Java heap space").closest("a")!.textContent).toContain("cp_gateway_backup, pan_configuration_collect");
-    expect(screen.getAllByText("connect_failed")).toHaveLength(3);
-    expect(screen.getByText("No configuration change in the latest collections.")).toBeInTheDocument();
+    expect(await screen.findByText("Enforce SSH Protocol Version 2 Only")).toBeInTheDocument();
+    expect(screen.getByText("28.9%")).toBeInTheDocument();
+    expect(screen.getByText(/172 critical findings are open/)).toBeInTheDocument();
+    expect(screen.queryByText("Telnet disabled")).toBeNull();
   });
 
-  it("shows major, minor and hardware donuts per vendor, each slice linked to the filtered device list", async () => {
-    stub(overview({ platform: { ...overview().platform, versions: {
-      check_point: { major: [{ label: "R81.20", count: 55 }, { label: null, count: 1 }], minor: [{ label: "R81.20 Jumbo Take 119", count: 30 }],
-        model: [{ label: "Check Point 29200 (RH-20-00)", count: 17 }, { label: null, count: 7 }] },
-      palo_alto: { major: [{ label: "11.1", count: 40 }], minor: [{ label: "11.1.10-h7", count: 21 }], model: [{ label: "PA-5445", count: 10 }] },
+  it("counts devices behind the newest build in each vendor's own terms", async () => {
+    stubWithControls(overview({ platform: { ...overview().platform, versions: {
+      check_point: { major: [{ label: "R81.20", count: 36 }], minor: [{ label: "R81.20 Jumbo Take 119", count: 30 }, { label: "R81.20 Jumbo Take 161", count: 6 }] },
+      palo_alto: { major: [{ label: "11.1", count: 40 }], minor: [{ label: "11.1.10-h7", count: 21 }, { label: "11.1.10-h4", count: 19 }] },
     } } }));
     render(<OverviewScreen />);
-    const appliance = (await screen.findByText("29200 (RH-20-00)")).closest("a")!;
-    expect(appliance.getAttribute("href")).toBe("?screen=inventory&vendor=check_point&hw_model=Check+Point+29200+%28RH-20-00%29");
-    expect(screen.getByText("R81.20 · Take 119").closest("a")!.getAttribute("href")).toBe("?screen=inventory&vendor=check_point&hotfix_level=R81.20+Jumbo+Take+119");
-    expect(screen.getByText("PA-5445").closest("a")!.getAttribute("href")).toBe("?screen=inventory&vendor=palo_alto&hw_model=PA-5445");
-    expect(screen.getByText("APPLIANCE")).toBeInTheDocument();
+    expect(await screen.findByText("Versions and patches")).toBeInTheDocument();
+    expect(screen.getByText("Check Point 30 on R81.20 below Take 161")).toBeInTheDocument();
+    expect(screen.getByText("Palo Alto 19 on 11.1 below 11.1.10-h7")).toBeInTheDocument();
   });
 
-  it("shows compliance evidence coverage as the stored one-decimal percentage", async () => {
-    stub(overview({ compliance: { state: "OK", reason: null, evaluated: 102, of_firewalls: 105, observed_pct: 34.7, assured_pct: 28.9, coverage_pct: 82.5,
-      critical_deficiencies: 172, data_gaps: 428, frameworks: [] } }));
+  it("leaves out the versions fact when no vendor has build facts", async () => {
+    stubWithControls(overview());
     render(<OverviewScreen />);
-    expect(await screen.findByText(/covers 82.5% of control checks: 172 critical failing checks, 428 data gaps/)).toBeInTheDocument();
-    expect(screen.getByText("Compliance deficiencies").closest("a")!.textContent).toContain("82.5% coverage");
-    expect(document.body.textContent).not.toContain("of 100");
-  });
-
-  it("keeps an UNKNOWN row in the hotfix histogram and never calls a level outdated", async () => {
-    stub(overview());
-    render(<OverviewScreen />);
-    expect(await screen.findByText("R81.20 · Take 119")).toBeInTheDocument();
-    expect(screen.getAllByText("UNKNOWN").length).toBeGreaterThan(0);
-    expect(document.body.textContent).not.toMatch(/outdated/i);
+    await screen.findByText("Recoverability");
+    expect(screen.queryByText("Versions and patches")).toBeNull();
   });
 
   it("says the read failed instead of rendering figures when the endpoint fails", async () => {

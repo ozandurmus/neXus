@@ -127,7 +127,7 @@ export function ComplianceScreen() {
   const [controls, setControls] = useState<readonly ComplianceControlItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [reEvaluating, setReEvaluating] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => urlParam("q") ?? "");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() =>
     urlParam("result") === "fail" ? "FAILING" : urlParam("result") === "unavailable" ? "UNAVAILABLE" : "ALL");
   const [severityFilter, setSeverityFilter] = useState<string>(() => (urlParam("severity") ? urlParam("severity")!.toUpperCase() : "ALL"));

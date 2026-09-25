@@ -1401,15 +1401,6 @@
       "priority": "P1",
       "target": "",
       "note": ""
-    },
-    {
-      "id": "ui_device_workspace_and_overview",
-      "category": "ui",
-      "title": "UI: one device screen, one count vocabulary, executive Overview (5 facts)",
-      "status": "deferred",
-      "priority": "P2",
-      "target": "",
-      "note": ""
     }
   ]
 }
