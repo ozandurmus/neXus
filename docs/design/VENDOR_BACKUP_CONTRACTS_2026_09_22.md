@@ -229,6 +229,26 @@ alignment test, and a first live run recorded in the backlog note before
 - Gate rows: `proxysg_enable`, `proxysg_show_version`, `proxysg_show_configuration`,
   `proxysg_show_configuration_expanded` — all read.
 
+## 8a. ProxySG through the Symantec Management Center — measured 2026-09-25 (read-only)
+
+Read with the Product Owner's MC web session, GET only, nothing changed on the MC or a device:
+- The MC REST API (`https://<mc>:8082/api`, basic auth or `X-Auth-Token`) has **no backup resource**. Its WADL
+  (`/api/application.wadl`, 122 operations) and on-box guide (`/help/api/`) list devices, groups, files, jobs,
+  job results and job artifacts. Device backups exist only as MC jobs (the guide's example names a
+  `DeviceBackups` job); none is defined on this MC (15 job definitions: 14 `INSTALL_POLICY`, 1 `COLLECT_SYS_INFO`;
+  0 job artifacts).
+- Job artifacts (`GET /jobs/artifact`, `GET /jobs/artifact/{uuid}/content`) carry an `ArtifactSource`; one value
+  is `SAVE_CONFIG` ("Device Configuration Capture") -- an MC job that captures a device's configuration as a
+  downloadable artifact. Using it means **creating a job on the MC** (a change on the MC).
+- `PUT /devices/{uuid}/command` executes one CLI command on a managed device through the MC and returns
+  `{"reply", "messages", "status"}`. The guide's example shows the MC's session on the ProxySG is at the
+  **`#(config)` prompt** -- so only exact read literals may ever be sent (`show version`, `show configuration`);
+  anything else could be a configuration change. This path needs no ProxySG credential of neXus's own and no
+  job on the MC.
+- Proposed gate rows (not yet signed off): `bluecoat_mc_command_show_version`,
+  `bluecoat_mc_command_show_configuration` -- `PUT /api/devices/{uuid}/command` with exactly that body, action class
+  read, one per device per run, first run on the test proxy only.
+
 ## 9. Order of work (Product Owner: "start from the top")
 
 Radware → Pulse Secure → Panorama → Infoblox → FortiGate → Cisco ASA →

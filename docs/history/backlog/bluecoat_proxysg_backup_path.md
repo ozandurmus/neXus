@@ -1,0 +1,5 @@
+# ProxySG backup (PO 2026-09-25): Management Center measured (fwadm, GET /api/devices: 4 ProxySG sgos6x, 1 Reporter, 2 WSS; fields incl. uuid, osVersion, build, serialNumber, managementStatus, deploymentStatus). Choose: MC device-backup job + backup retrieval (paths from the on-box guide, needs an MC web session) or SSH show configuration per ProxySG (gate rows in VENDOR_BACKUP_CONTRACTS §8). First target: the test proxy
+
+status: planned · target: docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md
+
+2026-09-25 ~10:50: MC API measured read-only (PO's web session, GET only): no backup resource; device backups only as MC jobs (none defined here; 0 artifacts); SAVE_CONFIG job artifacts would need a job created on the MC; PUT /devices/{uuid}/command runs one CLI command through the MC (session at #(config) -- exact read literals only). Proposal: show version + show configuration through the MC per ProxySG, gated exactly; first run on the test proxy after PO approval. Recorded in VENDOR_BACKUP_CONTRACTS §8a.
