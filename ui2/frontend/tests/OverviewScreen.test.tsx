@@ -57,14 +57,15 @@ function stubWithControls(body: OverviewView, controls: unknown[] = []) {
 }
 
 describe("Overview -- executive summary (PO 2026-09-25: five facts)", () => {
-  it("shows recoverability, changes and cluster consistency as plain facts with one link each", async () => {
+  it("shows four gauges: recoverability, compliance, cluster consistency and a fourth for changes or patches", async () => {
     stubWithControls(overview());
     render(<OverviewScreen />);
     expect(await screen.findByText("Recoverability")).toBeInTheDocument();
-    expect(screen.getByText(/19 have none yet/)).toBeInTheDocument();
-    expect(screen.getByText("Devices without a backup →").getAttribute("href")).toBe("?screen=backups&artefact=none");
-    expect(screen.getByText("83")).toBeInTheDocument(); // 102 targets - 19 without
-    expect(screen.getByText(/clusters whose two members carry different settings/)).toBeInTheDocument();
+    expect(screen.getByText("83 / 102")).toBeInTheDocument(); // 102 targets - 19 without
+    expect(screen.getByText("19 backup targets without a stored backup")).toBeInTheDocument();
+    expect(screen.getByText("Recoverability").closest("a")!.getAttribute("href")).toBe("?screen=backups&artefact=none");
+    expect(screen.getByText("28 / 31")).toBeInTheDocument(); // clusters in agreement
+    expect(screen.getByText("Configuration stable")).toBeInTheDocument(); // no build facts -> the fourth gauge is changes
     expect(screen.getByText("CLS-ROMEO-01").getAttribute("href")).toBe("?screen=configuration&cluster_ref=CLS-ROMEO-01");
   });
 
@@ -79,8 +80,8 @@ describe("Overview -- executive summary (PO 2026-09-25: five facts)", () => {
   it("writes UNKNOWN, never 0, for what is not evidenced", async () => {
     stubWithControls(overview({ attention: { ...overview().attention, backup_missing: { count: 0, of: 0, state: "UNKNOWN" } } }));
     render(<OverviewScreen />);
-    expect(await screen.findByText(/Compliance has not been evaluated yet/)).toBeInTheDocument();
-    expect(screen.getByText(/Backup coverage has not been read/)).toBeInTheDocument();
+    expect(await screen.findByText("Compliance has not been evaluated yet.")).toBeInTheDocument();
+    expect(screen.getByText("Backup coverage not read")).toBeInTheDocument();
   });
 
   it("names the most failed critical checks under compliance", async () => {
@@ -93,7 +94,7 @@ describe("Overview -- executive summary (PO 2026-09-25: five facts)", () => {
     render(<OverviewScreen />);
     expect(await screen.findByText("Enforce SSH Protocol Version 2 Only")).toBeInTheDocument();
     expect(screen.getByText("28.9%")).toBeInTheDocument();
-    expect(screen.getByText(/172 critical findings are open/)).toBeInTheDocument();
+    expect(screen.getByText("172 critical findings open on 102 firewalls")).toBeInTheDocument();
     expect(screen.queryByText("Telnet disabled")).toBeNull();
   });
 
@@ -104,8 +105,10 @@ describe("Overview -- executive summary (PO 2026-09-25: five facts)", () => {
     } } }));
     render(<OverviewScreen />);
     expect(await screen.findByText("Versions and patches")).toBeInTheDocument();
-    expect(screen.getByText("Check Point 30 on R81.20 below Take 161")).toBeInTheDocument();
-    expect(screen.getByText("Palo Alto 19 on 11.1 below 11.1.10-h7")).toBeInTheDocument();
+    expect(screen.getByText("Patch currency")).toBeInTheDocument();
+    expect(screen.getByText("27 / 76")).toBeInTheDocument(); // 6 CP on Take 161 + 21 PAN on -h7
+    expect(screen.getByText("Check Point R81.20 · newest Take 161")).toBeInTheDocument();
+    expect(screen.getByText("Palo Alto 11.1 · newest 11.1.10-h7")).toBeInTheDocument();
   });
 
   it("leaves out the versions fact when no vendor has build facts", async () => {

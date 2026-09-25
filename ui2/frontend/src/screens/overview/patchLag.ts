@@ -11,6 +11,8 @@ export interface Lag {
   readonly of: number;
   /** One line per version line that has devices behind: "R81.20: 18 below Take 161". */
   readonly lines: readonly string[];
+  /** Per version line: the newest build and how many devices run it or an older one. */
+  readonly groups: ReadonlyArray<{ line: string; newest: string; current: number; behind: number }>;
 }
 
 function checkPointTake(label: string): { line: string; take: number } | null {
@@ -47,7 +49,11 @@ function lag<T>(slices: readonly VersionSlice[] | undefined, parse: (label: stri
   }
   const lines = [...behindByLine.entries()].sort((a, b) => b[1] - a[1])
     .map(([line, n]) => `${n} on ${line} below ${describe(line, newest.get(line) as T)}`);
-  return { behind, of, lines };
+  const totalByLine = new Map<string, number>();
+  for (const { v, count } of read) totalByLine.set(lineOf(v), (totalByLine.get(lineOf(v)) ?? 0) + count);
+  const groups = [...totalByLine.entries()].sort((a, b) => b[1] - a[1]).map(([line, total]) => ({
+    line, newest: describe(line, newest.get(line) as T), behind: behindByLine.get(line) ?? 0, current: total - (behindByLine.get(line) ?? 0) }));
+  return { behind, of, lines, groups };
 }
 
 export function checkPointLag(minor: readonly VersionSlice[] | undefined): Lag | null {
