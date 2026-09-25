@@ -13,6 +13,22 @@ import org.junit.jupiter.api.Test;
 class BackupFreeSpaceParserTest {
 
     @Test
+    void theDigestLineIsFoundPastABannerOrNotice() {
+        String hex = "ab".repeat(32);
+        assertEquals(Optional.of(hex), BackupCapabilityExecutor.parseSha256sumOutput(hex + "  /var/log/CPbackup/backups/x.tgz\n"));
+        assertEquals(Optional.of(hex), BackupCapabilityExecutor.parseSha256sumOutput(
+                "This system is for authorized use only.\n" + hex + "  /var/log/CPbackup/backups/x.tgz\n"));
+        assertEquals(Optional.empty(), BackupCapabilityExecutor.parseSha256sumOutput("sha256sum: x.tgz: No such file or directory\n"));
+    }
+
+    @Test
+    void onlyTheGaiaEmbeddedPhraseMarksASpark() {
+        assertTrue(BackupCapabilityExecutor.isGaiaEmbeddedCliError("        ^\nBad parameter starting at 'diskspace'\n"));
+        assertTrue(!BackupCapabilityExecutor.isGaiaEmbeddedCliError("CLINFR0329  Invalid command:'show diskspace'.\n"),
+                "a full Gaia clish error is not a Spark");
+    }
+
+    @Test
     void aCliErrorIsNeverAFreeSpaceValue() {
         assertEquals(Optional.empty(),
                 BackupCapabilityExecutor.parseFreeSpaceBytes("CLINFR0329  Invalid command:'show diskspace'.\n"));

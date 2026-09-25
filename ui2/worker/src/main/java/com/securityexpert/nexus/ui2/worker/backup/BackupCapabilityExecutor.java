@@ -133,6 +133,12 @@ public final class BackupCapabilityExecutor {
                 LOG.log(System.Logger.Level.WARNING,
                         "[BACKUP_FREE_SPACE_UNPARSED] clish_shape={0} df_shape={1}",
                         maskedShape(diskspace.output()), maskedShape(df.output()));
+                if (isGaiaEmbeddedCliError(diskspace.output()) || isGaiaEmbeddedCliError(df.output())) {
+                    // Measured 2026-09-25: a Quantum Spark (Gaia Embedded) answers Gaia commands with "Bad parameter
+                    // starting at ..."; its backup is "backup settings to sftp ..." -- a different contract, not built yet.
+                    return new BackupResult.SubmitRefused("unsupported_platform: this appliance runs Gaia Embedded "
+                            + "(Quantum Spark), whose backup is 'backup settings to sftp', not 'add backup local'; not built yet");
+                }
                 return new BackupResult.InsufficientFreeSpace(
                         "neither show diskspace nor df -P /var/log could be parsed for a free-space value; refusing (fail-closed)");
             }
@@ -226,6 +232,9 @@ public final class BackupCapabilityExecutor {
         // until they match.
         ExecOutcome digest = exec(session, BackupReadPlan.archiveDigestCommand(name), DIGEST_TIMEOUT);
         Optional<String> deviceDigest = parseSha256sumOutput(digest.output());
+        if (deviceDigest.isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING, "[BACKUP_DIGEST_UNPARSED] shape={0}", maskedShape(digest.output()));
+        }
         if (deviceDigest.isEmpty() || !deviceDigest.get().equalsIgnoreCase(metadata.plaintextSha256())) {
             return new BackupResult.DigestMismatch(deviceDigest.orElse("UNPARSEABLE"), metadata.plaintextSha256());
         }
@@ -409,8 +418,21 @@ public final class BackupCapabilityExecutor {
         if (digestOutput == null || digestOutput.isBlank()) {
             return Optional.empty();
         }
-        String firstToken = digestOutput.strip().split("\\s+", 2)[0];
-        return firstToken.matches("[0-9a-fA-F]{64}") ? Optional.of(firstToken) : Optional.empty();
+        // The digest line may follow a banner or a shell notice (2026-09-24: one gateway's answer was UNPARSEABLE with
+        // the first token read): the first line whose first token is 64 hex characters is the digest.
+        for (String line : digestOutput.split("\\R")) {
+            String firstToken = line.strip().split("\\s+", 2)[0];
+            if (firstToken.matches("[0-9a-fA-F]{64}")) {
+                return Optional.of(firstToken);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** A Gaia Embedded (Quantum Spark) clish error answer to a Gaia command. */
+    static boolean isGaiaEmbeddedCliError(String output) {
+        // Only the measured Gaia Embedded phrase: a full Gaia clish answers "CLINFR0329 Invalid command" and is not Spark.
+        return output != null && output.contains("Bad parameter starting at");
     }
 
     private static BackupStatus classifyStatus(String statusOutput) {
