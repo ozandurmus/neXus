@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T00:55:24Z
+Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:07:47Z
 
 ## Now
 - NXS-LOCAL-0369 — Radware via Cyber Controller, device-list and backup UI, deploy safety, HOST-A rebuilt as neXus's own host (automated_validated)
@@ -8,6 +8,8 @@ Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T00:55:24Z
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
 - P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the reins (target: docs/design/HOST_A_REBUILD_RUNBOOK.md)
 - P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under aiv (target: docs/design/HOST_A_REBUILD_RUNBOOK.md se)
+- P0/in_progress https_inventory_collect_infoblox — Infoblox Collect: a real https_inventory_collect job (Coll (target: docs/design/VENDOR_BACKUP_CONTRACTS_2026)
+- P0/in_progress observed_facts_refresh_every_read — Observed device facts follow every completed read: hostnam (target: ui2/persistence/src/main/java/com/securi)
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a c (target: PanXmlApiTransport certificate verificat)
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test env (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)
@@ -29,6 +31,7 @@ Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T00:55:24Z
 - P1/in_progress vendor_radware_defensepro_backup — Radware DefensePro: configuration backup (HTTPS) (target: )
 - P1/planned aiview_masked_readonly_admin — aiview as a masked read-only administrator (PO 2026-09-23) (target: )
 - P1/planned aiview_masking_leak_audit — Masking leak audit: compare aiview responses against the r (target: PO 2026-09-22 proposal (separate masked)
+- P1/planned backup_jobs_only_back_up — Backup jobs carry no inventory side effects (PO 2026-09-25 (target: ui2/worker/src/main/java/com/securityexp)
 - P1/planned backup_plane_separate_service — Deliver the backup plane as the independent service the re (target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITEC)
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
 - P1/planned cluster_diff_member_specific_tuning — Cluster DIFF: 38 of 39 clusters show member differences (2 (target: Overview contract; configurationProjecti)
@@ -48,6 +51,8 @@ Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T00:55:24Z
 - P1/planned failover_vsx_vsls_mentality_contract — VSX/VSLS semantics: CP per-VS state independent of chassis (target: PO statement 2026-09-12; needs vendor-se)
 - P1/planned github_open_pr_triage — Decide the 21 open GitHub PRs (2026-09-15..17): close 15 s (target: docs/operations/OPEN_PR_TRIAGE_2026_09_2)
 - P1/planned gov_orch_budget_ceiling_not_persisted_or_enforced — The dispatch budget ceiling is neither recorded nor enforc (target: GOV.ORCH.13 DL-3 budget column; scripts/)
+- P1/planned https_configuration_collect — Configuration reads for HTTPS vendors, separate from backu (target: docs/design/VENDOR_BACKUP_CONTRACTS_2026)
+- P1/planned https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber Con (target: docs/design/RADWARE_CYBER_CONTROLLER_BAC)
 - P1/planned inventory_row_does_not_say_why_a_device_is_unconfirmed — The inventory row shows Registered, not confirmed without (target: InventoryScreen row rendering; jobs.term)
 - P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a pr (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
 - P1/planned legacy_python_separation — Separate the legacy Python product from the neXus reposito (target: docs/design/LEGACY_PYTHON_SEPARATION_PLA)
