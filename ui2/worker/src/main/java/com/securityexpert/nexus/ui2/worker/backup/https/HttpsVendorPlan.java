@@ -37,6 +37,8 @@ public final class HttpsVendorPlan {
     public static final List<String> RADWARE_GATE_KEYS = List.of("GET /", "POST /dynamic/File/Configuration/ReceivefromDevice");
 
     private static final Pattern WAPI_VERSION = Pattern.compile("VERSION\\s*:\\s*'(\\d+(?:\\.\\d+){1,3})'");
+    /** Newer Sphinx builds keep {@code VERSION} in {@code _static/documentation_options.js}; the page title still names it. */
+    private static final Pattern WAPI_TITLE_VERSION = Pattern.compile("<title>[^<]*WAPI\\s+(\\d+(?:\\.\\d+){1,3})\\s+documentation");
     private static final Pattern VERSION_SAFE = Pattern.compile("\\d+(?:\\.\\d+){1,3}");
 
     private HttpsVendorPlan() {
@@ -83,13 +85,21 @@ public final class HttpsVendorPlan {
         return names;
     }
 
-    /** {@code /wapidoc/} (Sphinx): the single-quoted value on the VERSION line, as Backbox reads it. */
+    /**
+     * {@code /wapidoc/} (Sphinx): the single-quoted value on the VERSION line, as Backbox reads it; when the page no
+     * longer carries that line (NIOS with WAPI 2.13.7 moved it to a static script, measured 2026-09-25), the version
+     * the page title names ("Infoblox WAPI 2.13.7 documentation"). Same page, no further request.
+     */
     public static Optional<String> parseWapiVersion(String html) {
         if (html == null) {
             return Optional.empty();
         }
         Matcher m = WAPI_VERSION.matcher(html);
-        return m.find() ? Optional.of(m.group(1)) : Optional.empty();
+        if (m.find()) {
+            return Optional.of(m.group(1));
+        }
+        Matcher t = WAPI_TITLE_VERSION.matcher(html);
+        return t.find() ? Optional.of(t.group(1)) : Optional.empty();
     }
 
     public static String withVersion(String template, String version) {

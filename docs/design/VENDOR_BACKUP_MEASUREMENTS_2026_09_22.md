@@ -147,7 +147,10 @@ The summaries above shortened two load-bearing values to "…". Re-read from the
   literal in a gate row or in code. Output: one text file.
 - **Infoblox Grid Manager (34411065):**
   1. `GET /wapidoc/` → 302 to `/wapidoc/index.html` (≈176 KB HTML); the WAPI version is the single-quoted value on
-     the line containing `VERSION` (Sphinx `VERSION: '2.13.5'` on this appliance).
+     the line containing `VERSION` (Sphinx `VERSION: '2.13.5'` on this appliance). Measured 2026-09-25 on the
+     production Grid Manager (WAPI 2.13.7): the page no longer carries that line -- Sphinx moved it to
+     `_static/documentation_options.js` -- but the `<title>` names it ("Infoblox WAPI 2.13.7 documentation"); the
+     parser reads the title as its fallback, same page, no extra request.
   2. `POST /wapi/v<ver>/fileop?_function=getgriddata`, `Content-Type: application/json`, body `{"type": "BACKUP"}`
      → JSON with `token` and `url` (the `url` is on the same appliance host).
   3. `GET <url>` → `database.bak`, ≈ 1 MB on this grid (996 KB) — so a "size > 1 MB" check is wrong; any non-empty

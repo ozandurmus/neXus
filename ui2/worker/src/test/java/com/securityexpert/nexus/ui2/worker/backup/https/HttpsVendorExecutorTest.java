@@ -54,6 +54,15 @@ class HttpsVendorExecutorTest {
     }
 
     @Test
+    void theWapiVersionFallsBackToThePageTitleWhenTheVersionLineMoved() {
+        // NIOS with WAPI 2.13.7 (2026-09-25): VERSION lives in _static/documentation_options.js, the title still names it.
+        assertEquals(Optional.of("2.13.7"), HttpsVendorPlan.parseWapiVersion(
+                "<html><head><title>Infoblox WAPI documentation &#8212; Infoblox WAPI 2.13.7 documentation</title></head>"));
+        assertEquals(Optional.of("2.13.5"), HttpsVendorPlan.parseWapiVersion(
+                "<title>Infoblox WAPI 2.13.7 documentation</title><script>VERSION: '2.13.5',</script>"), "the VERSION line wins");
+    }
+
+    @Test
     void infobloxBackupReadsTheVersionFetchesSameHostAndAlwaysSignalsDownloadComplete() {
         BackupResult r = executor.backup("infoblox", T, "cred", Optional.empty(), "dev", "job-1");
         assertTrue(r instanceof BackupResult.Completed, String.valueOf(r));
