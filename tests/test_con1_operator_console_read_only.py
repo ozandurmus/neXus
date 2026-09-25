@@ -82,7 +82,7 @@ def test_ac2_no_route_exposes_a_mutating_method(console_client):
     (the one enrollment confirm+persist path, gated by its own closed schema,
     preview binding and audit-before-mutation ordering)."""
     client, _ = console_client
-    post_only_routes = {"/api/jobs", "/api/enrollment/probe", "/api/registry/enrollments"}
+    post_only_routes = {"/api/jobs", "/api/enrollment/probe", "/api/registry/enrollments", "/api/settings/ldap"}
     for route in client.app.routes:
         methods = getattr(route, "methods", None)
         if methods is None:
@@ -338,7 +338,7 @@ def test_ac1_console_renders_every_module_live_with_zero_console_errors(uitest_r
                 page.goto(f"{bound_origin}/#t={token}")
                 page.wait_for_timeout(400)
 
-                for module in ("inventory", "configuration", "compliance", "discovery", "device-management", "exclusions", "project-plan"):
+                for module in ("inventory", "configuration", "compliance", "discovery", "ldap-settings", "device-management", "exclusions", "project-plan"):
                     page.eval_on_selector(f'.module-nav-item[data-module="{module}"]', "el => el.click()")
                     page.wait_for_timeout(100)
 

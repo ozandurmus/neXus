@@ -95,6 +95,7 @@ const NAVIGATION_MODEL = [
         label: "Administration",
         icon: "administration",
         items: [
+            { module: "ldap-settings", label: "LDAP Server", icon: "administration" },
             // PO-NAV-1 (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md):
             // the lifecycle home for enrollment, distinct from the Devices
             // pane's primary affordance -- both invoke the exact same M9
