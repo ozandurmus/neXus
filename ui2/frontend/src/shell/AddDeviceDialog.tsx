@@ -56,10 +56,11 @@ const VENDOR_LABEL: Record<Vendor, string> = {
   palo_alto: "Palo Alto",
   infoblox: "Infoblox",
   radware: "Radware",
+  bluecoat: "Blue Coat",
 };
 
 /** V64: vendors reached over HTTPS -- an appliance role, a password credential; Radware also an export passphrase. */
-const HTTPS_VENDORS: ReadonlySet<Vendor> = new Set<Vendor>(["infoblox", "radware"]);
+const HTTPS_VENDORS: ReadonlySet<Vendor> = new Set<Vendor>(["infoblox", "radware", "bluecoat"]);
 
 function formatValidationReason(reason: string): string {
   switch (reason) {
@@ -328,7 +329,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
     if (mode === "single") {
       setPhase("submitting");
       try {
-        const effectiveRole: DeviceRole = vendor === "radware" && radwareKind === "cyber_controller" ? "management_server"
+        const effectiveRole: DeviceRole = (vendor === "radware" && radwareKind === "cyber_controller") || vendor === "bluecoat" ? "management_server"
           : HTTPS_VENDORS.has(vendor) ? "appliance" : role;
         const result = await addDeviceSingle(trimmedAddress, effectiveRole, vendor, credentialId,
           defensePro ? passphraseCredentialId : undefined);
@@ -593,6 +594,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               <MenuItem value="palo_alto">Palo Alto</MenuItem>
               <MenuItem value="infoblox">Infoblox Grid Manager (HTTPS)</MenuItem>
               <MenuItem value="radware">Radware (HTTPS)</MenuItem>
+              <MenuItem value="bluecoat">Blue Coat Management Center (HTTPS, port 8082)</MenuItem>
             </TextField>
             {vendor === "radware" && (
               <TextField label="Radware device" select size="small" fullWidth value={radwareKind}

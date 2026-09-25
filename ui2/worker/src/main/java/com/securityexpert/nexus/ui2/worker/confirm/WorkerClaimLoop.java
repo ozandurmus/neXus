@@ -74,6 +74,25 @@ public final class WorkerClaimLoop {
     }
 
     /** An HTTPS endpoint's port: the one in the address, else 443 (never the SSH default). */
+    /** The HTTPS executor's vendor key: a Radware management server is a Cyber Controller, a Blue Coat one a Management Center. */
+    static String httpsVendorOf(String vendorHint, String role) {
+        if ("management_server".equals(role) && "radware".equals(vendorHint)) {
+            return "radware_cyber_controller";
+        }
+        if ("management_server".equals(role) && "bluecoat".equals(vendorHint)) {
+            return "bluecoat_mc";
+        }
+        return vendorHint;
+    }
+
+    /** A Management Center's REST listens on 8082 unless the address names a port. */
+    static int httpsPortOf(String addressRef, String httpsVendor) {
+        if ("bluecoat_mc".equals(httpsVendor) && addressRef.lastIndexOf(':') < 0) {
+            return com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorPlan.MC_DEFAULT_PORT;
+        }
+        return httpsPortOf(addressRef);
+    }
+
     static int httpsPortOf(String addressRef) {
         int colon = addressRef.lastIndexOf(':');
         if (colon < 0) {
@@ -248,11 +267,10 @@ public final class WorkerClaimLoop {
                     return true;
                 }
                 // A Radware management server is a Cyber Controller: its confirm is the REST login and device list (V67).
-                String httpsVendor = "radware".equals(device.vendorHint()) && "management_server".equals(device.role())
-                        ? "radware_cyber_controller" : device.vendorHint();
+                String httpsVendor = httpsVendorOf(device.vendorHint(), device.role());
                 httpsConfirmJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), httpsVendor,
                         new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(hostOf(endpoint.addressRef()),
-                                httpsPortOf(endpoint.addressRef())), device.credentialReferenceId());
+                                httpsPortOf(endpoint.addressRef(), httpsVendor)), device.credentialReferenceId());
                 return true;
             }
             if (InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT.equals(job.capabilityId())) {
@@ -262,11 +280,10 @@ public final class WorkerClaimLoop {
                             "no HTTPS inventory executor in this worker");
                     return true;
                 }
-                String httpsVendor = "radware".equals(device.vendorHint()) && "management_server".equals(device.role())
-                        ? "radware_cyber_controller" : device.vendorHint();
+                String httpsVendor = httpsVendorOf(device.vendorHint(), device.role());
                 httpsInventoryJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), httpsVendor,
                         new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(hostOf(endpoint.addressRef()),
-                                httpsPortOf(endpoint.addressRef())), device.credentialReferenceId());
+                                httpsPortOf(endpoint.addressRef(), httpsVendor)), device.credentialReferenceId());
                 return true;
             }
             if (BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(job.capabilityId())) {

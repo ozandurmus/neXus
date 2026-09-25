@@ -56,7 +56,9 @@ public final class DeviceAddSingleService {
             "palo_alto", new VendorMapping("pan_xml_api", ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO),
             // V64: vendors reached over HTTPS (VENDOR_BACKUP_CONTRACTS_2026_09_22.md §1, §4)
             "infoblox", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS),
-            "radware", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS));
+            "radware", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS),
+            // PO 2026-09-25: a Symantec (Blue Coat) Management Center, over its REST API on 8082.
+            "bluecoat", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS));
 
     /** Unwinds {@link #runInTransaction} to roll back the whole outer transaction on a validation refusal. */
     private static final class ValidationFailedSignal extends RuntimeException {

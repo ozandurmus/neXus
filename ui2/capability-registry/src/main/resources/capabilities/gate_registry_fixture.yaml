@@ -1222,6 +1222,22 @@ gates:
     secret_output_risk: 'none'
     safe_telemetry_fields: []
     source_document_pointer: 'CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md entry 2 (same literal, MDS scope)'
+  - gate_id: bluecoat_mc_devices
+    vendor: 'bluecoat'
+    platform_role_scope: 'bluecoat_management_center'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /api/devices'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per confirm, once per inventory read'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: '401/403 -> authentication_failed; other non-2xx -> failed'
+    secret_output_risk: 'device names and addresses (names shown masked to aiview; addresses never persisted)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Broadcom TechDocs: Management Center REST API, Best Practices (GET /devices); PO 2026-09-25'
   - gate_id: infoblox_wapidoc_version
     vendor: 'infoblox'
     platform_role_scope: 'infoblox_grid_manager'

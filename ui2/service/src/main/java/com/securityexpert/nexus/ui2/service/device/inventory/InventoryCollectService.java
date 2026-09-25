@@ -44,9 +44,10 @@ public final class InventoryCollectService {
             "palo_alto", InventoryCapabilityIds.PAN_INVENTORY_COLLECT,
             // PO 2026-09-25: HTTPS vendors collect through their own inventory job (grid members / managed devices).
             "infoblox", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
-            "radware", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT);
+            "radware", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
+            "bluecoat", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT);
     /** Vendors whose appliances and management servers are collected over HTTPS (V64 role "appliance"). */
-    private static final java.util.Set<String> HTTPS_VENDORS = java.util.Set.of("infoblox", "radware");
+    private static final java.util.Set<String> HTTPS_VENDORS = java.util.Set.of("infoblox", "radware", "bluecoat");
 
     private final DeviceRepository deviceRepository;
     private final JobAdmissionService jobAdmissionService;
@@ -78,7 +79,8 @@ public final class InventoryCollectService {
         // PO 2026-09-25: an Infoblox Grid Manager (appliance) and a Radware Cyber Controller (management server) have an
         // HTTPS inventory read; a DefensePro appliance has none gated yet, so it is refused here rather than failing nightly.
         boolean httpsCollectable = ("infoblox".equals(vendorHint) && "appliance".equals(role))
-                || ("radware".equals(vendorHint) && ("management_server".equals(role) || "appliance".equals(role)));
+                || ("radware".equals(vendorHint) && ("management_server".equals(role) || "appliance".equals(role)))
+                || ("bluecoat".equals(vendorHint) && "management_server".equals(role));
         if (!"gateway".equals(role) && !httpsCollectable) {
             if (HTTPS_VENDORS.contains(vendorHint) && "appliance".equals(role)) {
                 return new Outcome.AdmissionRefused("VENDOR_READ_SET_UNGATED",

@@ -86,6 +86,7 @@ public final class HttpsVendorExecutor {
                 case "infoblox" -> confirmInfoblox(target, creds);
                 case "radware" -> confirmRadware(target, creds);
                 case "radware_cyber_controller" -> confirmCyberController(target, creds);
+                case "bluecoat_mc" -> confirmManagementCenter(target, creds);
                 default -> new ConfirmOutcome.Failed("no HTTPS confirm for vendor " + vendor);
             };
         } catch (IOException e) {
@@ -140,6 +141,7 @@ public final class HttpsVendorExecutor {
             return switch (vendor) {
                 case "infoblox" -> inventoryInfoblox(target, creds);
                 case "radware_cyber_controller" -> inventoryCyberController(target, creds);
+                case "bluecoat_mc" -> inventoryManagementCenter(target, creds);
                 default -> new InventoryOutcome.Failed("no HTTPS inventory read for vendor " + vendor);
             };
         } catch (RuntimeException e) {
@@ -258,6 +260,66 @@ public final class HttpsVendorExecutor {
             return new InventoryOutcome.Completed(List.of(), List.of(), names.isEmpty() ? Optional.empty() : Optional.of(String.join(", ", names)),
                     new Identity(ownName, Optional.of("Radware Cyber Controller"), tree.ownVersion()));
         }
+    }
+
+    // ------------------------------------------------------------------------------------------------ Management Center
+
+    /**
+     * Symantec (Blue Coat) Management Center (PO 2026-09-25): {@code GET /api/devices} with basic auth (gate
+     * bluecoat_mc_devices). MEASURE FIRST: the list's field names and size are logged, never values; the name comes
+     * from the MC's TLS certificate, as for the Cyber Controller.
+     */
+    private ConfirmOutcome confirmManagementCenter(Target target, Credentials creds) throws IOException, InterruptedException {
+        TextResponse r = client.get(target, HttpsVendorPlan.MC_DEVICES, creds, SHORT, 8 * 1024 * 1024);
+        if (r.status() == 401 || r.status() == 403) {
+            return new ConfirmOutcome.AuthenticationFailed("HTTP " + r.status());
+        }
+        if (!r.ok()) {
+            return new ConfirmOutcome.Failed("the Management Center device list answered HTTP " + r.status());
+        }
+        JsonNode list = JSON.readTree(r.body());
+        LOG.log(System.Logger.Level.INFO, "[MANAGEMENT_CENTER] devices HTTP {0}, {1} bytes, {2} entries, field names {3}", r.status(),
+                r.body().length(), list.isArray() ? list.size() : -1, HttpsVendorPlan.fieldNames(list));
+        return new ConfirmOutcome.Confirmed(new Identity(Optional.empty(), Optional.of("Symantec Management Center"), Optional.empty()));
+    }
+
+    /**
+     * The Management Center's inventory: its managed devices by name (ProxySG, Reporter, WSS entries), with the
+     * type and OS version counts logged for measurement. Field names are read defensively (name / deviceName /
+     * displayName; osVersion / version / softwareVersion) until the first run names them.
+     */
+    private InventoryOutcome inventoryManagementCenter(Target target, Credentials creds) throws IOException, InterruptedException {
+        TextResponse r = client.get(target, HttpsVendorPlan.MC_DEVICES, creds, SHORT, 8 * 1024 * 1024);
+        if (r.status() == 401 || r.status() == 403) {
+            return new InventoryOutcome.AuthenticationFailed("HTTP " + r.status());
+        }
+        if (!r.ok()) {
+            return new InventoryOutcome.Failed("the Management Center device list answered HTTP " + r.status());
+        }
+        JsonNode list = JSON.readTree(r.body());
+        Iterable<JsonNode> items = list.isArray() ? list : list.path("devices").isArray() ? list.path("devices")
+                : list.path("results").isArray() ? list.path("results") : List.of();
+        List<String> names = new java.util.ArrayList<>();
+        java.util.Map<String, Integer> types = new java.util.TreeMap<>();
+        for (JsonNode d : items) {
+            for (String key : List.of("name", "deviceName", "displayName")) {
+                if (d.hasNonNull(key) && d.get(key).isTextual() && !d.get(key).asText().isBlank()) {
+                    names.add(d.get(key).asText().trim());
+                    break;
+                }
+            }
+            for (String key : List.of("type", "deviceType", "osType")) {
+                if (d.hasNonNull(key) && d.get(key).isValueNode()) {
+                    types.merge(d.get(key).asText(), 1, Integer::sum);
+                    break;
+                }
+            }
+        }
+        names.sort(String.CASE_INSENSITIVE_ORDER);
+        LOG.log(System.Logger.Level.INFO, "[HTTPS_INVENTORY] management center lists {0} device(s), types {1}, field names {2}",
+                names.size(), types, HttpsVendorPlan.fieldNames(list));
+        return new InventoryOutcome.Completed(List.of(), List.of(), names.isEmpty() ? Optional.empty() : Optional.of(String.join(", ", names)),
+                new Identity(Optional.empty(), Optional.of("Symantec Management Center"), Optional.empty()));
     }
 
     // ------------------------------------------------------------------------------------------------ Cyber Controller

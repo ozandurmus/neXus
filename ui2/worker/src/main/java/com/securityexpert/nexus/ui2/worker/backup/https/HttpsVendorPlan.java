@@ -28,6 +28,9 @@ public final class HttpsVendorPlan {
     public static final String RADWARE_RECEIVE_CONFIGURATION = "/dynamic/File/Configuration/ReceivefromDevice";
 
     // Radware Cyber Controller (REST reference 10.3.0; RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md, V67)
+    /** Symantec (Blue Coat) Management Center REST (PO 2026-09-25; basic auth): the managed device list (gate bluecoat_mc_devices). */
+    public static final String MC_DEVICES = "/api/devices";
+    public static final int MC_DEFAULT_PORT = 8082;
     public static final String CC_LOGIN = "/mgmt/system/user/login";
     public static final String CC_ALLDEVICES = "/mgmt/system/config/itemlist/alldevices";
     public static final String CC_GETCFG = "/mgmt/device/byip/%s/config/getcfg?saveToDb=false&includePrivateKeys=true&passphrase=%s";

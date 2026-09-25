@@ -211,6 +211,14 @@ class HttpsVendorExecutorTest {
     }
 
     @Test
+    void aManagementCenterIsConfirmedAndInventoriedFromItsDeviceList() {
+        assertTrue(executor.confirm("bluecoat_mc", T, "cred") instanceof HttpsVendorExecutor.ConfirmOutcome.Confirmed);
+        var o = (HttpsVendorExecutor.InventoryOutcome.Completed) executor.inventory("bluecoat_mc", T, "cred");
+        assertEquals(Optional.of("Reporter, SG-A, SG-B"), o.virtualSystems());
+        assertEquals(Optional.of("Symantec Management Center"), o.identity().model());
+    }
+
+    @Test
     void cidrFromAddressAndDottedMask() {
         assertEquals(Optional.of("10.0.0.12/24"), InfobloxMembers.cidr(Optional.of("10.0.0.12"), Optional.of("255.255.255.0")));
         assertEquals(Optional.of("10.9.0.0/16"), InfobloxMembers.cidr(Optional.of("10.9.0.0"), Optional.of("255.255.0.0")));
@@ -288,6 +296,11 @@ class HttpsVendorExecutorTest {
             log.add("GET " + path);
             if (path.equals("/wapidoc/")) {
                 return new TextResponse(200, Optional.of("text/html"), "var DOCUMENTATION_OPTIONS = {\n VERSION: '2.13.5',\n", false);
+            }
+            if (path.equals(HttpsVendorPlan.MC_DEVICES)) {
+                return new TextResponse(200, Optional.of("application/json"),
+                        "[{\"uuid\": \"u1\", \"name\": \"SG-B\", \"type\": \"SG\", \"osVersion\": \"7.4.15.1\"},"
+                        + " {\"uuid\": \"u2\", \"name\": \"SG-A\", \"type\": \"SG\"}, {\"uuid\": \"u3\", \"name\": \"Reporter\", \"type\": \"REPORTER\"}]", false);
             }
             if (path.equals(HttpsVendorPlan.CC_ALLDEVICES)) {
                 return new TextResponse(200, Optional.of("application/json"), deviceList, false);
