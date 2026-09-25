@@ -1311,6 +1311,15 @@
       "priority": "P1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "vendor_infoblox_grid_backup",
+      "category": "collection",
+      "title": "Infoblox Grid Manager: grid backup via WAPI fileop getgriddata (HTTPS)",
+      "status": "real_env_validated",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }

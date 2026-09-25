@@ -731,15 +731,6 @@
       "note": ""
     },
     {
-      "id": "vendor_infoblox_grid_backup",
-      "category": "collection",
-      "title": "Infoblox Grid Manager: grid backup via WAPI fileop getgriddata (HTTPS)",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "",
-      "note": ""
-    },
-    {
       "id": "vendor_fortinet_fortigate_backup",
       "category": "collection",
       "title": "Fortinet FortiGate: full configuration backup over SSH incl. VDOMs",
@@ -1034,6 +1025,15 @@
       "status": "in_progress",
       "priority": "P0",
       "target": "docs/design/HOST_A_REBUILD_RUNBOOK.md",
+      "note": ""
+    },
+    {
+      "id": "infoblox_grid_member_discovery",
+      "category": "collection",
+      "title": "Infoblox: enumerate grid members (GET /wapi/v<ver>/member) so the Grid Manager's members appear under it; needs a gate entry and a discovery-tree mapping; the grid backup already covers the whole grid database",
+      "status": "planned",
+      "priority": "P2",
+      "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
       "note": ""
     }
   ]
