@@ -398,15 +398,17 @@ public final class InventoryCapabilityExecutor {
             Optional<String> gaiaHostname;
             try {
                 // A Spark appliance's shell is clish itself: "clish -c" is absent there, the bare commands answer.
-                gaiaVersion = com.securityexpert.nexus.ui2.worker.backup.BackupReadPlan.parseGaiaVersion(
-                        identityReadOutput(session, preferInteractiveShell ? InventoryReadPlan.CP_SPARK_SHOW_VERSION_ALL
-                                : InventoryReadPlan.CP_SHOW_VERSION_ALL, preferInteractiveShell));
-                gaiaHostname = com.securityexpert.nexus.ui2.worker.configuration.ConfigurationCapabilityExecutor.parseHostname(
-                        identityReadOutput(session, preferInteractiveShell ? InventoryReadPlan.CP_SPARK_SHOW_HOSTNAME
-                                : InventoryReadPlan.CP_SHOW_HOSTNAME, preferInteractiveShell));
+                String versionOut = identityReadOutput(session, preferInteractiveShell ? InventoryReadPlan.CP_SPARK_SHOW_VERSION_ALL
+                        : InventoryReadPlan.CP_SHOW_VERSION_ALL, preferInteractiveShell);
+                String hostnameOut = identityReadOutput(session, preferInteractiveShell ? InventoryReadPlan.CP_SPARK_SHOW_HOSTNAME
+                        : InventoryReadPlan.CP_SHOW_HOSTNAME, preferInteractiveShell);
+                gaiaVersion = com.securityexpert.nexus.ui2.worker.backup.BackupReadPlan.parseGaiaVersion(versionOut);
+                gaiaHostname = com.securityexpert.nexus.ui2.worker.configuration.ConfigurationCapabilityExecutor.parseHostname(hostnameOut);
                 if (preferInteractiveShell) {
-                    LOG.log(System.Logger.Level.INFO, "[INVENTORY_SPARK_IDENTITY] target={0}:{1} hostname={2} version={3}",
-                            target.host(), target.port(), gaiaHostname.isPresent(), gaiaVersion.isPresent());
+                    // Measure first (2026-09-25): the Spark answers are unmeasured; log their masked shape, never values.
+                    LOG.log(System.Logger.Level.INFO, "[INVENTORY_SPARK_IDENTITY] target={0}:{1} hostname={2} version={3} "
+                            + "hostname_shape={4} version_shape={5}", target.host(), target.port(), gaiaHostname.isPresent(),
+                            gaiaVersion.isPresent(), maskedShape(hostnameOut, 160), maskedShape(versionOut, 400));
                 }
             } catch (RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "[INVENTORY_IDENTITY_READ_FAILED] {0}", e.getClass().getSimpleName());
