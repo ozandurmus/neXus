@@ -1053,6 +1053,24 @@
       "priority": "P1",
       "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
       "note": ""
+    },
+    {
+      "id": "cp_management_server_collect_duration",
+      "category": "collection",
+      "title": "Check Point management server Collect took 243 s: vsx stat, cphaprob stat/-a if and the batched read hang until their 30 s timeout on an SMS/MDS (measured 2026-09-25); skipped for role management_server since deploy 10; cpinfo -y all also hangs on the R82 MDS (30 s, no jumbo line) -- measure whether cpinfo needs another form on R82",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryCapabilityExecutor.java",
+      "note": ""
+    },
+    {
+      "id": "device_name_from_read_never_fingerprint",
+      "category": "collection",
+      "title": "Device names: the Check Point presented SSH identity is a host-key fingerprint on this estate and had been stored as the MDS hostname; inventory now reads show hostname (fixed 2026-09-25) -- audit the confirm path for the same and any device row still carrying a fingerprint as its name",
+      "status": "planned",
+      "priority": "P1",
+      "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/confirm/ConfirmJobExecutor.java",
+      "note": ""
     }
   ]
 }
