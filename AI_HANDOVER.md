@@ -1,11 +1,14 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
-# Snapshot (2026-09-25)
+# Snapshot (2026-09-25, morning)
 HOST-A was reinstalled for neXus alone (Ubuntu 26.04.1, k3s v1.36.4) and neXus restored from the 2026-09-24 export:
-site 200 (80/443), schema 70, 110 devices (108 enrolled), 901 artefact rows / 1,515 store files, no startup errors.
-Pod limits raised (service/worker 8Gi·4CPU, compliance/configuration 2Gi·1CPU) after an OOM at 2Gi.
-Build `NXS-LOCAL-0369` (automated_validated); details: `docs/history/builds/NXS-LOCAL-0369.md`.
-Not yet checked in the browser by the Product Owner (see "Exact next action").
+site 200, **schema 72**, 111 devices, all pods 1/1. Pod limits raised (service/worker 8Gi·4CPU, compliance/configuration
+2Gi·1CPU) after an OOM at 2Gi. Seven deploys ran during the night of 2026-09-25 (see "Recent session changes"): Infoblox
+Grid Manager enrolled, backed up and collected for real; observed device facts now follow every read (the upgraded MDS
+shows R82); HTTPS vendors have their own inventory job; backups only back up. Build `NXS-LOCAL-0369` (automated_validated)
+plus these night changes -- a new build record is still to be written by the next session.
+PO acceptance of the rebuild: 3 of 4 checks passed; the Cyber Controller Backup Now is blocked by the controller's stale
+known_hosts entry (case with Radware).
 
 # Who did this and how (2026-09-23 .. 25)
 One Claude engineering session (`ENGINEER` role), hands-on with the Product Owner in Turkish chat — not the `nexus-po`
@@ -48,13 +51,18 @@ is recorded in the runbook. The agent has logged sudo, asks first before deletin
 - Host rebuild: `scripts/hosta_export_all.sh`, `docs/design/HOST_A_REBUILD_RUNBOOK.md` (executed), host decision record.
 
 # Exact next action
-1. PO, in the browser as **aiview**: pseudonyms unchanged from before the rebuild; a Check Point and a Palo Alto
-   **Collect** succeed; an **old backup's Contents** opens; a **Cyber Controller Backup Now** completes
-   (`nexus-cc` has a password now; it must equal the credential "SFTP Receiver").
-2. Watch tonight's schedules: 01:00 discovery refresh, 02:00 MDS export, 03:00 Cyber Controller backup, 23:00 inventory.
-3. Radware follow-ups: measure `getcfg` with a DefensePro Backup Now; give the Cyber Controller device a name
-   (no documented REST identity endpoint — research summary pending to the PO); DefensePro REST reads worth gating
-   (policies `rsIDSNewRulesTable`, profiles, signature DB version via `/monitor?prop=`) — not yet proposed.
+1. PO, in the browser: the Grid Manager (`GarantiDNS`) after deploy 7 -- run Collect now once more so the device name
+   returns to the grid's own name (the first Collect had renamed it to the Grid Master's host name); check Interfaces
+   / Routing per member and the Grid members tab. Then decide what else the member data should say.
+2. Radware: open the Radware case for the Cyber Controller's known_hosts (HOST-A's host key changed with the reinstall;
+   its lftp/OpenSSH client disables password auth on the mismatch). Until then the 03:00 Cyber Controller backup fails
+   and backup `nexus-4ae0578d8cd2c6c4` sits on the controller. DefensePro inventory reads need PO approval and gate
+   entries (backlog `https_inventory_collect_radware`); the Cyber Controller's own Collect (managed device list) is built
+   but not yet run for real.
+3. Write the build record for the night's changes (V71 grid members, V72 member facts, observed facts refresh,
+   https_inventory_collect) and advance the queue; run the full test suites once more in daylight.
+4. Left to the PO: `https_configuration_collect` design (DefensePro getcfg as a configuration run), the fleet backup
+   schedule decision, the 98 GB export copies, the corporate CA check.
 
 # Backlog
 `project/QUEUE.md` is the planning source (write only through `scripts/project_queue.py`). Added 2026-09-25 from this
@@ -66,11 +74,13 @@ session: `hosta_rebuild_real_env_acceptance` (P0, in progress), `scheduled_fleet
 job failure reasons, aiview masking audit, cluster DIFF tuning, CP backup free-space parse, ...) are unchanged there.
 
 # Open items / risks
-- Infoblox (2026-09-25, night): Grid Manager enrolled and backed up for real (1,019,189 bytes, gzip verified); two
-  fixes on the day (WAPI version from the page title; `application/force-download` on the download GET) and V71
-  grid-member listing (7 members shown under the Grid Manager as GRID MEMBERS, masked to aiview). PO next: make the
-  member data meaningful (backlog `infoblox_member_facts`); the Grid Manager row still says "Not collected" with a
-  Collect now button that has no HTTPS inventory job behind it.
+- Infoblox (2026-09-25, night): Grid Manager enrolled, backed up (1,019,189 bytes, gzip verified; fixes: WAPI version
+  from the page title, `application/force-download` on the download GET) and collected for real through the new
+  `https_inventory_collect` job (7 members, 17 interfaces, 1 static route, member facts V72 shown in the Grid members
+  tab). Backups no longer read members. `~/wapi_member_shape.sh` and `~/wapi_member_ifaces.sh` on HOST-A are the
+  masked measurement scripts the PO ran / can run.
+- Observed facts follow every read (PO decision record 2026-09-25): confirm, inventory and configuration runs refresh
+  hostname / model / version; the fill-if-absent rule is gone. Validated on the upgraded MDS (R81.20 -> R82).
 - **Cyber Controller Backup Now fails after the rebuild (2026-09-25):** the Cyber Controller's known_hosts holds
   HOST-A's old host key, so its OpenSSH client disables password auth and the SFTP push to `nexus-cc` never sends a
   password (sshd DEBUG3: `next methods="publickey,password"`, then the client closes). Fix is on the Cyber Controller

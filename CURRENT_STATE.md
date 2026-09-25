@@ -22,8 +22,9 @@ schedule is not switched on. Evidence-weighted progress of the Java roadmap:
 
 ## Active build
 
-`NXS-LOCAL-0369` — `automated_validated` (2026-09-23..25, deployed on HOST-A; schema 71 after the 2026-09-25 night
-Infoblox fixes and grid-member listing, see `AI_HANDOVER.md`):
+`NXS-LOCAL-0369` — `automated_validated` (2026-09-23..25, deployed on HOST-A; schema 72 after the 2026-09-25 night:
+Infoblox backup fixes, grid members and member facts (V71/V72), observed facts refreshed on every read, the HTTPS
+inventory job -- see `AI_HANDOVER.md`; a build record for these is still to be written):
 Radware backup and discovery through the Cyber Controller and the controller's
 own SFTP-pushed backup (V65–V70), device-list / backup / add-device rework,
 deploys that never replace the worker under a running job, and HOST-A
