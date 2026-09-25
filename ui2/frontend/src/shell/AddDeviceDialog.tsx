@@ -64,6 +64,13 @@ const VENDOR_LABEL: Record<Vendor, string> = {
 };
 
 /** V64: vendors reached over HTTPS -- an appliance role, a password credential; Radware also an export passphrase. */
+/** Readable discovery kinds (FortiManager, 2026-09-25); other vendors' kinds are shown as the service names them. */
+const KIND_LABEL: Record<string, string> = {
+  FORTINET_FORTIGATE: "FortiGate",
+  FORTINET_HA_CLUSTER: "FortiGate HA cluster (imported at its management address)",
+  FORTINET_HA_MEMBER: "HA member",
+};
+
 const HTTPS_VENDORS: ReadonlySet<Vendor> = new Set<Vendor>(["infoblox", "radware", "bluecoat"]);
 
 function formatValidationReason(reason: string): string {
@@ -762,6 +769,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               <MenuItem value="check_point">Check Point (multi-domain server)</MenuItem>
               <MenuItem value="palo_alto">Palo Alto (Panorama)</MenuItem>
               <MenuItem value="radware">Radware (Cyber Controller)</MenuItem>
+              <MenuItem value="fortinet">Fortinet (FortiManager)</MenuItem>
             </TextField>
             {credentialSelectorFragment}
             {sshTrustAuthorization}
@@ -1034,7 +1042,7 @@ function CandidateRows({
           )}
         </TableCell>
         <TableCell>
-          {candidate.kind}
+          {KIND_LABEL[candidate.kind] ?? candidate.kind}
           {!candidate.importable && !isGroup && (
             <Typography component="span" variant="body2" sx={{ color: m3.onSurfaceVar, ml: 1 }}>
               (not importable)

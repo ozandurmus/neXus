@@ -27,6 +27,8 @@ final class DiscoveryMatchKey {
             case "palo_alto" -> "palo_alto|" + candidate.stableIdentifier();
             // Radware discovery (2026-09-24): the Cyber Controller's own opaque device id (ormId), never parsed.
             case "radware" -> "radware|" + candidate.stableIdentifier();
+            // FortiManager discovery (2026-09-25): the FortiGate (or HA cluster) serial, never parsed.
+            case "fortinet" -> "fortinet|" + candidate.stableIdentifier();
             default -> throw new IllegalArgumentException("unsupported vendor: " + candidate.vendor());
         };
     }

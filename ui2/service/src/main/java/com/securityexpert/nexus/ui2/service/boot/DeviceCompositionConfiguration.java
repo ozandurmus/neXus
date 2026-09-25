@@ -201,6 +201,8 @@ public class DeviceCompositionConfiguration {
                 confirmCapability(DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE, "palo_alto", "panorama",
                         TransportKind.PAN_XML_API),
                 confirmCapability(DiscoveryCapabilityIds.RDW_DISCOVERY_ENUMERATE, "radware", "radware_cyber_controller",
+                        TransportKind.HTTPS),
+                confirmCapability(DiscoveryCapabilityIds.FMG_DISCOVERY_ENUMERATE, "fortinet", "fortimanager",
                         TransportKind.HTTPS)));
     }
 

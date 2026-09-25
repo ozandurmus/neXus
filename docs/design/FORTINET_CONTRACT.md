@@ -27,6 +27,15 @@ platform, version; inventory → the managed FortiGates, shown under "Managed de
 **Not yet:** FortiManager's own backup. Its CLI pushes `execute backup all-settings` to a server; the HOST-A SFTP
 receiver used for the Radware Cyber Controller fits, and is the next step after the first confirm/inventory run.
 
+## FortiManager interfaces, routes and discovery (V81, PO 2026-09-25)
+- Inventory also reads its own `/cli/global/system/interface` and `/cli/global/system/route` (static routes); a refusal
+  stores the inventory without them and is logged.
+- Discovery (Add device › Discover from a management server › Fortinet): `/dvmdb/adom`, then per ADOM
+  `/dvmdb/adom/<adom>/device` with HA members. Candidates: a standalone FortiGate (importable at the address FortiManager
+  manages it by); an HA cluster as ONE importable candidate at that address, its members listed under it and not
+  importable (they have no separate management address in FortiManager). The serial is the stable identifier; the ADOM
+  is the domain. Imported devices run the FortiGate onboarding (SSH).
+
 ## Real-environment measurement (to do, after the PO adds the devices)
 One FortiGate with VDOMs and one FortiManager, fwadm credential: confirm facts present; VDOM, interface and route
 counts; backup size and time; that `--More--` never timed a read out; that the FortiManager accepted the JSON-RPC

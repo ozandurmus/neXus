@@ -72,6 +72,13 @@ public final class DiscoveryJobExecutor {
     private final PanoramaEnumeration paloAltoEnumeration;
     /** Radware discovery (2026-09-24): Radware Cyber Controller device list (the V67 REST calls); unset, a radware run fails UNSUPPORTED_VENDOR. */
     private com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor radwareCyberController;
+    /** FortiManager discovery (2026-09-25): its ADOMs and their FortiGates over JSON-RPC. */
+    private com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor fortiManager;
+
+    public DiscoveryJobExecutor withFortiManager(com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor executor) {
+        this.fortiManager = executor;
+        return this;
+    }
 
     public DiscoveryJobExecutor withRadwareCyberController(com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor executor) {
         this.radwareCyberController = executor;
@@ -151,6 +158,7 @@ public final class DiscoveryJobExecutor {
             case "check_point" -> enumerateCheckPoint(run);
             case "palo_alto" -> enumeratePaloAlto(run);
             case "radware" -> radwareCyberController == null ? EnumerationOutcome.failed("UNSUPPORTED_VENDOR") : enumerateRadware(run);
+            case "fortinet" -> fortiManager == null ? EnumerationOutcome.failed("UNSUPPORTED_VENDOR") : enumerateFortinet(run);
             default -> EnumerationOutcome.failed("UNSUPPORTED_VENDOR");
         };
     }
@@ -195,6 +203,29 @@ public final class DiscoveryJobExecutor {
                 "[RADWARE_DISCOVERY] categorical values " + RadwareDiscoveryCandidateMapper.categoricalValues(result.list().get()));
         var records = RadwareDiscoveryCandidateMapper.map(run.runId(), result.list().get());
         return EnumerationOutcome.succeeded(records, RadwareDiscoveryCandidateMapper.outcomeSummary(records));
+    }
+
+    private EnumerationOutcome enumerateFortinet(DiscoveryRun run) {
+        String address = run.managementAddress();
+        int port = DEFAULT_PAN_HTTPS_PORT;
+        int colon = address.lastIndexOf(':');
+        if (colon >= 0) {
+            try {
+                port = Integer.parseInt(address.substring(colon + 1));
+                address = address.substring(0, colon);
+            } catch (NumberFormatException bareHost) {
+                // no port
+            }
+        }
+        var result = fortiManager.discover(
+                new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(address, port), run.credentialReferenceId());
+        return switch (result) {
+            case com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor.Discovery.Failed f -> EnumerationOutcome.failed(f.reasonClass());
+            case com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor.Discovery.Listed listed -> {
+                var records = FortinetDiscoveryCandidateMapper.map(run.runId(), listed.devices());
+                yield EnumerationOutcome.succeeded(records, FortinetDiscoveryCandidateMapper.outcomeSummary(records));
+            }
+        };
     }
 
     private EnumerationOutcome enumeratePaloAlto(DiscoveryRun run) {

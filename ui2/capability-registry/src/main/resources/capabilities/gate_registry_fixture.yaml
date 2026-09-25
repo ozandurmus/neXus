@@ -1862,3 +1862,67 @@ gates:
     secret_output_risk: 'managed device names and addresses (masked to aiview)'
     safe_telemetry_fields: []
     source_document_pointer: 'FortiManager JSON API reference (dvmdb/device)'
+  - gate_id: fmg_jsonrpc_system_interface
+    vendor: 'fortinet'
+    platform_role_scope: 'fortimanager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /jsonrpc get /cli/global/system/interface'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'the inventory session'
+    unsupported_behavior_ref: 'refused -> inventory stored without interfaces, logged'
+    secret_output_risk: 'interface addresses (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiManager JSON API reference (cli/global/system/interface)'
+  - gate_id: fmg_jsonrpc_system_route
+    vendor: 'fortinet'
+    platform_role_scope: 'fortimanager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /jsonrpc get /cli/global/system/route'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'the inventory session'
+    unsupported_behavior_ref: 'refused -> inventory stored without routes, logged'
+    secret_output_risk: 'route destinations and gateways (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiManager JSON API reference (cli/global/system/route)'
+  - gate_id: fmg_jsonrpc_dvmdb_adom
+    vendor: 'fortinet'
+    platform_role_scope: 'fortimanager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /jsonrpc get /dvmdb/adom'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per discovery run'
+    session_reuse_rule: 'the discovery session'
+    unsupported_behavior_ref: 'refused -> the plain device list, domain "root"'
+    secret_output_risk: 'ADOM names (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiManager JSON API reference (dvmdb/adom)'
+  - gate_id: fmg_jsonrpc_dvmdb_adom_device
+    vendor: 'fortinet'
+    platform_role_scope: 'fortimanager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'POST /jsonrpc get /dvmdb/adom/<adom>/device (loadsub)'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per ADOM per discovery run'
+    session_reuse_rule: 'the discovery session'
+    unsupported_behavior_ref: 'refused for an ADOM -> that ADOM skipped'
+    secret_output_risk: 'device names, serials, addresses (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiManager JSON API reference (dvmdb/adom/{adom}/device)'

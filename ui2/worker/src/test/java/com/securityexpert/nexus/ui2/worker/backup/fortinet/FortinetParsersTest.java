@@ -107,4 +107,52 @@ class FortinetParsersTest {
         assertEquals(Optional.of("v7.2.8 build1639"), devices.get(1).hypervisor());
         assertTrue(devices.get(1).haEnabled());
     }
+
+    @Test
+    void fortiManagerOwnInterfacesAndRoutes() throws Exception {
+        ObjectMapper json = new ObjectMapper();
+        var ifs = FortiManagerExecutor.interfaces(json.readTree("""
+                [{"name":"port1","ip":["192.0.2.10","255.255.255.0"],"status":"up"},
+                 {"name":"port2","ip":"0.0.0.0 0.0.0.0","status":0}]"""));
+        assertEquals(2, ifs.size());
+        assertEquals("192.0.2.10/24", ifs.get(0).addresses().get(0).address());
+        assertEquals("up", ifs.get(0).state());
+        assertTrue(ifs.get(1).addresses().isEmpty());
+        assertEquals("down", ifs.get(1).state());
+        var routes = FortiManagerExecutor.routes(json.readTree("""
+                [{"seq_num":1,"dst":["0.0.0.0","0.0.0.0"],"gateway":"192.0.2.1","device":"port1"},
+                 {"seq_num":2,"dst":"198.51.100.0 255.255.255.0","gateway":"192.0.2.2","device":"port1"}]"""));
+        assertEquals(2, routes.size());
+        assertEquals("0.0.0.0/0", routes.get(0).destination());
+        assertEquals("default", routes.get(0).protocol());
+        assertEquals(Optional.of("192.0.2.1"), routes.get(0).nextHop());
+        assertEquals("198.51.100.0/24", routes.get(1).destination());
+    }
+
+    @Test
+    void discoveryCandidates() throws Exception {
+        ObjectMapper json = new ObjectMapper();
+        var devices = java.util.List.of(
+                new FortiManagerExecutor.Discovered("ADOM-A", json.readTree("""
+                        {"name":"FGT-SOLO","sn":"SN-1","ip":"192.0.2.5","platform_str":"FortiGate-60F","os_ver":7,"mr":2,"patch":8,"conn_status":1,"ha_mode":0}""")),
+                new FortiManagerExecutor.Discovered("ADOM-B", json.readTree("""
+                        {"name":"FGT-HA","sn":"SN-2","ip":"192.0.2.6","platform_str":"FortiGate-600E","os_ver":7,"mr":0,"patch":12,"conn_status":2,"ha_mode":1,
+                         "ha_slave":[{"name":"FGT-HA-1","sn":"SN-2","role":1},{"name":"FGT-HA-2","sn":"SN-3","role":0}]}""")));
+        var records = com.securityexpert.nexus.ui2.worker.discovery.FortinetDiscoveryCandidateMapper.map("run-1", devices);
+        assertEquals(4, records.size());
+        var solo = records.get(0);
+        assertEquals("FORTINET_FORTIGATE", solo.kind());
+        assertTrue(solo.importable());
+        assertEquals(Optional.of("192.0.2.5"), solo.ownAddress());
+        assertEquals(Optional.of("ADOM-A"), solo.owningDomain());
+        var cluster = records.get(1);
+        assertEquals("FORTINET_HA_CLUSTER", cluster.kind());
+        assertTrue(cluster.importable());
+        assertEquals(Optional.of("DOWN"), cluster.connectionState());
+        var member = records.get(3);
+        assertEquals("FORTINET_HA_MEMBER", member.kind());
+        assertFalse(member.importable());
+        assertEquals(Optional.of(cluster.candidateId()), member.parentCandidateId());
+        assertEquals(Optional.of("SECONDARY"), member.connectionState());
+    }
 }

@@ -16,7 +16,10 @@ public final class DiscoveryCapabilityIds {
 
     /** Radware Cyber Controller device list (2026-09-24; the V67 REST calls, no new device command). */
     public static final String RDW_DISCOVERY_ENUMERATE = "rdw_discovery_enumerate";
-    public static final Set<String> ALL = Set.of(CP_DISCOVERY_ENUMERATE, PAN_DISCOVERY_ENUMERATE, RDW_DISCOVERY_ENUMERATE);
+    /** FortiManager discovery (V81): its ADOMs and their FortiGates over JSON-RPC. */
+    public static final String FMG_DISCOVERY_ENUMERATE = "fmg_discovery_enumerate";
+    public static final Set<String> ALL = Set.of(CP_DISCOVERY_ENUMERATE, PAN_DISCOVERY_ENUMERATE, RDW_DISCOVERY_ENUMERATE,
+            FMG_DISCOVERY_ENUMERATE);
 
     private DiscoveryCapabilityIds() {
     }
