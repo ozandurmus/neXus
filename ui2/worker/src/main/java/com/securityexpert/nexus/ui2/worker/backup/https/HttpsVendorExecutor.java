@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials;
@@ -70,18 +71,6 @@ public final class HttpsVendorExecutor {
         this.credentials = Objects.requireNonNull(credentials, "credentials");
     }
 
-    /** Where a backup run hands the grid members it listed (device, job, sorted host names); the worker records them. */
-    @FunctionalInterface
-    public interface MemberSink {
-        void members(String deviceId, String jobId, List<GridMember> members);
-    }
-
-    private volatile MemberSink memberSink = (d, j, m) -> { };
-
-    public HttpsVendorExecutor withMemberSink(MemberSink sink) {
-        this.memberSink = Objects.requireNonNull(sink, "sink");
-        return this;
-    }
 
     // ------------------------------------------------------------------------------------------------ confirm
 
@@ -125,28 +114,99 @@ public final class HttpsVendorExecutor {
         if (node.isArray() && node.size() > 0 && node.get(0).hasNonNull("name")) {
             name = Optional.of(node.get(0).get("name").asText());
         }
-        return new ConfirmOutcome.Confirmed(new Identity(name, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get()),
-                infobloxMembers(target, creds, version.get())));
+        return new ConfirmOutcome.Confirmed(new Identity(name, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())));
     }
 
-    /**
-     * The grid's members (PO 2026-09-25, V72): {@code GET /wapi/v<ver>/member} with identity, grid role, hardware, HA,
-     * node health and services. The member whose VIP is the address this run dialled is the Grid Master. A failure here
-     * never fails the run -- the identity is already established -- it only leaves the member list empty (logged).
-     */
-    private List<GridMember> infobloxMembers(Target target, Credentials creds, String version) throws InterruptedException {
+    // ------------------------------------------------------------------------------------------------ inventory
+
+    /** What an HTTPS inventory read produced (PO 2026-09-25: inventory is its own job for these vendors). */
+    public sealed interface InventoryOutcome {
+        /**
+         * {@code contexts}: one per grid member (Infoblox) carrying its interfaces and static routes; {@code members}: the
+         * member facts; {@code virtualSystems}: the member (or managed device) names the Devices tree lists under the device.
+         */
+        record Completed(List<InventoryContext> contexts, List<GridMember> members, Optional<String> virtualSystems, Identity identity)
+                implements InventoryOutcome {
+        }
+        record AuthenticationFailed(String reason) implements InventoryOutcome {
+        }
+        record Failed(String reason) implements InventoryOutcome {
+        }
+    }
+
+    public InventoryOutcome inventory(String vendor, Target target, String credentialRef) {
         try {
-            TextResponse r = client.get(target, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_MEMBERS, version), creds, SHORT, TEXT_MAX);
-            if (!r.ok()) {
-                LOG.log(System.Logger.Level.WARNING, "[HTTPS_CONFIRM] infoblox member list answered HTTP {0}", r.status());
-                return List.of();
-            }
-            List<GridMember> members = InfobloxMembers.parse(JSON.readTree(r.body()), target.host());
-            LOG.log(System.Logger.Level.INFO, "[HTTPS_CONFIRM] infoblox grid lists {0} member(s)", members.size());
-            return members;
+            Credentials creds = credentials.apply(credentialRef);
+            return switch (vendor) {
+                case "infoblox" -> inventoryInfoblox(target, creds);
+                case "radware_cyber_controller" -> inventoryCyberController(target, creds);
+                default -> new InventoryOutcome.Failed("no HTTPS inventory read for vendor " + vendor);
+            };
+        } catch (RuntimeException e) {
+            return new InventoryOutcome.Failed("credential_unresolvable: " + e.getClass().getSimpleName());
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "[HTTPS_CONFIRM] infoblox member list failed: {0}", e.getClass().getSimpleName());
-            return List.of();
+            return new InventoryOutcome.Failed(e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage()));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new InventoryOutcome.Failed("interrupted");
+        }
+    }
+
+    /** Infoblox: the grid's members with interfaces, static routes and facts -- {@code GET /wapi/v<ver>/member} (gate infoblox_member_list). */
+    private InventoryOutcome inventoryInfoblox(Target target, Credentials creds) throws IOException, InterruptedException {
+        TextResponse doc = client.get(target, HttpsVendorPlan.INFOBLOX_WAPIDOC, creds, SHORT, TEXT_MAX);
+        Optional<String> version = HttpsVendorPlan.parseWapiVersion(doc.body());
+        if (version.isEmpty()) {
+            return new InventoryOutcome.Failed("the WAPI version could not be read from /wapidoc/ (HTTP " + doc.status() + ")");
+        }
+        TextResponse r = client.get(target, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_MEMBERS, version.get()), creds, SHORT, TEXT_MAX);
+        if (r.status() == 401 || r.status() == 403) {
+            return new InventoryOutcome.AuthenticationFailed("HTTP " + r.status());
+        }
+        if (!r.ok()) {
+            return new InventoryOutcome.Failed("member list answered HTTP " + r.status());
+        }
+        JsonNode json = JSON.readTree(r.body());
+        List<GridMember> members = InfobloxMembers.parse(json, target.host());
+        List<InventoryContext> contexts = InfobloxMembers.contexts(json);
+        LOG.log(System.Logger.Level.INFO, "[HTTPS_INVENTORY] infoblox grid lists {0} member(s), {1} interface(s), {2} route(s); member field names {3}",
+                members.size(), contexts.stream().mapToInt(c -> c.interfaces().size()).sum(),
+                contexts.stream().mapToInt(c -> c.routes().size()).sum(), HttpsVendorPlan.fieldNames(json));
+        Optional<String> names = members.isEmpty() ? Optional.empty()
+                : Optional.of(members.stream().map(GridMember::hostName).sorted().collect(java.util.stream.Collectors.joining(", ")));
+        Optional<String> gridName = members.stream().filter(GridMember::gridMaster).map(GridMember::hostName).findFirst();
+        return new InventoryOutcome.Completed(contexts, members, names,
+                new Identity(gridName, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())));
+    }
+
+    /** Radware Cyber Controller: the managed device list (V67 calls 1, 2, 4) as the controller's inventory -- names only. */
+    private InventoryOutcome inventoryCyberController(Target target, Credentials creds) throws IOException, InterruptedException {
+        CcLogin login = ccLogin(target, creds);
+        if (login.session().isEmpty()) {
+            return login.reason().startsWith("authentication_failed")
+                    ? new InventoryOutcome.AuthenticationFailed(login.reason().substring("authentication_failed: ".length()))
+                    : new InventoryOutcome.Failed(login.reason());
+        }
+        try (CcSession s = login.session().get()) {
+            Optional<JsonNode> devices = ccDevices(s);
+            if (devices.isEmpty()) {
+                return new InventoryOutcome.Failed("the Cyber Controller device list could not be read");
+            }
+            List<String> names = new java.util.ArrayList<>();
+            JsonNode list = devices.get();
+            Iterable<JsonNode> items = list.isArray() ? list : list.path("devices").isArray() ? list.path("devices") : List.of();
+            for (JsonNode d : items) {
+                for (String key : List.of("name", "deviceName", "hostName")) {
+                    if (d.hasNonNull(key) && d.get(key).isTextual() && !d.get(key).asText().isBlank()) {
+                        names.add(d.get(key).asText().trim());
+                        break;
+                    }
+                }
+            }
+            java.util.Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
+            LOG.log(System.Logger.Level.INFO, "[HTTPS_INVENTORY] cyber controller lists {0} managed device(s)", names.size());
+            return new InventoryOutcome.Completed(List.of(), List.of(), names.isEmpty() ? Optional.empty() : Optional.of(String.join(", ", names)),
+                    new Identity(Optional.empty(), Optional.of("Radware Cyber Controller"), Optional.empty()));
         }
     }
 
@@ -386,16 +446,9 @@ public final class HttpsVendorExecutor {
             if (path.isEmpty()) {
                 return new BackupResult.SubmitRefused("the download url is not on the same appliance; refused");
             }
-            BackupResult result = fetch(target, "GET", path.get(), null, creds, HttpsVendorPlan.INFOBLOX_DOWNLOAD_CONTENT_TYPE, deviceId, jobId,
+            // PO 2026-09-25: a backup only backs up; the grid members are the inventory job's business.
+            return fetch(target, "GET", path.get(), null, creds, HttpsVendorPlan.INFOBLOX_DOWNLOAD_CONTENT_TYPE, deviceId, jobId,
                     "infoblox", "database.bak", 1);
-            if (result instanceof BackupResult.Completed) {
-                // PO 2026-09-25: the member list is refreshed by every backup run, not only by the one-time confirm.
-                List<GridMember> members = infobloxMembers(target, creds, ver);
-                if (!members.isEmpty()) {
-                    memberSink.members(deviceId, jobId, members);
-                }
-            }
-            return result;
         } finally {
             // Always -- the appliance holds the file until told (Backbox sends this without a version and fails).
             try {

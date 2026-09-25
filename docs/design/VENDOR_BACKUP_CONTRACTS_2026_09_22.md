@@ -120,13 +120,18 @@ alignment test, and a first live run recorded in the backlog note before
   with the token (always, also after a failed download — the appliance holds
   the file otherwise). Verify: HTTP 200, size > 1 MB, gzip magic (the Grid
   backup is a tar.gz). Cleanup: `downloadcomplete` is the cleanup.
-- Grid members (PO 2026-09-25, V71): the confirm and every backup also read
-  `GET /wapi/v<ver>/member` (`_return_fields=host_name,platform`) and record the
-  member host names as the Grid Manager's "virtual systems" (one inventory run,
-  names only), so the Devices tree lists them under the Grid Manager as "Grid
-  members"; aiview sees them masked like any virtual system. Members are not
-  devices: the grid backup already carries every member's configuration, and a
-  member exposes no WAPI of its own. A failed member read never fails the run.
+- Inventory (PO 2026-09-25, night: "backup is backup, inventory is inventory"):
+  the Grid Manager has its own Collect, `https_inventory_collect` (Collect now and
+  the 23:00 schedule), which reads `GET /wapi/v<ver>/member` once (gate
+  `infoblox_member_list`) and records one inventory run: a context per member
+  (its host name) with interfaces LAN1 (VIP), MGMT (`node_info[0].mgmt_network_setting`),
+  LAN2 (`lan2_port_setting` when enabled) and every `additional_ip_list` entry,
+  static routes from `static_routes`, the member facts below, and the member
+  names as the device's "virtual systems" so the Devices tree lists them as
+  "Grid members" (masked for aiview like any virtual system). The confirm
+  establishes identity only; the backup only backs up. Members are not devices:
+  the grid backup already carries every member's configuration, and a member
+  exposes no WAPI of its own.
 - Member facts (PO 2026-09-25, V72, measured on the production grid, WAPI 2.13.7): the
   same read carries `master_candidate`, `enable_ha`, `vip_setting`, `node_info` and
   `service_status`; per member neXus keeps platform, hardware type (`node_info[0].hwtype`,

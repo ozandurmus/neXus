@@ -17,8 +17,11 @@ public final class InventoryCapabilityIds {
 
     public static final String CP_INVENTORY_COLLECT = "cp_inventory_collect";
     public static final String PAN_INVENTORY_COLLECT = "pan_inventory_collect";
+    /** PO 2026-09-25: the Collect for vendors reached over HTTPS (Infoblox grid members, interfaces and routes; Radware
+     *  via the Cyber Controller's device list) -- inventory is inventory, backup is backup. */
+    public static final String HTTPS_INVENTORY_COLLECT = "https_inventory_collect";
 
-    public static final Set<String> ALL = Set.of(CP_INVENTORY_COLLECT, PAN_INVENTORY_COLLECT);
+    public static final Set<String> ALL = Set.of(CP_INVENTORY_COLLECT, PAN_INVENTORY_COLLECT, HTTPS_INVENTORY_COLLECT);
 
     private InventoryCapabilityIds() {
     }

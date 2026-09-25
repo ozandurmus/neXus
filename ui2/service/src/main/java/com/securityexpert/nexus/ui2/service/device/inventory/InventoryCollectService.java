@@ -41,7 +41,12 @@ public final class InventoryCollectService {
 
     private static final Map<String, String> CAPABILITY_BY_VENDOR = Map.of(
             "check_point", InventoryCapabilityIds.CP_INVENTORY_COLLECT,
-            "palo_alto", InventoryCapabilityIds.PAN_INVENTORY_COLLECT);
+            "palo_alto", InventoryCapabilityIds.PAN_INVENTORY_COLLECT,
+            // PO 2026-09-25: HTTPS vendors collect through their own inventory job (grid members / managed devices).
+            "infoblox", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
+            "radware", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT);
+    /** Vendors whose appliances and management servers are collected over HTTPS (V64 role "appliance"). */
+    private static final java.util.Set<String> HTTPS_VENDORS = java.util.Set.of("infoblox", "radware");
 
     private final DeviceRepository deviceRepository;
     private final JobAdmissionService jobAdmissionService;
@@ -69,7 +74,8 @@ public final class InventoryCollectService {
             return new Outcome.DeviceNotFound();
         }
         String role = device.get().role();
-        if (!"gateway".equals(role)) {
+        boolean httpsVendor = HTTPS_VENDORS.contains(String.valueOf(device.get().vendorHint()).toLowerCase(java.util.Locale.ROOT));
+        if (!"gateway".equals(role) && !(httpsVendor && ("appliance".equals(role) || "management_server".equals(role)))) {
             // PO 2026-09-22: a Check Point management server (SMS / MDS) is a Gaia host -- its interfaces,
             // routes and platform identity come from the same Expert reads the gateway path issues (fw
             // getifs, ip route, cpinfo, uptime, show asset system), all gated; the cluster probe answers

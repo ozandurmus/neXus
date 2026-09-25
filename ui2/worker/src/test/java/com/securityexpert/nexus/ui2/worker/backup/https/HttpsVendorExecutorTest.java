@@ -64,11 +64,9 @@ class HttpsVendorExecutorTest {
 
     @Test
     void infobloxBackupReadsTheVersionFetchesSameHostAndAlwaysSignalsDownloadComplete() {
-        List<String> handed = new java.util.ArrayList<>();
-        executor.withMemberSink((d, j, m) -> handed.addAll(List.of(d, j, m.stream().map(x -> x.hostName()).collect(java.util.stream.Collectors.joining(",")))));
         BackupResult r = executor.backup("infoblox", T, "cred", Optional.empty(), "dev", "job-1");
         assertTrue(r instanceof BackupResult.Completed, String.valueOf(r));
-        assertEquals(List.of("dev", "job-1", "gm.example,ns2.example"), handed, "a completed backup refreshes the member list");
+        assertTrue(calls.log.stream().noneMatch(l -> l.contains("/member?")), "PO 2026-09-25: a backup only backs up: " + calls.log);
         assertTrue(calls.log.contains("POST /wapi/v2.13.5/fileop?_function=getgriddata {\"type\": \"BACKUP\"}"));
         assertTrue(calls.log.contains("GET-DL /http_direct_file_io/req_id-DOWNLOAD-1/database.bak content-type=application/force-download"),
                 "the download names application/force-download (415 without it): " + calls.log);
@@ -99,8 +97,12 @@ class HttpsVendorExecutorTest {
     /** Shape measured on the production grid 2026-09-25 (WAPI 2.13.7), values fictional. */
     static final String MEMBERS_JSON = "["
             + "{\"_ref\": \"member/a\", \"host_name\": \"ns2.example\", \"platform\": \"VNIOS\", \"master_candidate\": false, \"enable_ha\": false,"
-            + " \"vip_setting\": {\"address\": \"192.0.2.12\"},"
-            + " \"node_info\": [{\"ha_status\": \"NOT_CONFIGURED\", \"hwtype\": \"IB-V2326\", \"hwmodel\": \"\", \"hypervisor\": \"VMware\", \"service_status\": ["
+            + " \"vip_setting\": {\"address\": \"192.0.2.12\", \"subnet_mask\": \"255.255.255.0\", \"gateway\": \"192.0.2.1\"},"
+            + " \"lan2_enabled\": true, \"lan2_port_setting\": {\"enabled\": true, \"network_setting\": {\"address\": \"10.1.0.12\", \"subnet_mask\": \"255.255.255.0\"}},"
+            + " \"additional_ip_list\": [{\"interface\": \"LOOPBACK\", \"ipv4_network_setting\": {\"address\": \"192.0.2.200\", \"subnet_mask\": \"255.255.255.255\"}}],"
+            + " \"static_routes\": [{\"address\": \"10.9.0.0\", \"subnet_mask\": \"255.255.0.0\", \"gateway\": \"10.0.0.1\"}],"
+            + " \"node_info\": [{\"ha_status\": \"NOT_CONFIGURED\", \"hwtype\": \"IB-V2326\", \"hwmodel\": \"\", \"hypervisor\": \"VMware\","
+            + "   \"mgmt_network_setting\": {\"address\": \"10.0.0.12\", \"subnet_mask\": \"255.255.255.0\", \"gateway\": \"10.0.0.1\"}, \"service_status\": ["
             + "   {\"service\": \"NODE_STATUS\", \"status\": \"WORKING\", \"description\": \"Running\"},"
             + "   {\"service\": \"DISK_USAGE\", \"status\": \"WORKING\", \"description\": \"24% - Primary drive usage is OK.\"},"
             + "   {\"service\": \"MEMORY\", \"status\": \"WORKING\", \"description\": \"38% - System memory usage is OK.\"},"
@@ -123,13 +125,22 @@ class HttpsVendorExecutorTest {
         HttpsVendorExecutor.Identity id = ((HttpsVendorExecutor.ConfirmOutcome.Confirmed) c).identity();
         assertEquals(Optional.of("GRID-A"), id.name());
         assertEquals(Optional.of("WAPI 2.13.5"), id.version());
-        assertEquals(List.of("gm.example", "ns2.example"), id.members().stream().map(m -> m.hostName()).toList(),
+        assertTrue(id.members().isEmpty(), "PO 2026-09-25: the confirm establishes identity only; members are the inventory job's");
+        assertTrue(calls.log.stream().noneMatch(l -> l.contains("/member?")), "no member read on confirm: " + calls.log);
+    }
+
+    @Test
+    void infobloxInventoryListsMembersWithFactsInterfacesAndStaticRoutes() {
+        HttpsVendorExecutor.InventoryOutcome o = executor.inventory("infoblox", T, "cred");
+        assertTrue(o instanceof HttpsVendorExecutor.InventoryOutcome.Completed, String.valueOf(o));
+        var done = (HttpsVendorExecutor.InventoryOutcome.Completed) o;
+        assertEquals(List.of("gm.example", "ns2.example"), done.members().stream().map(m -> m.hostName()).toList(),
                 "the Grid Master first, then candidates, then by name; a nameless entry skipped");
-        var gm = id.members().get(0);
+        var gm = done.members().get(0);
         assertTrue(gm.gridMaster(), "the member whose VIP is the dialled address is the Grid Master");
         assertTrue(gm.masterCandidate());
         assertEquals(Optional.of("IB-V1516"), gm.hardwareType());
-        var ns2 = id.members().get(1);
+        var ns2 = done.members().get(1);
         assertEquals(Optional.of(24), ns2.diskPercent());
         assertEquals(Optional.of(38), ns2.memoryPercent());
         assertEquals(Optional.of(37), ns2.cpuPercent());
@@ -140,8 +151,31 @@ class HttpsVendorExecutorTest {
         assertEquals(Optional.of("NOT_CONFIGURED"), ns2.haStatus());
         assertEquals(List.of("DNS=WORKING", "DHCP=INACTIVE", "ATP=WARNING"),
                 ns2.services().stream().map(sv -> sv.service() + "=" + sv.status()).toList());
-        assertTrue(calls.log.stream().anyMatch(l -> l.startsWith("GET /wapi/v2.13.5/member?_return_fields=host_name,platform,master_candidate")),
-                String.valueOf(calls.log));
+        assertEquals(Optional.of("gm.example, ns2.example"), done.virtualSystems());
+        assertEquals(Optional.of("gm.example"), done.identity().name(), "the Grid Master names the grid manager");
+        var ns2Ctx = done.contexts().stream().filter(c -> c.context().equals("ns2.example")).findFirst().orElseThrow();
+        assertEquals(List.of("LAN1", "MGMT", "LAN2", "LOOPBACK-1"), ns2Ctx.interfaces().stream().map(i -> i.name()).toList());
+        assertEquals("192.0.2.12/24", ns2Ctx.interfaces().get(0).addresses().get(0).address());
+        assertEquals("10.0.0.12/24", ns2Ctx.interfaces().get(1).addresses().get(0).address());
+        assertEquals("10.1.0.12/24", ns2Ctx.interfaces().get(2).addresses().get(0).address());
+        assertEquals("192.0.2.200/32", ns2Ctx.interfaces().get(3).addresses().get(0).address());
+        assertEquals(1, ns2Ctx.routes().size());
+        assertEquals("10.9.0.0/16", ns2Ctx.routes().get(0).destination());
+        assertEquals(Optional.of("10.0.0.1"), ns2Ctx.routes().get(0).nextHop());
+        assertEquals("static", ns2Ctx.routes().get(0).protocol());
+        var gmCtx = done.contexts().stream().filter(c -> c.context().equals("gm.example")).findFirst().orElseThrow();
+        assertEquals(List.of("LAN1"), gmCtx.interfaces().stream().map(i -> i.name()).toList(), "no MGMT/LAN2 on this member");
+        assertTrue(calls.log.stream().anyMatch(l -> l.startsWith("GET /wapi/v2.13.5/member?_return_fields=host_name,platform,master_candidate")
+                && l.contains("static_routes")), String.valueOf(calls.log));
+    }
+
+    @Test
+    void cidrFromAddressAndDottedMask() {
+        assertEquals(Optional.of("10.0.0.12/24"), InfobloxMembers.cidr(Optional.of("10.0.0.12"), Optional.of("255.255.255.0")));
+        assertEquals(Optional.of("10.9.0.0/16"), InfobloxMembers.cidr(Optional.of("10.9.0.0"), Optional.of("255.255.0.0")));
+        assertEquals(Optional.of("192.0.2.200/32"), InfobloxMembers.cidr(Optional.of("192.0.2.200"), Optional.empty()));
+        assertEquals(Optional.empty(), InfobloxMembers.cidr(Optional.of("10.0.0.1"), Optional.of("bad")));
+        assertEquals(Optional.empty(), InfobloxMembers.cidr(Optional.empty(), Optional.of("255.255.255.0")));
     }
 
     @Test

@@ -1246,9 +1246,9 @@ gates:
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 30
     retry_rule: 'none'
-    max_frequency: 'once per confirm'
+    max_frequency: 'once per inventory read (Collect now, 23:00 schedule)'
     session_reuse_rule: 'one client per run'
-    unsupported_behavior_ref: 'non-2xx or no array -> member list empty, confirm unaffected'
+    unsupported_behavior_ref: 'non-2xx -> inventory failed; 401/403 -> authentication_failed'
     secret_output_risk: 'member host names (shown masked to aiview as virtual systems are)'
     safe_telemetry_fields: []
     source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §4 grid members; PO 2026-09-25'

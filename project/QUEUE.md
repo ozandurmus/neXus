@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:07:47Z
+Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:21:18Z
 
 ## Now
 - NXS-LOCAL-0369 — Radware via Cyber Controller, device-list and backup UI, deploy safety, HOST-A rebuilt as neXus's own host (automated_validated)
@@ -31,7 +31,6 @@ Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:07:47Z
 - P1/in_progress vendor_radware_defensepro_backup — Radware DefensePro: configuration backup (HTTPS) (target: )
 - P1/planned aiview_masked_readonly_admin — aiview as a masked read-only administrator (PO 2026-09-23) (target: )
 - P1/planned aiview_masking_leak_audit — Masking leak audit: compare aiview responses against the r (target: PO 2026-09-22 proposal (separate masked)
-- P1/planned backup_jobs_only_back_up — Backup jobs carry no inventory side effects (PO 2026-09-25 (target: ui2/worker/src/main/java/com/securityexp)
 - P1/planned backup_plane_separate_service — Deliver the backup plane as the independent service the re (target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITEC)
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
 - P1/planned cluster_diff_member_specific_tuning — Cluster DIFF: 38 of 39 clusters show member differences (2 (target: Overview contract; configurationProjecti)

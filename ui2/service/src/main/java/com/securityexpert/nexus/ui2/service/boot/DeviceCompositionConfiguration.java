@@ -171,6 +171,8 @@ public class DeviceCompositionConfiguration {
                 // request set in HttpsVendorPlan (gate rows V64); placeholder steps, as for discovery below.
                 confirmCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, "https_vendor", "https_appliance", TransportKind.HTTPS),
                 confirmCapability(BackupCapabilityIds.HTTPS_VENDOR_BACKUP, "https_vendor", "https_appliance", TransportKind.HTTPS),
+                // PO 2026-09-25: inventory for HTTPS vendors is its own job (HttpsInventoryJobExecutor), never a backup side effect.
+                confirmCapability(InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT, "https_vendor", "https_appliance", TransportKind.HTTPS),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),

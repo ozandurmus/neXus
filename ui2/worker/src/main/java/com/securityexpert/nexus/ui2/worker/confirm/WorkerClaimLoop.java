@@ -41,7 +41,7 @@ public final class WorkerClaimLoop {
     private static final List<String> ELIGIBLE_CAPABILITY_IDS = List.of(
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
             ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
-            InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT,
+            InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT, InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
             DiscoveryCapabilityIds.RDW_DISCOVERY_ENUMERATE,
@@ -62,6 +62,14 @@ public final class WorkerClaimLoop {
     /** V64: the enrollment confirm for vendors reached over HTTPS (Infoblox, Radware). */
     public WorkerClaimLoop withHttpsConfirm(com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor executor) {
         this.httpsConfirmJobExecutor = executor;
+        return this;
+    }
+
+    private com.securityexpert.nexus.ui2.worker.backup.https.HttpsInventoryJobExecutor httpsInventoryJobExecutor;
+
+    /** PO 2026-09-25: the inventory job for vendors reached over HTTPS. */
+    public WorkerClaimLoop withHttpsInventory(com.securityexpert.nexus.ui2.worker.backup.https.HttpsInventoryJobExecutor executor) {
+        this.httpsInventoryJobExecutor = executor;
         return this;
     }
 
@@ -243,6 +251,20 @@ public final class WorkerClaimLoop {
                 String httpsVendor = "radware".equals(device.vendorHint()) && "management_server".equals(device.role())
                         ? "radware_cyber_controller" : device.vendorHint();
                 httpsConfirmJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), httpsVendor,
+                        new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(hostOf(endpoint.addressRef()),
+                                httpsPortOf(endpoint.addressRef())), device.credentialReferenceId());
+                return true;
+            }
+            if (InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT.equals(job.capabilityId())) {
+                if (httpsInventoryJobExecutor == null) {
+                    leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                            com.securityexpert.nexus.ui2.jobs.JobState.FAILED, "system:worker", "claim_https_check",
+                            "no HTTPS inventory executor in this worker");
+                    return true;
+                }
+                String httpsVendor = "radware".equals(device.vendorHint()) && "management_server".equals(device.role())
+                        ? "radware_cyber_controller" : device.vendorHint();
+                httpsInventoryJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), httpsVendor,
                         new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(hostOf(endpoint.addressRef()),
                                 httpsPortOf(endpoint.addressRef())), device.credentialReferenceId());
                 return true;

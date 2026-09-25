@@ -244,18 +244,16 @@ public final class Ui2WorkerMain {
                             var m = panCredentialResolver.resolve(ref);
                             return new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials(m.username(), m.password());
                         });
-        // V71: an Infoblox backup also refreshes the grid member list shown under the Grid Manager.
-        httpsVendorExecutor.withMemberSink((deviceId, jobId, members) -> deviceInventoryRepository.recordRun(
-                new com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun(java.util.UUID.randomUUID().toString(), deviceId, jobId,
-                        java.time.Instant.now(), 0, java.util.List.of(), java.util.List.of(),
-                        java.util.Optional.of(members.stream().map(m -> m.hostName()).sorted().collect(java.util.stream.Collectors.joining(", "))),
-                        members),
-                "system:worker", "backup_completed"));
         backupJobExecutor.withHttpsVendorExecutor(httpsVendorExecutor,
                 new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(transactionBoundary));
         com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor httpsConfirmJobExecutor =
                 new com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor(leaseRepository, attemptRepository,
-                        deviceEnrollmentReadPort, deviceRepository, httpsVendorExecutor, deviceInventoryRepository);
+                        deviceEnrollmentReadPort, deviceRepository, httpsVendorExecutor);
+        // PO 2026-09-25: inventory for HTTPS vendors is its own job -- grid members, interfaces and routes (Infoblox), the
+        // managed device list (Radware Cyber Controller); backups only back up.
+        com.securityexpert.nexus.ui2.worker.backup.https.HttpsInventoryJobExecutor httpsInventoryJobExecutor =
+                new com.securityexpert.nexus.ui2.worker.backup.https.HttpsInventoryJobExecutor(leaseRepository, attemptRepository,
+                        deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, httpsVendorExecutor);
         // V69: a Radware Cyber Controller's own configuration backup, pushed to HOST-A's chrooted SFTP receiver, whose
         // upload directory is mounted here (UI2_CC_INBOX_DIR) and whose address the Cyber Controller dials (UI2_CC_RECEIVER_HOST).
         String ccInbox = System.getenv("UI2_CC_INBOX_DIR");
@@ -287,7 +285,8 @@ public final class Ui2WorkerMain {
                     confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
                     backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofMinutes(10), checkPointTrustRuleRef,
                     paloAltoTrustRuleRef, backupCredentialRef)
-                    .withHttpsConfirm(httpsConfirmJobExecutor);
+                    .withHttpsConfirm(httpsConfirmJobExecutor)
+                    .withHttpsInventory(httpsInventoryJobExecutor);
             claimLoops.add(claimLoop);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));
         }

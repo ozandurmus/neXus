@@ -16,7 +16,7 @@ public final class HttpsVendorPlan {
     public static final String INFOBLOX_GRID = "/wapi/v%s/grid?_return_fields=name";
     /** Grid members (PO 2026-09-25): host names and platforms, read once per confirm; shown under the Grid Manager. */
     public static final String INFOBLOX_MEMBERS = "/wapi/v%s/member?_return_fields=host_name,platform,master_candidate,enable_ha,"
-            + "vip_setting,node_info,service_status";
+            + "vip_setting,node_info,service_status,lan2_enabled,lan2_port_setting,additional_ip_list,static_routes";
     public static final String INFOBLOX_GETGRIDDATA = "/wapi/v%s/fileop?_function=getgriddata";
     public static final String INFOBLOX_GETGRIDDATA_BODY = "{\"type\": \"BACKUP\"}";
     public static final String INFOBLOX_DOWNLOADCOMPLETE = "/wapi/v%s/fileop?_function=downloadcomplete";

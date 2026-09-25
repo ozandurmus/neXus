@@ -1,8 +1,5 @@
 package com.securityexpert.nexus.ui2.worker.backup.https;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -13,8 +10,6 @@ import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.stepattempt.JobStepAttemptRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
-import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
-import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
 import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target;
 
@@ -34,17 +29,14 @@ public final class HttpsVendorConfirmJobExecutor {
     private final DeviceEnrollmentReadPort enrollment;
     private final DeviceRepository devices;
     private final HttpsVendorExecutor executor;
-    private final DeviceInventoryRepository inventory;
 
     public HttpsVendorConfirmJobExecutor(JobLeaseRepository leases, JobStepAttemptRepository attempts,
-            DeviceEnrollmentReadPort enrollment, DeviceRepository devices, HttpsVendorExecutor executor,
-            DeviceInventoryRepository inventory) {
+            DeviceEnrollmentReadPort enrollment, DeviceRepository devices, HttpsVendorExecutor executor) {
         this.leases = Objects.requireNonNull(leases);
         this.attempts = Objects.requireNonNull(attempts);
         this.enrollment = Objects.requireNonNull(enrollment);
         this.devices = Objects.requireNonNull(devices);
         this.executor = Objects.requireNonNull(executor);
-        this.inventory = Objects.requireNonNull(inventory);
     }
 
     public JobOutcome execute(String jobId, long leaseEpoch, String deviceId, String vendor, Target target, String credentialRef) {
@@ -98,13 +90,6 @@ public final class HttpsVendorConfirmJobExecutor {
         if (!devices.recordConfirmSuccess(deviceId, facts, ACTOR, "confirm_completed")) {
             leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, "confirm_failed", "device_confirm_write_conflict");
             return new JobOutcome.Failed("device_confirm_write_conflict");
-        }
-        if (!id.members().isEmpty()) {
-            // PO 2026-09-25: an Infoblox grid's members are shown under the Grid Manager the way a firewall's virtual
-            // systems are -- one inventory run carrying only the member names (no interfaces, routes or HA facts).
-            inventory.recordRun(new InventoryRun(UUID.randomUUID().toString(), deviceId, jobId, Instant.now(), 0, List.of(),
-                    List.of(), Optional.of(id.members().stream().map(m -> m.hostName()).sorted().collect(java.util.stream.Collectors.joining(", "))),
-                    id.members()), ACTOR, "confirm_completed");
         }
         leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR, "confirm_completed",
                 "completed in " + ms + "ms");

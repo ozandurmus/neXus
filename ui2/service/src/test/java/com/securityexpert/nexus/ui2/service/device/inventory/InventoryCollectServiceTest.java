@@ -150,7 +150,8 @@ class InventoryCollectServiceTest {
     private static InventoryCollectService serviceFor(FakeDeviceRepository devices) {
         CapabilityRegistry registry = CapabilityRegistry.of(List.of(
                 inventoryCapability(InventoryCapabilityIds.CP_INVENTORY_COLLECT, "check_point"),
-                inventoryCapability(InventoryCapabilityIds.PAN_INVENTORY_COLLECT, "palo_alto")));
+                inventoryCapability(InventoryCapabilityIds.PAN_INVENTORY_COLLECT, "palo_alto"),
+                inventoryCapability(InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT, "https_vendor")));
         DeviceEnrollmentReadPort enrollmentReadPort = deviceId -> Optional.ofNullable(devices.byId.get(deviceId))
                 .map(d -> new DeviceEnrollmentSnapshot(deviceId, d.enrollmentState(), d.disabled()));
         JobAdmissionService admissionService =
@@ -202,6 +203,18 @@ class InventoryCollectServiceTest {
         InventoryCollectService.Outcome outcome = service.requestCollect("device-1", "actor", Optional.empty());
 
         assertTrue(outcome instanceof InventoryCollectService.Outcome.Admitted, "expected Admitted, got " + outcome);
+    }
+
+    @Test
+    void anInfobloxApplianceAndARadwareManagementServerAreAdmittedOnTheHttpsInventoryJob() {
+        // PO 2026-09-25: inventory is its own job for HTTPS vendors, never a backup side effect.
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("gm-1", enrolledUnrecognizedRole("gm-1", "infoblox", "appliance"));
+        devices.byId.put("cc-1", enrolledManagementServer("cc-1", "radware"));
+        InventoryCollectService service = serviceFor(devices);
+
+        assertTrue(service.requestCollect("gm-1", "actor", Optional.empty()) instanceof InventoryCollectService.Outcome.Admitted);
+        assertTrue(service.requestCollect("cc-1", "actor", Optional.empty()) instanceof InventoryCollectService.Outcome.Admitted);
     }
 
     @Test

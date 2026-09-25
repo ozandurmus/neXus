@@ -1329,6 +1329,15 @@
       "priority": "P2",
       "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
       "note": ""
+    },
+    {
+      "id": "backup_jobs_only_back_up",
+      "category": "collection",
+      "title": "Backup jobs carry no inventory side effects (PO 2026-09-25: backup is backup, config and inventory are separate): remove the Infoblox member sink from the backup path once https_inventory_collect exists; audit Radware for the same",
+      "status": "done",
+      "priority": "P1",
+      "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/backup/https/HttpsVendorExecutor.java",
+      "note": ""
     }
   ]
 }
