@@ -63,7 +63,8 @@ public final class HttpsInventoryJobExecutor {
             // A DefensePro is inventoried through the Cyber Controller that lists it (its own REST reads are not gated).
             outcome = new HttpsVendorExecutor.InventoryOutcome.Failed("no enrolled Cyber Controller lists this DefensePro");
             for (CyberControllers.Ref cc : CyberControllers.enrolled(devices)) {
-                outcome = executor.inventoryDefenseProViaCyberController(cc.target(), cc.credentialRef(), target.host());
+                outcome = CyberControllers.oneAtATime(cc.target(),
+                        () -> executor.inventoryDefenseProViaCyberController(cc.target(), cc.credentialRef(), target.host()));
                 if (outcome instanceof HttpsVendorExecutor.InventoryOutcome.Completed) {
                     break;
                 }
@@ -78,6 +79,8 @@ public final class HttpsInventoryJobExecutor {
                     break;
                 }
             }
+        } else if ("radware_cyber_controller".equals(vendor)) {
+            outcome = CyberControllers.oneAtATime(target, () -> executor.inventory(vendor, target, credentialRef));
         } else {
             outcome = executor.inventory(vendor, target, credentialRef);
         }

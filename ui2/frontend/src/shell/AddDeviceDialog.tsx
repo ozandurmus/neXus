@@ -561,8 +561,8 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <Typography variant="h3">Add device</Typography>
           <Typography variant="body1" sx={{ color: m3.onSurfaceVar }}>
-            Enrolling a device grants read collection only. Backup creation stays off until the
-            device enters the pilot allowlist.
+            Adding a device only reads from it. Backups stay off until the device is made a backup
+            target on the Backups screen.
           </Typography>
         </Box>
 

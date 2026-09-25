@@ -60,7 +60,8 @@ public final class HttpsVendorConfirmJobExecutor {
         HttpsVendorExecutor.ConfirmOutcome outcome = null;
         if ("radware".equals(vendor)) {
             for (CyberControllers.Ref cc : CyberControllers.enrolled(devices)) {
-                Optional<HttpsVendorExecutor.ConfirmOutcome> viaCc = executor.confirmViaCyberController(cc.target(), cc.credentialRef(), target.host());
+                Optional<HttpsVendorExecutor.ConfirmOutcome> viaCc = CyberControllers.oneAtATime(cc.target(),
+                        () -> executor.confirmViaCyberController(cc.target(), cc.credentialRef(), target.host()));
                 if (viaCc.isPresent()) {
                     outcome = viaCc.get();
                     break;

@@ -193,8 +193,9 @@ public final class BackupJobExecutor {
                     com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository.EXPORT_PASSPHRASE);
             for (com.securityexpert.nexus.ui2.worker.backup.https.CyberControllers.Ref cc
                     : com.securityexpert.nexus.ui2.worker.backup.https.CyberControllers.enrolled(deviceRepository)) {
-                viaCyberController = httpsVendorExecutor.backupViaCyberController(cc.target(), cc.credentialRef(),
-                        request.connectionTarget().host(), passphrase, targetDeviceId, jobId);
+                viaCyberController = com.securityexpert.nexus.ui2.worker.backup.https.CyberControllers.oneAtATime(cc.target(),
+                        () -> httpsVendorExecutor.backupViaCyberController(cc.target(), cc.credentialRef(),
+                                request.connectionTarget().host(), passphrase, targetDeviceId, jobId));
                 if (viaCyberController.isPresent()) {
                     break;
                 }

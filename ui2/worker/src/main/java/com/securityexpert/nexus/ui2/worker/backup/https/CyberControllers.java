@@ -46,6 +46,24 @@ public final class CyberControllers {
         return out;
     }
 
+    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.locks.ReentrantLock> LOCKS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Runs {@code work} while holding this management server's lock: a Cyber Controller answered HTTP 500 to logins
+     * when the bulk Collect opened five sessions on it at once (measured 2026-09-25); one at a time per host, it answers.
+     */
+    public static <T> T oneAtATime(Target target, java.util.function.Supplier<T> work) {
+        java.util.concurrent.locks.ReentrantLock lock = LOCKS.computeIfAbsent(target.host() + ":" + target.port(),
+                k -> new java.util.concurrent.locks.ReentrantLock(true));
+        lock.lock();
+        try {
+            return work.get();
+        } finally {
+            lock.unlock();
+        }
+    }
+
     static Target target(String addressRef) {
         int colon = addressRef.lastIndexOf(':');
         if (colon >= 0) {
