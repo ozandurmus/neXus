@@ -102,7 +102,8 @@ public final class BackupCollectService {
                     "device " + deviceId + " carries role '" + role + "', which is not one the product knows how to collect from, so nothing was issued");
         }
         String vendorHint = device.get().vendorHint();
-        if (!"check_point".equals(vendorHint) && !"palo_alto".equals(vendorHint) && !httpsVendor) {
+        boolean ciscoAsa = "cisco_asa".equals(vendorHint);
+        if (!"check_point".equals(vendorHint) && !"palo_alto".equals(vendorHint) && !httpsVendor && !ciscoAsa) {
             return new Outcome.AdmissionRefused("VENDOR_UNSUPPORTED", "device " + deviceId + " vendor_hint="
                     + vendorHint + " has no registered backup capability (14H BK-9: Check Point gateway only)");
         }
@@ -124,6 +125,8 @@ public final class BackupCollectService {
             capabilityId = BackupCapabilityIds.RDW_CC_CONFIG_BACKUP;
         } else if (httpsVendor) {
             capabilityId = BackupCapabilityIds.HTTPS_VENDOR_BACKUP;
+        } else if (ciscoAsa) {
+            capabilityId = BackupCapabilityIds.ASA_CONFIG_BACKUP;
         } else if ("mds_export".equalsIgnoreCase(backupType)) {
             if (!checkPointManagement) {
                 return new Outcome.AdmissionRefused("MDS_EXPORT_NOT_APPLICABLE",

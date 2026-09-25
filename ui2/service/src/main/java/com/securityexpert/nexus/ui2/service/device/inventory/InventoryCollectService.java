@@ -45,7 +45,8 @@ public final class InventoryCollectService {
             // PO 2026-09-25: HTTPS vendors collect through their own inventory job (grid members / managed devices).
             "infoblox", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
             "radware", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
-            "bluecoat", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT);
+            "bluecoat", InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
+            "cisco_asa", InventoryCapabilityIds.ASA_INVENTORY_COLLECT);
     /** Vendors whose appliances and management servers are collected over HTTPS (V64 role "appliance"). */
     private static final java.util.Set<String> HTTPS_VENDORS = java.util.Set.of("infoblox", "radware", "bluecoat");
 

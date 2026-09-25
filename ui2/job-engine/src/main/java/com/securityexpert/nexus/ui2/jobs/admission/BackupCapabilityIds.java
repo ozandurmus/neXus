@@ -24,8 +24,10 @@ public final class BackupCapabilityIds {
     public static final String HTTPS_VENDOR_BACKUP = "https_vendor_backup";
     /** Radware Cyber Controller's own configuration backup, pushed by its CLI to HOST-A's SFTP receiver (V69, PO 2026-09-24). */
     public static final String RDW_CC_CONFIG_BACKUP = "rdw_cc_config_backup";
+    /** Cisco ASA configuration text over SSH -- running (with keys), startup, version (V78, CISCO_ASA_CONTRACT.md). */
+    public static final String ASA_CONFIG_BACKUP = "asa_config_backup";
     public static final Set<String> ALL = Set.of(CP_GAIA_BACKUP_LOCAL, CP_GAIA_SNAPSHOT, PAN_DEVICE_STATE_BACKUP, CP_MDS_EXPORT,
-            HTTPS_VENDOR_BACKUP, RDW_CC_CONFIG_BACKUP);
+            HTTPS_VENDOR_BACKUP, RDW_CC_CONFIG_BACKUP, ASA_CONFIG_BACKUP);
 
     private BackupCapabilityIds() {
     }

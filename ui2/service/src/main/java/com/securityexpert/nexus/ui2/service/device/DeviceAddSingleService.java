@@ -58,7 +58,9 @@ public final class DeviceAddSingleService {
             "infoblox", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS),
             "radware", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS),
             // PO 2026-09-25: a Symantec (Blue Coat) Management Center, over its REST API on 8082.
-            "bluecoat", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS));
+            "bluecoat", new VendorMapping("https", ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS),
+            // PO 2026-09-25: Cisco ASA over SSH (CISCO_ASA_CONTRACT.md), role gateway.
+            "cisco_asa", new VendorMapping("ssh_exec", ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA));
 
     /** Unwinds {@link #runInTransaction} to roll back the whole outer transaction on a validation refusal. */
     private static final class ValidationFailedSignal extends RuntimeException {

@@ -21,7 +21,9 @@ public final class InventoryCapabilityIds {
      *  via the Cyber Controller's device list) -- inventory is inventory, backup is backup. */
     public static final String HTTPS_INVENTORY_COLLECT = "https_inventory_collect";
 
-    public static final Set<String> ALL = Set.of(CP_INVENTORY_COLLECT, PAN_INVENTORY_COLLECT, HTTPS_INVENTORY_COLLECT);
+    /** Cisco ASA over SSH (V78, CISCO_ASA_CONTRACT.md): interfaces, routes and failover role. */
+    public static final String ASA_INVENTORY_COLLECT = "asa_inventory_collect";
+    public static final Set<String> ALL = Set.of(CP_INVENTORY_COLLECT, PAN_INVENTORY_COLLECT, HTTPS_INVENTORY_COLLECT, ASA_INVENTORY_COLLECT);
 
     private InventoryCapabilityIds() {
     }

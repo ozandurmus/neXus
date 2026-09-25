@@ -1526,3 +1526,163 @@ gates:
     secret_output_risk: 'none'
     safe_telemetry_fields: []
     source_document_pointer: '#4; measured: (Y/N)? answered y, "Remove completed."'
+  - gate_id: asa_terminal_pager_0
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'terminal pager 0'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per session'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'a refusal leaves paging on; reads still bounded by their timeout'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (terminal pager); Backbox ASA 9.4+ trail 2026-09-22'
+  - gate_id: asa_show_curpriv
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show curpriv'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per session'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'below 15 -> the run stops with the level named'
+    secret_output_risk: 'username of the session (never persisted)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show curpriv)'
+  - gate_id: asa_show_version
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show version'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per confirm, inventory and backup'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no "Adaptive Security Appliance Software Version" -> not an ASA, failed'
+    secret_output_risk: 'serial number and hostname (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show version); Backbox ASA trail'
+  - gate_id: asa_show_failover_this_host
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show failover | include This host'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no line -> standalone'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show failover)'
+  - gate_id: asa_show_mode
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show mode'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per inventory and backup'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no answer -> single context assumed and logged'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show mode)'
+  - gate_id: asa_show_ip_address
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show ip address'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no rows -> interfaces without addresses'
+    secret_output_risk: 'interface addresses (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show ip address)'
+  - gate_id: asa_show_interface_ip_brief
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show interface ip brief'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no rows -> interface states unknown'
+    secret_output_risk: 'interface addresses (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show interface ip brief)'
+  - gate_id: asa_show_route
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show route'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 180
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no rows -> no routes recorded'
+    secret_output_risk: 'route destinations and next hops (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show route)'
+  - gate_id: asa_more_system_running_config
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'more system:running-config'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 180
+    retry_rule: 'none'
+    max_frequency: 'once per backup'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no "ASA Version" line -> backup refused, nothing stored'
+    secret_output_risk: 'full configuration with keys: stored only inside the encrypted backup artefact, never logged'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox ASA 9.4+ trail 2026-09-22 (the same read); Cisco ASA command reference (more)'
+  - gate_id: asa_show_startup_config
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show startup-config'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 180
+    retry_rule: 'none'
+    max_frequency: 'once per backup'
+    session_reuse_rule: 'one session per device per run'
+    unsupported_behavior_ref: 'no answer -> the bundle has no startup-config.txt (manifest says so)'
+    secret_output_risk: 'configuration (keys masked by the ASA): stored only inside the encrypted backup artefact'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Backbox ASA 9.4+ trail 2026-09-22 (the same read)'

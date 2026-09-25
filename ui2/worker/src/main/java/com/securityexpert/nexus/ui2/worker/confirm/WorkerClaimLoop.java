@@ -41,6 +41,7 @@ public final class WorkerClaimLoop {
     private static final List<String> ELIGIBLE_CAPABILITY_IDS = List.of(
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
             ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
+            ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA, InventoryCapabilityIds.ASA_INVENTORY_COLLECT, BackupCapabilityIds.ASA_CONFIG_BACKUP,
             InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT, InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
@@ -87,6 +88,9 @@ public final class WorkerClaimLoop {
 
     /** A Management Center's REST listens on 8082 unless the address names a port. */
     static int httpsPortOf(String addressRef, String httpsVendor) {
+        if ("cisco_asa".equals(httpsVendor)) {
+            return portOf(addressRef);
+        }
         if ("bluecoat_mc".equals(httpsVendor) && addressRef.lastIndexOf(':') < 0) {
             return com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorPlan.MC_DEFAULT_PORT;
         }
@@ -259,7 +263,8 @@ public final class WorkerClaimLoop {
         EndpointRecord endpoint = endpointOpt.get();
 
         try {
-            if (ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS.equals(job.capabilityId())) {
+            if (ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS.equals(job.capabilityId())
+                    || ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA.equals(job.capabilityId())) {
                 if (httpsConfirmJobExecutor == null) {
                     leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
                             com.securityexpert.nexus.ui2.jobs.JobState.FAILED, "system:worker", "claim_https_check",
@@ -273,7 +278,8 @@ public final class WorkerClaimLoop {
                                 httpsPortOf(endpoint.addressRef(), httpsVendor)), device.credentialReferenceId());
                 return true;
             }
-            if (InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT.equals(job.capabilityId())) {
+            if (InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT.equals(job.capabilityId())
+                    || InventoryCapabilityIds.ASA_INVENTORY_COLLECT.equals(job.capabilityId())) {
                 if (httpsInventoryJobExecutor == null) {
                     leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
                             com.securityexpert.nexus.ui2.jobs.JobState.FAILED, "system:worker", "claim_https_check",
@@ -286,7 +292,8 @@ public final class WorkerClaimLoop {
                                 httpsPortOf(endpoint.addressRef(), httpsVendor)), device.credentialReferenceId());
                 return true;
             }
-            if (BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(job.capabilityId())) {
+            if (BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(job.capabilityId())
+                    || BackupCapabilityIds.ASA_CONFIG_BACKUP.equals(job.capabilityId())) {
                 BackupRequest httpsRequest = new BackupRequest(new ConnectionTarget(endpoint.endpointId(), hostOf(endpoint.addressRef()),
                         httpsPortOf(endpoint.addressRef(), httpsVendorOf(device.vendorHint(), device.role()))),
                         Optional.ofNullable(device.credentialReferenceId()), "https");

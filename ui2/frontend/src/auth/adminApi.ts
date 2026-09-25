@@ -434,7 +434,7 @@ export function deleteCredential(credentialId: string): Promise<{ credential_id:
  * knows about. `job.state` is a C2 job state machine -- callers must treat
  * an unrecognized value as `OUTCOME_UNKNOWN`-shaped rather than throwing.
  */
-export type Vendor = "check_point" | "palo_alto" | "infoblox" | "radware" | "bluecoat";
+export type Vendor = "check_point" | "palo_alto" | "infoblox" | "radware" | "bluecoat" | "cisco_asa";
 
 /** V64: bind a credential-store reference as a device's second secret (Radware's export passphrase); never a value. */
 export function setDeviceSecret(deviceId: string, purpose: "export_passphrase" | "backup_receiver", credentialReferenceId: string): Promise<{ ok: boolean }> {

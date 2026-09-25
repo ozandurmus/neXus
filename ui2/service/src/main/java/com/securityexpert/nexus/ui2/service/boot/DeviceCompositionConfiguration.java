@@ -173,6 +173,10 @@ public class DeviceCompositionConfiguration {
                 confirmCapability(BackupCapabilityIds.HTTPS_VENDOR_BACKUP, "https_vendor", "https_appliance", TransportKind.HTTPS),
                 // PO 2026-09-25: inventory for HTTPS vendors is its own job (HttpsInventoryJobExecutor), never a backup side effect.
                 confirmCapability(InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT, "https_vendor", "https_appliance", TransportKind.HTTPS),
+                // Cisco ASA over SSH (CISCO_ASA_CONTRACT.md, gate rows V78): run by the worker's CiscoAsaExecutor.
+                confirmCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA, "cisco_asa", "cisco_asa_firewall", TransportKind.SSH_EXEC),
+                confirmCapability(InventoryCapabilityIds.ASA_INVENTORY_COLLECT, "cisco_asa", "cisco_asa_firewall", TransportKind.SSH_EXEC),
+                confirmCapability(BackupCapabilityIds.ASA_CONFIG_BACKUP, "cisco_asa", "cisco_asa_firewall", TransportKind.SSH_EXEC),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),

@@ -72,10 +72,23 @@ public final class HttpsVendorExecutor {
         this.credentials = Objects.requireNonNull(credentials, "credentials");
     }
 
+    /** Cisco ASA runs over SSH, but through the same confirm / inventory / backup jobs (docs/design/CISCO_ASA_CONTRACT.md). */
+    private com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor ciscoAsa;
+
+    public HttpsVendorExecutor withCiscoAsa(com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor executor) {
+        this.ciscoAsa = executor;
+        return this;
+    }
+
+    private static final String CISCO = "cisco_asa";
+
 
     // ------------------------------------------------------------------------------------------------ confirm
 
     public ConfirmOutcome confirm(String vendor, Target target, String credentialRef) {
+        if (CISCO.equals(vendor)) {
+            return ciscoAsa == null ? new ConfirmOutcome.Failed("no Cisco ASA executor in this worker") : ciscoAsa.confirm(target, credentialRef);
+        }
         Credentials creds;
         try {
             creds = credentials.apply(credentialRef);
@@ -137,6 +150,9 @@ public final class HttpsVendorExecutor {
     }
 
     public InventoryOutcome inventory(String vendor, Target target, String credentialRef) {
+        if (CISCO.equals(vendor)) {
+            return ciscoAsa == null ? new InventoryOutcome.Failed("no Cisco ASA executor in this worker") : ciscoAsa.inventory(target, credentialRef);
+        }
         try {
             Credentials creds = credentials.apply(credentialRef);
             return switch (vendor) {
@@ -601,6 +617,10 @@ public final class HttpsVendorExecutor {
     /** @param passphraseRef Radware only: the credential whose password encrypts the private keys in the export */
     public BackupResult backup(String vendor, Target target, String credentialRef, Optional<String> passphraseRef,
             String deviceId, String jobId) {
+        if (CISCO.equals(vendor)) {
+            return ciscoAsa == null ? new BackupResult.ConnectFailed("no Cisco ASA executor in this worker")
+                    : ciscoAsa.backup(target, credentialRef, deviceId, jobId);
+        }
         Credentials creds;
         try {
             creds = credentials.apply(credentialRef);

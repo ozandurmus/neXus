@@ -207,7 +207,8 @@ public final class BackupJobExecutor {
                             com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository.BACKUP_RECEIVER), targetDeviceId, jobId);
         } else if (viaCyberController.isPresent()) {
             result = viaCyberController.get();
-        } else if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(capabilityId)) {
+        } else if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(capabilityId)
+                || com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.ASA_CONFIG_BACKUP.equals(capabilityId)) {
             result = httpsVendorExecutor == null
                     ? new BackupResult.ConnectFailed("https vendor executor not configured in this worker")
                     : httpsVendorExecutor.backup(vendor,

@@ -20,7 +20,11 @@ public final class ConfirmCapabilityIds {
     /** Vendors reached over HTTPS (V64): Infoblox, Radware -- routed by the device's vendor. */
     public static final String DEVICE_CONFIRM_HTTPS = "device_confirm_https";
 
-    public static final Set<String> ALL = Set.of(DEVICE_CONFIRM_CHECK_POINT, DEVICE_CONFIRM_PALO_ALTO, DEVICE_CONFIRM_HTTPS);
+    /** Cisco ASA over SSH (V78, CISCO_ASA_CONTRACT.md): show version on an interactive shell. */
+    public static final String DEVICE_CONFIRM_CISCO_ASA = "device_confirm_cisco_asa";
+
+    public static final Set<String> ALL = Set.of(DEVICE_CONFIRM_CHECK_POINT, DEVICE_CONFIRM_PALO_ALTO, DEVICE_CONFIRM_HTTPS,
+            DEVICE_CONFIRM_CISCO_ASA);
 
     private ConfirmCapabilityIds() {
     }

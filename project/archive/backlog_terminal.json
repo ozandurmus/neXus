@@ -1392,6 +1392,15 @@
       "priority": "P1",
       "target": "ui2/frontend/src/shell/AddDeviceDialog.tsx",
       "note": ""
+    },
+    {
+      "id": "cisco_asa_ssh",
+      "category": "vendor",
+      "title": "Cisco ASA over SSH: confirm, inventory, configuration-text backup (V78)",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }

@@ -244,6 +244,8 @@ public final class Ui2WorkerMain {
                             var m = panCredentialResolver.resolve(ref);
                             return new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials(m.username(), m.password());
                         });
+        // Cisco ASA: SSH interactive shell, through the same vendor jobs (CISCO_ASA_CONTRACT.md).
+        httpsVendorExecutor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(sshTransport, artefactStore));
         backupJobExecutor.withHttpsVendorExecutor(httpsVendorExecutor,
                 new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(transactionBoundary));
         com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor httpsConfirmJobExecutor =

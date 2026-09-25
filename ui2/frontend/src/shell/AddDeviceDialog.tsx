@@ -59,6 +59,7 @@ const VENDOR_LABEL: Record<Vendor, string> = {
   infoblox: "Infoblox",
   radware: "Radware",
   bluecoat: "Blue Coat",
+  cisco_asa: "Cisco ASA",
 };
 
 /** V64: vendors reached over HTTPS -- an appliance role, a password credential; Radware also an export passphrase. */
@@ -340,7 +341,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
       setPhase("submitting");
       try {
         const effectiveRole: DeviceRole = (vendor === "radware" && radwareKind === "cyber_controller") || vendor === "bluecoat" ? "management_server"
-          : HTTPS_VENDORS.has(vendor) ? "appliance" : role;
+          : HTTPS_VENDORS.has(vendor) ? "appliance" : vendor === "cisco_asa" ? "gateway" : role;
         const result = await addDeviceSingle(trimmedAddress, effectiveRole, vendor, credentialId,
           defensePro ? passphraseCredentialId : undefined);
         setDeviceId(result.device_id);
@@ -575,7 +576,11 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               onChange={(e) => setAddress(e.target.value)}
               autoFocus
             />
-            {!HTTPS_VENDORS.has(vendor) ? <TextField
+            {vendor === "cisco_asa" ? (
+              // CISCO_ASA_CONTRACT.md: a firewall, read over SSH with a privilege-15 account; nothing is written to it.
+              <TextField label="Role" size="small" fullWidth disabled value="Security device"
+                helperText="SSH with a privilege-15 account. Reads only: version, interfaces, routes, failover; backup is the configuration text." />
+            ) : !HTTPS_VENDORS.has(vendor) ? <TextField
               label="Role"
               select
               size="small"
@@ -609,6 +614,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
               <MenuItem value="infoblox">Infoblox Grid Manager (HTTPS)</MenuItem>
               <MenuItem value="radware">Radware (HTTPS)</MenuItem>
               <MenuItem value="bluecoat">Blue Coat Management Center (HTTPS, port 8082)</MenuItem>
+              <MenuItem value="cisco_asa">Cisco ASA (SSH)</MenuItem>
             </TextField>
             {vendor === "radware" && (
               <TextField label="Radware device" select size="small" fullWidth value={radwareKind}
