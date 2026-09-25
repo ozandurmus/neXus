@@ -1074,20 +1074,21 @@ const STEP_LABELS: Record<OnboardingView["step"], string> = {
 };
 const STEP_ORDER: readonly OnboardingView["step"][] = ["identity", "inventory", "configuration"];
 
-/** The three onboarding steps with their state; a skipped step names why (the vendor has no such read yet). */
+/**
+ * The onboarding steps that apply to this device (PO 2026-09-25: a read the vendor does not have is not shown at all --
+ * no "not available" row); numbered over the applicable steps only.
+ */
 function OnboardingSteps({ flow, confirmState }: { readonly flow: OnboardingView | null; readonly confirmState: string }) {
+  const applicable = STEP_ORDER.filter((step) => !flow?.skipped.some((s) => s.startsWith(step + ":")));
   return (
     <Stack spacing={0.5}>
-      {STEP_ORDER.map((step, index) => {
-        const skip = flow?.skipped.find((s) => s.startsWith(step + ":"));
+      {applicable.map((step, index) => {
+        const order = STEP_ORDER.indexOf(step);
         const current = flow ? flow.step === step : step === "identity";
-        const before = flow ? index < flow.step_number - 1 : false;
+        const before = flow ? order < flow.step_number - 1 : false;
         let tone: "ok" | "bad" | "warn" | "neutral" = "neutral";
         let label = "Waiting";
-        if (skip) {
-          tone = "neutral";
-          label = "Not available for this device";
-        } else if (before || flow?.state === "COMPLETED") {
+        if (before || flow?.state === "COMPLETED") {
           tone = "ok";
           label = "Done";
         } else if (current && flow?.state === "STOPPED") {
@@ -1099,7 +1100,7 @@ function OnboardingSteps({ flow, confirmState }: { readonly flow: OnboardingView
         }
         return (
           <Box key={step} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Typography variant="body2" sx={{ minWidth: 150 }}>{index + 1}/3 {STEP_LABELS[step]}</Typography>
+            <Typography variant="body2" sx={{ minWidth: 150 }}>{index + 1}/{applicable.length} {STEP_LABELS[step]}</Typography>
             <StatusChip tone={tone} label={label} dense />
           </Box>
         );

@@ -1,7 +1,8 @@
 # Cisco ASA — confirm, inventory, backup over SSH
 
-**Status:** DRAFT until the first real-environment run (implementation authority: PO 2026-09-25 "Cisco ASA'ları
-halledelim"; commands gated in V78). Freeze after the measurement below.
+**Status:** FROZEN by the Product Owner, 2026-09-25 ("İkisi de olsun, sırayla alır, hata veren kısım eksik gözükür";
+SCP is enabled on the estate's ASAs by their administrators). Commands gated in V78 and V79. Delivery status
+IMPLEMENTED until the real-environment measurement below.
 
 ## Reach
 - Vendor `cisco_asa`, role gateway ("Security device"), transport `ssh_exec` on port 22 (or the address's port).
@@ -27,12 +28,22 @@ halledelim"; commands gated in V78). Freeze after the measurement below.
   takes it), `startup-config.txt`, `show-version.txt`, `show-mode.txt`. Refused unless the running configuration has
   its `ASA Version` line.
 
-## Backbox comparison (trail 34409263, 2026-09-22, one ASA 9.22 on Firepower 4100, 63 s)
-Backbox reads the same `more system:running-config`, `show startup-config`, `show version`, and additionally runs the
-ASA's own `backup /noconfirm location disk0:…` and pulls the archive with SCP. That archive adds identity
-certificates, WebVPN data and AnyConnect images/profiles, but it **writes a file to the device's flash** and needs
-`ssh scopy enable` on the ASA. neXus does not do that step. **PO decision open:** keep the text backup, or add the
-archive step as a gated class-1 write with removal of the file after the pull.
+## Backup: both, in order (PO decision 2026-09-25)
+1. Configuration text on the shell: `more system:running-config`, `show startup-config`, `show version`, `show mode`.
+   Required — without the running configuration's `ASA Version` line nothing is stored.
+2. The ASA's own archive, on the same shell: `backup /noconfirm location disk0:/nexus-<job hex>.tar.gz` (identity
+   certificates, WebVPN data, AnyConnect images and profiles; "Backup finished!" required; items the ASA reports as
+   "Failed!" are listed in the manifest).
+3. A second SSH session pulls it with the SCP protocol (`scp -f disk0:/…`) into a temporary file; a torn transfer
+   never reaches the bundle. neXus never runs `ssh scopy enable`.
+4. A third session deletes exactly that file (`delete /noconfirm disk0:/nexus-<job hex>.tar.gz`; the name is
+   neXus's own, checked against `nexus-<hex>.tar.gz`), whether or not the pull worked.
+5. One encrypted bundle: the text files, `asa-backup.tar.gz`, `manifest.txt`.
+
+Outcomes: all parts → completed. Archive failed → the text is stored, the manifest says `MISSING: <why>`, and the job
+fails as `partial: stored without ASA archive (…)` — visible, completed later by a new backup. Delete failed →
+`cleanup_failed`, and the device leaves the backup schedule until cleared (the existing BK-7 rule).
+Backbox reference: trail 34409263 (2026-09-22) runs the same text reads and the same archive/SCP step.
 
 ## Not yet
 - Multi-context: a login lands in one context; `changeto` into each context (and the system context) is not issued.

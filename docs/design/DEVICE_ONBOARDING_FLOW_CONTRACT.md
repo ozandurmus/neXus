@@ -44,6 +44,12 @@ One row per device in `device_onboarding` (V77): `device_id`, `source`, `state` 
   "Onboarding stopped" with the reason on hover. No device shows a card of "Unknown" values while onboarding.
 - **Device detail:** while RUNNING, a progress panel replaces the empty tabs.
 
+## Amendment (PO 2026-09-25, after the UI council)
+A read the vendor or role does not have is **not shown at all** — no "not available" row or label. The dialog numbers
+only the applicable steps (an Infoblox shows 1/2 Identity, 2/2 Inventory); the skip and its code stay recorded in
+`device_onboarding.skipped` for audit. Each vendor's facts are shown in its own terms (Check Point version and
+hotfix take; Palo Alto its own; vendors without such a fact show nothing for it).
+
 ## Acceptance
 Minutes after adding a device (or importing a batch): every device is COMPLETED with name, model, version and its
 inventory filled — or STOPPED with the failing step and its reason. No "Unknown" without a reason.

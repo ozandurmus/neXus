@@ -414,6 +414,94 @@ public final class SshExecTransport implements DeviceTransport {
         }
     }
 
+    /** Where an SCP source's bytes go: called once with the announced size, before any byte. */
+    public interface ScpSink {
+        OutputStream open(long size) throws IOException;
+    }
+
+    private static final java.util.regex.Pattern SCP_PATH = java.util.regex.Pattern.compile("[A-Za-z0-9:/._-]{1,200}");
+
+    /**
+     * Pulls one file with the SCP protocol ({@code scp -f <path>} on an exec channel) -- for devices whose only file
+     * service is an SCP server, such as a Cisco ASA with {@code ssh scopy enable} (docs/design/CISCO_ASA_CONTRACT.md).
+     * The path is checked against a closed character set; nothing is ever sent to the device. Returns the byte count.
+     */
+    public long scpFetch(TransportSession session, String remotePath, ScpSink sink, long maxBytes, Duration timeout)
+            throws IOException {
+        if (!(session instanceof SshTransportSession sshSession)) {
+            throw new IOException("not an ssh session");
+        }
+        if (!SCP_PATH.matcher(remotePath).matches()) {
+            throw new IOException("scp path outside the allowed character set");
+        }
+        long deadline = System.currentTimeMillis() + timeout.toMillis();
+        ChannelExec channel = null;
+        try {
+            channel = (ChannelExec) sshSession.jschSession().openChannel("exec");
+            channel.setCommand("scp -f " + remotePath);
+            OutputStream out = channel.getOutputStream();
+            InputStream in = channel.getInputStream();
+            channel.connect((int) Math.min(timeout.toMillis(), 30_000));
+            out.write(0);
+            out.flush();
+            int c = in.read();
+            if (c == 1 || c == 2) {
+                throw new IOException("scp refused: " + readLine(in));
+            }
+            if (c != 'C') {
+                throw new IOException("scp: unexpected reply " + c);
+            }
+            String header = readLine(in); // "0644 <size> <name>"
+            String[] parts = header.trim().split(" ", 3);
+            if (parts.length < 2) {
+                throw new IOException("scp: unparseable header");
+            }
+            long size = Long.parseLong(parts[1]);
+            if (size < 0 || size > maxBytes) {
+                throw new IOException("scp: file of " + size + " bytes exceeds the limit " + maxBytes);
+            }
+            out.write(0);
+            out.flush();
+            long copied = 0;
+            byte[] buf = new byte[64 * 1024];
+            try (OutputStream target = sink.open(size)) {
+                while (copied < size) {
+                    if (System.currentTimeMillis() > deadline) {
+                        throw new IOException("scp: timed out after " + copied + " of " + size + " bytes");
+                    }
+                    int n = in.read(buf, 0, (int) Math.min(buf.length, size - copied));
+                    if (n < 0) {
+                        throw new IOException("scp: stream ended after " + copied + " of " + size + " bytes");
+                    }
+                    target.write(buf, 0, n);
+                    copied += n;
+                }
+            }
+            int status = in.read();
+            if (status != 0) {
+                throw new IOException("scp: transfer status " + status);
+            }
+            out.write(0);
+            out.flush();
+            return copied;
+        } catch (JSchException e) {
+            throw new IOException("scp channel: " + e.getMessage(), e);
+        } finally {
+            if (channel != null) {
+                channel.disconnect();
+            }
+        }
+    }
+
+    private static String readLine(InputStream in) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        int c;
+        while ((c = in.read()) >= 0 && c != '\n' && sb.length() < 1024) {
+            sb.append((char) c);
+        }
+        return sb.toString();
+    }
+
     @Override
     public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
         throw new TransportNotImplementedException("xml_api_call");

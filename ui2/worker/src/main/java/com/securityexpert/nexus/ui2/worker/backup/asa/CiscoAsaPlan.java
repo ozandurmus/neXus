@@ -37,6 +37,53 @@ public final class CiscoAsaPlan {
     public static final String MORE_SYSTEM_RUNNING_CONFIG = "more system:running-config";
     public static final String SHOW_STARTUP_CONFIG = "show startup-config";
 
+    /**
+     * The ASA's own archive (PO 2026-09-25: both backups, in order; SCP is enabled by the ASA team, neXus never enables
+     * it). Writes one file to flash, pulled by SCP and deleted by name -- only the file this run created.
+     */
+    public static String backupArchive(String fileName) {
+        return "backup /noconfirm location disk0:/" + checkedName(fileName);
+    }
+
+    public static String scpPath(String fileName) {
+        return "disk0:/" + checkedName(fileName);
+    }
+
+    public static String deleteArchive(String fileName) {
+        return "delete /noconfirm disk0:/" + checkedName(fileName);
+    }
+
+    /** neXus's own archive name for a job: fixed prefix, the job id's hex, nothing from the device. */
+    public static String archiveName(String jobId) {
+        String hex = jobId == null ? "" : jobId.replaceAll("[^0-9a-fA-F]", "");
+        return "nexus-" + (hex.length() > 16 ? hex.substring(0, 16) : hex) + ".tar.gz";
+    }
+
+    private static String checkedName(String fileName) {
+        if (fileName == null || !fileName.matches("nexus-[0-9a-fA-F]{1,16}\\.tar\\.gz")) {
+            throw new IllegalArgumentException("not a neXus archive name");
+        }
+        return fileName;
+    }
+
+    /** The backup command's own verdict: "Backup finished!" -- items it could not include say "Failed!". */
+    public static boolean archiveFinished(String output) {
+        return output != null && output.contains("Backup finished");
+    }
+
+    /** Items the ASA reported as not backed up ("Backing up [Dynamic Access Policies] ... Failed!"). */
+    public static java.util.List<String> archiveFailedItems(String output) {
+        java.util.List<String> items = new java.util.ArrayList<>();
+        if (output == null) {
+            return items;
+        }
+        Matcher m = Pattern.compile("Backing up \\[([^\\]]+)\\][^\\n]*?Failed!").matcher(output);
+        while (m.find()) {
+            items.add(m.group(1));
+        }
+        return items;
+    }
+
     public static final int DEFAULT_PORT = 22;
 
     public record Version(Optional<String> hostname, Optional<String> model, Optional<String> softwareVersion,

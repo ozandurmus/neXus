@@ -37,6 +37,14 @@ public sealed interface BackupResult {
     record CleanupFailed(ArtefactStore.ArtefactMetadata artefact, String archiveName, String reason) implements BackupResult {
     }
 
+    /**
+     * A multi-part backup stored with a part missing (PO 2026-09-25, Cisco ASA: "the failing part shows as missing, we
+     * complete it later"): the artefact holds what was read and its manifest names the missing part; the job fails
+     * with {@code partial: <missing>} so the gap is visible, and the endpoint is not marked ineligible.
+     */
+    record Partial(ArtefactStore.ArtefactMetadata artefact, String archiveName, String missing) implements BackupResult {
+    }
+
     /** BK-5: the poll never reached a terminal state before the run's own deadline. Nothing is deleted. */
     record OutcomeUnknown(String reason) implements BackupResult {
     }

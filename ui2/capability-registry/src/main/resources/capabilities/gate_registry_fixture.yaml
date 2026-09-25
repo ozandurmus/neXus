@@ -1686,3 +1686,51 @@ gates:
     secret_output_risk: 'configuration (keys masked by the ASA): stored only inside the encrypted backup artefact'
     safe_telemetry_fields: []
     source_document_pointer: 'Backbox ASA 9.4+ trail 2026-09-22 (the same read)'
+  - gate_id: asa_backup_archive
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'backup /noconfirm location disk0:/nexus-<job hex>.tar.gz'
+    action_class: 'recovery-write'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'none'
+    max_frequency: 'once per backup job'
+    session_reuse_rule: 'the text-read session'
+    unsupported_behavior_ref: 'no "Backup finished" -> archive missing, text stored, job partial'
+    secret_output_risk: 'the archive holds certificates and keys: stored only inside the encrypted backup artefact'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA 9.22 general configuration guide (Back Up and Restore); Backbox ASA 9.4+ trail 2026-09-22; PO 2026-09-25'
+  - gate_id: asa_scp_fetch_archive
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'scp_source'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'scp -f disk0:/nexus-<job hex>.tar.gz'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'none'
+    max_frequency: 'once per backup job'
+    session_reuse_rule: 'a second SSH session'
+    unsupported_behavior_ref: 'refused (ssh scopy not enabled) -> archive missing, job partial'
+    secret_output_risk: 'as above'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (ssh scopy enable); Backbox ASA trail (scp pull)'
+  - gate_id: asa_delete_archive
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'delete /noconfirm disk0:/nexus-<job hex>.tar.gz'
+    action_class: 'recovery-write'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per backup job, only when the archive command ran'
+    session_reuse_rule: 'a third SSH session'
+    unsupported_behavior_ref: 'refused or timed out -> cleanup_failed: the device is excluded from backups until cleared'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (delete); name restricted to nexus-<hex>.tar.gz'

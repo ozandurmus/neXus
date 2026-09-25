@@ -262,6 +262,17 @@ public final class BackupJobExecutor {
             return handleCleanupFailed(jobId, leaseEpoch, targetDeviceId, cleanupFailed, confirmFacts);
         }
 
+        if (result instanceof BackupResult.Partial partial) {
+            String deviationState = deviationStateAgainstPrevious(targetDeviceId, partial.artefact().plaintextSha256());
+            Optional<String> recorded = recordManifest(partial.artefact(), targetDeviceId, confirmFacts, deviationState, Optional.empty());
+            if (recorded.isPresent() && contentListing != null) {
+                contentListing.list(recorded.get(), partial.artefact().ref(), partial.artefact().wrappedDataKey());
+            }
+            String reason = "partial: stored without " + partial.missing();
+            leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, ACTION_FAILED, reason);
+            return new JobOutcome.Failed(reason);
+        }
+
         leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, ACTION_FAILED, describeFailure(result));
         return new JobOutcome.Failed(describeFailure(result));
     }
@@ -392,6 +403,8 @@ public final class BackupJobExecutor {
                     throw new IllegalStateException("unreachable: Completed is handled by handleCompleted");
             case BackupResult.CleanupFailed ignored ->
                     throw new IllegalStateException("unreachable: CleanupFailed is handled by handleCleanupFailed");
+            case BackupResult.Partial ignored ->
+                    throw new IllegalStateException("unreachable: Partial is handled before this switch");
             case BackupResult.OutcomeUnknown ignored ->
                     throw new IllegalStateException("unreachable: OutcomeUnknown is handled before this switch");
         };

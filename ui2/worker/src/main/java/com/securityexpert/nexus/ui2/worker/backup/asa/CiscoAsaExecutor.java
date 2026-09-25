@@ -37,12 +37,28 @@ public final class CiscoAsaExecutor {
     private static final Duration SHORT = Duration.ofSeconds(30);
     private static final Duration LONG = Duration.ofSeconds(180);
 
+    private static final Duration ARCHIVE = Duration.ofSeconds(600);
+    private static final long MAX_ARCHIVE_BYTES = 4L * 1024 * 1024 * 1024;
+
+    /** SCP pull from the device (production: SshExecTransport#scpFetch). */
+    public interface ScpFetcher {
+        long fetch(TransportSession session, String remotePath,
+                com.securityexpert.nexus.ui2.worker.transport.ssh.SshExecTransport.ScpSink sink, long maxBytes,
+                Duration timeout) throws IOException;
+    }
+
     private final DeviceTransport ssh;
     private final ArtefactStore artefactStore;
+    private final ScpFetcher scp;
 
     public CiscoAsaExecutor(DeviceTransport ssh, ArtefactStore artefactStore) {
+        this(ssh, artefactStore, null);
+    }
+
+    public CiscoAsaExecutor(DeviceTransport ssh, ArtefactStore artefactStore, ScpFetcher scp) {
         this.ssh = Objects.requireNonNull(ssh, "ssh");
         this.artefactStore = artefactStore;
+        this.scp = scp;
     }
 
     /** One open shell, already set to no paging, at privilege 15 -- or why not. */
@@ -153,15 +169,25 @@ public final class CiscoAsaExecutor {
         }
     }
 
+    /**
+     * Both backups, in order (PO 2026-09-25): the configuration text, then the ASA's own archive (backup to flash, SCP
+     * pull, delete). The text is required; a failed archive stores the text and names the archive as missing.
+     */
     public BackupResult backup(Target target, String credentialRef, String deviceId, String jobId) {
         if (artefactStore == null) {
             return new BackupResult.ArtefactStoreFailed("no artefact store in this worker");
         }
+        Map<String, byte[]> members = new LinkedHashMap<>();
+        List<String> manifest = new java.util.ArrayList<>();
+        String archiveName = CiscoAsaPlan.archiveName(jobId);
+        boolean archiveWritten = false;
+        Optional<String> archiveProblem = Optional.empty();
+
+        // 1. configuration text, and the archive written to flash, on one shell
         Shell shell = open(target, credentialRef);
         if (shell.session() == null) {
             return new BackupResult.ConnectFailed(shell.refusal().orElse("connect_failed"));
         }
-        Map<String, byte[]> members = new LinkedHashMap<>();
         try {
             TransportSession s = shell.session();
             Optional<String> running = read(s, CiscoAsaPlan.MORE_SYSTEM_RUNNING_CONFIG, LONG);
@@ -172,28 +198,104 @@ public final class CiscoAsaExecutor {
             read(s, CiscoAsaPlan.SHOW_STARTUP_CONFIG, LONG).ifPresent(t -> members.put("startup-config.txt", t.getBytes(StandardCharsets.UTF_8)));
             read(s, CiscoAsaPlan.SHOW_VERSION, SHORT).ifPresent(t -> members.put("show-version.txt", t.getBytes(StandardCharsets.UTF_8)));
             read(s, CiscoAsaPlan.SHOW_MODE, SHORT).ifPresent(t -> members.put("show-mode.txt", t.getBytes(StandardCharsets.UTF_8)));
+            if (scp == null) {
+                archiveProblem = Optional.of("ASA archive (no SCP client in this worker)");
+            } else {
+                ExecResult r = ssh.execInteractive(s, new ExecSpec(CiscoAsaPlan.backupArchive(archiveName), true), ARCHIVE);
+                String out = r instanceof ExecResult.Completed c ? c.output() : "";
+                archiveWritten = r instanceof ExecResult.Completed;
+                if (!CiscoAsaPlan.archiveFinished(out)) {
+                    archiveProblem = Optional.of("ASA archive (the backup command did not finish: "
+                            + (r instanceof ExecResult.Completed ? (CiscoAsaPlan.isCliError(out) ? "refused" : "no 'Backup finished'")
+                                    : r.getClass().getSimpleName()) + ")");
+                } else {
+                    List<String> failed = CiscoAsaPlan.archiveFailedItems(out);
+                    manifest.add("archive items the ASA could not include: " + (failed.isEmpty() ? "none" : String.join(", ", failed)));
+                }
+            }
         } finally {
             ssh.disconnect(shell.session());
         }
-        StringBuilder manifest = new StringBuilder("# Cisco ASA configuration backup (neXus, read-only CLI)\n");
-        members.forEach((name, bytes) -> manifest.append(name).append('\t').append(bytes.length).append(" bytes\n"));
+
+        // 2. pull the archive over SCP into a temporary file (a torn transfer never reaches the bundle)
+        java.nio.file.Path temp = null;
+        long archiveBytes = -1;
+        if (archiveProblem.isEmpty()) {
+            try {
+                temp = java.nio.file.Files.createTempFile("asa-archive-", ".part");
+                java.nio.file.Path tempFile = temp;
+                Shell pull = open(target, credentialRef);
+                if (pull.session() == null) {
+                    archiveProblem = Optional.of("ASA archive (SCP connection: " + pull.refusal().orElse("failed") + ")");
+                } else {
+                    try {
+                        archiveBytes = scp.fetch(pull.session(), CiscoAsaPlan.scpPath(archiveName),
+                                size -> java.nio.file.Files.newOutputStream(tempFile), MAX_ARCHIVE_BYTES, ARCHIVE);
+                    } finally {
+                        ssh.disconnect(pull.session());
+                    }
+                }
+            } catch (IOException e) {
+                archiveProblem = Optional.of("ASA archive (SCP: " + String.valueOf(e.getMessage()).split(":", 2)[0]
+                        + "; is 'ssh scopy enable' set?)");
+                archiveBytes = -1;
+            }
+        }
+
+        // 3. delete the file this run created (only that name), whether or not the pull worked
+        Optional<String> cleanup = Optional.empty();
+        if (archiveWritten) {
+            Shell del = open(target, credentialRef);
+            if (del.session() == null) {
+                cleanup = Optional.of("could not reconnect to delete disk0:/" + archiveName);
+            } else {
+                try {
+                    ExecResult r = ssh.execInteractive(del.session(), new ExecSpec(CiscoAsaPlan.deleteArchive(archiveName), true), SHORT);
+                    if (r instanceof ExecResult.Completed c && CiscoAsaPlan.isCliError(c.output())) {
+                        cleanup = Optional.of("delete of disk0:/" + archiveName + " was refused");
+                    } else if (r instanceof ExecResult.TimedOut) {
+                        cleanup = Optional.of("delete of disk0:/" + archiveName + " timed out");
+                    }
+                } finally {
+                    ssh.disconnect(del.session());
+                }
+            }
+        }
+
+        // 4. one bundle: text, archive (when pulled), manifest
         ArtefactStore.ArtefactHandle handle;
         try {
             handle = artefactStore.open(deviceId, jobId, "cisco_asa", false);
         } catch (IOException e) {
+            deleteQuietly(temp);
             return new BackupResult.ArtefactStoreFailed("artefact store open failed: " + e.getMessage());
         }
         try {
             try (com.securityexpert.nexus.ui2.persistence.artefact.content.TarWriter tar =
                     new com.securityexpert.nexus.ui2.persistence.artefact.content.TarWriter(new java.util.zip.GZIPOutputStream(handle.sink()))) {
-                tar.file("manifest.txt", manifest.toString().getBytes(StandardCharsets.UTF_8));
                 for (var e : members.entrySet()) {
                     tar.file(e.getKey(), e.getValue());
                 }
+                if (archiveProblem.isEmpty() && temp != null && archiveBytes >= 0) {
+                    try (java.io.OutputStream o = tar.begin("asa-backup.tar.gz", archiveBytes)) {
+                        java.nio.file.Files.copy(temp, o);
+                    }
+                }
+                StringBuilder text = new StringBuilder("# Cisco ASA backup (neXus): configuration text, then the ASA archive\n");
+                members.forEach((name, bytes) -> text.append(name).append('\t').append(bytes.length).append(" bytes\n"));
+                text.append("asa-backup.tar.gz\t").append(archiveProblem.isEmpty() ? archiveBytes + " bytes" : "MISSING: " + archiveProblem.get()).append('\n');
+                manifest.forEach(line -> text.append("# ").append(line).append('\n'));
+                tar.file("manifest.txt", text.toString().getBytes(StandardCharsets.UTF_8));
             }
             ArtefactStore.ArtefactMetadata metadata = handle.finish();
-            LOG.log(System.Logger.Level.INFO, "[ASA_BACKUP] stored {0} files, {1} bytes", members.size(), metadata.plaintextBytes());
-            return new BackupResult.Completed(metadata, "asa-configuration.tgz", Optional.empty(), Optional.empty());
+            LOG.log(System.Logger.Level.INFO, "[ASA_BACKUP] stored {0} text files, archive={1}, {2} bytes", members.size(),
+                    archiveProblem.isEmpty() ? archiveBytes : "missing", metadata.plaintextBytes());
+            if (cleanup.isPresent()) {
+                return new BackupResult.CleanupFailed(metadata, "asa-backup.tgz", cleanup.get());
+            }
+            return archiveProblem.isPresent()
+                    ? new BackupResult.Partial(metadata, "asa-backup.tgz", archiveProblem.get())
+                    : new BackupResult.Completed(metadata, "asa-backup.tgz", Optional.empty(), Optional.empty());
         } catch (IOException e) {
             try {
                 handle.close();
@@ -201,6 +303,18 @@ public final class CiscoAsaExecutor {
                 // best effort
             }
             return new BackupResult.ArtefactStoreFailed("bundle could not be stored: " + e.getClass().getSimpleName());
+        } finally {
+            deleteQuietly(temp);
+        }
+    }
+
+    private static void deleteQuietly(java.nio.file.Path p) {
+        if (p != null) {
+            try {
+                java.nio.file.Files.deleteIfExists(p);
+            } catch (IOException ignored) {
+                // best effort
+            }
         }
     }
 }

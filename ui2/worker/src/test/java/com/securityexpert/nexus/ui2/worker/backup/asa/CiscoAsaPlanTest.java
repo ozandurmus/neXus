@@ -123,4 +123,30 @@ class CiscoAsaPlanTest {
     void echoAndPromptAreStripped() {
         assertEquals("line1\nline2\n", CiscoAsaExecutor.stripEcho("show version\nline1\nline2\nFW-TANGO-04/sec/act# ", "show version"));
     }
+
+    @Test
+    void archiveCommandsNameOnlyNexusOwnFile() {
+        String name = CiscoAsaPlan.archiveName("ac075038-a275-4907-94f0-d385fd435700");
+        assertEquals("nexus-ac075038a2754907.tar.gz", name);
+        assertEquals("backup /noconfirm location disk0:/" + name, CiscoAsaPlan.backupArchive(name));
+        assertEquals("delete /noconfirm disk0:/" + name, CiscoAsaPlan.deleteArchive(name));
+        assertEquals("disk0:/" + name, CiscoAsaPlan.scpPath(name));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> CiscoAsaPlan.deleteArchive("*.tar.gz"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> CiscoAsaPlan.deleteArchive("startup-config"));
+    }
+
+    @Test
+    void archiveOutputFinishedAndFailedItems() {
+        String out = """
+                Begin backup ...
+                Backing up [ASA Version] ... Done!
+                Backing up [Identity Certificates] ... Done!
+                Backing up [Dynamic Access Policies] ... Failed!
+                Compressing the backup directory ... Done!
+                Backup finished!
+                """;
+        assertTrue(CiscoAsaPlan.archiveFinished(out));
+        assertEquals(java.util.List.of("Dynamic Access Policies"), CiscoAsaPlan.archiveFailedItems(out));
+        assertFalse(CiscoAsaPlan.archiveFinished("ERROR: % Invalid input detected at '^' marker."));
+    }
 }
