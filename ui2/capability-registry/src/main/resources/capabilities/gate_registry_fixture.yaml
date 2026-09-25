@@ -609,7 +609,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per device per inventory run"
+    max_frequency: "never issued -- measured 2026-09-25 as invalid on Quantum Spark (Bad parameter); kept for history (V73)"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "an empty hostname is a result, not an error"
     secret_output_risk: none

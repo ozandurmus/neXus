@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T07:49:41Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T08:33:22Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -40,7 +40,6 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T07:49:41Z
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
 - P1/planned cp_platform_facts_empty_on_nine_gateways — Check Point platform facts: 9 of 62 gateways have a facts (target: )
-- P1/planned device_name_from_read_never_fingerprint — Device names: the Check Point presented SSH identity is a (target: ui2/worker/src/main/java/com/securityexp)
 - P1/planned discovery_connection_state_never_populated — Check Point discovery never records the management plane's (target: MgmtCliEnumerationAdapter candidate cons)
 - P1/planned discovery_failure_summary_stores_certificate_subject — A failed Palo Alto discovery stores the presented certific (target: PanXmlApiTransport certificate exception)
 - P1/planned failover_p0_closure_set — Failover Engine: close the eight-item P0 set both external (target: docs/design/CODEX_FAILOVER_ENGINE_FINAL_)

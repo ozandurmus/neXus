@@ -1062,15 +1062,6 @@
       "priority": "P1",
       "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryCapabilityExecutor.java",
       "note": ""
-    },
-    {
-      "id": "device_name_from_read_never_fingerprint",
-      "category": "collection",
-      "title": "Device names: the Check Point presented SSH identity is a host-key fingerprint on this estate and had been stored as the MDS hostname; inventory now reads show hostname (fixed 2026-09-25) -- audit the confirm path for the same and any device row still carrying a fingerprint as its name",
-      "status": "planned",
-      "priority": "P1",
-      "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/confirm/ConfirmJobExecutor.java",
-      "note": ""
     }
   ]
 }
