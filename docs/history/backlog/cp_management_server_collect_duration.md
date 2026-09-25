@@ -1,0 +1,5 @@
+# Check Point management server Collect took 243 s: vsx stat, cphaprob stat/-a if and the batched read hang until their 30 s timeout on an SMS/MDS (measured 2026-09-25); skipped for role management_server since deploy 10; cpinfo -y all also hangs on the R82 MDS (30 s, no jumbo line) -- measure whether cpinfo needs another form on R82
+
+status: in_progress · target: ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryCapabilityExecutor.java
+
+2026-09-25 08:12 (deploy 11): MDS Collect 243 s -> 40 s, 5 interfaces / 2 addresses / 3 routes, no timeouts. Remaining time: clish -c 'show interfaces all' 20.5 s (clish start-up on the MDS), cpinfo interactive 6.9 s, clish show hostname 5.5 s. Two open observations for measurement: (1) short commands on the MDS intermittently exit 1 with the same 32-char answer (ip -4 route show table all in this run, uptime in the previous one) -- log its masked shape next; (2) cpinfo -y all on R82 answers (433 chars) but the jumbo parser finds no HOTFIX_R82_JUMBO_HF_MAIN Take line -- the R82 form must be measured before hotfix_level can be filled.
