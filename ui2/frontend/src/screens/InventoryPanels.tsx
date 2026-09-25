@@ -1073,7 +1073,9 @@ export function InterfacesPanel({
   // sets activeContext for this device (DeviceList), so a second selector in the panel would just
   // duplicate it.
   if (!isPaloAlto) {
-    const context = resolveContext(activeContext ?? "physical");
+    // A device whose contexts are its members (an Infoblox grid, V72) has no "physical" context: show the first one
+    // until the sidebar selects a member.
+    const context = resolveContext(activeContext ?? "physical") ?? (activeContext ? undefined : contexts[0]);
     return (
       <Stack spacing={1}>
         <ContextHaBadge context={context} />
@@ -1139,7 +1141,9 @@ export function RoutesPanel({
   );
 
   if (!isPaloAlto) {
-    const context = resolveContext(activeContext ?? "physical");
+    // A device whose contexts are its members (an Infoblox grid, V72) has no "physical" context: show the first one
+    // until the sidebar selects a member.
+    const context = resolveContext(activeContext ?? "physical") ?? (activeContext ? undefined : contexts[0]);
     return <ClusterRoutesTable routes={context ? toClusterContexts([context], member.device_id)[0].routes : []} members={members} />;
   }
 
