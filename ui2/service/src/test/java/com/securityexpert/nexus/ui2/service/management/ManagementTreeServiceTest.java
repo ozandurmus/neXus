@@ -67,4 +67,22 @@ class ManagementTreeServiceTest {
         assertThat(nodes.get(1)).containsEntry("hostname", "fw-solo");
         assertThat(ManagementTreeService.counts(pan, Map.of(), Map.of())).containsEntry("clusters", 1L).containsEntry("gateways", 3L);
     }
+
+    @Test
+    void fortiManagerDevicesLinkBySerialAndHaMembersAreNotCountedMissing() {
+        List<Candidate> candidates = List.of(
+                new Candidate("f1", null, "fortinet", "ADOM-A", "FORTINET_FORTIGATE", "FGT-SOLO", null, "SN-1", "FortiGate-60F"),
+                new Candidate("f2", null, "fortinet", "ADOM-B", "FORTINET_HA_CLUSTER", "FGT-HA", null, "SN-2", "FortiGate-600E"),
+                new Candidate("f3", "f2", "fortinet", "ADOM-B", "FORTINET_HA_MEMBER", "FGT-HA-2", "FGT-HA", "ha_member|SN-3", "FortiGate-600E"));
+        Map<String, Linked> linked = Map.of(
+                "fortinet|SN-1", new Linked("dev-solo", "FGT-SOLO", null, null, "ENROLLED", "COMPLETED", null),
+                "fortinet|SN-2", new Linked("dev-ha", "FGT-HA", "ACTIVE", null, "ENROLLED", "COMPLETED", null));
+        List<Map<String, Object>> domains = ManagementTreeService.build(candidates, linked, Map.of());
+        assertThat(domains).hasSize(2);
+        assertThat(((List<Map<String, Object>>) domains.get(0).get("nodes")).get(0).get("device_id")).isEqualTo("dev-solo");
+        assertThat(((List<Map<String, Object>>) domains.get(1).get("nodes")).get(0).get("device_id")).isEqualTo("dev-ha");
+        Map<String, Object> counts = ManagementTreeService.counts(candidates, linked, Map.of());
+        assertThat(counts.get("not_in_nexus")).isEqualTo(0L);
+        assertThat(counts.get("gateways")).isEqualTo(2L);
+    }
 }

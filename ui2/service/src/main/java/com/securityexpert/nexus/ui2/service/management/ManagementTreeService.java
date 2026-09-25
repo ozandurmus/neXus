@@ -214,6 +214,9 @@ public class ManagementTreeService {
             return switch (vendor == null ? "" : vendor) {
                 case "palo_alto" -> "palo_alto|" + stableIdentifier;
                 case "radware" -> "radware|" + stableIdentifier;
+                // FortiManager discovery (2026-09-25): the serial, as DiscoveryMatchKey keys it -- before this every
+                // imported FortiGate was looked up under a Check Point key and fell outside its FortiManager.
+                case "fortinet" -> "fortinet|" + stableIdentifier;
                 default -> "check_point|" + (domain == null ? "" : domain) + "|" + stableIdentifier;
             };
         }
@@ -232,6 +235,10 @@ public class ManagementTreeService {
 
         /** A device neXus would enrol: not a cluster object, not a virtual system, not a management/log appliance. */
         boolean isEnrollableDevice() {
+            // FortiManager: a standalone FortiGate and an HA cluster are each imported as one device; members are not.
+            if ("fortinet".equals(vendor)) {
+                return "FORTINET_FORTIGATE".equals(kind) || "FORTINET_HA_CLUSTER".equals(kind);
+            }
             return !isCluster() && !isVirtualSystem() && !isManagementAppliance();
         }
     }
