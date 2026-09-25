@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T10:27:57Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T11:21:40Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -146,6 +146,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-25T10:27:57Z
 - P2 per_vendor_worker_split
 - P2 policy_rule_hygiene_and_path_placement_brief
 - P2 snmpv3_fast_telemetry_plane
+- P2 ui_device_workspace_and_overview
 - P4 pan_ha_peer_ipv6_pairing
 ## Open decisions
 - op_track_id — Track id: keep OP.x as a dedicated OPERATE track, or fold into 1.x after
