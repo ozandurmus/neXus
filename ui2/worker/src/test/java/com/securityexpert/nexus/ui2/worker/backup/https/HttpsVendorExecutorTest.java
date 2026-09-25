@@ -152,7 +152,7 @@ class HttpsVendorExecutorTest {
         assertEquals(List.of("DNS=WORKING", "DHCP=INACTIVE", "ATP=WARNING"),
                 ns2.services().stream().map(sv -> sv.service() + "=" + sv.status()).toList());
         assertEquals(Optional.of("gm.example, ns2.example"), done.virtualSystems());
-        assertEquals(Optional.of("gm.example"), done.identity().name(), "the Grid Master names the grid manager");
+        assertEquals(Optional.of("GRID-A"), done.identity().name(), "the grid's own name, never the Grid Master's host name");
         var ns2Ctx = done.contexts().stream().filter(c -> c.context().equals("ns2.example")).findFirst().orElseThrow();
         assertEquals(List.of("LAN1", "MGMT", "LAN2", "LOOPBACK-1"), ns2Ctx.interfaces().stream().map(i -> i.name()).toList());
         assertEquals("192.0.2.12/24", ns2Ctx.interfaces().get(0).addresses().get(0).address());

@@ -174,7 +174,16 @@ public final class HttpsVendorExecutor {
                 contexts.stream().mapToInt(c -> c.routes().size()).sum(), HttpsVendorPlan.fieldNames(json));
         Optional<String> names = members.isEmpty() ? Optional.empty()
                 : Optional.of(members.stream().map(GridMember::hostName).sorted().collect(java.util.stream.Collectors.joining(", ")));
-        Optional<String> gridName = members.stream().filter(GridMember::gridMaster).map(GridMember::hostName).findFirst();
+        // The grid's own name (GET /grid, gate infoblox_grid_identity) is the device's name -- re-read here so it follows
+        // every read too, and never the Grid Master's host name.
+        Optional<String> gridName = Optional.empty();
+        TextResponse grid = client.get(target, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_GRID, version.get()), creds, SHORT, TEXT_MAX);
+        if (grid.ok()) {
+            JsonNode g = JSON.readTree(grid.body());
+            if (g.isArray() && g.size() > 0 && g.get(0).hasNonNull("name")) {
+                gridName = Optional.of(g.get(0).get("name").asText()).filter(n -> !n.isBlank());
+            }
+        }
         return new InventoryOutcome.Completed(contexts, members, names,
                 new Identity(gridName, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())));
     }

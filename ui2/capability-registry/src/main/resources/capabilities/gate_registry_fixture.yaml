@@ -1230,7 +1230,7 @@ gates:
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 30
     retry_rule: 'none'
-    max_frequency: 'once per confirm'
+    max_frequency: 'once per confirm, once per inventory read'
     session_reuse_rule: 'one client per run'
     unsupported_behavior_ref: 'no name -> identity UNKNOWN'
     secret_output_risk: 'none'
