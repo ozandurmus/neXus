@@ -3,3 +3,5 @@
 status: automated_validated · target: ui2/frontend/src/shell/AddDeviceDialog.tsx
 
 V77 device_onboarding + OnboardingFlowService (5 s scheduler) + retry route + Add device stepper + list chip; contract docs/design/DEVICE_ONBOARDING_FLOW_CONTRACT.md; V77 dry-run clean on the live DB.
+
+Deployed 16074e9 (schema 77). Real env: two enrolled devices started at the identity step with their last confirm job -- Management Center COMPLETED (inventory done, configuration skipped MANAGEMENT_SERVER_UNGATED), CP gateway COMPLETED (inventory + configuration jobs COMPLETED); 5 audited advances. Not yet exercised live: a brand-new add / discovery import through the dialog.
