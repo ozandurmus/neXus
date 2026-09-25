@@ -209,12 +209,15 @@ public final class HttpsVendorExecutor {
                 return new InventoryOutcome.Failed("the Cyber Controller device list could not be read");
             }
             CyberControllerTree tree = CyberControllerTree.walk(devices.get(), target.host());
+            // Measured 2026-09-25: the controller is not in its own device list; its TLS certificate names it (SAN / CN).
+            Optional<String> ownName = tree.ownName().or(login::peerName);
+            String nameRule = tree.ownName().isPresent() ? tree.ownNameRule() : login.peerName().isPresent() ? "the TLS certificate name" : "none";
             LOG.log(System.Logger.Level.INFO, "[HTTPS_INVENTORY] cyber controller tree: {0} node(s), types {1}, tree types {2}, "
                     + "managed devices {3}, own name found by {4}", tree.nodeCount(), tree.typeCounts(), tree.treeTypeCounts(),
-                    tree.managedNames().size(), tree.ownNameRule());
+                    tree.managedNames().size(), nameRule);
             List<String> names = tree.managedNames();
             return new InventoryOutcome.Completed(List.of(), List.of(), names.isEmpty() ? Optional.empty() : Optional.of(String.join(", ", names)),
-                    new Identity(tree.ownName(), Optional.of("Radware Cyber Controller"), tree.ownVersion()));
+                    new Identity(ownName, Optional.of("Radware Cyber Controller"), tree.ownVersion()));
         }
     }
 
@@ -244,7 +247,10 @@ public final class HttpsVendorExecutor {
     }
 
     /** Either a session, or why there is none ("authentication_failed: ..." when the Cyber Controller refused the login). */
-    private record CcLogin(Optional<CcSession> session, String reason) {
+    private record CcLogin(Optional<CcSession> session, String reason, Optional<String> peerName) {
+        CcLogin(Optional<CcSession> session, String reason) {
+            this(session, reason, Optional.empty());
+        }
     }
 
     private CcLogin ccLogin(Target target, Credentials creds) throws IOException, InterruptedException {
@@ -258,7 +264,7 @@ public final class HttpsVendorExecutor {
             return new CcLogin(Optional.empty(), "the Cyber Controller login answered HTTP " + login.status()
                     + (login.cookie().isEmpty() ? " without a session cookie" : ""));
         }
-        return new CcLogin(Optional.of(new CcSession(target, Credentials.session(login.cookie().get()))), "");
+        return new CcLogin(Optional.of(new CcSession(target, Credentials.session(login.cookie().get()))), "", login.peerName());
     }
 
     /** The device list, or empty when it could not be read; logs field names and size only (MEASURE FIRST). */

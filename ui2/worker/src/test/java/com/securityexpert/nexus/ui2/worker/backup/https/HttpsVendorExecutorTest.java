@@ -187,6 +187,16 @@ class HttpsVendorExecutorTest {
     }
 
     @Test
+    void cyberControllerNotInItsOwnListIsNamedByItsCertificate() {
+        // Measured 2026-09-25: alldevices lists the DefensePros only; the controller's TLS certificate carries its name.
+        calls.deviceList = "[{\"name\": \"DP-A\", \"managementIp\": \"192.0.2.41\", \"type\": \"DefensePro\"}]";
+        HttpsVendorExecutor.InventoryOutcome o = executor.inventory("radware_cyber_controller", T, "cred");
+        var done = (HttpsVendorExecutor.InventoryOutcome.Completed) o;
+        assertEquals(Optional.of("cc.example"), done.identity().name());
+        assertEquals(Optional.of("DP-A"), done.virtualSystems());
+    }
+
+    @Test
     void cidrFromAddressAndDottedMask() {
         assertEquals(Optional.of("10.0.0.12/24"), InfobloxMembers.cidr(Optional.of("10.0.0.12"), Optional.of("255.255.255.0")));
         assertEquals(Optional.of("10.9.0.0/16"), InfobloxMembers.cidr(Optional.of("10.9.0.0"), Optional.of("255.255.0.0")));
@@ -255,7 +265,8 @@ class HttpsVendorExecutorTest {
         @Override
         public HttpsDeviceClient.SessionLogin login(Target target, String path, String json, Duration timeout) {
             log.add("LOGIN " + path + " " + json);
-            return new HttpsDeviceClient.SessionLogin(loginStatus, loginStatus == 200 ? Optional.of("JSESSIONID=s1") : Optional.empty());
+            return new HttpsDeviceClient.SessionLogin(loginStatus, loginStatus == 200 ? Optional.of("JSESSIONID=s1") : Optional.empty(),
+                    Optional.of("cc.example"));
         }
 
         @Override

@@ -49,7 +49,19 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
     }
 
     /** {@code cookie} is "NAME=value" of the session cookie the login set (JSESSIONID), never logged. */
-    public record SessionLogin(int status, Optional<String> cookie) {
+    /**
+     * {@code peerName}: the name the appliance's own TLS certificate carries (the first DNS subject alternative name,
+     * else the subject CN) -- observed on the connection already made, no request of its own; empty when the
+     * certificate names nothing usable.
+     */
+    public record SessionLogin(int status, Optional<String> cookie, Optional<String> peerName) {
+        public SessionLogin {
+            peerName = peerName == null ? Optional.empty() : peerName;
+        }
+
+        public SessionLogin(int status, Optional<String> cookie) {
+            this(status, cookie, Optional.empty());
+        }
     }
 
     /** A text answer, bounded: {@code body} is at most {@code maxBytes} long; {@code truncated} says when more came. */
@@ -120,7 +132,35 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
                 .map(v -> v.split(";", 2)[0].strip())
                 .filter(v -> v.toUpperCase(Locale.ROOT).startsWith("JSESSIONID="))
                 .findFirst();
-        return new SessionLogin(r.statusCode(), cookie);
+        return new SessionLogin(r.statusCode(), cookie, r.sslSession().flatMap(HttpsDeviceClient::peerCertificateName));
+    }
+
+    /** The first DNS subject alternative name of the peer's leaf certificate, else its subject CN; empty on any failure. */
+    static Optional<String> peerCertificateName(javax.net.ssl.SSLSession session) {
+        try {
+            java.security.cert.Certificate[] chain = session.getPeerCertificates();
+            if (chain == null || chain.length == 0 || !(chain[0] instanceof java.security.cert.X509Certificate leaf)) {
+                return Optional.empty();
+            }
+            java.util.Collection<java.util.List<?>> sans = leaf.getSubjectAlternativeNames();
+            if (sans != null) {
+                for (java.util.List<?> san : sans) {
+                    if (san.size() >= 2 && Integer.valueOf(2).equals(san.get(0)) && san.get(1) instanceof String dns && !dns.isBlank()) {
+                        return Optional.of(dns.trim());
+                    }
+                }
+            }
+            String dn = leaf.getSubjectX500Principal().getName(javax.security.auth.x500.X500Principal.RFC2253);
+            for (String part : dn.split(",")) {
+                String t = part.trim();
+                if (t.regionMatches(true, 0, "CN=", 0, 3) && t.length() > 3) {
+                    return Optional.of(t.substring(3).trim());
+                }
+            }
+            return Optional.empty();
+        } catch (Exception e) {
+            return Optional.empty();
+        }
     }
 
     /** Streams a GET or form POST answer into {@code sink}, refusing past {@code maxBytes}; never buffered whole. */
