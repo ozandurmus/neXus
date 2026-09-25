@@ -322,8 +322,7 @@ export type ContextScreen = "inventory" | "configuration" | "backups" | "readine
 export function clusterContextLinks(clusterRef: string): ReadonlyArray<{ readonly id: ContextScreen; readonly label: string; readonly href: string }> {
   const r = encodeURIComponent(clusterRef);
   return [
-    { id: "inventory", label: "Inventory", href: `?screen=inventory&cluster_ref=${r}` },
-    { id: "configuration", label: "Configuration", href: `?screen=configuration&cluster_ref=${r}` },
+    { id: "inventory", label: "Device screen", href: `?screen=inventory&cluster_ref=${r}` },
     { id: "backups", label: "Backups", href: `?screen=backups&q=${r}` },
     { id: "readiness", label: "Readiness", href: `?screen=operations&cluster_ref=${r}` },
   ];

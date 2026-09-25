@@ -294,7 +294,7 @@ function PolicyInstallCard({ p }: { readonly p: OverviewView["policy_install"] }
   return (
     <Card sx={CARD}>
       <SectionTitle icon="config" title="Policy installed" hint={`as each gateway reports it · read every evening 23:00${p?.last_read_at ? ` · last read ${relativeAge(p.last_read_at)}` : ""}`}
-        right={<Link href="?screen=configuration" sx={{ fontSize: 13 }}>Open Configuration</Link>} />
+        right={<Link href="?screen=inventory" sx={{ fontSize: 13 }}>Open Configuration</Link>} />
       {!p || p.state !== "OK" ? (
         <StatePanel variant="not_evaluated" title="Not read yet" body="The first read runs at 23:00 with the nightly inventory collection." />
       ) : (
@@ -473,10 +473,10 @@ export function OverviewScreen() {
       <PostureTile big={wall} icon="config" severity="serious" title="Clusters with member differences" count={a.cluster_diff?.count ?? 0} of={a.cluster_diff?.of}
         unknown={tileUnknown(a.cluster_diff)} previous={a.cluster_diff?.previous}
         context={`${(a.cluster_diff?.of ?? 0) - (a.cluster_diff?.count ?? 0)} in agreement${a.cluster_diff?.unknown ? ` · ${a.cluster_diff.unknown} not comparable` : ""} · interface physical settings and member addresses excluded`}
-        href={q({ screen: "configuration", cluster_diff: "present" })} />
+        href={q({ screen: "inventory", cluster_diff: "present" })} />
       <PostureTile big={wall} icon="config" severity="serious" title="Configuration changed" count={a.config_changed?.count ?? 0} of={a.config_changed?.of}
         unknown={tileUnknown(a.config_changed)} previous={a.config_changed?.previous}
-        context={`since the previous collection · latest ${relativeAge(data.evidence.configuration?.at)}`} href={q({ screen: "configuration", change_state: "changed" })} />
+        context={`since the previous collection · latest ${relativeAge(data.evidence.configuration?.at)}`} href={q({ screen: "inventory", change_state: "changed" })} />
       <PostureTile big={wall} icon="devices" severity="warning" title="Devices without evidence, 24 h" count={a.stale_inventory?.count ?? 0} of={a.stale_inventory?.of}
         unknown={tileUnknown(a.stale_inventory)} previous={a.stale_inventory?.previous}
         context={`${age?.h24_72 ?? 0} aging · ${age?.gt72h ?? 0} stale · ${neverRead} never read`} href={q({ screen: "inventory", inventory_age: "stale" })} />
@@ -656,32 +656,32 @@ export function OverviewScreen() {
       </Box>
 
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "1fr 1fr", xl: "1fr 1fr 1fr" } }}>
-        {block("Configuration changed", "since the previous read, per device", { href: q({ screen: "configuration", change_state: "changed" }), label: "All" },
+        {block("Configuration changed", "since the previous read, per device", { href: q({ screen: "inventory", change_state: "changed" }), label: "All" },
           changed && changed.of > 0 ? (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
               <PopulationBar parts={[
-                { name: "Changed", count: changed.count, bg: EXEC.blue, href: q({ screen: "configuration", change_state: "changed" }) },
+                { name: "Changed", count: changed.count, bg: EXEC.blue, href: q({ screen: "inventory", change_state: "changed" }) },
                 { name: "Unchanged", count: changed.of - changed.count, bg: EXEC.pale },
                 { name: "Not comparable", count: Math.max(0, d.active_devices - changed.of), bg: EXEC.hatch }]} />
               {(ex.config_changes?.rows ?? []).slice(0, 3).map((r) => (
                 <Box key={r.device_id} sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
-                  <Link href={q({ screen: "configuration", device_id: r.device_id })} underline="hover" sx={{ fontSize: 13.5, fontWeight: 600, color: m3.onSurface }}>{r.label ?? r.device_id.slice(0, 8)}</Link>
+                  <Link href={q({ screen: "inventory", device_id: r.device_id, tab: "configuration" })} underline="hover" sx={{ fontSize: 13.5, fontWeight: 600, color: m3.onSurface }}>{r.label ?? r.device_id.slice(0, 8)}</Link>
                   <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>{r.sections_latest} sections · {relativeAge(r.collected_at)}</Typography>
                 </Box>
               ))}
             </Box>
           ) : <Typography sx={{ color: m3.onSurfaceVar }}>No comparable reads yet</Typography>)}
-        {block("Cluster members compared", "Differences are a review signal, not a fault.", { href: q({ screen: "configuration", cluster_diff: "present" }), label: "All" },
+        {block("Cluster members compared", "Differences are a review signal, not a fault.", { href: q({ screen: "inventory", cluster_diff: "present" }), label: "All" },
           cd && (cd.of ?? 0) > 0 ? (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
               <PopulationBar parts={[
-                { name: "Differences", count: cd.count, bg: EXEC.blue, href: q({ screen: "configuration", cluster_diff: "present" }) },
+                { name: "Differences", count: cd.count, bg: EXEC.blue, href: q({ screen: "inventory", cluster_diff: "present" }) },
                 { name: "No differences", count: (cd.of ?? 0) - cd.count, bg: EXEC.pale },
                 { name: "Insufficient evidence", count: cd.unknown ?? 0, bg: EXEC.hatch }]} />
               {(ex.cluster_diff?.rows ?? []).slice(0, 3).map((r) => (
                 <Box key={r.cluster_ref}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
-                    <Link href={q({ screen: "configuration", cluster_ref: r.cluster_ref })} underline="hover" sx={{ fontSize: 13.5, fontWeight: 600, color: m3.onSurface }}>{r.cluster_ref}</Link>
+                    <Link href={q({ screen: "inventory", cluster_ref: r.cluster_ref, tab: "configuration" })} underline="hover" sx={{ fontSize: 13.5, fontWeight: 600, color: m3.onSurface }}>{r.cluster_ref}</Link>
                     <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>{r.diff_setting_count} settings</Typography>
                   </Box>
                   <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.diff_sections.join(" · ")}</Typography>

@@ -7,3 +7,5 @@ PO 2026-09-25: one device screen approved (Config nav removed); Overview as exec
 Correction: 'Şu an için bu ekranlar ok' approved the five Overview facts (not a deferral). Building the executive Overview first.
 
 Overview done (estate map, Fable spec). Next: merge Devices and Config into one device screen (approved).
+
+2026-09-25: one device screen shipped -- Configuration is a tab of Devices (device and cluster, Check Point and Palo Alto only), the Config nav item is gone, old ?screen=configuration links land on Devices with the tab open; Devices list takes change_state=changed and cluster_diff=present; 'Read configuration, all' in the Devices toolbar.

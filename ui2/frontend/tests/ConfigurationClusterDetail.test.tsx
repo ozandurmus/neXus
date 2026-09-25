@@ -64,7 +64,8 @@ describe("Configuration cluster detail after the Fable review", () => {
     expect(within(m1).getByText("PASSIVE")).toHaveAttribute("data-role", "PASSIVE");
     const strip = screen.getByRole("navigation", { name: "This cluster on other screens" });
     expect(within(strip).getByRole("link", { name: "Backups" })).toHaveAttribute("href", "?screen=backups&q=CLS-ROMEO-01");
-    expect(within(strip).getByRole("link", { name: "Configuration" })).toHaveAttribute("aria-current", "page");
+    // Configuration is a tab of the device screen now (PO 2026-09-25): the strip links the device screen itself.
+    expect(within(strip).getByRole("link", { name: "Device screen" })).toHaveAttribute("href", "?screen=inventory&cluster_ref=CLS-ROMEO-01");
     // Setting columns run M1, M2 as well.
     const heads = screen.getAllByRole("columnheader").map((h) => h.textContent);
     expect(heads.indexOf("FW-TANGO-01")).toBeLessThan(heads.indexOf("FW-TANGO-02"));

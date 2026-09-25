@@ -10,7 +10,8 @@ import { DESTINATIONS, DRAWER_GROUPS } from "../src/shell/NavigationRail";
 const PRODUCT_MARKERS: Record<string, string> = {
   overview: "Reading the fleet…",
   inventory: "No device to show",
-  configuration: "Configuration",
+  // One device screen (PO 2026-09-25): ?screen=configuration lands on Devices.
+  configuration: "No device to show",
   compliance: "No framework assigned · nothing assessed yet",
   operations: "No HA pair or cluster enrolled",
   administration: "Administration",
@@ -36,7 +37,7 @@ describe("the UI 2.0 shell navigation", () => {
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
     const labels = DESTINATIONS.map((d) => d.label);
-    expect(labels).toEqual(["Overview", "Devices", "Config", "Compliance", "Backups", "Operations", "Admin"]);
+    expect(labels).toEqual(["Overview", "Devices", "Compliance", "Backups", "Operations", "Admin"]);
     for (const d of DESTINATIONS) {
       expect(within(rail).getByText(d.label)).toBeInTheDocument();
     }

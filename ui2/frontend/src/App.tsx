@@ -60,6 +60,14 @@ export function screenFromSearch(search: string): { readonly screen: ScreenId; r
   const preview = params.get("preview");
   if (isScreenId(preview)) return { screen: preview, preview: true };
   const screen = params.get("screen");
+  // One device screen (PO 2026-09-25): Configuration is a tab of Devices. An old link lands there, its device,
+  // cluster and filters kept, with the Configuration tab open.
+  if (screen === "configuration" && typeof window !== "undefined") {
+    params.set("screen", "inventory");
+    if (params.get("device_id") || params.get("cluster_ref")) params.set("tab", "configuration");
+    window.history.replaceState(null, "", `?${params.toString()}`);
+    return { screen: "inventory", preview: false };
+  }
   if (isScreenId(screen)) return { screen, preview: false };
   return { screen: "overview", preview: false };
 }

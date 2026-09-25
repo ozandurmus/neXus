@@ -17,7 +17,7 @@ interface Hit { readonly kind: "device" | "cluster" | "vs" | "screen"; readonly 
 interface DisplayHit { readonly group: "Devices" | "Screens" | "Settings" | "Evidence"; readonly label: string; readonly sub: string; readonly href: string; readonly vendor?: string | null }
 
 const SCREENS: Hit[] = [
-  ["Overview", "overview"], ["Devices", "inventory"], ["Configuration", "configuration"], ["Compliance", "compliance"],
+  ["Overview", "overview"], ["Devices", "inventory"], ["Compliance", "compliance"],
   ["Backups", "backups"], ["Operations", "operations"], ["Administration", "administration"],
 ].map(([label, id]) => ({ kind: "screen" as const, label, sub: "Screen", href: `?screen=${id}` }));
 

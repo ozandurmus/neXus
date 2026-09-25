@@ -323,7 +323,8 @@ function headerChips(device: DeviceSummary, extra: ReactNode = null) {
 }
 
 /** One device: header, summary bar, operator snapshot, section accordion; the old detail (changes, overrides, native text) stays under Details. */
-export function DeviceConfigurationDetail({ device }: { readonly device: DeviceSummary }) {
+/** {@code embedded}: shown as a tab of the device screen, whose header already names the device (PO 2026-09-25). */
+export function DeviceConfigurationDetail({ device, embedded = false }: { readonly device: DeviceSummary; readonly embedded?: boolean }) {
   const { configuration, projection, error, loading } = useProjection(device);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<ReadonlySet<string> | null>(null);
@@ -383,6 +384,18 @@ export function DeviceConfigurationDetail({ device }: { readonly device: DeviceS
     </Stack>
   );
 
+  if (embedded) {
+    return (
+      <M3Tabs
+        ariaLabel="Configuration sections"
+        tabs={[
+          { label: "Sections", panel: configurationTab },
+          { label: "Details", panel: <DeviceConfigurationPanels deviceId={device.device_id} hostname={device.hostname} vendorHint={device.vendor_hint} /> },
+        ]}
+      />
+    );
+  }
+
   return (
     <Stack spacing={2}>
       <InventoryEntityHeader
@@ -440,7 +453,9 @@ export function clusterEvidenceCsv(input: {
 }
 
 /** A cluster: every member's configuration side by side; a real difference is a DIFF row, a member-specific one is marked MEMBER. */
-export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembers }: { readonly clusterRef: string; readonly members: readonly DeviceSummary[] }) {
+export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembers, embedded = false }: {
+  readonly clusterRef: string; readonly members: readonly DeviceSummary[]; readonly embedded?: boolean;
+}) {
   // Review §3: members always M1, M2 (by name) -- in the header, the identity table and the setting columns.
   const members = useMemo(() => orderMembers(unorderedMembers), [unorderedMembers]);
   const [state, setState] = useState<{ cluster: ClusterProjection | null; missing: string[]; error: string | null; loading: boolean }>({ cluster: null, missing: [], error: null, loading: true });
@@ -554,7 +569,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
 
   return (
     <Stack spacing={2}>
-      <InventoryEntityHeader
+      {!embedded && <InventoryEntityHeader
         vendorHint={first?.vendor_hint ?? "check_point"}
         model={first?.model}
         titlePrefix={`Configuration · ${vendorLabel(first?.vendor_hint)} cluster`}
@@ -591,7 +606,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
         }
       >
         <ClusterContextStrip clusterRef={clusterRef} current="configuration" />
-      </InventoryEntityHeader>
+      </InventoryEntityHeader>}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <Box>
           <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Observed configuration · members side by side</Typography>
@@ -603,9 +618,12 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
             <Typography variant="body2">Differences only</Typography>
           </Stack>
           <FilterBox value={query} onChange={setQuery} />
+          {embedded && (
+            <M3Button emphasis="tonal" icon="download" disabled={!cluster} onClick={exportCsv}>Export evidence (CSV)</M3Button>
+          )}
         </Stack>
       </Box>
-      <ClusterMembersCard members={members} />
+      {!embedded && <ClusterMembersCard members={members} />}
       {state.missing.length > 0 && (
         <EmptyPanel
           title={cluster ? "One side has no configuration read" : "No member has a configuration read"}

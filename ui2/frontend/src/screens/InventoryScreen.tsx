@@ -14,10 +14,11 @@ import { RoleChip } from "../shell/States";
 import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, toCsv } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { useListSearch } from "../shell/listSearch";
-import { requestBulkInventoryCollect, listDevices, getManagementTree, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode } from "../auth/adminApi";
+import { requestBulkInventoryCollect, requestBulkConfigurationCollect, listConfigurations, getOverview, listDevices, getManagementTree, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode } from "../auth/adminApi";
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar, deriveClusterTitle } from "./InventoryPanels";
+import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -79,6 +80,9 @@ function hasFailedCollection(device: DeviceSummary): boolean {
 function clusterHasCollectedEvidence(members: readonly DeviceSummary[]): boolean {
   return members.some((m) => Boolean(m.ip_addresses && m.ip_addresses.trim().length > 0));
 }
+
+/** Vendors with a configuration read (one device screen, PO 2026-09-25): others show no Configuration tab. */
+const CONFIGURATION_VENDORS = new Set(["check_point", "palo_alto"]);
 
 /** Labels for the child list under a device: Palo Alto vsys, Check Point VSX virtual systems, Infoblox grid members. */
 function childLabels(vendorHint: string | null | undefined, role?: string | null): { heading: string; chip: string; tag: string } {
@@ -887,6 +891,34 @@ export function InventoryScreen() {
     urlParam("sw_version") ? { kind: "exact", value: urlParam("sw_version")! } : urlParam("sw_major") ? { kind: "major", value: urlParam("sw_major")! } : null);
   // Overview model donuts: Check Point appliance family (show asset system) or Palo Alto model.
   const [modelFilter, setModelFilter] = useState<string | null>(() => urlParam("hw_model"));
+  // One device screen (PO 2026-09-25): old Config links land here -- ?tab=configuration opens that tab, and the
+  // configuration filters (changed since the previous read, clusters whose members differ) narrow this list.
+  const [initialTab] = useState<string | null>(() => urlParam("tab"));
+  const [changedOnly, setChangedOnly] = useState<boolean>(() => urlParam("change_state") === "changed");
+  const [diffOnly, setDiffOnly] = useState<boolean>(() => urlParam("cluster_diff") === "present");
+  const [changedIds, setChangedIds] = useState<ReadonlySet<string> | null>(null);
+  const [diffRefs, setDiffRefs] = useState<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    if (changedOnly && !changedIds) {
+      listConfigurations().then((r) => setChangedIds(new Set((r.devices ?? []).filter((d) => d.change_state === "changed").map((d) => d.device_id))))
+        .catch(() => setChangedIds(new Set()));
+    }
+    if (diffOnly && !diffRefs) {
+      getOverview().then((o) => setDiffRefs(new Set(o.exceptions?.cluster_diff?.all_refs ?? []))).catch(() => setDiffRefs(new Set()));
+    }
+  }, [changedOnly, diffOnly, changedIds, diffRefs]);
+  const [configBulkBusy, setConfigBulkBusy] = useState(false);
+  const handleConfigBulk = async () => {
+    setConfigBulkBusy(true);
+    setBulkResult(null);
+    try {
+      setBulkResult(await requestBulkConfigurationCollect());
+    } catch (err) {
+      console.error("Bulk configuration collect failed:", err);
+    } finally {
+      setConfigBulkBusy(false);
+    }
+  };
   const [sortMode, setSortMode] = useState<"name_asc" | "name_desc" | "vendor">("name_asc");
   const [listView, setListView] = useListView();
 
@@ -959,6 +991,8 @@ export function InventoryScreen() {
     if (stateFilter === "failed" && !hasFailedCollection(device)) return false;
     if (stateFilter === "stale" && device.enrollment_state !== "DEGRADED" && device.enrollment_state !== "UNREACHABLE") return false;
     if (ageFilter && !inAgeBucket(device, ageFilter)) return false;
+    if (changedOnly && changedIds && !changedIds.has(device.device_id)) return false;
+    if (diffOnly && diffRefs && !(device.cluster_member_ref && diffRefs.has(device.cluster_member_ref))) return false;
     if (versionFilter) {
       const sw = device.software_version?.trim() || null;
       if (versionFilter.value === "unknown") { if (sw !== null) return false; }
@@ -1013,6 +1047,9 @@ export function InventoryScreen() {
             <M3Button emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
               {bulkBusy ? "Starting..." : "Bulk Collect"}
             </M3Button>
+            <M3Button emphasis="tonal" icon="config" disabled={configBulkBusy} onClick={handleConfigBulk}>
+              {configBulkBusy ? "Starting..." : "Read configuration, all"}
+            </M3Button>
             <M3Button emphasis="filled" icon="plus" href="?screen=administration">Add device</M3Button>
           </>
         }
@@ -1041,16 +1078,18 @@ export function InventoryScreen() {
               pr: 0.5,
             }}
           >
-            {(ageFilter || hotfixFilter || versionFilter || modelFilter) && (
+            {(ageFilter || hotfixFilter || versionFilter || modelFilter || changedOnly || diffOnly) && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, flexWrap: "wrap" }}>
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>From Overview:</Typography>
                 {ageFilter && <StatusChip tone="attn" label={`inventory ${({ stale: "older than 24 h or never", lt24h: "under 24 h", "24h_72h": "24–72 h", gt72h: "over 72 h", never: "never collected" } as Record<string, string>)[ageFilter] ?? ageFilter}`} dense />}
                 {hotfixFilter && <StatusChip tone="attn" label={`hotfix ${hotfixFilter === "unknown" ? "UNKNOWN" : hotfixFilter}`} dense />}
                 {versionFilter && <StatusChip tone="attn" label={`version ${versionFilter.value === "unknown" ? "UNKNOWN" : versionFilter.value}${versionFilter.kind === "major" ? " (major)" : ""}`} dense />}
                 {modelFilter && <StatusChip tone="attn" label={`model ${modelFilter === "unknown" ? "UNKNOWN" : modelFilter}`} dense />}
+                {changedOnly && <StatusChip tone="attn" label="configuration changed since the previous read" dense />}
+                {diffOnly && <StatusChip tone="attn" label="clusters whose members differ" dense />}
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{filteredCountLabel}</Typography>
                 <Box component="span" role="button" tabIndex={0} sx={{ cursor: "pointer", fontSize: 12, color: m3.primary }}
-                  onClick={() => { setAgeFilter(null); setHotfixFilter(null); setVersionFilter(null); setModelFilter(null); }}>clear</Box>
+                  onClick={() => { setAgeFilter(null); setHotfixFilter(null); setVersionFilter(null); setModelFilter(null); setChangedOnly(false); setDiffOnly(false); }}>clear</Box>
               </Box>
             )}
             <FilterBar settings={<ListSettingsMenu settings={[{ title: "View", options: [{ value: "flat", label: "Flat list" }, { value: "manager", label: "By manager" }], value: listView, onChange: (x: string) => setListView(x as typeof listView) }, { title: "Sort", options: [{ value: "name_asc", label: "Name (A→Z)" }, { value: "name_desc", label: "Name (Z→A)" }, { value: "vendor", label: "Vendor (A→Z)" }], value: sortMode, onChange: (x: string) => setSortMode(x as typeof sortMode) }]} />}>
@@ -1137,6 +1176,10 @@ export function InventoryScreen() {
                 initialVs={selectedCluster.initialVs}
                 cache={clusterCacheRef.current}
                 onCacheUpdate={(ref, inv) => clusterCacheRef.current.set(ref, inv)}
+                initialTab={initialTab}
+                configuration={CONFIGURATION_VENDORS.has(selectedCluster.members[0]?.vendor_hint ?? "")
+                  ? <ClusterConfigurationDetail key={selectedCluster.ref} clusterRef={selectedCluster.ref} members={selectedCluster.members} embedded />
+                  : undefined}
               />
             ) : selectedDevice ? (
               <Stack spacing={2}>
@@ -1158,6 +1201,10 @@ export function InventoryScreen() {
                   device={selectedDevice}
                   initialVs={selectedDeviceVs ?? undefined}
                   onDeviceStateChange={refresh}
+                  initialTab={initialTab}
+                  configuration={CONFIGURATION_VENDORS.has(selectedDevice.vendor_hint)
+                    ? <DeviceConfigurationDetail key={selectedDevice.device_id} device={selectedDevice} embedded />
+                    : undefined}
                 />
               </Stack>
             ) : (

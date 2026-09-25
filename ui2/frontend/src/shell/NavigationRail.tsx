@@ -39,7 +39,6 @@ export interface RailDestination {
 export const DESTINATIONS: readonly RailDestination[] = [
   { id: "overview", label: "Overview", icon: "grid", screen: "overview" },
   { id: "devices", label: "Devices", icon: "devices", screen: "inventory", requiredPlane: "Devices" },
-  { id: "config", label: "Config", icon: "config", screen: "configuration", requiredPlane: "Config" },
   { id: "compliance", label: "Compliance", icon: "compliance", screen: "compliance", requiredPlane: "Compliance" },
   // The Product Owner's backup requirement asks for a left-hand Backup destination
   // outright, and RECOVER is its own stage of the product axis rather than a leaf of
@@ -74,7 +73,6 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
   {
     header: "Planes",
     leaves: [
-      { label: "Configuration", screen: "configuration", requiredPlane: "Config" },
       { label: "Compliance", screen: "compliance", requiredPlane: "Compliance" },
     ],
   },

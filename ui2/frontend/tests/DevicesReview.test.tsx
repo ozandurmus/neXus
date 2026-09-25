@@ -86,8 +86,7 @@ describe("Devices screen after the Fable review", () => {
     const strip = screen.getByRole("navigation", { name: "This cluster on other screens" });
     const hrefs = within(strip).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]);
     expect(hrefs).toEqual([
-      ["Inventory", "?screen=inventory&cluster_ref=CLS-ROMEO-01"],
-      ["Configuration", "?screen=configuration&cluster_ref=CLS-ROMEO-01"],
+      ["Device screen", "?screen=inventory&cluster_ref=CLS-ROMEO-01"],
       ["Backups", "?screen=backups&q=CLS-ROMEO-01"],
       ["Readiness", "?screen=operations&cluster_ref=CLS-ROMEO-01"],
     ]);

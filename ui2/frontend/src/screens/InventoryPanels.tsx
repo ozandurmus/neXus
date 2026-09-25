@@ -1640,14 +1640,32 @@ export function InventoryEntityHeader({
   );
 }
 
+/** The detail tabs of the one device screen: the Configuration tab only when the vendor has a configuration read. */
+function DetailTabs({ ariaLabel, tabs, configuration, initialTab }: {
+  readonly ariaLabel: string;
+  readonly tabs: ReadonlyArray<{ label: string; panel: React.ReactNode }>;
+  readonly configuration?: React.ReactNode;
+  readonly initialTab?: string | null;
+}) {
+  const shown = tabs.filter((t) => t.label !== "Configuration" || Boolean(configuration));
+  const wanted = initialTab === "configuration" ? shown.findIndex((t) => t.label === "Configuration") : -1;
+  return <M3Tabs key={wanted} ariaLabel={ariaLabel} initial={Math.max(0, wanted)} tabs={shown} />;
+}
+
 export function DeviceInventoryPanels({
   device,
   initialVs,
   onDeviceStateChange,
+  configuration,
+  initialTab,
 }: {
   readonly device: DeviceSummary;
   readonly initialVs?: string;
   readonly onDeviceStateChange?: () => void;
+  /** One device screen (PO 2026-09-25): the configuration tab's content, when the vendor has a configuration read. */
+  readonly configuration?: React.ReactNode;
+  /** "configuration" opens that tab (old Config links land here). */
+  readonly initialTab?: string | null;
 }) {
   const isCluster = device.cluster_member_ref !== null;
   const isPaloAlto = device.vendor_hint === "palo_alto";
@@ -1751,8 +1769,10 @@ export function DeviceInventoryPanels({
         ) : null}
       </InventoryEntityHeader>
 
-      <M3Tabs
+      <DetailTabs
         ariaLabel="Device detail"
+        configuration={configuration}
+        initialTab={initialTab}
         tabs={[
           {
             label: "Interfaces",
@@ -1817,6 +1837,10 @@ export function DeviceInventoryPanels({
               ),
           },
           {
+            label: "Configuration",
+            panel: configuration,
+          },
+          {
             label: "Backup",
             panel: <BackupPanel deviceId={device.device_id} />,
           },
@@ -1843,10 +1867,15 @@ export function ClusterDetailPanels({
   initialVs,
   cache,
   onCacheUpdate,
+  configuration,
+  initialTab,
 }: {
   readonly clusterRef: string;
   readonly members: readonly DeviceSummary[];
   readonly initialVs?: string | null;
+  /** One device screen (PO 2026-09-25): the members' configuration side by side, as a tab. */
+  readonly configuration?: React.ReactNode;
+  readonly initialTab?: string | null;
   readonly cache?: Map<string, ClusterInventory>;
   readonly onCacheUpdate?: (ref: string, inv: ClusterInventory) => void;
 }) {
@@ -1998,8 +2027,10 @@ export function ClusterDetailPanels({
             this screen must not have. */}
       </InventoryEntityHeader>
 
-      <M3Tabs
+      <DetailTabs
         ariaLabel="Cluster detail"
+        configuration={configuration}
+        initialTab={initialTab}
         tabs={[
           {
             label: "Interfaces",
@@ -2068,6 +2099,10 @@ export function ClusterDetailPanels({
                 </Table>
               </Stack>
             ),
+          },
+          {
+            label: "Configuration",
+            panel: configuration,
           },
           {
             label: "Identity & provenance",
