@@ -22,6 +22,13 @@ class BackupFreeSpaceParserTest {
     }
 
     @Test
+    void theDigestTimeoutScalesWithTheArchive() {
+        assertEquals(60, BackupCapabilityExecutor.digestTimeout(100L * 1024 * 1024).toSeconds(), "small archives keep 60 s");
+        assertEquals(292, BackupCapabilityExecutor.digestTimeout(6_127_928_294L).toSeconds(), "about 6 GB: one second per 20 MB");
+        assertEquals(600, BackupCapabilityExecutor.digestTimeout(40L * 1024 * 1024 * 1024).toSeconds(), "never above the gate's 600 s");
+    }
+
+    @Test
     void onlyTheGaiaEmbeddedPhraseMarksASpark() {
         assertTrue(BackupCapabilityExecutor.isGaiaEmbeddedCliError("        ^\nBad parameter starting at 'diskspace'\n"));
         assertTrue(!BackupCapabilityExecutor.isGaiaEmbeddedCliError("CLINFR0329  Invalid command:'show diskspace'.\n"),

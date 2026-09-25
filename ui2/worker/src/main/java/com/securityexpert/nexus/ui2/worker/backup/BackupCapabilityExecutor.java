@@ -230,7 +230,7 @@ public final class BackupCapabilityExecutor {
         // Entry 6 (BK-3): the digest computed on the device is compared with
         // the digest of the bytes actually received -- nothing is deleted
         // until they match.
-        ExecOutcome digest = exec(session, BackupReadPlan.archiveDigestCommand(name), DIGEST_TIMEOUT);
+        ExecOutcome digest = exec(session, BackupReadPlan.archiveDigestCommand(name), digestTimeout(metadata.plaintextBytes()));
         Optional<String> deviceDigest = parseSha256sumOutput(digest.output());
         if (deviceDigest.isEmpty()) {
             LOG.log(System.Logger.Level.WARNING, "[BACKUP_DIGEST_UNPARSED] shape={0}", maskedShape(digest.output()));
@@ -427,6 +427,15 @@ public final class BackupCapabilityExecutor {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * The device-side digest's time allowance: one second per 20 MB of archive, never below {@link #DIGEST_TIMEOUT}
+     * nor above 600 s (gate cp_backup_archive_digest). Measured 2026-09-25: a multi-GB archive ran past a flat 60 s.
+     */
+    static Duration digestTimeout(long archiveBytes) {
+        long seconds = Math.max(DIGEST_TIMEOUT.toSeconds(), archiveBytes / (20L * 1024 * 1024));
+        return Duration.ofSeconds(Math.min(600, seconds));
     }
 
     /** A Gaia Embedded (Quantum Spark) clish error answer to a Gaia command. */

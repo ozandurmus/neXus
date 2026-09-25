@@ -875,7 +875,9 @@ gates:
     canonical_command_key: "sha256sum <name>"
     action_class: read
     sign_off_state: SIGNED_OFF
-    timeout_s: 60
+    # 2026-09-25: measured on a gateway with a multi-GB archive, sha256sum ran past 60 s; the run now allows
+    # one second per 20 MB of archive, at least 60 s and at most 600 s (the MDS export's own digest bound).
+    timeout_s: 600
     retry_rule: none
     max_frequency: "once per run"
     session_reuse_rule: "same session as the submit"
