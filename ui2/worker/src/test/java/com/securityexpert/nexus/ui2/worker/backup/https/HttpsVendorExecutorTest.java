@@ -170,6 +170,23 @@ class HttpsVendorExecutorTest {
     }
 
     @Test
+    void cyberControllerInventoryNamesTheControllerAndItsManagedDevices() {
+        calls.deviceList = "[{\"name\": \"CC-MAIN\", \"managementIp\": \"192.0.2.30\", \"type\": \"CyberController\", \"treeType\": \"ROOT\","
+                + " \"deviceVersion\": \"10.13.0\", \"ormId\": \"1\", \"parentOrmId\": null, \"children\": ["
+                + "  {\"name\": \"Site A\", \"type\": \"Site\", \"treeType\": \"SITE\", \"ormId\": \"2\", \"parentOrmId\": \"1\", \"children\": ["
+                + "    {\"name\": \"DP-B\", \"managementIp\": \"192.0.2.42\", \"type\": \"DefensePro\", \"treeType\": \"DEVICE\", \"deviceVersion\": \"8.32\"},"
+                + "    {\"name\": \"DP-A\", \"managementIp\": \"192.0.2.41\", \"type\": \"DefensePro\", \"treeType\": \"DEVICE\", \"deviceVersion\": \"8.32\"},"
+                + "    {\"name\": \"DP-OLD\", \"managementIp\": \"192.0.2.43\", \"type\": \"DefensePro\", \"treeType\": \"DEVICE\", \"deleted\": true}]}]}]";
+        HttpsVendorExecutor.InventoryOutcome o = executor.inventory("radware_cyber_controller", T, "cred");
+        assertTrue(o instanceof HttpsVendorExecutor.InventoryOutcome.Completed, String.valueOf(o));
+        var done = (HttpsVendorExecutor.InventoryOutcome.Completed) o;
+        assertEquals(Optional.of("CC-MAIN"), done.identity().name(), "the node whose address is the one dialled is the controller");
+        assertEquals(Optional.of("10.13.0"), done.identity().version());
+        assertEquals(Optional.of("DP-A, DP-B"), done.virtualSystems(), "managed devices by name, sorted; sites and deleted entries skipped");
+        assertTrue(calls.log.stream().anyMatch(l -> l.startsWith("POST " + HttpsVendorPlan.CC_LOGOUT)), "always logs out: " + calls.log);
+    }
+
+    @Test
     void cidrFromAddressAndDottedMask() {
         assertEquals(Optional.of("10.0.0.12/24"), InfobloxMembers.cidr(Optional.of("10.0.0.12"), Optional.of("255.255.255.0")));
         assertEquals(Optional.of("10.9.0.0/16"), InfobloxMembers.cidr(Optional.of("10.9.0.0"), Optional.of("255.255.0.0")));

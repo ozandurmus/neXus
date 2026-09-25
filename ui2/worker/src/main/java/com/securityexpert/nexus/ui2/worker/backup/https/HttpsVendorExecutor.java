@@ -188,7 +188,14 @@ public final class HttpsVendorExecutor {
                 new Identity(gridName, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())));
     }
 
-    /** Radware Cyber Controller: the managed device list (V67 calls 1, 2, 4) as the controller's inventory -- names only. */
+    /**
+     * Radware Cyber Controller: the managed device tree (V67 calls 1, 2, 4) as the controller's inventory. The tree
+     * (measured 2026-09-25: children, deleted, deviceVersion, formFactor, highAvailabilityPriorityEnum, managementIp,
+     * name, ormId, parentOrmId, status, supportTemplate, treeType, type) is walked whole; every node with a
+     * management address that is not the controller's own is a managed device; the controller's own name is the node
+     * whose address is the one dialled, else the node whose type names a controller, else the single root node. Node
+     * types and tree types are logged as counts (they are enumerations, never names).
+     */
     private InventoryOutcome inventoryCyberController(Target target, Credentials creds) throws IOException, InterruptedException {
         CcLogin login = ccLogin(target, creds);
         if (login.session().isEmpty()) {
@@ -201,21 +208,13 @@ public final class HttpsVendorExecutor {
             if (devices.isEmpty()) {
                 return new InventoryOutcome.Failed("the Cyber Controller device list could not be read");
             }
-            List<String> names = new java.util.ArrayList<>();
-            JsonNode list = devices.get();
-            Iterable<JsonNode> items = list.isArray() ? list : list.path("devices").isArray() ? list.path("devices") : List.of();
-            for (JsonNode d : items) {
-                for (String key : List.of("name", "deviceName", "hostName")) {
-                    if (d.hasNonNull(key) && d.get(key).isTextual() && !d.get(key).asText().isBlank()) {
-                        names.add(d.get(key).asText().trim());
-                        break;
-                    }
-                }
-            }
-            java.util.Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
-            LOG.log(System.Logger.Level.INFO, "[HTTPS_INVENTORY] cyber controller lists {0} managed device(s)", names.size());
+            CyberControllerTree tree = CyberControllerTree.walk(devices.get(), target.host());
+            LOG.log(System.Logger.Level.INFO, "[HTTPS_INVENTORY] cyber controller tree: {0} node(s), types {1}, tree types {2}, "
+                    + "managed devices {3}, own name found by {4}", tree.nodeCount(), tree.typeCounts(), tree.treeTypeCounts(),
+                    tree.managedNames().size(), tree.ownNameRule());
+            List<String> names = tree.managedNames();
             return new InventoryOutcome.Completed(List.of(), List.of(), names.isEmpty() ? Optional.empty() : Optional.of(String.join(", ", names)),
-                    new Identity(Optional.empty(), Optional.of("Radware Cyber Controller"), Optional.empty()));
+                    new Identity(tree.ownName(), Optional.of("Radware Cyber Controller"), tree.ownVersion()));
         }
     }
 
