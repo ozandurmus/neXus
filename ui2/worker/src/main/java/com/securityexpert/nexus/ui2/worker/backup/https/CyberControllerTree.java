@@ -110,6 +110,19 @@ final class CyberControllerTree {
         return List.copyOf(out);
     }
 
+    /** The managed device whose management address is {@code address}, if the controller lists it. */
+    Optional<JsonNode> deviceAt(String address) {
+        if (address == null || address.isBlank()) {
+            return Optional.empty();
+        }
+        return nodes.stream().filter(n -> text(n, "managementIp").map(ip -> ip.trim().equalsIgnoreCase(address.trim())).orElse(false))
+                .filter(n -> !n.path("deleted").asBoolean(false)).findFirst();
+    }
+
+    static Optional<String> field(JsonNode n, String name) {
+        return text(n, name).filter(v -> !v.isBlank());
+    }
+
     int nodeCount() {
         return nodes.size();
     }

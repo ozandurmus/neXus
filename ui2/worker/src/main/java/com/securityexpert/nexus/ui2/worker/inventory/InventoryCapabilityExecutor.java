@@ -397,10 +397,17 @@ public final class InventoryCapabilityExecutor {
             Optional<String> gaiaVersion;
             Optional<String> gaiaHostname;
             try {
+                // A Spark appliance's shell is clish itself: "clish -c" is absent there, the bare commands answer.
                 gaiaVersion = com.securityexpert.nexus.ui2.worker.backup.BackupReadPlan.parseGaiaVersion(
-                        identityReadOutput(session, InventoryReadPlan.CP_SHOW_VERSION_ALL, preferInteractiveShell));
+                        identityReadOutput(session, preferInteractiveShell ? InventoryReadPlan.CP_SPARK_SHOW_VERSION_ALL
+                                : InventoryReadPlan.CP_SHOW_VERSION_ALL, preferInteractiveShell));
                 gaiaHostname = com.securityexpert.nexus.ui2.worker.configuration.ConfigurationCapabilityExecutor.parseHostname(
-                        identityReadOutput(session, InventoryReadPlan.CP_SHOW_HOSTNAME, preferInteractiveShell));
+                        identityReadOutput(session, preferInteractiveShell ? InventoryReadPlan.CP_SPARK_SHOW_HOSTNAME
+                                : InventoryReadPlan.CP_SHOW_HOSTNAME, preferInteractiveShell));
+                if (preferInteractiveShell) {
+                    LOG.log(System.Logger.Level.INFO, "[INVENTORY_SPARK_IDENTITY] target={0}:{1} hostname={2} version={3}",
+                            target.host(), target.port(), gaiaHostname.isPresent(), gaiaVersion.isPresent());
+                }
             } catch (RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "[INVENTORY_IDENTITY_READ_FAILED] {0}", e.getClass().getSimpleName());
                 gaiaVersion = Optional.empty();

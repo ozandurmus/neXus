@@ -78,7 +78,7 @@ public final class InventoryCollectService {
         // PO 2026-09-25: an Infoblox Grid Manager (appliance) and a Radware Cyber Controller (management server) have an
         // HTTPS inventory read; a DefensePro appliance has none gated yet, so it is refused here rather than failing nightly.
         boolean httpsCollectable = ("infoblox".equals(vendorHint) && "appliance".equals(role))
-                || ("radware".equals(vendorHint) && "management_server".equals(role));
+                || ("radware".equals(vendorHint) && ("management_server".equals(role) || "appliance".equals(role)));
         if (!"gateway".equals(role) && !httpsCollectable) {
             if (HTTPS_VENDORS.contains(vendorHint) && "appliance".equals(role)) {
                 return new Outcome.AdmissionRefused("VENDOR_READ_SET_UNGATED",

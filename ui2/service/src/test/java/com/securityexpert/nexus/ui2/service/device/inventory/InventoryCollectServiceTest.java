@@ -218,15 +218,12 @@ class InventoryCollectServiceTest {
     }
 
     @Test
-    void aDefenseProApplianceIsRefusedUntilItsReadsAreGated() {
+    void aDefenseProApplianceIsAdmittedAndReadThroughItsCyberController() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.byId.put("dp-1", enrolledUnrecognizedRole("dp-1", "radware", "appliance"));
         InventoryCollectService service = serviceFor(devices);
 
-        InventoryCollectService.Outcome outcome = service.requestCollect("dp-1", "actor", Optional.empty());
-
-        assertTrue(outcome instanceof InventoryCollectService.Outcome.AdmissionRefused, String.valueOf(outcome));
-        assertEquals("VENDOR_READ_SET_UNGATED", ((InventoryCollectService.Outcome.AdmissionRefused) outcome).code());
+        assertTrue(service.requestCollect("dp-1", "actor", Optional.empty()) instanceof InventoryCollectService.Outcome.Admitted);
     }
 
     @Test

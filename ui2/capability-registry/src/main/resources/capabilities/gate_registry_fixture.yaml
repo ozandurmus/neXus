@@ -599,6 +599,22 @@ gates:
     source_document_pointer: "docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md entry 4"
 
   # NXS-LOCAL-0165: 14G CG-1 Check Point configuration reads. docs/design/CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md.
+  - gate_id: cp_spark_show_hostname
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: clish
+    transport_kind: SSH_EXEC
+    canonical_command_key: "show hostname"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per inventory run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "an empty hostname is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "PO 2026-09-25: observed facts follow every read; Quantum Spark / Gaia Embedded answers clish natively (clish -c is absent)"
   - gate_id: cp_configuration_show_hostname
     vendor: check_point
     platform_role_scope: cp_gaia_gateway
@@ -1358,7 +1374,7 @@ gates:
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 60
     retry_rule: 'none'
-    max_frequency: 'once per confirm, once per backup job'
+    max_frequency: 'once per confirm, once per backup job, once per inventory read'
     session_reuse_rule: 'same session'
     unsupported_behavior_ref: 'non-2xx -> confirm failed; target not listed -> direct DefensePro path'
     secret_output_risk: 'device names and addresses (parsed to a match yes/no and counts; never persisted)'

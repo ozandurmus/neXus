@@ -197,6 +197,20 @@ class HttpsVendorExecutorTest {
     }
 
     @Test
+    void aDefenseProIsInventoriedFromItsCyberControllerEntry() {
+        calls.deviceList = "[{\"name\": \"DP-A\", \"managementIp\": \"192.0.2.41\", \"type\": \"DefensePro\", \"deviceVersion\": \"8.32.1\","
+                + " \"formFactor\": \"x4420\", \"status\": \"UP\"}]";
+        HttpsVendorExecutor.InventoryOutcome o = executor.inventoryDefenseProViaCyberController(T, "cred", "192.0.2.41");
+        assertTrue(o instanceof HttpsVendorExecutor.InventoryOutcome.Completed, String.valueOf(o));
+        var id = ((HttpsVendorExecutor.InventoryOutcome.Completed) o).identity();
+        assertEquals(Optional.of("DP-A"), id.name());
+        assertEquals(Optional.of("8.32.1"), id.version());
+        assertEquals(Optional.of("Radware DefensePro x4420"), id.model());
+        assertTrue(executor.inventoryDefenseProViaCyberController(T, "cred", "192.0.2.99") instanceof HttpsVendorExecutor.InventoryOutcome.Failed,
+                "an address the controller does not list fails honestly");
+    }
+
+    @Test
     void cidrFromAddressAndDottedMask() {
         assertEquals(Optional.of("10.0.0.12/24"), InfobloxMembers.cidr(Optional.of("10.0.0.12"), Optional.of("255.255.255.0")));
         assertEquals(Optional.of("10.9.0.0/16"), InfobloxMembers.cidr(Optional.of("10.9.0.0"), Optional.of("255.255.0.0")));

@@ -58,7 +58,19 @@ public final class HttpsInventoryJobExecutor {
         if (attemptId == null) {
             return new JobOutcome.ZombieStopped();
         }
-        HttpsVendorExecutor.InventoryOutcome outcome = executor.inventory(vendor, target, credentialRef);
+        HttpsVendorExecutor.InventoryOutcome outcome;
+        if ("radware".equals(vendor)) {
+            // A DefensePro is inventoried through the Cyber Controller that lists it (its own REST reads are not gated).
+            outcome = new HttpsVendorExecutor.InventoryOutcome.Failed("no enrolled Cyber Controller lists this DefensePro");
+            for (CyberControllers.Ref cc : CyberControllers.enrolled(devices)) {
+                outcome = executor.inventoryDefenseProViaCyberController(cc.target(), cc.credentialRef(), target.host());
+                if (outcome instanceof HttpsVendorExecutor.InventoryOutcome.Completed) {
+                    break;
+                }
+            }
+        } else {
+            outcome = executor.inventory(vendor, target, credentialRef);
+        }
         boolean completed = outcome instanceof HttpsVendorExecutor.InventoryOutcome.Completed;
         if (!attempts.writeOutcome(attemptId, leaseEpoch, completed ? "MATCHED" : "EXPECTATION_UNMET", null, 0L, 0L,
                 outcome.getClass().getSimpleName())) {

@@ -90,6 +90,10 @@ public final class InventoryReadPlan {
     /** The Gaia hostname (same rule); the configuration path's gated literal. The presented SSH identity is a host-key
      *  fingerprint on this estate, never a name -- it is not a hostname. */
     public static final String CP_SHOW_HOSTNAME = "clish -c 'show hostname'";
+    /** Quantum Spark / Gaia Embedded (clish is the shell): the bare forms -- gates cp_spark_show_hostname (V73) and
+     *  cp_gaia_show_version_all. */
+    public static final String CP_SPARK_SHOW_HOSTNAME = "show hostname";
+    public static final String CP_SPARK_SHOW_VERSION_ALL = "show version all";
 
     /** Physical read order (amended 2026-09-21, cp_vsx_interfaces_identical_to_physical): interfaces
      * ({@code fw getifs}, superseding the old v4/v6 {@code ip addr show} pair), routes, HA state, cluster

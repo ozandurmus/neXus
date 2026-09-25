@@ -189,6 +189,45 @@ public final class HttpsVendorExecutor {
     }
 
     /**
+     * A DefensePro through the Cyber Controller that manages it (PO 2026-09-25): its entry in the controller's device
+     * list (gate radware_cc_alldevices, no new request) gives its name, version, form factor, status and HA priority.
+     * Management-plane evidence, not a read from the DefensePro itself; interfaces and routes are not in that list.
+     */
+    public InventoryOutcome inventoryDefenseProViaCyberController(Target cc, String ccCredentialRef, String deviceAddress) {
+        try {
+            CcLogin login = ccLogin(cc, credentials.apply(ccCredentialRef));
+            if (login.session().isEmpty()) {
+                return login.reason().startsWith("authentication_failed")
+                        ? new InventoryOutcome.AuthenticationFailed("Cyber Controller " + login.reason())
+                        : new InventoryOutcome.Failed("Cyber Controller " + login.reason());
+            }
+            try (CcSession s = login.session().get()) {
+                Optional<JsonNode> devices = ccDevices(s);
+                if (devices.isEmpty()) {
+                    return new InventoryOutcome.Failed("the Cyber Controller device list could not be read");
+                }
+                Optional<JsonNode> entry = CyberControllerTree.walk(devices.get(), cc.host()).deviceAt(deviceAddress);
+                if (entry.isEmpty()) {
+                    return new InventoryOutcome.Failed("the Cyber Controller does not list this DefensePro's address");
+                }
+                JsonNode e = entry.get();
+                String model = "Radware DefensePro" + CyberControllerTree.field(e, "formFactor").map(f -> " " + f).orElse("");
+                LOG.log(System.Logger.Level.INFO, "[HTTPS_INVENTORY] defensepro via cyber controller: status present={0}, HA priority present={1}",
+                        CyberControllerTree.field(e, "status").isPresent(), CyberControllerTree.field(e, "highAvailabilityPriorityEnum").isPresent());
+                return new InventoryOutcome.Completed(List.of(), List.of(), Optional.empty(),
+                        new Identity(CyberControllerTree.field(e, "name"), Optional.of(model), CyberControllerTree.field(e, "deviceVersion")));
+            }
+        } catch (RuntimeException e) {
+            return new InventoryOutcome.Failed("credential_unresolvable: " + e.getClass().getSimpleName());
+        } catch (IOException e) {
+            return new InventoryOutcome.Failed(e.getClass().getSimpleName());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new InventoryOutcome.Failed("interrupted");
+        }
+    }
+
+    /**
      * Radware Cyber Controller: the managed device tree (V67 calls 1, 2, 4) as the controller's inventory. The tree
      * (measured 2026-09-25: children, deleted, deviceVersion, formFactor, highAvailabilityPriorityEnum, managementIp,
      * name, ormId, parentOrmId, status, supportTemplate, treeType, type) is walked whole; every node with a
