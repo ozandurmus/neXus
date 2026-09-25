@@ -323,3 +323,12 @@ a big number, one plain sentence, at most three named items and one link:
 Job failures, connection errors and raw reasons are not on the Overview (Operations owns them). Software/hardware
 distributions, policy install ages and evidence age stay under a collapsed "Fleet details". The `?wall=1` view is
 unchanged. Council record: `UI_EFFECTIVENESS_COUNCIL_2026_09_25_SYNTHESIS.md`.
+
+## Amendment D (Product Owner, 2026-09-25) — executive design
+Supersedes Amendment C's layout. The normal view follows `EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md` (Astra panel,
+Fable final spec): estate map (every device a square, grouped by vendor, coloured by its worst evidenced condition,
+red ring for a backup target without an archive) with three facts beside it (critical failures K of N firewalls,
+backups A of B targets, evidence R of D devices); compliance by framework (demonstrated pass / assessed, "Technical
+checks. Not an audit certification."); most widespread critical failures keyed by vendor and control; configuration
+changed, cluster members compared and software in service as population bars. No "behind newest" measure until a
+vendor-recommended build register exists. The service adds `estate` to `/api/v2/overview`.

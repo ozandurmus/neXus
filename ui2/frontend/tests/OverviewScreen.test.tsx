@@ -56,66 +56,71 @@ function stubWithControls(body: OverviewView, controls: unknown[] = []) {
   }));
 }
 
-describe("Overview -- executive summary (PO 2026-09-25: five facts)", () => {
-  it("shows four gauges: recoverability, compliance, cluster consistency and a fourth for changes or patches", async () => {
-    stubWithControls(overview());
+const ESTATE = {
+  devices: [
+    { device_id: "d1", hostname: "FW-TANGO-01", vendor: "check_point", model: "Check Point 28000", condition: "critical", no_archive: false, critical_fail: 3, last_read_at: NOW },
+    { device_id: "d2", hostname: "FW-TANGO-02", vendor: "check_point", model: "Check Point 28000", condition: "clear", no_archive: true, critical_fail: 0, last_read_at: NOW },
+    { device_id: "d3", hostname: "FW-ROMEO-01", vendor: "palo_alto", model: "PA-5440", condition: "ageing", no_archive: false, critical_fail: null, last_read_at: null },
+  ],
+  counts: { critical: 1, ageing: 1, partly_assessed: 0, not_assessed: 0, clear: 1 },
+  no_archive: 1,
+  compliance_state: "OK",
+  facts: { critical: { k: 1, n: 2 }, backups: { a: 83, b: 102 }, evidence: { r: 98, d: 105, never: 3 } },
+};
+
+describe("Overview -- executive (EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md)", () => {
+  it("draws every device on the estate map, grouped by vendor, each opening its device", async () => {
+    stubWithControls(overview({ estate: ESTATE } as Partial<OverviewView>));
     render(<OverviewScreen />);
-    expect(await screen.findByText("Recoverability")).toBeInTheDocument();
-    expect(screen.getByText("83 / 102")).toBeInTheDocument(); // 102 targets - 19 without
-    expect(screen.getByText("19 backup targets without a stored backup")).toBeInTheDocument();
-    expect(screen.getByText("Recoverability").closest("a")!.getAttribute("href")).toBe("?screen=backups&artefact=none");
-    expect(screen.getByText("28 / 31")).toBeInTheDocument(); // clusters in agreement
-    expect(screen.getByText("Configuration stable")).toBeInTheDocument(); // no build facts -> the fourth gauge is changes
-    expect(screen.getByText("CLS-ROMEO-01").getAttribute("href")).toBe("?screen=configuration&cluster_ref=CLS-ROMEO-01");
+    expect(await screen.findByText("Estate map")).toBeInTheDocument();
+    expect(screen.getByLabelText("FW-TANGO-01: Critical finding").getAttribute("href")).toBe("?screen=inventory&device_id=d1");
+    expect(screen.getByLabelText("FW-ROMEO-01: Evidence ageing")).toBeInTheDocument();
+    expect(screen.getByText("No archive")).toBeInTheDocument();
+  });
+
+  it("states the three facts over their own populations", async () => {
+    stubWithControls(overview({ estate: ESTATE } as Partial<OverviewView>));
+    render(<OverviewScreen />);
+    expect(await screen.findByText("Critical failures")).toBeInTheDocument();
+    expect(screen.getByText("of 2 firewalls")).toBeInTheDocument();
+    expect(screen.getByText("19 backup targets have no stored archive")).toBeInTheDocument();
+    expect(screen.getByText("98 of 105 active devices read in the last 24 h · 3 never read")).toBeInTheDocument();
   });
 
   it("keeps job failures and connection errors off the executive summary", async () => {
-    stubWithControls(overview());
+    stubWithControls(overview({ estate: ESTATE } as Partial<OverviewView>));
     render(<OverviewScreen />);
-    await screen.findByText("Recoverability");
+    await screen.findByText("Estate map");
     expect(document.body.textContent).not.toContain("connect_failed");
     expect(document.body.textContent).not.toMatch(/jobs failed/);
   });
 
-  it("writes UNKNOWN, never 0, for what is not evidenced", async () => {
-    stubWithControls(overview({ attention: { ...overview().attention, backup_missing: { count: 0, of: 0, state: "UNKNOWN" } } }));
-    render(<OverviewScreen />);
-    expect(await screen.findByText("Compliance has not been evaluated yet.")).toBeInTheDocument();
-    expect(screen.getByText("Backup coverage not read")).toBeInTheDocument();
-  });
-
-  it("names the most failed critical checks under compliance", async () => {
-    stubWithControls(overview({ compliance: { state: "OK", reason: null, evaluated: 102, of_firewalls: 105, observed_pct: 34.7, assured_pct: 28.9,
-      coverage_pct: 82.5, critical_deficiencies: 172, data_gaps: 428, frameworks: [] } }), [
-      { control_id: "c1", title: "Enforce SSH Protocol Version 2 Only", severity: "CRITICAL", fail_count: 62, status: "FAIL" },
-      { control_id: "c2", title: "Enforce Minimum Password Length", severity: "HIGH", fail_count: 32, status: "FAIL" },
-      { control_id: "c3", title: "Telnet disabled", severity: "CRITICAL", fail_count: 0, status: "PASS" },
+  it("ranks critical failures per vendor, never merging two vendors' checks by title", async () => {
+    stubWithControls(overview({ estate: ESTATE, compliance: { state: "OK", reason: null, evaluated: 102, of_firewalls: 105, observed_pct: 34.7,
+      assured_pct: 28.9, coverage_pct: 82.5, critical_deficiencies: 172, data_gaps: 428,
+      frameworks: [{ name: "CIS Benchmark", pass: 708, fail: 1312, unavailable: 404, total: 2424, score_pct: 29.2 }] } } as Partial<OverviewView>), [
+      { control_id: "cp1", title: "Account lockout", severity: "CRITICAL", fail_count: 62, target_device_count: 62, data_unavailable_count: 0, vendors: ["check_point"], status: "FAIL" },
+      { control_id: "pan1", title: "Account lockout", severity: "CRITICAL", fail_count: 39, target_device_count: 39, data_unavailable_count: 0, vendors: ["palo_alto"], status: "FAIL" },
+      { control_id: "h1", title: "High only", severity: "HIGH", fail_count: 80, target_device_count: 80, data_unavailable_count: 0, vendors: ["check_point"], status: "FAIL" },
     ]);
     render(<OverviewScreen />);
-    expect(await screen.findByText("Enforce SSH Protocol Version 2 Only")).toBeInTheDocument();
-    expect(screen.getByText("28.9%")).toBeInTheDocument();
-    expect(screen.getByText("172 critical findings open on 102 firewalls")).toBeInTheDocument();
-    expect(screen.queryByText("Telnet disabled")).toBeNull();
+    expect(await screen.findAllByText("Account lockout")).toHaveLength(2);
+    expect(screen.getByText("CP")).toBeInTheDocument();
+    expect(screen.getByText("PAN")).toBeInTheDocument();
+    expect(screen.queryByText("High only")).toBeNull();
+    expect(screen.getByText("29.2%")).toBeInTheDocument();
+    expect(screen.getByText("Technical checks. Not an audit certification.")).toBeInTheDocument();
   });
 
-  it("counts devices behind the newest build in each vendor's own terms", async () => {
-    stubWithControls(overview({ platform: { ...overview().platform, versions: {
-      check_point: { major: [{ label: "R81.20", count: 36 }], minor: [{ label: "R81.20 Jumbo Take 119", count: 30 }, { label: "R81.20 Jumbo Take 161", count: 6 }] },
-      palo_alto: { major: [{ label: "11.1", count: 40 }], minor: [{ label: "11.1.10-h7", count: 21 }, { label: "11.1.10-h4", count: 19 }] },
-    } } }));
+  it("shows software in each vendor's own terms without 'behind' language", async () => {
+    stubWithControls(overview({ estate: ESTATE, platform: { ...overview().platform, versions: {
+      check_point: { major: [{ label: "R81.20", count: 36 }], minor: [{ label: "R81.20 Jumbo Take 119", count: 30 }, { label: null, count: 6 }] },
+      palo_alto: { major: [{ label: "11.1", count: 40 }], minor: [{ label: "11.1.10-h7", count: 21 }] },
+    } } } as Partial<OverviewView>));
     render(<OverviewScreen />);
-    expect(await screen.findByText("Versions and patches")).toBeInTheDocument();
-    expect(screen.getByText("Patch currency")).toBeInTheDocument();
-    expect(screen.getByText("27 / 76")).toBeInTheDocument(); // 6 CP on Take 161 + 21 PAN on -h7
-    expect(screen.getByText("Check Point R81.20 · newest Take 161")).toBeInTheDocument();
-    expect(screen.getByText("Palo Alto 11.1 · newest 11.1.10-h7")).toBeInTheDocument();
-  });
-
-  it("leaves out the versions fact when no vendor has build facts", async () => {
-    stubWithControls(overview());
-    render(<OverviewScreen />);
-    await screen.findByText("Recoverability");
-    expect(screen.queryByText("Versions and patches")).toBeNull();
+    expect(await screen.findByText("Check Point · Jumbo Hotfix take")).toBeInTheDocument();
+    expect(screen.getByText("Palo Alto Networks · PAN-OS version")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/behind|on newest/i);
   });
 
   it("says the read failed instead of rendering figures when the endpoint fails", async () => {

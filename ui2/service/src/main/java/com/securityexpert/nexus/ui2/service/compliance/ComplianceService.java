@@ -245,6 +245,35 @@ public final class ComplianceService {
         return overview;
     }
 
+    /** One compliance target's critical checks, for the executive estate map (PO 2026-09-25). */
+    public record DeviceCriticals(int criticalFail, int criticalUnavailable, int criticalPass) {
+    }
+
+    /** Per evaluated device: its critical checks failing, not evidenced and passing (latest stored evaluation). */
+    public Map<String, DeviceCriticals> criticalsByDevice() {
+        List<Target> evaluated = evaluable(allDevices());
+        Map<String, DeviceCriticals> out = new LinkedHashMap<>();
+        evaluateAll(evaluated, false, new int[1]).forEach((id, eval) -> {
+            if (eval == null || eval.containsKey("error")) {
+                return;
+            }
+            int fail = 0;
+            int unavailable = 0;
+            int pass = 0;
+            for (Map<String, Object> item : getItems(eval)) {
+                if (!"CRITICAL".equalsIgnoreCase(String.valueOf(item.get("severity")))) {
+                    continue;
+                }
+                String st = String.valueOf(item.get("displayStatus"));
+                if ("FAIL".equalsIgnoreCase(st)) fail++;
+                else if ("DATA_UNAVAILABLE".equalsIgnoreCase(st)) unavailable++;
+                else if ("PASS".equalsIgnoreCase(st)) pass++;
+            }
+            out.put(id, new DeviceCriticals(fail, unavailable, pass));
+        });
+        return out;
+    }
+
     /**
      * True when at least one device evaluation is cached and none is older than the 10-minute freshness window --
      * the Overview reads the compliance figures only then, and never triggers an evaluation itself
@@ -442,6 +471,7 @@ public final class ComplianceService {
             int failCount = 0;
             int unavailCount = 0;
             List<String> affectedDevices = new ArrayList<>();
+            java.util.Set<String> vendors = new java.util.TreeSet<>();
             String missingReason = null;
 
             for (var dev : evaluated) {
@@ -457,6 +487,7 @@ public final class ComplianceService {
                             break;
                         }
                         targetDevices++;
+                        vendors.add(dev.vendor());
                         if ("PASS".equalsIgnoreCase(st)) {
                             passCount++;
                         } else if ("FAIL".equalsIgnoreCase(st)) {
@@ -492,6 +523,8 @@ public final class ComplianceService {
             row.put("data_unavailable_count", unavailCount);
             row.put("missing_reason", missingReason);
             row.put("affected_devices", affectedDevices);
+            // Two vendors' checks can share a title: the vendor keeps them apart on screen (PO review 2026-09-25).
+            row.put("vendors", new ArrayList<>(vendors));
 
             result.add(row);
         }

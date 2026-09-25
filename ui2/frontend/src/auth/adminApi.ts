@@ -1261,6 +1261,8 @@ export interface ComplianceControlItem {
   readonly data_unavailable_count: number;
   readonly missing_reason?: string;
   readonly affected_devices: readonly string[];
+  /** Vendors whose devices this check was evaluated on (two vendors' checks can share a title). */
+  readonly vendors?: readonly string[];
 }
 
 export interface ComplianceControlsResponse {
@@ -1427,6 +1429,22 @@ export interface OverviewView {
     readonly oldest_at?: string | null; readonly newest_at?: string | null; readonly last_read_at?: string | null;
   };
   readonly nexus: { completed_24h: number; running: number; oldest_running_submitted_at: string | null; last_inventory: { check_point: string | null; palo_alto: string | null }; state?: EvidenceState };
+  /** Executive estate map (EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md): every active device and its worst evidenced condition. */
+  readonly estate?: EstateView;
+}
+
+export type EstateCondition = "critical" | "ageing" | "partly_assessed" | "not_assessed" | "clear";
+export interface EstateView {
+  readonly devices: ReadonlyArray<{ device_id: string; hostname: string | null; vendor: string; model: string | null;
+    condition: EstateCondition; no_archive: boolean; critical_fail: number | null; last_read_at: string | null }>;
+  readonly counts: Readonly<Record<EstateCondition, number>>;
+  readonly no_archive: number;
+  readonly compliance_state: EvidenceState;
+  readonly facts: {
+    readonly critical: { k?: number; n?: number; state?: string };
+    readonly backups: { a: number; b: number };
+    readonly evidence: { r: number; d: number; never: number };
+  };
 }
 
 export function getOverview(): Promise<OverviewView> {

@@ -138,7 +138,8 @@ public class OverviewService {
         CompletableFuture<Object> platform = section(() -> platform(fleet));
         CompletableFuture<Object> nexus = section(this::nexus);
         CompletableFuture<Object> policyInstall = section(() -> policyInstall(fleet, now));
-        CompletableFuture.allOf(evidence, attention, inventoryAge, compliance, platform, nexus, policyInstall).join();
+        CompletableFuture<Object> estate = section(() -> estate(fleet, now));
+        CompletableFuture.allOf(evidence, attention, inventoryAge, compliance, platform, nexus, policyInstall, estate).join();
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("generated_at", now.toString());
@@ -160,6 +161,7 @@ public class OverviewService {
         body.put("platform", platform.join());
         body.put("nexus", nexus.join());
         body.put("policy_install", policyInstall.join());
+        body.put("estate", estate.join());
         return body;
     }
 
@@ -431,6 +433,75 @@ public class OverviewService {
     }
 
     /** Every device's newest inventory run, for the device list ({@code inventory_collected_at}). */
+    /**
+     * The executive estate map (EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md §2): every active device with the worst
+     * condition neXus can evidence -- critical (a critical check fails), ageing (no read in 24 h), partly assessed
+     * (a critical check not evidenced, none failing), not assessed (no compliance evaluation), clear -- and, apart,
+     * whether a backup target lacks an archive. Plus the three hero facts over their own populations.
+     */
+    private Object estate(Fleet fleet, Instant now) {
+        Map<String, Instant> lastRead = latestInventoryAll();
+        java.util.Set<String> withArchive = new java.util.HashSet<>(q(dsl -> dsl.fetch(
+                "select distinct device_id from backup_artefact where artefact_class = 'backup'").getValues(0, String.class)));
+        boolean complianceWarm = complianceService.isEvaluationCacheWarm();
+        Map<String, ComplianceService.DeviceCriticals> criticals = complianceWarm ? complianceService.criticalsByDevice() : Map.of();
+        List<Map<String, Object>> devices = new ArrayList<>();
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (String c : List.of("critical", "ageing", "partly_assessed", "not_assessed", "clear")) {
+            counts.put(c, 0);
+        }
+        int noArchive = 0;
+        int backupTargets = 0;
+        int readRecent = 0;
+        int neverRead = 0;
+        int criticalDevices = 0;
+        for (DeviceSummaryRecord d : fleet.active()) {
+            Instant read = lastRead.get(d.deviceId());
+            boolean recent = read != null && read.isAfter(now.minus(java.time.Duration.ofHours(24)));
+            if (recent) readRecent++;
+            if (read == null) neverRead++;
+            ComplianceService.DeviceCriticals cr = criticals.get(d.deviceId());
+            String condition;
+            if (cr != null && cr.criticalFail() > 0) {
+                condition = "critical";
+                criticalDevices++;
+            } else if (!recent) {
+                condition = "ageing";
+            } else if (cr != null && cr.criticalUnavailable() > 0) {
+                condition = "partly_assessed";
+            } else if (cr == null) {
+                condition = "not_assessed";
+            } else {
+                condition = "clear";
+            }
+            counts.merge(condition, 1, Integer::sum);
+            boolean missing = d.backupTarget() && !withArchive.contains(d.deviceId());
+            if (d.backupTarget()) backupTargets++;
+            if (missing) noArchive++;
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("device_id", d.deviceId());
+            row.put("hostname", d.observedHostname().orElse(null));
+            row.put("vendor", d.vendorHint());
+            row.put("model", d.observedModel().orElse(null));
+            row.put("condition", condition);
+            row.put("no_archive", missing);
+            row.put("critical_fail", cr == null ? null : cr.criticalFail());
+            row.put("last_read_at", read == null ? null : read.toString());
+            devices.add(row);
+        }
+        Map<String, Object> facts = new LinkedHashMap<>();
+        facts.put("critical", complianceWarm ? Map.of("k", criticalDevices, "n", criticals.size()) : Map.of("state", "UNKNOWN"));
+        facts.put("backups", Map.of("a", backupTargets - noArchive, "b", backupTargets));
+        facts.put("evidence", Map.of("r", readRecent, "d", fleet.active().size(), "never", neverRead));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("devices", devices);
+        out.put("counts", counts);
+        out.put("no_archive", noArchive);
+        out.put("facts", facts);
+        out.put("compliance_state", complianceWarm ? "OK" : "UNKNOWN");
+        return out;
+    }
+
     public Map<String, Instant> latestInventoryAll() {
         Map<String, Instant> out = new HashMap<>();
         for (Record r : q(dsl -> dsl.fetch("select device_id, max(collected_at) as at from device_inventory_run group by device_id"))) {
