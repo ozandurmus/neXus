@@ -120,8 +120,15 @@ alignment test, and a first live run recorded in the backlog note before
   with the token (always, also after a failed download — the appliance holds
   the file otherwise). Verify: HTTP 200, size > 1 MB, gzip magic (the Grid
   backup is a tar.gz). Cleanup: `downloadcomplete` is the cleanup.
+- Grid members (PO 2026-09-25, V71): the confirm and every backup also read
+  `GET /wapi/v<ver>/member` (`_return_fields=host_name,platform`) and record the
+  member host names as the Grid Manager's "virtual systems" (one inventory run,
+  names only), so the Devices tree lists them under the Grid Manager as "Grid
+  members"; aiview sees them masked like any virtual system. Members are not
+  devices: the grid backup already carries every member's configuration, and a
+  member exposes no WAPI of its own. A failed member read never fails the run.
 - Gate rows: `infoblox_wapidoc_version`, `infoblox_grid_identity`,
-  `infoblox_fileop_getgriddata`, `infoblox_download`,
+  `infoblox_member_list`, `infoblox_fileop_getgriddata`, `infoblox_download`,
   `infoblox_fileop_downloadcomplete`.
 
 ## 5. Fortinet FortiGate — `vendor_fortinet_fortigate_backup`

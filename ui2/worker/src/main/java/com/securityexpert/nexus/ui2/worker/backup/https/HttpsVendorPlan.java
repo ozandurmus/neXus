@@ -14,6 +14,8 @@ public final class HttpsVendorPlan {
     // Infoblox Grid Manager (trail 34411065)
     public static final String INFOBLOX_WAPIDOC = "/wapidoc/";
     public static final String INFOBLOX_GRID = "/wapi/v%s/grid?_return_fields=name";
+    /** Grid members (PO 2026-09-25): host names and platforms, read once per confirm; shown under the Grid Manager. */
+    public static final String INFOBLOX_MEMBERS = "/wapi/v%s/member?_return_fields=host_name,platform";
     public static final String INFOBLOX_GETGRIDDATA = "/wapi/v%s/fileop?_function=getgriddata";
     public static final String INFOBLOX_GETGRIDDATA_BODY = "{\"type\": \"BACKUP\"}";
     public static final String INFOBLOX_DOWNLOADCOMPLETE = "/wapi/v%s/fileop?_function=downloadcomplete";
@@ -33,7 +35,7 @@ public final class HttpsVendorPlan {
             "GET /mgmt/device/byip/<deviceIp>/config/getcfg", "POST /mgmt/system/user/logout");
 
     /** Gate keys: {@code METHOD path}, the version placeholder kept as {@code <ver>}. */
-    public static final List<String> INFOBLOX_GATE_KEYS = List.of("GET /wapidoc/", "GET /wapi/v<ver>/grid",
+    public static final List<String> INFOBLOX_GATE_KEYS = List.of("GET /wapidoc/", "GET /wapi/v<ver>/grid", "GET /wapi/v<ver>/member",
             "POST /wapi/v<ver>/fileop?_function=getgriddata", "GET <getgriddata url, same host>",
             "POST /wapi/v<ver>/fileop?_function=downloadcomplete");
     public static final List<String> RADWARE_GATE_KEYS = List.of("GET /", "POST /dynamic/File/Configuration/ReceivefromDevice");

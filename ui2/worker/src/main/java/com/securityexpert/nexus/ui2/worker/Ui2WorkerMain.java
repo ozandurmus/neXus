@@ -244,11 +244,16 @@ public final class Ui2WorkerMain {
                             var m = panCredentialResolver.resolve(ref);
                             return new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials(m.username(), m.password());
                         });
+        // V71: an Infoblox backup also refreshes the grid member list shown under the Grid Manager.
+        httpsVendorExecutor.withMemberSink((deviceId, jobId, members) -> deviceInventoryRepository.recordRun(
+                new com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun(java.util.UUID.randomUUID().toString(), deviceId, jobId,
+                        java.time.Instant.now(), 0, java.util.List.of(), java.util.List.of(), java.util.Optional.of(String.join(", ", members))),
+                "system:worker", "backup_completed"));
         backupJobExecutor.withHttpsVendorExecutor(httpsVendorExecutor,
                 new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(transactionBoundary));
         com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor httpsConfirmJobExecutor =
                 new com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor(leaseRepository, attemptRepository,
-                        deviceEnrollmentReadPort, deviceRepository, httpsVendorExecutor);
+                        deviceEnrollmentReadPort, deviceRepository, httpsVendorExecutor, deviceInventoryRepository);
         // V69: a Radware Cyber Controller's own configuration backup, pushed to HOST-A's chrooted SFTP receiver, whose
         // upload directory is mounted here (UI2_CC_INBOX_DIR) and whose address the Cyber Controller dials (UI2_CC_RECEIVER_HOST).
         String ccInbox = System.getenv("UI2_CC_INBOX_DIR");

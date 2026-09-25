@@ -80,6 +80,13 @@ function clusterHasCollectedEvidence(members: readonly DeviceSummary[]): boolean
   return members.some((m) => Boolean(m.ip_addresses && m.ip_addresses.trim().length > 0));
 }
 
+/** Labels for the child list under a device: Palo Alto vsys, Check Point VSX virtual systems, Infoblox grid members. */
+function childLabels(vendorHint: string | null | undefined): { heading: string; chip: string; tag: string } {
+  if (vendorHint === "palo_alto") return { heading: "Virtual Systems (VSYS)", chip: "VSYS", tag: "PAN-OS" };
+  if (vendorHint === "infoblox") return { heading: "Grid members", chip: "MEMBER", tag: "NIOS" };
+  return { heading: "Virtual Systems (VSX)", chip: "VS", tag: "VSX" };
+}
+
 function clusterHealthTone(members: readonly DeviceSummary[]): "ok" | "warn" | "neutral" {
   const allEnrolled = members.every((m) => m.enrollment_state === "ENROLLED");
   const anyFailed = members.some(hasFailedCollection);
@@ -661,7 +668,7 @@ function FlatDeviceList({
         );
       })}
       {!clusterOnly && standalone.map((device) => {
-        const isPaloAlto = device.vendor_hint === "palo_alto";
+        const labels = childLabels(device.vendor_hint);
         const standaloneVsList = device.virtual_systems
           ? device.virtual_systems.split(/,\s*/).filter(Boolean)
           : [];
@@ -676,7 +683,7 @@ function FlatDeviceList({
               selected={isDeviceSelected && !selectedVs}
               onSelect={(dev) => onSelectDevice(dev)}
               trailingExtra={standaloneVsList.length > 0
-                ? <StatusChip tone="neutral" label={`${standaloneVsList.length} ${isPaloAlto ? "VSYS" : "VS"}`} dense />
+                ? <StatusChip tone="neutral" label={`${standaloneVsList.length} ${labels.chip}`} dense />
                 : undefined}
             />
           );
@@ -692,7 +699,7 @@ function FlatDeviceList({
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <StatusChip
                     tone="neutral"
-                    label={`${standaloneVsList.length} ${isPaloAlto ? "VSYS" : "VS"}`}
+                    label={`${standaloneVsList.length} ${labels.chip}`}
                     dense
                   />
                   <Box
@@ -730,7 +737,7 @@ function FlatDeviceList({
                     gap: 0.5,
                   }}
                 >
-                  <span>{isPaloAlto ? "Virtual Systems (VSYS)" : "Virtual Systems (VSX)"}</span>
+                  <span>{labels.heading}</span>
                   <Chip
                     size="small"
                     label={standaloneVsList.length}
@@ -769,7 +776,7 @@ function FlatDeviceList({
                         }}
                       >
                         <Chip
-                          label={isPaloAlto ? "VSYS" : "VS"}
+                          label={labels.chip}
                           size="small"
                           sx={{
                             height: 20,
@@ -796,7 +803,7 @@ function FlatDeviceList({
                           {vsName}
                         </Typography>
                         <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
-                          {isPaloAlto ? "PAN-OS" : "VSX"}
+                          {labels.tag}
                         </Typography>
                       </Box>
                     );

@@ -64,8 +64,11 @@ class HttpsVendorExecutorTest {
 
     @Test
     void infobloxBackupReadsTheVersionFetchesSameHostAndAlwaysSignalsDownloadComplete() {
+        List<String> handed = new java.util.ArrayList<>();
+        executor.withMemberSink((d, j, m) -> handed.addAll(List.of(d, j, String.join(",", m))));
         BackupResult r = executor.backup("infoblox", T, "cred", Optional.empty(), "dev", "job-1");
         assertTrue(r instanceof BackupResult.Completed, String.valueOf(r));
+        assertEquals(List.of("dev", "job-1", "gm.example,ns2.example"), handed, "a completed backup refreshes the member list");
         assertTrue(calls.log.contains("POST /wapi/v2.13.5/fileop?_function=getgriddata {\"type\": \"BACKUP\"}"));
         assertTrue(calls.log.contains("GET-DL /http_direct_file_io/req_id-DOWNLOAD-1/database.bak content-type=application/force-download"),
                 "the download names application/force-download (415 without it): " + calls.log);
@@ -100,6 +103,8 @@ class HttpsVendorExecutorTest {
         HttpsVendorExecutor.Identity id = ((HttpsVendorExecutor.ConfirmOutcome.Confirmed) c).identity();
         assertEquals(Optional.of("GRID-A"), id.name());
         assertEquals(Optional.of("WAPI 2.13.5"), id.version());
+        assertEquals(List.of("gm.example", "ns2.example"), id.members(), "members by host name, sorted; a nameless entry skipped");
+        assertTrue(calls.log.contains("GET /wapi/v2.13.5/member?_return_fields=host_name,platform"), String.valueOf(calls.log));
     }
 
     @Test
@@ -176,6 +181,12 @@ class HttpsVendorExecutorTest {
             }
             if (path.startsWith("/wapi/v2.13.5/grid")) {
                 return new TextResponse(200, Optional.of("application/json"), "[{\"_ref\": \"grid/x\", \"name\": \"GRID-A\"}]", false);
+            }
+            if (path.startsWith("/wapi/v2.13.5/member")) {
+                return new TextResponse(200, Optional.of("application/json"),
+                        "[{\"_ref\": \"member/a\", \"host_name\": \"ns2.example\", \"platform\": \"VNIOS\"},"
+                        + " {\"_ref\": \"member/b\", \"host_name\": \"gm.example\", \"platform\": \"VNIOS\"},"
+                        + " {\"_ref\": \"member/c\", \"platform\": \"VNIOS\"}]", false);
             }
             return new TextResponse(200, Optional.of("text/html"), "<html/>", false);
         }

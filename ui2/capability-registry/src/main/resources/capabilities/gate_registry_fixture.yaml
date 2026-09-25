@@ -1236,6 +1236,22 @@ gates:
     secret_output_risk: 'none'
     safe_telemetry_fields: []
     source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §4 confirm'
+  - gate_id: infoblox_member_list
+    vendor: 'infoblox'
+    platform_role_scope: 'infoblox_grid_manager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /wapi/v<ver>/member'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per confirm'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'non-2xx or no array -> member list empty, confirm unaffected'
+    secret_output_risk: 'member host names (shown masked to aiview as virtual systems are)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §4 grid members; PO 2026-09-25'
   - gate_id: infoblox_fileop_getgriddata
     vendor: 'infoblox'
     platform_role_scope: 'infoblox_grid_manager'

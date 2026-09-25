@@ -6,6 +6,7 @@ import java.io.OutputStream;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
@@ -35,7 +36,16 @@ public final class HttpsVendorExecutor {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /** The identity a confirm read returns; every field optional. */
-    public record Identity(Optional<String> name, Optional<String> model, Optional<String> version) {
+    /** {@code members}: the grid members an Infoblox Grid Manager lists (host names, sorted); empty for every other vendor. */
+    public record Identity(Optional<String> name, Optional<String> model, Optional<String> version, List<String> members) {
+        public Identity {
+            members = members == null ? List.of() : List.copyOf(members);
+        }
+
+        public Identity(Optional<String> name, Optional<String> model, Optional<String> version) {
+            this(name, model, version, List.of());
+        }
+
     }
 
     public sealed interface ConfirmOutcome {
@@ -57,6 +67,19 @@ public final class HttpsVendorExecutor {
         this.client = Objects.requireNonNull(client, "client");
         this.artefactStore = Objects.requireNonNull(artefactStore, "artefactStore");
         this.credentials = Objects.requireNonNull(credentials, "credentials");
+    }
+
+    /** Where a backup run hands the grid members it listed (device, job, sorted host names); the worker records them. */
+    @FunctionalInterface
+    public interface MemberSink {
+        void members(String deviceId, String jobId, List<String> members);
+    }
+
+    private volatile MemberSink memberSink = (d, j, m) -> { };
+
+    public HttpsVendorExecutor withMemberSink(MemberSink sink) {
+        this.memberSink = Objects.requireNonNull(sink, "sink");
+        return this;
     }
 
     // ------------------------------------------------------------------------------------------------ confirm
@@ -101,7 +124,38 @@ public final class HttpsVendorExecutor {
         if (node.isArray() && node.size() > 0 && node.get(0).hasNonNull("name")) {
             name = Optional.of(node.get(0).get("name").asText());
         }
-        return new ConfirmOutcome.Confirmed(new Identity(name, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())));
+        return new ConfirmOutcome.Confirmed(new Identity(name, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get()),
+                infobloxMembers(target, creds, version.get())));
+    }
+
+    /**
+     * The grid's members (PO 2026-09-25): {@code GET /wapi/v<ver>/member}, host names sorted. A failure here never fails
+     * the confirm -- the identity is already established -- it only leaves the member list empty (logged).
+     */
+    private List<String> infobloxMembers(Target target, Credentials creds, String version) throws InterruptedException {
+        try {
+            TextResponse r = client.get(target, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_MEMBERS, version), creds, SHORT, TEXT_MAX);
+            if (!r.ok()) {
+                LOG.log(System.Logger.Level.WARNING, "[HTTPS_CONFIRM] infoblox member list answered HTTP {0}", r.status());
+                return List.of();
+            }
+            JsonNode members = JSON.readTree(r.body());
+            if (!members.isArray()) {
+                return List.of();
+            }
+            List<String> names = new java.util.ArrayList<>();
+            for (JsonNode m : members) {
+                if (m.hasNonNull("host_name") && !m.get("host_name").asText().isBlank()) {
+                    names.add(m.get("host_name").asText().trim());
+                }
+            }
+            java.util.Collections.sort(names);
+            LOG.log(System.Logger.Level.INFO, "[HTTPS_CONFIRM] infoblox grid lists {0} member(s)", names.size());
+            return List.copyOf(names);
+        } catch (IOException e) {
+            LOG.log(System.Logger.Level.WARNING, "[HTTPS_CONFIRM] infoblox member list failed: {0}", e.getClass().getSimpleName());
+            return List.of();
+        }
     }
 
     // ------------------------------------------------------------------------------------------------ Cyber Controller
@@ -340,8 +394,16 @@ public final class HttpsVendorExecutor {
             if (path.isEmpty()) {
                 return new BackupResult.SubmitRefused("the download url is not on the same appliance; refused");
             }
-            return fetch(target, "GET", path.get(), null, creds, HttpsVendorPlan.INFOBLOX_DOWNLOAD_CONTENT_TYPE, deviceId, jobId,
+            BackupResult result = fetch(target, "GET", path.get(), null, creds, HttpsVendorPlan.INFOBLOX_DOWNLOAD_CONTENT_TYPE, deviceId, jobId,
                     "infoblox", "database.bak", 1);
+            if (result instanceof BackupResult.Completed) {
+                // PO 2026-09-25: the member list is refreshed by every backup run, not only by the one-time confirm.
+                List<String> members = infobloxMembers(target, creds, ver);
+                if (!members.isEmpty()) {
+                    memberSink.members(deviceId, jobId, members);
+                }
+            }
+            return result;
         } finally {
             // Always -- the appliance holds the file until told (Backbox sends this without a version and fails).
             try {
