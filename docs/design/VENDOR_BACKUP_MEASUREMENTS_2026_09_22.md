@@ -156,6 +156,17 @@ The summaries above shortened two load-bearing values to "…". Re-read from the
   3. `GET <url>` → `database.bak`, ≈ 1 MB on this grid (996 KB) — so a "size > 1 MB" check is wrong; any non-empty
      body with the expected magic is the check. The GET must carry `Content-Type: application/force-download`
      (as the Backbox trail does): measured 2026-09-25 on the production grid, the appliance answers **415** without it.
-  4. `POST /wapi/v<ver>/fileop?_function=downloadcomplete` with `{"token": "<token>"}`. **Backbox sends this to
+  4. `POST /wapi/v<ver>/fileop?_function=downloadcomplete` with `{"token": "<token>"}`.
+  5. Inventory (2026-09-25, first real `https_inventory_collect` on the production grid, 354 ms): `GET
+     /wapi/v<ver>/member?_return_fields=host_name,platform,master_candidate,enable_ha,vip_setting,node_info,
+     service_status,lan2_enabled,lan2_port_setting,additional_ip_list,static_routes` -> 7 members, 17 interfaces
+     (LAN1 on all 7 from `vip_setting`; MGMT on 6 from `node_info[0].mgmt_network_setting`; LAN2 on 4 from
+     `lan2_port_setting.network_setting` where enabled), 1 static route (`static_routes[]`: address + subnet_mask ->
+     destination, gateway -> next hop), no `additional_ip_list` entries on this grid. Member field names seen:
+     `_ref, additional_ip_list, enable_ha, host_name, lan2_enabled, lan2_port_setting, master_candidate, node_info,
+     platform, service_status, static_routes, vip_setting` (nested: `address, subnet_mask, gateway, dscp, enabled,
+     default_route_failover_enabled, ha_status, host_platform, hwid, hwmodel, hwtype, hypervisor, lan2_physical_setting,
+     lan_ha_port_setting, mgmt_network_setting, ...`). `GET /wapi/v<ver>/grid?_return_fields=name` is read on the same
+     run for the device's name. **Backbox sends this to
      `/wapi/v/fileop` (empty version) and the appliance answers "Unknown WAPI version" — its cleanup fails on every
      run.** neXus sends it with the version read in step 1.

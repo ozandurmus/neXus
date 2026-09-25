@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:25:51Z
+Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:40:45Z
 
 ## Now
 - NXS-LOCAL-0369 — Radware via Cyber Controller, device-list and backup UI, deploy safety, HOST-A rebuilt as neXus's own host (automated_validated)
@@ -8,7 +8,6 @@ Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:25:51Z
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
 - P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the reins (target: docs/design/HOST_A_REBUILD_RUNBOOK.md)
 - P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under aiv (target: docs/design/HOST_A_REBUILD_RUNBOOK.md se)
-- P0/in_progress https_inventory_collect_infoblox — Infoblox Collect: a real https_inventory_collect job (Coll (target: docs/design/VENDOR_BACKUP_CONTRACTS_2026)
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a c (target: PanXmlApiTransport certificate verificat)
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test env (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)
@@ -23,6 +22,7 @@ Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:25:51Z
 - P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect, warn with the (target: ui2 worker HostKeyVerifier / TrustRuleRe)
 - P1/in_progress backup_screen_backbox_model — Backup screen on the Backbox model: per-device history, sc (target: PO directive 2026-09-22 (Backbox standar)
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
+- P1/in_progress https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber Con (target: docs/design/RADWARE_CYBER_CONTROLLER_BAC)
 - P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI jo (target: workflow §5 B1-1)
 - P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, sing (target: workflow §5 B1-3)
 - P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, s (target: workflow §5 B1-4)
@@ -50,7 +50,6 @@ Build: NXS-LOCAL-0369 · Track: PCP.x · Generated: 2026-09-25T02:25:51Z
 - P1/planned github_open_pr_triage — Decide the 21 open GitHub PRs (2026-09-15..17): close 15 s (target: docs/operations/OPEN_PR_TRIAGE_2026_09_2)
 - P1/planned gov_orch_budget_ceiling_not_persisted_or_enforced — The dispatch budget ceiling is neither recorded nor enforc (target: GOV.ORCH.13 DL-3 budget column; scripts/)
 - P1/planned https_configuration_collect — Configuration reads for HTTPS vendors, separate from backu (target: docs/design/VENDOR_BACKUP_CONTRACTS_2026)
-- P1/planned https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber Con (target: docs/design/RADWARE_CYBER_CONTROLLER_BAC)
 - P1/planned inventory_row_does_not_say_why_a_device_is_unconfirmed — The inventory row shows Registered, not confirmed without (target: InventoryScreen row rendering; jobs.term)
 - P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a pr (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
 - P1/planned legacy_python_separation — Separate the legacy Python product from the neXus reposito (target: docs/design/LEGACY_PYTHON_SEPARATION_PLA)
