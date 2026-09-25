@@ -372,6 +372,11 @@ export function DeviceList(props: DeviceListProps) {
       {sections.map(({ manager, groups }) => {
         const expanded = open.has(manager.device_id);
         const total = groups.reduce((a, g) => a + g.devices.length, 0);
+        // A manager whose devices are not neXus devices (a Symantec Management Center's ProxySGs): the names its own
+        // inventory lists, shown under it -- before 2026-09-25 nothing appeared under the SMC.
+        const listed = groups.length === 0 && manager.virtual_systems
+          ? manager.virtual_systems.split(/,\s*/).filter(Boolean) : [];
+        const listedLabels = childLabels(manager.vendor_hint, manager.role);
         return (
           <Box key={manager.device_id} data-row="manager" sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Box data-row="manager-head" sx={{ display: "flex", alignItems: "center", gap: 1, height: 44, boxSizing: "border-box", px: 1,
@@ -401,8 +406,27 @@ export function DeviceList(props: DeviceListProps) {
               {(total > 0 || manager.vendor_hint === "check_point" || manager.vendor_hint === "palo_alto") && (
                 <StatusChip tone="neutral" label={`${total} managed`} dense />
               )}
+              {total === 0 && listed.length > 0 && <StatusChip tone="neutral" label={`${listed.length} managed`} dense />}
             </Box>
-            {expanded && (
+            {expanded && listed.length > 0 && (
+              <Box sx={{ pl: 2, display: "flex", flexDirection: "column", gap: 0.75, borderLeft: `2px solid ${m3.outlineVar}`, ml: 1 }}>
+                <Typography sx={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.04em", color: m3.onSurfaceVar, px: 0.5 }}>
+                  {listedLabels.heading.toUpperCase()} · {listed.length}
+                </Typography>
+                {listed.map((name) => (
+                  <Box key={name} role="button" tabIndex={0} onClick={() => rest.onSelectDevice(manager)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") rest.onSelectDevice(manager); }}
+                    title="Read through the management server -- open it for this device's facts"
+                    sx={{ display: "flex", alignItems: "center", gap: 1, px: 1, py: 0.75, borderRadius: "8px", cursor: "pointer",
+                      border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLowest, "&:hover": { bgcolor: m3.scLow } }}>
+                    <StatusChip tone="neutral" label={listedLabels.chip} dense />
+                    <Typography sx={{ fontSize: 13, fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</Typography>
+                    <Typography sx={{ fontSize: 11, color: m3.onSurfaceVar }}>{listedLabels.tag}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
+            {expanded && groups.length > 0 && (
               <Box sx={{ pl: 2, display: "flex", flexDirection: "column", gap: 1, borderLeft: `2px solid ${m3.outlineVar}`, ml: 1 }}>
                 {groups.map((g, i) => {
                   const k = `${manager.device_id}|${g.domain ?? i}`;
