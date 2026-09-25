@@ -74,8 +74,16 @@ public final class InventoryCollectService {
             return new Outcome.DeviceNotFound();
         }
         String role = device.get().role();
-        boolean httpsVendor = HTTPS_VENDORS.contains(String.valueOf(device.get().vendorHint()).toLowerCase(java.util.Locale.ROOT));
-        if (!"gateway".equals(role) && !(httpsVendor && ("appliance".equals(role) || "management_server".equals(role)))) {
+        String vendorHint = String.valueOf(device.get().vendorHint()).toLowerCase(java.util.Locale.ROOT);
+        // PO 2026-09-25: an Infoblox Grid Manager (appliance) and a Radware Cyber Controller (management server) have an
+        // HTTPS inventory read; a DefensePro appliance has none gated yet, so it is refused here rather than failing nightly.
+        boolean httpsCollectable = ("infoblox".equals(vendorHint) && "appliance".equals(role))
+                || ("radware".equals(vendorHint) && "management_server".equals(role));
+        if (!"gateway".equals(role) && !httpsCollectable) {
+            if (HTTPS_VENDORS.contains(vendorHint) && "appliance".equals(role)) {
+                return new Outcome.AdmissionRefused("VENDOR_READ_SET_UNGATED",
+                        "device " + deviceId + " is a " + vendorHint + " appliance whose inventory reads are not measured or gated yet, so nothing was issued");
+            }
             // PO 2026-09-22: a Check Point management server (SMS / MDS) is a Gaia host -- its interfaces,
             // routes and platform identity come from the same Expert reads the gateway path issues (fw
             // getifs, ip route, cpinfo, uptime, show asset system), all gated; the cluster probe answers
