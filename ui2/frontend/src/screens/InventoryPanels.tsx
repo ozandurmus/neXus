@@ -285,6 +285,18 @@ function extractMemberBase(hostname: string): string {
   return name;
 }
 
+type LabeledMember = { readonly device_id: string; readonly hostname?: string | null; readonly ha_role?: string | null };
+
+function memberLabel(member: LabeledMember, allMembers: readonly LabeledMember[]): string {
+  const label = deviceNameLabel(member.hostname);
+  const ordered = orderMembers(allMembers);
+  const sameName = ordered.filter((m) => deviceNameLabel(m.hostname) === label);
+  if (sameName.length < 2) return label;
+  const role = member.ha_role?.toLowerCase();
+  if (role && sameName.filter((m) => m.ha_role?.toLowerCase() === role).length === 1) return `${label} (${role})`;
+  return `${label} #${sameName.findIndex((m) => m.device_id === member.device_id) + 1}`;
+}
+
 export function deriveClusterTitle(clusterRef: string, members: readonly DeviceSummary[]): string {
   const isRawUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clusterRef.trim());
   if (!clusterRef.includes("|") && !isRawUuid && clusterRef.trim().length > 0) {
@@ -373,15 +385,18 @@ function presenceLabel(presence: Presence): string {
   return presence === "all" ? "All members" : presence.join(", ");
 }
 
-function DifferencesNote({ differences }: { readonly differences: readonly ClusterDifference[] }) {
+function DifferencesNote({ differences, members }: { readonly differences: readonly ClusterDifference[]; readonly members: readonly LabeledMember[] }) {
   if (differences.length === 0) return null;
   return (
     <Stack spacing={0.25}>
-      {differences.map((d) => (
+      {differences.map((d) => {
+        const member = members.find((m) => m.device_id === d.device_id);
+        return member ? (
         <Typography key={`${d.device_id}-${d.field}`} variant="body2" color="text.secondary">
-          {d.device_id}: {d.field} = {d.value}
+          {memberLabel(member, members)}: {d.field} = {d.value}
         </Typography>
-      ))}
+        ) : null;
+      })}
     </Stack>
   );
 }
@@ -529,7 +544,7 @@ function ClusterInterfacesTable({
 
   const filtered = withoutLoopback.filter((iface) => {
     if (upOnly) {
-      const memberStates = iface.member_states ? Object.values(iface.member_states).filter((v): v is string => typeof v === "string") : [];
+      const memberStates = members.map((m) => iface.member_states?.[m.device_id]).filter((v): v is string => typeof v === "string");
       const allDown = memberStates.length > 0 && memberStates.every((s) => s.toLowerCase() === "down");
       const hasVip = iface.addresses.some((a) => a.role === "cluster_virtual");
       // Hide strictly when all members are closed/down and there is no VIP.
@@ -590,7 +605,7 @@ function ClusterInterfacesTable({
                 {showVipColumn && <TableCell sx={{ fontWeight: 600 }}>Cluster VIP</TableCell>}
                 {members.map((m) => (
                   <TableCell key={m.device_id} sx={{ fontWeight: 600 }}>
-                    {deviceNameLabel(m.hostname)}
+                    {memberLabel(m, members)}
                   </TableCell>
                 ))}
               </>
@@ -620,7 +635,7 @@ function ClusterInterfacesTable({
             // Members agree or disagree with each other -- never "not literally up, not literally
             // down" against two hardcoded values. Two members reporting the same "unknown" agree;
             // Degraded means the members' own states genuinely differ from each other, nothing else.
-            const memberStates = iface.member_states ? Object.values(iface.member_states).filter((v): v is string => typeof v === "string") : [];
+            const memberStates = members.map((m) => iface.member_states?.[m.device_id]).filter((v): v is string => typeof v === "string");
             const normalizedStates = memberStates.map((s) => s.toLowerCase());
             const distinctStates = new Set(normalizedStates);
             const isMixed = memberStates.length > 0 && distinctStates.size > 1;
@@ -688,7 +703,7 @@ function ClusterInterfacesTable({
                           {mAddrs.length > 0 ? (
                             // Review §3: the coloured dot after the address carried the member's link state by colour
                             // alone; the word is now on hover here and, when members differ, in the State column.
-                            <Typography variant="body2" title={mState ? `${deviceNameLabel(m.hostname)} link state: ${mState}` : undefined}
+                            <Typography variant="body2" title={mState ? `${memberLabel(m, members)} link state: ${mState}` : undefined}
                               sx={{ fontFamily: MONO, fontSize: "0.8125rem" }}>
                               {mAddrs.map((a) => a.address).join(", ")}
                             </Typography>
@@ -714,7 +729,7 @@ function ClusterInterfacesTable({
                         <StatusChip tone="warn" label="Degraded" dense />
                         {members.map((m) => iface.member_states?.[m.device_id] ? (
                           <Typography key={m.device_id} variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>
-                            {deviceNameLabel(m.hostname)}: {iface.member_states[m.device_id]}
+                            {memberLabel(m, members)}: {iface.member_states[m.device_id]}
                           </Typography>
                         ) : null)}
                       </Stack>
@@ -724,7 +739,7 @@ function ClusterInterfacesTable({
                       <StatusChip tone={iface.presence === "all" ? "ok" : "warn"} label={presenceLabel(iface.presence)} dense />
                     )}
                     {iface.differences.length > 0 && (
-                      <DifferencesNote differences={iface.differences} />
+                      <DifferencesNote differences={iface.differences} members={members} />
                     )}
                   </Stack>
                 </TableCell>
@@ -774,7 +789,7 @@ function ClusterRoutesTable({
   }
 
   const memberNameById = new Map<string, string>();
-  members.forEach((m) => memberNameById.set(m.device_id, deviceNameLabel(m.hostname)));
+  members.forEach((m) => memberNameById.set(m.device_id, memberLabel(m, members)));
 
   return (
     <Stack spacing={1.5}>
@@ -879,7 +894,7 @@ function ClusterRoutesTable({
               const isDiff = !isShared || route.differences.length > 0;
               let diffLabel = null;
               if (!isShared && Array.isArray(route.presence)) {
-                const memberNames = route.presence.map((id) => memberNameById.get(id) ?? id).join(", ");
+                const memberNames = route.presence.map((id) => memberNameById.get(id)).filter((name): name is string => Boolean(name)).join(", ");
                 diffLabel = `DIFF > ${memberNames} only`;
               } else if (route.differences.length > 0) {
                 diffLabel = `DIFF > ${route.differences.map((d) => `${d.field}: ${d.value}`).join(", ")}`;
@@ -931,7 +946,7 @@ function ClusterRoutesTable({
                           {diffLabel}
                         </Box>
                         {route.differences.length > 0 && (
-                          <DifferencesNote differences={route.differences} />
+                          <DifferencesNote differences={route.differences} members={members} />
                         )}
                       </Stack>
                     ) : (
@@ -1290,7 +1305,7 @@ export function ClusterInterfacesPanel({
     return <EmptyPanel title="No interface evidence" body="No cluster member has been collected yet." />;
   }
 
-  const memberNames = members.map((m) => deviceNameLabel(m.hostname)).join(", ");
+  const memberNames = orderMembers(members).map((m) => memberLabel(m, members)).join(", ");
   const renderUncollected = (name: string) => (
     <Box
       sx={{
@@ -1467,7 +1482,7 @@ export function ClusterMembersMarker({ inventory }: { readonly inventory: Cluste
           }}
         >
           <Typography variant="caption" sx={{ fontWeight: 600 }}>
-            {deviceNameLabel(member.hostname)}
+            {memberLabel(member, inventory.members)}
           </Typography>
           <JobStatusIndicator
             state={member.latest_job_state}
@@ -1821,7 +1836,7 @@ export function DeviceInventoryPanels({
       >
         {isCluster && clusterInventory && clusterInventory.members.length > 0 ? (
           <Typography variant="caption" color="text.secondary">
-            Members: {orderMembers(clusterInventory.members).map((m) => deviceNameLabel(m.hostname)).join(" · ")}
+            Members: {orderMembers(clusterInventory.members).map((m) => memberLabel(m, clusterInventory.members)).join(" · ")}
           </Typography>
         ) : null}
       </InventoryEntityHeader>
@@ -1864,7 +1879,7 @@ export function DeviceInventoryPanels({
                     <TableBody>
                       {orderMembers(clusterInventory.members).map((member) => (
                         <TableRow key={member.device_id}>
-                          <TableCell sx={{ fontWeight: 500 }}>{deviceNameLabel(member.hostname)}</TableCell>
+                          <TableCell sx={{ fontWeight: 500 }}>{memberLabel(member, clusterInventory.members)}</TableCell>
                           <TableCell sx={{ fontFamily: MONO, fontSize: 12 }}>{member.device_id}</TableCell>
                           <TableCell>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -1981,7 +1996,12 @@ export function ClusterDetailPanels({
 
   // Review §3: members always M1, M2 (by name); the role chip says which one is active.
   const orderedMembers = orderMembers(members);
-  const inventoryMembers = clusterInventory ? orderMembers(clusterInventory.members) : orderedMembers;
+  const inventoryMembers = clusterInventory
+    ? orderMembers(clusterInventory.members.map((m) => ({
+      ...m,
+      ha_role: m.ha_role ?? members.find((summary) => summary.device_id === m.device_id)?.ha_role ?? null,
+    })))
+    : orderedMembers;
   const firstMember = orderedMembers[0];
   const isPaloAlto = firstMember?.vendor_hint === "palo_alto";
   const allContexts = clusterInventory?.contexts ?? [];
@@ -2056,7 +2076,7 @@ export function ClusterDetailPanels({
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                     <Typography variant="body2" sx={{ fontWeight: 700, color: m3.onSurface }}>
-                      {deviceNameLabel(m.hostname)}
+                      {memberLabel(m, orderedMembers)}
                     </Typography>
                     <JobStatusIndicator
                       state={m.latest_job_state}
@@ -2134,7 +2154,7 @@ export function ClusterDetailPanels({
                   <TableBody>
                     {orderedMembers.map((m) => (
                       <TableRow key={m.device_id} hover>
-                        <TableCell sx={{ fontWeight: 600 }}>{deviceNameLabel(m.hostname)}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{memberLabel(m, orderedMembers)}</TableCell>
                         <TableCell sx={{ fontFamily: MONO, fontSize: 12 }}>{m.device_id}</TableCell>
                         <TableCell>
                           <RoleChip role={m.ha_role} dense />

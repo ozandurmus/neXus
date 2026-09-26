@@ -223,6 +223,56 @@ describe("InventoryScreen device selection and panels", () => {
     expect(screen.getAllByText(label).length).toBeGreaterThan(0);
   });
 
+  it.each([
+    { roles: ["active", "standby"], labels: ["FW-X (active)", "FW-X (standby)"] },
+    { roles: [null, null], labels: ["FW-X #1", "FW-X #2"] },
+  ])("distinguishes duplicate cluster member names and hides unmatched ids", async ({ roles, labels }) => {
+    const unknownId = "123e4567-e89b-12d3-a456-426614174000";
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/devices") {
+        return Promise.resolve(jsonResponse(200, { devices: [
+          { ...CLUSTER_MEMBER_A, hostname: "FW-X", ha_role: roles[0] },
+          { ...CLUSTER_MEMBER_B, hostname: "FW-X", ha_role: roles[1] },
+        ] }));
+      }
+      if (url === "/clusters/cluster-1/inventory") {
+        return Promise.resolve(jsonResponse(200, {
+          cluster_member_ref: "cluster-1",
+          members: [
+            { device_id: "dev-a", hostname: "FW-X", ha_role: roles[0] },
+            { device_id: "dev-b", hostname: "FW-X", ha_role: roles[1] },
+          ],
+          contexts: [{
+            context: "physical",
+            interfaces: [{
+              name: "eth0", kind: "physical", presence: "all", addresses: [],
+              member_addresses: { "dev-a": [{ address: "192.0.2.1/24", family: "ipv4", role: "member" }], "dev-b": [{ address: "192.0.2.2/24", family: "ipv4", role: "member" }] },
+              member_states: { "dev-a": "down", "dev-b": "up", [unknownId]: "up" },
+              differences: [{ device_id: unknownId, field: "state", value: "up" }],
+            }],
+            routes: [],
+          }],
+        }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(withTheme(<InventoryScreen />));
+
+    await waitFor(() => expect(screen.getByText("cluster-1")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("cluster-1"));
+    for (const label of labels) await waitFor(() => expect(screen.getAllByText(label).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole("tab", { name: "Interfaces" }));
+    await waitFor(() => expect(screen.getByText("eth0")).toBeInTheDocument());
+    for (const label of labels) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+      expect(screen.getByRole("columnheader", { name: label })).toBeInTheDocument();
+    }
+    expect(screen.getByText("Degraded")).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(unknownId))).toBeNull();
+  });
+
   it("Collect now submits, polls the device, and refreshes the inventory once the job is terminal", async () => {
     let devicePollCount = 0;
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {

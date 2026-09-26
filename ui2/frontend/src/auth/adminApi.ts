@@ -734,6 +734,7 @@ export interface GridSummaryView {
 export interface ClusterMember {
   readonly device_id: string;
   readonly hostname: string | null;
+  readonly ha_role?: string | null;
   readonly latest_job_state?: string | null;
   readonly latest_job_type?: string | null;
   readonly latest_job_terminal_reason?: string | null;
