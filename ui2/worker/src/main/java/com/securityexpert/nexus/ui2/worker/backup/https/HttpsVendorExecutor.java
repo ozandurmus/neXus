@@ -539,6 +539,17 @@ public final class HttpsVendorExecutor {
             var routes = ProxySgOutputs.routes(rt);
             LOG.log(System.Logger.Level.INFO, "[PROXYSG] inventory via MC: interfaces={0} routes={1}; MEASURE interface shape: {2}; route shape: {3}",
                     interfaces.size(), routes.size(), ProxySgOutputs.shape(ifs, 14), ProxySgOutputs.shape(rt, 10));
+            // MEASURE (2026-09-26: states stayed unknown): the field labels of the interface blocks (text before ':'
+            // on indented lines, letters/spaces only) and the header's parenthesised words -- labels, never values.
+            java.util.Set<String> labels = new java.util.TreeSet<>();
+            java.util.Set<String> headerWords = new java.util.TreeSet<>();
+            for (String line : ifs.split("\\R")) {
+                var lm = java.util.regex.Pattern.compile("^\\s{2,}([A-Za-z][A-Za-z ]{0,30}):").matcher(line);
+                if (lm.find()) labels.add(lm.group(1).strip());
+                var hm = java.util.regex.Pattern.compile("(?i)interface\\s+\\d+:\\d+\\S*\\s*\\(([A-Za-z ]{1,30})\\)").matcher(line);
+                if (hm.find()) headerWords.add(hm.group(1).strip());
+            }
+            LOG.log(System.Logger.Level.INFO, "[PROXYSG] MEASURE interface labels {0}; header words {1}", labels, headerWords);
             return Optional.of(new InventoryOutcome.Completed(
                     List.of(new com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext(
                             com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext.PHYSICAL, interfaces, routes)),
