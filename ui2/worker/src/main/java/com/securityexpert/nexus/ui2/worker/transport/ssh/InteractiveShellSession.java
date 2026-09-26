@@ -109,6 +109,11 @@ final class InteractiveShellSession implements AutoCloseable {
         StringBuilder raw = new StringBuilder();
         long deadline = System.currentTimeMillis() + Math.max(1000, timeoutMs);
         long lastData = System.currentTimeMillis();
+        long started = lastData;
+        long firstData = -1;
+        long bytes = 0;
+        int pages = 0;
+        int idlePolls = 0;
         boolean sawData = false;
         boolean completed = false;
         byte[] buf = new byte[4096];
@@ -121,6 +126,8 @@ final class InteractiveShellSession implements AutoCloseable {
                         break;
                     }
                     raw.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+                    if (firstData < 0) firstData = System.currentTimeMillis();
+                    bytes += n;
                     got = true;
                     sawData = true;
                 }
@@ -138,6 +145,7 @@ final class InteractiveShellSession implements AutoCloseable {
                     int at = rawTail.lastIndexOf(MORE);
                     if (at >= 0 && stripTerminalControl(rawTail.substring(at)).stripTrailing().equals(MORE)) {
                         raw.delete(tailStart + at, raw.length());
+                        pages++;
                         try {
                             out.write(' ');
                             out.flush();
@@ -156,6 +164,7 @@ final class InteractiveShellSession implements AutoCloseable {
                 completed = true;
                 break;
             }
+            idlePolls++;
             sleepQuietly(40);
         }
         if (!completed) {
@@ -169,6 +178,12 @@ final class InteractiveShellSession implements AutoCloseable {
             return new Result(Result.Kind.TIMED_OUT, null);
         }
 
+        if (bytes > 512 * 1024) {
+            // MEASURE (2026-09-27: a 2.6 MB FortiGate show took 86 s before and after the linear-tail change): where the time goes.
+            System.getLogger(InteractiveShellSession.class.getName()).log(System.Logger.Level.INFO,
+                    "[SHELL] large read: bytes={0} totalMs={1} firstByteMs={2} pages={3} idlePolls={4}",
+                    bytes, System.currentTimeMillis() - started, firstData < 0 ? -1 : firstData - started, pages, idlePolls);
+        }
         String text = stripTerminalControl(raw.toString());
         String observedPrompt = promptCandidateOfStripped(text);
         if (observedPrompt != null) {
