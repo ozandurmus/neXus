@@ -48,8 +48,27 @@ class FortinetParsersTest {
         assertEquals(Optional.of("v7.0.12 build0523"), st.version());
         assertEquals(Optional.of("FGT-TANGO-04"), st.hostname());
         assertTrue(st.multiVdom());
-        assertEquals(Optional.of("active"), FortiGatePlan.haRole(st.haMode()));
+        assertEquals(Optional.of("a-p, primary"), st.haMode());
         assertFalse(FortiGatePlan.parseStatus("Version: FortiGate-60F v7.2.8,build1639\\nVirtual domain configuration: disable\\n").multiVdom());
+    }
+
+    @Test
+    void haStatusUsesOnlyThisUnitsExactSerialAndKnownModes() {
+        String members = """
+                HA Health Status: OK
+                Mode: HA A-P
+                Primary     : FW-TANGO-04, SYNTH00001, HA cluster index = 0
+                Secondary   : FW-JULIET-06, SYNTH00002, HA cluster index = 1
+                """;
+        assertEquals(Optional.of("primary"), FortiGatePlan.haRole(members, Optional.of("SYNTH00001")));
+        assertEquals(Optional.of("secondary"), FortiGatePlan.haRole(members, Optional.of("SYNTH00002")));
+        assertEquals(Optional.of("primary"), FortiGatePlan.haRole(members.replace("HA A-P", "HA A-A"), Optional.of("SYNTH00001")));
+        assertEquals(Optional.empty(), FortiGatePlan.haRole(members, Optional.of("SYNTH0001")));
+        assertEquals(Optional.empty(), FortiGatePlan.haRole(members, Optional.empty()));
+        assertEquals(Optional.empty(), FortiGatePlan.haRole("HA Health Status: Standalone\nMode: Standalone\n",
+                Optional.of("SYNTH00001")));
+        assertEquals(Optional.empty(), FortiGatePlan.haRole("HA Health Status: OK\nMode: HA A-P\nPrimary: unknown shape\n",
+                Optional.of("SYNTH00001")));
     }
 
     @Test

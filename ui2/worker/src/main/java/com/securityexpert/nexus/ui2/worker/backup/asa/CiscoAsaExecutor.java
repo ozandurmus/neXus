@@ -160,8 +160,10 @@ public final class CiscoAsaExecutor {
             }
             LOG.log(System.Logger.Level.INFO, "[ASA] confirm: hostname={0} model={1} version={2}",
                     v.hostname().isPresent(), v.model().isPresent(), v.softwareVersion().isPresent());
+            Optional<String> haRole = read(shell.session(), CiscoAsaPlan.SHOW_FAILOVER_THIS_HOST, SHORT)
+                    .flatMap(CiscoAsaPlan::parseHaRole);
             return new HttpsVendorExecutor.ConfirmOutcome.Confirmed(
-                    new HttpsVendorExecutor.Identity(v.hostname(), v.model(), v.softwareVersion()));
+                    new HttpsVendorExecutor.Identity(v.hostname(), v.model(), v.softwareVersion(), haRole));
         } finally {
             ssh.disconnect(shell.session());
         }
@@ -183,14 +185,15 @@ public final class CiscoAsaExecutor {
             Optional<String> brief = read(s, CiscoAsaPlan.SHOW_INTERFACE_IP_BRIEF, SHORT);
             Optional<String> route = read(s, CiscoAsaPlan.SHOW_ROUTE, LONG);
             Optional<String> failover = read(s, CiscoAsaPlan.SHOW_FAILOVER_THIS_HOST, SHORT);
+            Optional<String> haRole = failover.flatMap(CiscoAsaPlan::parseHaRole);
             boolean multiple = read(s, CiscoAsaPlan.SHOW_MODE, SHORT).map(CiscoAsaPlan::isMultipleContext).orElse(false);
             var interfaces = CiscoAsaPlan.interfaces(ip.orElse(null), brief.orElse(null));
             var routes = CiscoAsaPlan.parseRoutes(route.orElse(null));
             LOG.log(System.Logger.Level.INFO, "[ASA] inventory: interfaces={0} routes={1} ha={2} multiple_context={3}",
-                    interfaces.size(), routes.size(), failover.flatMap(CiscoAsaPlan::parseHaRole).orElse("none"), multiple);
+                    interfaces.size(), routes.size(), haRole.orElse("none"), multiple);
             String context = v.hostname().orElse(InventoryContext.PHYSICAL);
             return new HttpsVendorExecutor.InventoryOutcome.Completed(List.of(new InventoryContext(context, interfaces, routes)),
-                    List.of(), Optional.empty(), new HttpsVendorExecutor.Identity(v.hostname(), v.model(), v.softwareVersion()));
+                    List.of(), Optional.empty(), new HttpsVendorExecutor.Identity(v.hostname(), v.model(), v.softwareVersion(), haRole));
         } finally {
             ssh.disconnect(shell.session());
         }

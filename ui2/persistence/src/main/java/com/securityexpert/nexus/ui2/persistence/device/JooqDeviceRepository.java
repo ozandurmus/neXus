@@ -141,17 +141,25 @@ public final class JooqDeviceRepository implements DeviceRepository {
     @Override
     public boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,
             Optional<String> softwareVersion, String actorFingerprint, String actionId) {
-        if (hostname.isEmpty() && model.isEmpty() && softwareVersion.isEmpty()) {
+        return refreshObservedFacts(deviceId, hostname, model, softwareVersion, Optional.empty(), actorFingerprint, actionId);
+    }
+
+    @Override
+    public boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,
+            Optional<String> softwareVersion, Optional<String> haRole, String actorFingerprint, String actionId) {
+        if (hostname.isEmpty() && model.isEmpty() && softwareVersion.isEmpty() && haRole.isEmpty()) {
             return false;
         }
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, (DSLContext dsl) -> dsl.execute(
                 "update devices set observed_hostname = coalesce({1}, observed_hostname), "
                         + "observed_model = coalesce({2}, observed_model), "
-                        + "observed_software_version = coalesce({3}, observed_software_version) "
+                        + "observed_software_version = coalesce({3}, observed_software_version), "
+                        + "observed_ha_role = coalesce({4}, observed_ha_role) "
                         + "where device_id = {0} and (observed_hostname is distinct from coalesce({1}, observed_hostname) "
                         + "or observed_model is distinct from coalesce({2}, observed_model) "
-                        + "or observed_software_version is distinct from coalesce({3}, observed_software_version))",
-                deviceId, hostname.orElse(null), model.orElse(null), softwareVersion.orElse(null))) == 1;
+                        + "or observed_software_version is distinct from coalesce({3}, observed_software_version) "
+                        + "or observed_ha_role is distinct from coalesce({4}, observed_ha_role))",
+                deviceId, hostname.orElse(null), model.orElse(null), softwareVersion.orElse(null), haRole.orElse(null))) == 1;
     }
 
     @Override

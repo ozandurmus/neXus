@@ -1830,6 +1830,22 @@ gates:
     secret_output_risk: 'serial number and hostname (masked to aiview)'
     safe_telemetry_fields: []
     source_document_pointer: 'FortiOS CLI reference (get system status); Backbox FortiGate SSH (VDOM) trail 23488971; DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md: diagnostic output/history'
+  - gate_id: fgt_get_system_ha_status
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'cli'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'get system ha status'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory/confirm'
+    session_reuse_rule: 'same SSH session'
+    unsupported_behavior_ref: 'refusal -> role unknown (logged)'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference; PO 2026-09-26'
   - gate_id: fgt_context_moves
     vendor: 'fortinet'
     platform_role_scope: 'fortigate'

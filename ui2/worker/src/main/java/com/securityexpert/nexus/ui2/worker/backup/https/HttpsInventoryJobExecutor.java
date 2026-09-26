@@ -110,7 +110,8 @@ public final class HttpsInventoryJobExecutor {
         }
         // PO 2026-09-25: observed facts follow every read.
         try {
-            devices.refreshObservedFacts(deviceId, done.identity().name(), done.identity().model(), done.identity().version(), ACTOR,
+            devices.refreshObservedFacts(deviceId, done.identity().name(), done.identity().model(), done.identity().version(),
+                    done.identity().haRole(), ACTOR,
                     "inventory_identity_refresh");
         } catch (RuntimeException refreshFailed) {
             LOG.log(System.Logger.Level.WARNING, "[OBSERVED_FACTS_REFRESH_FAILED] HTTPS inventory job {0}: {1}", jobId, refreshFailed.getMessage());

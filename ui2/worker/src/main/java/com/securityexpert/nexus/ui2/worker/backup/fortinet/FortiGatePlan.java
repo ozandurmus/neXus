@@ -26,6 +26,7 @@ public final class FortiGatePlan {
     }
 
     public static final String GET_SYSTEM_STATUS = "get system status";
+    public static final String GET_SYSTEM_HA_STATUS = "get system ha status";
     public static final String CONFIG_GLOBAL = "config global";
     public static final String CONFIG_VDOM = "config vdom";
     public static final String END = "end";
@@ -74,16 +75,29 @@ public final class FortiGatePlan {
                 mode.startsWith("multiple") || mode.startsWith("split"), group(HA, out).map(String::trim));
     }
 
-    /** "a-p, primary" -> "active"; "a-p, secondary" -> "standby"; standalone -> empty. */
-    public static Optional<String> haRole(Optional<String> haMode) {
-        if (haMode.isEmpty()) {
+    /** This unit's exact serial in an A-P/A-A member row determines its FortiOS role. */
+    public static Optional<String> haRole(String output, Optional<String> ownSerial) {
+        if (output == null || ownSerial.isEmpty() || ownSerial.get().isBlank()) {
             return Optional.empty();
         }
-        String m = haMode.get().toLowerCase(Locale.ROOT);
-        if (m.startsWith("standalone")) {
+        if (Pattern.compile("(?im)^\\s*(?:Mode|HA Health Status):\\s*standalone\\s*$").matcher(output).find()) {
             return Optional.empty();
         }
-        return Optional.of(m.contains("primary") || m.contains("master") ? "active" : m.contains("secondary") || m.contains("slave") ? "standby" : m);
+        if (!Pattern.compile("(?m)^HA Health Status:\\s*.+$").matcher(output).find()
+                || !Pattern.compile("(?m)^Mode:\\s*HA A-[PA]\\s*$").matcher(output).find()) {
+            return Optional.empty();
+        }
+        Matcher member = Pattern.compile("(?m)^\\s*(Primary|Secondary)\\s*:\\s*[^,]+,\\s*([^,\\s]+),\\s*HA cluster index\\s*=").matcher(output);
+        String role = null;
+        while (member.find()) {
+            if (ownSerial.get().equals(member.group(2))) {
+                if (role != null) {
+                    return Optional.empty();
+                }
+                role = member.group(1).toLowerCase(Locale.ROOT);
+            }
+        }
+        return Optional.ofNullable(role);
     }
 
     /** One interface from "show system interface": its VDOM and the inventory row. */

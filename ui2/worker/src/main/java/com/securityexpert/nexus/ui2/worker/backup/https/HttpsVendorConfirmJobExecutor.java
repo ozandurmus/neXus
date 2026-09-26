@@ -96,7 +96,7 @@ public final class HttpsVendorConfirmJobExecutor {
             return new JobOutcome.Failed(reason);
         }
         HttpsVendorExecutor.Identity id = confirmed.identity();
-        DeviceConfirmFacts facts = new DeviceConfirmFacts(id.name(), id.model(), id.version(), Optional.empty(), Optional.empty(),
+        DeviceConfirmFacts facts = new DeviceConfirmFacts(id.name(), id.model(), id.version(), id.haRole(), Optional.empty(),
                 Optional.empty(), DeviceConfirmFacts.IDENTITY_MISMATCH_NONE, Optional.empty(), Optional.empty(), Optional.empty(),
                 Optional.empty(), DeviceConfirmFacts.PEER_FOLLOW_NONE, Optional.empty());
         if (!devices.recordConfirmSuccess(deviceId, facts, ACTOR, "confirm_completed")) {

@@ -45,13 +45,23 @@ public final class HttpsVendorExecutor {
 
     /** The identity a confirm read returns; every field optional. */
     /** {@code members}: the grid members an Infoblox Grid Manager lists (facts, ordered); empty for every other vendor. */
-    public record Identity(Optional<String> name, Optional<String> model, Optional<String> version, List<GridMember> members) {
+    public record Identity(Optional<String> name, Optional<String> model, Optional<String> version, List<GridMember> members,
+            Optional<String> haRole) {
         public Identity {
             members = members == null ? List.of() : List.copyOf(members);
+            Objects.requireNonNull(haRole, "haRole");
         }
 
         public Identity(Optional<String> name, Optional<String> model, Optional<String> version) {
-            this(name, model, version, List.of());
+            this(name, model, version, List.of(), Optional.empty());
+        }
+
+        public Identity(Optional<String> name, Optional<String> model, Optional<String> version, List<GridMember> members) {
+            this(name, model, version, members, Optional.empty());
+        }
+
+        public Identity(Optional<String> name, Optional<String> model, Optional<String> version, Optional<String> haRole) {
+            this(name, model, version, List.of(), haRole);
         }
 
     }

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jooq.DSLContext;
@@ -22,6 +23,32 @@ import org.junit.jupiter.api.Test;
 import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
 
 class JooqDeviceRepositoryTest {
+
+    @Test
+    void observedRoleRefreshWritesPresentRoleAndKeepsItWhenAbsent() {
+        AtomicReference<String> storedRole = new AtomicReference<>();
+        List<String> updates = new ArrayList<>();
+        var repository = new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
+                new MockConnection(context -> {
+                    if (context.sql().startsWith("update devices set observed_hostname")) {
+                        updates.add(context.sql());
+                        Object incomingRole = context.bindings()[4];
+                        if (incomingRole != null) {
+                            storedRole.set(incomingRole.toString());
+                        }
+                    }
+                    return new MockResult[] { new MockResult(1, null) };
+                }), SQLDialect.POSTGRES)));
+
+        assertTrue(repository.refreshObservedFacts("device-1", Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.of("primary"), "synthetic-actor", "refresh"));
+        assertEquals("primary", storedRole.get());
+        assertTrue(repository.refreshObservedFacts("device-1", Optional.of("FW-TANGO-04"), Optional.empty(), Optional.empty(),
+                Optional.empty(), "synthetic-actor", "refresh"));
+        assertEquals("primary", storedRole.get());
+        assertTrue(updates.stream().allMatch(sql -> sql.contains("observed_ha_role = coalesce(")));
+        assertEquals(2, updates.size());
+    }
 
     @Test
     void missingBackupDispositionReportsCountWithoutDeletingAnything() {

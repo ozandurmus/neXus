@@ -105,6 +105,11 @@ public interface DeviceRepository {
      */
     default boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,
             Optional<String> softwareVersion, String actorFingerprint, String actionId) {
+        return refreshObservedFacts(deviceId, hostname, model, softwareVersion, Optional.empty(), actorFingerprint, actionId);
+    }
+
+    default boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,
+            Optional<String> softwareVersion, Optional<String> haRole, String actorFingerprint, String actionId) {
         return false;
     }
 

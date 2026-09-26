@@ -34,6 +34,7 @@ public final class FortiGateExecutor {
     private static final System.Logger LOG = System.getLogger(FortiGateExecutor.class.getName());
     private static final Duration CONNECT = Duration.ofSeconds(30);
     private static final Duration SHORT = Duration.ofSeconds(30);
+    private static final Duration HA_READ = Duration.ofSeconds(60);
     private static final Duration LONG = Duration.ofSeconds(180);
     private static final Duration BACKUP = Duration.ofSeconds(600);
     private static final int MAX_VDOMS = 64;
@@ -100,6 +101,25 @@ public final class FortiGateExecutor {
         return out.filter(o -> o.contains("Version:"));
     }
 
+    private Optional<String> haRole(TransportSession s, Optional<String> ownSerial) {
+        Optional<String> output = read(s, FortiGatePlan.GET_SYSTEM_HA_STATUS, HA_READ);
+        if (output.isEmpty()) {
+            LOG.log(System.Logger.Level.INFO, "[FGT] HA role unknown: status read refused or unavailable");
+            return Optional.empty();
+        }
+        String text = output.get();
+        List<String> labels = text.lines().map(line -> {
+            int colon = line.indexOf(':');
+            return colon < 0 ? "" : line.substring(0, colon).strip();
+        }).filter(label -> label.matches("[A-Za-z ]{1,64}")).distinct().limit(32).toList();
+        LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE HA status: lines={0} labels={1}", text.lines().count(), labels);
+        Optional<String> role = FortiGatePlan.haRole(text, ownSerial);
+        if (role.isEmpty()) {
+            LOG.log(System.Logger.Level.INFO, "[FGT] HA role unknown or standalone");
+        }
+        return role;
+    }
+
     public HttpsVendorExecutor.ConfirmOutcome confirm(Target target, String credentialRef) {
         Shell shell = open(target, credentialRef);
         if (shell.session() == null) {
@@ -114,7 +134,8 @@ public final class FortiGateExecutor {
             }
             LOG.log(System.Logger.Level.INFO, "[FGT] confirm: hostname={0} version={1} vdoms={2}", st.hostname().isPresent(),
                     st.version().isPresent(), st.multiVdom());
-            return new HttpsVendorExecutor.ConfirmOutcome.Confirmed(new HttpsVendorExecutor.Identity(st.hostname(), st.model(), st.version()));
+            return new HttpsVendorExecutor.ConfirmOutcome.Confirmed(
+                    new HttpsVendorExecutor.Identity(st.hostname(), st.model(), st.version(), haRole(shell.session(), st.serial())));
         } finally {
             ssh.disconnect(shell.session());
         }
@@ -132,6 +153,7 @@ public final class FortiGateExecutor {
             if (st.model().isEmpty()) {
                 return new HttpsVendorExecutor.InventoryOutcome.Failed("get system status gave no FortiGate answer");
             }
+            Optional<String> haRole = haRole(s, st.serial());
             List<FortiGatePlan.Iface> ifaces;
             Map<String, List<com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute>> routes = new LinkedHashMap<>();
             if (st.multiVdom()) {
@@ -162,10 +184,10 @@ public final class FortiGateExecutor {
             byVdom.forEach((vdom, list) -> contexts.add(new InventoryContext(st.multiVdom() ? vdom : InventoryContext.PHYSICAL, list,
                     routes.getOrDefault(vdom, List.of()))));
             LOG.log(System.Logger.Level.INFO, "[FGT] inventory: vdoms={0} interfaces={1} routes={2} ha={3}", byVdom.size(), ifaces.size(),
-                    routes.values().stream().mapToInt(List::size).sum(), FortiGatePlan.haRole(st.haMode()).orElse("none"));
+                    routes.values().stream().mapToInt(List::size).sum(), haRole.orElse("none"));
             return new HttpsVendorExecutor.InventoryOutcome.Completed(contexts, List.of(),
                     st.multiVdom() ? Optional.of(String.join(", ", byVdom.keySet())) : Optional.empty(),
-                    new HttpsVendorExecutor.Identity(st.hostname(), st.model(), st.version()));
+                    new HttpsVendorExecutor.Identity(st.hostname(), st.model(), st.version(), haRole));
         } finally {
             ssh.disconnect(shell.session());
         }

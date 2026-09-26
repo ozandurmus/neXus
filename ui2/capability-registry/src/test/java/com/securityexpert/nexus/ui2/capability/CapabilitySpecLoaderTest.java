@@ -99,6 +99,8 @@ class CapabilitySpecLoaderTest {
                 getClass().getClassLoader().getResourceAsStream("capabilities/device_confirm_check_point.yaml"));
         List<GateRow> gates = GateRegistryFixtureLoader.loadFromStream(
                 getClass().getClassLoader().getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
+        assertTrue(gates.stream().anyMatch(row -> row.gateId().equals("fgt_get_system_ha_status")
+                && row.canonicalCommandKey().equals("get system ha status")));
 
         assertEquals("device_confirm_check_point", spec.capabilityId());
 
