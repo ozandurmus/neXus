@@ -26,6 +26,7 @@ class AsaConfigProcessorTest {
             passwd login-value
             username invented password user-value
             snmp-server community snmp-value
+            snmp-server host inside 192.0.2.50 community host-community-value version 2c
             tunnel-group VPN ipsec-attributes
              ikev1 pre-shared-key psk-value
              ikev2 remote-authentication pre-shared-key psk2-value
@@ -46,9 +47,9 @@ class AsaConfigProcessorTest {
         assertTrue(p.index().stream().anyMatch(e -> e.section().equals("Object Network") && e.entryCount() == 1));
         assertTrue(p.index().stream().anyMatch(e -> e.section().equals("Access List") && e.entryCount() == 1));
         assertTrue(p.index().stream().anyMatch(e -> e.section().equals("Route") && e.entryCount() == 1));
-        assertEquals(12, p.withheldLineCount());
+        assertEquals(13, p.withheldLineCount());
         for (String value : new String[] {"enable-value", "login-value", "user-value", "snmp-value", "psk-value",
-                "psk2-value", "auth-value", "key-value", "other-value", "deadbeef", "0123456789abcdef", "INVENTED"}) {
+                "psk2-value", "auth-value", "key-value", "other-value", "host-community-value", "deadbeef", "0123456789abcdef", "INVENTED"}) {
             assertFalse(p.sanitizedText().contains(value), value);
         }
         assertTrue(p.sanitizedText().contains("nameif outside"));

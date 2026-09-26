@@ -79,7 +79,9 @@ public final class AsaConfigProcessor {
 
     private static boolean secret(String lower) {
         return lower.contains("password") || lower.contains("passwd") || lower.contains("secret")
-                || lower.contains("key") || lower.contains("snmp-server community") || lower.contains("passphrase");
+                || lower.contains("key") || lower.contains("passphrase")
+                // SNMP community strings: "snmp-server community <c>" and "snmp-server host <if> <ip> community <c>"
+                || (lower.startsWith("snmp-server") && lower.contains("community"));
     }
 
     private static String sectionOf(String line) {
