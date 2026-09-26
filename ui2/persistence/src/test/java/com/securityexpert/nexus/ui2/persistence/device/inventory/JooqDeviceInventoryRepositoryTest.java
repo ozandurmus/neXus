@@ -47,7 +47,10 @@ class JooqDeviceInventoryRepositoryTest {
                 Optional.of("Online"), Optional.of(16), Optional.of(48), Optional.of(8), Optional.of(9),
                 List.of(new GridMember.ServiceStatus("DNS", "WORKING"), new GridMember.ServiceStatus("DHCP", "INACTIVE")));
         return new InventoryRun("run-1", "device-1", "job-1", Instant.parse("2026-09-14T00:00:00Z"), 1,
-                List.of(physical), List.of(haFact), Optional.empty(), List.of(member));
+                List.of(physical), List.of(haFact), Optional.empty(), List.of(member),
+                new InfobloxGridSummary(2, false, 3, true, 4, false, 5, false,
+                        "[{\"network\":\"192.0.2.0/24\",\"percent\":87.5}]",
+                        "[{\"member\":\"gm.example\",\"type\":\"DNS\"}]"));
     }
 
     @Test
@@ -78,6 +81,7 @@ class JooqDeviceInventoryRepositoryTest {
         assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into device_route")).count());
         assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into grid_member(")).count(),
                 "V72: one grid_member row per member in the same audited transaction");
+        assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into infoblox_grid_summary(")).count());
         assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into device_inventory_ha")).count(),
                 "AC-4: the HA fact is written");
         assertTrue(executedSql.get(0).contains("SET LOCAL app.actor_fingerprint"),
@@ -115,8 +119,14 @@ class JooqDeviceInventoryRepositoryTest {
                 new String[] { "member_id", "host_name", "vip_address", "platform", "hardware_type", "hypervisor", "grid_master",
                         "master_candidate", "ha_enabled", "ha_status", "node_status", "replication", "disk_percent", "memory_percent",
                         "cpu_percent", "db_percent", "services" });
+        Result<Record> summaryResult = create.fetchFromStringData(
+                new String[] { "dns_views", "dns_views_at_least", "auth_zones", "auth_zones_at_least", "dhcp_networks",
+                        "dhcp_networks_at_least", "dhcp_ranges", "dhcp_ranges_at_least", "top_networks", "licenses" },
+                new String[] { "2", "false", "3", "true", "4", "false", "5", "false",
+                        "[{\"network\":\"192.0.2.0/24\",\"percent\":87.5}]",
+                        "[{\"member\":\"gm.example\",\"type\":\"DNS\"}]" });
         List<Result<Record>> queue =
-                new ArrayList<>(List.of(runResult, addressResult, interfaceResult, routeResult, haResult, gridMemberResult));
+                new ArrayList<>(List.of(runResult, addressResult, interfaceResult, routeResult, haResult, gridMemberResult, summaryResult));
         MockDataProvider provider = ctx -> {
             Result<Record> next = queue.remove(0);
             return new MockResult[] { new MockResult(next.size(), next) };
@@ -139,6 +149,9 @@ class JooqDeviceInventoryRepositoryTest {
         assertEquals(Optional.of(100), context.interfaces().get(0).vlanId(), "AC-4: the VLAN id round-trips");
         assertEquals(1, context.routes().size());
         assertTrue(run.gridMembers().isEmpty(), "a firewall run carries no grid members");
+        assertEquals(2, run.gridSummary().dnsViews());
+        assertTrue(run.gridSummary().authZonesAtLeast());
+        assertTrue(run.gridSummary().topNetworksJson().contains("192.0.2.0/24"));
         assertEquals("default", context.routes().get(0).protocol());
         assertEquals(1, run.haFacts().size(), "AC-4: the HA fact round-trips");
         InventoryHaFact haFact = run.haFacts().get(0);

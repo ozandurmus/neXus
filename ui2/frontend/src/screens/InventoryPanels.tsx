@@ -35,6 +35,7 @@ import {
   type ClusterRoute,
   type DeviceInventory,
   type GridMemberView,
+  type GridSummaryView,
   type DeviceSummary,
   type InventoryAddress,
   type InventoryContext,
@@ -49,7 +50,7 @@ import { useFetchOnMount } from "../shell/useFetchOnMount";
 const POLL_INTERVAL_MS = 1750;
 
 /** The services worth a chip on a grid member row, in display order; everything else is counted only. */
-const GRID_MEMBER_SERVICES = ["DNS", "DHCP", "NTP", "DOT_DOH", "DFP", "ATP", "ANALYTICS", "REPORTING", "TAXII"] as const;
+const GRID_MEMBER_SERVICES = ["DOT_DOH", "DFP", "ATP", "ANALYTICS", "REPORTING", "TAXII"] as const;
 
 function serviceTone(status: string): Tone {
   if (status === "WORKING") return "ok";
@@ -66,18 +67,56 @@ function percentTone(value: number | null): Tone {
 }
 
 /** V72: an Infoblox Grid Manager's members -- role in the grid, hardware, HA, node health and services, as reported. */
-function GridMembersPanel({ members }: { readonly members: readonly GridMemberView[] }) {
-  if (members.length === 0) {
+export function GridMembersPanel({ members, summary }: { readonly members: readonly GridMemberView[]; readonly summary?: GridSummaryView | null }) {
+  if (members.length === 0 && !summary) {
     return (
       <EmptyPanel
         title="No grid member evidence"
-        body="The member list is read when the Grid Manager is confirmed and after every completed backup; none has been recorded yet."
+        body="The member list is read during Grid Manager inventory; none has been recorded yet."
       />
     );
   }
   const pct = (v: number | null) => (v === null ? "\u2014" : `${v}%`);
+  const count = (value: number, atLeast: boolean) => `${atLeast ? "≥" : ""}${value}`;
+  const serviceColumns = (["DNS", "DHCP", "NTP"] as const).filter((service) =>
+    members.some((member) => member.services.some((s) => s.service === service)));
   return (
     <Stack spacing={1.5}>
+      {summary && <Stack spacing={1}>
+        {(summary.dns_views !== null || summary.auth_zones !== null) && <Typography variant="body2">
+          DNS: {summary.dns_views !== null && `${count(summary.dns_views, summary.dns_views_at_least)} views`}
+          {summary.dns_views !== null && summary.auth_zones !== null && " · "}
+          {summary.auth_zones !== null && `${count(summary.auth_zones, summary.auth_zones_at_least)} authoritative zones`}
+        </Typography>}
+        {(summary.dhcp_networks !== null || summary.dhcp_ranges !== null) && <Typography variant="body2">
+          DHCP: {summary.dhcp_networks !== null && `${count(summary.dhcp_networks, summary.dhcp_networks_at_least)} networks`}
+          {summary.dhcp_networks !== null && summary.dhcp_ranges !== null && " · "}
+          {summary.dhcp_ranges !== null && `${count(summary.dhcp_ranges, summary.dhcp_ranges_at_least)} ranges`}
+        </Typography>}
+        {!!summary.top_networks?.length && <Box>
+          <Typography variant="subtitle2">Most utilised networks</Typography>
+          {summary.top_networks.map((row) => <Stack key={row.network} direction="row" spacing={1} alignItems="center">
+            <Typography variant="body2" sx={{ minWidth: 135, fontFamily: MONO }}>{row.network}</Typography>
+            <Box role="meter" aria-label={`${row.network} utilization`} aria-valuenow={row.percent} aria-valuemin={0} aria-valuemax={100}
+              sx={{ width: 100, height: 6, borderRadius: 1, bgcolor: "action.hover" }}>
+              <Box sx={{ width: `${Math.max(0, Math.min(100, row.percent))}%`, height: "100%", borderRadius: 1, bgcolor: "primary.main" }} />
+            </Box>
+            <Typography variant="body2">{row.percent.toFixed(1)}%</Typography>
+          </Stack>)}
+        </Box>}
+        {!!summary.licenses?.length && <Box>
+          <Typography variant="subtitle2">Licenses</Typography>
+          {summary.licenses.map((license, index) => {
+            const expired = !!license.expiry_date && /^\d{4}-\d{2}-\d{2}/.test(license.expiry_date)
+              && license.expiry_date.slice(0, 10) < new Date().toISOString().slice(0, 10);
+            return <Typography key={index} variant="body2" color={expired ? "error.main" : "text.primary"}>
+              {license.member} · {[license.type, license.kind].filter(Boolean).join(" / ")}
+              {license.expiry_date && ` · expires on ${license.expiry_date}`}
+            </Typography>;
+          })}
+        </Box>}
+      </Stack>}
+      {members.length > 0 && <>
       <Typography variant="caption" color="text.secondary">
         {members.length} members · {members.filter((m) => m.grid_master).length} Grid Master ·{" "}
         {members.filter((m) => m.master_candidate && !m.grid_master).length} master candidates ·{" "}
@@ -92,6 +131,7 @@ function GridMembersPanel({ members }: { readonly members: readonly GridMemberVi
               <TableCell>Hardware</TableCell>
               <TableCell>HA</TableCell>
               <TableCell>Node</TableCell>
+              {serviceColumns.map((service) => <TableCell key={service}>{service}</TableCell>)}
               <TableCell align="right">Disk</TableCell>
               <TableCell align="right">Memory</TableCell>
               <TableCell align="right">CPU</TableCell>
@@ -118,7 +158,7 @@ function GridMembersPanel({ members }: { readonly members: readonly GridMemberVi
                   </TableCell>
                   <TableCell>
                     {m.ha_enabled
-                      ? <StatusChip tone={m.ha_status === "ACTIVE" || m.ha_status === "PASSIVE" ? "ok" : "warn"} label={m.ha_status ?? "HA"} dense />
+                      ? <StatusChip tone={m.ha_status === "ACTIVE" || m.ha_status === "PASSIVE" ? "ok" : "warn"} label={`Enabled · ${m.ha_status ?? "status unknown"}`} dense />
                       : <Typography variant="caption" color="text.secondary">single node</Typography>}
                   </TableCell>
                   <TableCell sx={{ whiteSpace: "nowrap" }}>
@@ -127,6 +167,9 @@ function GridMembersPanel({ members }: { readonly members: readonly GridMemberVi
                       <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>replication {m.replication}</Typography>
                     )}
                   </TableCell>
+                  {serviceColumns.map((service) => <TableCell key={service}>
+                    {byService.has(service) && <StatusChip tone={serviceTone(byService.get(service)!)} label={byService.get(service)!} dense />}
+                  </TableCell>)}
                   <TableCell align="right"><StatusChip tone={percentTone(m.disk_percent)} label={pct(m.disk_percent)} dense /></TableCell>
                   <TableCell align="right"><StatusChip tone={percentTone(m.memory_percent)} label={pct(m.memory_percent)} dense /></TableCell>
                   <TableCell align="right"><StatusChip tone={percentTone(m.cpu_percent)} label={pct(m.cpu_percent)} dense /></TableCell>
@@ -145,6 +188,7 @@ function GridMembersPanel({ members }: { readonly members: readonly GridMemberVi
           </TableBody>
         </Table>
       </TableContainer>
+      </>}
     </Stack>
   );
 }
@@ -1798,7 +1842,7 @@ export function DeviceInventoryPanels({
             label: device.vendor_hint === "infoblox" ? "Grid members"
               : (device.vendor_hint === "bluecoat" || device.vendor_hint === "fortinet") && device.role === "management_server" ? "Managed devices" : "Cluster members",
             panel: device.vendor_hint === "infoblox"
-              ? <GridMembersPanel members={deviceInventory?.grid_members ?? []} />
+              ? <GridMembersPanel members={deviceInventory?.grid_members ?? []} summary={deviceInventory?.grid_summary} />
               : (device.vendor_hint === "bluecoat" || device.vendor_hint === "fortinet") && device.role === "management_server"
               ? <ManagedDevicesPanel members={deviceInventory?.grid_members ?? []} selected={activeContext} onSelect={setActiveContext} />
               : isCluster && clusterInventory

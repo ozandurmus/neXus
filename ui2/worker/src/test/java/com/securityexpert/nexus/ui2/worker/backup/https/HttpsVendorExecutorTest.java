@@ -170,6 +170,41 @@ class HttpsVendorExecutorTest {
     }
 
     @Test
+    void infobloxSummaryPagesOrdersUtilizationCapsAndKeepsFailedPartsNull() throws Exception {
+        calls.wapiBodies.put("view", "{\"result\":[{\"name\":\"internal\"}],\"next_page_id\":\"p2\"}");
+        calls.wapiBodies.put("view:p2", "{\"result\":[{\"name\":\"external\"}]}");
+        calls.wapiBodies.put("network", "{\"result\":["
+                + "{\"network\":\"192.0.2.0/24\",\"utilization\":100},"
+                + "{\"network\":\"198.51.100.0/24\",\"utilization\":875},"
+                + "{\"network\":\"203.0.113.0/24\",\"utilization\":500},"
+                + "{\"network\":\"192.0.2.128/25\",\"utilization\":950},"
+                + "{\"network\":\"198.51.100.128/25\",\"utilization\":700},"
+                + "{\"network\":\"203.0.113.128/25\",\"utilization\":600}]}");
+        calls.wapiBodies.put("member:license", "{\"result\":[{\"type\":\"DNS\",\"kind\":\"permanent\","
+                + "\"expiry_date\":\"2027-01-01\",\"hwid\":\"synthetic-hwid\"}]}");
+        calls.failObject = "zone_auth";
+        var done = (HttpsVendorExecutor.InventoryOutcome.Completed) executor.inventory("infoblox", T, "cred");
+        assertEquals(2, done.gridSummary().dnsViews());
+        assertEquals(null, done.gridSummary().authZones());
+        assertEquals(6, done.gridSummary().dhcpNetworks());
+        var top = new com.fasterxml.jackson.databind.ObjectMapper().readTree(done.gridSummary().topNetworksJson());
+        assertEquals(5, top.size());
+        assertEquals("192.0.2.128/25", top.get(0).path("network").asText());
+        assertEquals(95.0, top.get(0).path("percent").asDouble());
+        assertEquals(87.5, top.get(1).path("percent").asDouble());
+        var licenses = new com.fasterxml.jackson.databind.ObjectMapper().readTree(done.gridSummary().licensesJson());
+        assertEquals("grid", licenses.get(0).path("member").asText());
+        assertFalse(done.gridSummary().licensesJson().contains("synthetic-hwid"));
+        assertTrue(calls.log.stream().anyMatch(s -> s.contains("&_page_id=p2")));
+
+        calls.failObject = null;
+        calls.capViews = true;
+        var capped = (HttpsVendorExecutor.InventoryOutcome.Completed) executor.inventory("infoblox", T, "cred");
+        assertEquals(100, capped.gridSummary().dnsViews());
+        assertTrue(capped.gridSummary().dnsViewsAtLeast());
+    }
+
+    @Test
     void cyberControllerInventoryNamesTheControllerAndItsManagedDevices() {
         calls.deviceList = "[{\"name\": \"CC-MAIN\", \"managementIp\": \"192.0.2.30\", \"type\": \"CyberController\", \"treeType\": \"ROOT\","
                 + " \"deviceVersion\": \"10.13.0\", \"ormId\": \"1\", \"parentOrmId\": null, \"children\": ["
@@ -298,6 +333,9 @@ class HttpsVendorExecutorTest {
     }
 
     private static final class Scripted implements HttpsDeviceCalls {
+        Map<String, String> wapiBodies = new java.util.HashMap<>();
+        String failObject;
+        boolean capViews;
         final List<String> log = new ArrayList<>();
         String downloadHost = "192.0.2.30";
         int loginStatus = 200;
@@ -329,6 +367,16 @@ class HttpsVendorExecutorTest {
         @Override
         public TextResponse get(Target target, String path, Credentials creds, Duration timeout, int maxBytes) {
             log.add("GET " + path);
+            for (String object : HttpsVendorPlan.INFOBLOX_SUMMARY_OBJECTS) {
+                if (path.startsWith("/wapi/v2.13.5/" + object + "?")) {
+                    if (object.equals(failObject)) return new TextResponse(503, Optional.of("application/json"), "{}", false);
+                    if (capViews && object.equals("view")) return new TextResponse(200, Optional.of("application/json"),
+                            "{\"result\":[{\"name\":\"synthetic\"}],\"next_page_id\":\"again\"}", false);
+                    String key = object + (path.contains("_page_id=p2") ? ":p2" : "");
+                    return new TextResponse(200, Optional.of("application/json"),
+                            wapiBodies.getOrDefault(key, "{\"result\":[]}"), false);
+                }
+            }
             if (path.equals("/wapidoc/")) {
                 return new TextResponse(200, Optional.of("text/html"), "var DOCUMENTATION_OPTIONS = {\n VERSION: '2.13.5',\n", false);
             }

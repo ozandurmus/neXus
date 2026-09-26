@@ -10,12 +10,17 @@ import java.util.Map;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.net.URLEncoder;
+import java.util.HashMap;
 import java.util.function.Function;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InfobloxGridSummary;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient;
@@ -174,8 +179,12 @@ public final class HttpsVendorExecutor {
          * {@code contexts}: one per grid member (Infoblox) carrying its interfaces and static routes; {@code members}: the
          * member facts; {@code virtualSystems}: the member (or managed device) names the Devices tree lists under the device.
          */
-        record Completed(List<InventoryContext> contexts, List<GridMember> members, Optional<String> virtualSystems, Identity identity)
+        record Completed(List<InventoryContext> contexts, List<GridMember> members, Optional<String> virtualSystems, Identity identity,
+                InfobloxGridSummary gridSummary)
                 implements InventoryOutcome {
+            public Completed(List<InventoryContext> contexts, List<GridMember> members, Optional<String> virtualSystems, Identity identity) {
+                this(contexts, members, virtualSystems, identity, null);
+            }
         }
         record AuthenticationFailed(String reason) implements InventoryOutcome {
         }
@@ -246,9 +255,119 @@ public final class HttpsVendorExecutor {
                 gridName = Optional.of(g.get(0).get("name").asText()).filter(n -> !n.isBlank());
             }
         }
+        InfobloxGridSummary summary = infobloxSummary(target, creds, version.get(), json);
         return new InventoryOutcome.Completed(contexts, members, names,
-                new Identity(gridName, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())));
+                new Identity(gridName, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())), summary);
     }
+
+    private record WapiPages(List<JsonNode> items, boolean atLeast) {
+    }
+
+    private WapiPages infobloxPages(Target target, Credentials creds, String version, String object, String fields)
+            throws IOException, InterruptedException {
+        List<JsonNode> items = new ArrayList<>();
+        java.util.Set<String> fieldNames = new java.util.TreeSet<>();
+        String pageId = null;
+        boolean capped = false;
+        for (int page = 0; page < 100; page++) {
+            String path = HttpsVendorPlan.withVersion("/wapi/v%s/" + object, version)
+                    + "?_return_fields=" + fields + "&_paging=1&_max_results=1000&_return_as_object=1"
+                    + (pageId == null ? "" : "&_page_id=" + URLEncoder.encode(pageId, StandardCharsets.UTF_8));
+            TextResponse response = client.get(target, path, creds, Duration.ofSeconds(60), TEXT_MAX);
+            if (!response.ok()) {
+                LOG.log(System.Logger.Level.WARNING, "[HTTPS_INVENTORY] infoblox {0} read failed HTTP {1}", object, response.status());
+                return null;
+            }
+            JsonNode body = JSON.readTree(response.body());
+            JsonNode result = body.path("result");
+            if (!result.isArray()) {
+                LOG.log(System.Logger.Level.WARNING, "[HTTPS_INVENTORY] infoblox {0} read failed HTTP {1}: no result array", object, response.status());
+                return null;
+            }
+            result.forEach(items::add);
+            fieldNames.addAll(HttpsVendorPlan.fieldNames(result));
+            pageId = body.path("next_page_id").isTextual() ? body.path("next_page_id").asText() : null;
+            if (pageId != null && pageId.length() > 512) {
+                LOG.log(System.Logger.Level.WARNING, "[HTTPS_INVENTORY] infoblox {0} read failed HTTP {1}: invalid page id",
+                        object, response.status());
+                return null;
+            }
+            if (pageId == null || pageId.isBlank()) {
+                LOG.log(System.Logger.Level.INFO, "[MEASURE] infoblox {0}: count {1}, fields {2}", object, items.size(), fieldNames);
+                return new WapiPages(items, false);
+            }
+            capped = page == 99;
+        }
+        LOG.log(System.Logger.Level.INFO, "[MEASURE] infoblox {0}: at least {1}, fields {2}", object, items.size(), fieldNames);
+        return new WapiPages(items, capped);
+    }
+
+    private InfobloxGridSummary infobloxSummary(Target target, Credentials creds, String version, JsonNode memberJson)
+            throws InterruptedException {
+        WapiPages[] pages = new WapiPages[5];
+        for (int i = 0; i < pages.length; i++) {
+            String object = HttpsVendorPlan.INFOBLOX_SUMMARY_OBJECTS[i];
+            try {
+                pages[i] = infobloxPages(target, creds, version, object, HttpsVendorPlan.INFOBLOX_SUMMARY_FIELDS[i]);
+            } catch (IOException | RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "[HTTPS_INVENTORY] infoblox {0} read failed HTTP unknown ({1})",
+                        object, e.getClass().getSimpleName());
+            }
+        }
+        Map<String, String> memberByHwid = new HashMap<>();
+        java.util.Set<String> ambiguousHwids = new java.util.HashSet<>();
+        for (JsonNode member : memberJson) {
+            String name = member.path("host_name").asText("");
+            if (!name.isBlank()) {
+                JsonNode nodes = member.path("node_info");
+                if (nodes.isArray()) {
+                    for (JsonNode node : nodes) {
+                        String hwid = node.path("hwid").asText("");
+                        if (!hwid.isBlank() && !ambiguousHwids.contains(hwid)) {
+                            String prior = memberByHwid.putIfAbsent(hwid, name);
+                            if (prior != null && !prior.equals(name)) {
+                                memberByHwid.remove(hwid);
+                                ambiguousHwids.add(hwid);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        try {
+            List<Map<String, Object>> top = new ArrayList<>();
+            if (pages[2] != null) {
+                for (JsonNode network : pages[2].items()) {
+                    if (network.path("network").isTextual() && network.path("utilization").isNumber()) {
+                        top.add(Map.of("network", network.path("network").asText(),
+                                "percent", Math.round(network.path("utilization").asDouble()) / 10.0));
+                    }
+                }
+                top.sort(Comparator.comparingDouble((Map<String, Object> row) -> (double) row.get("percent")).reversed());
+                top = top.subList(0, Math.min(5, top.size()));
+            }
+            List<Map<String, String>> licenses = new ArrayList<>();
+            if (pages[4] != null) {
+                for (JsonNode license : pages[4].items()) {
+                    Map<String, String> entry = new LinkedHashMap<>();
+                    entry.put("member", memberByHwid.getOrDefault(license.path("hwid").asText(""), "grid"));
+                    for (String field : List.of("type", "kind", "expiry_date")) {
+                        if (license.path(field).isTextual()) entry.put(field, license.path(field).asText());
+                    }
+                    licenses.add(entry);
+                }
+            }
+            return new InfobloxGridSummary(count(pages[0]), capped(pages[0]), count(pages[1]), capped(pages[1]),
+                    count(pages[2]), capped(pages[2]), count(pages[3]), capped(pages[3]),
+                    pages[2] == null ? null : JSON.writeValueAsString(top),
+                    pages[4] == null ? null : JSON.writeValueAsString(licenses));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static Integer count(WapiPages pages) { return pages == null ? null : pages.items().size(); }
+    private static boolean capped(WapiPages pages) { return pages != null && pages.atLeast(); }
 
     /**
      * A DefensePro through the Cyber Controller that manages it (PO 2026-09-25): its entry in the controller's device

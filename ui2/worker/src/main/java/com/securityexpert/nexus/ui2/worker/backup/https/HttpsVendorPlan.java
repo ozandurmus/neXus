@@ -17,6 +17,8 @@ public final class HttpsVendorPlan {
     /** Grid members (PO 2026-09-25): host names and platforms, read once per confirm; shown under the Grid Manager. */
     public static final String INFOBLOX_MEMBERS = "/wapi/v%s/member?_return_fields=host_name,platform,master_candidate,enable_ha,"
             + "vip_setting,node_info,service_status,lan2_enabled,lan2_port_setting,additional_ip_list,static_routes";
+    public static final String[] INFOBLOX_SUMMARY_OBJECTS = {"view", "zone_auth", "network", "range", "member:license"};
+    public static final String[] INFOBLOX_SUMMARY_FIELDS = {"name", "fqdn", "network,utilization", "start_addr", "type,kind,expiry_date,hwid"};
     public static final String INFOBLOX_GETGRIDDATA = "/wapi/v%s/fileop?_function=getgriddata";
     public static final String INFOBLOX_GETGRIDDATA_BODY = "{\"type\": \"BACKUP\"}";
     public static final String INFOBLOX_DOWNLOADCOMPLETE = "/wapi/v%s/fileop?_function=downloadcomplete";
@@ -59,6 +61,8 @@ public final class HttpsVendorPlan {
 
     /** Gate keys: {@code METHOD path}, the version placeholder kept as {@code <ver>}. */
     public static final List<String> INFOBLOX_GATE_KEYS = List.of("GET /wapidoc/", "GET /wapi/v<ver>/grid", "GET /wapi/v<ver>/member",
+            "GET /wapi/v<ver>/view", "GET /wapi/v<ver>/zone_auth", "GET /wapi/v<ver>/network",
+            "GET /wapi/v<ver>/range", "GET /wapi/v<ver>/member:license",
             "POST /wapi/v<ver>/fileop?_function=getgriddata", "GET <getgriddata url, same host>",
             "POST /wapi/v<ver>/fileop?_function=downloadcomplete");
     public static final List<String> RADWARE_GATE_KEYS = List.of("GET /", "POST /dynamic/File/Configuration/ReceivefromDevice");

@@ -18,7 +18,7 @@ import java.util.Optional;
  */
 public record InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,
         List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
-        List<GridMember> gridMembers) {
+        List<GridMember> gridMembers, InfobloxGridSummary gridSummary) {
 
     public InventoryRun {
         Objects.requireNonNull(runId, "runId");
@@ -29,6 +29,12 @@ public record InventoryRun(String runId, String deviceId, String jobId, Instant 
         haFacts = haFacts == null ? List.of() : List.copyOf(haFacts);
         virtualSystems = virtualSystems == null ? Optional.empty() : virtualSystems;
         gridMembers = gridMembers == null ? List.of() : List.copyOf(gridMembers);
+    }
+
+    public InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,
+            List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
+            List<GridMember> gridMembers) {
+        this(runId, deviceId, jobId, collectedAt, contextCount, contexts, haFacts, virtualSystems, gridMembers, null);
     }
 
     /** Pre-V72 shape: no grid members (every firewall run). */
@@ -48,4 +54,3 @@ public record InventoryRun(String runId, String deviceId, String jobId, Instant 
         this(runId, deviceId, jobId, collectedAt, contextCount, contexts, List.of(), Optional.empty());
     }
 }
-

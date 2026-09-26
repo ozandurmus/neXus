@@ -77,7 +77,8 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 String key = String.valueOf(entry.getKey());
                 Object val = entry.getValue();
-                if (("address".equals(key) || "destination".equals(key) || "management_ip".equals(key)) && val instanceof String s) {
+                if (("address".equals(key) || "destination".equals(key) || "management_ip".equals(key)
+                        || "network".equals(key)) && val instanceof String s) {
                     ipMasker.registerSubnet(s);
                 } else {
                     preRegisterSubnets(val);
@@ -186,9 +187,10 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         result.put(key, value);
                     }
                 }
-                case "virtual_system" -> {
+                case "virtual_system", "member" -> {
                     if (value instanceof String s) {
-                        result.put(key, topologyPseudonymizer.maskVirtualSystem(s, clusterRef));
+                        result.put(key, "member".equals(key) && "grid".equals(s) ? s
+                                : topologyPseudonymizer.maskVirtualSystem(s, clusterRef));
                     } else {
                         result.put(key, value);
                     }
@@ -238,7 +240,7 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         result.put(key, value);
                     }
                 }
-                case "address", "management_ip" -> {
+                case "address", "management_ip", "network" -> {
                     if (value instanceof String s) {
                         result.put(key, ipMasker.mask(s));
                     } else {

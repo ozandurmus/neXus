@@ -185,7 +185,11 @@ class InventoryControllerTest {
                 Optional.of("eth0"), InventoryRoute.PROTOCOL_DEFAULT, Optional.empty());
         InventoryContext context = new InventoryContext(InventoryContext.PHYSICAL, List.of(iface), List.of(route));
         Instant collectedAt = Instant.parse("2026-09-14T12:00:00Z");
-        inventoryRepository.recordRun(new InventoryRun("run-1", "device-1", "job-1", collectedAt, 1, List.of(context)),
+        inventoryRepository.recordRun(new InventoryRun("run-1", "device-1", "job-1", collectedAt, 1, List.of(context),
+                List.of(), Optional.empty(), List.of(),
+                new com.securityexpert.nexus.ui2.persistence.device.inventory.InfobloxGridSummary(2, false, null, false,
+                        1, false, null, false, "[{\"network\":\"192.0.2.0/24\",\"percent\":87.5}]",
+                        "[{\"member\":\"grid\",\"type\":\"DNS\"}]")),
                 "actor", "action-1");
         FakeJobRecordDao jobs = new FakeJobRecordDao();
         jobs.byId.put("job-1", new JobRow("job-1", "cp_inventory_collect", "device-1", "CLASS_0_READ", "COMPLETED",
@@ -205,6 +209,11 @@ class InventoryControllerTest {
         List<Map<String, Object>> contexts = (List<Map<String, Object>>) body.get("contexts");
         assertEquals(1, contexts.size());
         assertEquals("physical", contexts.get(0).get("context"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> summary = (Map<String, Object>) body.get("grid_summary");
+        assertEquals(2, summary.get("dns_views"));
+        assertEquals(null, summary.get("auth_zones"));
+        assertEquals(1, ((List<?>) summary.get("top_networks")).size());
     }
 
     /** AC-4: {@code vlan_id} on an interface and {@code ha} on its context, per migration V17. */

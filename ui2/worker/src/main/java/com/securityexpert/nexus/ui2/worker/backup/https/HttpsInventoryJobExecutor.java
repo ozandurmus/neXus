@@ -102,7 +102,7 @@ public final class HttpsInventoryJobExecutor {
         }
         try {
             inventory.recordRun(new InventoryRun(UUID.randomUUID().toString(), deviceId, jobId, Instant.now(), done.contexts().size(),
-                    done.contexts(), List.of(), done.virtualSystems(), done.members()), ACTOR, "inventory_completed");
+                    done.contexts(), List.of(), done.virtualSystems(), done.members(), done.gridSummary()), ACTOR, "inventory_completed");
         } catch (RuntimeException writeFailed) {
             String reason = "inventory_run_write_failed: " + writeFailed.getMessage() + " (after " + ms + "ms)";
             leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, "inventory_failed", reason);

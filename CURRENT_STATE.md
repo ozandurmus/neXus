@@ -22,8 +22,15 @@ backup schedule is not switched on.
 
 ## Active build
 
-Continuous deploys 2026-09-25/26 on HOST-A (schema 91); the next tool starts
-from `docs/design/CODEX_HANDOVER_2026_09_26.md`. Predecessor build record
+`NXS-LOCAL-0371` is in progress on the local Infoblox summary lane
+(`docs/design/INFOBLOX_GRID_SUMMARY_2026_09_26.md`, FROZEN). The five approved
+WAPI reads, persistence, API masking and UI are implemented. Local frontend and
+focused Java checks passed; Gradle startup is blocked by this sandbox's local
+socket restriction. The V92 migration has not been applied, and live WAPI and
+AIView acceptance remain unverified. No push, PR, merge or deployment occurred.
+
+Continuous deploys 2026-09-25/26 on HOST-A (schema 91); prior deployment detail is in
+`docs/design/CODEX_HANDOVER_2026_09_26.md`. Predecessor build record
 `NXS-LOCAL-0370` (Infoblox, observed facts, HTTPS inventory). A build record
 for V73–V89 is still to be written. Open gates: first real runs of Cisco ASA,
 Pulse Secure, ProxySG discovery import; FortiManager physical link remains

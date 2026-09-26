@@ -17,9 +17,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InfobloxGridSummary;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
@@ -44,6 +46,7 @@ import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 public final class InventoryController {
 
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ISO_INSTANT;
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     public record CollectRequest(@JsonProperty("nonce") String nonce) {
     }
@@ -89,7 +92,32 @@ public final class InventoryController {
         // V72: an Infoblox Grid Manager's members as facts; the member name goes out under "virtual_system" so aiview sees
         // the same pseudonym the Devices tree shows, and the VIP under "address" so it is masked as an address.
         body.put("grid_members", run.map(r -> r.gridMembers().stream().map(InventoryController::toGridMemberBody).toList()).orElse(List.of()));
+        body.put("grid_summary", run.map(InventoryRun::gridSummary).map(InventoryController::toGridSummaryBody).orElse(null));
         return ResponseEntity.ok(body);
+    }
+
+    private static Map<String, Object> toGridSummaryBody(InfobloxGridSummary s) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("dns_views", s.dnsViews());
+        body.put("dns_views_at_least", s.dnsViewsAtLeast());
+        body.put("auth_zones", s.authZones());
+        body.put("auth_zones_at_least", s.authZonesAtLeast());
+        body.put("dhcp_networks", s.dhcpNetworks());
+        body.put("dhcp_networks_at_least", s.dhcpNetworksAtLeast());
+        body.put("dhcp_ranges", s.dhcpRanges());
+        body.put("dhcp_ranges_at_least", s.dhcpRangesAtLeast());
+        body.put("top_networks", parseSummaryList(s.topNetworksJson()));
+        body.put("licenses", parseSummaryList(s.licensesJson()));
+        return body;
+    }
+
+    private static Object parseSummaryList(String json) {
+        if (json == null) return null;
+        try {
+            return JSON.readValue(json, List.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return null;
+        }
     }
 
     private static Map<String, Object> toGridMemberBody(GridMember m) {

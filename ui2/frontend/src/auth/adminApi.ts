@@ -700,6 +700,20 @@ export interface DeviceInventory {
   readonly contexts: InventoryContext[];
   readonly virtual_systems?: readonly string[] | string | null;
   readonly grid_members?: readonly GridMemberView[];
+  readonly grid_summary?: GridSummaryView | null;
+}
+
+export interface GridSummaryView {
+  readonly dns_views: number | null;
+  readonly dns_views_at_least: boolean;
+  readonly auth_zones: number | null;
+  readonly auth_zones_at_least: boolean;
+  readonly dhcp_networks: number | null;
+  readonly dhcp_networks_at_least: boolean;
+  readonly dhcp_ranges: number | null;
+  readonly dhcp_ranges_at_least: boolean;
+  readonly top_networks: readonly { readonly network: string; readonly percent: number }[] | null;
+  readonly licenses: readonly { readonly member: string; readonly type?: string; readonly kind?: string; readonly expiry_date?: string }[] | null;
 }
 
 export interface ClusterMember {

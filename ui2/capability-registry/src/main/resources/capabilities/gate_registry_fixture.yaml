@@ -1318,6 +1318,86 @@ gates:
     secret_output_risk: 'member host names (shown masked to aiview as virtual systems are)'
     safe_telemetry_fields: []
     source_document_pointer: 'VENDOR_BACKUP_CONTRACTS_2026_09_22.md §4 grid members; PO 2026-09-25'
+  - gate_id: infoblox_dns_views
+    vendor: 'infoblox'
+    platform_role_scope: 'infoblox_grid_manager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /wapi/v<ver>/view'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'failed object -> null; paging cap -> at least count'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['count', 'field_names']
+    source_document_pointer: 'PO 2026-09-26 Infoblox grid summary'
+  - gate_id: infoblox_auth_zones
+    vendor: 'infoblox'
+    platform_role_scope: 'infoblox_grid_manager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /wapi/v<ver>/zone_auth'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'failed object -> null; paging cap -> at least count'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['count', 'field_names']
+    source_document_pointer: 'PO 2026-09-26 Infoblox grid summary'
+  - gate_id: infoblox_dhcp_networks
+    vendor: 'infoblox'
+    platform_role_scope: 'infoblox_grid_manager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /wapi/v<ver>/network'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'failed object -> null; paging cap -> at least count'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['count', 'field_names']
+    source_document_pointer: 'PO 2026-09-26 Infoblox grid summary'
+  - gate_id: infoblox_dhcp_ranges
+    vendor: 'infoblox'
+    platform_role_scope: 'infoblox_grid_manager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /wapi/v<ver>/range'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'failed object -> null; paging cap -> at least count'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['count', 'field_names']
+    source_document_pointer: 'PO 2026-09-26 Infoblox grid summary'
+  - gate_id: infoblox_member_licenses
+    vendor: 'infoblox'
+    platform_role_scope: 'infoblox_grid_manager'
+    shell_context: 'not_applicable'
+    transport_kind: 'HTTPS'
+    canonical_command_key: 'GET /wapi/v<ver>/member:license'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one client per run'
+    unsupported_behavior_ref: 'failed object -> null; paging cap -> at least count'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['count', 'field_names']
+    source_document_pointer: 'PO 2026-09-26 Infoblox grid summary'
   - gate_id: infoblox_fileop_getgriddata
     vendor: 'infoblox'
     platform_role_scope: 'infoblox_grid_manager'

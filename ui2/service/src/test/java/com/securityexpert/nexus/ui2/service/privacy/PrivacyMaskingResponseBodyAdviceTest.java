@@ -110,6 +110,24 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void gridSummaryMasksNetworkAndLicenseMember() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> body = Map.of("grid_summary", Map.of(
+                "top_networks", List.of(Map.of("network", "192.0.2.0/24", "percent", 87.5)),
+                "licenses", List.of(Map.of("member", "ns2.example", "type", "DNS"))));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> masked = (Map<String, Object>) advice.beforeBodyWrite(body, null, null, null, serverRequest, null);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> summary = (Map<String, Object>) masked.get("grid_summary");
+        @SuppressWarnings("unchecked")
+        String network = (String) ((Map<String, Object>) ((List<?>) summary.get("top_networks")).get(0)).get("network");
+        @SuppressWarnings("unchecked")
+        String member = (String) ((Map<String, Object>) ((List<?>) summary.get("licenses")).get(0)).get("member");
+        assertThat(network).isNotEqualTo("192.0.2.0/24");
+        assertThat(member).isNotEqualTo("ns2.example");
+    }
+
+    @Test
     void masksDeviceSummaryListForReplayViewer() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
 

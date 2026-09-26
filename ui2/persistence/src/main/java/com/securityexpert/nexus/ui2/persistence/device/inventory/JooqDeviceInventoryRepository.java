@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 import org.jooq.Result;
+import org.jooq.JSONB;
 
 import com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
@@ -50,6 +51,16 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
                         m.haStatus().orElse(null), m.nodeStatus().orElse(null), m.replication().orElse(null),
                         m.diskPercent().orElse(null), m.memoryPercent().orElse(null), m.cpuPercent().orElse(null), m.dbPercent().orElse(null),
                         m.services().stream().map(sv -> sv.service() + "=" + sv.status()).collect(java.util.stream.Collectors.joining(",")));
+            }
+            if (run.gridSummary() != null) {
+                InfobloxGridSummary s = run.gridSummary();
+                dsl.execute("insert into infoblox_grid_summary(run_id, dns_views, dns_views_at_least, auth_zones, auth_zones_at_least, "
+                        + "dhcp_networks, dhcp_networks_at_least, dhcp_ranges, dhcp_ranges_at_least, top_networks, licenses) "
+                        + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10})",
+                        run.runId(), s.dnsViews(), s.dnsViewsAtLeast(), s.authZones(), s.authZonesAtLeast(),
+                        s.dhcpNetworks(), s.dhcpNetworksAtLeast(), s.dhcpRanges(), s.dhcpRangesAtLeast(),
+                        s.topNetworksJson() == null ? null : JSONB.valueOf(s.topNetworksJson()),
+                        s.licensesJson() == null ? null : JSONB.valueOf(s.licensesJson()));
             }
             for (InventoryContext context : run.contexts()) {
                 for (InventoryInterface iface : context.interfaces()) {
@@ -181,9 +192,20 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
                 Optional.ofNullable(row.get("memory_percent", Integer.class)), Optional.ofNullable(row.get("cpu_percent", Integer.class)),
                 Optional.ofNullable(row.get("db_percent", Integer.class)), parseServices(row.get("services", String.class)))).toList();
 
+        Result<Record> summaryRows = dsl.fetch("select dns_views, dns_views_at_least, auth_zones, auth_zones_at_least, "
+                + "dhcp_networks, dhcp_networks_at_least, dhcp_ranges, dhcp_ranges_at_least, top_networks, licenses "
+                + "from infoblox_grid_summary where run_id = {0}", runId);
+        InfobloxGridSummary summary = summaryRows.isEmpty() ? null : summaryRows.stream().findFirst().map(row ->
+                new InfobloxGridSummary(row.get("dns_views", Integer.class), Boolean.TRUE.equals(row.get("dns_views_at_least", Boolean.class)),
+                        row.get("auth_zones", Integer.class), Boolean.TRUE.equals(row.get("auth_zones_at_least", Boolean.class)),
+                        row.get("dhcp_networks", Integer.class), Boolean.TRUE.equals(row.get("dhcp_networks_at_least", Boolean.class)),
+                        row.get("dhcp_ranges", Integer.class), Boolean.TRUE.equals(row.get("dhcp_ranges_at_least", Boolean.class)),
+                        row.get("top_networks", JSONB.class) == null ? null : row.get("top_networks", JSONB.class).data(),
+                        row.get("licenses", JSONB.class) == null ? null : row.get("licenses", JSONB.class).data())).orElse(null);
+
         return new InventoryRun(runId, runRow.get("device_id", String.class), runRow.get("job_id", String.class),
                 runRow.get("collected_at", Timestamp.class).toInstant(), runRow.get("context_count", Integer.class),
-                contexts, haFacts, virtualSystems, gridMembers);
+                contexts, haFacts, virtualSystems, gridMembers, summary);
     }
 
     /** {@code DNS=WORKING,DHCP=INACTIVE} back to pairs; malformed items skipped. */

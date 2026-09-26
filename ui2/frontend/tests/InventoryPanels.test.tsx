@@ -3,7 +3,32 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { InventoryScreen } from "../src/screens/InventoryScreen";
-import { BackupPanel, buildUnifiedContextTabs } from "../src/screens/InventoryPanels";
+import { BackupPanel, GridMembersPanel, buildUnifiedContextTabs } from "../src/screens/InventoryPanels";
+
+describe("Infoblox grid summary", () => {
+  it("shows available counts and utilisation while omitting missing parts", () => {
+    render(withTheme(<GridMembersPanel members={[]} summary={{
+      dns_views: 2, dns_views_at_least: false, auth_zones: 3, auth_zones_at_least: true,
+      dhcp_networks: null, dhcp_networks_at_least: false, dhcp_ranges: null, dhcp_ranges_at_least: false,
+      top_networks: [{ network: "192.0.2.0/24", percent: 87.5 }], licenses: null,
+    }} />));
+    expect(screen.getByText(/DNS: 2 views · ≥3 authoritative zones/)).toBeInTheDocument();
+    expect(screen.getByText("Most utilised networks")).toBeInTheDocument();
+    expect(screen.getByText("87.5%")).toBeInTheDocument();
+    expect(screen.queryByText(/DHCP:/)).toBeNull();
+    expect(screen.queryByText("Licenses")).toBeNull();
+  });
+
+  it("marks expired licenses red", () => {
+    render(withTheme(<GridMembersPanel members={[]} summary={{
+      dns_views: null, dns_views_at_least: false, auth_zones: null, auth_zones_at_least: false,
+      dhcp_networks: null, dhcp_networks_at_least: false, dhcp_ranges: null, dhcp_ranges_at_least: false,
+      top_networks: null, licenses: [{ member: "FW-TANGO-04", type: "DNS", expiry_date: "2020-01-01" }],
+    }} />));
+    expect(screen.getByText(/FW-TANGO-04 · DNS · expires on 2020-01-01/)).toHaveStyle({ color: m3Theme.palette.error.main });
+    expect(screen.queryByText("Most utilised networks")).toBeNull();
+  });
+});
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
