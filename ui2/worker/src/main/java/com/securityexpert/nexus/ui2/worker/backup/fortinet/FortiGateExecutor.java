@@ -104,6 +104,13 @@ public final class FortiGateExecutor {
     private Optional<String> haRole(TransportSession s, Optional<String> ownSerial) {
         Optional<String> output = read(s, FortiGatePlan.GET_SYSTEM_HA_STATUS, HA_READ);
         if (output.isEmpty()) {
+            // Measured 2026-09-26: two multi-VDOM FortiGates refused it at the top level; like "get system status",
+            // it is a global command there.
+            move(s, FortiGatePlan.CONFIG_GLOBAL);
+            output = read(s, FortiGatePlan.GET_SYSTEM_HA_STATUS, HA_READ);
+            move(s, FortiGatePlan.END);
+        }
+        if (output.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "[FGT] HA role unknown: status read refused or unavailable");
             return Optional.empty();
         }
