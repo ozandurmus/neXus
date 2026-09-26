@@ -1094,9 +1094,9 @@
       "id": "fmg_link_state_diagnose_nic",
       "category": "vendor",
       "title": "FortiManager physical link state: diagnose hardware info nic per port (gate + read)",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P2",
-      "target": "",
+      "target": "docs/design/FORTINET_CONTRACT.md",
       "note": ""
     }
   ]

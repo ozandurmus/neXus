@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-26T06:46:14Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-26T07:13:28Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -90,6 +90,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-26T06:46:14Z
 - P1/planned version_advisory_exposure — Security advisories and critical bugs for the versions the (target: )
 - P2/in_progress cp_spark_exec_channel_rejected
 - P2/in_progress cp_vsx_interfaces_identical_to_physical
+- P2/in_progress fmg_link_state_diagnose_nic
 - P2/in_progress ui2_m3_design_transfer_pass
 - P2/in_progress ui_device_workspace_and_overview
 - P2/planned antigravity_provider_adapter
@@ -102,7 +103,6 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-26T06:46:14Z
 - P2/planned deploy_manifest_tests_eight_failures
 - P2/planned device_admin_accounts_and_privileges
 - P2/planned failover_phase_d_has_no_build_record
-- P2/planned fmg_link_state_diagnose_nic
 - P2/planned gov_orch_turn_counter_blind_to_codex_stream
 - P2/planned hosta_export_include_build_namespace
 - P2/planned infoblox_member_facts

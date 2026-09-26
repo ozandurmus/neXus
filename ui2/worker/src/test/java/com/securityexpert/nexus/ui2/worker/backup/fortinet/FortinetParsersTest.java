@@ -17,12 +17,6 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
 class FortinetParsersTest {
 
     @Test
-    void nicProbeAcceptsOnlyOnePortToken() {
-        assertEquals(Optional.of("diagnose hardware info nic port1"), FortiManagerExecutor.nicCommand("port1"));
-        assertTrue(FortiManagerExecutor.nicCommand("port1; execute factoryreset").isEmpty());
-    }
-
-    @Test
     void systemStatus() {
         var st = FortiGatePlan.parseStatus("""
                 Version: FortiGate-1101E v7.0.12,build0523,230606 (GA.M)

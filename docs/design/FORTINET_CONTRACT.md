@@ -46,7 +46,9 @@ receiver used for the Radware Cyber Controller fits, and is the next step after 
   interface, measured 2026-09-25), so the inventory logs in over SSH too and reads `get system interface`. Measured
   2026-09-26: its `status:` is the configured state (`enable`), shown as up/down exactly as a FortiGate's configured
   `set status` is. V87 gates `diagnose hardware info nic <port>` once per named port in the same SSH session.
-  The first run records only a masked output shape; physical link semantics stay `UNKNOWN` until measured and verified.
+  The first real run on FortiManager 7.4.11 rejected every per-port invocation as a CLI error. The worker no longer
+  issues that form. Physical link remains `UNSUPPORTED` for this appliance and `UNKNOWN` in inventory until an
+  appliance-specific read is documented, gated, and measured; configured state remains a separate observation.
 
 ## Real-environment measurement (to do, after the PO adds the devices)
 One FortiGate with VDOMs and one FortiManager, fwadm credential: confirm facts present; VDOM, interface and route
