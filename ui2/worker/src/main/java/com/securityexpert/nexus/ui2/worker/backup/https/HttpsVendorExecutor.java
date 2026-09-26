@@ -549,7 +549,13 @@ public final class HttpsVendorExecutor {
                 var hm = java.util.regex.Pattern.compile("(?i)interface\\s+\\d+:\\d+\\S*\\s*\\(([A-Za-z ]{1,30})\\)").matcher(line);
                 if (hm.find()) headerWords.add(hm.group(1).strip());
             }
-            LOG.log(System.Logger.Level.INFO, "[PROXYSG] MEASURE interface labels {0}; header words {1}", labels, headerWords);
+            java.util.Set<String> stateValues = new java.util.TreeSet<>();
+            for (String line : ifs.split("\\R")) {
+                var sm = java.util.regex.Pattern.compile("^\\s{2,}((?:Link )?[Ss]tatus):\\s*(.{0,60})$").matcher(line);
+                if (sm.find()) stateValues.add(sm.group(1) + "=" + sm.group(2).strip().replaceAll("\\d{1,3}(\\.\\d{1,3}){3}", "<ip>"));
+            }
+            LOG.log(System.Logger.Level.INFO, "[PROXYSG] MEASURE interface labels {0}; header words {1}; state values {2}",
+                    labels, headerWords, stateValues);
             return Optional.of(new InventoryOutcome.Completed(
                     List.of(new com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext(
                             com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext.PHYSICAL, interfaces, routes)),
