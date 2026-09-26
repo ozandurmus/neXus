@@ -66,14 +66,18 @@ public final class ConfigurationQueryService {
         return new DeviceConfigurationOutcome.Found(deviceId, deviceConfigurationRepository.findRunView(deviceId));
     }
 
-    /** {@code GET /devices/{id}/configuration/text}: sanitized configuration text for Check Point or Palo Alto, or empty (404) for any other case. */
+    /**
+     * {@code GET /devices/{id}/configuration/text}: the sanitized configuration text, or empty (404) when there is none.
+     * Check Point, FortiGate and Cisco ASA store it on their SHOW_CONFIGURATION run (FortiGate V85, ASA 2026-09-26 --
+     * both were missing here, so their Configuration tab said "could not be read"); Palo Alto on ACTIVE/EFFECTIVE_RUNNING.
+     */
     public Optional<String> sanitizedText(String deviceId) {
         Optional<DeviceRecord> device = deviceRepository.find(deviceId);
         if (device.isEmpty()) {
             return Optional.empty();
         }
         String vendor = device.get().vendorHint();
-        if ("check_point".equalsIgnoreCase(vendor)) {
+        if ("check_point".equalsIgnoreCase(vendor) || "fortinet".equalsIgnoreCase(vendor) || "cisco_asa".equalsIgnoreCase(vendor)) {
             return deviceConfigurationRepository.findLatestRun(deviceId, ConfigurationReadKind.SHOW_CONFIGURATION)
                     .flatMap(ConfigurationRun::sanitizedText);
         } else if ("palo_alto".equalsIgnoreCase(vendor)) {
