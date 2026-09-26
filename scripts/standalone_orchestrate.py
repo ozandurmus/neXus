@@ -177,7 +177,8 @@ def cmd_start(args: argparse.Namespace) -> int:
     prompt_path = run_dir / "prompt.txt"
     prompt_path.write_text(PREAMBLE.format(model=args.model) + brief, encoding="utf-8")
     log_path, exit_file = run_dir / "run.jsonl", run_dir / "exit_code"
-    extra_dirs = [orch._worktree_git_dir(worktree), orch._git_object_dir(worktree)]
+    # ~/.gradle: the Gradle wrapper and daemon lock files live there; without it every Java test run is refused.
+    extra_dirs = [orch._worktree_git_dir(worktree), orch._git_object_dir(worktree), Path.home() / ".gradle"]
     argv = CodexAdapter().build_argv(
         prompt_path=prompt_path, worktree=worktree, model=args.model, effort=args.effort,
         budget_usd=None, extra_dirs=extra_dirs, resume_session_id=None,
