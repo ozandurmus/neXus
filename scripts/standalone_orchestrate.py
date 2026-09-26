@@ -23,6 +23,8 @@ Usage:
   standalone_orchestrate.py result --task <slug>
   standalone_orchestrate.py stop   --task <slug>
   standalone_orchestrate.py clean  --task <slug>      (after merge: removes the worktree and the lane branch)
+  standalone_orchestrate.py ship   [--task <slug>]    (fast-forward main to the lane if given, privacy gate, push origin +
+                                                       hosta, deploy with retry, sync ui2-configuration, clean the task)
 """
 from __future__ import annotations
 
@@ -280,6 +282,56 @@ def cmd_clean(args: argparse.Namespace) -> int:
     return 0
 
 
+def _deploy() -> None:
+    """scripts/hosta_deploy.sh with its exit-4 retry (a job in flight), then ui2-configuration set to the service image."""
+    log = STATE_DIR / "last_deploy.log"
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    for _ in range(30):
+        with open(log, "w") as out:
+            rc = subprocess.run(["bash", "scripts/hosta_deploy.sh"], cwd=str(REPO_ROOT), stdout=out, stderr=subprocess.STDOUT).returncode
+        if rc != 4:
+            break
+        time.sleep(25)
+    tail = log.read_text(errors="replace").strip().splitlines()[-3:]
+    if rc != 0:
+        raise SystemExit(f"deploy failed (rc={rc}); see {log}: " + " | ".join(t[:160] for t in tail))
+    host = (Path.home() / ".config" / "nexus" / "hosta").read_text().splitlines()[0].strip()
+    sync = ('export KUBECONFIG=$HOME/.kube/config; '
+            'IMG=$(kubectl -n ui2 get deploy ui2-service -o jsonpath="{.spec.template.spec.containers[0].image}"); '
+            'C=$(kubectl -n ui2 get deploy ui2-configuration -o jsonpath="{.spec.template.spec.containers[0].name}"); '
+            'kubectl -n ui2 set image deploy/ui2-configuration $C=$IMG >/dev/null && '
+            'kubectl -n ui2 rollout status deploy/ui2-configuration --timeout=240s | tail -1')
+    r = subprocess.run(["ssh", host, sync], capture_output=True, text=True, timeout=300)
+    if r.returncode != 0:
+        raise SystemExit("ui2-configuration image sync failed")
+    print(json.dumps({"deploy": "ok", "summary": [t[:160] for t in tail], "configuration": r.stdout.strip()}))
+
+
+def cmd_ship(args: argparse.Namespace) -> int:
+    if _git("status", "--porcelain", "--untracked-files=no"):
+        raise SystemExit("main checkout has uncommitted tracked changes; commit or set them aside first")
+    if args.task:
+        r = _load(args.task)
+        if _phase(r) == "running":
+            raise SystemExit("task still running")
+        wt = Path(r["worktree"])
+        if _git("status", "--porcelain", "--untracked-files=no", cwd=wt, check=False):
+            raise SystemExit("lane has uncommitted changes; review and commit them first")
+        _git("merge", "--ff-only", r["branch"])
+    gate = subprocess.run([sys.executable, "scripts/repository_privacy_check.py"], cwd=str(REPO_ROOT),
+                          capture_output=True, text=True)
+    if gate.returncode != 0 or "Gate:                 PASS" not in gate.stdout:
+        raise SystemExit("privacy gate did not pass; nothing pushed")
+    _git("push", "-q", "origin", "main")
+    _git("push", "-q", "hosta", "main")
+    print(json.dumps({"pushed": _git("rev-parse", "--short", "HEAD")}))
+    _deploy()
+    if args.task:
+        args.force = False
+        cmd_clean(args)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="standalone_orchestrate", description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -299,12 +351,14 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("result", "stop"):
         q = sub.add_parser(name)
         q.add_argument("--task", required=True)
+    sh = sub.add_parser("ship")
+    sh.add_argument("--task")
     c = sub.add_parser("clean")
     c.add_argument("--task", required=True)
     c.add_argument("--force", action="store_true")
     args = p.parse_args(argv)
     return {"start": cmd_start, "status": cmd_status, "wait": cmd_wait, "result": cmd_result,
-            "stop": cmd_stop, "clean": cmd_clean}[args.cmd](args)
+            "stop": cmd_stop, "clean": cmd_clean, "ship": cmd_ship}[args.cmd](args)
 
 
 if __name__ == "__main__":
