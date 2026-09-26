@@ -179,8 +179,10 @@ public final class FortiGateExecutor {
                     List.of(new com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer("assword:", secret.password())), Duration.ofSeconds(20));
             hopped = true;
             boolean learned = ssh.resyncPrompt(s, Duration.ofSeconds(3));
-            LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage login: result={0} promptLearned={1}",
-                    login.getClass().getSimpleName(), learned);
+            String loginText = login instanceof ExecResult.Completed c ? c.output() : "";
+            LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage login: result={0} promptLearned={1} outputShape={2}",
+                    login.getClass().getSimpleName(), learned,
+                    loginText.lines().limit(6).map(l -> l.replaceAll("[A-Za-z]+", "a").replaceAll("[0-9]+", "9")).toList());
             Optional<String> peerStatus = status(s);
             FortiGatePlan.Status ps = FortiGatePlan.parseStatus(peerStatus.orElse(null));
             Optional<String> peerHa = read(s, FortiGatePlan.GET_SYSTEM_HA_STATUS, HA_READ);
