@@ -776,7 +776,7 @@ export interface DiagnosticTarget {
   readonly target: string;
 }
 
-export function listFmgDiagnosticTargets(): Promise<{ targets: DiagnosticTarget[] }> {
+export function listFmgDiagnosticTargets(): Promise<{ targets: DiagnosticTarget[]; canExecute: boolean }> {
   return call("/api/v2/diagnostics/targets", "GET");
 }
 

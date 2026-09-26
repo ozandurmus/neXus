@@ -52,3 +52,14 @@ listing, visible output states, human/AI projections, refusal before contact for
 unapproved agent commands, and no duplicate dispatch. Any real device command
 still requires its own exact PO approval. Do not mark real-device validation done
 from tests or deployment alone.
+
+## Implementation checkpoint
+
+The feature branch now lists all devices, returns real names to authorized
+administrators and masked names to AIView, permits masked read inspection, and
+keeps Output visible and bound to the submitted command when the form changes.
+The existing execution gate is unchanged: this is not yet a general command
+runner, agent approval implementation, or complete administrator-output path.
+The output-lifetime choice (encrypted retained result or session-only result)
+has been requested from the PO before freezing that boundary. No worker has
+been dispatched, migration applied, deployment made, or device command sent.

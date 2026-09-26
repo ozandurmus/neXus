@@ -55,11 +55,15 @@ public final class DiagnosticService {
     }
 
     public Optional<Preview> preview(String deviceId, String port) {
+        return preview(deviceId, port, true);
+    }
+
+    public Optional<Preview> preview(String deviceId, String port, boolean masked) {
         if (port == null || !PORT.matcher(port).matches() || !ports(deviceId).contains(port) || !gateReady()) {
             return Optional.empty();
         }
         String label = devices.findSummary(deviceId).flatMap(s -> s.observedHostname())
-                .map(name -> names.maskDeviceName(name, null)).orElse("Unknown");
+                .map(name -> masked ? names.maskDeviceName(name, null) : name).orElse("Unknown");
         return Optional.of(new Preview(JobAdmissionService.FMG_INTERFACE_DETAIL, deviceId, label, port,
                 "diagnose fmnetwork interface detail " + port, 90, 60, "none", "one per target per minute"));
     }
@@ -94,12 +98,11 @@ public final class DiagnosticService {
                         && PORT.matcher(i.name()).matches()).map(InventoryInterface::name).distinct().toList();
     }
 
-    public List<TargetOption> targets() {
-        return devices.listAll().stream().filter(d -> "fortinet".equals(d.vendorHint())
-                        && "management_server".equals(d.role())
-                        && devices.find(d.deviceId()).filter(r -> r.permitsReadCollection()).isPresent())
+    public List<TargetOption> targets(boolean masked) {
+        return devices.listAll().stream()
                 .map(d -> new TargetOption(d.deviceId(), d.observedHostname()
-                        .map(name -> names.maskDeviceName(name, null)).orElse("Unknown"))).toList();
+                        .map(name -> masked ? names.maskDeviceName(name, d.clusterMemberRef().orElse(null)) : name)
+                        .orElse("Unknown"))).toList();
     }
 
     public AdmissionResult submit(String deviceId, String port, String requestId, String actor) {

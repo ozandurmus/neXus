@@ -11,6 +11,7 @@ const TERMINAL = new Set(["COMPLETED", "FAILED", "REJECTED", "CANCELLED", "OUTCO
 /** Typed text is matched locally against a gated command; the browser submits only target and port. */
 export function DiagnosticPanel() {
   const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [canExecute, setCanExecute] = useState(false);
   const [devices, setDevices] = useState<DiagnosticTarget[]>([]);
   const [deviceId, setDeviceId] = useState("");
   const [ports, setPorts] = useState<string[]>([]);
@@ -19,24 +20,32 @@ export function DiagnosticPanel() {
   const [result, setResult] = useState<DiagnosticResult | null>(null);
   const [jobId, setJobId] = useState("");
   const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState<{ target: string; command: string } | null>(null);
   const typedPort = /^diagnose fmnetwork interface detail ([A-Za-z0-9_.-]{1,31})$/.exec(command)?.[1];
 
   useEffect(() => {
     listFmgDiagnosticTargets().then(r => {
       if (!Array.isArray(r.targets)) return setAllowed(false);
-      setDevices(r.targets); setAllowed(true);
+      setDevices(r.targets); setAllowed(true); setCanExecute(r.canExecute === true);
     })
       .catch(() => setAllowed(false));
   }, []);
   useEffect(() => {
-    setPorts([]); setCommand(""); setPreview(null); setResult(null); setJobId("");
-    if (!deviceId) return;
-    getFmgDiagnosticPorts(deviceId).then(r => setPorts(r.ports)).catch(() => setPorts([]));
+    let active = true;
+    setPorts([]); setCommand(""); setPreview(null);
+    if (deviceId) getFmgDiagnosticPorts(deviceId)
+      .then(r => { if (active) setPorts(r.ports); })
+      .catch(() => { if (active) setPorts([]); });
+    return () => { active = false; };
   }, [deviceId]);
   useEffect(() => {
-    setPreview(null); setMessage(""); setResult(null); setJobId("");
-    if (deviceId && typedPort && ports.includes(typedPort)) previewFmgDiagnostic(deviceId, typedPort).then(setPreview)
-      .catch(() => setMessage("Diagnostic unavailable for this target or port. Refresh its inventory first."));
+    let active = true;
+    setPreview(null); setMessage("");
+    if (deviceId && typedPort && ports.includes(typedPort)) previewFmgDiagnostic(deviceId, typedPort)
+      .then(value => { if (active) setPreview(value); })
+      .catch(() => { if (active) setMessage("This diagnostic read is unavailable for the selected device."); });
+    return () => { active = false; };
   }, [deviceId, command, ports]);
   useEffect(() => {
     if (!jobId) return;
@@ -52,39 +61,48 @@ export function DiagnosticPanel() {
   }, [jobId]);
 
   const run = async () => {
-    if (!preview || command !== preview.command) return;
+    if (!canExecute || !preview || preview.deviceId !== deviceId || command !== preview.command || submitting) return;
+    setSubmitting(true);
     setMessage(""); setResult(null);
+    setSubmitted({ target: preview.target, command: preview.command });
     try {
       const admitted = await runFmgDiagnostic(deviceId, preview.port, crypto.randomUUID());
       setJobId(admitted.job_id);
     } catch { setMessage("Diagnostic request refused. Check role, target, gate, or one-minute limit."); }
+    finally { setSubmitting(false); }
   };
 
   return <Box sx={{ display: "grid", gap: 2, maxWidth: 700 }}>
     <Typography variant="h6">Debug / Parser</Typography>
-    <Typography variant="body2">Type a gated read command. The device response is reduced to safe fields.</Typography>
+    <Typography variant="body2">Select a device, enter a diagnostic command, and inspect its output.</Typography>
     {allowed === false ? <Typography role="status">Super administrator role required.</Typography> : allowed ? <>
       <TextField select SelectProps={{ native: true }} label="Device" value={deviceId} onChange={e => setDeviceId(e.target.value)}>
-        <option value="">Select a FortiManager</option>
+        <option value="">Select a device</option>
         {devices.map(d => <option key={d.deviceId} value={d.deviceId}>{d.target}</option>)}
       </TextField>
       <TextField label="Command" value={command} onChange={e => setCommand(e.target.value)} disabled={!deviceId}
-        placeholder="diagnose fmnetwork interface detail port5" helperText="FortiManager interface detail; the port must exist in current inventory." />
+        placeholder="Enter a diagnostic read command" />
       {command && (!typedPort || !ports.includes(typedPort)) && <Typography role="alert">Command or port is not gated for this device.</Typography>}
       {preview && <Box sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
         <Typography>Target: {preview.target} · Port: {preview.port}</Typography>
         <Typography sx={{ fontFamily: "monospace" }}>Command: {preview.command}</Typography>
         <Typography variant="body2">Read only · Gate V{preview.gateRevision} · {preview.timeoutSeconds}s timeout · no retry · {preview.frequency}</Typography>
-        <Typography variant="body2">Result: Status presence/token, bounded line count, masked shape ID. No raw response.</Typography>
-        <Button variant="contained" onClick={run} disabled={command !== preview.command || (!!jobId && (!result || !TERMINAL.has(result.state)))}>Run read</Button>
       </Box>}
-      {result && <Box role="status">
-        <Typography>Job: {result.state}</Typography>
-        <Typography sx={{ fontFamily: "monospace", whiteSpace: "pre-wrap" }}>Masked output:{"\n"}{result.maskedOutput ?? "[UNAVAILABLE]"}</Typography>
-        <Typography variant="body2">Status: {result.statusPresent ? result.statusToken : "ABSENT"} · Lines: {result.lineCount ?? "—"} · Shape: {result.shapeId ?? "—"}</Typography>
-        <Typography>Physical link: UNKNOWN until vendor semantics are proven.</Typography>
-      </Box>}
+      <Button variant="contained" onClick={run} disabled={!canExecute || !preview || command !== preview.command || submitting || (!!jobId && (!result || !TERMINAL.has(result.state)))}>Run read</Button>
+      {!canExecute && <Typography variant="body2">This session can inspect diagnostics but cannot run a command directly.</Typography>}
       {message && <Typography role="alert">{message}</Typography>}
     </> : null}
+      <Box role="status" aria-label="Output" sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+        <Typography variant="subtitle1">Output</Typography>
+        {submitted && <Typography variant="body2">{submitted.target} · {submitted.command}</Typography>}
+        <Typography sx={{ fontFamily: "monospace", whiteSpace: "pre-wrap", overflowWrap: "anywhere", minHeight: 160 }}>
+          {result ? result.maskedOutput ?? "Output is not available yet." : submitting ? "Submitting…" : jobId ? "Waiting for output…" : "No command has been run."}
+        </Typography>
+        {result && <>
+        <Typography>Job: {result.state}</Typography>
+        <Typography variant="body2">Status: {result.statusPresent ? result.statusToken : "ABSENT"} · Lines: {result.lineCount ?? "—"} · Shape: {result.shapeId ?? "—"}</Typography>
+        <Typography>Physical link: UNKNOWN until vendor semantics are proven.</Typography>
+        </>}
+      </Box>
   </Box>;
 }

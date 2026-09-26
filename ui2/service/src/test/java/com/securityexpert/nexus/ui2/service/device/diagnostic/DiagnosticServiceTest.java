@@ -60,8 +60,12 @@ class DiagnosticServiceTest {
         when(summary.role()).thenReturn("management_server");
         when(summary.observedHostname()).thenReturn(Optional.of("synthetic-device-name"));
         when(devices.listAll()).thenReturn(List.of(summary));
-        String projected = service.targets().get(0).target();
+        String projected = service.targets(true).get(0).target();
         assertTrue(projected.startsWith("FW-"));
         assertFalse(projected.contains("synthetic-device-name"));
+        assertEquals("synthetic-device-name", service.targets(false).get(0).target());
+        when(summary.vendorHint()).thenReturn("cisco");
+        when(summary.role()).thenReturn("gateway");
+        assertEquals(1, service.targets(false).size());
     }
 }

@@ -17,29 +17,40 @@ import org.springframework.web.bind.annotation.RestController;
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
 import com.securityexpert.nexus.ui2.service.device.diagnostic.DiagnosticService;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
+import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
+import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
+import com.securityexpert.nexus.ui2.platform.RoleToken;
+import org.springframework.web.server.ResponseStatusException;
 
 /** Typed class-0 diagnostic jobs; command text never originates in a client request. */
 @RestController
 public final class DiagnosticController {
     private final DiagnosticService service;
+    private final RbacEvaluator rbac;
 
-    public DiagnosticController(DiagnosticService service) {
+    public DiagnosticController(DiagnosticService service, RbacEvaluator rbac) {
         this.service = service;
+        this.rbac = rbac;
     }
 
     @GetMapping("/api/v2/diagnostics/targets")
-    public ResponseEntity<?> targets() {
-        return ResponseEntity.ok(Map.of("targets", service.targets()));
+    public ResponseEntity<?> targets(HttpServletRequest request) {
+        requireReadAccess(request);
+        return ResponseEntity.ok(Map.of("targets", service.targets(isMasked(request)),
+                "canExecute", isAdministrator(request)));
     }
 
     @GetMapping("/api/v2/diagnostics/ports")
-    public ResponseEntity<?> ports(@RequestParam("device_id") String deviceId) {
+    public ResponseEntity<?> ports(@RequestParam("device_id") String deviceId, HttpServletRequest request) {
+        requireReadAccess(request);
         return ResponseEntity.ok(Map.of("ports", service.ports(deviceId)));
     }
 
     @GetMapping("/api/v2/diagnostics/preview")
-    public ResponseEntity<?> preview(@RequestParam("device_id") String deviceId, @RequestParam String port) {
-        return service.preview(deviceId, port).<ResponseEntity<?>>map(ResponseEntity::ok)
+    public ResponseEntity<?> preview(@RequestParam("device_id") String deviceId, @RequestParam String port,
+            HttpServletRequest request) {
+        requireReadAccess(request);
+        return service.preview(deviceId, port, isMasked(request)).<ResponseEntity<?>>map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "DIAGNOSTIC_TARGET_UNAVAILABLE")));
     }
 
@@ -62,8 +73,26 @@ public final class DiagnosticController {
     }
 
     @GetMapping("/api/v2/diagnostics/{jobId}")
-    public ResponseEntity<?> result(@PathVariable String jobId) {
+    public ResponseEntity<?> result(@PathVariable String jobId, HttpServletRequest request) {
+        requireReadAccess(request);
         return service.result(jobId).<ResponseEntity<?>>map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("code", "NOT_FOUND")));
+    }
+
+    private static boolean isMasked(HttpServletRequest request) {
+        return Boolean.TRUE.equals(request.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE));
+    }
+
+    private boolean isAdministrator(HttpServletRequest request) {
+        String actor = (String) request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
+        return actor != null && rbac.evaluate(actor, java.util.Optional.of(RoleToken.SECURITY_ADMIN),
+                java.time.Instant.now()).outcome() == AuthzOutcome.PERMITTED;
+    }
+
+    private void requireReadAccess(HttpServletRequest request) {
+        if (request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE) == null
+                || (!isMasked(request) && !isAdministrator(request))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DIAGNOSTIC_ACCESS_REQUIRED");
+        }
     }
 }

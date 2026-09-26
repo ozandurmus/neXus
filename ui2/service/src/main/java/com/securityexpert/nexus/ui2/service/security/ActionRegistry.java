@@ -145,7 +145,8 @@ public final class ActionRegistry {
         // NO_APPLICABLE_AUTHORITY at E4 (open to any authenticated session).
         register(new ActionDescriptor(DEVICE_READ, true, Optional.empty()));
         register(new ActionDescriptor(DEVICE_INVENTORY_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
-        register(new ActionDescriptor(FMG_DIAGNOSTIC_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        // Controller restricts reads to administrators or the masked AIView projection.
+        register(new ActionDescriptor(FMG_DIAGNOSTIC_READ, true, Optional.empty()));
         register(new ActionDescriptor(FMG_DIAGNOSTIC_RUN, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_TEXT_READ, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
