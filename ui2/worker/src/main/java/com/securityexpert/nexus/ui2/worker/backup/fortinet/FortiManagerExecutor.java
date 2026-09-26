@@ -48,18 +48,13 @@ public final class FortiManagerExecutor {
     }
 
     public static final String SSH_GET_SYSTEM_INTERFACE = "get system interface";
-    private static final java.util.regex.Pattern PORT_NAME = java.util.regex.Pattern.compile("[A-Za-z0-9_.-]{1,31}");
     private static final java.util.regex.Pattern IFACE_BLOCK = java.util.regex.Pattern.compile("(?m)^==\\s*\\[\\s*([A-Za-z0-9_.-]+)\\s*\\]");
     private static final java.util.regex.Pattern IFACE_STATUS = java.util.regex.Pattern.compile("(?im)(?:^|\\s)status:\\s*(up|down|enable|disable)\\b");
-
-    static Optional<String> diagnosticCommand(String port) {
-        return PORT_NAME.matcher(port).matches() ? Optional.of("diagnose fmnetwork interface detail " + port) : Optional.empty();
-    }
 
     /**
      * FortiManager CLI "get system interface": "== [ port1 ]" blocks; "status:" is the interface's configured state
      * (measured 2026-09-26: enable), shown as up/down like a FortiGate's configured state. Physical link remains a
-     * separate, unproven observation until the V89 diagnostic output is measured and interpreted.
+     * separate, unproven observation after the V87-V89 diagnostics.
      */
     public static Map<String, String> parseInterfaceStates(String out) {
         Map<String, String> states = new java.util.LinkedHashMap<>();
@@ -112,18 +107,6 @@ public final class FortiManagerExecutor {
                 }
                 LOG.log(System.Logger.Level.INFO, "[FMG] ssh interface states: {0} read; status words {1}; shape {2}", states.size(), words,
                         com.securityexpert.nexus.ui2.worker.backup.https.ProxySgOutputs.shape(c.output(), 8));
-                // V89: measure one documented link diagnostic before assigning any link semantics.
-                states.keySet().stream().map(FortiManagerExecutor::diagnosticCommand).flatMap(Optional::stream).findFirst().ifPresent(command -> {
-                    var measured = ssh.execInteractive(a.session(), new com.securityexpert.nexus.ui2.jobs.transport.ExecSpec(
-                            command, true), Duration.ofSeconds(60));
-                    if (measured instanceof com.securityexpert.nexus.ui2.jobs.transport.ExecResult.Completed result) {
-                        LOG.log(System.Logger.Level.INFO, "[FMG] fmnetwork shape: {0}; status token: {1}",
-                                com.securityexpert.nexus.ui2.worker.backup.https.ProxySgOutputs.shape(result.output(), 12),
-                                diagnosticStatusToken(result.output()));
-                    } else {
-                        LOG.log(System.Logger.Level.INFO, "[FMG] fmnetwork result: {0}", measured.getClass().getSimpleName());
-                    }
-                });
                 return states;
             }
             LOG.log(System.Logger.Level.INFO, "[FMG] ssh get system interface: {0}", out.getClass().getSimpleName());
@@ -131,14 +114,6 @@ public final class FortiManagerExecutor {
         } finally {
             ssh.disconnect(a.session());
         }
-    }
-
-    static String diagnosticStatusToken(String output) {
-        java.util.regex.Matcher status = java.util.regex.Pattern.compile("(?im)^\\s*Status\\s*:\\s*(up|down)\\b").matcher(output);
-        if (status.find()) {
-            return status.group(1).toUpperCase(java.util.Locale.ROOT);
-        }
-        return java.util.regex.Pattern.compile("(?im)^\\s*Status\\s*:").matcher(output).find() ? "OTHER" : "ABSENT";
     }
 
     private record Session(String token, Credentials creds) {

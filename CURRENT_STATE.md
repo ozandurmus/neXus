@@ -22,12 +22,12 @@ backup schedule is not switched on.
 
 ## Active build
 
-Continuous deploys 2026-09-25/26 on HOST-A (schema 87); the next tool starts
+Continuous deploys 2026-09-25/26 on HOST-A (schema 89); the next tool starts
 from `docs/design/CODEX_HANDOVER_2026_09_26.md`. Predecessor build record
 `NXS-LOCAL-0370` (Infoblox, observed facts, HTTPS inventory). A build record
-for V73–V87 is still to be written. Open gates: first real runs of Cisco ASA,
+for V73–V89 is still to be written. Open gates: first real runs of Cisco ASA,
 Pulse Secure, ProxySG discovery import; FortiManager physical link remains
-`UNSUPPORTED/UNKNOWN` after V87's per-port CLI form was rejected on the real appliance.
+`UNSUPPORTED/UNKNOWN` after V87's per-port CLI form was rejected and V88/V89 lacked an explicit link field on the real appliance.
 
 ## Open Product Owner decisions
 

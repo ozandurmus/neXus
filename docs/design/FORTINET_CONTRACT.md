@@ -54,6 +54,10 @@ receiver used for the Radware Cyber Controller fits, and is the next step after 
   The V88 output had interface statistics but no explicit physical-link field. V89 gates the vendor-documented
   `diagnose fmnetwork interface detail <interface>`; its first run measures one port's masked shape and a bounded
   status enum before any interface state is changed.
+  The FortiManager 7.4.11 run returned an interface-information shape but no `Status:` field. The older documented
+  example therefore does not establish this estate's semantics. V89's diagnostic was removed from subsequent reads.
+  Neither `UP` nor `RUNNING` from the interface-information output is promoted to physical link; Linux documents
+  `IFF_RUNNING` as operational UP or UNKNOWN. Physical link stays `UNKNOWN` until stronger evidence exists.
 
 ## Real-environment measurement (to do, after the PO adds the devices)
 One FortiGate with VDOMs and one FortiManager, fwadm credential: confirm facts present; VDOM, interface and route

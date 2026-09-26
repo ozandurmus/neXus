@@ -17,14 +17,6 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
 class FortinetParsersTest {
 
     @Test
-    void diagnosticProbeAcceptsOnlyOneInterfaceToken() {
-        assertEquals(Optional.of("diagnose fmnetwork interface detail port1"), FortiManagerExecutor.diagnosticCommand("port1"));
-        assertTrue(FortiManagerExecutor.diagnosticCommand("port1; execute factoryreset").isEmpty());
-        assertEquals("UP", FortiManagerExecutor.diagnosticStatusToken("Status: up\nSpeed: 1000Mb/s"));
-        assertEquals("ABSENT", FortiManagerExecutor.diagnosticStatusToken("Command fail"));
-    }
-
-    @Test
     void systemStatus() {
         var st = FortiGatePlan.parseStatus("""
                 Version: FortiGate-1101E v7.0.12,build0523,230606 (GA.M)
