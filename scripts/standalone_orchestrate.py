@@ -59,8 +59,9 @@ Hard rules:
   messages ending with the line `Co-Authored-By: {model} (Codex)`). Do not push, open a PR, merge, or deploy.
 - Never contact HOST-A or any network device; never run device commands; no credentials, real hostnames, addresses,
   serials or account names in code, tests, logs or messages (use RFC 5737 addresses and invented names in tests).
-- A new device command needs a gate row (migration + gate_registry_fixture.yaml): if the brief seems to need one, stop
-  and say so in your final message instead of adding it.
+- A new device command needs a gate row (migration + gate_registry_fixture.yaml). Add gate rows ONLY when the brief
+  lists them as Product Owner approved (exact endpoint/command); then add exactly those. If the work seems to need a
+  device command the brief does not list, stop and say so in your final message instead of adding it.
 - No new dependencies. English code, comments and UI text. Keep the diff to what the brief asks.
 - Run the validation the brief lists (frontend: `cd ui2/frontend && npx tsc --noEmit -p . && npx vitest run && npm run
   build`, with `--cacheDir` / cache paths inside the worktree if node_modules is read-only; Java: the named
