@@ -1,34 +1,45 @@
-# FortiManager approved diagnostic command screen and CLI
+# Approved diagnostic command screen and CLI
 
-**Status: DRAFT — DO NOT FREEZE.** No command in this document is authorized for execution. Product Owner review of the code and individual approval of each diagnostic request are required by `AGENTS.md` (2026-09-26 amendment).
+**Status: DRAFT — DO NOT FREEZE.** This document permits design work only. Implementation needs a Product Owner freeze; each real diagnostic command separately needs the Product Owner's review of exact code, command, masked target and safe output, then an explicit `OK`. `NOK` or silence means no device contact.
 
 ## Objective
 
-Provide a neXus command screen for approved, read-only diagnostic templates, with the same audited backend usable from a Codex CLI. The first candidate is `diagnose fmnetwork interface detail port5` for the enrolled FortiManager represented under `aiview` as `FW-WHISKEY-02`. This is a class 0 read, gated in V89. No device setting, operational state, or credential is changed. The first diagnostic remains unexecuted until the Product Owner reviews the code and approves this exact command.
+Add one neXus UI2 command screen for approved read-only diagnostic templates, with a Codex CLI client of the same typed API. The first proposed template is FortiManager `diagnose fmnetwork interface detail <port>` (V89 gate). The first proposed target is the enrolled FortiManager shown as `FW-WHISKEY-02` under `aiview`, port5. V89's real port1 read did not contain the older vendor example's `Status:` field; physical link remains `UNKNOWN`.
 
-## Proposed closed path
+## Existing UI2 path
 
-1. The command screen shows a closed list of signed-off, read-only diagnostic templates. It accepts an opaque enrolled device ID and a port selected from that device's inventory; it does not accept a command string or arbitrary SSH target. It previews the exact command, target pseudonym, maximum duration, and safe output fields before the Product Owner approves a single execution.
-2. The existing authenticated neXus service validates the session, CSRF, role, exact approved device/port/command/code revision, and unused approval; it admits one typed diagnostic job and consumes the approval atomically. No approval means no job.
-3. The existing worker and SSH transport run exactly `diagnose fmnetwork interface detail <validated-port>` in the device's existing trusted session, once, with a 60-second timeout and no retry. The job records start and terminal state.
-4. The worker parses in memory, discards the raw response, and persists only `Status` presence and a bounded `UP` / `DOWN` / `OTHER` / `ABSENT` token, line count, and a masked line shape. It does not infer physical link from `UP` or `RUNNING` flags. The UI and CLI show the fixed command and this sanitized projection after the job reaches a terminal state.
-5. A Codex CLI uses the same typed API. It logs in through the existing neXus `/login` endpoint using credentials entered interactively and kept only in process memory, then obtains CSRF from `/session/status`; it never copies the browser's session cookie. It prints the exact command and masked result in the terminal. The CLI contains no device transport code.
+UI2 Java already has `/login` (session cookie), `/session/status` (CSRF), `SecurityWebMvcConfig` (closed route/action mapping), `JobAdmissionService` (typed admission), a durable job store, `WorkerClaimLoop`, and the FortiManager executor using the trusted SSH transport. Use those seams. The legacy Python `console/` has a different bearer-token model and is outside this build.
 
-## Reviewable command and output contract
+## Closed flow
+
+1. The screen lists server-owned, signed-off read-only templates. A request contains only `template_id`, opaque enrolled `device_id`, one server-derived inventory port, and a one-use approval reference. It contains no command, argv, hostname, address, account, credential, route or transport option. The server validates port membership and a strict token grammar.
+2. The screen previews the exact server-rendered command, target pseudonym, port, timeout, retry/frequency limits and safe output fields. A PO-specific approver role approves one exact command after reviewing the implementation. Approval binds approver, permitted actor, target, port, template/gate revision, code revision and expiry; it is consumed atomically with admission of one durable job. The execution actor cannot create their own approval through submission.
+3. A dedicated UI2 API route is mapped in `SecurityWebMvcConfig`, uses the existing session and CSRF chain, and admits a fixed diagnostic capability through `JobAdmissionService`. Missing, stale, consumed or mismatched approval is refused before a job or device contact. A matching idempotent repeat returns the same job; it does not send the command twice.
+4. `WorkerClaimLoop` routes that one capability to the existing FortiManager executor and trusted SSH transport. It sends only the registered command to the approved target/port, once, with a 60-second timeout and no retry. Unknown dispatch outcome is `UNKNOWN`, never automatically replayed. Verification and troubleshooting never change device configuration or operational state.
+5. The worker parses in memory, discards the raw response, and stores only fixed safe enums, field-presence booleans, bounded counts and a closed shape ID. No raw lines, hostnames, addresses, serials, accounts or credentials enter jobs, logs, CLI, UI or repository metadata. `Status` is not promoted to physical link until vendor semantics and real output prove its meaning.
+6. The screen and Codex CLI read the same job result. The CLI authenticates through UI2's existing `/login` and `/session/status`, with credentials and cookie kept only in process memory. It prints the exact command preview before submission and the sanitized result after the job reaches a terminal state. It contains no SSH or device transport code. The CLI must not reuse the Edge browser cookie.
+
+## Reviewable first command
 
 ```text
-neXus CLI request: fmg-interface-detail --device-id <opaque-id> --port port5 --approval <one-use-ref>
-device command: diagnose fmnetwork interface detail port5
-terminal output: job=<opaque-id> state=<terminal-state> command=<fixed-command>
-                 status_token=<UP|DOWN|OTHER|ABSENT> lines=<count> shape=<masked-shape>
+UI/CLI intent: template=fmg_interface_detail, target=FW-WHISKEY-02 (opaque ID on wire), port=port5
+Server-rendered device command: diagnose fmnetwork interface detail port5
+Transport: existing neXus FortiManager SSH session; class 0 read; timeout 60 s; retry none
+Terminal/UI result: job=<opaque> state=<terminal enum> status_present=<boolean>
+                    status_token=<UP|DOWN|OTHER|ABSENT> lines=<bounded count> shape_id=<closed enum>
 ```
 
-The CLI never prints a hostname, management address, serial, account, session cookie, raw response, or credential. The approval binds one command to one target and expires without execution. A new port, command, or retry requires a new Product Owner approval.
+The candidate has **not** been approved or executed for port5. The screenshot supplied by the Product Owner is a derived comparison observation; agent UI validation remains exclusively under `aiview`.
 
-## Delivery order and acceptance
+## Delivery and checks
 
-The first build delivers the shared typed backend, a minimal command screen, and the Codex CLI client. The UI and CLI must not contain device transport code or permit arbitrary commands. The screen renders only under `aiview` masking for agent inspection.
+Deliver the shared typed backend, minimal command screen and thin CLI in one bounded build. The browser sends typed intent only. Targeted tests must prove refusal before contact for missing/wrong/expired/consumed approval, wrong target or port, unsigned template, stale inventory and unauthorized actor; concurrent submissions must consume approval at most once. One approved job yields at most one SSH command, with no retry. Tests must prove raw output is discarded and only the safe projection reaches UI/CLI. UI changes require the HTML render harness, full suite and repository privacy gate. Any new SQL migration is dry-run inside `BEGIN/ROLLBACK` on the live DB before `scripts/hosta_deploy.sh`.
 
-Automated checks must prove refusal when approval is absent, expired, consumed, or mismatched on target/port/command/revision; exactly one job and one SSH command after valid approval; no retry; no raw response in the job record, logs, CLI output, or browser response. The CLI must print the command before submission and follow the job to a terminal state. V89's real port1 output lacked the older example's `Status:` field, so the physical-link verdict remains `UNKNOWN` unless the separately approved port5 read establishes a vendor-supported semantic.
+## Product Owner decisions before freeze
 
-Freezing this design authorizes implementation only. The Product Owner reviews the resulting code and gives a separate `OK` or `NOK` for the exact device command before execution.
+1. Which existing or new UI2 role identifies the Product Owner approver? Recommended: a dedicated `diagnostic_approver` role, separate from the execution actor. Do not infer authority from the `aiview` persona or the `operator` role.
+2. How long does one approval live, and may the approver and execution actor be the same person? Recommended: 15 minutes and distinct identities for the first pilot.
+3. What is the maximum rate across separately approved reads per endpoint? Recommended: one diagnostic per endpoint per 15 minutes, enforced by admission, with no retry.
+4. Does a missing `Status:` field report only `ABSENT/UNKNOWN`, or should the UI also show `UP/RUNNING` as non-link diagnostic flags? Recommended: `ABSENT/UNKNOWN` only for the first build.
+
+Freezing this contract authorizes implementation, not any real command. After implementation, the Product Owner reviews the exact diff and separately approves or rejects the first port5 execution.

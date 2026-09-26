@@ -9,7 +9,7 @@ HOST-A: schema 89, 122 devices at the last count. V87's per-port NIC command was
 - Targeted worker and gate tests passed. Broader service tests retain the known `ProjectPlanReaderTest` failure.
 
 # Exact next action
-Use Luna 6 through the repository orchestrator for a bounded ARCHITECTURE movement that makes `docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md` FROZEN-ready: a UI-first, closed read-only command catalog with a shared typed backend and CLI. Review the worker result and obtain PO contract approval before implementation. Then show the exact code and obtain separate PO approval before any one-off device diagnostic. Keep FortiManager physical link `UNKNOWN` meanwhile. When Cisco ASA or Pulse Secure is enrolled, or SMC discovery runs, follow the first jobs through completion as specified in `docs/design/CODEX_HANDOVER_2026_09_26.md` §5.
+Obtain the four PO decisions in `docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md` (DRAFT), then freeze the UI2-specific contract before implementation. Show the exact code and obtain separate PO approval before any one-off device diagnostic. Luna 6 movement `NXS-LOCAL-0367` was cancelled after an out-of-scope feature-branch push and legacy-console confusion; its branch was not integrated. Keep FortiManager physical link `UNKNOWN` meanwhile. When Cisco ASA or Pulse Secure is enrolled, or SMC discovery runs, follow the first jobs through completion as specified in `docs/design/CODEX_HANDOVER_2026_09_26.md` §5.
 
 # New risks
 - FortiManager Interfaces currently presents configured enable/disable as up/down; this is not verified physical link.

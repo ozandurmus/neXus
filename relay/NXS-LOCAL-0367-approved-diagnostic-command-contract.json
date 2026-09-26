@@ -1,0 +1,91 @@
+{
+  "created_at": "2026-09-26T07:51:22Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "DRAFT names all API/job/worker/approval/masking boundaries and refusal behavior",
+          "DRAFT specifies UI command preview and CLI terminal sent/received safe projection",
+          "DRAFT states the V89 port5 measurement stays unexecuted pending separate code review and exact PO approval",
+          "Engineer returns a concise decision list and implementation slices without claiming FROZEN"
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN; dispatch authority only)",
+          "observed": "origin/main at 62cad5c; HOST-A schema 89; FortiManager physical link UNKNOWN after V87-V89 measurements",
+          "what_exists": "DRAFT UI-first diagnostic contract in docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md; existing gate registry, job engine, authenticated service, and worker SSH transport"
+        },
+        "context_not_loaded": [
+          "No docs/history scan, data/output/logs/CAS, support artifacts, or credential stores",
+          "No live device output or production identities"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/approved-diagnostic-command-contract"
+        },
+        "invariants": [
+          "No Browser-to-device path; browser submits typed intent only",
+          "No device change during verification",
+          "Readiness is not authorization",
+          "Configured state is not physical link",
+          "Raw identities and responses never enter chat or repository metadata"
+        ],
+        "merge_gate": "Engineer review of canonical relay close, diff, privacy gate, and Product Owner freeze decision; no automatic merge",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Make the DRAFT approved read-only diagnostic command screen and shared CLI contract FROZEN-ready for Product Owner review; do not implement or execute device commands.",
+        "output_contract": [
+          "English SESSION START and SESSION CLOSE through the canonical relay",
+          "Only the named DRAFT contract changed in the worker worktree",
+          "No command execution or UI/source implementation",
+          "Return exact open decisions, evidence, and recommended next movement"
+        ],
+        "recommended_reasoning": {
+          "reason": "New security boundary and approval semantics; GPT-6 Luna high as explicitly selected by the Product Owner",
+          "tier": "High"
+        },
+        "requirements": [
+          "Preserve AGENTS.md browser-to-device closed registry and 2026-09-26 per-command PO approval amendment",
+          "Keep UI and CLI thin; exact device command is server-owned and gate-signed-off; no arbitrary command input",
+          "One-use approval binds actor, opaque target, template, validated port, code revision, expiration, and one job",
+          "Show only masked pseudonyms, safe enums, counts, and shape; discard raw response",
+          "Use existing authenticated transport and job ledger; no new credential path"
+        ],
+        "risks": [
+          "FortiManager VM diagnostic output may not prove physical carrier",
+          "A diagnostic UI can become an arbitrary-command boundary if the catalog is not closed"
+        ],
+        "scope": {
+          "in": [
+            "Review the named DRAFT, closed browser-to-job architecture, existing admission/security seams, command gate and AIView masking",
+            "Revise only docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md into a precise FROZEN-ready DRAFT with acceptance criteria, per-command PO approval, UI and CLI using one typed backend",
+            "Report unresolved contract decisions and a bounded implementation sequence"
+          ],
+          "out": [
+            "No source, tests, migration, project state, or deployment changes",
+            "No device contact, diagnostic command execution, host jump, credential access, or raw output",
+            "No contract freeze, Git push, PR, or merge"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "python3 scripts/repository_privacy_check.py"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-26T07:51:22Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0367",
+  "movement": "Approved diagnostic command screen architecture",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md",
+    "docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-26T07:51:22Z"
+}
