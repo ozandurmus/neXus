@@ -27,11 +27,11 @@ it("submits only typed intent and shows the safe terminal projection", async () 
   await screen.findByRole("option", { name: "FW-TANGO-04" });
   fireEvent.change(await screen.findByLabelText("Device"), { target: { value: "device-1" } });
   expect((screen.getByLabelText("Device") as HTMLSelectElement).value).toBe("device-1");
-  await screen.findByRole("option", { name: "port5" });
-  fireEvent.change(await screen.findByLabelText("Inventoried physical port"), { target: { value: "port5" } });
+  fireEvent.change(await screen.findByLabelText("Command"), { target: { value: "diagnose fmnetwork interface detail port5" } });
   expect(await screen.findByText(/Command: diagnose fmnetwork interface detail port5/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Run approved read" }));
+  fireEvent.click(screen.getByRole("button", { name: "Run read" }));
   expect(await screen.findByText("Physical link: UNKNOWN until vendor semantics are proven.")).toBeInTheDocument();
+  expect(screen.getByText(/Masked output:/)).toBeInTheDocument();
   const submitted = calls.find(c => c.url === "/api/v2/diagnostics" && c.body);
   expect(Object.keys(JSON.parse(submitted?.body ?? "{}"))).toEqual(["device_id", "port", "request_id"]);
 });
