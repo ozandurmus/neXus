@@ -65,6 +65,25 @@ describe("AddDeviceDialog", () => {
     vi.unstubAllGlobals();
   });
 
+  it("explains that a viewer cannot add a device when credential listing is refused", async () => {
+    vi.stubGlobal("fetch", routedFetch({
+      "/credentials": { status: 403, body: { error: "ACTION_REFUSED" } },
+    }));
+    render(withTheme(<AddDeviceDialogTrigger />));
+    fireEvent.click(screen.getByRole("button", { name: "Add device" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This session can view devices but not add them. Sign in as an administrator to add a device.",
+    );
+    expect(screen.queryByRole("button", { name: "Create credential" })).not.toBeInTheDocument();
+    expect(screen.queryByText("You do not have permission to create credentials.")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Address"), { target: { value: "192.0.2.20" } });
+    expect(screen.getByRole("button", { name: "Enrol" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Management server (discovery)" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("This session can view devices but not add them.");
+    expect(screen.getByRole("button", { name: "Start discovery" })).toBeDisabled();
+  });
+
   it("submits, polls, and shows the success result once enrollment_state reaches ENROLLED", async () => {
     const fetchMock = routedFetch({
       "/credentials": CREDENTIALS_ROUTE,

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
+import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
 import Dialog from "@mui/material/Dialog";
@@ -208,10 +209,15 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
   const {
     data: credentialsData,
     error: credentialsError,
+    rawError: credentialsRawError,
   } = useFetchOnMount(
     () => listCredentials().then((result) => result.credentials ?? []),
     (err) => describeApiError(err).message,
   );
+  const credentialListingRefused = (() => {
+    const err = credentialsRawError as Partial<ApiError> | null;
+    return err?.status === 401 || err?.status === 403 || err?.body?.error === "ACTION_REFUSED";
+  })();
   const credentials = createdCredential && !(credentialsData ?? []).some((credential) => credential.credential_id === createdCredential.credential_id)
     ? [...(credentialsData ?? []), createdCredential]
     : credentialsData ?? [];
@@ -534,7 +540,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
         value={credentialId}
         onChange={(e) => setCredentialId(e.target.value)}
         disabled={eligibleCredentials.length === 0}
-        helperText={
+        helperText={credentialListingRefused ? undefined :
           credentialsError
             ? credentialsError
             : eligibleCredentials.length === 0
@@ -548,7 +554,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
           </MenuItem>
         ))}
       </TextField>
-      {eligibleCredentials.length === 0 && !credentialCreationRefused && (
+      {eligibleCredentials.length === 0 && !credentialCreationRefused && !credentialListingRefused && (
         <Button onClick={() => setCreateCredentialOpen(true)}>Create credential</Button>
       )}
       {credentialCreationRefused && <Typography variant="body2">Ask an administrator to add a credential for this vendor.</Typography>}
@@ -604,6 +610,10 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
             Management server (discovery)
           </ToggleButton>
         </ToggleButtonGroup>
+
+        {credentialListingRefused && (mode === "single" ? phase === "form" : discoveryPhase === "form") && (
+          <Alert severity="info">This session can view devices but not add them. Sign in as an administrator to add a device.</Alert>
+        )}
 
         {mode === "single" && phase === "form" && (
           <Stack spacing={1.5}>
