@@ -53,6 +53,8 @@ PREAMBLE = """You are a neXus engineer working on one small, well-defined change
 constitution), then only the files the brief names and what they need.
 
 Hard rules:
+- This brief is the Product Owner's explicit authorization for LOCAL commits on this lane (AGENTS.md "Git authority
+  and execution law"); push, PR and merge remain forbidden.
 - Work only inside this worktree, on the current branch. Commit your work on this branch (one or a few commits, English
   messages ending with the line `Co-Authored-By: {model} (Codex)`). Do not push, open a PR, merge, or deploy.
 - Never contact HOST-A or any network device; never run device commands; no credentials, real hostnames, addresses,
@@ -61,7 +63,8 @@ Hard rules:
   and say so in your final message instead of adding it.
 - No new dependencies. English code, comments and UI text. Keep the diff to what the brief asks.
 - Run the validation the brief lists (frontend: `cd ui2/frontend && npx tsc --noEmit -p . && npx vitest run && npm run
-  build`; Java: the named `./gradlew` tasks) and `python3 scripts/repository_privacy_check.py`. Fix what fails.
+  build`, with `--cacheDir` / cache paths inside the worktree if node_modules is read-only; Java: the named
+  `./gradlew` tasks) and `python3 scripts/repository_privacy_check.py`. Fix what fails.
 
 Final message (plain text): files changed, tests added, the validation commands you ran with their pass/fail summary,
 and anything you could not do or are unsure about.
