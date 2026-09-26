@@ -1098,6 +1098,15 @@
       "priority": "P2",
       "target": "docs/design/FORTINET_CONTRACT.md",
       "note": ""
+    },
+    {
+      "id": "debug_operations_successor",
+      "category": "operations",
+      "title": "General Debug screen with optional command catalog, PO-approved agent execution, and role-aware output",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md",
+      "note": ""
     }
   ]
 }

@@ -32,6 +32,11 @@ The approved Debug/Parser screen is deployed but awaits a first PO-approved devi
 (`docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md`, FROZEN). It accepts one V89 FortiManager
 read and shows up to 64 masked structural line labels. Arbitrary commands are refused;
 physical link and the first real port5 run remain `UNKNOWN`/unvalidated.
+Successor architecture is in progress: all-device Debug with optional command
+catalog, PO-approved agent execution, and role-aware output
+(`docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md`). The product
+direction is ratified; runtime registration, agent attribution, and output
+delivery details are not yet an implementation authorization.
 
 ## Open Product Owner decisions
 

@@ -1,5 +1,10 @@
 # Debug and parser command screen
 
+**Successor direction:** `DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md`
+records the PO-approved all-device screen, optional catalog/text authoring, and
+human/AI output projections. This document remains the deployed pilot's execution
+contract until the successor's implementation boundaries are frozen.
+
 **Status: FROZEN — PRODUCT OWNER APPROVED, amended 2026-09-26.** The Product Owner directed a small Debug/Parser screen: choose a device, type a command, run it as a super administrator, and view a masked result that an AI agent can use for parser work. An agent still needs separate, exact Product Owner approval before it runs an ad hoc device command. One command per target per minute, no retry or device write; absent explicit `Status` means physical link `UNKNOWN`. This contract authorizes implementation, not the first real port5 execution.
 
 ## Objective

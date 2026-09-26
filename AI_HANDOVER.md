@@ -10,7 +10,7 @@ HOST-A: schema 90, 122 devices at the last count. The Debug/Parser screen is dep
 - Merged and deployed the one-command Debug/Parser screen; live V90 `BEGIN/ROLLBACK` passed, configuration image aligned, and diagnostic job count remained zero.
 
 # Exact next action
-Obtain exact PO approval before the agent runs the first port5 command through neXus; present the code, command, masked target scope and safe projection. Then watch the job to terminal state and use the masked output to determine whether any physical-link field is proven. The existing aiview browser session is at sign-in, so visual UI acceptance remains pending. When Cisco ASA or Pulse Secure is enrolled, or SMC discovery runs, follow the first jobs through completion as specified in `docs/design/CODEX_HANDOVER_2026_09_26.md` §5.
+Continue `debug_operations_successor` from `docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md`. Resolve runtime command registration, protected agent attribution, and response delivery/masking against existing code, then freeze the implementation contract and extend the deployed screen. Product choices are settled; do not ask the PO to repeat them. Do not run any device command without its separate exact PO approval. The existing aiview browser session was at sign-in at the last UI check.
 
 # New risks
 - FortiManager Interfaces currently presents configured enable/disable as up/down; this is not verified physical link.
