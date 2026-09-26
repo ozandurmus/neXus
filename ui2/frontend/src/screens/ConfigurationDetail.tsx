@@ -601,7 +601,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
                 : null;
             })()}
             {cluster && (cluster.diffCount > 0
-              ? <StatusChip tone="bad" label={`${cluster.diffCount} settings differ`} dense />
+              ? <StatusChip tone="bad" label={cluster.diffCount === 1 ? "1 setting differs" : `${cluster.diffCount} settings differ`} dense />
               : state.missing.length === 0 ? <StatusChip tone="ok" label="Members agree" dense /> : <StatusChip tone="warn" label="UNKNOWN" dense />)}
           </>
         }
