@@ -14,3 +14,5 @@ Wait for a safe PO observation of one port's FortiManager Unit Operation link in
 # New risks
 - FortiManager Interfaces currently presents configured enable/disable as up/down; this is not verified physical link.
 - Device contact stays inside gated neXus jobs. HOST-A is never a jump host; no manual device SSH or browser access.
+- PO 2026-09-26: present exact code, command, target scope, and sanitized projection for each ad hoc parser diagnostic;
+  obtain individual approval before neXus sends it. Never modify a device for verification or troubleshooting.

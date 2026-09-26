@@ -465,6 +465,16 @@ unsupported behavior, secret-output risk, safe telemetry. A parse-scope
 extension of a command already issued (same command/session/timeout/
 frequency) is not a command addition and needs no new gate entry.
 
+**PO Amendment (2026-09-26, ad hoc parser diagnostics).** A one-off or
+incremental device command sent through neXus to measure output for a parser
+requires the Product Owner to review the exact code, command, target scope,
+and sanitized output projection and approve that command before execution.
+Approval of one command does not approve the next. Verification and
+troubleshooting must not change a device's configuration or operational state.
+The agent may continue neXus code, infrastructure, and host troubleshooting
+without this device-command approval; HOST-A is never used as a jump host or
+as a path for manual device SSH or browser access.
+
 ## Host action boundary
 
 What the *product* may execute against a *device* is the network action
