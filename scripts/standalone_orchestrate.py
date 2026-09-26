@@ -62,7 +62,10 @@ Hard rules:
 - A new device command needs a gate row (migration + gate_registry_fixture.yaml). Add gate rows ONLY when the brief
   lists them as Product Owner approved (exact endpoint/command); then add exactly those. If the work seems to need a
   device command the brief does not list, stop and say so in your final message instead of adding it.
-- No new dependencies. English code, comments and UI text. Keep the diff to what the brief asks.
+- No new dependencies. English code, comments and UI text. Keep the diff to what the brief asks: never edit
+  AI_HANDOVER.md, CURRENT_STATE.md, project/, docs/history/ or create/freeze contracts -- the engineering session owns
+  project state.
+- A new table in a migration also needs `GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO ui2_app;` (see V72).
 - Run the validation the brief lists (frontend: `cd ui2/frontend && npx tsc --noEmit -p . && npx vitest run && npm run
   build`, with `--cacheDir` / cache paths inside the worktree if node_modules is read-only; Java: the named
   `./gradlew` tasks) and `python3 scripts/repository_privacy_check.py`. Fix what fails.
