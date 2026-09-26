@@ -147,6 +147,13 @@ final class InteractiveShellSession implements AutoCloseable {
             sleepQuietly(40);
         }
         if (!completed) {
+            // MEASURE (2026-09-26: a Cisco ASA login answered no command): the shape of the learned prompt and of the
+            // tail of what came back (letters a, digits 9, the rest kept) -- never values.
+            String tail = stripTerminalControl(raw.toString());
+            tail = tail.substring(Math.max(0, tail.length() - 200));
+            System.getLogger(InteractiveShellSession.class.getName()).log(System.Logger.Level.INFO,
+                    "[SHELL] timed out: prompt shape \"{0}\"; sawData {1}; tail shape \"{2}\"",
+                    shapeOf(prompt), sawData, shapeOf(tail));
             return new Result(Result.Kind.TIMED_OUT, null);
         }
 
@@ -233,6 +240,13 @@ final class InteractiveShellSession implements AutoCloseable {
             sleepQuietly(40);
         }
         if (!completed) {
+            // MEASURE (2026-09-26: a Cisco ASA login answered no command): the shape of the learned prompt and of the
+            // tail of what came back (letters a, digits 9, the rest kept) -- never values.
+            String tail = stripTerminalControl(raw.toString());
+            tail = tail.substring(Math.max(0, tail.length() - 200));
+            System.getLogger(InteractiveShellSession.class.getName()).log(System.Logger.Level.INFO,
+                    "[SHELL] timed out: prompt shape \"{0}\"; sawData {1}; tail shape \"{2}\"",
+                    shapeOf(prompt), raw.length() > 0, shapeOf(tail));
             return new Result(Result.Kind.TIMED_OUT, null);
         }
         String text = stripTerminalControl(raw.toString());
@@ -328,6 +342,13 @@ final class InteractiveShellSession implements AutoCloseable {
             }
         }
         return null;
+    }
+
+    static String shapeOf(String value) {
+        if (value == null) {
+            return "null";
+        }
+        return value.replaceAll("[A-Za-z]+", "a").replaceAll("[0-9]+", "9").replace("\n", " | ").replace("\r", "<cr>");
     }
 
     private static final String MORE = "--More--";
