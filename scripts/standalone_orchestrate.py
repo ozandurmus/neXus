@@ -320,6 +320,13 @@ def cmd_ship(args: argparse.Namespace) -> int:
         wt = Path(r["worktree"])
         if _git("status", "--porcelain", "--untracked-files=no", cwd=wt, check=False):
             raise SystemExit("lane has uncommitted changes; review and commit them first")
+        # main may have moved since the lane was cut (state or tooling commits): replay the lane onto it first.
+        if _git("merge-base", "--is-ancestor", "main", r["branch"], check=False) == "" and subprocess.run(
+                ["git", "merge-base", "--is-ancestor", "main", r["branch"]], cwd=str(REPO_ROOT)).returncode != 0:
+            rb = subprocess.run(["git", "rebase", "main"], cwd=str(wt), capture_output=True, text=True)
+            if rb.returncode != 0:
+                subprocess.run(["git", "rebase", "--abort"], cwd=str(wt), capture_output=True)
+                raise SystemExit("lane does not rebase cleanly onto main; resolve in the worktree first")
         _git("merge", "--ff-only", r["branch"])
     gate = subprocess.run([sys.executable, "scripts/repository_privacy_check.py"], cwd=str(REPO_ROOT),
                           capture_output=True, text=True)
