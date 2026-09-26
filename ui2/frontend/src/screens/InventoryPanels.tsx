@@ -1581,16 +1581,13 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
  * mount effect re-runs -- it never re-triggers on a changed fetcher alone.
  */
 
-/** One header for every inventory entity (standalone device or cluster): avatar, title, opaque
- * reference badge, status chips, an optional action on the right and optional body rows below
- * (member cards) -- so a standalone device and a cluster read the same way. */
+/** One header for every inventory entity (standalone device or cluster): avatar, title, status chips,
+ * an optional action on the right and optional body rows below (member cards). */
 export function InventoryEntityHeader({
   vendorHint,
   model,
   titlePrefix,
   title,
-  reference,
-  referenceTitle,
   chips,
   action,
   children,
@@ -1599,8 +1596,6 @@ export function InventoryEntityHeader({
   readonly model?: string | null;
   readonly titlePrefix?: string;
   readonly title: string;
-  readonly reference: string;
-  readonly referenceTitle: string;
   readonly chips: React.ReactNode;
   readonly action?: React.ReactNode;
   readonly children?: React.ReactNode;
@@ -1626,24 +1621,6 @@ export function InventoryEntityHeader({
               <Typography variant="h5" sx={{ fontWeight: 700, color: m3.onSurface }}>
                 {titlePrefix ? `${titlePrefix} ` : ""}{title}
               </Typography>
-              {reference && (
-              <Typography
-                variant="caption"
-                sx={{
-                  fontFamily: MONO,
-                  fontSize: "0.75rem",
-                  color: m3.primary,
-                  bgcolor: m3.scHigh,
-                  px: 0.75,
-                  py: 0.2,
-                  borderRadius: "4px",
-                  border: `1px solid ${m3.outlineVar}`,
-                }}
-                title={referenceTitle}
-              >
-                {reference}
-              </Typography>
-              )}
               {chips}
             </Box>
           </Box>
@@ -1652,6 +1629,16 @@ export function InventoryEntityHeader({
       </Box>
       {children}
     </Box>
+  );
+}
+
+function IdentityReference({ value }: { readonly value: string }) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Typography variant="caption">Reference</Typography>
+      <Typography variant="body2" sx={{ fontFamily: MONO }}>{value}</Typography>
+      <Button size="small" onClick={() => { void navigator.clipboard?.writeText(value).catch(() => undefined); }}>Copy</Button>
+    </Stack>
   );
 }
 
@@ -1742,8 +1729,6 @@ export function DeviceInventoryPanels({
         vendorHint={device.vendor_hint}
         model={device.model}
         title={deviceNameLabel(device.hostname)}
-        reference={device.device_id}
-        referenceTitle={`Device ID: ${device.device_id}`}
         chips={
           <>
             <JobStatusIndicator
@@ -1871,6 +1856,7 @@ export function DeviceInventoryPanels({
             label: "Identity & provenance",
             panel: (
               <Stack spacing={1}>
+                <IdentityReference value={device.device_id} />
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
                   Platform identity as read from the device itself; a value not read is UNKNOWN.
                 </Typography>
@@ -1979,8 +1965,6 @@ export function ClusterDetailPanels({
         model={firstMember?.model}
         titlePrefix="CLS >"
         title={clusterTitle}
-        reference={clusterRef}
-        referenceTitle={`Verified API Cluster Reference: ${clusterRef}`}
         chips={
           <>
             <StatusChip
@@ -2131,6 +2115,7 @@ export function ClusterDetailPanels({
             label: "Identity & provenance",
             panel: (
               <Stack spacing={1}>
+                <IdentityReference value={clusterRef} />
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
                   {orderedMembers.length} members · {firstMember?.vendor_hint === "palo_alto" ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"}
                   {virtualSystems.length > 0 ? ` · ${virtualSystems.length} ${isPaloAlto ? "VSYS" : "VSX"}: ${virtualSystems.join(", ")}` : ""}

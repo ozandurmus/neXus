@@ -117,6 +117,9 @@ describe("Devices screen after the Fable review", () => {
     expect(within(idRows[1]).getByText("SN-00000002")).toBeInTheDocument();
     expect(within(idRows[1]).getByText("2026-09-23 01:57:54")).toBeInTheDocument();
     expect(within(idRows[0]).getAllByText("UNKNOWN").length).toBeGreaterThan(0);
+    const clusterReference = screen.getByText("Reference").parentElement as HTMLElement;
+    expect(within(clusterReference).getByText("CLS-ROMEO-01")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
   });
 
   it("opens the device named by ?device_id=", async () => {
@@ -126,6 +129,11 @@ describe("Devices screen after the Fable review", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "FW-BRAVO-02" })).toBeInTheDocument());
     expect(screen.getByRole("tablist", { name: "Device detail" })).toBeInTheDocument();
     expect(screen.queryByText("Select a device or cluster")).toBeNull();
+    expect(screen.queryByText("bravo-02")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Identity & provenance" }));
+    const deviceReference = screen.getByText("Reference").parentElement as HTMLElement;
+    expect(within(deviceReference).getByText("bravo-02")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
   });
 });
 

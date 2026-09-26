@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -89,7 +89,11 @@ describe("InventoryScreen device selection and panels", () => {
 
     await waitFor(() => expect(screen.getByText("eth0")).toBeInTheDocument());
     expect(screen.getByText("198.51.100.5/24")).toBeInTheDocument();
-    expect(screen.getByText("dev-1")).toBeInTheDocument();
+    expect(screen.queryByText("dev-1")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Identity & provenance" }));
+    const reference = screen.getByText("Reference").parentElement as HTMLElement;
+    expect(within(reference).getByText("dev-1")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Routing" }));
     await waitFor(() => expect(screen.getByText("0.0.0.0/0")).toBeInTheDocument());

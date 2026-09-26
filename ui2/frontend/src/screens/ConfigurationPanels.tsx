@@ -312,8 +312,6 @@ export function DeviceConfigurationPanels({
         vendorHint={vendor}
         model={device?.facts?.model ?? null}
         title={displayName}
-        reference={deviceId}
-        referenceTitle={`Device ID: ${deviceId}`}
         chips={
           <>
             <StatusChip tone={changeStateTone(configuration?.change_state ?? null)} label={changeStateLabel(configuration?.change_state ?? null)} dense />

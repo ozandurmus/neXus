@@ -60,17 +60,11 @@ export function vendorLabel(vendorHint: string): string {
   return VENDOR_LABEL[vendorHint] ?? vendorHint;
 }
 
-function collectionOutcome(device: DeviceSummary): string {
-  const state = device.latest_job_state?.toUpperCase();
-  if (!state) return "Not yet collected";
-  if (state === "FAILED") {
-    const reasonClass = device.latest_job_terminal_reason?.trim().toLowerCase().split(":", 1)[0] === "connect_failed"
-      ? "Connection failed"
-      : "Recorded failure";
-    return `Collection attempt failed · ${reasonClass}`;
-  }
-  if (state === "COMPLETED" || state === "SUCCEEDED") return "Collection completed";
-  return "Collection in progress";
+function collectionFailure(device: DeviceSummary): string | null {
+  if (device.latest_job_state?.toUpperCase() !== "FAILED") return null;
+  return device.latest_job_terminal_reason?.trim().toLowerCase().split(":", 1)[0] === "connect_failed"
+    ? "Collection failed · Connection failed"
+    : "Collection failed";
 }
 
 function hasFailedCollection(device: DeviceSummary): boolean {
@@ -214,14 +208,8 @@ function DeviceRow({
           </Box>
         </Box>
         <Typography variant="caption" sx={{ fontSize: 11, lineHeight: "15px", color: m3.onSurfaceVar, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          <span>{collectionOutcome(device)}</span>
-          {" · "}
-          <Box component="span" sx={{ fontFamily: MONO }}>{device.management_ip ?? "No IP"}</Box>
-          {" · "}
-          {device.role === "management_server" ? "Management server" : vendorLabel(device.vendor_hint)}
-          {device.model ? ` · ${device.model}` : " · Unknown model"}
-          {device.software_version ? ` · ${device.software_version}` : " · Unknown version"}
-          {device.ha_role ? "" : " · No HA role"}
+          {[collectionFailure(device), device.role === "management_server" ? "Management server" : vendorLabel(device.vendor_hint), device.model, device.software_version]
+            .filter(Boolean).join(" · ")}
         </Typography>
       </Box>
     </Box>

@@ -410,8 +410,6 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
         model={device.model}
         titlePrefix={`Configuration · ${vendorLabel(device.vendor_hint)}`}
         title={device.hostname ?? device.device_id}
-        reference={device.device_id}
-        referenceTitle="Device identifier"
         chips={headerChips(device, <StatusChip tone="ok" label="Current" dense />)}
       />
       <M3Tabs
@@ -581,10 +579,6 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
         model={first?.model}
         titlePrefix={`Configuration · ${vendorLabel(first?.vendor_hint)} cluster`}
         title={clusterTitle}
-        // A Palo Alto HA pair's reference is the two serials joined; the members table below shows each
-        // serial in its own column, so the chip would only repeat them (PO, 2026-09-22).
-        reference={first?.vendor_hint === "palo_alto" ? "" : clusterRef}
-        referenceTitle="Cluster reference"
         action={
           <M3Button emphasis="tonal" icon="download" disabled={!cluster} onClick={exportCsv}>
             Export evidence (CSV)

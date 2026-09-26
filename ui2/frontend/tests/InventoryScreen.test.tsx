@@ -111,10 +111,13 @@ describe("InventoryScreen device list", () => {
     })));
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("Collection completed")).toBeInTheDocument());
-    expect(screen.getByText("Collection attempt failed · Connection failed")).toBeInTheDocument();
-    expect(screen.getByText("Collection attempt failed · Recorded failure")).toBeInTheDocument();
-    expect(screen.getByText("Not yet collected")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("failed-device")).toBeInTheDocument());
+    const rowText = (name: string) => [...document.querySelectorAll('[data-row="device"]')]
+      .find((row) => row.textContent?.includes(name))?.textContent ?? "";
+    expect(rowText("failed-device")).toContain("Collection failed · Connection failed");
+    expect(rowText("unknown-failure-device")).toContain("Collection failed");
+    expect(screen.queryByText("Collection completed")).toBeNull();
+    expect(screen.queryByText("Not yet collected")).toBeNull();
 
     // Each filter is a labelled dropdown (PO, 2026-09-24) whose options read "Label · n".
     const stateRow = screen.getByRole("combobox", { name: "State" }) as HTMLSelectElement;
@@ -136,6 +139,22 @@ describe("InventoryScreen device list", () => {
     expect(screen.getByText("unknown-failure-device")).toBeInTheDocument();
     expect(screen.getByText("new-device")).toBeInTheDocument();
     expect(screen.queryByText("done-device")).toBeNull();
+  });
+
+  it("shows only available device facts in the sidebar subtitle", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, {
+      devices: [
+        { device_id: "full", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "full-device", role: "gateway", model: "Quantum 6600", software_version: "R81.20", ha_role: null, management_ip: "192.0.2.10", latest_job_state: "COMPLETED" },
+        { device_id: "sparse", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "sparse-device", model: "PA-440", software_version: null, ha_role: null },
+      ],
+    })));
+    render(withTheme(<InventoryScreen />));
+    await waitFor(() => expect(screen.getByText("full-device")).toBeInTheDocument());
+    const rowText = (name: string) => [...document.querySelectorAll('[data-row="device"]')]
+      .find((row) => row.textContent?.includes(name))?.textContent ?? "";
+    expect(rowText("full-device")).toContain("Check Point · Quantum 6600 · R81.20");
+    expect(rowText("sparse-device")).toContain("Palo Alto · PA-440");
+    expect(screen.queryByText(/Collection completed|No HA role|Unknown model|192\.0\.2\.10/)).toBeNull();
   });
 
   it("groups devices sharing a cluster_member_ref under one parent grouping", async () => {
