@@ -1015,9 +1015,15 @@ def _worktree_git_dir(worktree_path: Path) -> Path:
 
 
 def _git_object_dir(worktree_path: Path) -> Path:
-    """Git's resolved shared object store, not a path composed from `.git`."""
-    object_dir = Path(_git_rev_parse("--git-path=objects", worktree_path))
-    return object_dir if object_dir.is_absolute() else (worktree_path / object_dir).resolve()
+    """Git's shared (common) directory: the object store and the branch refs a commit on the lane must write.
+
+    2026-09-26: this used `git rev-parse --git-path=objects`, which git does not parse as an option (the form is
+    `--git-path objects`) and echoes back verbatim, so a Codex engineer was granted `<worktree>/--git-path=objects`
+    instead of the object store: `git add` wrote blobs it could not keep and `git commit` could not lock
+    `refs/heads/<lane>` (NXS-LOCAL-0369 left a HEAD naming a missing commit; NXS-LOCAL-0370 could not commit).
+    """
+    common_dir = Path(_git_rev_parse("--git-common-dir", worktree_path))
+    return common_dir if common_dir.is_absolute() else (worktree_path / common_dir).resolve()
 
 
 def _add_engineer_toolchains(env: dict[str, str]) -> None:
@@ -1045,6 +1051,16 @@ def _git_worktree_add(worktree_path: Path, base: str, branch: str, cwd: Path) ->
     )
     if result.returncode != 0:
         raise OrchestratorError(f"git worktree add failed: {result.stderr.strip()}")
+    _link_frontend_dependencies(worktree_path, cwd)
+
+
+def _link_frontend_dependencies(worktree_path: Path, cwd: Path) -> None:
+    """A fresh worktree has no `ui2/frontend/node_modules` (git-ignored), so an engineer could not run tsc, vitest or
+    the build (NXS-LOCAL-0370, 2026-09-26). Link the dispatching checkout's installed copy; installing is out of scope."""
+    source = Path(cwd) / "ui2" / "frontend" / "node_modules"
+    target = Path(worktree_path) / "ui2" / "frontend" / "node_modules"
+    if source.is_dir() and target.parent.is_dir() and not target.exists():
+        target.symlink_to(source)
 
 
 def _git_worktree_remove(worktree_path: Path, cwd: Path) -> None:

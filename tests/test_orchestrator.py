@@ -988,12 +988,12 @@ def test_spawn_engineer_grants_add_dir_for_the_canonical_relay_directory_on_resu
 def test_codex_spawn_grants_only_the_derived_git_directories_needed_to_commit(tmp_path, monkeypatch, resume_session_id):
     calls = []
     git_dir = tmp_path / "main" / ".git" / "worktrees" / "wt"
-    object_dir = tmp_path / "main" / ".git" / "objects"
+    object_dir = tmp_path / "main" / ".git"  # the common dir: object store and branch refs (2026-09-26)
 
     monkeypatch.setattr(orch.subprocess, "Popen", lambda argv, **k: (calls.append(argv), _FakeProc(1))[1])
     monkeypatch.setattr(
         orch, "_git_rev_parse", lambda ref, cwd: str({
-            "--git-dir": git_dir, "--git-path=objects": object_dir,
+            "--git-dir": git_dir, "--git-common-dir": object_dir,
         }[ref]),
     )
     relay_dir = tmp_path / "relay"
