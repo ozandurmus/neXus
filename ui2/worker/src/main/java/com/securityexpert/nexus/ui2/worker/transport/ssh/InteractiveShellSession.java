@@ -164,8 +164,12 @@ final class InteractiveShellSession implements AutoCloseable {
                 completed = true;
                 break;
             }
-            idlePolls++;
-            sleepQuietly(40);
+            // Measured 2026-09-27: output arrives in ~1.3 KB pieces; a fixed 40 ms sleep between checks made a 2.7 MB read
+            // take 84 s (2,099 sleeps). While output is flowing (data in the last second) poll every 2 ms; idle, 40 ms.
+            if (!got) {
+                idlePolls++;
+                sleepQuietly(System.currentTimeMillis() - lastData < 1000 ? 2 : 40);
+            }
         }
         if (!completed) {
             // MEASURE (2026-09-26: a Cisco ASA login answered no command): the shape of the learned prompt and of the
@@ -227,6 +231,7 @@ final class InteractiveShellSession implements AutoCloseable {
         boolean[] answered = new boolean[answers.size()];
         StringBuilder raw = new StringBuilder();
         long deadline = System.currentTimeMillis() + Math.max(1000, timeoutMs);
+        long lastAnswerData = 0;
         byte[] buf = new byte[4096];
         boolean completed = false;
         while (System.currentTimeMillis() < deadline) {
@@ -239,6 +244,7 @@ final class InteractiveShellSession implements AutoCloseable {
                     }
                     raw.append(new String(buf, 0, n, StandardCharsets.UTF_8));
                     got = true;
+                    lastAnswerData = System.currentTimeMillis();
                 }
             } catch (IOException ignored) {
                 // the deadline still governs
@@ -264,7 +270,9 @@ final class InteractiveShellSession implements AutoCloseable {
                     }
                 }
             }
-            sleepQuietly(40);
+            if (!got) {
+                sleepQuietly(System.currentTimeMillis() - lastAnswerData < 1000 ? 2 : 40);
+            }
         }
         if (!completed) {
             // MEASURE (2026-09-26: a Cisco ASA login answered no command): the shape of the learned prompt and of the
