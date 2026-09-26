@@ -16,8 +16,17 @@ public interface JobRecordDao {
     }
 
     record DiagnosticJob(String jobId, String targetDeviceId, String port, String state,
-            String statusToken, boolean statusPresent, Integer lineCount, String shapeId, String maskedOutput) {
+            String statusToken, boolean statusPresent, Integer lineCount, String shapeId, String maskedOutput, String command, String actor, java.time.Instant submittedAt, Integer exitStatus) {
     }
+
+    record DiagnosticOutputRef(String reference, byte[] wrappedKey) {
+        @Override public String toString() { return "DiagnosticOutputRef[redacted]"; }
+    }
+    default DiagnosticAdmission insertDiagnosticRead(String jobId, String idempotencyKey, String deviceId,
+            String command, String actor) { return new DiagnosticAdmission("UNSUPPORTED", null); }
+    default java.util.List<DiagnosticJob> diagnosticHistory(String deviceId, int offset) { return java.util.List.of(); }
+    default Optional<DiagnosticOutputRef> diagnosticOutput(String jobId, String actor) { return Optional.empty(); }
+    default boolean writeDiagnosticOutput(String jobId, String reference, byte[] key, int exitStatus, int lines) { return false; }
 
     /** @return the inserted row's own {@code job_id} if this key was new, {@code empty} on a duplicate key. */
     Optional<String> insertRequestedIfAbsent(String jobId, String idempotencyKey, String capabilityId,

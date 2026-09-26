@@ -10,7 +10,7 @@ HOST-A: schema 90, 122 devices at the last count. The Debug/Parser screen is dep
 - Merged and deployed the one-command Debug/Parser screen; live V90 `BEGIN/ROLLBACK` passed, configuration image aligned, and diagnostic job count remained zero.
 
 # Exact next action
-Continue Debug Phase 1 on `feature/debug-operations-contract`, following `docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md`. All-device selection, role-aware names, masked read access, and always-visible output are implemented and tested locally. Resolve the pending PO preference for encrypted retained versus session-only output, then freeze and implement the remaining command/approval/output path. No worker was dispatched and no successor code was deployed. Saved commands are Phase 2; automation and failover stay outside scope. Device commands still require separate exact PO approval.
+Deploy Debug Phase 1 from `feature/debug-operations-contract`, following `docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md` (FROZEN). The PO requested persistent actor/command/target/time/result history. All-device selection, typed gated reads, retained administrator output and masked AIView output are implemented; V91 passed live BEGIN/ROLLBACK including job insertion. First SSH read scopes are FortiManager, FortiGate and Cisco ASA. No worker was delegated and no device command was run. Saved commands are Phase 2; automation and failover stay outside scope. Device commands still require separate exact PO approval.
 
 # New risks
 - FortiManager Interfaces currently presents configured enable/disable as up/down; this is not verified physical link.

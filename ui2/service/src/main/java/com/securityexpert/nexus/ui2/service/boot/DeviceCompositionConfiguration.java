@@ -183,6 +183,8 @@ public class DeviceCompositionConfiguration {
                 confirmCapability(BackupCapabilityIds.FGT_CONFIG_BACKUP, "fortinet", "fortigate", TransportKind.SSH_EXEC),
                 confirmCapability(ConfigurationCapabilityIds.FGT_CONFIGURATION_COLLECT, "fortinet", "fortigate", TransportKind.SSH_EXEC),
                 fortiManagerDiagnosticCapability(gateRegistryPort),
+                confirmCapability(com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
+                        "diagnostic", "reviewed_read", TransportKind.SSH_EXEC),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),

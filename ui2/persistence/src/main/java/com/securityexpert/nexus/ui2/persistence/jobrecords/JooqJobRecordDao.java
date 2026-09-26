@@ -91,13 +91,13 @@ public final class JooqJobRecordDao implements JobRecordDao {
                         same ? prior.get("job_id", String.class) : null);
             }
             Boolean active = dsl.fetchOne("select exists(select 1 from jobs where target_device_id = {0} "
-                    + "and capability_id = 'fmg_interface_detail' and state in ('REQUESTED', 'CLAIMED', 'EXECUTING')) as active",
+                    + "and capability_id in ('fmg_interface_detail','diagnostic_read') and state in ('REQUESTED', 'CLAIMED', 'EXECUTING')) as active",
                     targetDeviceId).get("active", Boolean.class);
             if (Boolean.TRUE.equals(active)) {
                 return new DiagnosticAdmission("DIAGNOSTIC_IN_FLIGHT", null);
             }
             Boolean recent = dsl.fetchOne("select exists(select 1 from jobs where target_device_id = {0} "
-                    + "and capability_id = 'fmg_interface_detail' and submitted_at > now() - interval '1 minute') as recent",
+                    + "and capability_id in ('fmg_interface_detail','diagnostic_read') and submitted_at > now() - interval '1 minute') as recent",
                     targetDeviceId).get("recent", Boolean.class);
             if (Boolean.TRUE.equals(recent)) {
                 return new DiagnosticAdmission("RATE_LIMITED", null);
@@ -117,16 +117,68 @@ public final class JooqJobRecordDao implements JobRecordDao {
     @Override
     public Optional<DiagnosticJob> findDiagnostic(String jobId) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
-                "select job_id, target_device_id, diagnostic_port, state, diagnostic_status_token, "
-                        + "diagnostic_line_count, diagnostic_shape_id, diagnostic_masked_output from jobs "
-                        + "where job_id = {0} and capability_id = 'fmg_interface_detail'", jobId)
-                .stream().findFirst().map(r -> new DiagnosticJob(r.get("job_id", String.class),
-                        r.get("target_device_id", String.class), r.get("diagnostic_port", String.class),
-                        r.get("state", String.class), r.get("diagnostic_status_token", String.class),
-                        r.get("diagnostic_status_token", String.class) != null
-                                && !"ABSENT".equals(r.get("diagnostic_status_token", String.class)),
-                        r.get("diagnostic_line_count", Integer.class), r.get("diagnostic_shape_id", String.class),
-                        r.get("diagnostic_masked_output", String.class))));
+                "select * from jobs where job_id = {0} and capability_id in ('fmg_interface_detail','diagnostic_read')", jobId)
+                .stream().findFirst().map(JooqJobRecordDao::toDiagnostic));
+    }
+
+    private static DiagnosticJob toDiagnostic(Record r) {
+        String port = r.get("diagnostic_port", String.class);
+        String command = r.get("diagnostic_command", String.class);
+        return new DiagnosticJob(r.get("job_id", String.class), r.get("target_device_id", String.class), port,
+                r.get("state", String.class), r.get("diagnostic_status_token", String.class),
+                r.get("diagnostic_status_token", String.class) != null && !"ABSENT".equals(r.get("diagnostic_status_token", String.class)),
+                r.get("diagnostic_line_count", Integer.class), r.get("diagnostic_shape_id", String.class),
+                r.get("diagnostic_masked_output", String.class), command != null ? command : "diagnose fmnetwork interface detail " + port,
+                r.get("submitted_by_actor_fingerprint", String.class),
+                r.get("submitted_at", java.time.OffsetDateTime.class).toInstant(), r.get("diagnostic_exit_status", Integer.class));
+    }
+
+    @Override
+    public java.util.List<DiagnosticJob> diagnosticHistory(String deviceId, int offset) {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(
+                "select * from jobs where capability_id in ('fmg_interface_detail','diagnostic_read') "
+                + "and ({0}::text is null or target_device_id = {0}) order by submitted_at desc, job_id desc limit 50 offset {1}",
+                deviceId, Math.max(0, offset)).stream().map(JooqJobRecordDao::toDiagnostic).toList());
+    }
+
+    @Override
+    public Optional<DiagnosticOutputRef> diagnosticOutput(String jobId, String actor) {
+        return auditedTransactionBoundary.inTransaction(actor, "diagnostic_output_viewed", dsl -> {
+            var r = dsl.fetchOne("update jobs set diagnostic_viewed_at=now(), diagnostic_viewed_by={1} "
+                + "where job_id={0} and capability_id='diagnostic_read' and diagnostic_output_ref is not null "
+                + "returning diagnostic_output_ref, diagnostic_output_key", jobId, actor);
+            return r == null ? Optional.empty() : Optional.of(new DiagnosticOutputRef(
+                r.get("diagnostic_output_ref", String.class), r.get("diagnostic_output_key", byte[].class)));
+        });
+    }
+
+    @Override
+    public boolean writeDiagnosticOutput(String jobId, String reference, byte[] key, int exitStatus, int lines) {
+        return auditedTransactionBoundary.inTransaction("system:worker", "diagnostic_output_recorded", dsl ->
+            dsl.execute("update jobs set diagnostic_output_ref={1}, diagnostic_output_key={2}, diagnostic_exit_status={3}, "
+                + "diagnostic_line_count={4} where job_id={0} and capability_id='diagnostic_read' and diagnostic_output_ref is null",
+                jobId, reference, key, exitStatus, Math.min(256, lines)) == 1);
+    }
+
+    @Override
+    public DiagnosticAdmission insertDiagnosticRead(String jobId, String idempotencyKey, String deviceId, String command, String actor) {
+        return auditedTransactionBoundary.inTransaction(actor, "diagnostic_read_submitted", dsl -> {
+            if (dsl.fetchOne("select device_id from devices where device_id={0} for update", deviceId) == null)
+                return new DiagnosticAdmission("DEVICE_NOT_FOUND", null);
+            var prior = dsl.fetchOne("select job_id,target_device_id,diagnostic_command,submitted_by_actor_fingerprint from jobs where idempotency_key={0}", idempotencyKey);
+            if (prior != null) {
+                boolean same = actor.equals(prior.get("submitted_by_actor_fingerprint", String.class)) && deviceId.equals(prior.get("target_device_id", String.class)) && command.equals(prior.get("diagnostic_command", String.class));
+                return new DiagnosticAdmission(same ? "DEDUPLICATED" : "IDEMPOTENCY_CONFLICT", same ? prior.get("job_id", String.class) : null);
+            }
+            if (Boolean.TRUE.equals(dsl.fetchOne("select exists(select 1 from jobs where target_device_id={0} "
+                + "and capability_id in ('diagnostic_read','fmg_interface_detail') "
+                + "and (state in ('REQUESTED','CLAIMED','EXECUTING') or submitted_at > now()-interval '1 minute')) as busy", deviceId).get("busy", Boolean.class)))
+                return new DiagnosticAdmission("RATE_LIMITED_OR_RUNNING", null);
+            var inserted = dsl.fetchOne("insert into jobs(job_id,job_type,capability_id,target_device_id,target_kind,submitted_by_actor_fingerprint,"
+                + "submitted_at,idempotency_key,action_class,state,diagnostic_command) values ({0},'diagnostic_read','diagnostic_read',{1},'device',"
+                + "{2},now(),{3},'read','REQUESTED',{4}) on conflict(idempotency_key) do nothing returning job_id", jobId,deviceId,actor,idempotencyKey,command);
+            return inserted == null ? new DiagnosticAdmission("IDEMPOTENCY_CONFLICT", null) : new DiagnosticAdmission("ADMITTED", jobId);
+        });
     }
 
     @Override

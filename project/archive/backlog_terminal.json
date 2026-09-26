@@ -1428,6 +1428,15 @@
       "priority": "P1",
       "target": "docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md",
       "note": ""
+    },
+    {
+      "id": "debug_operations_successor",
+      "category": "operations",
+      "title": "General Debug screen with optional command catalog, PO-approved agent execution, and role-aware output",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md",
+      "note": ""
     }
   ]
 }

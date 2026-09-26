@@ -40,6 +40,7 @@ import com.securityexpert.nexus.ui2.worker.inventory.InventoryRequest;
 public final class WorkerClaimLoop {
 
     private static final List<String> ELIGIBLE_CAPABILITY_IDS = List.of(
+            com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
             ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA, InventoryCapabilityIds.ASA_INVENTORY_COLLECT, BackupCapabilityIds.ASA_CONFIG_BACKUP,
@@ -72,6 +73,10 @@ public final class WorkerClaimLoop {
     }
 
     private com.securityexpert.nexus.ui2.worker.backup.https.HttpsInventoryJobExecutor httpsInventoryJobExecutor;
+    private com.securityexpert.nexus.ui2.worker.diagnostic.DiagnosticJobExecutor readDiagnosticExecutor;
+    public WorkerClaimLoop withDiagnosticReads(com.securityexpert.nexus.ui2.worker.diagnostic.DiagnosticJobExecutor executor) {
+        this.readDiagnosticExecutor=executor; return this;
+    }
     private com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerDiagnosticJobExecutor diagnosticJobExecutor;
 
     public WorkerClaimLoop withFortiManagerDiagnostic(
@@ -281,6 +286,16 @@ public final class WorkerClaimLoop {
         EndpointRecord endpoint = endpointOpt.get();
 
         try {
+            if (com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY.equals(job.capabilityId())) {
+                if (readDiagnosticExecutor == null) {
+                    leaseRepository.transitionState(claimed.jobId(),claimed.leaseEpoch(),com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                        com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,"system:worker","diagnostic_claim_check","EXECUTOR_UNAVAILABLE");
+                } else {
+                    readDiagnosticExecutor.execute(claimed.jobId(),claimed.leaseEpoch(),job.targetDeviceId(),
+                        hostOf(endpoint.addressRef()),"management_server".equals(device.role()) ? 22 : portOf(endpoint.addressRef()),device.credentialReferenceId());
+                }
+                return true;
+            }
             if (JobAdmissionService.FMG_INTERFACE_DETAIL.equals(job.capabilityId())) {
                 if (diagnosticJobExecutor == null || !"fortinet".equals(device.vendorHint())
                         || !"management_server".equals(device.role())) {

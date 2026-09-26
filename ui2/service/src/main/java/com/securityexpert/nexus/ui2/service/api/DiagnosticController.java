@@ -54,8 +54,21 @@ public final class DiagnosticController {
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "DIAGNOSTIC_TARGET_UNAVAILABLE")));
     }
 
+    @GetMapping("/api/v2/diagnostics/history")
+    public ResponseEntity<?> history(@RequestParam(value="device_id",required=false) String deviceId,
+            @RequestParam(value="page",defaultValue="0") int page,HttpServletRequest request) {
+        requireReadAccess(request);
+        return ResponseEntity.ok(Map.of("runs",service.history(deviceId,page,isMasked(request))));
+    }
+
     @PostMapping("/api/v2/diagnostics")
     public ResponseEntity<?> run(@RequestBody Map<String, Object> request, HttpServletRequest servletRequest) {
+        if (request.keySet().equals(Set.of("device_id","command","request_id"))
+                && request.get("device_id") instanceof String device && request.get("command") instanceof String command
+                && request.get("request_id") instanceof String requestId) {
+            String actor=(String)servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
+            return admitted(service.submitRead(device,command,requestId,actor));
+        }
         if (!request.keySet().equals(Set.of("device_id", "port", "request_id"))
                 || !(request.get("device_id") instanceof String deviceId)
                 || !(request.get("port") instanceof String port)
@@ -75,8 +88,16 @@ public final class DiagnosticController {
     @GetMapping("/api/v2/diagnostics/{jobId}")
     public ResponseEntity<?> result(@PathVariable String jobId, HttpServletRequest request) {
         requireReadAccess(request);
-        return service.result(jobId).<ResponseEntity<?>>map(ResponseEntity::ok)
+        return service.output(jobId,(String)request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE),isMasked(request)).<ResponseEntity<?>>map(body -> ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(body))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("code", "NOT_FOUND")));
+    }
+
+    private static ResponseEntity<?> admitted(AdmissionResult result) {
+        return switch(result) {
+            case AdmissionResult.Admitted a -> ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("job_id",a.jobId()));
+            case AdmissionResult.Deduplicated d -> ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("job_id",d.jobId()));
+            case AdmissionResult.Refused r -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code",r.code()));
+        };
     }
 
     private static boolean isMasked(HttpServletRequest request) {

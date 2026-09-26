@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-26T11:11:26Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-26T11:49:40Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -23,7 +23,6 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-26T11:11:26Z
 - P1/in_progress backup_screen_backbox_model — Backup screen on the Backbox model: per-device history, sc (target: PO directive 2026-09-22 (Backbox standar)
 - P1/in_progress cp_management_server_collect_duration — Check Point management server Collect took 243 s: vsx stat (target: ui2/worker/src/main/java/com/securityexp)
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
-- P1/in_progress debug_operations_successor — General Debug screen with optional command catalog, PO-app (target: docs/design/DEBUG_OPERATIONS_SUCCESSOR_D)
 - P1/in_progress https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber Con (target: docs/design/RADWARE_CYBER_CONTROLLER_BAC)
 - P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI jo (target: workflow §5 B1-1)
 - P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, sing (target: workflow §5 B1-3)

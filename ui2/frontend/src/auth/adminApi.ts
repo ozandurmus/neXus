@@ -784,7 +784,22 @@ export function getFmgDiagnosticPorts(deviceId: string): Promise<{ ports: string
   return call(`/api/v2/diagnostics/ports?device_id=${encodeURIComponent(deviceId)}`, "GET");
 }
 
-export interface DiagnosticResult {
+export interface DiagnosticHistoryRow {
+  jobId: string; targetDeviceId: string; target: string; command: string; actor: string;
+  submittedAt: string; state: string; exitStatus: number | null;
+}
+export function diagnosticHistory(deviceId: string, page: number): Promise<{ runs: DiagnosticHistoryRow[] }> {
+  return call(`/api/v2/diagnostics/history?page=${page}${deviceId ? `&device_id=${encodeURIComponent(deviceId)}` : ""}`, "GET");
+}
+export function runDiagnostic(deviceId: string, command: string, requestId: string): Promise<{ job_id: string }> {
+  return call("/api/v2/diagnostics", "POST", { device_id: deviceId, command, request_id: requestId });
+}
+
+export interface DiagnosticResult extends DiagnosticHistoryRow {
+  readonly terminalReason?: string | null;
+  readonly output: string | null;
+  readonly masked: boolean;
+  readonly legacySummary: boolean;
   readonly jobId: string;
   readonly targetDeviceId: string;
   readonly port: string;

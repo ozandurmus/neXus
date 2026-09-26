@@ -1,6 +1,6 @@
 # Device Debug — Phase 1 scope
 
-**Status: RATIFIED PRODUCT SCOPE — narrowed by the Product Owner on 2026-09-26.**
+**Status: FROZEN — Phase 1, PO implementation and persistent-history direction, 2026-09-26.**
 This supersedes the broader scope previously recorded in this file. The task is
 an interface for trying diagnostic commands on FortiManager and other firewalls.
 It is not an Automation, Script Execution, configuration-change, or failover build.
@@ -35,9 +35,9 @@ The deployed FortiManager pilot remains the current execution implementation.
 
 Implementation must address the actual gaps: hard-coded FortiManager filtering,
 unconditional name masking, missing pre-run Output panel, incomplete arbitrary
-text masking, and agent-specific approval enforcement. Do not import failover
+text masking, and preserving the agent's per-command PO approval requirement. Do not import failover
 approval rules or require a second human approver for a human diagnostic read.
-No new raw-output retention policy is authorized by this scope decision.
+The PO explicitly requests persistent execution history and administrator-readable output. Store bounded, credential-scrubbed responses through the existing encrypted artefact store; persist the actor, command, target, time and outcome on the audited job. No automatic deletion is added. AI output is a server-masked projection; plaintext output never enters operational logs or audit snapshots.
 
 ## Phase 2 — deferred
 
@@ -53,13 +53,22 @@ unapproved agent commands, and no duplicate dispatch. Any real device command
 still requires its own exact PO approval. Do not mark real-device validation done
 from tests or deployment alone.
 
-## Implementation checkpoint
+## Implementation boundary
 
-The feature branch now lists all devices, returns real names to authorized
-administrators and masked names to AIView, permits masked read inspection, and
-keeps Output visible and bound to the submitted command when the form changes.
-The existing execution gate is unchanged: this is not yet a general command
-runner, agent approval implementation, or complete administrator-output path.
-The output-lifetime choice (encrypted retained result or session-only result)
-has been requested from the PO before freezing that boundary. No worker has
-been dispatched, migration applied, deployment made, or device command sent.
+Typed command input is a proposal. The server matches an explicitly permitted
+read against the existing signed command gate before admitting an existing job.
+Initial SSH support is FortiManager, FortiGate and Cisco ASA; other devices remain
+visible and report unsupported commands/transports rather than inventing SSH
+support. No script execution, write command, unrestricted shell, or catalog UI.
+The admission and worker both verify the exact command and target scope. Existing
+one-minute target limit, lease, pre-contact attempt and no-retry behavior remain.
+
+History is paginated and includes failed jobs. Original response and storage keys
+are server-only; admin output is decrypted after authorization. AIView output
+preserves lines and known operational tokens while masking unknown identity tokens,
+addresses and secrets. Old pilot results remain readable without fabricated raw
+responses. Failure to store a response must be visible in the terminal outcome.
+
+Phase 1 does not add an approval workflow platform. The agent must obtain exact
+PO approval before every device command as directed in AGENTS.md; a super admin
+has no second product approver. No device command is approved by this code change.

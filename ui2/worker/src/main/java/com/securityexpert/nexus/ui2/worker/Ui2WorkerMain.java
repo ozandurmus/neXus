@@ -289,6 +289,8 @@ public final class Ui2WorkerMain {
         var diagnosticJobExecutor = new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerDiagnosticJobExecutor(
                 leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceInventoryRepository,
                 jobRecordDao, fortiManagerExecutor, gateRegistry);
+        var genericDiagnosticExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.DiagnosticJobExecutor(
+                leaseRepository, attemptRepository, deviceRepository, jobRecordDao, sshTransport, gateRegistry, artefactStore);
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         for (int i = 0; i < 10; i++) {
@@ -298,7 +300,8 @@ public final class Ui2WorkerMain {
                     paloAltoTrustRuleRef, backupCredentialRef)
                     .withHttpsConfirm(httpsConfirmJobExecutor)
                     .withHttpsInventory(httpsInventoryJobExecutor)
-                    .withFortiManagerDiagnostic(diagnosticJobExecutor);
+                    .withFortiManagerDiagnostic(diagnosticJobExecutor)
+                    .withDiagnosticReads(genericDiagnosticExecutor);
             claimLoops.add(claimLoop);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));
         }

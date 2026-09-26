@@ -30,6 +30,35 @@ import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 
 class DiagnosticServiceTest {
     @Test
+    void retainedOutputIsAuthorizedSeparatelyFromHistoryAndMaskedForAi() throws Exception {
+        var devices=mock(DeviceRepository.class);
+        var jobs=mock(JobRecordDao.class);
+        var store=mock(com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore.class);
+        var identities=mock(com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver.class);
+        byte[] key="synthetic-test-key".getBytes();
+        var service=new DiagnosticService(devices,mock(DeviceInventoryRepository.class),mock(JobAdmissionService.class),jobs,
+            new TopologyNamePseudonymizer(key), k -> List.of(),
+            new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(store),identities,
+            new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(key));
+        String id="00000000-0000-0000-0000-000000000001";
+        var job=new JobRecordDao.DiagnosticJob(id,"device-1",null,"COMPLETED",null,false,4,null,null,
+            "get system status","actor",Instant.now(),0);
+        when(jobs.findDiagnostic(id)).thenReturn(Optional.of(job));
+        when(jobs.diagnosticOutput(id,"actor")).thenReturn(Optional.of(new JobRecordDao.DiagnosticOutputRef("opaque-output",new byte[]{1})));
+        when(store.retrieve(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.eq(false)))
+            .thenAnswer(call -> new java.io.ByteArrayInputStream("Hostname: synthetic-private-name\nStatus: UP\nAddress: 192.0.2.44\npassword: synthetic-secret".getBytes()));
+        when(devices.listAll()).thenReturn(List.of());
+        String admin=(String)service.output(id,"actor",false).orElseThrow().get("output");
+        assertTrue(admin.contains("synthetic-private-name"));
+        assertFalse(admin.contains("synthetic-secret"));
+        String ai=(String)service.output(id,"actor",true).orElseThrow().get("output");
+        assertTrue(ai.contains("Status: UP"));
+        assertFalse(ai.contains("synthetic-private-name"));
+        assertFalse(ai.contains("192.0.2.44"));
+        assertFalse(service.output(id,"actor",true).orElseThrow().containsKey("wrappedKey"));
+    }
+
+    @Test
     void onlyAnInventoriedPhysicalPortCanReachAdmission() {
         DeviceRepository devices = mock(DeviceRepository.class);
         DeviceInventoryRepository inventory = mock(DeviceInventoryRepository.class);
@@ -38,7 +67,10 @@ class DiagnosticServiceTest {
                 .getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
         var service = new DiagnosticService(devices, inventory, admission, mock(JobRecordDao.class),
                 new TopologyNamePseudonymizer("synthetic-test-key".getBytes()),
-                key -> gates.stream().filter(row -> row.key().equals(key)).toList());
+                key -> gates.stream().filter(row -> row.key().equals(key)).toList(),
+                new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(null),
+                mock(com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver.class),
+                mock(com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker.class));
         when(devices.find("device-1")).thenReturn(Optional.of(new DeviceRecord("device-1", "management_server", "fortinet",
                 "manual", Instant.now(), false, DeviceEnrollmentState.ENROLLED, false, "credential-ref")));
         var iface = new InventoryInterface("if-1", "port5", Optional.empty(), "physical", "unknown", List.of());

@@ -32,8 +32,8 @@ The approved Debug/Parser screen is deployed but awaits a first PO-approved devi
 (`docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md`, FROZEN). It accepts one V89 FortiManager
 read and shows up to 64 masked structural line labels. Arbitrary commands are refused;
 physical link and the first real port5 run remain `UNKNOWN`/unvalidated.
-Debug Phase 1 is in progress: device selection, typed diagnostic command, and
-role-aware output with prior PO approval for agent runs
+Debug Phase 1 is automated-validated: all-device selection, typed gated reads,
+persistent execution history and role-aware output, with prior PO approval for agent runs
 (`docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md`). Saved commands
 are deferred to Phase 2; automation and failover are outside this build.
 
