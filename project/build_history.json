@@ -3,14 +3,6 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
-      "build": "NXS-LOCAL-0371",
-      "status": "in_progress",
-      "title": "Infoblox Grid Manager summary",
-      "summary": "Added the approved paged WAPI summary, run persistence, AIView masking and Grid members display. Local frontend and focused Java checks passed; full Gradle validation and real environment evidence remain pending.",
-      "movement": "IMPLEMENTATION",
-      "docs": {}
-    },
-    {
       "build": "NXS-LOCAL-0370",
       "status": "automated_validated",
       "title": "Infoblox for real, observed facts follow every read, inventory for HTTPS vendors",
