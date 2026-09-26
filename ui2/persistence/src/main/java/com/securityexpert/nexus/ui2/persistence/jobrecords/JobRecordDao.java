@@ -12,6 +12,13 @@ import java.util.Optional;
  */
 public interface JobRecordDao {
 
+    record DiagnosticAdmission(String kind, String jobId) {
+    }
+
+    record DiagnosticJob(String jobId, String targetDeviceId, String port, String state,
+            String statusToken, boolean statusPresent, Integer lineCount, String shapeId) {
+    }
+
     /** @return the inserted row's own {@code job_id} if this key was new, {@code empty} on a duplicate key. */
     Optional<String> insertRequestedIfAbsent(String jobId, String idempotencyKey, String capabilityId,
             String targetDeviceId, String actionClass, String jobType, String actorFingerprint, String actionId);
@@ -32,4 +39,18 @@ public interface JobRecordDao {
 
     /** GET /devices/{id}'s {@code job} field: the most recently submitted job targeting this device, if any. */
     Optional<JobRow> findMostRecentByTargetDeviceId(String targetDeviceId);
+
+    /** Atomic target rate limit, idempotency, and typed port admission for the closed diagnostic capability. */
+    default DiagnosticAdmission insertDiagnostic(String jobId, String idempotencyKey, String targetDeviceId,
+            String port, String actorFingerprint, String actionId) {
+        return new DiagnosticAdmission("UNSUPPORTED", null);
+    }
+
+    default Optional<DiagnosticJob> findDiagnostic(String jobId) {
+        return Optional.empty();
+    }
+
+    default boolean writeDiagnosticResult(String jobId, String statusToken, int lineCount, String shapeId) {
+        return false;
+    }
 }

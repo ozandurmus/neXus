@@ -286,6 +286,9 @@ public final class Ui2WorkerMain {
                 .withFortiManager(fortiManagerExecutor);
 
         JobRecordDao jobRecordDao = new JooqJobRecordDao(transactionBoundary);
+        var diagnosticJobExecutor = new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerDiagnosticJobExecutor(
+                leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceInventoryRepository,
+                jobRecordDao, fortiManagerExecutor, gateRegistry);
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         for (int i = 0; i < 10; i++) {
@@ -294,7 +297,8 @@ public final class Ui2WorkerMain {
                     backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofMinutes(10), checkPointTrustRuleRef,
                     paloAltoTrustRuleRef, backupCredentialRef)
                     .withHttpsConfirm(httpsConfirmJobExecutor)
-                    .withHttpsInventory(httpsInventoryJobExecutor);
+                    .withHttpsInventory(httpsInventoryJobExecutor)
+                    .withFortiManagerDiagnostic(diagnosticJobExecutor);
             claimLoops.add(claimLoop);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));
         }

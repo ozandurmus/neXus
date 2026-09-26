@@ -35,4 +35,15 @@ public final class PersistenceJobAdmissionRepository implements JobAdmissionRepo
     public Optional<String> findByIdempotencyKey(String idempotencyKey) {
         return dao.findJobIdByIdempotencyKey(idempotencyKey);
     }
+
+    @Override
+    public AdmissionResult createDiagnosticIfAllowed(String jobId, String idempotencyKey, String targetDeviceId,
+            String port, String actorFingerprint, String actionId) {
+        var result = dao.insertDiagnostic(jobId, idempotencyKey, targetDeviceId, port, actorFingerprint, actionId);
+        return switch (result.kind()) {
+            case "ADMITTED" -> new AdmissionResult.Admitted(result.jobId());
+            case "DEDUPLICATED" -> new AdmissionResult.Deduplicated(result.jobId());
+            default -> new AdmissionResult.Refused(result.kind(), "diagnostic request refused");
+        };
+    }
 }

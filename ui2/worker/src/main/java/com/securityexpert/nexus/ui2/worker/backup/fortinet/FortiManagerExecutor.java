@@ -48,6 +48,7 @@ public final class FortiManagerExecutor {
     }
 
     public static final String SSH_GET_SYSTEM_INTERFACE = "get system interface";
+    private static final java.util.regex.Pattern DIAGNOSTIC_PORT = java.util.regex.Pattern.compile("[A-Za-z0-9_.-]{1,31}");
     private static final java.util.regex.Pattern IFACE_BLOCK = java.util.regex.Pattern.compile("(?m)^==\\s*\\[\\s*([A-Za-z0-9_.-]+)\\s*\\]");
     private static final java.util.regex.Pattern IFACE_STATUS = java.util.regex.Pattern.compile("(?im)(?:^|\\s)status:\\s*(up|down|enable|disable)\\b");
 
@@ -114,6 +115,44 @@ public final class FortiManagerExecutor {
         } finally {
             ssh.disconnect(a.session());
         }
+    }
+
+    /** One gated class-0 diagnostic read; raw output is parsed in memory and never returned or logged. */
+    public Optional<DiagnosticResult> readInterfaceDetail(Target target, String credentialRef, String port) {
+        if (ssh == null || port == null || !DIAGNOSTIC_PORT.matcher(port).matches()) {
+            return Optional.empty();
+        }
+        var ct = new com.securityexpert.nexus.ui2.jobs.transport.ConnectionTarget(UUID.randomUUID().toString(), target.host(), 22);
+        var spec = new com.securityexpert.nexus.ui2.jobs.transport.ConnectSpec(credentialRef,
+                com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(target.host(), 22),
+                Optional.empty());
+        var connected = ssh.connect(ct, spec, Duration.ofSeconds(30));
+        if (!(connected instanceof com.securityexpert.nexus.ui2.jobs.transport.ConnectResult.Authenticated authenticated)) {
+            return Optional.empty();
+        }
+        try {
+            var result = ssh.execInteractive(authenticated.session(), new com.securityexpert.nexus.ui2.jobs.transport.ExecSpec(
+                    "diagnose fmnetwork interface detail " + port, true), Duration.ofSeconds(60));
+            return result instanceof com.securityexpert.nexus.ui2.jobs.transport.ExecResult.Completed completed
+                    ? Optional.of(parseDiagnostic(completed.output())) : Optional.empty();
+        } finally {
+            ssh.disconnect(authenticated.session());
+        }
+    }
+
+    public record DiagnosticResult(String statusToken, int lineCount, String shapeId) {
+    }
+
+    static DiagnosticResult parseDiagnostic(String output) {
+        if (output == null || output.length() > 65_536) {
+            return new DiagnosticResult("ABSENT", 256, "FMG_DETAIL_OTHER");
+        }
+        java.util.regex.Matcher status = java.util.regex.Pattern.compile("(?im)^\\s*Status\\s*:\\s*(up|down)\\b").matcher(output);
+        boolean hasStatus = java.util.regex.Pattern.compile("(?im)^\\s*Status\\s*:").matcher(output).find();
+        String token = status.find() ? status.group(1).toUpperCase(java.util.Locale.ROOT) : hasStatus ? "OTHER" : "ABSENT";
+        String shape = hasStatus ? "FMG_DETAIL_STATUS"
+                : output.contains("Link encap:") ? "FMG_DETAIL_NO_STATUS" : "FMG_DETAIL_OTHER";
+        return new DiagnosticResult(token, Math.min(256, output.split("\\R").length), shape);
     }
 
     private record Session(String token, Credentials creds) {

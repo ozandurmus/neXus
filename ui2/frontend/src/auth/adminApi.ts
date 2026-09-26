@@ -759,6 +759,54 @@ export function getDeviceInventory(deviceId: string): Promise<DeviceInventory> {
   return call(`/devices/${encodeURIComponent(deviceId)}/inventory`, "GET");
 }
 
+export interface DiagnosticPreview {
+  readonly templateId: string;
+  readonly deviceId: string;
+  readonly target: string;
+  readonly port: string;
+  readonly command: string;
+  readonly gateRevision: number;
+  readonly timeoutSeconds: number;
+  readonly retry: string;
+  readonly frequency: string;
+}
+
+export interface DiagnosticTarget {
+  readonly deviceId: string;
+  readonly target: string;
+}
+
+export function listFmgDiagnosticTargets(): Promise<{ targets: DiagnosticTarget[] }> {
+  return call("/api/v2/diagnostics/targets", "GET");
+}
+
+export function getFmgDiagnosticPorts(deviceId: string): Promise<{ ports: string[] }> {
+  return call(`/api/v2/diagnostics/ports?device_id=${encodeURIComponent(deviceId)}`, "GET");
+}
+
+export interface DiagnosticResult {
+  readonly jobId: string;
+  readonly targetDeviceId: string;
+  readonly port: string;
+  readonly state: string;
+  readonly statusToken: "UP" | "DOWN" | "OTHER" | "ABSENT" | null;
+  readonly statusPresent: boolean;
+  readonly lineCount: number | null;
+  readonly shapeId: string | null;
+}
+
+export function previewFmgDiagnostic(deviceId: string, port: string): Promise<DiagnosticPreview> {
+  return call(`/api/v2/diagnostics/preview?device_id=${encodeURIComponent(deviceId)}&port=${encodeURIComponent(port)}`, "GET");
+}
+
+export function runFmgDiagnostic(deviceId: string, port: string, requestId: string): Promise<{ job_id: string }> {
+  return call("/api/v2/diagnostics", "POST", { device_id: deviceId, port, request_id: requestId });
+}
+
+export function getFmgDiagnostic(jobId: string): Promise<DiagnosticResult> {
+  return call(`/api/v2/diagnostics/${encodeURIComponent(jobId)}`, "GET");
+}
+
 /** GET /devices/{id}/management-tree: what a Check Point management server manages (latest discovery run). */
 export interface ManagementTreeNode {
   readonly kind: string;

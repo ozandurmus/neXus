@@ -37,6 +37,7 @@ const TABS = [
   { label: "Jobs", marker: "All jobs" },
   { label: "Queue", marker: "Queued and running jobs" },
   { label: "History", marker: "Finished jobs" },
+  { label: "Diagnostics", marker: "Super administrator role required." },
 ];
 
 describe("OperationsScreen tabs", () => {
@@ -48,7 +49,7 @@ describe("OperationsScreen tabs", () => {
 
     for (const tab of TABS) {
       fireEvent.click(within(tablist).getByRole("tab", { name: tab.label }));
-      expect(screen.getByText(tab.marker)).toBeInTheDocument();
+      expect(await screen.findByText(tab.marker)).toBeInTheDocument();
       for (const other of TABS) {
         if (other.label === tab.label) continue;
         expect(screen.queryByText(other.marker)).toBeNull();

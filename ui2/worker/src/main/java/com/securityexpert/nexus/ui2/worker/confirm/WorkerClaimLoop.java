@@ -11,6 +11,7 @@ import com.securityexpert.nexus.ui2.jobs.admission.ConfigurationCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.ConfirmCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.DiscoveryCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.InventoryCapabilityIds;
+import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.jobs.lease.ClaimedJob;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
@@ -45,6 +46,7 @@ public final class WorkerClaimLoop {
             ConfirmCapabilityIds.DEVICE_CONFIRM_FORTIGATE, InventoryCapabilityIds.FGT_INVENTORY_COLLECT, BackupCapabilityIds.FGT_CONFIG_BACKUP,
             ConfigurationCapabilityIds.FGT_CONFIGURATION_COLLECT,
             InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT, InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
+            JobAdmissionService.FMG_INTERFACE_DETAIL,
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
             DiscoveryCapabilityIds.RDW_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.FMG_DISCOVERY_ENUMERATE,
@@ -70,6 +72,13 @@ public final class WorkerClaimLoop {
     }
 
     private com.securityexpert.nexus.ui2.worker.backup.https.HttpsInventoryJobExecutor httpsInventoryJobExecutor;
+    private com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerDiagnosticJobExecutor diagnosticJobExecutor;
+
+    public WorkerClaimLoop withFortiManagerDiagnostic(
+            com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerDiagnosticJobExecutor executor) {
+        this.diagnosticJobExecutor = executor;
+        return this;
+    }
 
     /** PO 2026-09-25: the inventory job for vendors reached over HTTPS. */
     public WorkerClaimLoop withHttpsInventory(com.securityexpert.nexus.ui2.worker.backup.https.HttpsInventoryJobExecutor executor) {
@@ -272,6 +281,21 @@ public final class WorkerClaimLoop {
         EndpointRecord endpoint = endpointOpt.get();
 
         try {
+            if (JobAdmissionService.FMG_INTERFACE_DETAIL.equals(job.capabilityId())) {
+                if (diagnosticJobExecutor == null || !"fortinet".equals(device.vendorHint())
+                        || !"management_server".equals(device.role())) {
+                    leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(),
+                            com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                            com.securityexpert.nexus.ui2.jobs.JobState.REJECTED, "system:worker", "diagnostic_claim_check",
+                            "DIAGNOSTIC_TARGET_UNAVAILABLE");
+                    return true;
+                }
+                diagnosticJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(),
+                        new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(
+                                hostOf(endpoint.addressRef()), httpsPortOf(endpoint.addressRef(), "fortimanager")),
+                        device.credentialReferenceId());
+                return true;
+            }
             if (ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS.equals(job.capabilityId())
                     || ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA.equals(job.capabilityId())
                     || ConfirmCapabilityIds.DEVICE_CONFIRM_FORTIGATE.equals(job.capabilityId())) {

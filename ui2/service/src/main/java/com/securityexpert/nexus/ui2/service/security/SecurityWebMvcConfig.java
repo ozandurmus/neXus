@@ -51,6 +51,11 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /devices/*/management-tree", ActionRegistry.DEVICE_READ),
             Map.entry("POST /devices/*/management-tree/acknowledge", ActionRegistry.DISCOVERY_ACKNOWLEDGE),
             Map.entry("POST /devices/*/inventory/collect", ActionRegistry.DEVICE_INVENTORY_COLLECT),
+            Map.entry("GET /api/v2/diagnostics/preview", ActionRegistry.FMG_DIAGNOSTIC_READ),
+            Map.entry("GET /api/v2/diagnostics/targets", ActionRegistry.FMG_DIAGNOSTIC_READ),
+            Map.entry("GET /api/v2/diagnostics/ports", ActionRegistry.FMG_DIAGNOSTIC_READ),
+            Map.entry("POST /api/v2/diagnostics", ActionRegistry.FMG_DIAGNOSTIC_RUN),
+            Map.entry("GET /api/v2/diagnostics/*", ActionRegistry.FMG_DIAGNOSTIC_READ),
             Map.entry("POST /devices/inventory/collect-all", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
             // NXS-LOCAL-0165 "Routes": same wildcard shapes as the inventory

@@ -13,4 +13,9 @@ public interface JobAdmissionRepository {
             String targetRunId, String actionClassId, String actorFingerprint, String actionId);
 
     Optional<String> findByIdempotencyKey(String idempotencyKey);
+
+    default AdmissionResult createDiagnosticIfAllowed(String jobId, String idempotencyKey, String targetDeviceId,
+            String port, String actorFingerprint, String actionId) {
+        return new AdmissionResult.Refused("DIAGNOSTIC_UNSUPPORTED", "diagnostic admission is not configured");
+    }
 }

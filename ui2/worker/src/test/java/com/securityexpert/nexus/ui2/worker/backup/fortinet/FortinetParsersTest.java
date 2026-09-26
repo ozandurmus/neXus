@@ -17,6 +17,23 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute;
 class FortinetParsersTest {
 
     @Test
+    void diagnosticReportsOnlySafeStatusAndShape() {
+        assertEquals(new FortiManagerExecutor.DiagnosticResult("DOWN", 2, "FMG_DETAIL_STATUS"),
+                FortiManagerExecutor.parseDiagnostic("Status: down\nSpeed: auto"));
+        assertEquals(new FortiManagerExecutor.DiagnosticResult("ABSENT", 2, "FMG_DETAIL_NO_STATUS"),
+                FortiManagerExecutor.parseDiagnostic("port5 Link encap:Ethernet\nUP BROADCAST RUNNING"));
+        assertEquals("ABSENT", FortiManagerExecutor.parseDiagnostic("unexpected secret-like response").statusToken());
+    }
+
+    @Test
+    void diagnosticNeverReplaysARecordedAttempt() {
+        var prior = new com.securityexpert.nexus.ui2.jobs.stepattempt.StepAttempt("attempt-1", "job-1", 0, 0, 1,
+                "FMG_INTERFACE_DETAIL", "read", true, Optional.empty(), Optional.empty());
+        assertFalse(FortiManagerDiagnosticJobExecutor.mayDispatch(java.util.List.of(prior)));
+        assertTrue(FortiManagerDiagnosticJobExecutor.mayDispatch(java.util.List.of()));
+    }
+
+    @Test
     void systemStatus() {
         var st = FortiGatePlan.parseStatus("""
                 Version: FortiGate-1101E v7.0.12,build0523,230606 (GA.M)

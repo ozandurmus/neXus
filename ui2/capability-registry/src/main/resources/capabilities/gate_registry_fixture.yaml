@@ -2192,8 +2192,8 @@ gates:
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 60
     retry_rule: 'none'
-    max_frequency: 'once per named physical interface per inventory'
-    session_reuse_rule: 'reuse inventory SSH session'
+    max_frequency: 'one command per endpoint per minute'
+    session_reuse_rule: 'one trusted SSH session for this diagnostic job, no second connection'
     unsupported_behavior_ref: 'refused, missing, or unrecognized output -> physical link UNKNOWN; preserve configured state'
     secret_output_risk: 'interface identity and hardware data; log only masked shape and safe status enum'
     safe_telemetry_fields: []

@@ -23,6 +23,7 @@ import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { StatePanel, Ts, RoleChip, VendorBadge, Unknown } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel } from "./JobLogsPanel";
+import { DiagnosticPanel } from "./DiagnosticPanel";
 import { urlParam } from "../shell/urlParams";
 import { getJobStats, listDevices, type DeviceSummary } from "../auth/adminApi";
 import { deriveClusterTitle } from "./InventoryPanels";
@@ -85,7 +86,7 @@ export function OperationsScreen() {
   const [clusterCache, setClusterCache] = useState<Record<string, { verdict: string; checksCount: number; generatedAt: string | null }>>({});
   const evaluatedCount = Object.values(clusterCache).filter((r) => r.checksCount > 0).length;
 
-  const [tab, setTab] = useState(urlParam("tab") === "jobs" ? 1 : 0);
+  const [tab, setTab] = useState(urlParam("tab") === "diagnostics" ? 4 : urlParam("tab") === "jobs" ? 1 : 0);
 
   // A cluster header elsewhere in the product links here as ?screen=operations&cluster_ref=<ref>; preselect it.
   useEffect(() => {
@@ -1197,6 +1198,7 @@ export function OperationsScreen() {
             initialSinceHours={urlParam("since_hours") ? Number(urlParam("since_hours")) : undefined} initialText={urlParam("q") ?? ""} /></Box> },
           { label: "Queue", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>Queued and running jobs</Typography><JobLogsPanel initialState="REQUESTED,CLAIMED,EXECUTING" emptyTitle="Queue empty" emptyBody="0 requested · 0 claimed · 0 executing" /></Box> },
           { label: "History", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>Finished jobs</Typography><JobLogsPanel initialState="COMPLETED,FAILED,OUTCOME_UNKNOWN,REJECTED" /></Box> },
+          { label: "Diagnostics", panel: <DiagnosticPanel /> },
         ]}
       />
     </ScreenRoot>

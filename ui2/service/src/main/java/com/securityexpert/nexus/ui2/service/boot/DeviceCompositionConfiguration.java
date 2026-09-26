@@ -182,6 +182,7 @@ public class DeviceCompositionConfiguration {
                 confirmCapability(InventoryCapabilityIds.FGT_INVENTORY_COLLECT, "fortinet", "fortigate", TransportKind.SSH_EXEC),
                 confirmCapability(BackupCapabilityIds.FGT_CONFIG_BACKUP, "fortinet", "fortigate", TransportKind.SSH_EXEC),
                 confirmCapability(ConfigurationCapabilityIds.FGT_CONFIGURATION_COLLECT, "fortinet", "fortigate", TransportKind.SSH_EXEC),
+                fortiManagerDiagnosticCapability(gateRegistryPort),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),
@@ -218,6 +219,19 @@ public class DeviceCompositionConfiguration {
         CapabilitySpec spec = new CapabilitySpec(capabilityId, vendor, platformRoleScope, transportKind,
                 MaturityState.CAP_OFFLINE, List.of(connect), List.of(disconnect), "UNKNOWN", List.of(), false);
         return new CapabilityRegistryLoader(key -> List.of()).load(spec);
+    }
+
+    private static Capability fortiManagerDiagnosticCapability(GateRegistryPort gateRegistryPort) {
+        CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep read = new CapabilityStep(StepKind.EXEC, "cli", "diagnose fmnetwork interface detail <interface>", false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilitySpec spec = new CapabilitySpec(JobAdmissionService.FMG_INTERFACE_DETAIL, "fortinet", "fortimanager",
+                TransportKind.SSH_EXEC, MaturityState.CAP_OFFLINE, List.of(connect, read), List.of(disconnect),
+                "FMG_DIAGNOSTIC", List.of(), false);
+        return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
     }
 
     /** NXS-LOCAL-0164: 14D CF-3's physical reads, in CF-2's bare form, each gated (docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md). */

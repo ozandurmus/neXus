@@ -42,6 +42,8 @@ import com.securityexpert.nexus.ui2.jobs.discovery.DiscoveryRunSnapshot;
  */
 public final class JobAdmissionService {
 
+    public static final String FMG_INTERFACE_DETAIL = "fmg_interface_detail";
+
     private final CapabilityRegistry capabilityRegistry;
     private final DeviceEnrollmentReadPort deviceEnrollmentReadPort;
     private final DiscoveryRunReadPort discoveryRunReadPort;
@@ -127,6 +129,21 @@ public final class JobAdmissionService {
                 .orElse(new AdmissionResult.Refused("IDEMPOTENCY_KEY_CONFLICT",
                         "a job already exists for idempotency_key=" + idempotencyKey
                                 + " but it could not be re-read"));
+    }
+
+    /** Closed diagnostic admission: the port and one-minute target limit are persisted atomically with the job. */
+    public AdmissionResult submitFmgInterfaceDetail(String targetDeviceId, String port, String idempotencyKey,
+            String actorFingerprint, String actionId) {
+        Optional<Capability> capability = capabilityRegistry.find(FMG_INTERFACE_DETAIL);
+        if (capability.isEmpty() || !capability.get().executionEligible()) {
+            return new AdmissionResult.Refused("CAPABILITY_NOT_EXECUTION_ELIGIBLE", "diagnostic gate is unavailable");
+        }
+        Optional<DeviceEnrollmentSnapshot> device = deviceEnrollmentReadPort.findEnrollment(targetDeviceId);
+        if (device.isEmpty() || device.get().disabled() || !device.get().permitsReadCollection()) {
+            return new AdmissionResult.Refused("DEVICE_NOT_ELIGIBLE", "diagnostic target is not enrolled and enabled");
+        }
+        return repository.createDiagnosticIfAllowed(UUID.randomUUID().toString(), idempotencyKey, targetDeviceId,
+                port, actorFingerprint, actionId);
     }
 
     /**
