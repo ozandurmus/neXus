@@ -102,17 +102,38 @@ function formatValidationReason(reason: string): string {
   }
 }
 
-function describeApiError(err: unknown): string {
+interface ApiErrorDescription {
+  readonly message: string;
+  readonly code?: string;
+}
+
+function describeApiError(err: unknown): ApiErrorDescription {
   const apiErr = err as Partial<ApiError>;
   const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
-  const reasonCode = typeof apiErr.body?.reason_code === "string" ? (apiErr.body.reason_code as string) : undefined;
-  if (serverError === "ACTION_REFUSED") return "You do not have permission to create credentials.";
-  if (serverError === "VALIDATION_FAILED" && reasonCode) {
-    return `Validation failed: ${formatValidationReason(reasonCode)}`;
+  const code = typeof apiErr.body?.code === "string" ? apiErr.body.code : undefined;
+  if (serverError === "ADMISSION_REFUSED") {
+    const messages: Record<string, string> = {
+      DUPLICATE_ADDRESS: "A device is already registered at this address. Open it in Devices, or delete it first to add it again.",
+      VENDOR_UNSUPPORTED: "neXus cannot read this vendor/role yet.",
+      MANAGEMENT_SERVER_UNGATED: "Reads for this management server are not approved yet.",
+      ROLE_UNRECOGNISED: "This role is not recognised for the selected vendor.",
+      UNAVAILABLE: "The job queue is unavailable; try again in a minute.",
+    };
+    const reason = typeof apiErr.body?.reason === "string" ? apiErr.body.reason : undefined;
+    return { message: (code && messages[code]) || reason || code || "The request was refused.", code };
   }
-  if (reasonCode) return `Validation failed: ${formatValidationReason(reasonCode)}`;
-  if (serverError) return serverError;
-  return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
+  const reasonCode = typeof apiErr.body?.reason_code === "string" ? (apiErr.body.reason_code as string) : undefined;
+  if (serverError === "ACTION_REFUSED") return { message: "You do not have permission to create credentials." };
+  if (serverError === "VALIDATION_FAILED" && reasonCode) {
+    return { message: `Validation failed: ${formatValidationReason(reasonCode)}` };
+  }
+  if (reasonCode) return { message: `Validation failed: ${formatValidationReason(reasonCode)}` };
+  if (serverError) return { message: serverError };
+  return { message: `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}` };
+}
+
+function ApiErrorText({ error }: { readonly error: ApiErrorDescription }) {
+  return <><span>{error.message}</span>{error.code && <Typography component="span" variant="caption" sx={{ display: "block" }}>Code: {error.code}</Typography>}</>;
 }
 
 /**
@@ -164,7 +185,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
   const [credentialCreationRefused, setCredentialCreationRefused] = useState(false);
   const [phase, setPhase] = useState<Phase>("form");
   const [validationReason, setValidationReason] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<ApiErrorDescription | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [detail, setDetail] = useState<DeviceDetail | null>(null);
@@ -189,7 +210,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
     error: credentialsError,
   } = useFetchOnMount(
     () => listCredentials().then((result) => result.credentials ?? []),
-    describeApiError,
+    (err) => describeApiError(err).message,
   );
   const credentials = createdCredential && !(credentialsData ?? []).some((credential) => credential.credential_id === createdCredential.credential_id)
     ? [...(credentialsData ?? []), createdCredential]
@@ -676,7 +697,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
             )}
             {submitError && (
               <Typography variant="body2" color="error">
-                {submitError}
+                <ApiErrorText error={submitError} />
               </Typography>
             )}
             <Typography variant="body2">
@@ -792,7 +813,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
             )}
             {submitError && (
               <Typography variant="body2" color="error">
-                {submitError}
+                <ApiErrorText error={submitError} />
               </Typography>
             )}
           </Stack>
@@ -818,7 +839,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
           <Stack spacing={1.5}>
             {submitError && (
               <Typography variant="body2" color="error">
-                {submitError}
+                <ApiErrorText error={submitError} />
               </Typography>
             )}
             {discoveryPhase !== "done" && (

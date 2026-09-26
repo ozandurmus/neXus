@@ -182,6 +182,43 @@ describe("AddDeviceDialog", () => {
     expect(calledPaths.some((p) => p.startsWith("/devices/") && p !== "/devices/add-single")).toBe(false);
   });
 
+  it("explains a duplicate-address admission refusal and shows its code", async () => {
+    vi.stubGlobal("fetch", routedFetch({
+      "/credentials": CREDENTIALS_ROUTE,
+      "/session/status": { body: { csrf_token: "test-csrf" } },
+      "/devices/add-single": { status: 409, body: {
+        error: "ADMISSION_REFUSED",
+        code: "DUPLICATE_ADDRESS",
+        reason: "a device already exists at this address (device opaque-test-id); delete it first if it must be re-added",
+      } },
+    }));
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndFillAddress("192.0.2.11");
+    fireEvent.click(screen.getByRole("button", { name: "Enrol" }));
+
+    expect(await screen.findByText("A device is already registered at this address. Open it in Devices, or delete it first to add it again.")).toBeInTheDocument();
+    expect(screen.getByText("Code: DUPLICATE_ADDRESS")).toBeInTheDocument();
+    expect(screen.queryByText(/ADMISSION_REFUSED|opaque-test-id/)).not.toBeInTheDocument();
+  });
+
+  it("shows the server reason for an unknown admission refusal code", async () => {
+    vi.stubGlobal("fetch", routedFetch({
+      "/credentials": CREDENTIALS_ROUTE,
+      "/session/status": { body: { csrf_token: "test-csrf" } },
+      "/devices/add-single": { status: 409, body: {
+        error: "ADMISSION_REFUSED", code: "CAPABILITY_UNKNOWN", reason: "The device capability could not be confirmed.",
+      } },
+    }));
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndFillAddress("192.0.2.12");
+    fireEvent.click(screen.getByRole("button", { name: "Enrol" }));
+
+    expect(await screen.findByText("The device capability could not be confirmed.")).toBeInTheDocument();
+    expect(screen.getByText("Code: CAPABILITY_UNKNOWN")).toBeInTheDocument();
+  });
+
   it("offers inline credential creation and selects the created credential", async () => {
     vi.stubGlobal(
       "fetch",
