@@ -9,10 +9,11 @@ HOST-A: schema 89, 122 devices at the last count. V87's per-port NIC command was
 - Targeted worker and gate tests passed. Broader service tests retain the known `ProjectPlanReaderTest` failure.
 
 # Exact next action
-Implement the now-FROZEN UI2 diagnostic screen and shared CLI contract in `docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md` through bounded, reviewed movements. PO decisions are settled: existing `role:security_admin`, no second product approval for a human super admin, exact PO approval before agent commands, one per target per minute, missing Status -> physical link UNKNOWN. Do not execute port5 until exact code/command/target/safe projection is reviewed and separately approved. Luna 6 architecture movement `NXS-LOCAL-0367` was cancelled after an out-of-scope feature-branch push and legacy-console confusion; its branch was not integrated. When Cisco ASA or Pulse Secure is enrolled, or SMC discovery runs, follow the first jobs through completion as specified in `docs/design/CODEX_HANDOVER_2026_09_26.md` §5.
+Review `feature/approved-diagnostic-screen` against the PO's Debug/Parser requirement before merge. The branch implements one gated FortiManager command with typed input and a safe status/shape summary; it does not show a masked line-by-line response and has not been deployed. Do not execute port5 until the PO separately approves the exact command, target and safe projection. After approval to merge, deploy `origin/main` only via `scripts/hosta_deploy.sh`, align `ui2-configuration` to the service digest, and watch the rollout to completion. When Cisco ASA or Pulse Secure is enrolled, or SMC discovery runs, follow the first jobs through completion as specified in `docs/design/CODEX_HANDOVER_2026_09_26.md` §5.
 
 # New risks
 - FortiManager Interfaces currently presents configured enable/disable as up/down; this is not verified physical link.
 - Device contact stays inside gated neXus jobs. HOST-A is never a jump host; no manual device SSH or browser access.
 - PO 2026-09-26: present exact code, command, target scope, and sanitized projection for each ad hoc parser diagnostic;
   obtain individual approval before neXus sends it. Never modify a device for verification or troubleshooting.
+- UI2 frontend: 203 tests, production build and HTML render harness passed. Targeted diagnostic backend and role-architecture tests passed. Full Gradle regression remains red: integration tests cannot start in the local container environment, and the known `ProjectPlanReaderTest` fails.
