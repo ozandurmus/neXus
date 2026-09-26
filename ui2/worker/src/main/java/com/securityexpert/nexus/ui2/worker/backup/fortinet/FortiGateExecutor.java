@@ -120,6 +120,13 @@ public final class FortiGateExecutor {
             return colon < 0 ? "" : line.substring(0, colon).strip();
         }).filter(label -> label.matches("[A-Za-z ]{1,64}")).distinct().limit(32).toList();
         LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE HA status: lines={0} labels={1}", text.lines().count(), labels);
+        // MEASURE (2026-09-26: the HA pair's Primary/Secondary lines did not match the parser): the shapes of the Mode,
+        // Primary and Secondary lines (letters a, digits 9) and whether the own serial appears on them -- never values.
+        List<String> shapes = text.lines().filter(line -> line.matches("(?i)\\s*(Mode|Primary|Secondary)\\b.*"))
+                .map(line -> line.replaceAll("[A-Za-z]+", "a").replaceAll("[0-9]+", "9")
+                        + (ownSerial.isPresent() && line.contains(ownSerial.get()) ? " <own-serial>" : ""))
+                .limit(8).toList();
+        LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE HA lines: {0}", shapes);
         Optional<String> role = FortiGatePlan.haRole(text, ownSerial);
         if (role.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "[FGT] HA role unknown or standalone");
