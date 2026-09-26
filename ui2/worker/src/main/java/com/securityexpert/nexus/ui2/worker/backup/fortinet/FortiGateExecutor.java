@@ -64,6 +64,7 @@ public final class FortiGateExecutor {
 
     /** PO 2026-09-27: measure the secondary through the primary once per worker process and cluster address. */
     private static final java.util.Set<String> HA_MANAGE_MEASURED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static final boolean HA_MANAGE_ENABLED = false;
 
     private record Shell(TransportSession session, Optional<String> refusal, boolean authFailure) {
     }
@@ -241,7 +242,9 @@ public final class FortiGateExecutor {
                 return new HttpsVendorExecutor.InventoryOutcome.Failed("get system status gave no FortiGate answer");
             }
             Optional<String> haRole = haRole(s, st.serial());
-            if (haRole.filter("primary"::equals).isPresent() && secrets != null && HA_MANAGE_MEASURED.add(target.host())) {
+            // Disabled 2026-09-27 after two measurement runs (the hop answered in 40 ms without a password prompt and did
+            // not reach the secondary); the next run needs the Product Owner to trigger it -- never unattended.
+            if (HA_MANAGE_ENABLED && haRole.filter("primary"::equals).isPresent() && secrets != null && HA_MANAGE_MEASURED.add(target.host())) {
                 measureSecondaryThroughPrimary(s, st, credentialRef);
             }
             List<FortiGatePlan.Iface> ifaces;
