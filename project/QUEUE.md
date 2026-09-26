@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-26T07:47:54Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-26T08:22:15Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -20,6 +20,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-26T07:47:54Z
 - P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices ( (target: )
 - P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner vs DeviceComposit)
 - P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect, warn with the (target: ui2 worker HostKeyVerifier / TrustRuleRe)
+- P1/in_progress approved_diagnostic_command_screen — Approved read-only diagnostic command screen and shared CL (target: docs/design/FMG_SINGLE_COMMAND_DIAGNOSTI)
 - P1/in_progress backup_screen_backbox_model — Backup screen on the Backbox model: per-device history, sc (target: PO directive 2026-09-22 (Backbox standar)
 - P1/in_progress cp_management_server_collect_duration — Check Point management server Collect took 243 s: vsx stat (target: ui2/worker/src/main/java/com/securityexp)
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
@@ -31,7 +32,6 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-26T07:47:54Z
 - P1/in_progress vendor_radware_defensepro_backup — Radware DefensePro: configuration backup (HTTPS) (target: )
 - P1/planned aiview_masked_readonly_admin — aiview as a masked read-only administrator (PO 2026-09-23) (target: )
 - P1/planned aiview_masking_leak_audit — Masking leak audit: compare aiview responses against the r (target: PO 2026-09-22 proposal (separate masked)
-- P1/planned approved_diagnostic_command_screen — Approved read-only diagnostic command screen and shared CL (target: docs/design/FMG_SINGLE_COMMAND_DIAGNOSTI)
 - P1/planned asa_fortinet_cluster_view — Cluster view for Cisco ASA failover pairs and FortiGate HA (target: )
 - P1/planned asa_fortinet_configuration_plane — Configuration plane for Cisco ASA and FortiGate (sections, (target: )
 - P1/planned backup_plane_separate_service — Deliver the backup plane as the independent service the re (target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITEC)
