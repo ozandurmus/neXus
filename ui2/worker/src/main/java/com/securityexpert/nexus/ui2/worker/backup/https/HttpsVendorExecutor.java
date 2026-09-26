@@ -617,6 +617,16 @@ public final class HttpsVendorExecutor {
         }
         JsonNode j = JSON.readTree(r.body());
         if (!"SUCCESS".equals(j.path("status").asText())) {
+            // MEASURE (2026-09-26: every ProxySG inventory read failed with "status FAILURE, 6 message(s)"): which gated
+            // command the MC refused and its messages, addresses and long digit runs masked, each cut to 160 chars.
+            StringBuilder why = new StringBuilder();
+            for (JsonNode m : j.path("messages")) {
+                String text = (m.isTextual() ? m.asText() : m.toString())
+                        .replaceAll("\\b\\d{1,3}(\\.\\d{1,3}){3}\\b", "<ip>").replaceAll("\\d{5,}", "<n>");
+                why.append(" | ").append(text, 0, Math.min(160, text.length()));
+            }
+            LOG.log(System.Logger.Level.INFO, "[MANAGEMENT_CENTER] command refused: \"{0}\" status {1}{2}",
+                    command, j.path("status").asText("?"), why);
             throw new McCommandFailed("status " + j.path("status").asText("?") + ", " + j.path("messages").size() + " message(s)");
         }
         return j.path("reply").asText("");
