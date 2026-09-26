@@ -59,12 +59,27 @@ export function globalSearch(q: string, limit = 20): Promise<GlobalSearchRespons
 
 async function csrfToken(): Promise<string | undefined> {
   try {
-    const response = await fetch("/session/status", { credentials: "include" });
+    const response = await fetchWithTimeout("/session/status", { credentials: "include" }, 20_000);
     const body = await response.json();
     return typeof body?.csrf_token === "string" ? body.csrf_token : undefined;
   } catch {
     return undefined;
   }
+}
+
+function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const request = fetch(input, { ...init, signal: controller.signal });
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject({ status: 0, body: { error: "TIMEOUT" } } satisfies ApiError);
+    }, timeoutMs);
+  });
+  return Promise.race([request, timeout]).finally(() => {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  });
 }
 
 async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unknown): Promise<T> {
@@ -73,12 +88,12 @@ async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unkn
     const token = await csrfToken();
     if (token) headers["X-CSRF-Token"] = token;
   }
-  const response = await fetch(path, {
+  const response = await fetchWithTimeout(path, {
     method,
     credentials: "include",
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  }, method === "GET" ? 20_000 : 60_000);
   noteMasking(response);
   const parsed = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -105,7 +120,7 @@ function noteMasking(response: Response) {
 
 /** Like {@link call}, but for a {@code text/plain} response (the Check Point sanitized configuration view) -- never JSON-parsed. */
 async function callText(path: string): Promise<string> {
-  const response = await fetch(path, { method: "GET", credentials: "include" });
+  const response = await fetchWithTimeout(path, { method: "GET", credentials: "include" }, 20_000);
   const text = await response.text();
   if (!response.ok) {
     const error: ApiError = { status: response.status, body: { error: text || "NOT_FOUND" } };

@@ -112,6 +112,7 @@ function describeApiError(err: unknown): ApiErrorDescription {
   const apiErr = err as Partial<ApiError>;
   const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
   const code = typeof apiErr.body?.code === "string" ? apiErr.body.code : undefined;
+  if (serverError === "TIMEOUT") return { message: "The server did not answer in time; try again." };
   if (serverError === "ADMISSION_REFUSED") {
     const messages: Record<string, string> = {
       DUPLICATE_ADDRESS: "A device is already registered at this address. Open it in Devices, or delete it first to add it again.",

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -62,6 +62,7 @@ async function openDialogAndFillAddress(address: string) {
 
 describe("AddDeviceDialog", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -178,6 +179,36 @@ describe("AddDeviceDialog", () => {
       return url.split("?")[0] === "/devices/dev-1/inventory/collect";
     })).toBe(false);
   }, 15000);
+
+  it("keeps polling after a timed-out device read and reaches the terminal phase", async () => {
+    let deviceReads = 0;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = String(input).split("?")[0];
+      if (path === "/credentials") return Promise.resolve(jsonResponse(200, CREDENTIALS_ROUTE.body));
+      if (path === "/session/status") return Promise.resolve(jsonResponse(200, { csrf_token: "synthetic-token" }));
+      if (path === "/devices/add-single") return Promise.resolve(jsonResponse(200, { device_id: "dev-1", job_id: "job-1", enrollment_state: "DRAFT" }));
+      if (path === "/devices/dev-1") {
+        deviceReads++;
+        if (deviceReads <= 12) return new Promise<Response>(() => {});
+        return Promise.resolve(jsonResponse(200, {
+          device_id: "dev-1", vendor_hint: "check_point", enrollment_state: "ENROLLED", disabled: false,
+          facts: null, peer_follow_outcome: null, peer_follow_reason: null, identity_mismatch_state: "NONE", cluster_member_ref: null,
+          onboarding: { state: "COMPLETED", step: "configuration", step_number: 3, step_total: 3, step_job_id: "job-3", reason: null, skipped: [], source: "manual_registration", started_at: null, completed_at: null },
+          job: { job_id: "job-1", state: "COMPLETED", outcome: "SUCCESS" },
+        }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "NOT_MOCKED" }));
+    }));
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndFillAddress("192.0.2.10");
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "Enrol" }));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(22_000); });
+    expect(deviceReads).toBeGreaterThan(12);
+    expect(screen.getByText("Enrolled")).toBeInTheDocument();
+  });
 
   it("shows the 422 reason_code inline and never opens a polling loop", async () => {
     const fetchMock = routedFetch({
