@@ -117,6 +117,23 @@ public final class FortiGatePlan {
         return peers.size() == 1 ? Optional.of(peers.iterator().next()) : Optional.empty();
     }
 
+    private static final Pattern HA_MEMBER_INDEX = Pattern.compile(
+            "(?m)^\\s*(?:Primary|Secondary)\\s*:\\s*(?:[^,]+,\\s*)?([^,\\s]+),\\s*HA (?:cluster|operating) index\\s*=\\s*(\\d{1,3})");
+
+    /** The peer's index from the HA status member line "Secondary: <serial>, HA operating index = N" (exact serial). */
+    public static Optional<String> haIndexOf(String haStatus, String serial) {
+        if (haStatus == null || serial == null) return Optional.empty();
+        Optional<String> found = Optional.empty();
+        Matcher m = HA_MEMBER_INDEX.matcher(haStatus);
+        while (m.find()) {
+            if (serial.equals(m.group(1))) {
+                if (found.isPresent() && !found.get().equals(m.group(2))) return Optional.empty();
+                found = Optional.of(m.group(2));
+            }
+        }
+        return found;
+    }
+
     /** "execute ha manage ?" lists "<index> ... <serial>" per other unit: the index whose line names the peer serial exactly. */
     public static Optional<String> haManageIndexFor(String listOutput, String peerSerial) {
         if (listOutput == null || peerSerial == null) return Optional.empty();

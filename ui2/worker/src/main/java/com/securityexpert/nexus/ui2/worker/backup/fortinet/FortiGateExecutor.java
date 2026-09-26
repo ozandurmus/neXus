@@ -166,11 +166,10 @@ public final class FortiGateExecutor {
             if (global) move(s, FortiGatePlan.CONFIG_GLOBAL);
             Optional<String> haStatus = read(s, FortiGatePlan.GET_SYSTEM_HA_STATUS, HA_READ);
             Optional<String> peer = haStatus.flatMap(h -> FortiGatePlan.haPeerSerial(h, st.serial().orElse(null)));
-            Optional<String> list = read(s, "execute ha manage ?", SHORT);
-            LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage list: peerKnown={0} lines={1} shape={2}", peer.isPresent(),
-                    list.map(t -> t.lines().count()).orElse(-1L),
-                    list.map(t -> t.lines().limit(6).map(l -> l.replaceAll("[A-Za-z]+", "a").replaceAll("[0-9]+", "9")).toList()).orElse(List.of()));
-            Optional<String> index = peer.flatMap(p -> list.flatMap(l -> FortiGatePlan.haManageIndexFor(l, p)));
+            // "execute ha manage ?" is inline help on FortiOS, not a command (measured 2026-09-27: CLI error); the peer's
+            // index is on its HA status member line instead ("Secondary: <serial>, HA operating index = N").
+            Optional<String> index = peer.flatMap(p -> haStatus.flatMap(h -> FortiGatePlan.haIndexOf(h, p)));
+            LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage index: peerKnown={0} indexKnown={1}", peer.isPresent(), index.isPresent());
             LoginSecret secret = secrets.apply(credentialRef);
             if (index.isEmpty() || secret == null || !FortiGatePlan.safeUsername(secret.username())) {
                 LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage: no unique secondary index or unusable account; stop");

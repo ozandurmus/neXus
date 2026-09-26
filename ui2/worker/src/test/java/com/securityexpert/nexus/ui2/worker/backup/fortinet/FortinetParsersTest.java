@@ -210,6 +210,9 @@ class FortinetParsersTest {
         String list = "<id>     please input peer box index.\n<1>      Subsidary unit SYNTH00002\n";
         assertEquals(Optional.of("1"), FortiGatePlan.haManageIndexFor(list, "SYNTH00002"));
         assertEquals(Optional.empty(), FortiGatePlan.haManageIndexFor(list, "SYNTH0000"));
+        assertEquals(Optional.of("1"), FortiGatePlan.haIndexOf(ha, "SYNTH00002"));
+        assertEquals(Optional.of("0"), FortiGatePlan.haIndexOf(ha, "SYNTH00001"));
+        assertEquals(Optional.empty(), FortiGatePlan.haIndexOf(ha, "SYNTH0000"));
         assertTrue(FortiGatePlan.safeUsername("svc.reader"));
         assertFalse(FortiGatePlan.safeUsername("a b; exit"));
     }
