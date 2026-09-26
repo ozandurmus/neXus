@@ -10,7 +10,7 @@ const TERMINAL = new Set(["COMPLETED", "FAILED", "REJECTED", "CANCELLED", "OUTCO
 
 /** Typed text is matched locally against a gated command; the browser submits only target and port. */
 export function DiagnosticPanel() {
-  const [allowed, setAllowed] = useState(false);
+  const [allowed, setAllowed] = useState<boolean | null>(null);
   const [devices, setDevices] = useState<DiagnosticTarget[]>([]);
   const [deviceId, setDeviceId] = useState("");
   const [ports, setPorts] = useState<string[]>([]);
@@ -22,13 +22,9 @@ export function DiagnosticPanel() {
   const typedPort = /^diagnose fmnetwork interface detail ([A-Za-z0-9_.-]{1,31})$/.exec(command)?.[1];
 
   useEffect(() => {
-    fetch("/session/status", { credentials: "include" }).then(r => r.json())
-      .then(s => setAllowed(Array.isArray(s.role_tokens) && s.role_tokens.includes("role:security_admin")))
+    listFmgDiagnosticTargets().then(r => { setDevices(r.targets); setAllowed(true); })
       .catch(() => setAllowed(false));
   }, []);
-  useEffect(() => {
-    if (allowed) listFmgDiagnosticTargets().then(r => setDevices(r.targets)).catch(() => setDevices([]));
-  }, [allowed]);
   useEffect(() => {
     setPorts([]); setCommand(""); setPreview(null); setResult(null); setJobId("");
     if (!deviceId) return;
@@ -64,7 +60,7 @@ export function DiagnosticPanel() {
   return <Box sx={{ display: "grid", gap: 2, maxWidth: 700 }}>
     <Typography variant="h6">Debug / Parser</Typography>
     <Typography variant="body2">Type a gated read command. The device response is reduced to safe fields.</Typography>
-    {!allowed ? <Typography role="status">Super administrator role required.</Typography> : <>
+    {allowed === false ? <Typography role="status">Super administrator access required.</Typography> : allowed ? <>
       <TextField select SelectProps={{ native: true }} label="Device" value={deviceId} onChange={e => setDeviceId(e.target.value)}>
         <option value="">Select a FortiManager</option>
         {devices.map(d => <option key={d.deviceId} value={d.deviceId}>{d.target}</option>)}
@@ -85,6 +81,6 @@ export function DiagnosticPanel() {
         <Typography>Physical link: UNKNOWN until vendor semantics are proven.</Typography>
       </Box>}
       {message && <Typography role="alert">{message}</Typography>}
-    </>}
+    </> : null}
   </Box>;
 }
