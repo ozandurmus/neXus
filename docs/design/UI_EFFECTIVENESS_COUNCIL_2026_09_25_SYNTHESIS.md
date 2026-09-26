@@ -1,8 +1,20 @@
 # UI effectiveness council — engineering synthesis (2026-09-25)
 
-**Status:** DRAFT — for Product Owner decision. Inputs: `UI_EFFECTIVENESS_COUNCIL_2026_09_25_ASTRA.md` (gpt-6-astra,
+**Status:** RATIFIED — Product Owner decisions recorded below (2026-09-25; recorded 2026-09-26). The analysis sections
+remain the council's input. Inputs: `UI_EFFECTIVENESS_COUNCIL_2026_09_25_ASTRA.md` (gpt-6-astra,
 codex exec, one author speaking six seats), `UI_EFFECTIVENESS_COUNCIL_2026_09_25_FABLE.md` (claude-fable-5-1, review of
 Astra), 19 aiview screenshots (kept outside the repository). Synthesis by the engineering session (Opus).
+
+## Product Owner decisions (2026-09-25, RATIFIED)
+1. **One device screen.** Inventory and Configuration are tabs of the selected device or cluster; the Config screen goes.
+2. **Overview is an executive summary**, with no operational noise (job failures, "could not reach the device").
+   Final design: `EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md`.
+3. **Each vendor in its own terms: data a vendor or device does not have is not shown** — no empty tab, chip, column
+   or step for a kind of data that does not exist for that device (the PO's words: "if a vendor lacks data it should
+   not be shown").
+4. **Cisco ASA: both backups**, the configuration text and then the archive; a failing part shows as missing and is
+   completed later (`CISCO_ASA_CONTRACT.md`).
+5. The five engineering proposals of this synthesis are approved as the UI direction.
 
 ## Agreed by both reviewers
 - One device screen: Devices keeps one tree; Inventory and Configuration become tabs of the selected device or
