@@ -1437,6 +1437,15 @@
       "priority": "P1",
       "target": "docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md",
       "note": ""
+    },
+    {
+      "id": "smc_inventory_navigation",
+      "category": "ui",
+      "title": "SMC managed-device navigation and configuration refresh visibility",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "ui2/frontend/src/screens/InventoryPanels.tsx",
+      "note": ""
     }
   ]
 }

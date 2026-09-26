@@ -25,7 +25,7 @@ import {
   type DeviceSummary,
 } from "../auth/adminApi";
 import { InventoryEntityHeader, deriveClusterTitle } from "./InventoryPanels";
-import { DeviceConfigurationPanels } from "./ConfigurationPanels";
+import { DeviceConfigurationPanels, ConfigurationCollectNowButton } from "./ConfigurationPanels";
 import {
   ClusterContextStrip,
   ContentVersions,
@@ -87,7 +87,7 @@ interface Loaded {
 }
 
 /** One device's configuration read and projected; null projection when the device has no sanitized text. */
-function useProjection(device: DeviceSummary | null): Loaded & { loading: boolean } {
+function useProjection(device: DeviceSummary | null, revision = 0): Loaded & { loading: boolean } {
   const [state, setState] = useState<Loaded & { loading: boolean }>({ configuration: null, projection: null, error: null, loading: false });
   useEffect(() => {
     if (!device) return;
@@ -113,7 +113,7 @@ function useProjection(device: DeviceSummary | null): Loaded & { loading: boolea
     return () => {
       cancelled = true;
     };
-  }, [device?.device_id]);
+  }, [device?.device_id, revision]);
   return state;
 }
 
@@ -327,7 +327,9 @@ function headerChips(device: DeviceSummary, extra: ReactNode = null) {
 /** One device: header, summary bar, operator snapshot, section accordion; the old detail (changes, overrides, native text) stays under Details. */
 /** {@code embedded}: shown as a tab of the device screen, whose header already names the device (PO 2026-09-25). */
 export function DeviceConfigurationDetail({ device, embedded = false }: { readonly device: DeviceSummary; readonly embedded?: boolean }) {
-  const { configuration, projection, error, loading } = useProjection(device);
+  const [revision, setRevision] = useState(0);
+  const refresh = () => setRevision(v => v + 1);
+  const { configuration, projection, error, loading } = useProjection(device, revision);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<ReadonlySet<string> | null>(null);
   useEffect(() => { setQuery(""); setOpen(null); }, [device.device_id]);
@@ -349,12 +351,13 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
           <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>Device configuration</Typography>
         </Box>
         <FilterBox value={query} onChange={setQuery} />
+        <ConfigurationCollectNowButton deviceId={device.device_id} onCollected={refresh} />
       </Box>
       <IdentityCard title={device.hostname ?? device.device_id} tiles={identityTiles(device, collectedAt)} />
       {error && <EmptyPanel title="Configuration unavailable" body={error} />}
       {!error && loading && <EmptyPanel title="Configuration" body="Reading the device's configuration…" />}
       {!error && !loading && !projection && (
-        <EmptyPanel title="No configuration read yet" body="Collect the device's configuration first (Collect All, or Collect now on the Details tab)." />
+        <EmptyPanel title="No configuration read yet" body="Use Collect now to read this device's configuration." />
       )}
       {projection && (
         <>
@@ -392,7 +395,7 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
         ariaLabel="Configuration sections"
         tabs={[
           { label: "Sections", panel: configurationTab },
-          { label: "Details", panel: <DeviceConfigurationPanels deviceId={device.device_id} hostname={device.hostname} vendorHint={device.vendor_hint} /> },
+          { label: "Details", panel: <DeviceConfigurationPanels deviceId={device.device_id} hostname={device.hostname} vendorHint={device.vendor_hint} onCollected={refresh} /> },
         ]}
       />
     );
@@ -413,7 +416,7 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
         ariaLabel="Configuration sections"
         tabs={[
           { label: "Configuration", panel: configurationTab },
-          { label: "Details", panel: <DeviceConfigurationPanels deviceId={device.device_id} hostname={device.hostname} vendorHint={device.vendor_hint} /> },
+          { label: "Details", panel: <DeviceConfigurationPanels deviceId={device.device_id} hostname={device.hostname} vendorHint={device.vendor_hint} onCollected={refresh} /> },
         ]}
       />
     </Stack>

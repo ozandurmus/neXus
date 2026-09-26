@@ -198,7 +198,9 @@ export function ConfigurationCollectNowButton({
           if (cancelled) return;
           setJobState(result.job?.state ?? null);
           if (result.job !== null && isTerminalJobState(result.job.state)) {
-            setPhase("idle");
+            const success = result.job.state === "COMPLETED";
+            setPhase(success ? "idle" : "error");
+            setError(success ? null : `Configuration collection ended: ${result.job.state}.`);
             onCollected();
           }
         })
@@ -250,11 +252,13 @@ export function DeviceConfigurationPanels({
   deviceId,
   hostname,
   vendorHint,
+  onCollected,
 }: {
   readonly deviceId: string;
   /** The same name the list shows, so list and detail never name one device two ways. */
   readonly hostname?: string | null;
   readonly vendorHint?: string | null;
+  readonly onCollected?: () => void;
 }) {
   const configurationFetch = useFetchOnMount<DeviceConfiguration>(
     () => getDeviceConfiguration(deviceId),
@@ -279,7 +283,7 @@ export function DeviceConfigurationPanels({
         .catch((err) => setTextError(describeApiError(err)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deviceId, configuration?.sanitized_text_available]);
+  }, [deviceId, configuration?.sanitized_text_available, configuration?.collected_at]);
 
   if (configurationFetch.error) {
     return (
@@ -321,7 +325,7 @@ export function DeviceConfigurationPanels({
             {device?.facts?.ha_role && <RoleChip role={device.facts.ha_role} dense />}
           </>
         }
-        action={<ConfigurationCollectNowButton deviceId={deviceId} onCollected={configurationFetch.refresh} />}
+        action={<ConfigurationCollectNowButton deviceId={deviceId} onCollected={() => { configurationFetch.refresh(); onCollected?.(); }} />}
       >
         {/* Provenance and honest withholding (design language §7): where the value came from, and what was withheld. */}
         <Stack spacing={0.5}>

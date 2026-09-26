@@ -47,9 +47,15 @@ function describeApiError(err: unknown): string {
 const VENDOR_LABEL: Record<string, string> = {
   check_point: "Check Point",
   palo_alto: "Palo Alto",
+  fortinet: "Fortinet",
+  bluecoat: "Symantec / Blue Coat",
+  infoblox: "Infoblox",
+  radware: "Radware",
+  cisco_asa: "Cisco ASA",
+  pulse_secure: "Pulse Secure",
 };
 
-function vendorLabel(vendorHint: string): string {
+export function vendorLabel(vendorHint: string): string {
   return VENDOR_LABEL[vendorHint] ?? vendorHint;
 }
 
@@ -418,8 +424,8 @@ export function DeviceList(props: DeviceListProps) {
                   {listedLabels.heading.toUpperCase()} · {listed.length}
                 </Typography>
                 {listed.map((name) => (
-                  <Box key={name} role="button" tabIndex={0} onClick={() => rest.onSelectDevice(manager)}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") rest.onSelectDevice(manager); }}
+                  <Box key={name} role="button" tabIndex={0} onClick={() => rest.onSelectDevice(manager, name)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") rest.onSelectDevice(manager, name); }}
                     title="Read through the management server -- open it for this device's facts"
                     sx={{ display: "flex", alignItems: "center", gap: 1, px: 1, py: 0.75, borderRadius: "8px", cursor: "pointer",
                       border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLowest, "&:hover": { bgcolor: m3.scLow } }}>
@@ -876,8 +882,8 @@ export function InventoryScreen() {
   // The top bar's search narrows this list (one search box, PO 2026-09-24).
   const searchTerm = useListSearch();
   // Review §4: one chip row per filter dimension, each labelled; the dimensions combine.
-  const [vendorFilter, setVendorFilter] = useState<"all" | "check_point" | "palo_alto">(
-    () => (urlParam("vendor") === "check_point" ? "check_point" : urlParam("vendor") === "palo_alto" ? "palo_alto" : "all"));
+  const [vendorFilter, setVendorFilter] = useState<string>(
+    () => urlParam("vendor") || "all");
   const [scopeFilter, setScopeFilter] = useState<"all" | "cluster">("all");
   const [stateFilter, setStateFilter] = useState<"all" | "draft" | "failed" | "stale">("all");
   // Cross-screen links (global search, cluster context strip): preselect a cluster or a device once the list is in.
@@ -925,8 +931,8 @@ export function InventoryScreen() {
   const devices = data;
   const total = devices?.length ?? 0;
   const clusters = clusterCounts(devices ?? []);
-  const checkPointCount = devices?.filter((d) => d.vendor_hint === "check_point").length ?? 0;
-  const paloAltoCount = devices?.filter((d) => d.vendor_hint === "palo_alto").length ?? 0;
+  const vendorCounts = new Map<string, number>();
+  devices?.forEach(d => vendorCounts.set(d.vendor_hint, (vendorCounts.get(d.vendor_hint) ?? 0) + 1));
   const draftCount = devices?.filter((d) => d.enrollment_state === "DRAFT").length ?? 0;
   const staleCount = devices?.filter((d) => d.enrollment_state === "DEGRADED" || d.enrollment_state === "UNREACHABLE").length ?? 0;
   const failedCount = devices?.filter(hasFailedCollection).length ?? 0;
@@ -1099,8 +1105,8 @@ export function InventoryScreen() {
               onChange={setVendorFilter}
               options={[
                 { value: "all", label: "All", count: total },
-                { value: "check_point", label: "Check Point", count: checkPointCount },
-                { value: "palo_alto", label: "Palo Alto", count: paloAltoCount },
+                ...[...vendorCounts].sort(([a], [b]) => vendorLabel(a).localeCompare(vendorLabel(b)))
+                  .map(([value, count]) => ({ value, label: vendorLabel(value), count })),
               ]}
             />
             <FilterRow

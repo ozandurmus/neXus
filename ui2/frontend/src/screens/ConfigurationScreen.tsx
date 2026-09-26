@@ -10,7 +10,7 @@ import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { listConfigurations, listDevices, requestBulkConfigurationCollect, type ApiError, type ConfigurationDeviceListEntry, type DeviceSummary } from "../auth/adminApi";
-import { DeviceList, deviceMatchesSearch, isDeviceLive, useListView } from "./InventoryScreen";
+import { DeviceList, deviceMatchesSearch, isDeviceLive, useListView, vendorLabel } from "./InventoryScreen";
 import { useListSearch } from "../shell/listSearch";
 import { FilterBar, FilterRow, ListSettingsMenu } from "./DeviceShared";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
@@ -89,7 +89,7 @@ export function ConfigurationScreen() {
     if (urlParam("cluster_diff") !== "present") return;
     getOverview().then((o) => setDiffRefs(new Set(o.exceptions?.cluster_diff?.all_refs ?? []))).catch(() => setDiffRefs(new Set()));
   }, []);
-  const [vendorFilter, setVendorFilter] = useState<"all" | "check_point" | "palo_alto">("all");
+  const [vendorFilter, setVendorFilter] = useState<string>("all");
   const [listView, setListView] = useListView();
   // Design language section 2: the list is the inventory's own tree (cluster -> virtual systems),
   // read from /devices; /configuration only supplies each device's change state and filters.
@@ -189,8 +189,8 @@ export function ConfigurationScreen() {
               onChange={setVendorFilter}
               options={[
                 { value: "all", label: "All", count: summaries?.length ?? total },
-                { value: "check_point", label: "Check Point", count: vendorCount("check_point") },
-                { value: "palo_alto", label: "Palo Alto", count: vendorCount("palo_alto") },
+                ...[...new Set((summaries ?? []).map(d => d.vendor_hint))].sort((a,b) => vendorLabel(a).localeCompare(vendorLabel(b)))
+                  .map(value => ({ value, label: vendorLabel(value), count: vendorCount(value) })),
               ]}
             />
             <FilterRow

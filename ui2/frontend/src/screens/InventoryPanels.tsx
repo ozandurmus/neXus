@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
@@ -149,21 +150,32 @@ function GridMembersPanel({ members }: { readonly members: readonly GridMemberVi
 }
 
 /** A Symantec Management Center's managed devices (ProxySG, Reporter, WSS) as it lists them; values read, never inferred. */
-function ManagedDevicesPanel({ members }: { readonly members: readonly GridMemberView[] }) {
+function ManagedDevicesPanel({ members, selected, onSelect }: {
+  readonly members: readonly GridMemberView[];
+  readonly selected?: string | null;
+  readonly onSelect?: (name: string | null) => void;
+}) {
   if (members.length === 0) {
     return <EmptyPanel title="No managed-device evidence" body="Collect reads the Management Center's device list; none has been recorded yet." />;
   }
   const deployment = (m: GridMemberView) => m.services.find((s) => s.service === "DEPLOYMENT")?.status ?? null;
+  const selectedMember = members.find(m => m.virtual_system === selected);
+  const shown = selectedMember ? [selectedMember] : members;
   return (
     <Stack spacing={1.5}>
       <Typography variant="caption" color="text.secondary">
-        {members.length} devices · {members.filter((m) => m.platform === "ProxySG").length} ProxySG · read from the Management Center, nothing inferred
+        {members.length} devices · manager-reported inventory
       </Typography>
+      {selectedMember && <Stack direction="row" spacing={2} alignItems="center">
+        <Typography variant="h6">{selectedMember.virtual_system}</Typography>
+        <Button onClick={() => onSelect?.(null)}>All managed devices</Button>
+      </Stack>}
       <TableContainer>
         <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell>Device</TableCell>
+              <TableCell>Address</TableCell>
               <TableCell>Type</TableCell>
               <TableCell>Model</TableCell>
               <TableCell>OS version</TableCell>
@@ -172,9 +184,12 @@ function ManagedDevicesPanel({ members }: { readonly members: readonly GridMembe
             </TableRow>
           </TableHead>
           <TableBody>
-            {members.map((m) => (
+            {shown.map((m) => (
               <TableRow key={m.virtual_system}>
-                <TableCell sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>{m.virtual_system}</TableCell>
+                <TableCell sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                  <Button onClick={() => onSelect?.(m.virtual_system)}>{m.virtual_system}</Button>
+                </TableCell>
+                <TableCell>{m.address ?? "UNKNOWN"}</TableCell>
                 <TableCell>{m.platform ?? "\u2014"}</TableCell>
                 <TableCell>{m.hardware_type ?? "\u2014"}</TableCell>
                 <TableCell sx={{ whiteSpace: "nowrap" }}>{m.hypervisor ?? "\u2014"}</TableCell>
@@ -1093,7 +1108,7 @@ export function InterfacesPanel({
     return (
       <EmptyPanel
         title="No interface evidence"
-        body="This device has not been collected yet. Use Collect now to read its interfaces."
+        body="No interface records are available for this device. Management-server inventory may contain managed devices instead."
       />
     );
   }
@@ -1167,7 +1182,7 @@ export function RoutesPanel({
     return (
       <EmptyPanel
         title="No routing evidence"
-        body="This device has not been collected yet. Use Collect now to read its routes."
+        body="No routing records are available for this device. Management-server inventory may contain managed devices instead."
       />
     );
   }
@@ -1641,15 +1656,16 @@ export function InventoryEntityHeader({
 }
 
 /** The detail tabs of the one device screen: the Configuration tab only when the vendor has a configuration read. */
-function DetailTabs({ ariaLabel, tabs, configuration, initialTab }: {
+function DetailTabs({ ariaLabel, tabs, configuration, initialTab, selectionKey }: {
   readonly ariaLabel: string;
   readonly tabs: ReadonlyArray<{ label: string; panel: React.ReactNode }>;
   readonly configuration?: React.ReactNode;
   readonly initialTab?: string | null;
+  readonly selectionKey?: string | null;
 }) {
   const shown = tabs.filter((t) => t.label !== "Configuration" || Boolean(configuration));
-  const wanted = initialTab === "configuration" ? shown.findIndex((t) => t.label === "Configuration") : -1;
-  return <M3Tabs key={wanted} ariaLabel={ariaLabel} initial={Math.max(0, wanted)} tabs={shown} />;
+  const wanted = initialTab ? shown.findIndex((t) => t.label.toLowerCase() === initialTab.toLowerCase()) : -1;
+  return <M3Tabs key={`${wanted}:${selectionKey ?? ""}`} ariaLabel={ariaLabel} initial={Math.max(0, wanted)} tabs={shown} />;
 }
 
 export function DeviceInventoryPanels({
@@ -1669,6 +1685,8 @@ export function DeviceInventoryPanels({
 }) {
   const isCluster = device.cluster_member_ref !== null;
   const isPaloAlto = device.vendor_hint === "palo_alto";
+  const hasManagedDevices = device.role === "management_server" &&
+    (device.vendor_hint === "bluecoat" || device.vendor_hint === "fortinet");
   const [activeContext, setActiveContext] = useState<string | null>(initialVs ?? null);
 
   // Re-clicking the device's own row (not a VS) sends initialVs=undefined -- that must clear
@@ -1772,7 +1790,8 @@ export function DeviceInventoryPanels({
       <DetailTabs
         ariaLabel="Device detail"
         configuration={configuration}
-        initialTab={initialTab}
+        initialTab={hasManagedDevices ? (initialVs ? "managed devices" : initialTab ?? "managed devices") : initialTab}
+        selectionKey={hasManagedDevices ? initialVs : undefined}
         tabs={[
           {
             label: "Interfaces",
@@ -1792,7 +1811,7 @@ export function DeviceInventoryPanels({
             panel: device.vendor_hint === "infoblox"
               ? <GridMembersPanel members={deviceInventory?.grid_members ?? []} />
               : (device.vendor_hint === "bluecoat" || device.vendor_hint === "fortinet") && device.role === "management_server"
-              ? <ManagedDevicesPanel members={deviceInventory?.grid_members ?? []} />
+              ? <ManagedDevicesPanel members={deviceInventory?.grid_members ?? []} selected={activeContext} onSelect={setActiveContext} />
               : isCluster && clusterInventory
               ? (
                 <Stack spacing={2}>
