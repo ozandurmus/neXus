@@ -28,6 +28,8 @@ from `docs/design/CODEX_HANDOVER_2026_09_26.md`. Predecessor build record
 for V73–V89 is still to be written. Open gates: first real runs of Cisco ASA,
 Pulse Secure, ProxySG discovery import; FortiManager physical link remains
 `UNSUPPORTED/UNKNOWN` after V87's per-port CLI form was rejected and V88/V89 lacked an explicit link field on the real appliance.
+The next architecture movement is the PO-approved diagnostic command screen and shared CLI
+(`docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md`, DRAFT); no new device command is authorized by that draft.
 
 ## Open Product Owner decisions
 

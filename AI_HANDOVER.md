@@ -9,7 +9,7 @@ HOST-A: schema 89, 122 devices at the last count. V87's per-port NIC command was
 - Targeted worker and gate tests passed. Broader service tests retain the known `ProjectPlanReaderTest` failure.
 
 # Exact next action
-Wait for a safe PO observation of one port's FortiManager Unit Operation link indicator; use it to evaluate whether any measured field has the same meaning. Keep physical link `UNKNOWN` unless a vendor-proven read exists. Then decide the UI treatment with the PO. When Cisco ASA or Pulse Secure is enrolled, or SMC discovery runs, follow the first jobs through completion as specified in `docs/design/CODEX_HANDOVER_2026_09_26.md` §5.
+Use Luna 6 through the repository orchestrator for a bounded ARCHITECTURE movement that makes `docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md` FROZEN-ready: a UI-first, closed read-only command catalog with a shared typed backend and CLI. Review the worker result and obtain PO contract approval before implementation. Then show the exact code and obtain separate PO approval before any one-off device diagnostic. Keep FortiManager physical link `UNKNOWN` meanwhile. When Cisco ASA or Pulse Secure is enrolled, or SMC discovery runs, follow the first jobs through completion as specified in `docs/design/CODEX_HANDOVER_2026_09_26.md` §5.
 
 # New risks
 - FortiManager Interfaces currently presents configured enable/disable as up/down; this is not verified physical link.
