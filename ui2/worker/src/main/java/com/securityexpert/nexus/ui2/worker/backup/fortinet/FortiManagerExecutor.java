@@ -49,7 +49,7 @@ public final class FortiManagerExecutor {
 
     public static final String SSH_GET_SYSTEM_INTERFACE = "get system interface";
     private static final java.util.regex.Pattern IFACE_BLOCK = java.util.regex.Pattern.compile("(?m)^==\\s*\\[\\s*([A-Za-z0-9_.-]+)\\s*\\]");
-    private static final java.util.regex.Pattern IFACE_STATUS = java.util.regex.Pattern.compile("(?m)\\bstatus:\\s*(\\S+)");
+    private static final java.util.regex.Pattern IFACE_STATUS = java.util.regex.Pattern.compile("(?im)(?:^|\\s)status:\\s*(up|down)\\b");
 
     /** FortiManager CLI "get system interface": "== [ port1 ]" blocks with a "status: up|down" line each. */
     public static Map<String, String> parseInterfaceStates(String out) {
@@ -69,8 +69,7 @@ public final class FortiManagerExecutor {
             int to = i + 1 < names.size() ? spans.get(i + 1)[0] : out.length();
             java.util.regex.Matcher st = IFACE_STATUS.matcher(out.substring(from, to));
             if (st.find()) {
-                String v = st.group(1).toLowerCase(java.util.Locale.ROOT);
-                states.put(names.get(i), v.equals("up") ? "up" : v.equals("down") ? "down" : "unknown");
+                states.put(names.get(i), st.group(1).toLowerCase(java.util.Locale.ROOT));
             }
         }
         return states;
