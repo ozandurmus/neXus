@@ -1,6 +1,10 @@
 package com.securityexpert.nexus.ui2.worker.backup.fortinet;
 
 import java.util.ArrayList;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -105,6 +109,32 @@ public final class FortiGatePlan {
 
     private static final Pattern HA_MEMBER_LINE = Pattern.compile(
             "(?m)^\\s*(Primary|Secondary)\\s*:\\s*(?:[^,]+,\\s*)?([^,\\s]+),\\s*HA (?:cluster|operating) index\\s*=");
+
+    /** A pair identity from exactly one Primary and one Secondary member, including this unit. */
+    public static Optional<String> haPairClaim(String haStatus, Optional<String> ownSerial) {
+        if (haStatus == null || ownSerial.isEmpty() || ownSerial.get().isBlank()
+                || Pattern.compile("(?im)^\\s*(?:Mode|HA Health Status):\\s*standalone\\s*$").matcher(haStatus).find()) {
+            return Optional.empty();
+        }
+        Matcher m = HA_MEMBER_LINE.matcher(haStatus);
+        String primary = null;
+        String secondary = null;
+        int lines = 0;
+        while (m.find()) {
+            lines++;
+            if ("Primary".equals(m.group(1))) primary = m.group(2);
+            else secondary = m.group(2);
+        }
+        if (lines != 2 || primary == null || secondary == null || primary.equals(secondary)
+                || (!ownSerial.get().equals(primary) && !ownSerial.get().equals(secondary))) return Optional.empty();
+        String pair = primary.compareTo(secondary) < 0 ? primary + "|" + secondary : secondary + "|" + primary;
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(pair.getBytes(StandardCharsets.UTF_8));
+            return Optional.of("fgt-ha|" + HexFormat.of().formatHex(digest, 0, 8));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 
     /** The other unit's serial in a two-unit HA status, when exactly one member line is not this unit. */
     public static Optional<String> haPeerSerial(String haStatus, String ownSerial) {

@@ -346,6 +346,7 @@ export function deriveClusterTitle(clusterRef: string, members: readonly DeviceS
 
 function clusterVendorLabel(vendorHint: string | null | undefined): string {
   return vendorHint === "cisco_asa" ? "Cisco ASA failover"
+    : vendorHint === "fortinet" ? "FortiGate HA"
     : vendorHint === "palo_alto" ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL";
 }
 
@@ -1823,6 +1824,8 @@ export function DeviceInventoryPanels({
               }
               dense
             />
+            {device.ha_peer_unconfirmed && !device.cluster_member_ref &&
+              <StatusChip tone="neutral" label="HA peer named, not confirmed" dense />}
             {device.software_version && (
               <StatusChip tone="neutral" label={`${device.software_version}${isPaloAlto ? " · PAN-OS" : device.vendor_hint === "check_point" ? " · Gaia" : ""}`} dense />
             )}

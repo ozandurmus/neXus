@@ -74,6 +74,15 @@ class FortinetParsersTest {
                 + "Secondary: SYNTH00002, HA operating index = 1\n";
         assertEquals(Optional.of("primary"), FortiGatePlan.haRole(measured, Optional.of("SYNTH00001")));
         assertEquals(Optional.of("secondary"), FortiGatePlan.haRole(measured, Optional.of("SYNTH00002")));
+        var primaryClaim = FortiGatePlan.haPairClaim(measured, Optional.of("SYNTH00001"));
+        assertTrue(primaryClaim.orElseThrow().matches("fgt-ha\\|[0-9a-f]{16}"));
+        assertEquals(primaryClaim, FortiGatePlan.haPairClaim(measured.replace("operating", "cluster"), Optional.of("SYNTH00002")));
+        assertEquals(Optional.empty(), FortiGatePlan.haPairClaim(measured, Optional.of("SYNTH00003")));
+        assertEquals(Optional.empty(), FortiGatePlan.haPairClaim("Mode: standalone\n" + measured, Optional.of("SYNTH00001")));
+        assertEquals(Optional.empty(), FortiGatePlan.haPairClaim(measured + "Secondary: SYNTH00003, HA operating index = 2\n",
+                Optional.of("SYNTH00001")));
+        assertEquals(Optional.empty(), FortiGatePlan.haPairClaim(measured.replace("SYNTH00002", "SYNTH00001"),
+                Optional.of("SYNTH00001")));
     }
 
     @Test

@@ -120,7 +120,9 @@ public final class FortiGateExecutor {
         return out.filter(o -> o.contains("Version:"));
     }
 
-    private Optional<String> haRole(TransportSession s, Optional<String> ownSerial) {
+    private record HaObservation(Optional<String> role, Optional<String> pairClaim) {}
+
+    private HaObservation haObservation(TransportSession s, Optional<String> ownSerial) {
         Optional<String> output = read(s, FortiGatePlan.GET_SYSTEM_HA_STATUS, HA_READ);
         if (output.isEmpty()) {
             // Measured 2026-09-26: two multi-VDOM FortiGates refused it at the top level; like "get system status",
@@ -131,7 +133,7 @@ public final class FortiGateExecutor {
         }
         if (output.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "[FGT] HA role unknown: status read refused or unavailable");
-            return Optional.empty();
+            return new HaObservation(Optional.empty(), Optional.empty());
         }
         String text = output.get();
         List<String> labels = text.lines().map(line -> {
@@ -151,7 +153,7 @@ public final class FortiGateExecutor {
         if (role.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "[FGT] HA role unknown or standalone");
         }
-        return role;
+        return new HaObservation(role, FortiGatePlan.haPairClaim(text, ownSerial));
     }
 
     /**
@@ -223,7 +225,8 @@ public final class FortiGateExecutor {
             LOG.log(System.Logger.Level.INFO, "[FGT] confirm: hostname={0} version={1} vdoms={2}", st.hostname().isPresent(),
                     st.version().isPresent(), st.multiVdom());
             return new HttpsVendorExecutor.ConfirmOutcome.Confirmed(
-                    new HttpsVendorExecutor.Identity(st.hostname(), st.model(), st.version(), haRole(shell.session(), st.serial())));
+                    new HttpsVendorExecutor.Identity(st.hostname(), st.model(), st.version(),
+                            haObservation(shell.session(), st.serial()).role()));
         } finally {
             ssh.disconnect(shell.session());
         }
@@ -241,7 +244,8 @@ public final class FortiGateExecutor {
             if (st.model().isEmpty()) {
                 return new HttpsVendorExecutor.InventoryOutcome.Failed("get system status gave no FortiGate answer");
             }
-            Optional<String> haRole = haRole(s, st.serial());
+            HaObservation ha = haObservation(s, st.serial());
+            Optional<String> haRole = ha.role();
             // Disabled 2026-09-27 after two measurement runs (the hop answered in 40 ms without a password prompt and did
             // not reach the secondary); the next run needs the Product Owner to trigger it -- never unattended.
             if (HA_MANAGE_ENABLED && haRole.filter("primary"::equals).isPresent() && secrets != null && HA_MANAGE_MEASURED.add(target.host())) {
@@ -280,7 +284,7 @@ public final class FortiGateExecutor {
                     routes.values().stream().mapToInt(List::size).sum(), haRole.orElse("none"));
             return new HttpsVendorExecutor.InventoryOutcome.Completed(contexts, List.of(),
                     st.multiVdom() ? Optional.of(String.join(", ", byVdom.keySet())) : Optional.empty(),
-                    new HttpsVendorExecutor.Identity(st.hostname(), st.model(), st.version(), haRole));
+                    new HttpsVendorExecutor.Identity(st.hostname(), st.model(), st.version(), List.of(), haRole, ha.pairClaim()));
         } finally {
             ssh.disconnect(shell.session());
         }

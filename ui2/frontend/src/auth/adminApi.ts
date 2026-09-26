@@ -531,6 +531,7 @@ export interface DeviceSummary {
   readonly software_version: string | null;
   readonly ha_role: string | null;
   readonly cluster_member_ref: string | null;
+  readonly ha_peer_unconfirmed?: boolean;
   readonly latest_job_state?: string | null;
   readonly latest_job_type?: string | null;
   readonly latest_job_terminal_reason?: string | null;

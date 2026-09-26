@@ -76,7 +76,7 @@ describe("InventoryScreen device selection and panels", () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/devices") {
-        return Promise.resolve(jsonResponse(200, { devices: [STANDALONE_DEVICE] }));
+        return Promise.resolve(jsonResponse(200, { devices: [{ ...STANDALONE_DEVICE, ha_peer_unconfirmed: true }] }));
       }
       if (url === "/devices/dev-1/inventory") {
         return Promise.resolve(
@@ -110,6 +110,7 @@ describe("InventoryScreen device selection and panels", () => {
     render(withTheme(<InventoryScreen />));
 
     await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
+    expect(screen.getAllByText("HA peer named, not confirmed").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByText("fw-edge-1"));
 
     await waitFor(() => expect(screen.getByText("eth0")).toBeInTheDocument());
@@ -173,6 +174,7 @@ describe("InventoryScreen device selection and panels", () => {
   it.each([
     { vendor: "check_point", label: "Check Point ClusterXL" },
     { vendor: "cisco_asa", label: "Cisco ASA failover" },
+    { vendor: "fortinet", label: "FortiGate HA" },
   ])("renders the $vendor cluster unified view with its label and one VIP", async ({ vendor, label }) => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);

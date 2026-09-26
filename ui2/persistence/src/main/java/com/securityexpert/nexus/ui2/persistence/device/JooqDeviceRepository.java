@@ -23,6 +23,8 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
  */
 public final class JooqDeviceRepository implements DeviceRepository {
 
+    private static final System.Logger LOG = System.getLogger(JooqDeviceRepository.class.getName());
+
     private static final String DEVICE_COLUMNS = "device_id, role, vendor_hint, registration_source, created_at, "
             + "is_test_target, enrollment_state, disabled, credential_reference_id, backup_target";
     private static final String ENDPOINT_COLUMNS = "endpoint_id, device_id, transport_kind, address_ref, created_at";
@@ -37,6 +39,7 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "coalesce(d.observed_software_version, dc.software_version, c_parent.software_version) as observed_software_version, "
             + "coalesce(d.observed_ha_role, inv_ha.role) as observed_ha_role, "
             + "coalesce(c_parent.display_name, d.cluster_member_ref, dc.cluster_reference) as cluster_member_ref, "
+            + "(d.ha_pair_claim is not null and d.cluster_member_ref is null) as ha_peer_unconfirmed, "
             + "coalesce(vs_info.virtual_systems, inv_run.virtual_systems) as virtual_systems, "
             + "latest_job.state as latest_job_state, "
             + "latest_job.job_type as latest_job_type, "
@@ -267,6 +270,52 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public void recordHaPairClaim(String deviceId, String claim, String actorFingerprint, String actionId) {
+        Objects.requireNonNull(claim, "claim");
+        if (!claim.matches("(?:asa-failover|fgt-ha)\\|[0-9a-f]{16}")) {
+            throw new IllegalArgumentException("unsupported HA claim");
+        }
+        auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
+            // ponytail: one lock serializes pair writes; use per-claim locks if throughput ever requires it.
+            dsl.fetch("select pg_advisory_xact_lock(hashtext('ha_pair_claim'))");
+            Record own = dsl.fetchOne("select vendor_hint, ha_pair_claim, cluster_member_ref, enrollment_state "
+                    + "from devices where device_id = {0} for update", deviceId);
+            if (own == null || !"ENROLLED".equals(own.get("enrollment_state", String.class))) return null;
+            String vendor = own.get("vendor_hint", String.class);
+            if (!("cisco_asa".equals(vendor) && claim.startsWith("asa-failover|"))
+                    && !("fortinet".equals(vendor) && claim.startsWith("fgt-ha|"))) {
+                throw new IllegalArgumentException("HA claim vendor mismatch");
+            }
+            String oldClaim = own.get("ha_pair_claim", String.class);
+            if (!claim.equals(oldClaim)) {
+                dsl.execute("update devices set ha_pair_claim = {0} where device_id = {1} and ha_pair_claim is distinct from {0}",
+                        claim, deviceId);
+                if (oldClaim != null && oldClaim.equals(own.get("cluster_member_ref", String.class))) {
+                    dsl.execute("update devices set cluster_member_ref = null where device_id = {0} and cluster_member_ref = {1}",
+                            deviceId, oldClaim);
+                    // The former peer's corroboration disappeared as well.
+                    dsl.execute("update devices set cluster_member_ref = null where device_id <> {0} and vendor_hint = {1} "
+                            + "and ha_pair_claim = {2} and cluster_member_ref = {2} and enrollment_state = 'ENROLLED'",
+                            deviceId, vendor, oldClaim);
+                }
+            }
+            List<String> peers = dsl.fetch("select device_id from devices where device_id <> {0} and vendor_hint = {1} "
+                    + "and ha_pair_claim = {2} and enrollment_state = 'ENROLLED' limit 2", deviceId, vendor, claim)
+                    .getValues("device_id", String.class);
+            if (peers.size() >= 2) {
+                LOG.log(System.Logger.Level.WARNING, "[HA] pair ambiguous: peers={0}", peers.size());
+            } else if (peers.size() == 1) {
+                dsl.execute("update devices set cluster_member_ref = {0} where device_id in ({1}, {2}) "
+                        + "and cluster_member_ref is distinct from {0}", claim, deviceId, peers.get(0));
+            } else {
+                dsl.execute("update devices set cluster_member_ref = null where device_id = {0} and cluster_member_ref = {1}",
+                        deviceId, claim);
+            }
+            return null;
+        });
+    }
+
+    @Override
     public boolean setCredentialReference(String deviceId, String credentialReferenceId, String actorFingerprint, String actionId) {
         int updated = auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> dsl.execute(
                 "update devices set credential_reference_id = {0} where device_id = {1} and credential_reference_id <> {0}",
@@ -389,7 +438,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 Optional.ofNullable(row.get("virtual_systems", String.class)),
                 Optional.ofNullable(row.get("management_ip", String.class)),
                 Optional.ofNullable(row.get("ip_addresses", String.class)),
-                backupTargetOf(row));
+                backupTargetOf(row),
+                row.field("ha_peer_unconfirmed") != null && Boolean.TRUE.equals(row.get("ha_peer_unconfirmed", Boolean.class)));
     }
 
     private static EndpointRecord toEndpointRecord(Record row) {

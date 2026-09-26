@@ -82,6 +82,11 @@ public interface DeviceRepository {
         throw new UnsupportedOperationException("setClusterMemberRef");
     }
 
+    /** Store this device's claim and reconcile its pair in one audited transaction. */
+    default void recordHaPairClaim(String deviceId, String claim, String actorFingerprint, String actionId) {
+        throw new UnsupportedOperationException("recordHaPairClaim");
+    }
+
     /**
      * EC-J3: the confirm job's completion handler moves the row {@code
      * DRAFT -> ENROLLED} with the observed facts, atomically, in one

@@ -197,6 +197,8 @@ function DeviceRow({
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
             {device.ha_role && <RoleChip role={device.ha_role} dense />}
+            {device.ha_peer_unconfirmed && !device.cluster_member_ref &&
+              <StatusChip tone="neutral" label="HA peer named, not confirmed" dense />}
             {!isLive && (
               <StatusChip
                 tone={isEnrolled ? "neutral" : enrollmentStateTone(device.enrollment_state)}

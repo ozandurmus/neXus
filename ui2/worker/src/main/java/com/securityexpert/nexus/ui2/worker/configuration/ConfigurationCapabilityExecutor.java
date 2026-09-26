@@ -242,11 +242,11 @@ public final class ConfigurationCapabilityExecutor {
             if (pair.ambiguous()) {
                 System.getLogger(ConfigurationCapabilityExecutor.class.getName()).log(System.Logger.Level.WARNING,
                         "[ASA] failover pairing ambiguous: {0} lines", pair.matchingLines());
-            } else if (pair.reference().isPresent() && Objects.requireNonNull(deviceRepository, "deviceRepository")
-                    .setClusterMemberRef(deviceId, pair.reference(), WorkerActor.RESERVED_ACTOR_FINGERPRINT,
-                            "asa_failover_pairing")) {
+            } else if (pair.reference().isPresent()) {
+                Objects.requireNonNull(deviceRepository, "deviceRepository").recordHaPairClaim(deviceId, pair.reference().get(),
+                        WorkerActor.RESERVED_ACTOR_FINGERPRINT, "asa_failover_claim");
                 System.getLogger(ConfigurationCapabilityExecutor.class.getName()).log(System.Logger.Level.INFO,
-                        "[ASA] failover pair reference set");
+                        "[ASA] failover pair claim recorded");
             }
             return new ConfigurationResult.Completed(List.of(runData));
         } catch (IOException e) {

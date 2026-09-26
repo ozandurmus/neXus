@@ -116,6 +116,15 @@ public final class HttpsInventoryJobExecutor {
         } catch (RuntimeException refreshFailed) {
             LOG.log(System.Logger.Level.WARNING, "[OBSERVED_FACTS_REFRESH_FAILED] HTTPS inventory job {0}: {1}", jobId, refreshFailed.getMessage());
         }
+        try {
+            done.identity().haPairClaim().ifPresent(claim -> devices.recordHaPairClaim(deviceId, claim, ACTOR,
+                    "inventory_ha_pair_claim"));
+        } catch (RuntimeException claimFailed) {
+            LOG.log(System.Logger.Level.WARNING, "[HA] pair claim write failed for inventory job {0}", jobId);
+            leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
+                    "inventory_ha_pair_claim_failed", "ha_pair_claim_write_failed");
+            return new JobOutcome.Failed("ha_pair_claim_write_failed");
+        }
         LOG.log(System.Logger.Level.INFO, "[JOB_COMPLETED] HTTPS inventory job {0} ({1}) in {2}ms: {3} context(s), {4} member(s)",
                 jobId, vendor, ms, done.contexts().size(), done.members().size());
         leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR, "inventory_completed", "completed in " + ms + "ms");

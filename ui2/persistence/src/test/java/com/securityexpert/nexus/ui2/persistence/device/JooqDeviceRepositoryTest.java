@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -23,6 +25,67 @@ import org.junit.jupiter.api.Test;
 import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
 
 class JooqDeviceRepositoryTest {
+
+    private static final class PairState {
+        String claim;
+        String ref;
+    }
+
+    @Test
+    void haPairRequiresOneOtherEnrolledClaimAndDropsStalePair() {
+        Map<String, PairState> state = new LinkedHashMap<>();
+        for (String id : List.of("x", "y", "z")) state.put(id, new PairState());
+        DSLContext create = DSL.using(SQLDialect.POSTGRES);
+        var repository = new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
+                new MockConnection(context -> {
+                    String sql = context.sql();
+                    Object[] b = context.bindings();
+                    if (sql.startsWith("select pg_advisory_xact_lock")) {
+                        Result<Record> rows = create.fetchFromStringData(new String[] { "lock" }, new String[] { "" });
+                        return new MockResult[] { new MockResult(1, rows) };
+                    }
+                    if (sql.contains("from devices where device_id =") && sql.endsWith("for update")) {
+                        PairState s = state.get(b[0]);
+                        Result<Record> rows = create.fetchFromStringData(
+                                new String[] { "vendor_hint", "ha_pair_claim", "cluster_member_ref", "enrollment_state" },
+                                new String[] { "cisco_asa", s.claim, s.ref, "ENROLLED" });
+                        return new MockResult[] { new MockResult(1, rows) };
+                    }
+                    if (sql.startsWith("select device_id from devices")) {
+                        List<String> peers = state.entrySet().stream()
+                                .filter(e -> !e.getKey().equals(b[0]) && b[2].equals(e.getValue().claim))
+                                .map(Map.Entry::getKey).limit(2).toList();
+                        Result<Record> rows = create.fetchFromStringData(new String[] { "device_id" },
+                                peers.stream().map(id -> new String[] { id }).toArray(String[][]::new));
+                        return new MockResult[] { new MockResult(peers.size(), rows) };
+                    }
+                    if (sql.startsWith("update devices set ha_pair_claim")) state.get(b[1]).claim = (String) b[0];
+                    if (sql.startsWith("update devices set cluster_member_ref = null where device_id <>")) {
+                        state.forEach((id, s) -> { if (!id.equals(b[0]) && b[2].equals(s.claim) && b[2].equals(s.ref)) s.ref = null; });
+                    } else if (sql.startsWith("update devices set cluster_member_ref = null")) {
+                        PairState s = state.get(b[0]);
+                        if (b[1].equals(s.ref)) s.ref = null;
+                    } else if (sql.startsWith("update devices set cluster_member_ref =")) {
+                        state.get(b[1]).ref = (String) b[0];
+                        state.get(b[2]).ref = (String) b[0];
+                    }
+                    return new MockResult[] { new MockResult(1, null) };
+                }), SQLDialect.POSTGRES)));
+
+        String a = "asa-failover|aaaaaaaaaaaaaaaa";
+        repository.recordHaPairClaim("x", a, "synthetic-actor", "claim");
+        assertEquals(null, state.get("x").ref);
+        repository.recordHaPairClaim("y", a, "synthetic-actor", "claim");
+        assertEquals(a, state.get("x").ref);
+        assertEquals(a, state.get("y").ref);
+        repository.recordHaPairClaim("z", a, "synthetic-actor", "claim");
+        assertEquals(null, state.get("z").ref);
+        assertEquals(a, state.get("x").ref);
+        assertEquals(a, state.get("y").ref);
+        repository.recordHaPairClaim("x", "asa-failover|bbbbbbbbbbbbbbbb", "synthetic-actor", "claim");
+        assertEquals(null, state.get("x").ref);
+        assertEquals(null, state.get("y").ref);
+    }
 
     @Test
     void clusterReferenceUpdateWritesOnlyWhenDifferent() {
@@ -147,9 +210,9 @@ class JooqDeviceRepositoryTest {
                 new String[] { "device_id", "role", "vendor_hint", "enrollment_state", "observed_hostname",
                         "observed_model", "observed_software_version", "observed_ha_role", "cluster_member_ref",
                         "virtual_systems", "latest_job_state", "latest_job_type", "latest_job_terminal_reason",
-                        "management_ip", "ip_addresses", "backup_target" },
+                        "management_ip", "ip_addresses", "backup_target", "ha_peer_unconfirmed" },
                 new String[] { "device-1", "gateway", "check_point", "DRAFT", "member-1", "Quantum",
-                        "R81.20", null, "cluster-1", null, null, null, null, "192.0.2.10", null, "false" });
+                        "R81.20", null, "cluster-1", null, null, null, null, "192.0.2.10", null, "false", "false" });
         var repository = new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
                 new MockConnection(context -> {
                     sql.set(context.sql());
@@ -173,9 +236,9 @@ class JooqDeviceRepositoryTest {
                 new String[] { "device_id", "role", "vendor_hint", "enrollment_state", "observed_hostname",
                         "observed_model", "observed_software_version", "observed_ha_role", "cluster_member_ref",
                         "virtual_systems", "latest_job_state", "latest_job_type", "latest_job_terminal_reason",
-                        "management_ip", "ip_addresses", "backup_target" },
+                        "management_ip", "ip_addresses", "backup_target", "ha_peer_unconfirmed" },
                 new String[] { "device-2", "gateway", "check_point", "DRAFT", null, null, null, null, null,
-                        null, null, null, null, "192.0.2.11", null, "false" });
+                        null, null, null, null, "192.0.2.11", null, "false", "true" });
         var repository = new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
                 new MockConnection(context -> {
                     sql.set(context.sql());
@@ -185,6 +248,7 @@ class JooqDeviceRepositoryTest {
         DeviceSummaryRecord result = repository.listAll().get(0);
 
         assertTrue(result.observedHostname().isEmpty());
+        assertTrue(result.haPeerUnconfirmed());
         assertEquals("192.0.2.11", result.managementIp().orElseThrow());
         assertFalse(sql.get().contains("coalesce(d.observed_hostname, dc.display_name, ep.address_ref)"));
     }
