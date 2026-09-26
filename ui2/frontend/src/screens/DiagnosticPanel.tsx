@@ -19,6 +19,7 @@ export function DiagnosticPanel() {
   const [result, setResult] = useState<DiagnosticResult | null>(null);
   const [jobId, setJobId] = useState("");
   const [message, setMessage] = useState("");
+  const typedPort = /^diagnose fmnetwork interface detail ([A-Za-z0-9_.-]{1,31})$/.exec(command)?.[1];
 
   useEffect(() => {
     fetch("/session/status", { credentials: "include" }).then(r => r.json())
@@ -35,8 +36,7 @@ export function DiagnosticPanel() {
   }, [deviceId]);
   useEffect(() => {
     setPreview(null); setMessage(""); setResult(null); setJobId("");
-    const match = /^diagnose fmnetwork interface detail ([A-Za-z0-9_.-]{1,31})$/.exec(command);
-    if (deviceId && match && ports.includes(match[1])) previewFmgDiagnostic(deviceId, match[1]).then(setPreview)
+    if (deviceId && typedPort && ports.includes(typedPort)) previewFmgDiagnostic(deviceId, typedPort).then(setPreview)
       .catch(() => setMessage("Diagnostic unavailable for this target or port. Refresh its inventory first."));
   }, [deviceId, command, ports]);
   useEffect(() => {
@@ -71,6 +71,7 @@ export function DiagnosticPanel() {
       </TextField>
       <TextField label="Command" value={command} onChange={e => setCommand(e.target.value)} disabled={!deviceId}
         placeholder="diagnose fmnetwork interface detail port5" helperText="FortiManager interface detail; the port must exist in current inventory." />
+      {command && (!typedPort || !ports.includes(typedPort)) && <Typography role="alert">Command or port is not gated for this device.</Typography>}
       {preview && <Box sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
         <Typography>Target: {preview.target} · Port: {preview.port}</Typography>
         <Typography sx={{ fontFamily: "monospace" }}>Command: {preview.command}</Typography>

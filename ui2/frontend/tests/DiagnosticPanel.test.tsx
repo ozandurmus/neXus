@@ -27,6 +27,9 @@ it("submits only typed intent and shows the safe terminal projection", async () 
   await screen.findByRole("option", { name: "FW-TANGO-04" });
   fireEvent.change(await screen.findByLabelText("Device"), { target: { value: "device-1" } });
   expect((screen.getByLabelText("Device") as HTMLSelectElement).value).toBe("device-1");
+  fireEvent.change(screen.getByLabelText("Command"), { target: { value: "execute reboot" } });
+  expect(await screen.findByText("Command or port is not gated for this device.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Run read" })).not.toBeInTheDocument();
   fireEvent.change(await screen.findByLabelText("Command"), { target: { value: "diagnose fmnetwork interface detail port5" } });
   expect(await screen.findByText(/Command: diagnose fmnetwork interface detail port5/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Run read" }));
