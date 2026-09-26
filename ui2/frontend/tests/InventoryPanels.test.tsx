@@ -116,7 +116,7 @@ describe("InventoryScreen device selection and panels", () => {
     expect(screen.getByText("198.51.100.5/24")).toBeInTheDocument();
     expect(screen.queryByText("dev-1")).toBeNull();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Identity & provenance" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
     const reference = screen.getByText("Reference").parentElement as HTMLElement;
     expect(within(reference).getByText("dev-1")).toBeInTheDocument();
 

@@ -1206,7 +1206,7 @@ export function InventoryScreen() {
                 />
               </Stack>
             ) : (
-              // Review §3: the detail tabs (Interfaces, Routing, Cluster members, Backup, Identity & provenance)
+              // Review §3: the detail tabs (Interfaces, Routing, Cluster members, Backup, Identity)
               // appear once a device or cluster is chosen; before that there is nothing for them to show.
               <EmptyPanel
                 title={(devices?.length ?? 0) === 0 ? "No device to show" : "Select a device or cluster"}

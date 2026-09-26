@@ -37,6 +37,14 @@ describe("Compliance -- UI review 2026-09-23", () => {
     expect(screen.getByRole("heading", { name: "Compliance" })).toBeInTheDocument();
   });
 
+  it("uses plain words for re-checks, unchecked evidence, and passing checks", async () => {
+    stub();
+    render(<ComplianceScreen />);
+    expect(await screen.findByRole("button", { name: "Re-check" })).toBeInTheDocument();
+    expect(screen.getByText("Not yet checked · 1")).toBeInTheDocument();
+    expect(screen.getByText("Checks passing")).toBeInTheDocument();
+  });
+
   it("shows control families with checks, coverage and findings", async () => {
     stub();
     render(<ComplianceScreen />);

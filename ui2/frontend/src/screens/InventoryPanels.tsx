@@ -885,7 +885,7 @@ function ClusterRoutesTable({
               <TableCell sx={{ fontWeight: 600 }}>Next hop</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Interface</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Protocol</TableCell>
-              {!singleMember && <TableCell sx={{ fontWeight: 600 }}>Cluster Alignment / Diff</TableCell>}
+              {!singleMember && <TableCell sx={{ fontWeight: 600 }}>Same on both members</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -1917,7 +1917,7 @@ export function DeviceInventoryPanels({
             panel: <BackupPanel deviceId={device.device_id} />,
           },
           {
-            label: "Identity & provenance",
+            label: "Identity",
             panel: (
               <Stack spacing={1}>
                 <IdentityReference value={device.device_id} />
@@ -2181,7 +2181,7 @@ export function ClusterDetailPanels({
             panel: configuration,
           },
           {
-            label: "Identity & provenance",
+            label: "Identity",
             panel: (
               <Stack spacing={1}>
                 <IdentityReference value={clusterRef} />

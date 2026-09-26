@@ -302,7 +302,7 @@ export function JobLogsPanel({
                   <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Duration</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Terminal Reason / Error</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Result</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Submitted At</TableCell>
                 </TableRow>
               </TableHead>

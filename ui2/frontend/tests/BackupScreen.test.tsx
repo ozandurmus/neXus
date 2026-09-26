@@ -63,12 +63,12 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
   ];
   const backups = [{ artefact_id: "a1", device_id: "d1", collected_at: "2026-09-22T11:43:28.377470Z", size_bytes: 2048, digest_prefix: "x", validation_level: "V1", deviation_state: "changed", vendor: "check_point" }];
 
-  function stub(policy: object | null, deviations: object | null) {
+  function stub(policy: object | null, deviations: object | null, backupRows: object[] = backups) {
     vi.stubGlobal("fetch", vi.fn((url: string) => {
       const body = url.startsWith("/devices") ? { devices }
         : url.startsWith("/api/v2/backups/policies") ? policy
         : url.startsWith("/api/v2/backups/deviations") ? deviations
-        : url.startsWith("/backups") ? { backups, baselines: {} } : {};
+        : url.startsWith("/backups") ? { backups: backupRows, baselines: {} } : {};
       return Promise.resolve(new Response(JSON.stringify(body ?? {}), { status: body === null ? 500 : 200 }));
     }));
   }
@@ -85,10 +85,23 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
       expect(within(row).getByRole("button", { name: action })).toBeInTheDocument();
     }
     // validation is an evidence grade (neutral), CHANGED an attention word
-    expect(within(row).getByText("V1")).toBeInTheDocument();
-    expect(within(row).getByText("CHANGED")).toBeInTheDocument();
+    expect(within(row).getByText("Checked")).toBeInTheDocument();
+    expect(within(row).getByText("Changed since last")).toBeInTheDocument();
     // a target without an archive says so
     expect(within((await screen.findByText("FW-ROMEO-01-M1")).closest("tr")!).getByText("No archive")).toBeInTheDocument();
+  });
+
+  it("shows plain words for backup validation and changes", async () => {
+    stub(null, null, [
+      ...backups,
+      { artefact_id: "a2", device_id: "d2", collected_at: "2026-09-21T11:43:28Z", size_bytes: 2048, digest_prefix: "y", validation_level: "V1", deviation_state: "first", vendor: "palo_alto" },
+      { artefact_id: "a3", device_id: "d3", collected_at: "2026-09-20T11:43:28Z", size_bytes: 2048, digest_prefix: "z", validation_level: "V1", deviation_state: "major deviation", vendor: "palo_alto" },
+    ]);
+    render(<BackupScreen />);
+    expect((await screen.findAllByText("Checked")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Changed since last")).toBeInTheDocument();
+    expect(screen.getByText("First backup")).toBeInTheDocument();
+    expect(screen.getByText("Major change")).toBeInTheDocument();
   });
 
   it("writes Not scheduled and UNKNOWN deviations instead of Off and 0", async () => {

@@ -106,8 +106,8 @@ describe("Devices screen after the Fable review", () => {
     expect(within(rows[0]).getByText("FW-TANGO-01")).toBeInTheDocument();
     expect(within(rows[1]).getByText("ACTIVE")).toHaveAttribute("data-role", "ACTIVE");
 
-    // Identity & provenance: the per-member identity table.
-    fireEvent.click(screen.getByRole("tab", { name: "Identity & provenance" }));
+    // Identity: the per-member identity table.
+    fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
     const table = screen.getByRole("table", { name: "Member identity" });
     const idRows = within(table).getAllByRole("row").slice(1);
     expect(within(idRows[0]).getByText("FW-TANGO-01")).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe("Devices screen after the Fable review", () => {
     expect(screen.getByRole("tablist", { name: "Device detail" })).toBeInTheDocument();
     expect(screen.queryByText("Select a device or cluster")).toBeNull();
     expect(screen.queryByText("bravo-02")).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Identity & provenance" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
     const deviceReference = screen.getByText("Reference").parentElement as HTMLElement;
     expect(within(deviceReference).getByText("bravo-02")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();

@@ -289,7 +289,7 @@ function IdentityCard({ title, tiles }: { readonly title: string; readonly tiles
 }
 
 /**
- * A cluster's members as one row each -- the same identity table the Devices screen's Identity & provenance tab
+ * A cluster's members as one row each -- the same identity table the Devices screen's Identity tab
  * renders. The platform identity line above it keeps the full virtual-system list; the table collapses it.
  */
 function ClusterMembersCard({ members }: { readonly members: readonly DeviceSummary[] }) {
@@ -601,7 +601,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
                 : null;
             })()}
             {cluster && (cluster.diffCount > 0
-              ? <StatusChip tone="bad" label={`Config diff · ${cluster.diffCount}`} dense />
+              ? <StatusChip tone="bad" label={`${cluster.diffCount} settings differ`} dense />
               : state.missing.length === 0 ? <StatusChip tone="ok" label="Members agree" dense /> : <StatusChip tone="warn" label="UNKNOWN" dense />)}
           </>
         }

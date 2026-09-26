@@ -260,7 +260,7 @@ export function VirtualSystemsCell({ vs, clusterVs }: { readonly vs: readonly st
 const HEAD = { fontSize: 11, letterSpacing: "0.04em", whiteSpace: "nowrap" } as const;
 
 /**
- * The per-member identity table (review §3 Devices › Identity & provenance, and Configuration's member table):
+ * The per-member identity table (review §3 Devices › Identity, and Configuration's member table):
  * serial, model, software version, hotfix or content versions, uptime, HA role, management address, virtual
  * systems, platform-facts observed time, last inventory read and evidence source -- one component rendered by
  * both screens. A value the product has not read is UNKNOWN with its reason; a software version or hotfix

@@ -948,20 +948,25 @@ const DEVIATION_MEANING: Record<string, string> = {
   "NOT EVALUATED": "No comparison has run for this archive",
 };
 
+function backupDisplayWord(value: string): string {
+  return ({ V1: "Checked", FIRST: "First backup", CHANGED: "Changed since last", "MAJOR DEVIATION": "Major change" } as Record<string, string>)[value] ?? value;
+}
+
 function DeviationChip({ state }: { readonly state: string }) {
   const tone = state === "MAJOR DEVIATION" ? "bad" : state === "CHANGED" ? "attn" : "neutral";
   return (
     <Tooltip title={DEVIATION_MEANING[state] ?? state}>
-      <Box component="span"><StatusChip tone={tone} label={state} dense /></Box>
+      <Box component="span"><StatusChip tone={tone} label={backupDisplayWord(state)} dense /></Box>
     </Tooltip>
   );
 }
 
-/** The validation level is an evidence grade on the V1-V4 ladder, not a pass mark: shown as recorded, neutral. */
+/** The validation level remains an evidence grade; the UI uses a plain display word and a neutral tone. */
 function ValidationChip({ level }: { readonly level: string }) {
+  const label = backupDisplayWord(level);
   return (
-    <Tooltip title={`Validation level ${level} as recorded on the V1–V4 ladder (evidence grade, not a pass mark)`}>
-      <Box component="span"><StatusChip tone="neutral" label={level} dense /></Box>
+    <Tooltip title={`Backup check: ${label}`}>
+      <Box component="span"><StatusChip tone="neutral" label={label} dense /></Box>
     </Tooltip>
   );
 }
@@ -1123,7 +1128,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                         <Switch size="small" checked={Boolean(summary.backup_target)} disabled={busyId === id}
                           onChange={(e) => void toggle(summary, e.target.checked)}
                           inputProps={{ "aria-label": `Backup target ${name}` }} />
-                      ) : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>not enrolled</Typography>}
+                      ) : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Not a backup target</Typography>}
                     </TableCell>
                     <TableCell sx={{ fontSize: 12.5, whiteSpace: "nowrap" }}>
                       {item ? <Ts at={item.lastBackupTime} relative />

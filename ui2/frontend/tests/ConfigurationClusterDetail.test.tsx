@@ -58,6 +58,7 @@ describe("Configuration cluster detail after the Fable review", () => {
     stubConfigs();
     const { container } = render(withTheme(<ClusterConfigurationDetail clusterRef="CLS-ROMEO-01" members={MEMBERS} />));
     await waitFor(() => expect(screen.getByText("1 difference")).toBeInTheDocument());
+    expect(screen.getByText("1 settings differ")).toBeInTheDocument();
     const chips = [...container.querySelectorAll("[data-member-chip]")].map((el) => el.getAttribute("data-member-chip"));
     expect(chips).toEqual(["m1", "m2"]);
     const m1 = container.querySelector('[data-member-chip="m1"]') as HTMLElement;

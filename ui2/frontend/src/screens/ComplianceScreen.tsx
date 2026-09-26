@@ -272,7 +272,7 @@ export function ComplianceScreen() {
               onClick={handleReEvaluate}
               disabled={reEvaluating || loading}
             >
-              {reEvaluating ? "Evaluating..." : "Re-evaluate"}
+              {reEvaluating ? "Checking..." : "Re-check"}
             </M3Button>
             <M3Button emphasis="filled" icon="download" onClick={exportAuditReport} disabled={loading || controls.length === 0}>
               Export Audit Report
@@ -294,7 +294,7 @@ export function ComplianceScreen() {
       )}
       <MetricGrid>
         <ComplianceMetricCard
-          title="Assured Compliance"
+          title="Checks passing"
           count={overview ? `${overview.assured_compliance_pct}%` : null}
           badge={{
             label: !overview ? "UNKNOWN" : overview.assured_compliance_pct >= 70 ? "High Assurance" : "Improvement Needed",
@@ -513,7 +513,7 @@ export function ComplianceScreen() {
             />
             <Chip
               clickable
-              label={`Data gaps · ${unavailCount}`}
+              label={`Not yet checked · ${unavailCount}`}
               onClick={() => setStatusFilter("UNAVAILABLE")}
               sx={{
                 bgcolor: statusFilter === "UNAVAILABLE" ? m3.warningContainer : m3.scLow,
