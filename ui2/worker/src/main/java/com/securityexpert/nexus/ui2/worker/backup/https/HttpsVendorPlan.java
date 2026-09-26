@@ -30,6 +30,8 @@ public final class HttpsVendorPlan {
     // Radware Cyber Controller (REST reference 10.3.0; RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md, V67)
     /** Symantec (Blue Coat) Management Center REST (PO 2026-09-25; basic auth): the managed device list (gate bluecoat_mc_devices). */
     public static final String MC_DEVICES = "/api/devices";
+    /** The MC's own identity (measured 2026-09-26: fields buildNumber, id, name, version). */
+    public static final String MC_SYSTEM_VERSION = "/api/system/version";
     public static final int MC_DEFAULT_PORT = 8082;
     /** {@code PUT /api/devices/{uuid}/command}: one CLI command through the MC. Its session is at {@code #(config)}, so
      *  only these exact read literals are ever sent (gates bluecoat_mc_command_show_version / _show_configuration). */

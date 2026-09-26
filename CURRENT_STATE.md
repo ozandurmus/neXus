@@ -6,31 +6,27 @@ the generated project data it represents; contract succession is in
 
 ## Product today
 
-neXus (UI2, Java) runs on HOST-A against the live estate — 110 devices in the
-registry (108 enrolled) — and the Product Owner uses it daily under the `aiview`
-persona. Inventory (with serial, version, hotfix / content versions, uptime),
-configuration (section projection, cluster member DIFF, change detection),
-compliance (four frameworks), backups (Check Point, Palo Alto, Check Point MDS
-export, Radware through the Cyber Controller and the Cyber Controller's own
-configuration; encrypted, downloadable under RBAC, listed and compared, orphan
-backups deletable), jobs with filters and export, nexus-cli, notifications
-(built, not yet pointed at real targets), a service and storage view, and the
-Overview (exception-and-evidence screen, frozen contract) are deployed.
-Restore is deliberately disabled. Backup scheduling exists; the fleet
-schedule is not switched on. Evidence-weighted progress of the Java roadmap:
-57 % (2026-09-23).
+neXus (UI2, Java) runs on HOST-A against the live estate — 122 devices under
+management (2026-09-26) — and the Product Owner uses it daily under the
+`aiview` persona. Vendors read for real: Check Point (gateways, ClusterXL, VSX,
+MDS), Palo Alto (firewalls, HA, Panorama), Infoblox Grid Manager and members,
+Radware Cyber Controller and DefensePro, Symantec Management Center and its
+ProxySGs, FortiManager and FortiGates (discovery, inventory, configuration
+plane). Implemented and awaiting a first device: Cisco ASA, Pulse Secure.
+Screens: executive Overview (estate map), one device screen (inventory,
+configuration, backup and identity as tabs), Compliance (four frameworks),
+Backups (encrypted, downloadable under RBAC, listed and compared), Operations,
+Administration. Adding a device runs a server-side onboarding flow (identity →
+inventory → configuration, V77). Restore is deliberately disabled; the fleet
+backup schedule is not switched on.
 
 ## Active build
 
-`NXS-LOCAL-0370` — `automated_validated` (2026-09-25, deployed on HOST-A, schema 72):
-the Infoblox Grid Manager enrolled, backed up and collected for real (grid
-members and member facts, V71/V72), observed device facts refreshed on every
-read (the upgraded MDS shows R82), `https_inventory_collect` for Infoblox and
-the Radware Cyber Controller, backups only back up. Open gates: the Cyber
-Controller Backup Now (stale known_hosts on the controller), DefensePro live
-reads, configuration reads for HTTPS vendors. Predecessor `NXS-LOCAL-0369`
-(Radware via Cyber Controller, HOST-A rebuilt): three of four rebuild
-acceptance checks passed. Records in `project/build_history.json`.
+Continuous deploys 2026-09-25/26 on HOST-A (schema 86); the next tool starts
+from `docs/design/CODEX_HANDOVER_2026_09_26.md`. Predecessor build record
+`NXS-LOCAL-0370` (Infoblox, observed facts, HTTPS inventory). A build record
+for V73–V86 is still to be written. Open gates: first real runs of Cisco ASA,
+Pulse Secure, ProxySG discovery import; FortiManager link states.
 
 ## Open Product Owner decisions
 

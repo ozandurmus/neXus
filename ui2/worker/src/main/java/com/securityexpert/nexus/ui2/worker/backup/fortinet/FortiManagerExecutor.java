@@ -93,7 +93,15 @@ public final class FortiManagerExecutor {
                     Duration.ofSeconds(60));
             if (out instanceof com.securityexpert.nexus.ui2.jobs.transport.ExecResult.Completed c) {
                 Map<String, String> states = parseInterfaceStates(c.output());
-                LOG.log(System.Logger.Level.INFO, "[FMG] ssh interface states: {0} read", states.size());
+                // MEASURE (2026-09-26: the first parser matched a value that was not up/down): the distinct words after
+                // every "status:" and the shape of the first lines (letters a, digits 9) -- categorical, never an address.
+                java.util.Set<String> words = new java.util.TreeSet<>();
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("status:\\s*(\\S+)").matcher(c.output());
+                while (m.find()) {
+                    words.add(m.group(1));
+                }
+                LOG.log(System.Logger.Level.INFO, "[FMG] ssh interface states: {0} read; status words {1}; shape {2}", states.size(), words,
+                        com.securityexpert.nexus.ui2.worker.backup.https.ProxySgOutputs.shape(c.output(), 8));
                 return states;
             }
             LOG.log(System.Logger.Level.INFO, "[FMG] ssh get system interface: {0}", out.getClass().getSimpleName());

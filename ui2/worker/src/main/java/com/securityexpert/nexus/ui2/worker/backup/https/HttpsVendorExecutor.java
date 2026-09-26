@@ -329,26 +329,21 @@ public final class HttpsVendorExecutor {
      * bluecoat_mc_devices). MEASURE FIRST: the list's field names and size are logged, never values; the name comes
      * from the MC's TLS certificate, as for the Cyber Controller.
      */
-    /** MEASURE FIRST (PO 2026-09-26): which of the MC's own resources answer -- status codes and field names only. */
-    private void probeManagementCenterOwnResources(Target target, Credentials creds) throws InterruptedException {
-        StringBuilder probe = new StringBuilder();
-        for (String path : List.of("/api/system", "/api/system/version", "/api/system/status", "/api/system/health", "/api/version")) {
-            try {
-                TextResponse p = client.get(target, path, creds, SHORT, 256 * 1024);
-                probe.append(path).append(" HTTP ").append(p.status());
-                if (p.ok()) {
-                    try {
-                        probe.append(" fields ").append(HttpsVendorPlan.fieldNames(JSON.readTree(p.body())));
-                    } catch (IOException notJson) {
-                        probe.append(" (not JSON, ").append(p.body().length()).append(" chars)");
-                    }
-                }
-                probe.append("; ");
-            } catch (IOException e) {
-                probe.append(path).append(' ').append(e.getClass().getSimpleName()).append("; ");
+    /** The MC's own name and version from /api/system/version (measured 2026-09-26); the certificate name when absent. */
+    private Identity managementCenterIdentity(Target target, Credentials creds, Optional<String> peerName) throws InterruptedException {
+        try {
+            TextResponse v = client.get(target, HttpsVendorPlan.MC_SYSTEM_VERSION, creds, SHORT, 64 * 1024);
+            if (v.ok()) {
+                JsonNode j = JSON.readTree(v.body());
+                Optional<String> name = Optional.ofNullable(j.path("name").asText(null)).filter(x -> !x.isBlank());
+                Optional<String> version = Optional.ofNullable(j.path("version").asText(null)).filter(x -> !x.isBlank())
+                        .map(x -> j.hasNonNull("buildNumber") ? x + " (build " + j.path("buildNumber").asText() + ")" : x);
+                return new Identity(name.or(() -> peerName), Optional.of("Symantec Management Center"), version);
             }
+        } catch (IOException e) {
+            LOG.log(System.Logger.Level.INFO, "[MANAGEMENT_CENTER] system/version not read: {0}", e.getClass().getSimpleName());
         }
-        LOG.log(System.Logger.Level.INFO, "[MANAGEMENT_CENTER] MEASURE own resources: {0}", probe);
+        return new Identity(peerName, Optional.of("Symantec Management Center"), Optional.empty());
     }
 
     private ConfirmOutcome confirmManagementCenter(Target target, Credentials creds) throws IOException, InterruptedException {
@@ -363,10 +358,7 @@ public final class HttpsVendorExecutor {
         LOG.log(System.Logger.Level.INFO, "[MANAGEMENT_CENTER] devices HTTP {0}, {1} bytes, {2} entries, field names {3}", r.status(),
                 r.body().length(), list.isArray() ? list.size() : -1, HttpsVendorPlan.fieldNames(list));
         // The MC is not in its own list (measured 2026-09-25: types cp, rptr, sgos6x): its certificate names it.
-        // MEASURE FIRST (PO 2026-09-26: "SMC'nin kendi bilgileri de olmalı"): which of the MC's own resources answer --
-        // status codes and top-level field names only, never values. The next release reads the one that answers.
-        probeManagementCenterOwnResources(target, creds);
-        return new ConfirmOutcome.Confirmed(new Identity(r.peerName(), Optional.of("Symantec Management Center"), Optional.empty()));
+        return new ConfirmOutcome.Confirmed(managementCenterIdentity(target, creds, r.peerName()));
     }
 
     /**
@@ -383,15 +375,13 @@ public final class HttpsVendorExecutor {
             return new InventoryOutcome.Failed("the Management Center device list answered HTTP " + r.status());
         }
         JsonNode list = JSON.readTree(r.body());
-        probeManagementCenterOwnResources(target, creds);
         List<GridMember> managed = ManagementCenterDevices.parse(list);
         LOG.log(System.Logger.Level.INFO, "[HTTPS_INVENTORY] management center lists {0} device(s), types {1}, field names {2}",
                 managed.size(), ManagementCenterDevices.typeCounts(list), HttpsVendorPlan.fieldNames(list));
         Optional<String> names = managed.isEmpty() ? Optional.empty()
                 : Optional.of(managed.stream().map(GridMember::hostName).sorted(String.CASE_INSENSITIVE_ORDER)
                         .collect(java.util.stream.Collectors.joining(", ")));
-        return new InventoryOutcome.Completed(List.of(), managed, names,
-                new Identity(r.peerName(), Optional.of("Symantec Management Center"), Optional.empty()));
+        return new InventoryOutcome.Completed(List.of(), managed, names, managementCenterIdentity(target, creds, r.peerName()));
     }
 
     /**
