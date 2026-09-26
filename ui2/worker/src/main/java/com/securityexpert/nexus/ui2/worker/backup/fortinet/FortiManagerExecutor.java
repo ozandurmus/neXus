@@ -140,19 +140,39 @@ public final class FortiManagerExecutor {
         }
     }
 
-    public record DiagnosticResult(String statusToken, int lineCount, String shapeId) {
+    public record DiagnosticResult(String statusToken, int lineCount, String shapeId, String maskedOutput) {
     }
 
     static DiagnosticResult parseDiagnostic(String output) {
         if (output == null || output.length() > 65_536) {
-            return new DiagnosticResult("ABSENT", 256, "FMG_DETAIL_OTHER");
+            return new DiagnosticResult("ABSENT", 256, "FMG_DETAIL_OTHER", "[OUTPUT_UNAVAILABLE]");
         }
         java.util.regex.Matcher status = java.util.regex.Pattern.compile("(?im)^\\s*Status\\s*:\\s*(up|down)\\b").matcher(output);
         boolean hasStatus = java.util.regex.Pattern.compile("(?im)^\\s*Status\\s*:").matcher(output).find();
         String token = status.find() ? status.group(1).toUpperCase(java.util.Locale.ROOT) : hasStatus ? "OTHER" : "ABSENT";
         String shape = hasStatus ? "FMG_DETAIL_STATUS"
                 : output.contains("Link encap:") ? "FMG_DETAIL_NO_STATUS" : "FMG_DETAIL_OTHER";
-        return new DiagnosticResult(token, Math.min(256, output.split("\\R").length), shape);
+        String[] lines = output.split("\\R", -1);
+        StringBuilder masked = new StringBuilder();
+        for (int i = 0; i < Math.min(lines.length, 64); i++) {
+            if (i > 0) masked.append('\n');
+            String line = lines[i];
+            if (java.util.regex.Pattern.compile("(?i)^\\s*Status\\s*:").matcher(line).find()) {
+                masked.append("Status: ").append(token);
+            } else if (line.contains("Link encap:")) {
+                masked.append("[INTERFACE_HEADER]");
+            } else if (java.util.regex.Pattern.compile("(?i)^\\s*Speed\\s*:").matcher(line).find()) {
+                masked.append("Speed: [MASKED]");
+            } else if (java.util.regex.Pattern.compile("(?i)^\\s*(inet|inet6|IP/Mask|HWaddr|MAC)\\b").matcher(line).find()) {
+                masked.append("[ADDRESS_FIELD]");
+            } else if (java.util.regex.Pattern.compile("(?i)\\b(UP|DOWN|RUNNING|BROADCAST)\\b").matcher(line).find()) {
+                masked.append("[FLAGS_FIELD]");
+            } else {
+                masked.append("[MASKED]");
+            }
+        }
+        if (lines.length > 64) masked.append("\n[TRUNCATED]");
+        return new DiagnosticResult(token, Math.min(256, lines.length), shape, masked.toString());
     }
 
     private record Session(String token, Credentials creds) {

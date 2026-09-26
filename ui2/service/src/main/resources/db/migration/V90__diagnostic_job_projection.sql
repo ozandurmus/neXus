@@ -7,6 +7,7 @@ ALTER TABLE jobs ADD COLUMN diagnostic_gate_revision INTEGER;
 ALTER TABLE jobs ADD COLUMN diagnostic_status_token TEXT;
 ALTER TABLE jobs ADD COLUMN diagnostic_line_count INTEGER;
 ALTER TABLE jobs ADD COLUMN diagnostic_shape_id TEXT;
+ALTER TABLE jobs ADD COLUMN diagnostic_masked_output TEXT;
 
 ALTER TABLE jobs ADD CONSTRAINT chk_jobs_diagnostic_port
     CHECK ((capability_id = 'fmg_interface_detail' AND diagnostic_port IS NOT NULL
@@ -15,7 +16,8 @@ ALTER TABLE jobs ADD CONSTRAINT chk_jobs_diagnostic_port
 ALTER TABLE jobs ADD CONSTRAINT chk_jobs_diagnostic_safe_result
     CHECK ((diagnostic_status_token IS NULL OR diagnostic_status_token IN ('UP', 'DOWN', 'OTHER', 'ABSENT'))
         AND (diagnostic_line_count IS NULL OR diagnostic_line_count BETWEEN 0 AND 256)
-        AND (diagnostic_shape_id IS NULL OR diagnostic_shape_id IN ('FMG_DETAIL_STATUS', 'FMG_DETAIL_NO_STATUS', 'FMG_DETAIL_OTHER')));
+        AND (diagnostic_shape_id IS NULL OR diagnostic_shape_id IN ('FMG_DETAIL_STATUS', 'FMG_DETAIL_NO_STATUS', 'FMG_DETAIL_OTHER'))
+        AND (diagnostic_masked_output IS NULL OR length(diagnostic_masked_output) <= 4096));
 CREATE INDEX idx_jobs_fmg_diagnostic_rate ON jobs(target_device_id, submitted_at DESC)
     WHERE capability_id = 'fmg_interface_detail';
 

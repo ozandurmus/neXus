@@ -30,8 +30,9 @@ Pulse Secure, ProxySG discovery import; FortiManager physical link remains
 `UNSUPPORTED/UNKNOWN` after V87's per-port CLI form was rejected and V88/V89 lacked an explicit link field on the real appliance.
 The approved diagnostic screen is implemented on `feature/approved-diagnostic-screen`,
 but is not merged or deployed (`docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md`, FROZEN).
-It accepts the one V89 FortiManager read and shows a safe result summary; broader masked
-transcript output is not implemented. The first real port5 command still requires exact PO approval.
+It accepts the one V89 FortiManager read and shows a masked structural response (up to
+64 safe line labels). Arbitrary commands are not accepted. The first real port5 command
+still requires exact PO approval.
 
 ## Open Product Owner decisions
 

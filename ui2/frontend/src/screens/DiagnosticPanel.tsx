@@ -22,7 +22,10 @@ export function DiagnosticPanel() {
   const typedPort = /^diagnose fmnetwork interface detail ([A-Za-z0-9_.-]{1,31})$/.exec(command)?.[1];
 
   useEffect(() => {
-    listFmgDiagnosticTargets().then(r => { setDevices(r.targets); setAllowed(true); })
+    listFmgDiagnosticTargets().then(r => {
+      if (!Array.isArray(r.targets)) return setAllowed(false);
+      setDevices(r.targets); setAllowed(true);
+    })
       .catch(() => setAllowed(false));
   }, []);
   useEffect(() => {
@@ -60,7 +63,7 @@ export function DiagnosticPanel() {
   return <Box sx={{ display: "grid", gap: 2, maxWidth: 700 }}>
     <Typography variant="h6">Debug / Parser</Typography>
     <Typography variant="body2">Type a gated read command. The device response is reduced to safe fields.</Typography>
-    {allowed === false ? <Typography role="status">Super administrator access required.</Typography> : allowed ? <>
+    {allowed === false ? <Typography role="status">Super administrator role required.</Typography> : allowed ? <>
       <TextField select SelectProps={{ native: true }} label="Device" value={deviceId} onChange={e => setDeviceId(e.target.value)}>
         <option value="">Select a FortiManager</option>
         {devices.map(d => <option key={d.deviceId} value={d.deviceId}>{d.target}</option>)}
@@ -77,7 +80,8 @@ export function DiagnosticPanel() {
       </Box>}
       {result && <Box role="status">
         <Typography>Job: {result.state}</Typography>
-        <Typography sx={{ fontFamily: "monospace", whiteSpace: "pre-wrap" }}>Masked output:{"\n"}Status: {result.statusPresent ? result.statusToken : "ABSENT"}{"\n"}Lines: {result.lineCount ?? "—"}{"\n"}Shape: {result.shapeId ?? "—"}</Typography>
+        <Typography sx={{ fontFamily: "monospace", whiteSpace: "pre-wrap" }}>Masked output:{"\n"}{result.maskedOutput ?? "[UNAVAILABLE]"}</Typography>
+        <Typography variant="body2">Status: {result.statusPresent ? result.statusToken : "ABSENT"} · Lines: {result.lineCount ?? "—"} · Shape: {result.shapeId ?? "—"}</Typography>
         <Typography>Physical link: UNKNOWN until vendor semantics are proven.</Typography>
       </Box>}
       {message && <Typography role="alert">{message}</Typography>}

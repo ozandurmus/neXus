@@ -16,7 +16,7 @@ public interface JobRecordDao {
     }
 
     record DiagnosticJob(String jobId, String targetDeviceId, String port, String state,
-            String statusToken, boolean statusPresent, Integer lineCount, String shapeId) {
+            String statusToken, boolean statusPresent, Integer lineCount, String shapeId, String maskedOutput) {
     }
 
     /** @return the inserted row's own {@code job_id} if this key was new, {@code empty} on a duplicate key. */
@@ -50,7 +50,7 @@ public interface JobRecordDao {
         return Optional.empty();
     }
 
-    default boolean writeDiagnosticResult(String jobId, String statusToken, int lineCount, String shapeId) {
+    default boolean writeDiagnosticResult(String jobId, String statusToken, int lineCount, String shapeId, String maskedOutput) {
         return false;
     }
 }

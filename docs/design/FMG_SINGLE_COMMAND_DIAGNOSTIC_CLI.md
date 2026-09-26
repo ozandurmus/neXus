@@ -16,7 +16,7 @@ Reuse UI2 `/login`, `/session/status` and CSRF, `SecurityWebMvcConfig`, `JobAdmi
 2. Before Run, the screen shows the server-rendered command, AIView target pseudonym, port, 60-second timeout, no-retry rule, one-command-per-target-per-minute limit and safe output fields. The route uses UI2's existing session/CSRF/RBAC chain and requires `role:security_admin`. A super administrator may submit their own request. An agent needs the Product Owner's exact, prior approval before using the Run action.
 3. `JobAdmissionService` refuses before job creation for wrong role, unsigned/unsupported template, unenrolled or mismatched target, stale/non-member port, malformed typed input or rate-limit violation. A matching idempotent repeat returns the existing job; a conflicting repeat is refused. Each accepted request creates one durable typed job and records actor, target, template, port, gate revision and submission outcome.
 4. `WorkerClaimLoop` routes only that fixed capability to the existing FortiManager executor and trusted SSH transport. The worker rechecks the job and target, sends exactly one gated read in the approved CLI context, once, with a 60-second timeout and no retry, and records a terminal outcome. Uncertain dispatch is `UNKNOWN`/collection-failed and is never replayed. Verification and troubleshooting never change device configuration or operational state.
-5. Raw output stays in memory just long enough to parse safe field-presence booleans, bounded `UP`/`DOWN`/`OTHER`/`ABSENT` token, line count and a closed shape ID. Raw lines and device identities never enter job records, logs, UI, CLI, screenshots or repository metadata. No `UP`, `RUNNING` or other field is promoted to physical link without vendor semantic proof and real corroboration. Missing `Status:` displays physical link `UNKNOWN` with no substitute guess.
+5. Raw output stays in memory just long enough to parse safe field-presence booleans, bounded `UP`/`DOWN`/`OTHER`/`ABSENT` token, line count, closed shape ID, and at most 64 structural line labels from a fixed vocabulary (`Status`, `Speed`, `INTERFACE_HEADER`, `ADDRESS_FIELD`, `FLAGS_FIELD`, `MASKED`, `TRUNCATED`). Values and unrecognized lines are masked. Raw lines and device identities never enter job records, logs, UI, CLI, screenshots or repository metadata. No `UP`, `RUNNING` or other field is promoted to physical link without vendor semantic proof and real corroboration. Missing `Status:` displays physical link `UNKNOWN` with no substitute guess.
 6. The UI reads the terminal job result. The agent uses only the masked `aiview` projection for visual inspection and parser work; neither UI nor agent receives raw output. A CLI client is deferred.
 
 ## First command preview and safe result
@@ -27,6 +27,7 @@ Server-rendered command: diagnose fmnetwork interface detail port5
 Transport: existing neXus FortiManager SSH session; class 0 read; timeout 60 s; retry none
 UI result: job=<opaque> state=<terminal enum> status_present=<boolean>
                status_token=<UP|DOWN|OTHER|ABSENT> lines=<bounded count> shape_id=<closed enum>
+               masked_output=<bounded structural labels only>
 ```
 
 The candidate has **not** been executed for port5. The Product Owner's vendor screenshot is a derived comparison observation; agent UI validation remains under `aiview`.

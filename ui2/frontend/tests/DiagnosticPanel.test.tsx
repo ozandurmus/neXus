@@ -20,7 +20,8 @@ it("submits only typed intent and shows the safe terminal projection", async () 
       retry: "none", frequency: "one per target per minute" });
     if (url === "/api/v2/diagnostics" && init?.method === "POST") return reply({ job_id: "job-1" });
     if (url === "/api/v2/diagnostics/job-1") return reply({ jobId: "job-1", targetDeviceId: "device-1", port: "port5",
-      state: "COMPLETED", statusToken: "ABSENT", statusPresent: false, lineCount: 13, shapeId: "FMG_DETAIL_NO_STATUS" });
+      state: "COMPLETED", statusToken: "ABSENT", statusPresent: false, lineCount: 13, shapeId: "FMG_DETAIL_NO_STATUS",
+      maskedOutput: "[INTERFACE_HEADER]\n[FLAGS_FIELD]" });
     return reply({});
   }));
   render(<ThemeProvider theme={m3Theme}><DiagnosticPanel /></ThemeProvider>);
@@ -35,6 +36,7 @@ it("submits only typed intent and shows the safe terminal projection", async () 
   fireEvent.click(screen.getByRole("button", { name: "Run read" }));
   expect(await screen.findByText("Physical link: UNKNOWN until vendor semantics are proven.")).toBeInTheDocument();
   expect(screen.getByText(/Masked output:/)).toBeInTheDocument();
+  expect(screen.getByText(/\[INTERFACE_HEADER\]/)).toBeInTheDocument();
   const submitted = calls.find(c => c.url === "/api/v2/diagnostics" && c.body);
   expect(Object.keys(JSON.parse(submitted?.body ?? "{}"))).toEqual(["device_id", "port", "request_id"]);
 });

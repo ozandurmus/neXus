@@ -118,22 +118,23 @@ public final class JooqJobRecordDao implements JobRecordDao {
     public Optional<DiagnosticJob> findDiagnostic(String jobId) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 "select job_id, target_device_id, diagnostic_port, state, diagnostic_status_token, "
-                        + "diagnostic_line_count, diagnostic_shape_id from jobs "
+                        + "diagnostic_line_count, diagnostic_shape_id, diagnostic_masked_output from jobs "
                         + "where job_id = {0} and capability_id = 'fmg_interface_detail'", jobId)
                 .stream().findFirst().map(r -> new DiagnosticJob(r.get("job_id", String.class),
                         r.get("target_device_id", String.class), r.get("diagnostic_port", String.class),
                         r.get("state", String.class), r.get("diagnostic_status_token", String.class),
                         r.get("diagnostic_status_token", String.class) != null
                                 && !"ABSENT".equals(r.get("diagnostic_status_token", String.class)),
-                        r.get("diagnostic_line_count", Integer.class), r.get("diagnostic_shape_id", String.class))));
+                        r.get("diagnostic_line_count", Integer.class), r.get("diagnostic_shape_id", String.class),
+                        r.get("diagnostic_masked_output", String.class))));
     }
 
     @Override
-    public boolean writeDiagnosticResult(String jobId, String statusToken, int lineCount, String shapeId) {
+    public boolean writeDiagnosticResult(String jobId, String statusToken, int lineCount, String shapeId, String maskedOutput) {
         return auditedTransactionBoundary.inTransaction("system:worker", "diagnostic_safe_result", dsl -> dsl.execute(
-                "update jobs set diagnostic_status_token = {0}, diagnostic_line_count = {1}, diagnostic_shape_id = {2} "
-                        + "where job_id = {3} and capability_id = 'fmg_interface_detail'",
-                statusToken, lineCount, shapeId, jobId)) == 1;
+                "update jobs set diagnostic_status_token = {0}, diagnostic_line_count = {1}, diagnostic_shape_id = {2}, "
+                        + "diagnostic_masked_output = {3} where job_id = {4} and capability_id = 'fmg_interface_detail'",
+                statusToken, lineCount, shapeId, maskedOutput, jobId)) == 1;
     }
 
     private static JobRow toRow(Record row) {

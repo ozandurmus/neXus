@@ -7,3 +7,7 @@ status: planned · target: docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md
 2026-09-26 PO decisions: existing UI2 super administrators may run permitted read commands without a second product approval; the agent needs exact prior PO approval for each ad hoc device command. Same person may approve and execute. Limit one command per target per minute, no retry. Missing Status means physical link UNKNOWN with no flag-based guess. Contract frozen for implementation; real port5 execution remains separately unapproved.
 
 Feature branch implements one gated FortiManager read with typed command input and safe status/shape summary; automated UI, targeted backend, architecture and render checks pass. Not merged or deployed. Masked line-by-line output remains open; first real device command requires separate exact PO approval.
+
+Feature branch implements one gated FortiManager read with typed command input and a masked structural response of at most 64 fixed line labels. Targeted tests pass; not merged or deployed. Revised V90 requires live BEGIN/ROLLBACK dry-run before deploy; first real device command requires separate exact PO approval.
+
+Feature branch implements one gated FortiManager read with typed command input and a masked structural response of at most 64 fixed line labels. Targeted tests pass; revised V90 passed live BEGIN/ROLLBACK dry-run. Not merged or deployed. First real device command requires separate exact PO approval.

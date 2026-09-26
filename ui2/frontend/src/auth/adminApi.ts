@@ -793,6 +793,7 @@ export interface DiagnosticResult {
   readonly statusPresent: boolean;
   readonly lineCount: number | null;
   readonly shapeId: string | null;
+  readonly maskedOutput: string | null;
 }
 
 export function previewFmgDiagnostic(deviceId: string, port: string): Promise<DiagnosticPreview> {

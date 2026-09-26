@@ -18,11 +18,13 @@ class FortinetParsersTest {
 
     @Test
     void diagnosticReportsOnlySafeStatusAndShape() {
-        assertEquals(new FortiManagerExecutor.DiagnosticResult("DOWN", 2, "FMG_DETAIL_STATUS"),
+        assertEquals(new FortiManagerExecutor.DiagnosticResult("DOWN", 2, "FMG_DETAIL_STATUS", "Status: DOWN\nSpeed: [MASKED]"),
                 FortiManagerExecutor.parseDiagnostic("Status: down\nSpeed: auto"));
-        assertEquals(new FortiManagerExecutor.DiagnosticResult("ABSENT", 2, "FMG_DETAIL_NO_STATUS"),
+        assertEquals(new FortiManagerExecutor.DiagnosticResult("ABSENT", 2, "FMG_DETAIL_NO_STATUS", "[INTERFACE_HEADER]\n[FLAGS_FIELD]"),
                 FortiManagerExecutor.parseDiagnostic("port5 Link encap:Ethernet\nUP BROADCAST RUNNING"));
         assertEquals("ABSENT", FortiManagerExecutor.parseDiagnostic("unexpected secret-like response").statusToken());
+        assertEquals("[ADDRESS_FIELD]\n[MASKED]", FortiManagerExecutor.parseDiagnostic(
+                "inet addr:192.0.2.10\nHostname: synthetic-secret").maskedOutput());
     }
 
     @Test

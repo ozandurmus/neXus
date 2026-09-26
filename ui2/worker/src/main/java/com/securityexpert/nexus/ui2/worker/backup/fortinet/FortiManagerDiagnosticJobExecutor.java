@@ -91,7 +91,7 @@ public final class FortiManagerDiagnosticJobExecutor {
                 return;
             }
             var safe = observation.get();
-            if (!jobs.writeDiagnosticResult(jobId, safe.statusToken(), safe.lineCount(), safe.shapeId())) {
+            if (!jobs.writeDiagnosticResult(jobId, safe.statusToken(), safe.lineCount(), safe.shapeId(), safe.maskedOutput())) {
                 leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.OUTCOME_UNKNOWN, ACTOR,
                         "diagnostic_result_uncertain", "SAFE_RESULT_WRITE_FAILED");
                 return;
