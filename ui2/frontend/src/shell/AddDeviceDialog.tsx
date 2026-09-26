@@ -761,7 +761,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
             {success && peerMessage && <Typography variant="body2">{peerMessage}</Typography>}
             {!success && (
               <Typography variant="body2" color="error">
-                {submitError ?? detail.job?.terminal_reason ?? "Enrollment did not complete."}
+                {submitError ? <ApiErrorText error={submitError} /> : (detail.job?.terminal_reason ?? "Enrollment did not complete.")}
               </Typography>
             )}
             {!success && deviceId && detail.enrollment_state === "DRAFT" && (
