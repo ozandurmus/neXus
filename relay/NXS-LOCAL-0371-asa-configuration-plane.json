@@ -1,0 +1,96 @@
+{
+  "created_at": "2026-09-26T17:31:36Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AsaConfigProcessor turns 'more system:running-config' text into sections/settings with secrets withheld and a canonical hash stable across runs that differ only in volatile header lines",
+          "asa_configuration_collect is admitted for an enrolled cisco_asa gateway by ConfigurationCollectService and runs in the worker through ConfigurationCapabilityExecutor over the existing ASA SSH interactive session",
+          "The onboarding flow's configuration step is no longer skipped for Cisco ASA",
+          "Frontend: Cisco ASA devices show the Configuration tab with sections from a projectAsa projection",
+          "Worker, service and capability-registry tests green except the known ProjectPlanReaderTest; frontend tsc, vitest and build green",
+          "No new device command, no migration, no gate change"
+        ],
+        "baseline": {
+          "authority": "docs/design/CISCO_ASA_CONTRACT.md (FROZEN: SSH reads incl. 'more system:running-config', gated V78) and docs/design/UI_EFFECTIVENESS_COUNCIL_2026_09_25_SYNTHESIS.md (RATIFIED decision 1: configuration is a tab of the one device screen)",
+          "observed": "origin/main d6d11f3; FortiGate configuration plane shipped in commit e100928 and validated live on 9 FortiGates (100-121 sections each); no Cisco ASA device enrolled yet",
+          "what_exists": "FortiGate reference implementation (commit e100928): worker/configuration/fortinet/FortiGateConfigProcessor.java + test, ConfigurationVendor, ConfigurationRequest.fortiGate, ConfigurationCapabilityExecutor collectFortiGate, ConfigurationCapabilityIds.FGT_CONFIGURATION_COLLECT, WorkerClaimLoop, ConfigurationCollectService mapping, DeviceCompositionConfiguration, frontend configurationProjection.projectFortiGate, InventoryScreen CONFIGURATION_VENDORS. ASA transport: worker/backup/asa/CiscoAsaPlan.java (MORE_SYSTEM_RUNNING_CONFIG), CiscoAsaExecutor (interactive shell, privilege-15 check, pager handling). DB CHECK already accepts vendor cisco_asa (V86)."
+        },
+        "context_not_loaded": [
+          "No docs/history scan, no live data, no HOST-A, no device output, nothing under ~/Downloads"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/asa-configuration-plane"
+        },
+        "invariants": [
+          "Reuse the gated read 'more system:running-config' exactly as CiscoAsaPlan issues it for the backup, in the same kind of interactive session (terminal pager handled in-session, never saved); no new device command, no config mode, no write",
+          "Secrets never reach the sanitized text, the index or logs: withhold any line carrying password, passwd, secret, key (pre-shared-key, key-string, authentication key, ikev1/ikev2 keys), snmp community, enable password, username ... password, and the whole body of 'crypto ca certificate chain' blocks (certificate hex) -- replace with '<keyword> [withheld]' and count withheld lines",
+          "If 'show mode' reports multiple contexts, refuse the read with a clear reason (single context only, per the ASA contract)",
+          "Values shown as read, never inferred; logs carry counts and shapes only",
+          "English code, comments, UI text; no new dependencies"
+        ],
+        "merge_gate": "ENGINEER reviews canonical relay close, diff, tests and privacy; no worker push, PR or merge; ENGINEER deploys and validates on a real ASA later",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Cisco ASA configuration plane, mirroring the FortiGate one (commit e100928): parse the running configuration into sections and settings with secrets withheld, admit and run asa_configuration_collect, include it in onboarding, and project it in the device screen's Configuration tab.",
+        "output_contract": [
+          "English SESSION START and SESSION CLOSE in canonical relay",
+          "One or more commits on the lane, messages ending 'Co-Authored-By: gpt-6-sol (Codex)'",
+          "No push, PR, merge or deployment",
+          "Exact changed paths and test outcomes; list any assumption about ASA output format explicitly"
+        ],
+        "recommended_reasoning": {
+          "reason": "Multi-module wiring with a reference implementation to mirror; secret handling needs care",
+          "tier": "High"
+        },
+        "requirements": [
+          "worker/configuration/asa/AsaConfigProcessor: process(raw) -> Processed(canonicalHash, withheldLineCount, sanitizedText, index, settingCount) like FortiGateConfigProcessor. Skip volatile lines (': Saved', ': Written by', ': Serial Number', ': Hardware', 'Cryptochecksum', blank ':' lines) from the hash. Top-level line = a new block; lines starting with one space belong to the current block. Section = the block's kind in title case by its leading keyword(s) (Interface, Object network, Object-group, Access-list, Route, Nat, Crypto map, Tunnel-group, Group-policy, Aaa-server, Logging, Snmp-server, Ntp, Ssh, Http, Failover, Policy-map, Class-map, ...); setting = block name + sub-line (or the whole top-level line for flat commands such as access-list/route). Index context = 'single'.",
+          "ConfigurationVendor CISCO_ASA, ConfigurationRequest.ciscoAsa(target, credRef, trustRuleRef), ConfigurationCapabilityExecutor case -> collectCiscoAsa reusing the ASA interactive session code path (factor a small shared helper from CiscoAsaExecutor if needed, without changing its backup behaviour); stores the raw artefact with vendor 'cisco_asa' and returns ConfigurationRunData like the FortiGate path",
+          "ConfigurationCapabilityIds.ASA_CONFIGURATION_COLLECT = 'asa_configuration_collect'; register it wherever FGT_CONFIGURATION_COLLECT is registered (WorkerClaimLoop eligible list and request build, ConfigurationCollectService vendor mapping, DeviceCompositionConfiguration)",
+          "Onboarding: the configuration step for cisco_asa is admitted, not skipped (follow how FortiGate became eligible)",
+          "Frontend: configurationProjection.projectAsa(text) (sections by block kind, settings 'block › line'), Projection.vendor includes 'cisco_asa', ConfigurationDetail uses it, InventoryScreen CONFIGURATION_VENDORS includes cisco_asa",
+          "Tests: AsaConfigProcessorTest with a synthetic running-config (RFC 5737 addresses only, invented names) covering interface/object/access-list/route blocks, every withheld secret form, certificate chain body, hash stability across different ': Saved' headers; frontend projection test; service mapping test"
+        ],
+        "risks": [
+          "Do not change the ASA backup path's behaviour or its tests' expectations",
+          "Another worker is editing ui2/frontend/src/screens/InventoryPanels.tsx and shell/AddDeviceDialog.tsx on another lane: do not edit those two files"
+        ],
+        "scope": {
+          "in": [
+            "ui2/worker (configuration, asa transport helper, WorkerClaimLoop, Ui2WorkerMain if needed)",
+            "ui2/service configuration/onboarding mapping and DeviceCompositionConfiguration",
+            "ui2/job-engine or capability-registry capability ids if that is where FGT lives",
+            "ui2/frontend/src/screens/configurationProjection.ts, ConfigurationDetail.tsx, InventoryScreen.tsx, frontend tests"
+          ],
+          "out": [
+            "Migrations, gate registry, docs, project/, handover files",
+            "ui2/frontend/src/screens/InventoryPanels.tsx, ui2/frontend/src/shell/AddDeviceDialog.tsx",
+            "Git push, PR, merge, deployment, HOST-A, device contact"
+          ]
+        },
+        "validation_plan": [
+          "cd ui2 && ./gradlew :worker:test :service:test :capability-registry:test --continue -q",
+          "cd ui2/frontend && npx tsc --noEmit -p . && npx vitest run && npm run build",
+          "git diff --check",
+          "python3 scripts/repository_privacy_check.py"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-26T17:31:36Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0371",
+  "movement": "Cisco ASA configuration plane (mirror of the FortiGate plane)",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/CISCO_ASA_CONTRACT.md",
+    "docs/design/UI_EFFECTIVENESS_COUNCIL_2026_09_25_SYNTHESIS.md",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-26T17:31:36Z"
+}

@@ -1,0 +1,93 @@
+{
+  "created_at": "2026-09-26T17:29:30Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A Blue Coat/Fortinet management server with 0 interfaces and 0 routes renders no Interfaces/Routing tab and no 'interfaces · routes' chip; its Managed devices tab is selected",
+          "A management server with interface evidence keeps its Interfaces tab",
+          "A standalone gateway renders no Cluster members tab; its empty Interfaces panel says 'Use Collect now to read its interfaces.'",
+          "A cluster member keeps its Cluster members tab",
+          "Add device: 'Create credential' is not offered to a session that cannot create credentials",
+          "npx tsc --noEmit -p ., npx vitest run (all) and npm run build green in ui2/frontend",
+          "Canonical SESSION_CLOSE lists exact changed paths and test output"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI_EFFECTIVENESS_COUNCIL_2026_09_25_SYNTHESIS.md (RATIFIED, PO decisions 2026-09-25, decision 3: data a device does not have is not shown)",
+          "observed": "origin/main d6d11f3 (code as deployed 1524e7d) deployed on HOST-A (schema 91); verified in aiview 2026-09-26: SMC opens on Managed devices but still shows empty Interfaces/Routing tabs and '0 interfaces · 0 routes'",
+          "what_exists": "ui2/frontend/src/screens/InventoryPanels.tsx DeviceInventoryPanels/DetailTabs/ManagedDevicesPanel/InterfacesPanel/RoutesPanel; ui2/frontend/src/shell/AddDeviceDialog.tsx; tests SmcInventory.test.tsx, ConfigurationRefresh.test.tsx"
+        },
+        "context_not_loaded": [
+          "No docs/history scan, no live data, no HOST-A access, no device output"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/device-screen-empty-tabs"
+        },
+        "invariants": [
+          "Frontend only: ui2/frontend/ (src and tests)",
+          "No backend, migration, docs, project/ or handover edits",
+          "English UI text; no new dependencies",
+          "Values are shown as read, never inferred"
+        ],
+        "merge_gate": "ENGINEER reviews canonical relay close, diff, tests and privacy; no worker push, PR or merge",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Device screen cleanup in the UI2 frontend: hide tabs and chips a device has no data for (management servers without own interfaces, standalone Cluster members), restore the Collect-now empty state, and stop offering Create credential to sessions that cannot create credentials. Full brief: # Task: device screen cleanup (frontend only)\n\nRepository: this worktree (branch `w/luna-ui-0926`). Work only under `ui2/frontend/`. React + MUI + TypeScript,\ntests with vitest. Product rule (Product Owner, 2026-09-25): **if a vendor/device lacks a kind of data, the UI does not\nshow that tab or chip at all** (\"each vendor in its own terms\"). All UI text is English.\n\n## Changes\n\n1. **Management servers without own interface evidence** — `src/screens/InventoryPanels.tsx`, `DeviceInventoryPanels`\n   (the single-device branch, around the `DetailTabs` call and the header chip\n   `` `${deviceIfaceCount} interfaces · ${deviceRouteCount} routes` ``).\n   For a device with `role === \"management_server\"` whose inventory has **zero interfaces and zero routes**, do not\n   render the `Interfaces` and `Routing` tabs and do not render that header chip. The first remaining tab\n   (e.g. `Managed devices`, `Grid members`) becomes the default. Devices that do have interface or route evidence are\n   unchanged. Non-management devices are unchanged (they keep the tabs, with the empty state of change 2).\n\n2. **Empty-state wording regression** — `InterfacesPanel` (~line 1108) and `RoutesPanel` (~line 1182) currently say\n   \"No interface/routing records are available for this device. Management-server inventory may contain managed\n   devices instead.\" for every device. Restore, for ordinary devices:\n   - Interfaces: title `No interface evidence`, body `This device has not been collected yet. Use Collect now to read its interfaces.`\n   - Routing: title `No routing evidence`, body `This device has not been collected yet. Use Collect now to read its routes.`\n   (Management servers never reach this panel after change 1 when they have nothing; if one has evidence it shows it.)\n\n3. **\"Cluster members\" tab on standalone devices** — same `DetailTabs` list, third tab. When the device is not a\n   cluster member (`device.cluster_member_ref === null`) and is not an Infoblox grid manager and not a\n   Blue Coat / Fortinet management server, do not render that tab at all (today it renders `Cluster members` with\n   nothing meaningful for a standalone firewall).\n\n4. **Add device dialog, credential link** — `src/shell/AddDeviceDialog.tsx` ~line 529: the `Create credential` button\n   shows even when the session cannot create credentials (the dialog then says \"You do not have permission to create\n   credentials.\"). Show the button only when the session can create credentials. Find how the app already knows this\n   (look at `CredentialsPanel.tsx`, the session/permissions context, `ACTION_REFUSED` handling); if the dialog cannot\n   know it before trying, then after a refusal (`ACTION_REFUSED`) hide the button and show one sentence:\n   `Ask an administrator to add a credential for this vendor.` Do not invent a new permission model.\n\n## Tests (required)\nAdd or extend vitest tests under `ui2/frontend/tests/` (see `SmcInventory.test.tsx`, `ConfigurationRefresh.test.tsx`\nfor the rendering/mocking style):\n- a Blue Coat management server with 0 interfaces/0 routes: no `Interfaces`/`Routing` tab, no \"interfaces · routes\"\n  chip, `Managed devices` is selected;\n- a management server with interfaces keeps its `Interfaces` tab;\n- a standalone gateway: no `Cluster members` tab; its empty Interfaces panel shows \"Use Collect now\";\n- a cluster member keeps `Cluster members`;\n- the Add device credential link rule of change 4.\n\n## Done means\n- `cd ui2/frontend && npx tsc --noEmit -p . && npx vitest run` both green (all tests, not only yours).\n- `npm run build` green.\n- One commit on this branch, message in English, ending with the line `Co-Authored-By: gpt-6-luna (Codex)`.\n- Do not push, do not deploy, do not touch anything outside `ui2/frontend/`, do not edit `project/`, `docs/`, or\n  handover files. Do not add dependencies.\n- Final message: list the files changed, the tests added, and the test/build output summary.\n",
+        "output_contract": [
+          "English SESSION START and SESSION CLOSE in canonical relay",
+          "One commit on the lane, message ending 'Co-Authored-By: gpt-6-luna (Codex)'",
+          "No push, PR, merge or deployment",
+          "Exact changed paths and test outcomes"
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded frontend change with tests; four small rules",
+          "tier": "Medium"
+        },
+        "requirements": [
+          "Management server (role management_server) with zero interfaces and zero routes: omit Interfaces and Routing tabs and the count chip; first remaining tab is default",
+          "InterfacesPanel/RoutesPanel empty state for ordinary devices: 'This device has not been collected yet. Use Collect now to read its interfaces.' / '... its routes.'",
+          "Standalone device (cluster_member_ref null, not Infoblox grid manager, not Blue Coat/Fortinet management server): omit Cluster members tab",
+          "AddDeviceDialog: show Create credential only when the session can create credentials, reusing how the app already knows it; otherwise after ACTION_REFUSED hide it and say 'Ask an administrator to add a credential for this vendor.'",
+          "Vitest coverage for each rule"
+        ],
+        "risks": [
+          "DetailTabs default-tab logic from c27014a (initialTab, selectionKey) must keep working for SMC child selection",
+          "Existing tests may assert the removed tabs; update them only where the rule changed"
+        ],
+        "scope": {
+          "in": [
+            "ui2/frontend/src/screens/InventoryPanels.tsx",
+            "ui2/frontend/src/shell/AddDeviceDialog.tsx",
+            "ui2/frontend/tests/*"
+          ],
+          "out": [
+            "Backend, migrations, docs, project/, handover files",
+            "Git push, PR, merge, deployment, HOST-A, device contact"
+          ]
+        },
+        "validation_plan": [
+          "cd ui2/frontend && npx tsc --noEmit -p .",
+          "cd ui2/frontend && npx vitest run",
+          "cd ui2/frontend && npm run build",
+          "git diff --check",
+          "python3 scripts/repository_privacy_check.py"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-26T17:29:30Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0370",
+  "movement": "Device screen: hide empty tabs, restore Collect-now empty state, credential link by permission",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI_EFFECTIVENESS_COUNCIL_2026_09_25_FABLE.md",
+    "docs/design/CODEX_HANDOVER_2026_09_26.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-26T17:29:30Z"
+}
