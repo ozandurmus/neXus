@@ -80,17 +80,95 @@
       },
       "seq": 1,
       "timestamp": "2026-09-26T17:31:36Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/frontend/src/screens/ConfigurationDetail.tsx",
+          "ui2/frontend/src/screens/InventoryScreen.tsx",
+          "ui2/frontend/src/screens/configurationProjection.ts",
+          "ui2/frontend/tests/SmcInventory.test.tsx",
+          "ui2/frontend/tests/configurationProjection.test.ts",
+          "ui2/job-engine/src/main/java/com/securityexpert/nexus/ui2/jobs/admission/ConfigurationCapabilityIds.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/DeviceCompositionConfiguration.java",
+          "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/device/configuration/ConfigurationCollectService.java",
+          "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/configuration/ConfigurationCollectServiceTest.java",
+          "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/backup/asa/CiscoAsaExecutor.java",
+          "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/configuration/ConfigurationCapabilityExecutor.java",
+          "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/configuration/ConfigurationJobExecutor.java",
+          "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/configuration/ConfigurationRequest.java",
+          "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/configuration/ConfigurationVendor.java",
+          "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/configuration/asa/AsaConfigProcessor.java",
+          "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/confirm/WorkerClaimLoop.java",
+          "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/configuration/asa/AsaConfigProcessorTest.java"
+        ],
+        "completed": [
+          "Implemented the Cisco ASA configuration plane on feature/asa-configuration-plane in two commits.",
+          "Opened pull request 449 for orchestrator verification; no merge or deployment was performed."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "None.",
+          "ui": "Cisco ASA devices now expose a Configuration tab with sections derived from sanitized running configuration."
+        },
+        "integration": {
+          "branch": "feature/asa-configuration-plane",
+          "ci": "Not yet verified by the orchestrator.",
+          "head_sha": "a78f934b4ac8ff7c466b07e8eb5a481cefe3eb4a",
+          "merge_commit": null,
+          "merge_decision": "The orchestrator decides and performs merge after its own verification; the worker did not merge.",
+          "merge_state": "OPEN",
+          "pr": 449,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/449"
+        },
+        "next": {
+          "movement": "Orchestrator verification of PR 449, followed by real ASA validation under separate authorization.",
+          "movement_type": "VALIDATION",
+          "objective": "Review the relay close, diff, automated validation, and privacy gate before any merge; validate against a real single-context ASA later.",
+          "status": "planned"
+        },
+        "preserved": [
+          "Existing ASA backup behavior and command set; configuration reuses the interactive SSH session and gated more system:running-config read.",
+          "Single-context refusal; no migration, gate registry change, device write, or device contact.",
+          "Raw configuration remains in the existing encrypted artefact path; sanitized text, index, and logs withhold secret-bearing lines."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded PR and validation review; elevate only if real ASA semantics conflict with synthetic evidence.",
+          "tier": "Medium"
+        },
+        "state_updates": [
+          "None; docs, project state, and handover files were excluded by the worker scope."
+        ],
+        "unresolved_risks": [
+          "ASA running-config format and certificate-chain indentation are assumed from the approved single-context contract and synthetic fixtures; real ASA validation remains pending.",
+          "The known ProjectPlanReaderTest repository-state assertion remains failing outside this worker scope."
+        ],
+        "validation": {
+          "affected": "Frontend tsc --noEmit, Vitest 213/213, and npm run build passed on rebased origin/main.",
+          "diff_check": "git diff --check origin/main passed before each commit and after rebase.",
+          "full_regression": "Worker and capability-registry test tasks passed; service test task ran 386 tests with only the known ProjectPlanReaderTest repository-state assertion failing. Gradle used the installed binary with a temporary writable cache and -x :frontendCi because the default wrapper home and linked node_modules are read-only in this sandbox. Frontend checks ran separately.",
+          "privacy": "repository_privacy_check.py passed with 0 findings.",
+          "real_environment": "Not run; no ASA device was contacted and no deployment was performed.",
+          "state_consistency": "Project state files were excluded by the worker scope; no state consistency gate was run.",
+          "targeted": "AsaConfigProcessorTest, ConfigurationCollectServiceTest, and configurationProjection.test.ts passed; the added SmcInventory fixture test passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-26T18:02:50Z"
     }
   ],
   "id": "NXS-LOCAL-0371",
   "movement": "Cisco ASA configuration plane (mirror of the FortiGate plane)",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/CISCO_ASA_CONTRACT.md",
     "docs/design/UI_EFFECTIVENESS_COUNCIL_2026_09_25_SYNTHESIS.md",
     "project/QUEUE.md"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-26T17:31:36Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-26T18:02:50Z"
 }
