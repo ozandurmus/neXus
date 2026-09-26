@@ -66,7 +66,7 @@ it("includes collected vendors beyond Check Point and Palo Alto in the inventory
 });
 it("hides Interfaces and Routing for a collected appliance that reports none",async()=>{
   const appliance={...manager,device_id:"dp",vendor_hint:"radware",role:"appliance",cluster_member_ref:null} as DeviceSummary;
-  vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({device_id:"dp",collected_at:"2026-09-26T10:00:00Z",contexts:[],job:null}))));
+  vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({device_id:"dp",collected_at:"2026-09-26T10:00:00Z",contexts:[],job:null,backups:[]}))));
   render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={appliance}/></ThemeProvider>);
   await waitFor(()=>expect(screen.queryByRole('tab',{name:'Interfaces'})).toBeNull());
   expect(screen.queryByRole('tab',{name:'Routing'})).toBeNull();
