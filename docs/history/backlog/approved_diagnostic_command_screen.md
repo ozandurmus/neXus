@@ -11,3 +11,5 @@ Feature branch implements one gated FortiManager read with typed command input a
 Feature branch implements one gated FortiManager read with typed command input and a masked structural response of at most 64 fixed line labels. Targeted tests pass; not merged or deployed. Revised V90 requires live BEGIN/ROLLBACK dry-run before deploy; first real device command requires separate exact PO approval.
 
 Feature branch implements one gated FortiManager read with typed command input and a masked structural response of at most 64 fixed line labels. Targeted tests pass; revised V90 passed live BEGIN/ROLLBACK dry-run. Not merged or deployed. First real device command requires separate exact PO approval.
+
+Merged to main and deployed via scripts/hosta_deploy.sh. Schema 90, service/worker/configuration ready 1/1, configuration image digest matches service, diagnostic jobs 0. UI aiview inspection unavailable because the existing browser session is at sign-in. No diagnostic device command was sent; parser and physical link real-environment validation remain pending exact PO command approval.

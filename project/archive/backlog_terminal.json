@@ -1419,6 +1419,15 @@
       "priority": "P1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "approved_diagnostic_command_screen",
+      "category": "operations",
+      "title": "Approved read-only diagnostic command screen and shared CLI",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md",
+      "note": ""
     }
   ]
 }

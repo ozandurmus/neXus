@@ -1,15 +1,16 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
 # Snapshot (2026-09-26)
-HOST-A: schema 89, 122 devices at the last count. V87's per-port NIC command was rejected on the real FortiManager. V88 and V89 documented diagnostics were gated, dry-run, deployed, and measured under aiview; neither supplied an explicit link field on this version. Physical link remains `UNSUPPORTED/UNKNOWN`; the existing configured interface state is still displayed.
+HOST-A: schema 90, 122 devices at the last count. The Debug/Parser screen is deployed; service, worker and configuration are ready 1/1 on one image digest. V87 was rejected on the real FortiManager; V88/V89 lacked an explicit link field. Physical link remains `UNSUPPORTED/UNKNOWN`; no diagnostic command was run in this build.
 
 # What changed this session
 - Gated V87-V89 FortiManager diagnostics; the real CLI rejected V87, while V88/V89 returned an interface-information shape without a proven link field.
 - Removed the diagnostic probes from subsequent inventory reads. Gate and measurements remain in the contract and `fmg_link_state_diagnose_nic` queue note.
 - Targeted worker and gate tests passed. Broader service tests retain the known `ProjectPlanReaderTest` failure.
+- Merged and deployed the one-command Debug/Parser screen; live V90 `BEGIN/ROLLBACK` passed, configuration image aligned, and diagnostic job count remained zero.
 
 # Exact next action
-Review `feature/approved-diagnostic-screen` against the PO's Debug/Parser requirement before merge. The branch implements one gated FortiManager command with typed input and a masked structural response of at most 64 safe line labels; it has not been deployed. Revised V90 passed a live `BEGIN/ROLLBACK` dry-run. Do not execute port5 until the PO separately approves the exact command, target and safe projection. After approval to merge, deploy `origin/main` only via `scripts/hosta_deploy.sh`, align `ui2-configuration` to the service digest, and watch the rollout to completion. When Cisco ASA or Pulse Secure is enrolled, or SMC discovery runs, follow the first jobs through completion as specified in `docs/design/CODEX_HANDOVER_2026_09_26.md` §5.
+Obtain exact PO approval before the agent runs the first port5 command through neXus; present the code, command, masked target scope and safe projection. Then watch the job to terminal state and use the masked output to determine whether any physical-link field is proven. The existing aiview browser session is at sign-in, so visual UI acceptance remains pending. When Cisco ASA or Pulse Secure is enrolled, or SMC discovery runs, follow the first jobs through completion as specified in `docs/design/CODEX_HANDOVER_2026_09_26.md` §5.
 
 # New risks
 - FortiManager Interfaces currently presents configured enable/disable as up/down; this is not verified physical link.
