@@ -10,7 +10,7 @@ HOST-A: schema 90, 122 devices at the last count. The Debug/Parser screen is dep
 - Merged and deployed the one-command Debug/Parser screen; live V90 `BEGIN/ROLLBACK` passed, configuration image aligned, and diagnostic job count remained zero.
 
 # Exact next action
-Continue `debug_operations_successor` from `docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md`. Resolve runtime command registration, protected agent attribution, and response delivery/masking against existing code, then freeze the implementation contract and extend the deployed screen. Product choices are settled; do not ask the PO to repeat them. Do not run any device command without its separate exact PO approval. The existing aiview browser session was at sign-in at the last UI check.
+Continue Debug Phase 1 from `docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md`: device selection, typed diagnostic command, always-visible output, and human/AI output privacy. Reuse existing jobs and transports; do not build an automation platform or change failover. Saved commands are Phase 2. Do not run a device command without its separate exact PO approval. The existing aiview browser session was at sign-in at the last UI check.
 
 # New risks
 - FortiManager Interfaces currently presents configured enable/disable as up/down; this is not verified physical link.
