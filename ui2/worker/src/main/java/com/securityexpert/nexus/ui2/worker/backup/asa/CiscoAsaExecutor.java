@@ -191,7 +191,9 @@ public final class CiscoAsaExecutor {
             var routes = CiscoAsaPlan.parseRoutes(route.orElse(null));
             LOG.log(System.Logger.Level.INFO, "[ASA] inventory: interfaces={0} routes={1} ha={2} multiple_context={3}",
                     interfaces.size(), routes.size(), haRole.orElse("none"), multiple);
-            String context = v.hostname().orElse(InventoryContext.PHYSICAL);
+            // A single-context ASA has one context, the physical one (multiple-context ASAs are refused). The host name
+            // here made the cluster view look for "physical" and find nothing (2026-09-27, first ASA failover pairs).
+            String context = InventoryContext.PHYSICAL;
             return new HttpsVendorExecutor.InventoryOutcome.Completed(List.of(new InventoryContext(context, interfaces, routes)),
                     List.of(), Optional.empty(), new HttpsVendorExecutor.Identity(v.hostname(), v.model(), v.softwareVersion(), haRole));
         } finally {
