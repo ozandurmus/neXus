@@ -81,4 +81,27 @@ class ProxySgOutputsTest {
         org.junit.jupiter.api.Assertions.assertFalse(HttpsVendorExecutor.onlyAbsentInterfaceMessages(mixed));
         org.junit.jupiter.api.Assertions.assertFalse(HttpsVendorExecutor.onlyAbsentInterfaceMessages(none));
     }
+
+    @Test
+    void parsesTheMeasuredSgosInterfaceShapeAndIgnoresEmptySlots() {
+        String out = String.join("\n",
+                "!- show interface all",
+                "proxy-one#(config)show interface all",
+                "  Ethernet interface 0:0 (link up)",
+                "    Status:               up",
+                "    MAC address:          00:00:5e:00:53:01",
+                "    Internet address:     192.0.2.10 netmask 255.255.255.0",
+                "    IPv6 address:         fe80::1 prefixlen 64",
+                "  Ethernet interface 1:0 (link down)",
+                "    Status:               down",
+                "    Internet address:     0.0.0.0 netmask 0.0.0.0",
+                "% Ethernet interface 4:0 is not installed");
+        var list = ProxySgOutputs.interfaces(out);
+        assertEquals(2, list.size());
+        assertEquals("0:0", list.get(0).name());
+        assertEquals(com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface.STATE_UP, list.get(0).state());
+        assertEquals("192.0.2.10/24", list.get(0).addresses().get(0).address());
+        assertEquals(com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface.STATE_DOWN, list.get(1).state());
+        assertTrue(list.get(1).addresses().isEmpty());
+    }
 }

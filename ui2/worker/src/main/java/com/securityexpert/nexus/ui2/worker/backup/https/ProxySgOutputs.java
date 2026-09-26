@@ -24,7 +24,13 @@ public final class ProxySgOutputs {
     private ProxySgOutputs() {
     }
 
-    private static final Pattern IFACE = Pattern.compile("^\\s*Interface\\s+(\\d+:\\d+(?:\\.\\d+)?)\\b(.*)$", Pattern.CASE_INSENSITIVE);
+    // Measured 2026-09-26 (SGOS 7.4 via the MC): "  Ethernet interface 0:0 (...)"; an optional leading word is allowed.
+    // "% Ethernet interface N:0 is not installed" (empty slots) starts with '%' and never matches.
+    private static final Pattern IFACE = Pattern.compile("^\\s*(?:[A-Za-z]+\\s+)?Interface\\s+(\\d+:\\d+(?:\\.\\d+)?)\\b(.*)$", Pattern.CASE_INSENSITIVE);
+    /** Measured: "    Internet address: <ip> netmask <ip>" -- the mask follows the address on the same line. */
+    private static final Pattern ADDR_WITH_MASK = Pattern.compile("(?i)internet address:?\\s*(\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+\\S+\\s+(255\\.\\d+\\.\\d+\\.\\d+)");
+    /** Measured: "    Status: up" on its own line. */
+    private static final Pattern STATUS = Pattern.compile("(?i)^\\s*status:\\s*(up|down)\\b");
     private static final Pattern ADDR = Pattern.compile("(?i)internet address:?\\s*(\\d+\\.\\d+\\.\\d+\\.\\d+)");
     private static final Pattern MASK = Pattern.compile("(?i)subnet mask:?\\s*(\\d+\\.\\d+\\.\\d+\\.\\d+)");
     private static final Pattern IPV4 = Pattern.compile("\\b(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})(?:/(\\d{1,2}))?\\b");
@@ -60,6 +66,14 @@ public final class ProxySgOutputs {
             Matcher m = MASK.matcher(raw);
             if (m.find() && mask == null) {
                 mask = m.group(1);
+            }
+            Matcher am = ADDR_WITH_MASK.matcher(raw);
+            if (am.find() && mask == null) {
+                mask = am.group(2);
+            }
+            Matcher st = STATUS.matcher(raw);
+            if (st.find()) {
+                header = header + " link " + st.group(1).toLowerCase(Locale.ROOT);
             }
             String l = raw.toLowerCase(Locale.ROOT);
             if (l.contains("link") && (l.contains(" up") || l.contains(" down")) && !header.contains("link")) {
