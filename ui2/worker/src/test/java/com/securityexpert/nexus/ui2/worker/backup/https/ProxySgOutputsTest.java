@@ -64,4 +64,21 @@ class ProxySgOutputsTest {
         assertFalse(records.get(1).importable());
         assertEquals("BLUECOAT_RPTR", records.get(1).kind());
     }
+
+    @org.junit.jupiter.api.Test
+    void aManagementCenterFailureMadeOnlyOfAbsentInterfaceNotesIsAccepted() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var absent = mapper.readTree("""
+                {"status":"FAILURE","reply":"Ethernet interface 0:0 ...","messages":[
+                 {"severity":"ERROR","message":"% Ethernet interface 4:0 is not installed\\r\\n"},
+                 {"severity":"ERROR","message":"% Ethernet interface 9:0 is not installed\\r\\n"}]}""");
+        var mixed = mapper.readTree("""
+                {"status":"FAILURE","reply":"x","messages":[
+                 {"severity":"ERROR","message":"% Ethernet interface 4:0 is not installed"},
+                 {"severity":"ERROR","message":"% Invalid input detected"}]}""");
+        var none = mapper.readTree("{\"status\":\"FAILURE\",\"reply\":\"x\",\"messages\":[]}");
+        org.junit.jupiter.api.Assertions.assertTrue(HttpsVendorExecutor.onlyAbsentInterfaceMessages(absent));
+        org.junit.jupiter.api.Assertions.assertFalse(HttpsVendorExecutor.onlyAbsentInterfaceMessages(mixed));
+        org.junit.jupiter.api.Assertions.assertFalse(HttpsVendorExecutor.onlyAbsentInterfaceMessages(none));
+    }
 }

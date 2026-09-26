@@ -594,6 +594,24 @@ public final class HttpsVendorExecutor {
         }
     }
 
+    private static final java.util.regex.Pattern ABSENT_INTERFACE =
+            java.util.regex.Pattern.compile("^%\\s*Ethernet interface \\S+ is not installed\\s*$");
+
+    /** True when the MC's messages are all SGOS's "interface is not installed" notes for empty slots, and there is one. */
+    static boolean onlyAbsentInterfaceMessages(JsonNode reply) {
+        JsonNode messages = reply.path("messages");
+        if (!messages.isArray() || messages.isEmpty()) {
+            return false;
+        }
+        for (JsonNode m : messages) {
+            String text = m.isTextual() ? m.asText() : m.path("message").asText("");
+            if (!ABSENT_INTERFACE.matcher(text.strip()).matches()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static final class McCommandFailed extends Exception {
         McCommandFailed(String message) {
             super(message, null, false, false);
@@ -616,6 +634,12 @@ public final class HttpsVendorExecutor {
             throw new McCommandFailed("reply larger than 64 MB");
         }
         JsonNode j = JSON.readTree(r.body());
+        if (!"SUCCESS".equals(j.path("status").asText()) && onlyAbsentInterfaceMessages(j) && !j.path("reply").asText("").isBlank()) {
+            // Measured 2026-09-26: SGOS "show interface all" prints every installed interface, then one
+            // "% Ethernet interface N:0 is not installed" error per empty slot; the MC marks the whole reply FAILURE.
+            // The reply is complete for the installed interfaces, so it is used.
+            return j.path("reply").asText("");
+        }
         if (!"SUCCESS".equals(j.path("status").asText())) {
             // MEASURE (2026-09-26: every ProxySG inventory read failed with "status FAILURE, 6 message(s)"): which gated
             // command the MC refused and its messages, addresses and long digit runs masked, each cut to 160 chars.
