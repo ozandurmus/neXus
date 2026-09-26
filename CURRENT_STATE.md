@@ -34,9 +34,9 @@ output (`docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md`, FROZEN)
 Initial executable reads cover FortiManager, FortiGate and Cisco ASA. No diagnostic
 job has run; first real-command and AIView visual acceptance remain pending.
 Saved commands are Phase 2; automation and failover are outside this build.
-SMC inventory navigation and configuration refresh fixes are automated-validated
-on `feature/smc-inventory-visibility`, pending merge/deploy (`smc_inventory_navigation`
-in the queue). Existing SMC inventory contains seven members; discovery/import
+SMC inventory navigation and configuration refresh fixes are deployed
+(`smc_inventory_navigation` in the queue; code `c27014a`). Existing SMC inventory
+contains seven members. Post-deploy AIView acceptance awaits sign-in; discovery/import
 and missing Fortinet configuration collection remain unvalidated.
 
 ## Open Product Owner decisions
