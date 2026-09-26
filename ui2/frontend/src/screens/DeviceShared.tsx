@@ -20,7 +20,18 @@ import { Icon } from "../shell/Icon";
 import { deviceNameLabel } from "../shell/deviceCopy";
 import type { DeviceSummary } from "../auth/adminApi";
 
-export function isDeviceLive(device: DeviceSummary, inventoryCollectedAt?: string | null): boolean {
+/**
+ * One "Live" rule for the sidebar rows, cluster rows, the list count and the detail header: enrolled, and evidence has
+ * been read -- interface addresses, or a completed inventory run (HTTPS appliances and management servers report
+ * members or managed devices, not interfaces). Single-argument on purpose: it is passed straight to filter()/some(),
+ * which would hand it the array index as a second argument.
+ */
+export function isDeviceLive(device: DeviceSummary): boolean {
+  return deviceLiveWithInventory(device, null);
+}
+
+/** The detail header's form: also counts the inventory it has just loaded for this device. */
+export function deviceLiveWithInventory(device: DeviceSummary, inventoryCollectedAt: string | null | undefined): boolean {
   return device.enrollment_state === "ENROLLED" && Boolean(
     device.ip_addresses?.trim() || device.inventory_collected_at || inventoryCollectedAt,
   );

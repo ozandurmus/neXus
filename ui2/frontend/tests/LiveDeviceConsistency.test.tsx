@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import type { DeviceSummary } from "../src/auth/adminApi";
-import { DeviceList } from "../src/screens/InventoryScreen";
+import { DeviceList, isDeviceLive } from "../src/screens/InventoryScreen";
 
 function renderDevice(device: DeviceSummary) {
   return render(
@@ -33,4 +33,9 @@ it("keeps not-collected when an enrolled device has no inventory evidence", () =
 it("keeps an enrolled device with interface addresses Live", () => {
   renderDevice(appliance({ ip_addresses: "192.0.2.1" }));
   expect(screen.queryByText("Confirmed · Not collected")).toBeNull();
+});
+
+it("counts Live per device when used as a filter callback (no index leaks into the rule)", () => {
+  const devices = [appliance({ device_id: "a", ip_addresses: "192.0.2.1" }), appliance({ device_id: "b" }), appliance({ device_id: "c" })];
+  expect(devices.filter(isDeviceLive).map((d) => d.device_id)).toEqual(["a"]);
 });

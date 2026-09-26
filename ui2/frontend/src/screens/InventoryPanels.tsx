@@ -18,7 +18,7 @@ import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel, onboardingChip } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip, Ts, VendorBadge, vendorDisplayName } from "../shell/States";
-import { ClusterContextStrip, DeviceIdentityTable, isDeviceLive, orderMembers } from "./DeviceShared";
+import { ClusterContextStrip, DeviceIdentityTable, deviceLiveWithInventory, orderMembers } from "./DeviceShared";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import {
   getDevice,
@@ -1733,7 +1733,7 @@ export function DeviceInventoryPanels({
     deviceIfaceCount === 0 && deviceRouteCount === 0 && deviceContexts.every((c) => !c.vs_name);
   // Live = device evidence has been read: interface addresses, or (HTTPS appliances and management servers whose
   // evidence is members / managed devices, not interfaces) a completed inventory run.
-  const isLiveDevice = isDeviceLive(device, deviceInventory?.collected_at);
+  const isLiveDevice = deviceLiveWithInventory(device, deviceInventory?.collected_at);
   const isEnrolledDevice = device.enrollment_state === "ENROLLED";
 
   return (
