@@ -49,6 +49,8 @@ receiver used for the Radware Cyber Controller fits, and is the next step after 
   The first real run on FortiManager 7.4.11 rejected every per-port invocation as a CLI error. The worker no longer
   issues that form. Physical link remains `UNSUPPORTED` for this appliance and `UNKNOWN` in inventory until an
   appliance-specific read is documented, gated, and measured; configured state remains a separate observation.
+  V88 gates the FortiManager-documented `diagnose system print interface <interface>` as a bounded candidate. Its
+  first neXus run probes one interface and records only a masked output shape; it does not assert link semantics.
 
 ## Real-environment measurement (to do, after the PO adds the devices)
 One FortiGate with VDOMs and one FortiManager, fwadm credential: confirm facts present; VDOM, interface and route

@@ -48,8 +48,13 @@ public final class FortiManagerExecutor {
     }
 
     public static final String SSH_GET_SYSTEM_INTERFACE = "get system interface";
+    private static final java.util.regex.Pattern PORT_NAME = java.util.regex.Pattern.compile("[A-Za-z0-9_.-]{1,31}");
     private static final java.util.regex.Pattern IFACE_BLOCK = java.util.regex.Pattern.compile("(?m)^==\\s*\\[\\s*([A-Za-z0-9_.-]+)\\s*\\]");
     private static final java.util.regex.Pattern IFACE_STATUS = java.util.regex.Pattern.compile("(?im)(?:^|\\s)status:\\s*(up|down|enable|disable)\\b");
+
+    static Optional<String> diagnosticCommand(String port) {
+        return PORT_NAME.matcher(port).matches() ? Optional.of("diagnose system print interface " + port) : Optional.empty();
+    }
 
     /**
      * FortiManager CLI "get system interface": "== [ port1 ]" blocks; "status:" is the interface's configured state
@@ -107,6 +112,17 @@ public final class FortiManagerExecutor {
                 }
                 LOG.log(System.Logger.Level.INFO, "[FMG] ssh interface states: {0} read; status words {1}; shape {2}", states.size(), words,
                         com.securityexpert.nexus.ui2.worker.backup.https.ProxySgOutputs.shape(c.output(), 8));
+                // V88: measure one documented interface diagnostic before assigning any link semantics.
+                states.keySet().stream().map(FortiManagerExecutor::diagnosticCommand).flatMap(Optional::stream).findFirst().ifPresent(command -> {
+                    var measured = ssh.execInteractive(a.session(), new com.securityexpert.nexus.ui2.jobs.transport.ExecSpec(
+                            command, true), Duration.ofSeconds(60));
+                    if (measured instanceof com.securityexpert.nexus.ui2.jobs.transport.ExecResult.Completed result) {
+                        LOG.log(System.Logger.Level.INFO, "[FMG] interface diagnostic shape: {0}",
+                                com.securityexpert.nexus.ui2.worker.backup.https.ProxySgOutputs.shape(result.output(), 12));
+                    } else {
+                        LOG.log(System.Logger.Level.INFO, "[FMG] interface diagnostic result: {0}", measured.getClass().getSimpleName());
+                    }
+                });
                 return states;
             }
             LOG.log(System.Logger.Level.INFO, "[FMG] ssh get system interface: {0}", out.getClass().getSimpleName());
