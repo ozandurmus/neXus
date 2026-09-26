@@ -35,6 +35,25 @@ public final class LoginFlow {
 
     private RoleBindingRepository bindings;
     private GroupReferenceCipher cipher;
+    /**
+     * Actors whose sessions never time out for idleness (PO 2026-09-26: "aiview açıksa açık kalsın"): their idle window
+     * is the absolute lifetime, so only the absolute lifetime or a sign-out ends the session.
+     */
+    private java.util.function.Predicate<String> idleExempt = actor -> false;
+
+    /** @see #idleExempt */
+    public LoginFlow withIdleExemption(java.util.function.Predicate<String> exempt) {
+        this.idleExempt = java.util.Objects.requireNonNull(exempt, "exempt");
+        return this;
+    }
+
+    private Duration idleFor(String actorFingerprint) {
+        try {
+            return idleExempt.test(actorFingerprint) ? absoluteLifetime : idleTimeout;
+        } catch (RuntimeException e) {
+            return idleTimeout; // an unresolvable actor keeps the normal idle window
+        }
+    }
 
     public LoginFlow(SessionRepository sessions, Duration idle, Duration absolute,
             RoleBindingRepository bindings, GroupReferenceCipher cipher) {
@@ -123,7 +142,7 @@ public final class LoginFlow {
             String sessionId = SessionHasher.hash(rawCookie);
             String csrfSecret = randomCookieValue();
             SessionRecord created = sessionRepository.createActive(sessionId, actorFingerprint, csrfSecret, now,
-                    idleTimeout, absoluteLifetime, ACTION_SESSION_LOGIN);
+                    idleFor(actorFingerprint), absoluteLifetime, ACTION_SESSION_LOGIN);
             return new LoginResult.NewSession(rawCookie, created);
         }
         SessionRecord prior = existing.get();
@@ -168,7 +187,7 @@ public final class LoginFlow {
                         }
                         String cookie = randomCookieValue();
                         SessionRecord session = tx.sessions().takeover(pending.priorSessionId(), SessionHasher.hash(cookie),
-                                pending.actorFingerprint(), randomCookieValue(), at, idleTimeout, absoluteLifetime,
+                                pending.actorFingerprint(), randomCookieValue(), at, idleFor(pending.actorFingerprint()), absoluteLifetime,
                                 ACTION_SESSION_LOGIN_TAKEOVER);
                         tx.actors().upsertDirectory(pending.directory().encryptedProof());
                         result.set(new ResolveResult.TakenOver(cookie, session));
@@ -182,7 +201,7 @@ public final class LoginFlow {
         String newSessionId = SessionHasher.hash(rawCookie);
         String csrfSecret = randomCookieValue();
         SessionRecord session = sessionRepository.takeover(pending.priorSessionId(), newSessionId,
-                pending.actorFingerprint(), csrfSecret, now, idleTimeout, absoluteLifetime,
+                pending.actorFingerprint(), csrfSecret, now, idleFor(pending.actorFingerprint()), absoluteLifetime,
                 ACTION_SESSION_LOGIN_TAKEOVER);
         return new ResolveResult.TakenOver(rawCookie, session);
     }

@@ -89,3 +89,13 @@ identities today and do not prejudge it.
   actor appear in audit presentation.
 - `AGENTS.md` — authority hierarchy; a FROZEN contract is superseded by a later
   record, never edited in place.
+
+## Amendment A (2026-09-26, Product Owner): no idle timeout for the aiview role
+
+The Product Owner, 2026-09-26: "airview'in boşa kalma süresini kapatalım. Airview açıksa açık kalsın" — turn off the
+idle timeout for aiview; while aiview is open it stays open. A session whose local identity holds
+`role:replay_viewer` gets the absolute lifetime as its idle window (`LoginFlow.withIdleExemption`, wired in
+`LocalAuthenticationConfiguration.loginFlow`), so only the absolute lifetime (10 hours) or a sign-out ends it. Every
+other identity keeps SP-1's idle timeout as implemented (30 minutes). An identity whose roles cannot be resolved keeps
+the normal idle timeout. Sessions created before this amendment keep the idle window they were created with until
+the next sign-in.

@@ -142,8 +142,17 @@ public class LocalAuthenticationConfiguration {
     }
 
     @Bean
-    public LoginFlow loginFlow(SessionRepository sessionRepository, RoleBindingRepository bindings, GroupReferenceCipher cipher) {
-        return new LoginFlow(sessionRepository, IDLE_TIMEOUT, ABSOLUTE_LIFETIME, bindings, cipher);
+    public LoginFlow loginFlow(SessionRepository sessionRepository, RoleBindingRepository bindings, GroupReferenceCipher cipher,
+            LocalCredentialsRepository localCredentialsRepository) {
+        // PO 2026-09-26 (amends SP-1 of PO_DECISION_RECORD_2026_09_15B for this one role): a role:replay_viewer (aiview)
+        // session has no idle timeout -- it stays open while it is open, until its absolute lifetime or a sign-out.
+        LocalIdentityResolver identities = new LocalIdentityResolver(localCredentialsRepository);
+        LocalRoleTokenResolver roles = new LocalRoleTokenResolver(bindings, cipher);
+        return new LoginFlow(sessionRepository, IDLE_TIMEOUT, ABSOLUTE_LIFETIME, bindings, cipher)
+                .withIdleExemption(actor -> identities.resolve(actor)
+                        .map(identity -> roles.resolve(identity.localIdentityId())
+                                .contains(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER))
+                        .orElse(false));
     }
 
     @Bean

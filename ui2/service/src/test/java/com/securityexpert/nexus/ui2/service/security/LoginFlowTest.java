@@ -119,6 +119,29 @@ class LoginFlowTest {
     }
 
     @Test
+    void anIdleExemptActorGetsTheAbsoluteLifetimeAsItsIdleWindowOthersKeepTheIdleTimeout() {
+        InMemorySessionRepository repo = new InMemorySessionRepository();
+        LoginFlow flow = newFlow(repo).withIdleExemption(actor -> actor.equals("aiview-actor"));
+
+        SessionRecord viewer = ((LoginFlow.LoginResult.NewSession) flow.login("aiview-actor", NOW)).session();
+        SessionRecord other = ((LoginFlow.LoginResult.NewSession) flow.login("actor1", NOW)).session();
+
+        assertEquals(NOW.plus(Duration.ofHours(10)), viewer.idleDeadlineAt());
+        assertEquals(viewer.absoluteExpiresAt(), viewer.idleDeadlineAt());
+        assertEquals(NOW.plus(Duration.ofMinutes(5)), other.idleDeadlineAt());
+    }
+
+    @Test
+    void anExemptionThatThrowsKeepsTheNormalIdleWindow() {
+        InMemorySessionRepository repo = new InMemorySessionRepository();
+        LoginFlow flow = newFlow(repo).withIdleExemption(actor -> { throw new IllegalStateException("unresolvable"); });
+
+        SessionRecord s = ((LoginFlow.LoginResult.NewSession) flow.login("actor1", NOW)).session();
+
+        assertEquals(NOW.plus(Duration.ofMinutes(5)), s.idleDeadlineAt());
+    }
+
+    @Test
     void firstLoginForAnIdentityCreatesAnActiveSession() {
         InMemorySessionRepository repo = new InMemorySessionRepository();
         LoginFlow flow = newFlow(repo);
