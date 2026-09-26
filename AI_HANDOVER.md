@@ -1,20 +1,18 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
 # Snapshot (2026-09-26)
-HOST-A: schema 90, 122 devices at the last count. The Debug/Parser screen is deployed; service, worker and configuration are ready 1/1 on one image digest. V87 was rejected on the real FortiManager; V88/V89 lacked an explicit link field. Physical link remains `UNSUPPORTED/UNKNOWN`; no diagnostic command was run in this build.
+HOST-A schema 91; Debug Phase 1 code 655bc26 is deployed from main. Service, worker and configuration are ready 1/1; configuration matches the service image digest. The output store is accessible. Diagnostic job count is zero. FortiManager physical link remains UNKNOWN.
 
 # What changed this session
-- Gated V87-V89 FortiManager diagnostics; the real CLI rejected V87, while V88/V89 returned an interface-information shape without a proven link field.
-- Removed the diagnostic probes from subsequent inventory reads. Gate and measurements remain in the contract and `fmg_link_state_diagnose_nic` queue note.
-- Targeted worker and gate tests passed. Broader service tests retain the known `ProjectPlanReaderTest` failure.
-- Merged and deployed the one-command Debug/Parser screen; live V90 `BEGIN/ROLLBACK` passed, configuration image aligned, and diagnostic job count remained zero.
+- Added all-device selection, typed gated diagnostic reads and persistent actor/target/command/time/outcome history.
+- Administrator output uses the existing encrypted artefact store after credential-secret scrubbing; AIView receives server-masked text. Old pilot summaries remain readable.
+- Initial executable SSH reads cover FortiManager, FortiGate and Cisco ASA. Unsupported commands/transports are refused. No saved-command catalog, scripts, writes or failover work.
 
 # Exact next action
-Deploy Debug Phase 1 from `feature/debug-operations-contract`, following `docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md` (FROZEN). The PO requested persistent actor/command/target/time/result history. All-device selection, typed gated reads, retained administrator output and masked AIView output are implemented; V91 passed live BEGIN/ROLLBACK including job insertion. First SSH read scopes are FortiManager, FortiGate and Cisco ASA. No worker was delegated and no device command was run. Saved commands are Phase 2; automation and failover stay outside scope. Device commands still require separate exact PO approval.
+Validate Operations > Diagnostics under AIView. Before any agent-triggered real read, present the exact command, target, code and safe projection and obtain the PO's separate approval. Watch that job to its terminal state and verify retained history/output. The contract is `docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md` (FROZEN).
+
+# Test delta
+203 frontend tests passed; focused Java diagnostic tests and Java architecture checks passed. Python render/architecture checks: 29 passed, 1 skipped. V91 live BEGIN/ROLLBACK and job insertion passed. Repository privacy passed. Full Gradle regression retains the previously observed container-environment failures and known ProjectPlanReaderTest failure; this build does not claim a green full Java suite.
 
 # New risks
-- FortiManager Interfaces currently presents configured enable/disable as up/down; this is not verified physical link.
-- Device contact stays inside gated neXus jobs. HOST-A is never a jump host; no manual device SSH or browser access.
-- PO 2026-09-26: present exact code, command, target scope, and sanitized projection for each ad hoc parser diagnostic;
-  obtain individual approval before neXus sends it. Never modify a device for verification or troubleshooting.
-- UI2 frontend: 203 tests, production build and HTML render harness passed. Targeted diagnostic backend and role-architecture tests passed. Full Gradle regression remains red: integration tests cannot start in the local container environment, and the known `ProjectPlanReaderTest` fails.
+No real diagnostic read or authenticated live UI acceptance has been performed for Phase 1. Output masking is conservative for unknown tokens. No automatic history deletion was introduced. Device commands still require exact PO approval for agent use; HOST-A is never a jump host.

@@ -22,20 +22,18 @@ backup schedule is not switched on.
 
 ## Active build
 
-Continuous deploys 2026-09-25/26 on HOST-A (schema 90); the next tool starts
+Continuous deploys 2026-09-25/26 on HOST-A (schema 91); the next tool starts
 from `docs/design/CODEX_HANDOVER_2026_09_26.md`. Predecessor build record
 `NXS-LOCAL-0370` (Infoblox, observed facts, HTTPS inventory). A build record
 for V73–V89 is still to be written. Open gates: first real runs of Cisco ASA,
 Pulse Secure, ProxySG discovery import; FortiManager physical link remains
 `UNSUPPORTED/UNKNOWN` after V87's per-port CLI form was rejected and V88/V89 lacked an explicit link field on the real appliance.
-The approved Debug/Parser screen is deployed but awaits a first PO-approved device read
-(`docs/design/FMG_SINGLE_COMMAND_DIAGNOSTIC_CLI.md`, FROZEN). It accepts one V89 FortiManager
-read and shows up to 64 masked structural line labels. Arbitrary commands are refused;
-physical link and the first real port5 run remain `UNKNOWN`/unvalidated.
-Debug Phase 1 is automated-validated: all-device selection, typed gated reads,
-persistent execution history and role-aware output, with prior PO approval for agent runs
-(`docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md`). Saved commands
-are deferred to Phase 2; automation and failover are outside this build.
+Debug Phase 1 is deployed and automated-validated: all-device selection, typed
+gated diagnostic reads, persistent execution history, and administrator/masked
+output (`docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md`, FROZEN).
+Initial executable reads cover FortiManager, FortiGate and Cisco ASA. No diagnostic
+job has run; first real-command and AIView visual acceptance remain pending.
+Saved commands are Phase 2; automation and failover are outside this build.
 
 ## Open Product Owner decisions
 
