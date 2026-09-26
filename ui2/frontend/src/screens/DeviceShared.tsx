@@ -20,6 +20,12 @@ import { Icon } from "../shell/Icon";
 import { deviceNameLabel } from "../shell/deviceCopy";
 import type { DeviceSummary } from "../auth/adminApi";
 
+export function isDeviceLive(device: DeviceSummary, inventoryCollectedAt?: string | null): boolean {
+  return device.enrollment_state === "ENROLLED" && Boolean(
+    device.ip_addresses?.trim() || device.inventory_collected_at || inventoryCollectedAt,
+  );
+}
+
 /**
  * Pieces the Devices and Configuration screens share (UI_VISUAL_REVIEW_2026_09_23_FABLE.md §3, §6): the labelled
  * filter row, the fixed member order, the per-member identity table, the cluster context strip and the CSV

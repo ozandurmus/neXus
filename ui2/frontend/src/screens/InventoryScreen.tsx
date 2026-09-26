@@ -11,7 +11,8 @@ import { Icon } from "../shell/Icon";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
-import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, toCsv } from "./DeviceShared";
+import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, isDeviceLive, toCsv } from "./DeviceShared";
+export { isDeviceLive } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { useListSearch } from "../shell/listSearch";
 import { requestBulkInventoryCollect, requestBulkConfigurationCollect, listConfigurations, getOverview, listDevices, getManagementTree, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode } from "../auth/adminApi";
@@ -80,11 +81,8 @@ function hasFailedCollection(device: DeviceSummary): boolean {
 // look: its name, that it is a cluster, and whether the connection is clean -- member count,
 // virtual-system count and the raw cluster reference move to the detail view, which already
 // shows every member's own version/serial/identity once selected.
-// Same rule as the detail header (InventoryPanels): "Live" needs collected interface evidence, not
-// just a successful confirm -- a cluster read as "Live" in this list while its own detail view said
-// "Confirmed · Not collected" (Product Owner, 2026-09-22).
 function clusterHasCollectedEvidence(members: readonly DeviceSummary[]): boolean {
-  return members.some((m) => Boolean(m.ip_addresses && m.ip_addresses.trim().length > 0));
+  return members.some(isDeviceLive);
 }
 
 /** Vendors with a configuration read (one device screen, PO 2026-09-25): others show no Configuration tab. */
@@ -247,11 +245,6 @@ export function inventoryCsv(devices: readonly DeviceSummary[]): string {
       ];
     }),
   ]);
-}
-
-/** "Live" = identity-verified AND at least one interface read (see DeviceRow). */
-export function isDeviceLive(device: DeviceSummary): boolean {
-  return device.enrollment_state === "ENROLLED" && Boolean(device.ip_addresses && device.ip_addresses.trim().length > 0);
 }
 
 /** Distinct clusters in a device list: every cluster reference, and those with at least one ENROLLED member. */
