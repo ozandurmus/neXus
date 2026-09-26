@@ -325,14 +325,15 @@ type DeviceListProps = Parameters<typeof FlatDeviceList>[0] & {
  */
 export function DeviceList(props: DeviceListProps) {
   const { groupByManager = false, devices, ...rest } = props;
-  const managers = useMemo(() => devices.filter((d) => d.role === "management_server"), [devices]);
+  const managers = useMemo(() => devices.filter((d) => d.role === "management_server" || d.vendor_hint === "infoblox"), [devices]);
+  const treeManagers = useMemo(() => managers.filter((d) => d.role === "management_server"), [managers]);
   const [trees, setTrees] = useState<ReadonlyMap<string, ManagementTree>>(new Map());
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
-  const managerKey = managers.map((m) => m.device_id).join(",");
+  const managerKey = treeManagers.map((m) => m.device_id).join(",");
   useEffect(() => {
-    if (!groupByManager || managers.length === 0) return;
+    if (!groupByManager || treeManagers.length === 0) return;
     let cancelled = false;
-    Promise.all(managers.map((m) => getManagementTree(m.device_id).then((t) => [m.device_id, t] as const).catch(() => null)))
+    Promise.all(treeManagers.map((m) => getManagementTree(m.device_id).then((t) => [m.device_id, t] as const).catch(() => null)))
       .then((rows) => {
         if (cancelled) return;
         setTrees(new Map(rows.filter((r): r is readonly [string, ManagementTree] => r !== null)));
@@ -340,7 +341,7 @@ export function DeviceList(props: DeviceListProps) {
     return () => { cancelled = true; };
   }, [groupByManager, managerKey]);
 
-  if (!groupByManager || managers.length === 0 || trees.size === 0) return <FlatDeviceList devices={devices} {...rest} />;
+  if (!groupByManager || managers.length === 0 || (treeManagers.length > 0 && trees.size === 0)) return <FlatDeviceList devices={devices} {...rest} />;
   const byId = new Map(devices.map((d) => [d.device_id, d]));
   const placed = new Set<string>();
   const sections = managers.map((m) => {
@@ -393,11 +394,13 @@ export function DeviceList(props: DeviceListProps) {
                   {MANAGER_KIND[manager.vendor_hint] ?? "Management server"}
                 </Typography>
               </Box>
-              {/* An HTTPS manager's devices are its inventory's member list, not neXus devices: no count here. */}
-              {(total > 0 || manager.vendor_hint === "check_point" || manager.vendor_hint === "palo_alto") && (
+              {/* Listed manager inventory is external; Infoblox rows count their listed grid members. */}
+              {manager.vendor_hint === "infoblox" ? (
+                <StatusChip tone="neutral" label={`${listed.length} members`} dense />
+              ) : (total > 0 || manager.vendor_hint === "check_point" || manager.vendor_hint === "palo_alto") && (
                 <StatusChip tone="neutral" label={`${total} managed`} dense />
               )}
-              {total === 0 && listed.length > 0 && <StatusChip tone="neutral" label={`${listed.length} managed`} dense />}
+              {manager.vendor_hint !== "infoblox" && total === 0 && listed.length > 0 && <StatusChip tone="neutral" label={`${listed.length} managed`} dense />}
             </Box>
             {expanded && listed.length > 0 && (
               <Box sx={{ pl: 2, display: "flex", flexDirection: "column", gap: 0.75, borderLeft: `2px solid ${m3.outlineVar}`, ml: 1 }}>
@@ -471,6 +474,7 @@ function FlatDeviceList({
 }) {
   const [expandedRefs, setExpandedRefs] = useState<ReadonlySet<string>>(new Set());
   const [collapsedRefs, setCollapsedRefs] = useState<ReadonlySet<string>>(new Set());
+  const [expandedStandaloneRefs, setExpandedStandaloneRefs] = useState<ReadonlySet<string>>(new Set());
 
   const groups = new Map<string, DeviceSummary[]>();
   const standalone: DeviceSummary[] = [];
@@ -501,6 +505,12 @@ function FlatDeviceList({
       });
     }
   };
+  const toggleStandalone = (id: string) => setExpandedStandaloneRefs((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
 
   return (
     <Stack spacing={1.25}>
@@ -704,7 +714,8 @@ function FlatDeviceList({
           ? device.virtual_systems.split(/,\s*/).filter(Boolean)
           : [];
         const isDeviceSelected = device.device_id === selectedDeviceId;
-        const isExpanded = !collapsedRefs.has(device.device_id);
+        const isExpanded = expandedStandaloneRefs.has(device.device_id);
+        const childCountLabel = device.vendor_hint === "infoblox" ? "members" : labels.chip;
 
         if (standaloneVsList.length === 0 || !showVirtualSystems) {
           return (
@@ -714,7 +725,7 @@ function FlatDeviceList({
               selected={isDeviceSelected && !selectedVs}
               onSelect={(dev) => onSelectDevice(dev)}
               trailingExtra={standaloneVsList.length > 0
-                ? <StatusChip tone="neutral" label={`${standaloneVsList.length} ${labels.chip}`} dense />
+                ? <StatusChip tone="neutral" label={`${standaloneVsList.length} ${childCountLabel}`} dense />
                 : undefined}
             />
           );
@@ -730,14 +741,14 @@ function FlatDeviceList({
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <StatusChip
                     tone="neutral"
-                    label={`${standaloneVsList.length} ${labels.chip}`}
+                    label={`${standaloneVsList.length} ${childCountLabel}`}
                     dense
                   />
                   <Box
                     component="span"
                     onClick={(e) => {
                       e.stopPropagation();
-                      toggle(device.device_id);
+                      toggleStandalone(device.device_id);
                     }}
                     sx={{
                       cursor: "pointer",
@@ -748,7 +759,7 @@ function FlatDeviceList({
                     }}
                     title={isExpanded ? "Collapse virtual systems" : "Expand virtual systems"}
                   >
-                    {isExpanded ? "▲" : "▼"}
+                    {isExpanded ? "▾" : "▸"}
                   </Box>
                 </Box>
               }

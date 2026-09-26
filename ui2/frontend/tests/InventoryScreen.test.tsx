@@ -437,6 +437,8 @@ describe("InventoryScreen device list", () => {
     expect(screen.queryByRole("tab", { name: /Physical/i })).toBeNull();
 
     // Selecting the VS from the sidebar switches straight to that VS's own interface.
+    expect(screen.queryByText("ExamplebankBetaAA")).toBeNull();
+    fireEvent.click(screen.getByTitle("Expand virtual systems"));
     fireEvent.click(screen.getByText("ExamplebankBetaAA"));
     await waitFor(() => expect(screen.getByText("eth0.100")).toBeInTheDocument());
     expect(screen.queryByText("Mgmt")).toBeNull();
@@ -666,6 +668,8 @@ describe("InventoryScreen device list", () => {
 
     await waitFor(() => expect(screen.getByText("PA-STANDALONE")).toBeInTheDocument());
     expect(screen.getByText("2 VSYS")).toBeInTheDocument();
+    expect(screen.queryByText("default (vsys1)")).toBeNull();
+    fireEvent.click(screen.getByTitle("Expand virtual systems"));
     expect(screen.getByText("default (vsys1)")).toBeInTheDocument();
     expect(screen.getByText("CorpNet (vsys2)")).toBeInTheDocument();
 

@@ -38,3 +38,38 @@ it("stays flat without grouping", () => {
   render(<DeviceList devices={devices} selectedDeviceId={null} selectedClusterRef={null} onSelectDevice={vi.fn()} onSelectCluster={vi.fn()} />);
   expect(screen.getByText("CLS-ROMEO-01")).toBeTruthy();
 });
+
+it("collapses Infoblox grid members and selects a member through its manager", () => {
+  const onSelectDevice = vi.fn();
+  const grid = dev("grid", "GRID-ROMEO-01", { vendor_hint: "infoblox", role: "appliance", virtual_systems: "MEMBER-A, MEMBER-B, MEMBER-C" });
+  render(<DeviceList devices={[grid]} selectedDeviceId={null} selectedClusterRef={null} onSelectDevice={onSelectDevice} onSelectCluster={vi.fn()} />);
+  expect(screen.getByText("3 members")).toBeTruthy();
+  expect(screen.queryByText("MEMBER-A")).toBeNull();
+  fireEvent.click(screen.getByTitle("Expand virtual systems"));
+  fireEvent.click(screen.getByText("MEMBER-B"));
+  expect(onSelectDevice).toHaveBeenCalledWith(grid, "MEMBER-B");
+});
+
+it("places Infoblox manager rows with management servers above standalone gateways", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(tree))));
+  const grid = dev("grid", "GRID-ROMEO-01", { vendor_hint: "infoblox", role: "appliance", virtual_systems: "MEMBER-A" });
+  const { container } = render(<DeviceList groupByManager devices={[devices[0], grid, devices[3]]} selectedDeviceId={null} selectedClusterRef={null}
+    onSelectDevice={vi.fn()} onSelectCluster={vi.fn()} />);
+  await waitFor(() => expect(screen.getByText("1 members")).toBeTruthy());
+  expect(screen.queryByText("1 managed")).toBeNull();
+  const rows = [...container.querySelectorAll('[data-row="manager-head"]')];
+  expect(rows.map((row) => row.textContent)).toEqual(expect.arrayContaining([expect.stringContaining("FW-MDS-01"), expect.stringContaining("GRID-ROMEO-01")]));
+  expect(rows[0]?.textContent).toContain("FW-MDS-01");
+  expect(rows[1]?.textContent).toContain("GRID-ROMEO-01");
+  expect(container.querySelector('[data-row="device"]')?.textContent).toContain("FW-SOLO-09");
+});
+
+it("starts a standalone VSX gateway collapsed with the virtual-system count", () => {
+  const gateway = dev("vsx", "FW-VSX-01", { virtual_systems: "VS-A, VS-B" });
+  render(<DeviceList devices={[gateway]} selectedDeviceId={null} selectedClusterRef={null} onSelectDevice={vi.fn()} onSelectCluster={vi.fn()} />);
+  expect(screen.getByText("2 VS")).toBeTruthy();
+  expect(screen.queryByText("VS-A")).toBeNull();
+  fireEvent.click(screen.getByTitle("Expand virtual systems"));
+  expect(screen.getByText("VS-A")).toBeTruthy();
+  expect(screen.getByText("VS-B")).toBeTruthy();
+});
