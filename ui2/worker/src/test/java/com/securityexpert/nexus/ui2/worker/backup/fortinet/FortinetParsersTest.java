@@ -18,8 +18,10 @@ class FortinetParsersTest {
 
     @Test
     void diagnosticProbeAcceptsOnlyOneInterfaceToken() {
-        assertEquals(Optional.of("diagnose system print interface port1"), FortiManagerExecutor.diagnosticCommand("port1"));
+        assertEquals(Optional.of("diagnose fmnetwork interface detail port1"), FortiManagerExecutor.diagnosticCommand("port1"));
         assertTrue(FortiManagerExecutor.diagnosticCommand("port1; execute factoryreset").isEmpty());
+        assertEquals("UP", FortiManagerExecutor.diagnosticStatusToken("Status: up\nSpeed: 1000Mb/s"));
+        assertEquals("ABSENT", FortiManagerExecutor.diagnosticStatusToken("Command fail"));
     }
 
     @Test

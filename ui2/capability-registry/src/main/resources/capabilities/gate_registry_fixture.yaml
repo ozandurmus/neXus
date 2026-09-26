@@ -2182,3 +2182,19 @@ gates:
     secret_output_risk: 'hardware identifiers and addresses; log only masked shape'
     safe_telemetry_fields: []
     source_document_pointer: 'FortiManager 7.4 CLI Reference: system print interface; FORTINET_CONTRACT.md'
+  - gate_id: fmg_ssh_fmnetwork_interface_detail
+    vendor: 'fortinet'
+    platform_role_scope: 'fortimanager'
+    shell_context: 'cli'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'diagnose fmnetwork interface detail <interface>'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per named physical interface per inventory'
+    session_reuse_rule: 'reuse inventory SSH session'
+    unsupported_behavior_ref: 'refused, missing, or unrecognized output -> physical link UNKNOWN; preserve configured state'
+    secret_output_risk: 'interface identity and hardware data; log only masked shape and safe status enum'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiManager 7.4 CLI Reference: fmnetwork interface detail; FORTINET_CONTRACT.md'

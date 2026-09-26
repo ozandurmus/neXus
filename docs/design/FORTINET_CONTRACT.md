@@ -51,6 +51,9 @@ receiver used for the Radware Cyber Controller fits, and is the next step after 
   appliance-specific read is documented, gated, and measured; configured state remains a separate observation.
   V88 gates the FortiManager-documented `diagnose system print interface <interface>` as a bounded candidate. Its
   first neXus run probes one interface and records only a masked output shape; it does not assert link semantics.
+  The V88 output had interface statistics but no explicit physical-link field. V89 gates the vendor-documented
+  `diagnose fmnetwork interface detail <interface>`; its first run measures one port's masked shape and a bounded
+  status enum before any interface state is changed.
 
 ## Real-environment measurement (to do, after the PO adds the devices)
 One FortiGate with VDOMs and one FortiManager, fwadm credential: confirm facts present; VDOM, interface and route
