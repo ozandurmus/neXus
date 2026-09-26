@@ -87,9 +87,10 @@ public final class FortiGatePlan {
                 || !Pattern.compile("(?m)^Mode:\\s*HA A-[PA]\\s*$").matcher(output).find()) {
             return Optional.empty();
         }
-        // Measured 2026-09-26 (FortiOS HA A-P pair): "Primary: <serial>, HA cluster index = 0" -- no host name field;
-        // other releases print "<name>, <serial>, HA cluster index = N". Both are accepted.
-        Matcher member = Pattern.compile("(?m)^\\s*(Primary|Secondary)\\s*:\\s*(?:[^,]+,\\s*)?([^,\\s]+),\\s*HA cluster index\\s*=").matcher(output);
+        // Measured 2026-09-26 (FortiOS HA A-P pair): "Primary: <serial>, HA operating index = 0" -- no host name field
+        // and "operating" (confirmed by condition measurement: mode matched, 0 "cluster index" lines); other releases
+        // print "<name>, <serial>, HA cluster index = N". Both are accepted.
+        Matcher member = Pattern.compile("(?m)^\\s*(Primary|Secondary)\\s*:\\s*(?:[^,]+,\\s*)?([^,\\s]+),\\s*HA (?:cluster|operating) index\\s*=").matcher(output);
         String role = null;
         while (member.find()) {
             if (ownSerial.get().equals(member.group(2))) {

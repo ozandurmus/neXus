@@ -70,8 +70,8 @@ class FortinetParsersTest {
         assertEquals(Optional.empty(), FortiGatePlan.haRole("HA Health Status: OK\nMode: HA A-P\nPrimary: unknown shape\n",
                 Optional.of("SYNTH00001")));
         // Measured shape (2026-09-26): no host name field on the member lines.
-        String measured = "HA Health Status: OK\nMode: HA A-P\nPrimary: SYNTH00001, HA cluster index = 0\n"
-                + "Secondary: SYNTH00002, HA cluster index = 1\n";
+        String measured = "HA Health Status: OK\nMode: HA A-P\nPrimary: SYNTH00001, HA operating index = 0\n"
+                + "Secondary: SYNTH00002, HA operating index = 1\n";
         assertEquals(Optional.of("primary"), FortiGatePlan.haRole(measured, Optional.of("SYNTH00001")));
         assertEquals(Optional.of("secondary"), FortiGatePlan.haRole(measured, Optional.of("SYNTH00002")));
     }
