@@ -37,7 +37,7 @@ export interface SnapshotTile {
 }
 
 export interface Projection {
-  readonly vendor: "check_point" | "palo_alto";
+  readonly vendor: "check_point" | "palo_alto" | "fortinet";
   readonly sourcePlane: string;
   readonly settingCount: number;
   readonly withheldCount: number;
@@ -382,4 +382,60 @@ export function filterProjection(sections: readonly Section[], query: string): S
   return sections
     .map((s) => ({ label: s.label, rows: s.rows.filter((r) => r.setting.toLowerCase().includes(q) || r.value.toLowerCase().includes(q) || s.label.toLowerCase().includes(q)) }))
     .filter((s) => s.rows.length > 0);
+}
+
+/**
+ * FortiOS (PO 2026-09-26): the sanitized top-level "show". Sections are the outermost config blocks, prefixed by the
+ * VDOM on a multi-VDOM box ("root · System Interface"); a setting is the "set" name under its edit path
+ * ("port1 › ip"); a "[withheld]" value is a secret the worker withheld. Nothing is invented; unknown lines are skipped.
+ */
+export function projectFortiGate(text: string): Projection {
+  const bySection = new Map<string, SettingRow[]>();
+  const counters = new Map<string, number>();
+  const snapshot: SnapshotTile[] = [];
+  const stack: string[] = [];
+  let vdom: string | null = null;
+  let inVdomList = false;
+  let withheld = 0;
+  const all: string[] = [];
+  const sectionLabel = (): string | null => {
+    const outer = stack.find((s) => !s.startsWith("edit ") && s !== "vdom" && s !== "global");
+    if (!outer) return null;
+    const label = outer.split(/\s+/).map(titleCase).join(" ");
+    return vdom && vdom !== "global" ? `${vdom} · ${label}` : label;
+  };
+  const editPath = (): string => stack.filter((s) => s.startsWith("edit ")).map((s) => s.slice(5).replace(/^"|"$/g, "")).join(" › ");
+  for (const raw of text.split(/\r?\n/)) {
+    const t = raw.trim();
+    if (!t || t.startsWith("#")) continue;
+    if (t.startsWith("config ")) {
+      const name = t.slice(7).trim();
+      if (stack.length === 0 && name === "vdom") inVdomList = true;
+      if (stack.length === 0 && name === "global") vdom = "global";
+      stack.push(name);
+    } else if (t.startsWith("edit ")) {
+      if (inVdomList && stack.length === 1) vdom = t.slice(5).trim().replace(/^"|"$/g, "");
+      stack.push("edit " + t.slice(5).trim());
+    } else if (t === "next" || t === "end") {
+      const popped = stack.pop();
+      if (t === "end" && popped === "vdom" && stack.length === 0) inVdomList = false;
+    } else if (t.startsWith("set ") || t.startsWith("unset ")) {
+      const section = sectionLabel();
+      if (!section) continue;
+      const parts = t.split(/\s+/);
+      const name = parts[1] ?? "";
+      const value = t.startsWith("unset ") ? "unset" : parts.slice(2).join(" ").replace(/^"|"$/g, "");
+      if (value === "[withheld]") withheld++;
+      const path = editPath();
+      const setting = path ? `${path} › ${titleCase(name)}` : titleCase(name);
+      push(bySection, counters, { section, setting, value, origin: "LOCAL", context: vdom });
+      all.push(setting);
+      if (section.endsWith("System Global") && name === "hostname") snapshot.push({ group: "System", label: "Hostname", value, origin: "LOCAL" });
+      if (section.endsWith("System Global") && name === "timezone") snapshot.push({ group: "System", label: "Timezone", value, origin: "LOCAL" });
+      if (section.endsWith("System Ntp") && name === "ntpsync") snapshot.push({ group: "NTP", label: "NTP sync", value, origin: "LOCAL" });
+      if (section.endsWith("System Dns") && (name === "primary" || name === "secondary")) snapshot.push({ group: "DNS", label: titleCase(name), value, origin: "LOCAL" });
+    }
+  }
+  const sections = [...bySection.keys()].sort((a, b) => a.localeCompare(b)).map((label) => ({ label, rows: bySection.get(label) ?? [] }));
+  return { vendor: "fortinet", sourcePlane: "fortios-show", settingCount: all.length, withheldCount: withheld, sections, snapshot };
 }

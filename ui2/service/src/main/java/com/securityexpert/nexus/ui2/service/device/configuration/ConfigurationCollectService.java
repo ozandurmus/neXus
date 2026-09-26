@@ -34,7 +34,8 @@ public final class ConfigurationCollectService {
 
     private static final Map<String, String> CAPABILITY_BY_VENDOR = Map.of(
             "check_point", ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT,
-            "palo_alto", ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT);
+            "palo_alto", ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
+            "fortinet", ConfigurationCapabilityIds.FGT_CONFIGURATION_COLLECT);
 
     private final DeviceRepository deviceRepository;
     private final JobAdmissionService jobAdmissionService;

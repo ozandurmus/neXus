@@ -246,7 +246,8 @@ public final class Ui2WorkerMain {
                         });
         // Cisco ASA: SSH interactive shell, through the same vendor jobs (CISCO_ASA_CONTRACT.md).
         // Fortinet (FORTINET_CONTRACT.md): FortiGate over SSH, FortiManager over JSON-RPC.
-        com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor fortiManagerExecutor = httpsVendorExecutor.newFortiManagerExecutor();
+        com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor fortiManagerExecutor = httpsVendorExecutor.newFortiManagerExecutor()
+                .withSsh(sshTransport);
         httpsVendorExecutor.withFortinet(new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGateExecutor(sshTransport, artefactStore),
                 fortiManagerExecutor);
         httpsVendorExecutor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(sshTransport, artefactStore, sshTransport::scpFetch));

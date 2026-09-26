@@ -36,6 +36,16 @@ receiver used for the Radware Cyber Controller fits, and is the next step after 
   importable (they have no separate management address in FortiManager). The serial is the stable identifier; the ADOM
   is the domain. Imported devices run the FortiGate onboarding (SSH).
 
+## Configuration plane and FortiManager link states (V85, PO 2026-09-26)
+- **FortiGate configuration read** (`fgt_configuration_collect`, the onboarding's third step): the same top-level
+  `show` the backup takes, parsed by the worker into the configuration plane -- one section per outermost
+  `config …` block, per VDOM (`root · System Interface`), one setting per `set` line under its `edit` path;
+  lines carrying a password, key, PSK, certificate or `ENC` value are withheld and counted. The canonical hash leaves
+  out the per-run `#` header, so an unchanged configuration hashes the same. Device screen: the Configuration tab.
+- **FortiManager interface states:** the JSON API's `status` is a number without a documented meaning (16 on every
+  interface, measured 2026-09-25), so the inventory logs in over SSH too and reads `get system interface` for the
+  up/down state; a refusal leaves the states unknown.
+
 ## Real-environment measurement (to do, after the PO adds the devices)
 One FortiGate with VDOMs and one FortiManager, fwadm credential: confirm facts present; VDOM, interface and route
 counts; backup size and time; that `--More--` never timed a read out; that the FortiManager accepted the JSON-RPC

@@ -43,6 +43,7 @@ public final class WorkerClaimLoop {
             ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA, InventoryCapabilityIds.ASA_INVENTORY_COLLECT, BackupCapabilityIds.ASA_CONFIG_BACKUP,
             ConfirmCapabilityIds.DEVICE_CONFIRM_FORTIGATE, InventoryCapabilityIds.FGT_INVENTORY_COLLECT, BackupCapabilityIds.FGT_CONFIG_BACKUP,
+            ConfigurationCapabilityIds.FGT_CONFIGURATION_COLLECT,
             InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT, InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             DiscoveryCapabilityIds.CP_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.PAN_DISCOVERY_ENUMERATE,
@@ -409,6 +410,12 @@ public final class WorkerClaimLoop {
         }
         if (ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT.equals(capabilityId)) {
             return ConfigurationRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
+        }
+        if (ConfigurationCapabilityIds.FGT_CONFIGURATION_COLLECT.equals(capabilityId)) {
+            String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
+                    hostOf(addressRef), portOf(addressRef));
+            return ConfigurationRequest.fortiGate(new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef)),
+                    credentialRef, trustRuleRef);
         }
         throw new IllegalStateException("claimed job for a configuration capability the worker does not recognize: "
                 + capabilityId);

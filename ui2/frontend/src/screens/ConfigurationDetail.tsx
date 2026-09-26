@@ -39,7 +39,7 @@ import {
   filterProjection,
   projectCheckPoint,
   projectCluster,
-  projectPaloAlto,
+  projectPaloAlto, projectFortiGate,
   type ClusterProjection,
   type MemberRow,
   type Origin,
@@ -101,7 +101,9 @@ function useProjection(device: DeviceSummary | null): Loaded & { loading: boolea
           const text = await getDeviceConfigurationText(device.device_id);
           projection = configuration.vendor === "palo_alto" || device.vendor_hint === "palo_alto"
             ? projectPaloAlto(text, configuration.overrides.map((o) => o.element_path))
-            : projectCheckPoint(text);
+            : configuration.vendor === "fortinet" || device.vendor_hint === "fortinet"
+              ? projectFortiGate(text)
+              : projectCheckPoint(text);
         }
         if (!cancelled) setState({ configuration, projection, error: null, loading: false });
       } catch (error) {

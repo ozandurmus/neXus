@@ -92,6 +92,7 @@ public final class ConfigurationCapabilityExecutor {
         return switch (request.vendor()) {
             case CHECK_POINT -> collectCheckPoint(request, deviceId, jobId, recordedIdentity, strictRefuseEnabled);
             case PALO_ALTO -> collectPaloAlto(request, deviceId, jobId, recordedIdentity, strictRefuseEnabled);
+            case FORTINET -> collectFortiGate(request, deviceId, jobId);
         };
     }
 
@@ -148,6 +149,74 @@ public final class ConfigurationCapabilityExecutor {
         } finally {
             transport.disconnect(session);
         }
+    }
+
+    /**
+     * FortiGate (FORTINET_CONTRACT.md; PO 2026-09-26 "Fortilerde config yok"): one interactive shell, "get system status"
+     * for the observed identity, then the top-level "show" -- the same read the backup takes, here parsed to sections and
+     * settings with secrets withheld. Paging is answered in the session; nothing is written to the device.
+     */
+    private ConfigurationResult collectFortiGate(ConfigurationRequest request, String deviceId, String jobId) {
+        ConnectionTarget target = request.connectionTarget()
+                .orElseThrow(() -> new IllegalArgumentException("fortinet configuration collect requires a connectionTarget"));
+        ConnectSpec spec = new ConnectSpec(request.credentialRef(), request.trustRuleRef(), Optional.empty());
+        ConnectResult connectResult;
+        try {
+            connectResult = transport.connect(target, spec, IDENTITY_TIMEOUT);
+        } catch (IllegalStateException credentialUnresolvable) {
+            return new ConfigurationResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
+        }
+        if (!(connectResult instanceof ConnectResult.Authenticated authenticated)) {
+            return new ConfigurationResult.ConnectFailed(describeConnect(connectResult));
+        }
+        TransportSession session = authenticated.session();
+        try {
+            String status = interactiveOutput(session, com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.GET_SYSTEM_STATUS, IDENTITY_TIMEOUT);
+            if (status == null || !status.contains("Version:")) {
+                transport.execInteractive(session, new ExecSpec(com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.CONFIG_GLOBAL, true), IDENTITY_TIMEOUT);
+                status = interactiveOutput(session, com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.GET_SYSTEM_STATUS, IDENTITY_TIMEOUT);
+                transport.execInteractive(session, new ExecSpec(com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.END, true), IDENTITY_TIMEOUT);
+            }
+            var st = com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.parseStatus(status);
+            ConfigurationResult.ObservedIdentity observed = new ConfigurationResult.ObservedIdentity(st.hostname(), st.version());
+            String rawConfig = interactiveOutput(session, com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.SHOW, java.time.Duration.ofSeconds(600));
+            if (rawConfig == null || !com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.isConfiguration(rawConfig)) {
+                return new ConfigurationResult.ConnectFailed("show gave no FortiOS configuration (no #config-version header)");
+            }
+            var processed = com.securityexpert.nexus.ui2.worker.configuration.fortinet.FortiGateConfigProcessor.process(rawConfig);
+            ArtefactStore.ArtefactHandle handle = null;
+            try {
+                handle = artefactStore.open(deviceId, jobId, "fortinet", false);
+                handle.sink().write(rawConfig.getBytes(StandardCharsets.UTF_8));
+                ArtefactStore.ArtefactMetadata metadata = handle.finish();
+                ConfigurationRunData runData = new ConfigurationRunData(ConfigurationReadKind.SHOW_CONFIGURATION, true,
+                        processed.canonicalHash(), processed.withheldLineCount(), Optional.of(processed.sanitizedText()),
+                        processed.index(), List.of(), toRecord(metadata, deviceId, jobId, "fortinet"));
+                return new ConfigurationResult.Completed(List.of(runData), observed);
+            } catch (IOException e) {
+                closeQuietly(handle);
+                return new ConfigurationResult.ArtefactStoreFailed("artefact store write failed: " + e.getMessage());
+            }
+        } finally {
+            transport.disconnect(session);
+        }
+    }
+
+    private String interactiveOutput(TransportSession session, String command, java.time.Duration timeout) {
+        ExecResult r = transport.execInteractive(session, new ExecSpec(command, true), timeout);
+        if (r instanceof ExecResult.Completed c) {
+            String text = c.output();
+            int nl = text.indexOf('\n');
+            if (nl >= 0 && text.substring(0, nl).strip().equals(command)) {
+                text = text.substring(nl + 1);
+            }
+            int last = text.lastIndexOf('\n');
+            if (last >= 0 && text.substring(last + 1).strip().endsWith("#")) {
+                text = text.substring(0, last + 1);
+            }
+            return text;
+        }
+        return null;
     }
 
     private ConfigurationResult collectPaloAlto(ConfigurationRequest request, String deviceId, String jobId,

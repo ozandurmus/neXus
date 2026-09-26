@@ -181,6 +181,7 @@ public class DeviceCompositionConfiguration {
                 confirmCapability(ConfirmCapabilityIds.DEVICE_CONFIRM_FORTIGATE, "fortinet", "fortigate", TransportKind.SSH_EXEC),
                 confirmCapability(InventoryCapabilityIds.FGT_INVENTORY_COLLECT, "fortinet", "fortigate", TransportKind.SSH_EXEC),
                 confirmCapability(BackupCapabilityIds.FGT_CONFIG_BACKUP, "fortinet", "fortigate", TransportKind.SSH_EXEC),
+                confirmCapability(ConfigurationCapabilityIds.FGT_CONFIGURATION_COLLECT, "fortinet", "fortigate", TransportKind.SSH_EXEC),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),

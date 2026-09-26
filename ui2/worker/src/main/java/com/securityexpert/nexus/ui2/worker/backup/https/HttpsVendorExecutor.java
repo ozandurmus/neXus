@@ -341,6 +341,26 @@ public final class HttpsVendorExecutor {
         LOG.log(System.Logger.Level.INFO, "[MANAGEMENT_CENTER] devices HTTP {0}, {1} bytes, {2} entries, field names {3}", r.status(),
                 r.body().length(), list.isArray() ? list.size() : -1, HttpsVendorPlan.fieldNames(list));
         // The MC is not in its own list (measured 2026-09-25: types cp, rptr, sgos6x): its certificate names it.
+        // MEASURE FIRST (PO 2026-09-26: "SMC'nin kendi bilgileri de olmalı"): which of the MC's own resources answer --
+        // status codes and top-level field names only, never values. The next release reads the one that answers.
+        StringBuilder probe = new StringBuilder();
+        for (String path : List.of("/api/system", "/api/system/version", "/api/system/status", "/api/system/health", "/api/version")) {
+            try {
+                TextResponse p = client.get(target, path, creds, SHORT, 256 * 1024);
+                probe.append(path).append(" HTTP ").append(p.status());
+                if (p.ok()) {
+                    try {
+                        probe.append(" fields ").append(HttpsVendorPlan.fieldNames(JSON.readTree(p.body())));
+                    } catch (IOException notJson) {
+                        probe.append(" (not JSON, ").append(p.body().length()).append(" chars)");
+                    }
+                }
+                probe.append("; ");
+            } catch (IOException e) {
+                probe.append(path).append(' ').append(e.getClass().getSimpleName()).append("; ");
+            }
+        }
+        LOG.log(System.Logger.Level.INFO, "[MANAGEMENT_CENTER] MEASURE own resources: {0}", probe);
         return new ConfirmOutcome.Confirmed(new Identity(r.peerName(), Optional.of("Symantec Management Center"), Optional.empty()));
     }
 

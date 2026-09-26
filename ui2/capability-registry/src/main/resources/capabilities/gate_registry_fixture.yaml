@@ -2134,3 +2134,19 @@ gates:
     secret_output_risk: 'none'
     safe_telemetry_fields: []
     source_document_pointer: 'Backbox trail 34411066'
+  - gate_id: fmg_ssh_get_system_interface
+    vendor: 'fortinet'
+    platform_role_scope: 'fortimanager'
+    shell_context: 'cli'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'get system interface'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per inventory'
+    session_reuse_rule: 'one SSH session per inventory'
+    unsupported_behavior_ref: 'refused or unreadable -> states stay unknown, logged'
+    secret_output_risk: 'interface addresses (masked to aiview)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiManager CLI reference (get system interface); PO 2026-09-26'

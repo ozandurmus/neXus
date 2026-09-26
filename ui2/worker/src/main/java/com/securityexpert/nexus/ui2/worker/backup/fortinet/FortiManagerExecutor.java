@@ -34,10 +34,74 @@ public final class FortiManagerExecutor {
 
     private final HttpsDeviceCalls client;
     private final Function<String, Credentials> credentials;
+    /** Its SSH CLI (PO 2026-09-26: "ssh imkanın var, interface niye unknown?"): interface link states come from there. */
+    private com.securityexpert.nexus.ui2.jobs.transport.DeviceTransport ssh;
 
     public FortiManagerExecutor(HttpsDeviceCalls client, Function<String, Credentials> credentials) {
         this.client = client;
         this.credentials = credentials;
+    }
+
+    public FortiManagerExecutor withSsh(com.securityexpert.nexus.ui2.jobs.transport.DeviceTransport transport) {
+        this.ssh = transport;
+        return this;
+    }
+
+    public static final String SSH_GET_SYSTEM_INTERFACE = "get system interface";
+    private static final java.util.regex.Pattern IFACE_BLOCK = java.util.regex.Pattern.compile("(?m)^==\\s*\\[\\s*([A-Za-z0-9_.-]+)\\s*\\]");
+    private static final java.util.regex.Pattern IFACE_STATUS = java.util.regex.Pattern.compile("(?m)\\bstatus:\\s*(\\S+)");
+
+    /** FortiManager CLI "get system interface": "== [ port1 ]" blocks with a "status: up|down" line each. */
+    public static Map<String, String> parseInterfaceStates(String out) {
+        Map<String, String> states = new java.util.LinkedHashMap<>();
+        if (out == null) {
+            return states;
+        }
+        java.util.regex.Matcher b = IFACE_BLOCK.matcher(out);
+        java.util.List<int[]> spans = new ArrayList<>();
+        java.util.List<String> names = new ArrayList<>();
+        while (b.find()) {
+            spans.add(new int[] {b.end()});
+            names.add(b.group(1));
+        }
+        for (int i = 0; i < names.size(); i++) {
+            int from = spans.get(i)[0];
+            int to = i + 1 < names.size() ? spans.get(i + 1)[0] : out.length();
+            java.util.regex.Matcher st = IFACE_STATUS.matcher(out.substring(from, to));
+            if (st.find()) {
+                String v = st.group(1).toLowerCase(java.util.Locale.ROOT);
+                states.put(names.get(i), v.equals("up") ? "up" : v.equals("down") ? "down" : "unknown");
+            }
+        }
+        return states;
+    }
+
+    /** The link states over SSH, or empty when SSH is not wired, refused or unreadable (logged, never guessed). */
+    private Map<String, String> interfaceStatesOverSsh(Target target, String credentialRef) {
+        if (ssh == null) {
+            return Map.of();
+        }
+        var ct = new com.securityexpert.nexus.ui2.jobs.transport.ConnectionTarget(UUID.randomUUID().toString(), target.host(), 22);
+        var spec = new com.securityexpert.nexus.ui2.jobs.transport.ConnectSpec(credentialRef,
+                com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(target.host(), 22), Optional.empty());
+        var r = ssh.connect(ct, spec, Duration.ofSeconds(30));
+        if (!(r instanceof com.securityexpert.nexus.ui2.jobs.transport.ConnectResult.Authenticated a)) {
+            LOG.log(System.Logger.Level.INFO, "[FMG] ssh interface states not read: {0}", r.getClass().getSimpleName());
+            return Map.of();
+        }
+        try {
+            var out = ssh.execInteractive(a.session(), new com.securityexpert.nexus.ui2.jobs.transport.ExecSpec(SSH_GET_SYSTEM_INTERFACE, true),
+                    Duration.ofSeconds(60));
+            if (out instanceof com.securityexpert.nexus.ui2.jobs.transport.ExecResult.Completed c) {
+                Map<String, String> states = parseInterfaceStates(c.output());
+                LOG.log(System.Logger.Level.INFO, "[FMG] ssh interface states: {0} read", states.size());
+                return states;
+            }
+            LOG.log(System.Logger.Level.INFO, "[FMG] ssh get system interface: {0}", out.getClass().getSimpleName());
+            return Map.of();
+        } finally {
+            ssh.disconnect(a.session());
+        }
     }
 
     private record Session(String token, Credentials creds) {
@@ -269,8 +333,15 @@ public final class FortiManagerExecutor {
                 } catch (IOException e) {
                     LOG.log(System.Logger.Level.INFO, "[FMG] routes not read: {0}", String.valueOf(e.getMessage()));
                 }
-                LOG.log(System.Logger.Level.INFO, "[FMG] inventory: managed devices={0} interfaces={1} routes={2}", managed.size(),
-                        interfaces.size(), routes.size());
+                Map<String, String> states = interfaceStatesOverSsh(target, credentialRef);
+                if (!states.isEmpty()) {
+                    interfaces = interfaces.stream().map(i -> states.containsKey(i.name())
+                            ? new com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface(i.interfaceId(), i.name(), i.parent(), i.kind(),
+                                    states.get(i.name()), i.addresses(), i.vlanId())
+                            : i).toList();
+                }
+                LOG.log(System.Logger.Level.INFO, "[FMG] inventory: managed devices={0} interfaces={1} routes={2} states={3}", managed.size(),
+                        interfaces.size(), routes.size(), states.size());
                 return new HttpsVendorExecutor.InventoryOutcome.Completed(
                         List.of(new com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext(
                                 com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext.PHYSICAL, interfaces, routes)),

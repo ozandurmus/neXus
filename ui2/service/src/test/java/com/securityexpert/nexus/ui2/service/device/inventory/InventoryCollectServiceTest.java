@@ -182,7 +182,7 @@ class InventoryCollectServiceTest {
     @Test
     void aManagementServerIsRefusedNamingTheMissingGate() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
-        devices.byId.put("device-1", enrolledManagementServer("device-1", "palo_alto"));
+        devices.byId.put("device-1", enrolledManagementServer("device-1", "infoblox"));
         InventoryCollectService service = serviceFor(devices);
 
         InventoryCollectService.Outcome outcome = service.requestCollect("device-1", "actor", Optional.empty());

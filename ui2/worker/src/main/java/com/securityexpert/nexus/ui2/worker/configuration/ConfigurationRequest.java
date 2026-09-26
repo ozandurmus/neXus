@@ -18,6 +18,10 @@ public record ConfigurationRequest(
                 credentialRef, trustRuleRef);
     }
 
+    public static ConfigurationRequest fortiGate(ConnectionTarget target, String credentialRef, String trustRuleRef) {
+        return new ConfigurationRequest(ConfigurationVendor.FORTINET, Optional.of(target), Optional.empty(), credentialRef, trustRuleRef);
+    }
+
     public static ConfigurationRequest paloAlto(ApiTarget target, String credentialRef) {
         return new ConfigurationRequest(ConfigurationVendor.PALO_ALTO, Optional.empty(), Optional.of(target),
                 credentialRef, "");

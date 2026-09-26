@@ -216,7 +216,7 @@ class BackupCollectServiceTest {
 
     @Test
     void refusesAManagementServerNamingTheMissingGate() {
-        BackupCollectService service = new BackupCollectService(new StubDeviceRepository().putManagementServer(PILOT_DEVICE, "palo_alto"),
+        BackupCollectService service = new BackupCollectService(new StubDeviceRepository().putManagementServer(PILOT_DEVICE, "cisco_asa"),
                 admissionService(), Set.of(PILOT_DEVICE), true);
 
         BackupCollectService.Outcome outcome = service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());
