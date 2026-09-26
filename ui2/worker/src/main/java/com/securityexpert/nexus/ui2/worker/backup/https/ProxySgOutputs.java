@@ -29,8 +29,13 @@ public final class ProxySgOutputs {
     private static final Pattern IFACE = Pattern.compile("^\\s*(?:[A-Za-z]+\\s+)?Interface\\s+(\\d+:\\d+(?:\\.\\d+)?)\\b(.*)$", Pattern.CASE_INSENSITIVE);
     /** Measured: "    Internet address: <ip> netmask <ip>" -- the mask follows the address on the same line. */
     private static final Pattern ADDR_WITH_MASK = Pattern.compile("(?i)internet address:?\\s*(\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+\\S+\\s+(255\\.\\d+\\.\\d+\\.\\d+)");
-    /** Measured: "    Status: up" on its own line. */
-    private static final Pattern STATUS = Pattern.compile("(?i)^\\s*status:\\s*(up|down)\\b");
+    /**
+     * Measured 2026-09-26 (four SGOS 7.4 virtual appliances): "    Status: enabled" (administrative) and
+     * "    Link status: autosensed to full duplex, virtual network" (link negotiated). Disabled -> down; a negotiated
+     * link ("autosensed", "duplex") -> up; "no link"/"down" -> down; anything else stays unknown.
+     */
+    private static final Pattern ADMIN_STATUS = Pattern.compile("(?i)^\\s*status:\\s*(enabled|disabled)\\b");
+    private static final Pattern LINK_STATUS = Pattern.compile("(?i)^\\s*link status:\\s*(.*)$");
     private static final Pattern ADDR = Pattern.compile("(?i)internet address:?\\s*(\\d+\\.\\d+\\.\\d+\\.\\d+)");
     private static final Pattern MASK = Pattern.compile("(?i)subnet mask:?\\s*(\\d+\\.\\d+\\.\\d+\\.\\d+)");
     private static final Pattern IPV4 = Pattern.compile("\\b(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})(?:/(\\d{1,2}))?\\b");
@@ -71,9 +76,18 @@ public final class ProxySgOutputs {
             if (am.find() && mask == null) {
                 mask = am.group(2);
             }
-            Matcher st = STATUS.matcher(raw);
-            if (st.find()) {
-                header = header + " link " + st.group(1).toLowerCase(Locale.ROOT);
+            Matcher adm = ADMIN_STATUS.matcher(raw);
+            if (adm.find() && adm.group(1).equalsIgnoreCase("disabled")) {
+                header = header + " not running";
+            }
+            Matcher ls = LINK_STATUS.matcher(raw);
+            if (ls.find()) {
+                String v = ls.group(1).toLowerCase(Locale.ROOT);
+                if (v.contains("no link") || v.contains("down")) {
+                    header = header + " link down";
+                } else if (v.contains("autosensed") || v.contains("duplex")) {
+                    header = header + " link up";
+                }
             }
             String l = raw.toLowerCase(Locale.ROOT);
             if (l.contains("link") && (l.contains(" up") || l.contains(" down")) && !header.contains("link")) {
