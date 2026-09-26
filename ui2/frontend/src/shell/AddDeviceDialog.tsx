@@ -161,6 +161,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
   const [credentialId, setCredentialId] = useState("");
   const [createdCredential, setCreatedCredential] = useState<CredentialView | null>(null);
   const [createCredentialOpen, setCreateCredentialOpen] = useState(false);
+  const [credentialCreationRefused, setCredentialCreationRefused] = useState(false);
   const [phase, setPhase] = useState<Phase>("form");
   const [validationReason, setValidationReason] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -526,9 +527,10 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
           </MenuItem>
         ))}
       </TextField>
-      {eligibleCredentials.length === 0 && (
+      {eligibleCredentials.length === 0 && !credentialCreationRefused && (
         <Button onClick={() => setCreateCredentialOpen(true)}>Create credential</Button>
       )}
+      {credentialCreationRefused && <Typography variant="body2">Ask an administrator to add a credential for this vendor.</Typography>}
     </>
   );
 
@@ -936,6 +938,10 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
         <CreateCredentialDialog
           initialVendor={vendor === "check_point" ? "check_point" : "palo_alto" /* HTTPS vendors use a password credential, like PAN */}
           onClose={() => setCreateCredentialOpen(false)}
+          onActionRefused={() => {
+            setCredentialCreationRefused(true);
+            setCreateCredentialOpen(false);
+          }}
           onCreated={(credential) => {
             setCreatedCredential(credential);
             setCredentialId(credential.credential_reference_id);

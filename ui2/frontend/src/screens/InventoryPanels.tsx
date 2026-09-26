@@ -1108,7 +1108,7 @@ export function InterfacesPanel({
     return (
       <EmptyPanel
         title="No interface evidence"
-        body="No interface records are available for this device. Management-server inventory may contain managed devices instead."
+        body="This device has not been collected yet. Use Collect now to read its interfaces."
       />
     );
   }
@@ -1182,7 +1182,7 @@ export function RoutesPanel({
     return (
       <EmptyPanel
         title="No routing evidence"
-        body="No routing records are available for this device. Management-server inventory may contain managed devices instead."
+        body="This device has not been collected yet. Use Collect now to read its routes."
       />
     );
   }
@@ -1726,6 +1726,11 @@ export function DeviceInventoryPanels({
   const deviceContexts = deviceInventory?.contexts ?? [];
   const deviceIfaceCount = deviceContexts.reduce((acc, c) => acc + c.interfaces.length, 0);
   const deviceRouteCount = deviceContexts.reduce((acc, c) => acc + c.routes.length, 0);
+  // PO 2026-09-25 (decision 3): data a device does not have is not shown. A single device whose completed inventory
+  // reported no interfaces and no routes (a Management Center, a DefensePro, a Cyber Controller) shows neither tab nor
+  // the count chip; a device never collected keeps them, with the Collect-now empty state.
+  const singleDeviceHasNoNetworkEvidence = !isCluster && Boolean(deviceInventory?.collected_at) &&
+    deviceIfaceCount === 0 && deviceRouteCount === 0 && deviceContexts.every((c) => !c.vs_name);
   const isEnrolledDevice = device.enrollment_state === "ENROLLED";
   // Live = device evidence has been read: interface addresses, or (HTTPS appliances and management servers whose
   // evidence is members / managed devices, not interfaces) a completed inventory run.
@@ -1774,7 +1779,7 @@ export function DeviceInventoryPanels({
             )}
             {(device.model || device.platform_family) && <StatusChip tone="neutral" label={(device.model || device.platform_family)!} dense />}
             {device.ha_role && <RoleChip role={device.ha_role} dense />}
-            <StatusChip tone="neutral" label={`${deviceIfaceCount} interfaces · ${deviceRouteCount} routes`} dense />
+            {!singleDeviceHasNoNetworkEvidence && <StatusChip tone="neutral" label={`${deviceIfaceCount} interfaces · ${deviceRouteCount} routes`} dense />}
             {isCluster && clusterInventory && <ClusterMembersMarker inventory={clusterInventory} />}
           </>
         }
@@ -1793,19 +1798,18 @@ export function DeviceInventoryPanels({
         initialTab={hasManagedDevices ? (initialVs ? "managed devices" : initialTab ?? "managed devices") : initialTab}
         selectionKey={hasManagedDevices ? initialVs : undefined}
         tabs={[
-          {
+          ...(!singleDeviceHasNoNetworkEvidence ? [{
             label: "Interfaces",
             panel: isCluster
               ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory ? orderMembers(clusterInventory.members) : undefined} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
               : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} />,
-          },
-          {
+          }, {
             label: "Routing",
             panel: isCluster
               ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory ? orderMembers(clusterInventory.members) : undefined} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
               : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} />,
-          },
-          {
+          }] : []),
+          ...((isCluster || device.vendor_hint === "infoblox" || hasManagedDevices) ? [{
             label: device.vendor_hint === "infoblox" ? "Grid members"
               : (device.vendor_hint === "bluecoat" || device.vendor_hint === "fortinet") && device.role === "management_server" ? "Managed devices" : "Cluster members",
             panel: device.vendor_hint === "infoblox"
@@ -1854,7 +1858,7 @@ export function DeviceInventoryPanels({
                         yet."
                 />
               ),
-          },
+          }] : []),
           {
             label: "Configuration",
             panel: configuration,

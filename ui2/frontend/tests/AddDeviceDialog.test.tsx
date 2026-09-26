@@ -270,6 +270,28 @@ describe("AddDeviceDialog", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Create credential" })).toBeInTheDocument());
     expect(screen.getByText(/INTERNAL_ERROR/)).toBeInTheDocument();
   });
+
+  it("hides credential creation after ACTION_REFUSED and directs the operator to an administrator", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      if (url === "/credentials" && init?.method === "POST") {
+        return Promise.resolve(jsonResponse(403, { error: "ACTION_REFUSED" }));
+      }
+      if (url === "/credentials") return Promise.resolve(jsonResponse(200, { credentials: [] }));
+      return Promise.resolve(jsonResponse(200, { csrf_token: "test-csrf" }));
+    }));
+
+    render(withTheme(<AddDeviceDialogTrigger />));
+    fireEvent.click(screen.getByRole("button", { name: "Add device" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create credential" }));
+    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "New credential" } });
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "admin" } });
+    fireEvent.change(screen.getByLabelText("Secret"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(await screen.findByText("Ask an administrator to add a credential for this vendor.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create credential" })).toBeNull();
+  });
 });
 
 const CLUSTER_CANDIDATE = {

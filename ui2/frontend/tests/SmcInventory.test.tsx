@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -16,16 +16,37 @@ it("opens SMC on collected managed devices and selects the clicked child with it
   vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL)=>new Response(JSON.stringify(String(input).includes('/inventory')
     ? {device_id:"smc",collected_at:"2026-09-26T10:00:00Z",contexts:[],grid_members:members,job:null} : {}))));
   const view=render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager}/></ThemeProvider>);
+  const child=await screen.findByRole('button',{name:'FW-TANGO-04'});
   expect(screen.getByRole('tab',{name:'Managed devices'})).toHaveAttribute('aria-selected','true');
-  fireEvent.click(await screen.findByRole('button',{name:'FW-TANGO-04'}));
+  expect(screen.queryByRole('tab',{name:'Interfaces'})).toBeNull();
+  expect(screen.queryByRole('tab',{name:'Routing'})).toBeNull();
+  expect(screen.queryByText(/interfaces · routes/)).toBeNull();
+  fireEvent.click(child);
   expect(within(screen.getByRole('table')).getByText('192.0.2.1')).toBeInTheDocument();
   expect(screen.queryByRole('button',{name:'FW-BRAVO-02'})).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:'All managed devices'}));
   expect(screen.getByRole('button',{name:'FW-BRAVO-02'})).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('tab',{name:'Interfaces'}));
   view.rerender(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager} initialVs="FW-BRAVO-02"/></ThemeProvider>);
   expect(screen.getByRole('tab',{name:'Managed devices'})).toHaveAttribute('aria-selected','true');
   expect(within(screen.getByRole('table')).getByText('192.0.2.2')).toBeInTheDocument();
+});
+it("keeps Interfaces for a management server with interface evidence",async()=>{
+  vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({device_id:"smc",contexts:[{context:"physical",interfaces:[{}],routes:[]}],grid_members:members}))));
+  render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager}/></ThemeProvider>);
+  expect(await screen.findByRole('tab',{name:'Interfaces'})).toBeInTheDocument();
+});
+it("hides Cluster members for a standalone device and restores its collect-now empty state",async()=>{
+  const standalone={...manager,device_id:"standalone",vendor_hint:"check_point",role:"gateway",cluster_member_ref:null} as DeviceSummary;
+  vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({device_id:"standalone",contexts:[]}))));
+  render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={standalone}/></ThemeProvider>);
+  expect(screen.queryByRole('tab',{name:'Cluster members'})).toBeNull();
+  expect(await screen.findByText("This device has not been collected yet. Use Collect now to read its interfaces.")).toBeInTheDocument();
+});
+it("keeps Cluster members for a cluster member",()=>{
+  const clusterMember={...manager,device_id:"member",vendor_hint:"check_point",cluster_member_ref:"cluster-opaque"} as DeviceSummary;
+  vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({device_id:"member",members:[],contexts:[]}))));
+  render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={clusterMember}/></ThemeProvider>);
+  expect(screen.getByRole('tab',{name:'Cluster members'})).toBeInTheDocument();
 });
 it("passes the selected listed child from the manager sidebar",async()=>{
   vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({device_id:"smc",vendor:"bluecoat",run_id:null,domains:[],counts:{}}))));
@@ -42,4 +63,12 @@ it("includes collected vendors beyond Check Point and Palo Alto in the inventory
     ? {devices:[manager]} : {domains:[],counts:{}}))));
   render(<ThemeProvider theme={m3Theme}><InventoryScreen/></ThemeProvider>);
   expect(await screen.findByRole("option",{name:/Symantec \/ Blue Coat/})).toBeInTheDocument();
+});
+it("hides Interfaces and Routing for a collected appliance that reports none",async()=>{
+  const appliance={...manager,device_id:"dp",vendor_hint:"radware",role:"appliance",cluster_member_ref:null} as DeviceSummary;
+  vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({device_id:"dp",collected_at:"2026-09-26T10:00:00Z",contexts:[],job:null}))));
+  render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={appliance}/></ThemeProvider>);
+  await waitFor(()=>expect(screen.queryByRole('tab',{name:'Interfaces'})).toBeNull());
+  expect(screen.queryByRole('tab',{name:'Routing'})).toBeNull();
+  expect(screen.queryByText(/interfaces · routes/)).toBeNull();
 });

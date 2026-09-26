@@ -157,9 +157,10 @@ function describeError(err: ApiError): string {
   return serverError ?? `request failed (status ${err.status})`;
 }
 
-export function CreateCredentialDialog({ onClose, onCreated }: {
+export function CreateCredentialDialog({ onClose, onCreated, onActionRefused }: {
   readonly onClose: () => void;
   readonly onCreated: (credential: CredentialView) => void;
+  readonly onActionRefused?: () => void;
   /** Kept for callers; a credential is no longer tied to a vendor (PO, 2026-09-24). */
   readonly initialVendor?: string;
 }) {
@@ -212,7 +213,10 @@ export function CreateCredentialDialog({ onClose, onCreated }: {
                 onCreated(credential);
                 onClose();
               })
-              .catch((err: ApiError) => setError(describeError(err)))
+              .catch((err: ApiError) => {
+                setError(describeError(err));
+                if (err.body?.error === "ACTION_REFUSED") onActionRefused?.();
+              })
           }
         >
           Add
