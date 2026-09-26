@@ -77,6 +77,11 @@ public interface DeviceRepository {
     /** Contract §3 {@code any -> disabled}: a separate boolean column, not a state. */
     boolean setDisabled(String deviceId, boolean disabled, String actorFingerprint, String actionId);
 
+    /** Updates a device's confirmed cluster reference only when it differs. */
+    default boolean setClusterMemberRef(String deviceId, Optional<String> ref, String actorFingerprint, String actionId) {
+        throw new UnsupportedOperationException("setClusterMemberRef");
+    }
+
     /**
      * EC-J3: the confirm job's completion handler moves the row {@code
      * DRAFT -> ENROLLED} with the observed facts, atomically, in one

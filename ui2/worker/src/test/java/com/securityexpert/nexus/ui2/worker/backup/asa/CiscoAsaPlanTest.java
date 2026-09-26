@@ -68,6 +68,28 @@ class CiscoAsaPlanTest {
     }
 
     @Test
+    void failoverPairReferenceRequiresOneMatchingManagementLine() {
+        String active = "interface outside\n ip address 198.51.100.10 255.255.255.0 standby 198.51.100.11\n"
+                + "interface Management1/1\n ip address 192.0.2.10 255.255.255.0 standby 192.0.2.11\n";
+        String standby = "interface Management1/1\n ip address 192.0.2.10 255.255.255.0 standby 192.0.2.11\n";
+        var a = CiscoAsaPlan.failoverPairReference(active, "192.0.2.10");
+        var b = CiscoAsaPlan.failoverPairReference(standby, "192.0.2.11");
+        assertEquals(a.reference(), b.reference());
+        assertEquals(Optional.of("asa-failover|d9c3304fe1a726b0"), a.reference());
+        assertTrue(a.reference().orElseThrow().matches("asa-failover\\|[0-9a-f]{16}"));
+        assertFalse(a.reference().equals(CiscoAsaPlan.failoverPairReference(
+                "ip address 198.51.100.10 255.255.255.0 standby 198.51.100.11", "198.51.100.10").reference()));
+        assertTrue(CiscoAsaPlan.failoverPairReference("ip address 192.0.2.10 255.255.255.0", "192.0.2.10")
+                .reference().isEmpty());
+        assertTrue(CiscoAsaPlan.failoverPairReference(active, "192.0.2.12").reference().isEmpty());
+        var ambiguous = CiscoAsaPlan.failoverPairReference(active +
+                "ip address 192.0.2.10 255.255.255.0 standby 203.0.113.11\n", "192.0.2.10");
+        assertTrue(ambiguous.ambiguous());
+        assertEquals(2, ambiguous.matchingLines());
+        assertTrue(ambiguous.reference().isEmpty());
+    }
+
+    @Test
     void interfacesJoinAddressesAndStates() {
         String ip = """
                 System IP Addresses:

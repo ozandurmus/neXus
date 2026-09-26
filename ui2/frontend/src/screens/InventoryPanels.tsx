@@ -332,6 +332,11 @@ export function deriveClusterTitle(clusterRef: string, members: readonly DeviceS
   return clusterRef;
 }
 
+function clusterVendorLabel(vendorHint: string | null | undefined): string {
+  return vendorHint === "cisco_asa" ? "Cisco ASA failover"
+    : vendorHint === "palo_alto" ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL";
+}
+
 /** The vendor monogram (review §4: one vendor identity everywhere); VSX when the model or name says so. */
 export function VendorAvatar({
   vendorHint,
@@ -1797,7 +1802,7 @@ export function DeviceInventoryPanels({
               tone="neutral"
               label={
                 device.cluster_member_ref
-                  ? `${isPaloAlto ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"} · ${device.cluster_member_ref}`
+                  ? `${clusterVendorLabel(device.vendor_hint)} · ${device.cluster_member_ref}`
                   : `${isPaloAlto ? "Palo Alto" : vendorDisplayName(device.vendor_hint)} · ${device.role === "management_server" ? "Management server"
                     : device.role === "appliance" ? "Appliance" : "Standalone"}`
               }
@@ -2018,7 +2023,7 @@ export function ClusterDetailPanels({
             />
             <StatusChip
               tone="neutral"
-              label={firstMember?.vendor_hint === "palo_alto" ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"}
+              label={clusterVendorLabel(firstMember?.vendor_hint)}
               dense
             />
             {firstMember?.software_version && (
@@ -2161,7 +2166,7 @@ export function ClusterDetailPanels({
               <Stack spacing={1}>
                 <IdentityReference value={clusterRef} />
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                  {orderedMembers.length} members · {firstMember?.vendor_hint === "palo_alto" ? "Palo Alto PAN-OS HA" : "Check Point ClusterXL"}
+                  {orderedMembers.length} members · {clusterVendorLabel(firstMember?.vendor_hint)}
                   {virtualSystems.length > 0 ? ` · ${virtualSystems.length} ${isPaloAlto ? "VSYS" : "VSX"}: ${virtualSystems.join(", ")}` : ""}
                   {" "}· each value is read from that member itself; a value not read is UNKNOWN.
                 </Typography>

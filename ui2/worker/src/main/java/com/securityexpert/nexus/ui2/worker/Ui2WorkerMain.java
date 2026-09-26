@@ -196,7 +196,9 @@ public final class Ui2WorkerMain {
         JooqConfigurationNotificationRepository configurationNotificationRepository =
                 new JooqConfigurationNotificationRepository(transactionBoundary);
         ConfigurationCapabilityExecutor configurationCapabilityExecutor = new ConfigurationCapabilityExecutor(
-                compositeTransport, panCredentialResolver, artefactStore, PanoramaCrossCheckPort.NONE);
+                compositeTransport, panCredentialResolver, artefactStore, PanoramaCrossCheckPort.NONE,
+                com.securityexpert.nexus.ui2.worker.configuration.server.ConfigurationServiceClient.fromEnvironment(),
+                deviceRepository);
         ConfigurationJobExecutor configurationJobExecutor = new ConfigurationJobExecutor(leaseRepository,
                 attemptRepository, deviceEnrollmentReadPort, deviceRepository, deviceConfigurationRepository,
                 configurationNotificationRepository, configurationCapabilityExecutor, backupArtefactManifestRepository,

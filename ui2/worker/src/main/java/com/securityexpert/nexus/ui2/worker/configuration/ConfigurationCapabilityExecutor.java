@@ -24,7 +24,9 @@ import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiStreamOutcome;
+import com.securityexpert.nexus.ui2.platform.WorkerActor;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationArtefactRecord;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationReadKind;
 import com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator;
@@ -67,6 +69,7 @@ public final class ConfigurationCapabilityExecutor {
     private final DeviceTransport transport;
     private final PanCredentialResolver panCredentialResolver;
     private final ArtefactStore artefactStore;
+    private final DeviceRepository deviceRepository;
     private final PanoramaCrossCheckPort panoramaCrossCheck;
     private final com.securityexpert.nexus.ui2.worker.configuration.server.ConfigurationServiceClient configServiceClient;
 
@@ -79,9 +82,17 @@ public final class ConfigurationCapabilityExecutor {
     public ConfigurationCapabilityExecutor(DeviceTransport transport, PanCredentialResolver panCredentialResolver,
             ArtefactStore artefactStore, PanoramaCrossCheckPort panoramaCrossCheck,
             com.securityexpert.nexus.ui2.worker.configuration.server.ConfigurationServiceClient configServiceClient) {
+        this(transport, panCredentialResolver, artefactStore, panoramaCrossCheck, configServiceClient, null);
+    }
+
+    public ConfigurationCapabilityExecutor(DeviceTransport transport, PanCredentialResolver panCredentialResolver,
+            ArtefactStore artefactStore, PanoramaCrossCheckPort panoramaCrossCheck,
+            com.securityexpert.nexus.ui2.worker.configuration.server.ConfigurationServiceClient configServiceClient,
+            DeviceRepository deviceRepository) {
         this.transport = Objects.requireNonNull(transport, "transport");
         this.panCredentialResolver = panCredentialResolver;
         this.artefactStore = Objects.requireNonNull(artefactStore, "artefactStore");
+        this.deviceRepository = deviceRepository;
         this.panoramaCrossCheck = panoramaCrossCheck == null ? PanoramaCrossCheckPort.NONE : panoramaCrossCheck;
         this.configServiceClient = configServiceClient != null ? configServiceClient
                 : com.securityexpert.nexus.ui2.worker.configuration.server.ConfigurationServiceClient.fromEnvironment();
@@ -227,6 +238,16 @@ public final class ConfigurationCapabilityExecutor {
             ConfigurationRunData runData = new ConfigurationRunData(ConfigurationReadKind.SHOW_CONFIGURATION, true,
                     processed.canonicalHash(), processed.withheldLineCount(), Optional.of(processed.sanitizedText()),
                     processed.index(), List.of(), toRecord(metadata, deviceId, jobId, "cisco_asa"));
+            var pair = com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaPlan.failoverPairReference(rawConfig, target.host());
+            if (pair.ambiguous()) {
+                System.getLogger(ConfigurationCapabilityExecutor.class.getName()).log(System.Logger.Level.WARNING,
+                        "[ASA] failover pairing ambiguous: {0} lines", pair.matchingLines());
+            } else if (pair.reference().isPresent() && Objects.requireNonNull(deviceRepository, "deviceRepository")
+                    .setClusterMemberRef(deviceId, pair.reference(), WorkerActor.RESERVED_ACTOR_FINGERPRINT,
+                            "asa_failover_pairing")) {
+                System.getLogger(ConfigurationCapabilityExecutor.class.getName()).log(System.Logger.Level.INFO,
+                        "[ASA] failover pair reference set");
+            }
             return new ConfigurationResult.Completed(List.of(runData));
         } catch (IOException e) {
             closeQuietly(handle);

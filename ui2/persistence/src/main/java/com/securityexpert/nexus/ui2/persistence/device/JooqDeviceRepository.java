@@ -259,6 +259,14 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public boolean setClusterMemberRef(String deviceId, Optional<String> ref, String actorFingerprint, String actionId) {
+        Objects.requireNonNull(ref, "ref");
+        return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> dsl.execute(
+                "update devices set cluster_member_ref = {0} where device_id = {1} "
+                        + "and cluster_member_ref is distinct from {0}", ref.orElse(null), deviceId)) == 1;
+    }
+
+    @Override
     public boolean setCredentialReference(String deviceId, String credentialReferenceId, String actorFingerprint, String actionId) {
         int updated = auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> dsl.execute(
                 "update devices set credential_reference_id = {0} where device_id = {1} and credential_reference_id <> {0}",

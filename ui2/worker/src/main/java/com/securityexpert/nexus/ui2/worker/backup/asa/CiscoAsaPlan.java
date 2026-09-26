@@ -1,6 +1,10 @@
 package com.securityexpert.nexus.ui2.worker.backup.asa;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +40,40 @@ public final class CiscoAsaPlan {
     /** Backup: the running configuration with its keys (Backbox's own read), and the saved one. */
     public static final String MORE_SYSTEM_RUNNING_CONFIG = "more system:running-config";
     public static final String SHOW_STARTUP_CONFIG = "show startup-config";
+    private static final Pattern FAILOVER_ADDRESS = Pattern.compile(
+            "(?m)^[ \\t]*ip[ \\t]+address[ \\t]+(\\S+)[ \\t]+(\\S+)[ \\t]+standby[ \\t]+(\\S+)[ \\t]*$");
+
+    public record FailoverPairReference(Optional<String> reference, int matchingLines) {
+        public boolean ambiguous() {
+            return matchingLines > 1;
+        }
+    }
+
+    public static FailoverPairReference failoverPairReference(String rawConfig, String ownAddress) {
+        if (rawConfig == null || ownAddress == null) {
+            return new FailoverPairReference(Optional.empty(), 0);
+        }
+        Matcher lines = FAILOVER_ADDRESS.matcher(rawConfig);
+        String pair = null;
+        int matchingLines = 0;
+        while (lines.find()) {
+            String a = lines.group(1);
+            String b = lines.group(3);
+            if (ownAddress.equals(a) || ownAddress.equals(b)) {
+                matchingLines++;
+                pair = a.compareTo(b) <= 0 ? a + "|" + b : b + "|" + a;
+            }
+        }
+        if (matchingLines != 1) {
+            return new FailoverPairReference(Optional.empty(), matchingLines);
+        }
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(pair.getBytes(StandardCharsets.UTF_8));
+            return new FailoverPairReference(Optional.of("asa-failover|" + HexFormat.of().formatHex(digest, 0, 8)), 1);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 
     /**
      * The ASA's own archive (PO 2026-09-25: both backups, in order; SCP is enabled by the ASA team, neXus never enables

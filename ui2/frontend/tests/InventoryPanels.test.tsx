@@ -170,11 +170,16 @@ describe("InventoryScreen device selection and panels", () => {
     expect(screen.getByText("High Availability")).toBeInTheDocument();
   });
 
-  it("renders the cluster unified view with a member marker and VIP once for a cluster device", async () => {
+  it.each([
+    { vendor: "check_point", label: "Check Point ClusterXL" },
+    { vendor: "cisco_asa", label: "Cisco ASA failover" },
+  ])("renders the $vendor cluster unified view with its label and one VIP", async ({ vendor, label }) => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/devices") {
-        return Promise.resolve(jsonResponse(200, { devices: [CLUSTER_MEMBER_A, CLUSTER_MEMBER_B] }));
+        return Promise.resolve(jsonResponse(200, { devices: [
+          { ...CLUSTER_MEMBER_A, vendor_hint: vendor }, { ...CLUSTER_MEMBER_B, vendor_hint: vendor },
+        ] }));
       }
       if (url === "/clusters/cluster-1/inventory") {
         return Promise.resolve(
@@ -215,6 +220,7 @@ describe("InventoryScreen device selection and panels", () => {
     expect(screen.getAllByText("192.0.2.100/24")).toHaveLength(1);
     expect(screen.getByText("VIP")).toBeInTheDocument();
     expect(screen.getByText(/state = down/)).toBeInTheDocument();
+    expect(screen.getAllByText(label).length).toBeGreaterThan(0);
   });
 
   it("Collect now submits, polls the device, and refreshes the inventory once the job is terminal", async () => {

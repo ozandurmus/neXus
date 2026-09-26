@@ -25,6 +25,25 @@ import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
 class JooqDeviceRepositoryTest {
 
     @Test
+    void clusterReferenceUpdateWritesOnlyWhenDifferent() {
+        List<String> sql = new ArrayList<>();
+        var repository = new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
+                new MockConnection(context -> {
+                    if (context.sql().startsWith("update devices set cluster_member_ref")) {
+                        sql.add(context.sql());
+                        return new MockResult[] { new MockResult(sql.size() == 1 ? 1 : 0, null) };
+                    }
+                    return new MockResult[] { new MockResult(0, null) };
+                }), SQLDialect.POSTGRES)));
+
+        assertTrue(repository.setClusterMemberRef("device-1", Optional.of("asa-failover|abc123"),
+                "synthetic-actor", "asa_failover_pairing"));
+        assertFalse(repository.setClusterMemberRef("device-1", Optional.of("asa-failover|abc123"),
+                "synthetic-actor", "asa_failover_pairing"));
+        assertTrue(sql.stream().allMatch(statement -> statement.contains("cluster_member_ref is distinct from")));
+    }
+
+    @Test
     void observedRoleRefreshWritesPresentRoleAndKeepsItWhenAbsent() {
         AtomicReference<String> storedRole = new AtomicReference<>();
         List<String> updates = new ArrayList<>();
