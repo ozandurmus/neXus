@@ -32,6 +32,7 @@ import com.jcraft.jsch.Session;
  */
 final class InteractiveShellSession implements AutoCloseable {
 
+    private static final int TAIL_CHARS = 8192;
     private static final Pattern ANSI_ESCAPE = Pattern.compile("(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])");
     private static final List<String> CLI_ERROR_PATTERNS = List.of(
             "command not found", "unknown command", "invalid command", "syntax error",
@@ -64,13 +65,22 @@ final class InteractiveShellSession implements AutoCloseable {
         this.prompt = promptCandidateOf(painted);
     }
 
+    InteractiveShellSession(InputStream in, OutputStream out, String prompt) {
+        this.channel = null;
+        this.in = in;
+        this.out = out;
+        this.prompt = prompt;
+    }
+
     boolean isConnected() {
-        return channel.isConnected();
+        return channel != null && channel.isConnected();
     }
 
     @Override
     public void close() {
-        channel.disconnect();
+        if (channel != null) {
+            channel.disconnect();
+        }
     }
 
     /** How one command on the shell ended: only {@link Kind#TIMED_OUT} means the prompt never came back. */
@@ -119,21 +129,23 @@ final class InteractiveShellSession implements AutoCloseable {
             }
             if (got) {
                 lastData = System.currentTimeMillis();
-                String current = stripTerminalControl(raw.toString());
+                String current = strippedTail(raw);
                 // FortiOS pages at the terminal height with " --More-- " and waits: answer with a space, drop the
                 // marker, keep reading (no console setting is changed on the device).
                 if (current.stripTrailing().endsWith(MORE)) {
-                    int at = raw.lastIndexOf(MORE);
-                    if (at >= 0) {
-                        raw.delete(at, raw.length());
+                    int tailStart = Math.max(0, raw.length() - TAIL_CHARS);
+                    String rawTail = raw.substring(tailStart);
+                    int at = rawTail.lastIndexOf(MORE);
+                    if (at >= 0 && stripTerminalControl(rawTail.substring(at)).stripTrailing().equals(MORE)) {
+                        raw.delete(tailStart + at, raw.length());
+                        try {
+                            out.write(' ');
+                            out.flush();
+                        } catch (IOException e) {
+                            return new Result(Result.Kind.NOT_SENT, null);
+                        }
+                        continue;
                     }
-                    try {
-                        out.write(' ');
-                        out.flush();
-                    } catch (IOException e) {
-                        return new Result(Result.Kind.NOT_SENT, null);
-                    }
-                    continue;
                 }
                 if (prompt != null && (current.stripTrailing().endsWith(prompt) || isPromptVariant(lastLine(current)))) {
                     completed = true;
@@ -149,7 +161,7 @@ final class InteractiveShellSession implements AutoCloseable {
         if (!completed) {
             // MEASURE (2026-09-26: a Cisco ASA login answered no command): the shape of the learned prompt and of the
             // tail of what came back (letters a, digits 9, the rest kept) -- never values.
-            String tail = stripTerminalControl(raw.toString());
+            String tail = strippedTail(raw);
             tail = tail.substring(Math.max(0, tail.length() - 200));
             System.getLogger(InteractiveShellSession.class.getName()).log(System.Logger.Level.INFO,
                     "[SHELL] timed out: prompt shape \"{0}\"; sawData {1}; tail shape \"{2}\"",
@@ -158,7 +170,7 @@ final class InteractiveShellSession implements AutoCloseable {
         }
 
         String text = stripTerminalControl(raw.toString());
-        String observedPrompt = promptCandidateOf(text);
+        String observedPrompt = promptCandidateOfStripped(text);
         if (observedPrompt != null) {
             prompt = observedPrompt;
         }
@@ -217,7 +229,7 @@ final class InteractiveShellSession implements AutoCloseable {
                 // the deadline still governs
             }
             if (got) {
-                String current = stripTerminalControl(raw.toString()).stripTrailing();
+                String current = strippedTail(raw).stripTrailing();
                 if (prompt != null && current.endsWith(prompt)) {
                     completed = true;
                     break;
@@ -242,7 +254,7 @@ final class InteractiveShellSession implements AutoCloseable {
         if (!completed) {
             // MEASURE (2026-09-26: a Cisco ASA login answered no command): the shape of the learned prompt and of the
             // tail of what came back (letters a, digits 9, the rest kept) -- never values.
-            String tail = stripTerminalControl(raw.toString());
+            String tail = strippedTail(raw);
             tail = tail.substring(Math.max(0, tail.length() - 200));
             System.getLogger(InteractiveShellSession.class.getName()).log(System.Logger.Level.INFO,
                     "[SHELL] timed out: prompt shape \"{0}\"; sawData {1}; tail shape \"{2}\"",
@@ -327,10 +339,18 @@ final class InteractiveShellSession implements AutoCloseable {
         return text.replace("\r\n", "\n").replace("\r", "\n");
     }
 
+    private static String strippedTail(StringBuilder raw) {
+        return stripTerminalControl(raw.substring(Math.max(0, raw.length() - TAIL_CHARS)));
+    }
+
     /** The last plausible prompt line, for read framing only -- never used to decide Clish vs
      * Expert; command success is the only capability evidence, matching the Python original. */
     private static String promptCandidateOf(String value) {
-        String[] lines = stripTerminalControl(value).split("\n", -1);
+        return promptCandidateOfStripped(stripTerminalControl(value));
+    }
+
+    private static String promptCandidateOfStripped(String value) {
+        String[] lines = value.split("\n", -1);
         for (int i = lines.length - 1; i >= 0; i--) {
             String line = lines[i].strip();
             if (line.isEmpty() || line.length() > 240) {
