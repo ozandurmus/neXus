@@ -11,7 +11,7 @@ import standalone_orchestrate as sa  # noqa: E402
 
 def _args(**kw):
     import argparse
-    base = dict(task="small-fix", model="gpt-6-luna", effort="medium", brief="-", base=None)
+    base = dict(task="small-fix", model="gpt-6-luna", effort="medium", brief="-", base=None, network=False)
     base.update(kw)
     return argparse.Namespace(**base)
 
@@ -75,6 +75,8 @@ def test_start_spawns_codex_with_commit_roots_and_prompt_on_stdin(tmp_path, monk
     assert argv[:2] == ["/bin/sh", "-c"] and "$@" in argv[2]
     codex = argv[4:]
     assert codex[:2] == ["codex", "exec"] and "gpt-6-luna" in codex
+    assert "sandbox_workspace_write.network_access=false" in codex
+    assert "sandbox_workspace_write.network_access=true" not in codex
     assert str(tmp_path / "common") in [codex[i + 1] for i, v in enumerate(codex) if v == "--add-dir"]
     prompt = Path(spawned["env"]["SA_PROMPT"]).read_text()
     assert "Do not push" in prompt and prompt.endswith("Fix the label.")

@@ -17,7 +17,7 @@ Rules it enforces:
   prompt). Review, merge, deploy and live validation stay with the engineering session.
 
 Usage:
-  standalone_orchestrate.py start  --task <slug> --model gpt-6-luna|gpt-6-sol [--effort medium] --brief FILE|-
+  standalone_orchestrate.py start  --task <slug> --model gpt-6-luna|gpt-6-sol [--effort medium] [--network] --brief FILE|-
   standalone_orchestrate.py status [--task <slug>]
   standalone_orchestrate.py wait   --task <slug> [--timeout 540]
   standalone_orchestrate.py result --task <slug>
@@ -171,6 +171,12 @@ def cmd_start(args: argparse.Namespace) -> int:
         prompt_path=prompt_path, worktree=worktree, model=args.model, effort=args.effort,
         budget_usd=None, extra_dirs=extra_dirs, resume_session_id=None,
     )
+    # No network for the worker unless asked (2026-09-26: a relay-path worker pushed its lane, opened a PR and ran
+    # npm install): without network it cannot push, open PRs or install packages; the frontend dependencies are
+    # linked and Gradle runs from its local cache.
+    if not args.network:
+        argv = [("sandbox_workspace_write.network_access=false" if a == "sandbox_workspace_write.network_access=true" else a)
+                for a in argv]
     # CodexAdapter writes the last message under <worktree>/.nexus/; keep it there and create the directory.
     (worktree / ".nexus").mkdir(exist_ok=True)
     env = dict(os.environ)
@@ -283,6 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--effort", default="medium", choices=["minimal", "low", "medium", "high"])
     s.add_argument("--brief", required=True, help="brief file, or - for stdin")
     s.add_argument("--base", default=None, help="base commit-ish (default origin/main)")
+    s.add_argument("--network", action="store_true", help="allow the worker's commands network access (default off)")
     for name in ("status",):
         q = sub.add_parser(name)
         q.add_argument("--task")
