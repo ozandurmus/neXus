@@ -102,6 +102,24 @@ public final class FortiGatePlan {
         return Optional.ofNullable(role);
     }
 
+    /** MEASURE: which of haRole's conditions hold on a real output (booleans and counts only). */
+    public static String haRoleChecks(String output, Optional<String> ownSerial) {
+        if (output == null) return "null";
+        boolean health = Pattern.compile("(?m)^HA Health Status:\\s*.+$").matcher(output).find();
+        boolean mode = Pattern.compile("(?m)^Mode:\\s*HA A-[PA]\\s*$").matcher(output).find();
+        boolean modeLoose = Pattern.compile("(?im)^\\s*Mode\\s*:\\s*HA\\s+A-[PA]").matcher(output).find();
+        Matcher member = Pattern.compile("(?m)^\\s*(Primary|Secondary)\\s*:\\s*(?:[^,]+,\\s*)?([^,\\s]+),\\s*HA cluster index\\s*=").matcher(output);
+        int members = 0;
+        int own = 0;
+        while (member.find()) {
+            members++;
+            if (ownSerial.isPresent() && ownSerial.get().equals(member.group(2))) own++;
+        }
+        boolean cr = output.indexOf('\r') >= 0;
+        return "health=" + health + " mode=" + mode + " modeLoose=" + modeLoose + " memberLines=" + members + " ownMatches=" + own
+                + " cr=" + cr + " ownSerialLen=" + ownSerial.map(String::length).orElse(-1);
+    }
+
     /** One interface from "show system interface": its VDOM and the inventory row. */
     public record Iface(String vdom, InventoryInterface row) {
     }

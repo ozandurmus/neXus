@@ -127,6 +127,7 @@ public final class FortiGateExecutor {
                         + (ownSerial.isPresent() && line.contains(ownSerial.get()) ? " <own-serial>" : ""))
                 .limit(8).toList();
         LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE HA lines: {0}", shapes);
+        LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE HA checks: {0}", FortiGatePlan.haRoleChecks(text, ownSerial));
         Optional<String> role = FortiGatePlan.haRole(text, ownSerial);
         if (role.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "[FGT] HA role unknown or standalone");
