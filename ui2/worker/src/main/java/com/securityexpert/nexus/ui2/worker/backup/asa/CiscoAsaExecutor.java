@@ -99,6 +99,33 @@ public final class CiscoAsaExecutor {
         return Optional.empty();
     }
 
+    /** Configuration plane: the backup's interactive read, limited to a single ASA context. */
+    public record ConfigurationRead(Optional<String> text, String refusal) {
+    }
+
+    public ConfigurationRead configuration(Target target, String credentialRef) {
+        Shell shell = open(target, credentialRef);
+        if (shell.session() == null) {
+            return new ConfigurationRead(Optional.empty(), shell.refusal().orElse("connect_failed"));
+        }
+        try {
+            Optional<String> mode = read(shell.session(), CiscoAsaPlan.SHOW_MODE, SHORT);
+            if (mode.isEmpty()) {
+                return new ConfigurationRead(Optional.empty(), "show mode gave no answer");
+            }
+            if (CiscoAsaPlan.isMultipleContext(mode.get())) {
+                return new ConfigurationRead(Optional.empty(), "multiple ASA contexts are not supported for configuration collection");
+            }
+            Optional<String> running = read(shell.session(), CiscoAsaPlan.MORE_SYSTEM_RUNNING_CONFIG, LONG);
+            if (running.isEmpty() || !running.get().contains("ASA Version")) {
+                return new ConfigurationRead(Optional.empty(), "more system:running-config gave no ASA configuration");
+            }
+            return new ConfigurationRead(running, "");
+        } finally {
+            ssh.disconnect(shell.session());
+        }
+    }
+
     /** The shell echoes the command on the first line and ends with the prompt: neither is device output. */
     static String stripEcho(String out, String command) {
         String text = out;

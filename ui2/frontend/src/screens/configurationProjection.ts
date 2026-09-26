@@ -37,7 +37,7 @@ export interface SnapshotTile {
 }
 
 export interface Projection {
-  readonly vendor: "check_point" | "palo_alto" | "fortinet";
+  readonly vendor: "check_point" | "palo_alto" | "fortinet" | "cisco_asa";
   readonly sourcePlane: string;
   readonly settingCount: number;
   readonly withheldCount: number;
@@ -438,4 +438,40 @@ export function projectFortiGate(text: string): Projection {
   }
   const sections = [...bySection.keys()].sort((a, b) => a.localeCompare(b)).map((label) => ({ label, rows: bySection.get(label) ?? [] }));
   return { vendor: "fortinet", sourcePlane: "fortios-show", settingCount: all.length, withheldCount: withheld, sections, snapshot };
+}
+
+/** ASA's sanitized running configuration: indented lines belong to the preceding top-level block. */
+export function projectAsa(text: string): Projection {
+  const bySection = new Map<string, SettingRow[]>();
+  const counters = new Map<string, number>();
+  let block = "";
+  let section = "";
+  let hasChildren = false;
+  let withheld = 0;
+  let settings = 0;
+  const add = (setting: string, value: string) => {
+    push(bySection, counters, { section, setting, value, origin: "LOCAL", context: "single" });
+    settings++;
+  };
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line === "!") continue;
+    if (line.includes("[withheld]")) withheld++;
+    if (/^\s/.test(raw)) {
+      if (block) {
+        hasChildren = true;
+        add(`${block} › ${line}`, line);
+      }
+    } else {
+      if (block && !hasChildren) add(block, block);
+      block = line;
+      const words = line.split(/\s+/);
+      const size = /^(object network |crypto map )/.test(line) ? 2 : 1;
+      section = words.slice(0, size).map(titleCase).join(" ");
+      hasChildren = false;
+    }
+  }
+  if (block && !hasChildren) add(block, block);
+  const sections = [...bySection.keys()].sort((a, b) => a.localeCompare(b)).map((label) => ({ label, rows: bySection.get(label) ?? [] }));
+  return { vendor: "cisco_asa", sourcePlane: "asa-running-config", settingCount: settings, withheldCount: withheld, sections, snapshot: [] };
 }

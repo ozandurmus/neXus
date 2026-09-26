@@ -93,6 +93,7 @@ public final class ConfigurationCapabilityExecutor {
             case CHECK_POINT -> collectCheckPoint(request, deviceId, jobId, recordedIdentity, strictRefuseEnabled);
             case PALO_ALTO -> collectPaloAlto(request, deviceId, jobId, recordedIdentity, strictRefuseEnabled);
             case FORTINET -> collectFortiGate(request, deviceId, jobId);
+            case CISCO_ASA -> collectCiscoAsa(request, deviceId, jobId);
         };
     }
 
@@ -199,6 +200,37 @@ public final class ConfigurationCapabilityExecutor {
             }
         } finally {
             transport.disconnect(session);
+        }
+    }
+
+    private ConfigurationResult collectCiscoAsa(ConfigurationRequest request, String deviceId, String jobId) {
+        ConnectionTarget target = request.connectionTarget()
+                .orElseThrow(() -> new IllegalArgumentException("cisco_asa configuration collect requires a connectionTarget"));
+        com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor.ConfigurationRead read;
+        try {
+            read = new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(transport, null)
+                    .configuration(new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(
+                            target.host(), target.port()), request.credentialRef());
+        } catch (IllegalStateException credentialUnresolvable) {
+            return new ConfigurationResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
+        }
+        if (read.text().isEmpty()) {
+            return new ConfigurationResult.ConnectFailed(read.refusal());
+        }
+        String rawConfig = read.text().get();
+        var processed = com.securityexpert.nexus.ui2.worker.configuration.asa.AsaConfigProcessor.process(rawConfig);
+        ArtefactStore.ArtefactHandle handle = null;
+        try {
+            handle = artefactStore.open(deviceId, jobId, "cisco_asa", false);
+            handle.sink().write(rawConfig.getBytes(StandardCharsets.UTF_8));
+            ArtefactStore.ArtefactMetadata metadata = handle.finish();
+            ConfigurationRunData runData = new ConfigurationRunData(ConfigurationReadKind.SHOW_CONFIGURATION, true,
+                    processed.canonicalHash(), processed.withheldLineCount(), Optional.of(processed.sanitizedText()),
+                    processed.index(), List.of(), toRecord(metadata, deviceId, jobId, "cisco_asa"));
+            return new ConfigurationResult.Completed(List.of(runData));
+        } catch (IOException e) {
+            closeQuietly(handle);
+            return new ConfigurationResult.ArtefactStoreFailed("artefact store write failed: " + e.getMessage());
         }
     }
 

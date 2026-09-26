@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import { filterProjection, projectCheckPoint, projectCluster, projectPaloAlto } from "../src/screens/configurationProjection";
+import { filterProjection, projectAsa, projectCheckPoint, projectCluster, projectPaloAlto } from "../src/screens/configurationProjection";
+
+describe("Cisco ASA projection", () => {
+  it("groups flat and indented lines by block kind with withheld values", () => {
+    const p = projectAsa(`ASA Version 9.22\ninterface GigabitEthernet0/0\n nameif outside\n ip address 192.0.2.1 255.255.255.0\nobject network WEB\n host 192.0.2.10\naccess-list OUTSIDE permit ip any any\nusername [withheld]\n`);
+    expect(p.vendor).toBe("cisco_asa");
+    expect(p.sections.find((s) => s.label === "Interface")?.rows[0]).toMatchObject({
+      setting: "interface GigabitEthernet0/0 › nameif outside", value: "nameif outside", context: "single",
+    });
+    expect(p.sections.find((s) => s.label === "Object Network")?.rows).toHaveLength(1);
+    expect(p.sections.find((s) => s.label === "Access List")?.rows[0].setting).toBe("access-list OUTSIDE permit ip any any");
+    expect(p.withheldCount).toBe(1);
+    expect(p.settingCount).toBe(6);
+  });
+});
 
 const CP_A = `# SecurityExpert Check Point Gaia configuration evidence (redacted)
 # secret-bearing-lines-withheld=2

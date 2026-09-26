@@ -16,7 +16,9 @@ public final class ConfigurationCapabilityIds {
 
     /** FortiGate (FORTINET_CONTRACT.md, V85): the top-level show parsed to config blocks. */
     public static final String FGT_CONFIGURATION_COLLECT = "fgt_configuration_collect";
-    public static final Set<String> ALL = Set.of(CP_CONFIGURATION_COLLECT, PAN_CONFIGURATION_COLLECT, FGT_CONFIGURATION_COLLECT);
+    public static final String ASA_CONFIGURATION_COLLECT = "asa_configuration_collect";
+    public static final Set<String> ALL = Set.of(CP_CONFIGURATION_COLLECT, PAN_CONFIGURATION_COLLECT,
+            FGT_CONFIGURATION_COLLECT, ASA_CONFIGURATION_COLLECT);
 
     private ConfigurationCapabilityIds() {
     }

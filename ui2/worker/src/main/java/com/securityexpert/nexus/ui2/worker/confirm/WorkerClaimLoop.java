@@ -46,6 +46,7 @@ public final class WorkerClaimLoop {
             ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA, InventoryCapabilityIds.ASA_INVENTORY_COLLECT, BackupCapabilityIds.ASA_CONFIG_BACKUP,
             ConfirmCapabilityIds.DEVICE_CONFIRM_FORTIGATE, InventoryCapabilityIds.FGT_INVENTORY_COLLECT, BackupCapabilityIds.FGT_CONFIG_BACKUP,
             ConfigurationCapabilityIds.FGT_CONFIGURATION_COLLECT,
+            ConfigurationCapabilityIds.ASA_CONFIGURATION_COLLECT,
             InventoryCapabilityIds.CP_INVENTORY_COLLECT, InventoryCapabilityIds.PAN_INVENTORY_COLLECT, InventoryCapabilityIds.HTTPS_INVENTORY_COLLECT,
             JobAdmissionService.FMG_INTERFACE_DETAIL,
             ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
@@ -454,6 +455,12 @@ public final class WorkerClaimLoop {
             String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
                     hostOf(addressRef), portOf(addressRef));
             return ConfigurationRequest.fortiGate(new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef)),
+                    credentialRef, trustRuleRef);
+        }
+        if (ConfigurationCapabilityIds.ASA_CONFIGURATION_COLLECT.equals(capabilityId)) {
+            String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
+                    hostOf(addressRef), portOf(addressRef));
+            return ConfigurationRequest.ciscoAsa(new ConnectionTarget(endpointId, hostOf(addressRef), portOf(addressRef)),
                     credentialRef, trustRuleRef);
         }
         throw new IllegalStateException("claimed job for a configuration capability the worker does not recognize: "

@@ -134,7 +134,12 @@ public final class ConfigurationJobExecutor {
             return new JobOutcome.Failed(describeFailure(result));
         }
 
-        String vendor = request.vendor() == ConfigurationVendor.CHECK_POINT ? "check_point" : "palo_alto";
+        String vendor = switch (request.vendor()) {
+            case CHECK_POINT -> "check_point";
+            case PALO_ALTO -> "palo_alto";
+            case FORTINET -> "fortinet";
+            case CISCO_ASA -> "cisco_asa";
+        };
         // PO 2026-09-25: this run's identity refresh updates the device's observed hostname / version whenever they
         // differ (an MDS upgrade must show after the next read); the identity baseline stays untouched.
         if (completed.identity().hostname().isPresent() || completed.identity().softwareVersion().isPresent()) {

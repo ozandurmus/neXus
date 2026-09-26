@@ -39,7 +39,7 @@ import {
   filterProjection,
   projectCheckPoint,
   projectCluster,
-  projectPaloAlto, projectFortiGate,
+  projectPaloAlto, projectFortiGate, projectAsa,
   type ClusterProjection,
   type MemberRow,
   type Origin,
@@ -103,6 +103,8 @@ function useProjection(device: DeviceSummary | null, revision = 0): Loaded & { l
             ? projectPaloAlto(text, configuration.overrides.map((o) => o.element_path))
             : configuration.vendor === "fortinet" || device.vendor_hint === "fortinet"
               ? projectFortiGate(text)
+              : configuration.vendor === "cisco_asa" || device.vendor_hint === "cisco_asa"
+                ? projectAsa(text)
               : projectCheckPoint(text);
         }
         if (!cancelled) setState({ configuration, projection, error: null, loading: false });

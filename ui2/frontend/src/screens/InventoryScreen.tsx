@@ -88,7 +88,7 @@ function clusterHasCollectedEvidence(members: readonly DeviceSummary[]): boolean
 }
 
 /** Vendors with a configuration read (one device screen, PO 2026-09-25): others show no Configuration tab. */
-const CONFIGURATION_VENDORS = new Set(["check_point", "palo_alto", "fortinet"]);
+const CONFIGURATION_VENDORS = new Set(["check_point", "palo_alto", "fortinet", "cisco_asa"]);
 
 /** Labels for the child list under a device: Palo Alto vsys, Check Point VSX virtual systems, Infoblox grid members. */
 function childLabels(vendorHint: string | null | undefined, role?: string | null): { heading: string; chip: string; tag: string } {

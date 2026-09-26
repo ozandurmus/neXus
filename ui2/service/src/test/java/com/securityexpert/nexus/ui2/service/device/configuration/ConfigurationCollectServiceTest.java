@@ -150,7 +150,8 @@ class ConfigurationCollectServiceTest {
     private static ConfigurationCollectService serviceFor(FakeDeviceRepository devices) {
         CapabilityRegistry registry = CapabilityRegistry.of(List.of(
                 configurationCapability(ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, "check_point"),
-                configurationCapability(ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT, "palo_alto")));
+                configurationCapability(ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT, "palo_alto"),
+                configurationCapability(ConfigurationCapabilityIds.ASA_CONFIGURATION_COLLECT, "cisco_asa")));
         DeviceEnrollmentReadPort enrollmentReadPort = deviceId -> Optional.ofNullable(devices.byId.get(deviceId))
                 .map(d -> new DeviceEnrollmentSnapshot(deviceId, d.enrollmentState(), d.disabled()));
         JobAdmissionService admissionService =
@@ -177,6 +178,14 @@ class ConfigurationCollectServiceTest {
 
         ConfigurationCollectService.Outcome outcome = service.requestCollect("device-1", "actor", Optional.of("nonce-1"));
 
+        assertTrue(outcome instanceof ConfigurationCollectService.Outcome.Admitted, "expected Admitted, got " + outcome);
+    }
+
+    @Test
+    void anEnrolledAsaGatewayAdmitsConfigurationCollection() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("device-1", enrolledDevice("device-1", "cisco_asa"));
+        var outcome = serviceFor(devices).requestCollect("device-1", "actor", Optional.of("nonce-1"));
         assertTrue(outcome instanceof ConfigurationCollectService.Outcome.Admitted, "expected Admitted, got " + outcome);
     }
 
