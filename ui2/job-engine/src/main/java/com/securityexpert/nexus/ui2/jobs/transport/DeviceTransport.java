@@ -47,6 +47,15 @@ public interface DeviceTransport {
         throw new TransportNotImplementedException("exec_interactive_answering");
     }
 
+    /**
+     * The interactive shell's prompt changed on purpose (a FortiGate {@code execute ha manage} hop to another cluster unit,
+     * and back): send an empty line, read until quiet and learn the new prompt. Returns whether a prompt was learned.
+     * Default: not supported.
+     */
+    default boolean resyncPrompt(TransportSession session, Duration quiet) {
+        return false;
+    }
+
     /** {@code sftp_get}/{@code scp_get} -- declared, not implemented at this movement. */
     FetchResult fetch(TransportSession session, FetchSpec spec, Duration timeout);
 

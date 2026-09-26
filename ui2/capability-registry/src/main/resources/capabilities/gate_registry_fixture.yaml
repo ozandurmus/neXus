@@ -1846,6 +1846,38 @@ gates:
     secret_output_risk: 'none'
     safe_telemetry_fields: []
     source_document_pointer: 'FortiOS CLI reference; PO 2026-09-26'
+  - gate_id: fgt_execute_ha_manage_list
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'cli'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'execute ha manage ?'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per measurement'
+    session_reuse_rule: 'same SSH session (HA primary)'
+    unsupported_behavior_ref: 'refused -> measurement ends, logged'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Fortinet Technical Tip: Managing individual cluster units with execute ha manage; PO 2026-09-27'
+  - gate_id: fgt_execute_ha_manage_login
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'cli'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'execute ha manage <index> <username>'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per measurement'
+    session_reuse_rule: 'same SSH session; password prompt answered from the credential store; exit returns to the primary'
+    unsupported_behavior_ref: 'refused or no prompt back -> exit, measurement ends, logged'
+    secret_output_risk: 'password prompt (answered, never logged)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Fortinet Technical Tip: How to access the secondary unit from the primary with execute ha manage; PO 2026-09-27'
   - gate_id: fgt_context_moves
     vendor: 'fortinet'
     platform_role_scope: 'fortigate'

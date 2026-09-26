@@ -47,6 +47,24 @@ public final class FortiGateExecutor {
         this.artefactStore = artefactStore;
     }
 
+    /** User name and password of a credential reference, for the one prompt that asks for them (execute ha manage). */
+    public record LoginSecret(String username, char[] password) {
+        @Override
+        public String toString() {
+            return "LoginSecret[username=" + username + ", password=<redacted>]";
+        }
+    }
+
+    private java.util.function.Function<String, LoginSecret> secrets;
+
+    public FortiGateExecutor withSecrets(java.util.function.Function<String, LoginSecret> secrets) {
+        this.secrets = secrets;
+        return this;
+    }
+
+    /** PO 2026-09-27: measure the secondary through the primary once per worker process and cluster address. */
+    private static final java.util.Set<String> HA_MANAGE_MEASURED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     private record Shell(TransportSession session, Optional<String> refusal, boolean authFailure) {
     }
 
@@ -135,6 +153,59 @@ public final class FortiGateExecutor {
         return role;
     }
 
+    /**
+     * One-shot measurement (PO 2026-09-27, gates V95): from the HA primary, list the units (execute ha manage ?), open a
+     * CLI on the secondary over the HA link with the same account (password answered from the credential store, never on
+     * the command line, never logged), read its status and HA status (already gated), exit back. Logs shapes, labels and
+     * booleans only; stores nothing. Any failure ends the measurement and leaves the primary's own read untouched.
+     */
+    private void measureSecondaryThroughPrimary(TransportSession s, FortiGatePlan.Status st, String credentialRef) {
+        boolean global = st.multiVdom();
+        boolean hopped = false;
+        try {
+            if (global) move(s, FortiGatePlan.CONFIG_GLOBAL);
+            Optional<String> haStatus = read(s, FortiGatePlan.GET_SYSTEM_HA_STATUS, HA_READ);
+            Optional<String> peer = haStatus.flatMap(h -> FortiGatePlan.haPeerSerial(h, st.serial().orElse(null)));
+            Optional<String> list = read(s, "execute ha manage ?", SHORT);
+            LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage list: peerKnown={0} lines={1} shape={2}", peer.isPresent(),
+                    list.map(t -> t.lines().count()).orElse(-1L),
+                    list.map(t -> t.lines().limit(6).map(l -> l.replaceAll("[A-Za-z]+", "a").replaceAll("[0-9]+", "9")).toList()).orElse(List.of()));
+            Optional<String> index = peer.flatMap(p -> list.flatMap(l -> FortiGatePlan.haManageIndexFor(l, p)));
+            LoginSecret secret = secrets.apply(credentialRef);
+            if (index.isEmpty() || secret == null || !FortiGatePlan.safeUsername(secret.username())) {
+                LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage: no unique secondary index or unusable account; stop");
+                return;
+            }
+            ExecResult login = ssh.execInteractiveAnswering(s, new ExecSpec("execute ha manage " + index.get() + " " + secret.username(), true),
+                    List.of(new com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer("assword:", secret.password())), Duration.ofSeconds(20));
+            hopped = true;
+            boolean learned = ssh.resyncPrompt(s, Duration.ofSeconds(3));
+            LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage login: result={0} promptLearned={1}",
+                    login.getClass().getSimpleName(), learned);
+            Optional<String> peerStatus = status(s);
+            FortiGatePlan.Status ps = FortiGatePlan.parseStatus(peerStatus.orElse(null));
+            Optional<String> peerHa = read(s, FortiGatePlan.GET_SYSTEM_HA_STATUS, HA_READ);
+            if (peerHa.isEmpty()) {
+                move(s, FortiGatePlan.CONFIG_GLOBAL);
+                peerHa = read(s, FortiGatePlan.GET_SYSTEM_HA_STATUS, HA_READ);
+                move(s, FortiGatePlan.END);
+            }
+            boolean serialIsPeer = ps.serial().isPresent() && peer.isPresent() && ps.serial().get().equals(peer.get());
+            Optional<String> peerRole = peerHa.flatMap(h -> FortiGatePlan.haRole(h, ps.serial()));
+            LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage secondary: statusRead={0} model={1} serialIsPeer={2} role={3}",
+                    peerStatus.isPresent(), ps.model().isPresent(), serialIsPeer, peerRole.orElse("unknown"));
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage failed: {0}", e.getClass().getSimpleName());
+        } finally {
+            if (hopped) {
+                move(s, "exit");
+                boolean back = ssh.resyncPrompt(s, Duration.ofSeconds(3));
+                LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage exit: promptLearned={0}", back);
+            }
+            if (global) move(s, FortiGatePlan.END);
+        }
+    }
+
     public HttpsVendorExecutor.ConfirmOutcome confirm(Target target, String credentialRef) {
         Shell shell = open(target, credentialRef);
         if (shell.session() == null) {
@@ -169,6 +240,9 @@ public final class FortiGateExecutor {
                 return new HttpsVendorExecutor.InventoryOutcome.Failed("get system status gave no FortiGate answer");
             }
             Optional<String> haRole = haRole(s, st.serial());
+            if (haRole.filter("primary"::equals).isPresent() && secrets != null && HA_MANAGE_MEASURED.add(target.host())) {
+                measureSecondaryThroughPrimary(s, st, credentialRef);
+            }
             List<FortiGatePlan.Iface> ifaces;
             Map<String, List<com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute>> routes = new LinkedHashMap<>();
             if (st.multiVdom()) {

@@ -200,4 +200,17 @@ class FortinetParsersTest {
         // the primary is listed as a member with the cluster's own serial: identifiers stay unique within the run
         assertEquals(records.size(), records.stream().map(r -> r.stableIdentifier()).distinct().count());
     }
+
+    @Test
+    void haManageHelpersFindThePeerAndItsIndexExactly() {
+        String ha = "HA Health Status: OK\nMode: HA A-P\nPrimary: SYNTH00001, HA operating index = 0\n"
+                + "Secondary: SYNTH00002, HA operating index = 1\n";
+        assertEquals(Optional.of("SYNTH00002"), FortiGatePlan.haPeerSerial(ha, "SYNTH00001"));
+        assertEquals(Optional.empty(), FortiGatePlan.haPeerSerial("Mode: standalone\n", "SYNTH00001"));
+        String list = "<id>     please input peer box index.\n<1>      Subsidary unit SYNTH00002\n";
+        assertEquals(Optional.of("1"), FortiGatePlan.haManageIndexFor(list, "SYNTH00002"));
+        assertEquals(Optional.empty(), FortiGatePlan.haManageIndexFor(list, "SYNTH0000"));
+        assertTrue(FortiGatePlan.safeUsername("svc.reader"));
+        assertFalse(FortiGatePlan.safeUsername("a b; exit"));
+    }
 }

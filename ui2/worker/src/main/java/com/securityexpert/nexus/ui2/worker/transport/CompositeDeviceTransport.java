@@ -64,6 +64,11 @@ public final class CompositeDeviceTransport implements DeviceTransport {
     }
 
     @Override
+    public boolean resyncPrompt(TransportSession session, Duration quiet) {
+        return registry.find(TransportKind.SSH_EXEC).map(transport -> transport.resyncPrompt(session, quiet)).orElse(false);
+    }
+
+    @Override
     public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
         return registry.find(TransportKind.SSH_EXEC)
                 .map(transport -> transport.execInteractive(session, spec, timeout))

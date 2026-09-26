@@ -103,6 +103,39 @@ public final class FortiGatePlan {
         return Optional.ofNullable(role);
     }
 
+    private static final Pattern HA_MEMBER_LINE = Pattern.compile(
+            "(?m)^\\s*(Primary|Secondary)\\s*:\\s*(?:[^,]+,\\s*)?([^,\\s]+),\\s*HA (?:cluster|operating) index\\s*=");
+
+    /** The other unit's serial in a two-unit HA status, when exactly one member line is not this unit. */
+    public static Optional<String> haPeerSerial(String haStatus, String ownSerial) {
+        if (haStatus == null || ownSerial == null) return Optional.empty();
+        java.util.Set<String> peers = new java.util.LinkedHashSet<>();
+        Matcher m = HA_MEMBER_LINE.matcher(haStatus);
+        while (m.find()) {
+            if (!ownSerial.equals(m.group(2))) peers.add(m.group(2));
+        }
+        return peers.size() == 1 ? Optional.of(peers.iterator().next()) : Optional.empty();
+    }
+
+    /** "execute ha manage ?" lists "<index> ... <serial>" per other unit: the index whose line names the peer serial exactly. */
+    public static Optional<String> haManageIndexFor(String listOutput, String peerSerial) {
+        if (listOutput == null || peerSerial == null) return Optional.empty();
+        Optional<String> found = Optional.empty();
+        for (String line : listOutput.split("\\R")) {
+            Matcher idx = Pattern.compile("<(\\d{1,3})>").matcher(line);
+            if (idx.find() && java.util.Arrays.asList(line.split("[\\s,()]+")).contains(peerSerial)) {
+                if (found.isPresent()) return Optional.empty();
+                found = Optional.of(idx.group(1));
+            }
+        }
+        return found;
+    }
+
+    /** A user name safe to put on the command line (it is not secret; the password never is). */
+    public static boolean safeUsername(String username) {
+        return username != null && username.matches("[A-Za-z0-9._@-]{1,64}");
+    }
+
     /** MEASURE: which of haRole's conditions hold on a real output (booleans and counts only). */
     public static String haRoleChecks(String output, Optional<String> ownSerial) {
         if (output == null) return "null";

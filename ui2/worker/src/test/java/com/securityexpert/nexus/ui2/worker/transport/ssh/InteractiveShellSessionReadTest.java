@@ -138,4 +138,27 @@ class InteractiveShellSessionReadTest {
             }
         }
     }
+
+    @org.junit.jupiter.api.Test
+    void relearnPromptPicksUpTheOtherUnitsPrompt() throws Exception {
+        // The new unit repaints its prompt only after the empty line is sent.
+        byte[] repaint = "\nFGT-B # ".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        java.util.concurrent.atomic.AtomicBoolean asked = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.concurrent.atomic.AtomicInteger pos = new java.util.concurrent.atomic.AtomicInteger();
+        var in = new java.io.InputStream() {
+            @Override public int available() { return asked.get() ? repaint.length - pos.get() : 0; }
+            @Override public int read() { return asked.get() && pos.get() < repaint.length ? repaint[pos.getAndIncrement()] & 0xff : -1; }
+            @Override public int read(byte[] b, int off, int len) {
+                int n = Math.min(len, available());
+                if (n <= 0) return -1;
+                System.arraycopy(repaint, pos.getAndAdd(n), b, off, n);
+                return n;
+            }
+        };
+        var out = new java.io.OutputStream() {
+            @Override public void write(int b) { if (b == '\n') asked.set(true); }
+        };
+        var shell = new InteractiveShellSession(in, out, "FGT-A # ");
+        org.junit.jupiter.api.Assertions.assertTrue(shell.relearnPrompt(100));
+    }
 }

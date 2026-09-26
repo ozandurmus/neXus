@@ -318,6 +318,26 @@ final class InteractiveShellSession implements AutoCloseable {
         }
     }
 
+    /**
+     * The prompt changed on purpose (FortiGate "execute ha manage" to another cluster unit, and "exit" back): drain what
+     * is pending, ask the shell to repaint its prompt (an empty line, never a device command) and learn it again.
+     */
+    boolean relearnPrompt(int quietMs) {
+        readUntilQuiet(3000, quietMs);
+        try {
+            out.write('\n');
+            out.flush();
+        } catch (IOException e) {
+            return false;
+        }
+        String learned = promptCandidateOf(readUntilQuiet(5000, quietMs));
+        if (learned == null) {
+            return false;
+        }
+        prompt = learned;
+        return true;
+    }
+
     private String readUntilQuiet(int timeoutMs, int quietMs) {
         StringBuilder chunks = new StringBuilder();
         long deadline = System.currentTimeMillis() + Math.max(1, timeoutMs);

@@ -316,6 +316,23 @@ public final class SshExecTransport implements DeviceTransport {
         }
     }
 
+    @Override
+    public boolean resyncPrompt(TransportSession session, Duration quiet) {
+        if (!(session instanceof SshTransportSession sshSession)) {
+            return false;
+        }
+        try {
+            return sshSession.interactiveShell().relearnPrompt((int) Math.max(100, quiet.toMillis()));
+        } catch (JSchException | IOException e) {
+            return false;
+        }
+    }
+
+    /** The account name of "execute ha manage <index> <user>" is not logged (AGENTS.md: no principals in logs). */
+    private static String loggable(String command) {
+        return command == null ? null : command.replaceAll("^(execute ha manage \\d+)\\s+\\S+.*$", "$1 <user>");
+    }
+
     /** {@link #execInteractive}, answering the command's questions on the way (replies never logged). */
     @Override
     public ExecResult execInteractiveAnswering(TransportSession session, ExecSpec spec,
@@ -328,7 +345,7 @@ public final class SshExecTransport implements DeviceTransport {
             InteractiveShellSession.Result result = sshSession.interactiveShell().runAnswering(spec.command(), answers, (int) timeout.toMillis());
             long elapsedMs = System.currentTimeMillis() - startMs;
             LOG.log(System.Logger.Level.INFO, "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" answered, ended {1} in {2}ms",
-                    spec.command(), result.kind(), elapsedMs);
+                    loggable(spec.command()), result.kind(), elapsedMs);
             return switch (result.kind()) {
                 case TIMED_OUT -> new ExecResult.TimedOut();
                 case OUTPUT -> new ExecResult.Completed(result.text(), 0);
