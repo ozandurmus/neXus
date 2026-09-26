@@ -31,8 +31,8 @@ configuration vendor CHECK widened (V86). UI: executive Overview (estate map), o
 masking fix, Cyber Controller reads queued per host.
 
 # Exact next action
-1. FortiManager interface up/down: after the next FortiManager Collect read the worker log line
-   `[FMG] ssh interface states … status words … shape …` and fix `FortiManagerExecutor.parseInterfaceStates`.
+1. FortiManager physical link state: gate and read `diagnose hardware info nic <port>` over SSH; today the tab shows
+   the configured state (enable/disable → up/down, measured 2026-09-26).
 2. First real runs when the PO adds them: Cisco ASA, Pulse Secure, SMC discovery → ProxySG import; read the
    measure-first logs, fix parsers, trigger and measure backups, note each run in the queue.
 3. Cluster view for ASA failover pairs and FortiGate HA (`asa_fortinet_cluster_view`); ASA configuration plane.

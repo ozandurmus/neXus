@@ -74,8 +74,14 @@ class FortiGateConfigProcessorTest {
                 == [ port2 ]
                 name: port2
                 status: down
+                == [ port3 ]
+                name: port3    status: enable    ip: 192.0.2.3 255.255.255.0
+                == [ port4 ]
+                name: port4    status: disable
                 """);
         assertEquals("up", st.get("port1"));
         assertEquals("down", st.get("port2"));
+        assertEquals("up", st.get("port3"));
+        assertEquals("down", st.get("port4"));
     }
 }

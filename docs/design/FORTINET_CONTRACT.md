@@ -43,8 +43,9 @@ receiver used for the Radware Cyber Controller fits, and is the next step after 
   lines carrying a password, key, PSK, certificate or `ENC` value are withheld and counted. The canonical hash leaves
   out the per-run `#` header, so an unchanged configuration hashes the same. Device screen: the Configuration tab.
 - **FortiManager interface states:** the JSON API's `status` is a number without a documented meaning (16 on every
-  interface, measured 2026-09-25), so the inventory logs in over SSH too and reads `get system interface` for the
-  up/down state; a refusal leaves the states unknown.
+  interface, measured 2026-09-25), so the inventory logs in over SSH too and reads `get system interface`. Measured
+  2026-09-26: its `status:` is the configured state (`enable`), shown as up/down exactly as a FortiGate's configured
+  `set status` is. The physical link state needs `diagnose hardware info nic <port>` per port — queued, not gated.
 
 ## Real-environment measurement (to do, after the PO adds the devices)
 One FortiGate with VDOMs and one FortiManager, fwadm credential: confirm facts present; VDOM, interface and route

@@ -96,10 +96,10 @@ Live state at handover: schema **86**, 122 devices, Bulk Collect 120/120 admitte
 configuration 102/120 (18 vendors without a read), all HOST-A pods 1/1.
 
 ## 5. Open items, in priority order (what Codex should pick up)
-1. **FortiManager interface up/down:** JSON `status` is an undocumented number (16 everywhere); the SSH read
-   `get system interface` is wired (V85) but its `status:` word did not match `up|down` — the last commit logs the
-   distinct words and the output shape (`[FMG] ssh interface states`); read that log after the next FMG Collect and fix
-   `FortiManagerExecutor.parseInterfaceStates`.
+1. **FortiManager physical link state:** the Interfaces tab now shows the configured state (`status: enable` over SSH,
+   measured 2026-09-26, mapped to up/down like a FortiGate's `set status`). The physical link state is a separate read,
+   `diagnose hardware info nic <port>` per port — gate it (one row), read it in the same SSH session, prefer it over the
+   configured state when present.
 2. **First real runs still pending:** Cisco ASA (PO adds it with fwadm), Pulse Secure (PO adds it), SMC discovery →
    ProxySG import (parsers measure-first), Panorama backup (device-state vs XML), FortiGate backup.
 3. **Cluster view for ASA failover pairs and FortiGate HA** (`asa_fortinet_cluster_view`): group members and compare
@@ -153,8 +153,8 @@ Radware (CC + DefensePro), Symantec MC (+ProxySG via MC), FortiManager + FortiGa
 and Pulse Secure implemented but not yet run on a real device.
 
 Your first tasks, in order (details in CODEX_HANDOVER §5):
-1. FortiManager interface states: read the "[FMG] ssh interface states" measurement in the worker log after a Collect
-   of the FortiManager, fix FortiManagerExecutor.parseInterfaceStates, deploy, verify the Interfaces tab shows up/down.
+1. FortiManager physical link state: gate and read `diagnose hardware info nic <port>` over SSH (see CODEX_HANDOVER §5.1),
+   deploy, verify the Interfaces tab shows the link state.
 2. When the PO adds a Cisco ASA / Pulse Secure / runs SMC discovery: follow the onboarding jobs, read the measure-first
    logs, fix parsers, then trigger and measure the backups; record each first run as a queue note.
 3. Cluster view for ASA failover pairs and FortiGate HA clusters.
