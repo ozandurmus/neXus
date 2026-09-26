@@ -32,7 +32,7 @@ class JooqDeviceRepositoryTest {
                 new MockConnection(context -> {
                     if (context.sql().startsWith("update devices set observed_hostname")) {
                         updates.add(context.sql());
-                        Object incomingRole = context.bindings()[4];
+                        Object incomingRole = context.bindings()[3]; // bindings follow the SQL text order: {1},{2},{3},{4} in the SET clause first
                         if (incomingRole != null) {
                             storedRole.set(incomingRole.toString());
                         }
