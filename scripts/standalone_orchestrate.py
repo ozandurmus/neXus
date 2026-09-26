@@ -65,6 +65,8 @@ Hard rules:
 - No new dependencies. English code, comments and UI text. Keep the diff to what the brief asks: never edit
   AI_HANDOVER.md, CURRENT_STATE.md, project/, docs/history/ or create/freeze contracts -- the engineering session owns
   project state.
+- Never run `npm install`, `npm ci`, `npx <package>` downloads or delete node_modules: ui2/frontend/node_modules is
+  already installed for you (use `npx tsc`, `npx vitest`, `npm run build`).
 - A new table in a migration also needs `GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO ui2_app;` (see V72).
 - Run the validation the brief lists (frontend: `cd ui2/frontend && npx tsc --noEmit -p . && npx vitest run && npm run
   build`, with `--cacheDir` / cache paths inside the worktree if node_modules is read-only; Java: the named

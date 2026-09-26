@@ -1060,7 +1060,11 @@ def _link_frontend_dependencies(worktree_path: Path, cwd: Path) -> None:
     source = Path(cwd) / "ui2" / "frontend" / "node_modules"
     target = Path(worktree_path) / "ui2" / "frontend" / "node_modules"
     if source.is_dir() and target.parent.is_dir() and not target.exists():
-        target.symlink_to(source)
+        # A private copy, not a symlink (2026-09-26: a worker's `npm ci` emptied the dispatching checkout's
+        # node_modules through the link). On APFS `cp -c` clones copy-on-write: instant, no extra disk until written.
+        r = subprocess.run(["cp", "-cR", str(source), str(target)], capture_output=True, text=True, timeout=300)
+        if r.returncode != 0:
+            subprocess.run(["cp", "-R", str(source), str(target)], capture_output=True, text=True, timeout=900)
 
 
 def _git_worktree_remove(worktree_path: Path, cwd: Path) -> None:
