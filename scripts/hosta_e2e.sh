@@ -19,11 +19,16 @@ s=open('/tmp/70-e2e-job.yaml').read()
 job=[d for d in s.split('\n---\n') if re.search(r'^kind: Job$',d,re.M)][0]
 job=job.replace('nexus-ui2-e2e:SET_AT_DEPLOY','nexus-ui2-e2e@'+sys.argv[1]).replace('  suspend: true\n','  suspend: false\n',1)
 open('/tmp/70-e2e-job.run.yaml','w').write(job)
+# The 4-hourly CronJob follows the newest runner image (PO 2026-09-27: after each deploy + every 4 h).
+cron=[d for d in s.split('\n---\n') if re.search(r'^kind: CronJob$',d,re.M)][0]
+cron=cron.replace('nexus-ui2-e2e:SET_AT_DEPLOY','nexus-ui2-e2e@'+sys.argv[1]).replace('  suspend: true\n','  suspend: false\n',1)
+open('/tmp/70-e2e-cron.run.yaml','w').write(cron)
 PY
 kubectl -n ui2 delete job ui2-e2e --ignore-not-found >/dev/null
 kubectl apply -f /tmp/70-e2e-job.run.yaml >/dev/null
-rm -f /tmp/32-e2e-build-job.yaml /tmp/70-e2e-job.yaml /tmp/70-e2e-job.run.yaml
+kubectl apply -f /tmp/70-e2e-cron.run.yaml >/dev/null
+rm -f /tmp/32-e2e-build-job.yaml /tmp/70-e2e-job.yaml /tmp/70-e2e-job.run.yaml /tmp/70-e2e-cron.run.yaml
 for i in $(seq 1 120); do s=$(kubectl -n ui2 get job ui2-e2e -o jsonpath='{.status.succeeded}{.status.failed}'); [ -n "$s" ] && break; sleep 10; done
 kubectl -n ui2 logs job/ui2-e2e --tail=300 2>&1 | sed -E 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/<ip>/g' | grep -E '✘|[0-9]+ passed|[0-9]+ failed|flaky|^\s+Error:' | cut -c1-170 | head -40
-[ "$(kubectl -n ui2 get job ui2-e2e -o jsonpath='{.status.succeeded}')" = "1" ] && echo "E2E: PASS" || echo "E2E: FAIL"
+if [ "$(kubectl -n ui2 get job ui2-e2e -o jsonpath='{.status.succeeded}')" = "1" ]; then echo "E2E: PASS"; else echo "E2E: FAIL"; exit 1; fi
 REMOTE

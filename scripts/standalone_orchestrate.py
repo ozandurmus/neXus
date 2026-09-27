@@ -343,6 +343,11 @@ def cmd_ship(args: argparse.Namespace) -> int:
     _git("push", "-q", "hosta", "main")
     print(json.dumps({"pushed": _git("rev-parse", "--short", "HEAD")}))
     _deploy()
+    # The in-cluster e2e screen suite after every deploy (PO 2026-09-27); a failure is reported, not rolled back.
+    e2e = subprocess.run(["bash", "scripts/hosta_e2e.sh"], cwd=str(REPO_ROOT), capture_output=True, text=True)
+    lines = [l for l in e2e.stdout.splitlines() if l.strip()]
+    print(json.dumps({"e2e": "pass" if e2e.returncode == 0 and "E2E: PASS" in e2e.stdout else "FAIL",
+                      "summary": lines[-6:]}))
     if args.task:
         args.force = False
         cmd_clean(args)

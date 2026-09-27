@@ -133,3 +133,14 @@ Sandbox validation is limited to type-checking, test discovery, Vitest, build
 and `python3 scripts/repository_privacy_check.py` from the repository root.
 Live Chrome execution and role/HTTP/data behavior must be verified by the
 engineering session; offline discovery is not live acceptance.
+
+## Running it (engineering session, 2026-09-27)
+- `scripts/hosta_e2e.sh` builds the runner image from the context the last deploy streamed
+  (`deploy/ui2-image-build/32-e2e-build-job.yaml`), runs the `ui2-e2e` Job with that image, re-points the 4-hourly
+  `ui2-e2e` CronJob at it, and prints the summary. Exit 0 = pass, 1 = test failures, 2 = could not run.
+- `scripts/standalone_orchestrate.py ship` runs it after every deploy and prints `{"e2e": "pass"|"FAIL", ...}`.
+- Secrets on HOST-A: `ui2-e2e-machine-token` (token + sha256, created once, rotate by deleting it and restarting the
+  service) and `ui2-e2e-canary` (SHA-256 of real interface/management addresses and serials; refresh when the estate
+  changes). Neither is in the repository.
+- First green run 2026-09-27: 22/22. It found a real defect on the way: a viewer-only session saw a load error on the
+  Configuration tab instead of a role notice (fixed).
