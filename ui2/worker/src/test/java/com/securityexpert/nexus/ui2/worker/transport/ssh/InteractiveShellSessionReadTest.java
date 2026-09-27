@@ -67,6 +67,17 @@ class InteractiveShellSessionReadTest {
         assertEquals(2, out.newlines);
     }
 
+    @Test
+    void aLatePreviousPromptDoesNotEndTheNextCommand() {
+        // PAN-OS 2026-09-27: a second repaint of the previous prompt arrives after the command is sent.
+        ScriptedInput in = new ScriptedInput(true, PROMPT + " ", "show\nbody line\n" + PROMPT);
+        ScriptedOutput out = new ScriptedOutput(in);
+        InteractiveShellSession.Result result = new InteractiveShellSession(in, out, PROMPT).runForResult("show", 5000);
+
+        assertEquals(InteractiveShellSession.Result.Kind.OUTPUT, result.kind());
+        assertEquals("body line", result.text());
+    }
+
     private static final class ScriptedInput extends InputStream {
         private final byte[][] pages;
         private final boolean autoAdvance;

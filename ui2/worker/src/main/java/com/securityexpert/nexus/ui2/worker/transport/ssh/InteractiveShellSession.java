@@ -117,6 +117,10 @@ final class InteractiveShellSession implements AutoCloseable {
         int idlePolls = 0;
         boolean sawData = false;
         boolean completed = false;
+        // A prompt counts as "this command finished" only after the shell echoed the command -- a late second repaint
+        // of the previous prompt (PAN-OS, measured 2026-09-27) otherwise ended the next command at once with no output,
+        // shifting every answer by one command. No echo within ECHO_GRACE_MS: the old rule applies.
+        boolean echoSeen = false;
         byte[] buf = new byte[4096];
         while (System.currentTimeMillis() < deadline) {
             boolean got = false;
@@ -156,7 +160,18 @@ final class InteractiveShellSession implements AutoCloseable {
                         continue;
                     }
                 }
-                if (prompt != null && (current.stripTrailing().endsWith(prompt) || isPromptVariant(lastLine(current)))) {
+                if (!echoSeen && raw.length() < 64 * 1024 && stripTerminalControl(raw.toString()).contains(normalized)) {
+                    echoSeen = true;
+                }
+                if (prompt != null && (current.stripTrailing().endsWith(prompt) || isPromptVariant(lastLine(current)))
+                        && (echoSeen || System.currentTimeMillis() - started >= ECHO_GRACE_MS)) {
+                    completed = true;
+                    break;
+                }
+            } else if (sawData && prompt != null && !echoSeen && System.currentTimeMillis() - started >= ECHO_GRACE_MS) {
+                // No echo and nothing new: the prompt already in the buffer ends the command after the grace period.
+                String current = strippedTail(raw);
+                if (current.stripTrailing().endsWith(prompt) || isPromptVariant(lastLine(current))) {
                     completed = true;
                     break;
                 }
@@ -195,7 +210,7 @@ final class InteractiveShellSession implements AutoCloseable {
             prompt = observedPrompt;
         }
         List<String> lines = new ArrayList<>(List.of(text.split("\n", -1)));
-        if (!lines.isEmpty() && lines.get(0).strip().equals(normalized)) {
+        if (!lines.isEmpty() && isEcho(lines.get(0).strip(), normalized)) {
             lines.remove(0);
         }
         if (prompt != null && !lines.isEmpty() && (lines.get(lines.size() - 1).strip().equals(prompt)
@@ -289,7 +304,7 @@ final class InteractiveShellSession implements AutoCloseable {
         }
         String text = stripTerminalControl(raw.toString());
         List<String> lines = new ArrayList<>(List.of(text.split("\n", -1)));
-        if (!lines.isEmpty() && lines.get(0).strip().equals(normalized)) {
+        if (!lines.isEmpty() && isEcho(lines.get(0).strip(), normalized)) {
             lines.remove(0);
         }
         if (prompt != null && !lines.isEmpty() && lines.get(lines.size() - 1).strip().equals(prompt)) {
@@ -419,6 +434,14 @@ final class InteractiveShellSession implements AutoCloseable {
      * measured 2026-09-27); learning the doubled line made every later command wait for a prompt that never came.
      * When the line is the same prompt repeated, keep one; any other line is returned unchanged.
      */
+    /** The echoed command line, bare or behind a prompt ("u@fw(active)> show config running"). */
+    private boolean isEcho(String firstLine, String command) {
+        if (firstLine.equals(command)) return true;
+        if (!firstLine.endsWith(command)) return false;
+        String before = firstLine.substring(0, firstLine.length() - command.length()).strip();
+        return before.isEmpty() || (prompt != null && before.endsWith(prompt)) || promptCandidateOfStripped(before) != null;
+    }
+
     static String singlePrompt(String line) {
         String[] parts = line.split("(?<=[>#$])\\s+");
         if (parts.length < 2) return line;
@@ -436,6 +459,7 @@ final class InteractiveShellSession implements AutoCloseable {
     }
 
     private static final String MORE = "--More--";
+    static final long ECHO_GRACE_MS = 1500;
 
     private static String lastLine(String text) {
         String t = text.stripTrailing();
