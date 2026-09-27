@@ -76,6 +76,18 @@ public final class FirstBootIdentityRoleBindingSeeder {
     }
 
     /**
+     * Binds the given role tokens to an existing local identity (bootstrap actor), e.g. a seeded identity that was
+     * created by hand before its seeding ran and so never received its bindings.
+     */
+    public void bindRoles(String localIdentityId, List<String> roleTokens) {
+        byte[] selfReferenceEncrypted = groupReferenceCipher.encrypt(localIdentityId);
+        for (String roleToken : roleTokens) {
+            roleBindingRepository.create(OpaqueId.random().value(), roleToken, selfReferenceEncrypted,
+                    groupReferenceKeyId, SecurityAdminBootstrapPort.BOOTSTRAP_ACTOR, ACTION_FIRST_BOOT_ROLE_BINDING_CREATE);
+        }
+    }
+
+    /**
      * Seeds every identity and every one of its role bindings in a single
      * transaction (BOOT-5a/AC-3). The caller is responsible for the BOOT-2
      * gate ({@code local_credentials} must already be known empty) -- this

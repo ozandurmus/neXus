@@ -74,4 +74,20 @@ class AiViewIdentitySeedingRunnerTest {
         assertThat(spec.roleTokens()).containsExactly(RoleToken.VIEWER, RoleToken.REPLAY_VIEWER);
         assertThat(spec.rootIdentity()).isFalse();
     }
+
+    @Test
+    void bindsOnlyTheMissingRolesWhenTheE2eIdentityWasCreatedByHand() {
+        LocalCredentialsRepository repository = mock(LocalCredentialsRepository.class);
+        FirstBootIdentityRoleBindingSeeder seeder = mock(FirstBootIdentityRoleBindingSeeder.class);
+        com.securityexpert.nexus.ui2.service.security.LocalRoleTokenResolver roles =
+                mock(com.securityexpert.nexus.ui2.service.security.LocalRoleTokenResolver.class);
+        LocalCredentialRecord existing = mock(LocalCredentialRecord.class);
+        when(existing.localIdentityId()).thenReturn("id-e2e");
+        when(repository.findByName(BootstrapCredentialDefaults.AIVIEW_NAME)).thenReturn(Optional.of(mock(LocalCredentialRecord.class)));
+        when(repository.findByName(AiViewIdentitySeedingRunner.E2E_NAME)).thenReturn(Optional.of(existing));
+        when(roles.resolve("id-e2e")).thenReturn(List.of(RoleToken.VIEWER));
+        new AiViewIdentitySeedingRunner(repository, seeder, roles).run(null);
+        verify(seeder).bindRoles("id-e2e", List.of(RoleToken.REPLAY_VIEWER));
+        verify(seeder, never()).seed(anyList());
+    }
 }

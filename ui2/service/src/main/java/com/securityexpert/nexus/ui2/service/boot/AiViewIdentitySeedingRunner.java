@@ -28,10 +28,18 @@ public class AiViewIdentitySeedingRunner implements ApplicationRunner {
 
     private final LocalCredentialsRepository repository;
     private final FirstBootIdentityRoleBindingSeeder seeder;
+    private final com.securityexpert.nexus.ui2.service.security.LocalRoleTokenResolver roles;
 
     public AiViewIdentitySeedingRunner(LocalCredentialsRepository repository, FirstBootIdentityRoleBindingSeeder seeder) {
+        this(repository, seeder, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public AiViewIdentitySeedingRunner(LocalCredentialsRepository repository, FirstBootIdentityRoleBindingSeeder seeder,
+            com.securityexpert.nexus.ui2.service.security.LocalRoleTokenResolver roles) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.seeder = Objects.requireNonNull(seeder, "seeder");
+        this.roles = roles;
     }
 
     @Override
@@ -56,6 +64,16 @@ public class AiViewIdentitySeedingRunner implements ApplicationRunner {
             for (int i = 0; i < password.length; i++) password[i] = alphabet.charAt(random.nextInt(alphabet.length()));
             seeder.seed(List.of(new FirstBootIdentityRoleBindingSeeder.IdentitySpec(E2E_NAME, password, AIVIEW_ROLE_TOKENS)));
             LOG.info("ui2 aiview-e2e identity and replay-viewer role bindings seeded (password to be set by an administrator)");
+        } else if (roles != null) {
+            // Created by hand before this runner existed (2026-09-27): replay_viewer cannot be assigned in the UI, so
+            // complete the missing bindings here. Extra roles are left alone; the machine login refuses them.
+            String id = repository.findByName(E2E_NAME).get().localIdentityId();
+            java.util.Set<String> held = java.util.Set.copyOf(roles.resolve(id));
+            List<String> missing = AIVIEW_ROLE_TOKENS.stream().filter(t -> !held.contains(t)).toList();
+            if (!missing.isEmpty()) {
+                seeder.bindRoles(id, missing);
+                LOG.info("ui2 aiview-e2e: bound missing role tokens {}", missing);
+            }
         }
     }
 
