@@ -28,7 +28,7 @@ public final class CpFailoverController {
     private static Map<String,Object> approval(JooqCpFailoverRepository.Approval a) {
         Map<String,Object> m=new LinkedHashMap<>();
         m.put("approvalId",a.id()); m.put("windowFrom",a.from()); m.put("windowUntil",a.until());
-        m.put("reason",a.reason()); m.put("revokedAt",a.revokedAt());
+        m.put("reason",a.reason()); m.put("approvedBy",a.approvedBy()); m.put("revokedAt",a.revokedAt());
         return m;
     }
     private static Map<String,Object> run(JooqCpFailoverRepository.Run r) {
@@ -51,6 +51,13 @@ public final class CpFailoverController {
     public ResponseEntity<?> units(@PathVariable String clusterId,HttpServletRequest request) {
         return result(() -> service.units(clusterId,actor(request)).stream()
             .map(u -> Map.of("unitId",u.id(),"clusterId",u.clusterId(),"label",u.label())).toList());
+    }
+    @GetMapping("/units")
+    public ResponseEntity<?> unitsForRef(@RequestParam String clusterRef,HttpServletRequest request) {
+        return result(() -> service.unitsForRef(clusterRef,actor(request)).stream()
+            .map(u -> Map.of("unitId",u.id(),"clusterId",u.clusterId(),"label",u.label(),
+                "canApprove",service.mayApprove(actor(request)),"canStart",service.mayStart(actor(request)),
+                "canSchedule",service.mayStart(actor(request)))).toList());
     }
     @PostMapping("/approvals")
     public ResponseEntity<?> approve(@RequestBody ApprovalRequest body,HttpServletRequest request) {

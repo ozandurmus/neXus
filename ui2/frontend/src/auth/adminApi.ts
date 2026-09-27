@@ -1571,11 +1571,23 @@ export function getOverview(): Promise<OverviewView> {
 
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
 export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN";
-export interface CpFailoverUnit { unitId: string; clusterId: string; label: string }
-export interface CpFailoverApproval { approvalId: string; windowFrom: string; windowUntil: string; reason: string; revokedAt: string | null }
+export interface CpFailoverUnit { unitId: string; clusterId: string; label: string; canApprove: boolean; canStart: boolean; canSchedule: boolean }
+export interface CpFailoverApproval { approvalId: string; windowFrom: string; windowUntil: string; reason: string; approvedBy: string; revokedAt: string | null }
 export interface CpFailoverRun {
   runId: string; approvalId: string; scheduledFor: string; state: CpFailoverState; step: string;
   outcome: string | null; failedCheck: string | null; message: string | null; steps: string[];
 }
 export interface CpFailoverCheck { phase: "pre" | "post"; member: string; checkNo: 1 | 2 | 3 | 5 | 6 | 8; status: CpFailoverCheckStatus; derived: string; observedAt: string }
 export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverCheck[] }
+
+const cpFailover = "/api/v2/cp-failover";
+const cpQuery = (unit: CpFailoverUnit) => `clusterId=${encodeURIComponent(unit.clusterId)}&unitId=${encodeURIComponent(unit.unitId)}`;
+export const listCpFailoverUnits = (clusterRef: string) => call<CpFailoverUnit[]>(`${cpFailover}/units?clusterRef=${encodeURIComponent(clusterRef)}`, "GET");
+export const listCpFailoverApprovals = (unit: CpFailoverUnit) => call<CpFailoverApproval[]>(`${cpFailover}/approvals?${cpQuery(unit)}`, "GET");
+export const listCpFailoverRuns = (unit: CpFailoverUnit) => call<CpFailoverRun[]>(`${cpFailover}/runs?${cpQuery(unit)}`, "GET");
+export const getCpFailoverRun = (runId: string) => call<CpFailoverRunDetail>(`${cpFailover}/runs/${encodeURIComponent(runId)}`, "GET");
+export const approveCpFailover = (unit: CpFailoverUnit, from: string, until: string, reason: string) =>
+  call<CpFailoverApproval>(`${cpFailover}/approvals`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, windowFrom: from, windowUntil: until, reason });
+export const revokeCpFailover = (approvalId: string) => call<{ revoked: boolean }>(`${cpFailover}/approvals/${encodeURIComponent(approvalId)}/revoke`, "POST");
+export const startCpFailover = (unit: CpFailoverUnit, scheduledFor: string | null) =>
+  call<{ runId: string }>(`${cpFailover}/runs`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, scheduledFor });

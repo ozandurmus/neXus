@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { Fragment, useState, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -25,7 +25,7 @@ import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel } from "./JobLogsPanel";
 import { DiagnosticPanel } from "./DiagnosticPanel";
 import { urlParam } from "../shell/urlParams";
-import { getJobStats, listDevices, type DeviceSummary } from "../auth/adminApi";
+import { getJobStats, listDevices, listCpFailoverUnits, listCpFailoverApprovals, listCpFailoverRuns, type CpFailoverUnit, type DeviceSummary } from "../auth/adminApi";
 import { deriveClusterTitle } from "./InventoryPanels";
 
 interface PreflightCheckItem {
@@ -72,6 +72,24 @@ export function OperationsScreen() {
       .catch(() => setClusters([]));
   }, []);
   const selected = clusters?.find((c) => c.ref === selectedCluster) ?? null;
+  const [cpRows, setCpRows] = useState<Record<string, Array<{ unit: CpFailoverUnit; outcome: string | null; lastRunAt: string | null; activeWindow: boolean }>>>({});
+  useEffect(() => {
+    if (!clusters) return;
+    let mounted = true;
+    void Promise.all(clusters.filter(c => c.members[0]?.vendor_hint === "check_point").map(async c => {
+      try {
+        const units = await listCpFailoverUnits(c.ref);
+        const rows = await Promise.all(units.map(async unit => {
+          const [windows, runs] = await Promise.all([listCpFailoverApprovals(unit), listCpFailoverRuns(unit)]);
+          const now = Date.now();
+          return { unit, outcome: runs[0]?.outcome ?? runs[0]?.state ?? null, lastRunAt: runs[0]?.scheduledFor ?? null,
+            activeWindow: windows.some(w => !w.revokedAt && Date.parse(w.windowFrom) <= now && now < Date.parse(w.windowUntil)) };
+        }));
+        return [c.ref, rows] as const;
+      } catch { return [c.ref, []] as const; }
+    })).then(entries => { if (mounted) setCpRows(Object.fromEntries(entries)); });
+    return () => { mounted = false; };
+  }, [clusters]);
   const [selectedCheck, setSelectedCheck] = useState<PreflightCheckItem | null>(null);
   const [filter, setFilter] = useState<"ALL" | "BLOCKING" | "ADVISORY">("ALL");
   const [isRunning, setIsRunning] = useState(false);
@@ -396,7 +414,7 @@ export function OperationsScreen() {
         <Box>
           <Typography variant="h4" sx={{ mb: 0.5 }}>{count} clusters enrolled</Typography>
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 2 }}>
-            Choose a cluster to read its preflight checks. Readiness is observed only; nothing is inferred. Failover is unavailable in this build.
+            Choose a cluster to read its preflight checks. Check Point failover runs and approval windows appear with their Virtual Systems below.
           </Typography>
           <TableContainer component={Paper} sx={{ borderRadius: "10px", border: `1px solid ${m3.outlineVar}`, boxShadow: "none" }}>
             <Table size="small">
@@ -409,6 +427,7 @@ export function OperationsScreen() {
                   <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Roles observed</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Last evaluated</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Readiness</TableCell>
+                  <TableCell>Last run / window</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -417,9 +436,12 @@ export function OperationsScreen() {
                   const standby = roleOfMembers(c.members, "standby") ?? roleOfMembers(c.members, "passive");
                   const report = clusterCache[c.ref];
                   const evaluated = report && report.checksCount > 0;
-                  return (
-                    <TableRow key={c.ref} hover onClick={() => setSelectedCluster(c.ref)} sx={{ cursor: "pointer" }}>
-                      <TableCell sx={{ fontWeight: 500 }}>{c.title}</TableCell>
+                  const cp = cpRows[c.ref] ?? [];
+                  const last = [...cp].filter(row => row.lastRunAt).sort((a, b) => (b.lastRunAt ?? "").localeCompare(a.lastRunAt ?? ""))[0];
+                  const context = c.members[0]?.vendor_hint === "palo_alto" ? c.members.flatMap(m => (m.virtual_systems ?? "").split(",").map(v => v.trim()).filter(Boolean)) : [];
+                  return (<Fragment key={c.ref}>
+                    <TableRow hover onClick={() => setSelectedCluster(c.ref)} sx={{ cursor: "pointer" }}>
+                      <TableCell sx={{ fontWeight: 500 }}>{c.title}{context.length > 0 && <Typography variant="caption" display="block">VSYS: {[...new Set(context)].join(", ")}</Typography>}</TableCell>
                       <TableCell><VendorBadge vendor={c.members[0]?.vendor_hint} /></TableCell>
                       <TableCell sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         {active ? <Box component="span" sx={{ fontFamily: "inherit" }}>{active}</Box> : <Unknown />}
@@ -439,8 +461,14 @@ export function OperationsScreen() {
                           ? <StatusChip tone={report!.verdict === "NO_BLOCKING_CONDITIONS_OBSERVED" ? "ok" : report!.verdict === "ADVISORY_CONDITIONS_PRESENT" ? "warn" : "bad"} label={report!.verdict} dense />
                           : <Unknown word="NOT EVALUATED" reason="No preflight has been read for this cluster in this session." />}
                       </TableCell>
+                      <TableCell>{cp.length > 0 && <>{last?.outcome ?? "No run"} {cp.some(row => row.activeWindow) && <StatusChip label="Active window" tone="ok" dense />}</>}</TableCell>
                     </TableRow>
-                  );
+                    {cp.filter(row => row.unit.unitId !== row.unit.clusterId).map(row => <TableRow key={row.unit.unitId} onClick={() => setSelectedCluster(c.ref)} sx={{ cursor: "pointer" }}>
+                      <TableCell sx={{ pl: 4 }}><Typography variant="caption">Virtual System</Typography> {row.unit.label}</TableCell>
+                      <TableCell colSpan={6} />
+                      <TableCell>{row.outcome ?? "No run"} {row.activeWindow && <StatusChip label="Active window" tone="ok" dense />}</TableCell>
+                    </TableRow>)}
+                  </Fragment>);
                 })}
               </TableBody>
             </Table>

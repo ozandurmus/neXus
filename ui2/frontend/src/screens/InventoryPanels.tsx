@@ -49,6 +49,7 @@ import {
 } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
+import { CpFailoverPanel } from "./CpFailoverPanel";
 
 const POLL_INTERVAL_MS = 1750;
 
@@ -2200,6 +2201,7 @@ export function ClusterDetailPanels({
               </Stack>
             ),
           },
+          ...(firstMember?.vendor_hint === "check_point" ? [{ label: "Failover", panel: <CpFailoverPanel clusterRef={clusterRef} /> }] : []),
         ]}
       />
     </Stack>

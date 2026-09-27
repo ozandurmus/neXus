@@ -54,6 +54,16 @@ class CpFailoverServiceTest {
         when(inventory.findLatestRun(B)).thenReturn(Optional.of(run(B,bRole)));
         when(trust.findActiveAlgorithms(anyString(),eq(22))).thenReturn(List.of("ssh-ed25519"));
     }
+    @Test void clusterReferenceResolvesToOpaqueUnitsAndServerPermissions() {
+        ready("ACTIVE","STANDBY");
+        var units=service.unitsForRef(CLUSTER,"actor-1");
+        assertEquals(1,units.size());
+        assertEquals(CLUSTER_ID,units.get(0).id());
+        assertTrue(service.mayApprove("actor-1"));
+        assertTrue(service.mayStart("actor-1"));
+        assertEquals("CLUSTER_NOT_FOUND",assertThrows(CpFailoverService.Refusal.class,
+            () -> service.unitsForRef("unknown","actor-1")).code());
+    }
     @Test void wrongRoleRefusedBeforeAdmission() {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
             AuthzOutcome.DENIED,Optional.empty(),Optional.empty(),Optional.empty()));

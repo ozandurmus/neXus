@@ -58,6 +58,17 @@ public final class CpFailoverService {
             throw new Refusal("WRONG_ROLE");
     }
 
+    public boolean mayApprove(String actor) { return allowed(actor, RoleToken.SECURITY_ADMIN); }
+    public boolean mayStart(String actor) {
+        return allowed(actor, RoleToken.OPERATOR) || mayApprove(actor);
+    }
+    public List<Unit> unitsForRef(String clusterRef, String actor) {
+        requireOperator(actor);
+        if (clusterRef == null || devices.listAll().stream().noneMatch(d -> d.clusterMemberRef().filter(clusterRef::equals).isPresent()))
+            throw new Refusal("CLUSTER_NOT_FOUND");
+        return units(opaque(clusterRef), actor);
+    }
+
     public List<Unit> units(String clusterId, String actor) {
         requireOperator(actor);
         List<String> clusters = devices.listAll().stream().map(DeviceSummaryRecord::clusterMemberRef)
