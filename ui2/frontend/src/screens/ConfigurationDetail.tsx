@@ -87,6 +87,16 @@ interface Loaded {
   readonly error: string | null;
 }
 
+/** The vendor's projection of a sanitized configuration text -- one choice for single devices and cluster members. */
+function projectFor(configuration: DeviceConfiguration, vendorHint: string | null | undefined, text: string): Projection {
+  const is = (vendor: string) => configuration.vendor === vendor || vendorHint === vendor;
+  if (is("palo_alto")) return projectPaloAlto(text, configuration.overrides.map((o) => o.element_path));
+  if (is("fortinet")) return projectFortiGate(text);
+  if (is("cisco_asa")) return projectAsa(text);
+  if (is("bluecoat")) return projectProxySg(text);
+  return projectCheckPoint(text);
+}
+
 /** One device's configuration read and projected; null projection when the device has no sanitized text. */
 function useProjection(device: DeviceSummary | null, revision = 0): Loaded & { loading: boolean } {
   const [state, setState] = useState<Loaded & { loading: boolean }>({ configuration: null, projection: null, error: null, loading: false });
@@ -100,15 +110,7 @@ function useProjection(device: DeviceSummary | null, revision = 0): Loaded & { l
         let projection: Projection | null = null;
         if (configuration.sanitized_text_available) {
           const text = await getDeviceConfigurationText(device.device_id);
-          projection = configuration.vendor === "palo_alto" || device.vendor_hint === "palo_alto"
-            ? projectPaloAlto(text, configuration.overrides.map((o) => o.element_path))
-            : configuration.vendor === "fortinet" || device.vendor_hint === "fortinet"
-              ? projectFortiGate(text)
-              : configuration.vendor === "cisco_asa" || device.vendor_hint === "cisco_asa"
-                ? projectAsa(text)
-              : configuration.vendor === "bluecoat" || device.vendor_hint === "bluecoat"
-                ? projectProxySg(text)
-              : projectCheckPoint(text);
+          projection = projectFor(configuration, device.vendor_hint, text);
         }
         if (!cancelled) setState({ configuration, projection, error: null, loading: false });
       } catch (error) {
@@ -519,7 +521,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
           const text = await getDeviceConfigurationText(member.device_id);
           loaded.push({
             id: member.device_id,
-            projection: member.vendor_hint === "palo_alto" ? projectPaloAlto(text, configuration.overrides.map((o) => o.element_path)) : projectCheckPoint(text),
+            projection: projectFor(configuration, member.vendor_hint, text),
           });
         } catch {
           missing.push(member.hostname ?? member.device_id);
