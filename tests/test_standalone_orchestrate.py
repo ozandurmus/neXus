@@ -32,7 +32,7 @@ def test_refuses_while_an_orchestrator_movement_runs(tmp_path, monkeypatch):
         sa.cmd_start(_args())
 
 
-@pytest.mark.parametrize("kw,msg", [({"task": "Bad Slug"}, "slug"), ({"model": "gpt-6-astra"}, "model")])
+@pytest.mark.parametrize("kw,msg", [({"task": "Bad Slug"}, "slug"), ({"model": "gpt-5-unknown"}, "model")])
 def test_rejects_bad_task_or_model(tmp_path, monkeypatch, kw, msg):
     monkeypatch.setattr(sa, "STATE_DIR", tmp_path / ".state")
     with pytest.raises(SystemExit, match=msg):

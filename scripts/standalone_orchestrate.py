@@ -46,7 +46,7 @@ from orchestrator_providers import CodexAdapter  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HOME = REPO_ROOT.parent / f"{REPO_ROOT.name}-standalone"
 STATE_DIR = HOME / ".state"
-MODELS = ("gpt-6-luna", "gpt-6-sol")
+MODELS = ("gpt-6-luna", "gpt-6-sol", "gpt-6-astra")
 SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{1,48}$")
 
 PREAMBLE = """You are a neXus engineer working on one small, well-defined change. Read AGENTS.md first (the project
