@@ -2201,7 +2201,7 @@ export function ClusterDetailPanels({
               </Stack>
             ),
           },
-          ...(firstMember?.vendor_hint === "check_point" ? [{ label: "Failover", panel: <CpFailoverPanel clusterRef={clusterRef} /> }] : []),
+          ...(firstMember?.vendor_hint === "check_point" ? [{ label: "Failover", panel: <CpFailoverPanel memberDeviceId={firstMember.device_id} /> }] : []),
         ]}
       />
     </Stack>

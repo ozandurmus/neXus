@@ -1582,7 +1582,8 @@ export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverC
 
 const cpFailover = "/api/v2/cp-failover";
 const cpQuery = (unit: CpFailoverUnit) => `clusterId=${encodeURIComponent(unit.clusterId)}&unitId=${encodeURIComponent(unit.unitId)}`;
-export const listCpFailoverUnits = (clusterRef: string) => call<CpFailoverUnit[]>(`${cpFailover}/units?clusterRef=${encodeURIComponent(clusterRef)}`, "GET");
+/** By a member's device id -- cluster names are pseudonymised for aiview, device ids are not. */
+export const listCpFailoverUnits = (memberDeviceId: string) => call<CpFailoverUnit[]>(`${cpFailover}/units?memberDeviceId=${encodeURIComponent(memberDeviceId)}`, "GET");
 export const listCpFailoverApprovals = (unit: CpFailoverUnit) => call<CpFailoverApproval[]>(`${cpFailover}/approvals?${cpQuery(unit)}`, "GET");
 export const listCpFailoverRuns = (unit: CpFailoverUnit) => call<CpFailoverRun[]>(`${cpFailover}/runs?${cpQuery(unit)}`, "GET");
 export const getCpFailoverRun = (runId: string) => call<CpFailoverRunDetail>(`${cpFailover}/runs/${encodeURIComponent(runId)}`, "GET");

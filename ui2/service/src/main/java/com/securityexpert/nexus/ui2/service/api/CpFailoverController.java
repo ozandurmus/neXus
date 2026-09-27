@@ -53,8 +53,10 @@ public final class CpFailoverController {
             .map(u -> Map.of("unitId",u.id(),"clusterId",u.clusterId(),"label",u.label())).toList());
     }
     @GetMapping("/units")
-    public ResponseEntity<?> unitsForRef(@RequestParam String clusterRef,HttpServletRequest request) {
-        return result(() -> service.unitsForRef(clusterRef,actor(request)).stream()
+    public ResponseEntity<?> unitsForRef(@RequestParam(required = false) String clusterRef,
+            @RequestParam(required = false) String memberDeviceId, HttpServletRequest request) {
+        return result(() -> (memberDeviceId != null ? service.unitsForMember(memberDeviceId,actor(request))
+                : service.unitsForRef(clusterRef,actor(request))).stream()
             .map(u -> Map.of("unitId",u.id(),"clusterId",u.clusterId(),"label",u.label(),
                 "canApprove",service.mayApprove(actor(request)),"canStart",service.mayStart(actor(request)),
                 "canSchedule",service.mayStart(actor(request)))).toList());

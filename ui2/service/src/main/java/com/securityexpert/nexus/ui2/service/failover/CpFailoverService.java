@@ -69,6 +69,16 @@ public final class CpFailoverService {
         return units(opaque(clusterRef), actor);
     }
 
+    /** By a member's opaque device id: cluster names are pseudonymised for the aiview persona, device ids are not. */
+    public List<Unit> unitsForMember(String memberDeviceId, String actor) {
+        requireOperator(actor);
+        String ref = memberDeviceId == null ? null : devices.listAll().stream()
+            .filter(d -> d.deviceId().equals(memberDeviceId)).findFirst()
+            .flatMap(DeviceSummaryRecord::clusterMemberRef).orElse(null);
+        if (ref == null) throw new Refusal("CLUSTER_NOT_FOUND");
+        return units(opaque(ref), actor);
+    }
+
     public List<Unit> units(String clusterId, String actor) {
         requireOperator(actor);
         List<String> clusters = devices.listAll().stream().map(DeviceSummaryRecord::clusterMemberRef)

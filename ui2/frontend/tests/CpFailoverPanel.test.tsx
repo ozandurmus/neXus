@@ -12,7 +12,7 @@ vi.mock("../src/auth/adminApi", () => ({
 
 const cluster = { clusterId: "cluster-opaque", unitId: "cluster-opaque", label: "CLS-ROMEO-01", canApprove: false, canStart: true, canSchedule: true };
 const vs = { ...cluster, unitId: "vs-opaque", label: "Virtual System 07" };
-const renderPanel = () => render(<ThemeProvider theme={m3Theme}><CpFailoverPanel clusterRef="cluster-ref" /></ThemeProvider>);
+const renderPanel = () => render(<ThemeProvider theme={m3Theme}><CpFailoverPanel memberDeviceId="member-device-id" /></ThemeProvider>);
 
 beforeEach(() => {
   api.units.mockReset().mockResolvedValue([cluster, vs]);

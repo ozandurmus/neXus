@@ -142,11 +142,11 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
   </Card>;
 }
 
-export function CpFailoverPanel({ clusterRef }: { clusterRef: string }) {
+export function CpFailoverPanel({ memberDeviceId }: { memberDeviceId: string }) {
   const [units, setUnits] = useState<CpFailoverUnit[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { listCpFailoverUnits(clusterRef).then(setUnits).catch(e => setError(errorText(e))); }, [clusterRef]);
+  useEffect(() => { listCpFailoverUnits(memberDeviceId).then(setUnits).catch(e => setError(errorText(e))); }, [memberDeviceId]);
   return <Stack spacing={1} aria-label="Check Point failover">
     {error && <Typography color="error">{error}</Typography>}
     {!error && units.length === 0 && <Typography>No eligible failover units</Typography>}

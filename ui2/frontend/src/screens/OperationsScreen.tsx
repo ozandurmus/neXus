@@ -78,7 +78,7 @@ export function OperationsScreen() {
     let mounted = true;
     void Promise.all(clusters.filter(c => c.members[0]?.vendor_hint === "check_point").map(async c => {
       try {
-        const units = await listCpFailoverUnits(c.ref);
+        const units = await listCpFailoverUnits(c.members[0].device_id);
         const rows = await Promise.all(units.map(async unit => {
           const [windows, runs] = await Promise.all([listCpFailoverApprovals(unit), listCpFailoverRuns(unit)]);
           const now = Date.now();
