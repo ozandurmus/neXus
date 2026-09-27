@@ -30,7 +30,7 @@ Supersedes, for Check Point execution, the read-only-only scope of `FAILOVER_REA
 | 4 | Critical devices | derived from 1 (`cphaprob stat` problem notification) | no problem notification on either member |
 | 5 | ARP | `arp -an` (entry count only) | standby has a comparable ARP population (recorded for §3) |
 | 6 | Connections | `fw tab -t connections -s` (#VALS, #PEAK) | recorded; standby within sync tolerance of active |
-| 7 | New connections / s | two samples of 6, 5 s apart | recorded (baseline for §3) |
+| 7 | New connections / s | **deferred** -- `fw tab -t connections -s` gives the table population and peak, not a rate (Check Point CLI reference); the PO names the CPS command, then it is added | -- |
 | 8 | Traffic rate | two samples of `cat /proc/net/dev`, 5 s apart (cluster interfaces only) | recorded (baseline for §3) |
 Unrecognised output -> UNKNOWN (blocks). Values are stored as derived numbers and states only, never raw output.
 
@@ -39,7 +39,7 @@ Unrecognised output -> UNKNOWN (blocks). Values are stored as derived numbers an
 - 2, 3, 4: as in the pre-checks, on the new active.
 - 5: new active ARP count at least 80 % of the pre-check active's.
 - 6: new active connection count at least 80 % of the pre-check active's (sync carried them).
-- 7, 8: new active carries traffic: rate at least 50 % of the pre-check active's (not zero).
+- 8: new active carries traffic: rate at least 50 % of the pre-check active's (not zero). (7 deferred, §2.)
 Tolerances are constants in one place so the PO can tune them.
 
 ## 4. Commands and gates (migration: gate rows)
@@ -81,3 +81,8 @@ registry. The legacy Python `utils/failover/` read-only rule is unchanged (this 
 - CP method: `clusterXL_admin down` then `up` on the former active. On a post-check problem: stop and warn.
 - Roles: normally security_admin approves and an operator starts; security_admin may also start.
 - Scope: Check Point + VSX first.
+
+## 9. Amendment 2026-09-27 (engineering, found during implementation)
+Check 7 (new connections per second) is deferred: the approved `fw tab -t connections -s` reports the connection
+table's current population (#VALS) and peak (#PEAK), not a new-connection rate, and two samples cannot derive one.
+The first release runs checks 1-6 and 8; check 7 is added when the PO names the command that reports CPS.
