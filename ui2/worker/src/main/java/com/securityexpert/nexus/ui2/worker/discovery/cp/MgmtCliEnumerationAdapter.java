@@ -103,7 +103,12 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
         SessionDisconnectOutcome disconnectOutcome = closeSession(session);
 
         if (caught != null) {
-            log.warning("discovery enumeration failed: " + caught.getClass().getSimpleName());
+            // MEASURE (2026-09-27: failing nightly since 09-25): where it stopped and the message's shape, never values.
+            String shape = String.valueOf(caught.getMessage()).replaceAll("[0-9]{1,3}(\\.[0-9]{1,3}){3}", "<ip>")
+                    .replaceAll("[A-Za-z]+", "a").replaceAll("[0-9]+", "9");
+            log.warning("discovery enumeration failed: " + caught.getClass().getSimpleName() + " after requests="
+                    + requestCount + " message-shape=" + (shape.length() > 160 ? shape.substring(0, 160) : shape)
+                    + " at=" + (caught.getStackTrace().length > 0 ? caught.getStackTrace()[0].getMethodName() : "?"));
             return new ManagementPlaneEnumerationResult.Failed("management-plane enumeration did not complete", requestCount, disconnectOutcome);
         }
         log.info(String.format("discovery enumeration completed: candidateCount=%d requestCount=%d", candidates.size(), requestCount));
