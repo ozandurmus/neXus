@@ -19,11 +19,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class FailoverPreflightControllerTest {
 
     private FailoverPreflightController controller;
     private FailoverPreflightController emptyClusterController;
+    private PreflightService serviceWithInventory;
 
     @BeforeEach
     void setUp() {
@@ -72,8 +74,8 @@ class FailoverPreflightControllerTest {
             }
         };
 
-        PreflightService preflightServiceHealthy = new PreflightService(devRepo, invRepo, pseudonymizer);
-        controller = new FailoverPreflightController(preflightServiceHealthy);
+        serviceWithInventory = new PreflightService(devRepo, invRepo, pseudonymizer);
+        controller = new FailoverPreflightController(serviceWithInventory);
 
         PreflightService preflightServiceEmpty = new PreflightService(null, null, pseudonymizer);
         emptyClusterController = new FailoverPreflightController(preflightServiceEmpty);
@@ -98,8 +100,8 @@ class FailoverPreflightControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v2/failover/{clusterRef}/preflight returns valid pre-flight report with opaque UUID cluster_id")
-    void testGetLatestPreflightHealthy() {
+    @DisplayName("GET preflight keeps observed roles and versions but does not pass unmeasured readiness checks")
+    void testGetLatestPreflightWithInventory() {
         ResponseEntity<Map<String, Object>> response = controller.getLatestPreflight("CLS-ROMEO-01");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -111,14 +113,32 @@ class FailoverPreflightControllerTest {
         assertNotNull(clusterId);
         assertDoesNotThrow(() -> UUID.fromString(clusterId));
 
-        assertEquals("NO_BLOCKING_CONDITIONS_OBSERVED", body.get("overall_verdict"));
+        assertEquals("BLOCKING_CONDITIONS_PRESENT", body.get("overall_verdict"));
         assertTrue((int) body.get("total_checks") >= 10);
-        assertEquals(0, body.get("blocking_failure_count"));
+        assertTrue((int) body.get("blocking_failure_count") > 0);
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> checks = (List<Map<String, Object>>) body.get("checks");
         assertNotNull(checks);
         assertFalse(checks.isEmpty());
+        Map<String, String> statuses = checks.stream().collect(java.util.stream.Collectors.toMap(
+            check -> (String) check.get("check_id"), check -> (String) check.get("status")));
+        for (String id : List.of("preflight.state_sync_current", "preflight.policy_parity",
+            "preflight.control_sync_link_health", "preflight.checkpoint_pnotes",
+            "preflight.standby_resource_headroom")) {
+            assertEquals("INSUFFICIENT_EVIDENCE", statuses.get(id), id);
+        }
+        assertEquals("PASS", statuses.get("preflight.viable_target"));
+        assertEquals("PASS", statuses.get("preflight.split_brain_prevention"));
+
+        var snapshot = serviceWithInventory.buildSnapshotForCluster("CLS-ROMEO-01");
+        assertEquals("ACTIVE", snapshot.memberA().selfState());
+        assertEquals("STANDBY", snapshot.memberB().selfState());
+        assertEquals("R81.20", snapshot.memberA().softwareVersion());
+        assertTrue(snapshot.memberA().directObservationSuccessful());
+        assertNotEquals(Instant.EPOCH, snapshot.memberA().observedAt());
+        assertNull(snapshot.memberA().installedPolicyHash());
+        assertEquals(-1, snapshot.memberB().cpuUtilizationPct());
     }
 
     @Test
@@ -144,7 +164,30 @@ class FailoverPreflightControllerTest {
         Map<String, Object> body = response.getBody();
         assertNotNull(body);
 
-        assertEquals("NO_BLOCKING_CONDITIONS_OBSERVED", body.get("overall_verdict"));
+        assertEquals("BLOCKING_CONDITIONS_PRESENT", body.get("overall_verdict"));
         assertNotNull(body.get("generated_at"));
+    }
+
+    @Test
+    @DisplayName("Palo Alto inventory is never labelled ClusterXL")
+    void testPaloAltoMode() {
+        DeviceRepository devices = mock(DeviceRepository.class);
+        DeviceInventoryRepository inventory = mock(DeviceInventoryRepository.class);
+        DeviceSummaryRecord active = new DeviceSummaryRecord(
+            "pan-01", "FIREWALL", "PALO_ALTO", DeviceEnrollmentState.ENROLLED,
+            Optional.of("FW-TANGO-04"), Optional.empty(), Optional.of("11.2"),
+            Optional.of("ACTIVE"), Optional.of("CLS-ROMEO-01"));
+        DeviceSummaryRecord standby = new DeviceSummaryRecord(
+            "pan-02", "FIREWALL", "PALO_ALTO", DeviceEnrollmentState.ENROLLED,
+            Optional.of("FW-JULIET-06"), Optional.empty(), Optional.empty(),
+            Optional.of("PASSIVE"), Optional.of("CLS-ROMEO-01"));
+        when(devices.findMembersByClusterRef("CLS-ROMEO-01")).thenReturn(List.of(active, standby));
+        PreflightService service = new PreflightService(devices, inventory, null);
+
+        var snapshot = service.buildSnapshotForCluster("CLS-ROMEO-01");
+        assertEquals("PAN_ACTIVE_PASSIVE", snapshot.haMode());
+        assertEquals("PAN_ACTIVE_PASSIVE", snapshot.memberA().haMode());
+        assertEquals("PAN_ACTIVE_PASSIVE", snapshot.memberB().haMode());
+        assertNull(snapshot.memberB().softwareVersion());
     }
 }

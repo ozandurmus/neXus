@@ -24,6 +24,18 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PreflightService {
 
     private static final Duration REPORT_DISPLAY_TTL = Duration.ofMinutes(5);
+    private static final Set<String> UNMEASURED_INVENTORY_CHECKS = Set.of(
+        "preflight.platform_mode_gate",
+        "preflight.state_sync_current",
+        "preflight.policy_parity",
+        "preflight.control_sync_link_health",
+        "preflight.checkpoint_pnotes",
+        "preflight.paloalto_path_monitoring",
+        "preflight.standby_resource_headroom",
+        "preflight.preemption_awareness",
+        "preflight.flap_history",
+        "preflight.paloalto_pending_commits"
+    );
 
     private final PreflightRegistry preflightRegistry;
     private final DeviceRepository deviceRepository;
@@ -71,7 +83,29 @@ public class PreflightService {
      * cluster) must use this method with that live snapshot, never {@link #getLatestReport}.
      */
     public PreflightReport evaluateSnapshot(ClusterEvidenceSnapshot snapshot) {
-        return preflightRegistry.evaluateAll(snapshot);
+        PreflightReport report = preflightRegistry.evaluateAll(snapshot);
+        // Inventory records carry roles and versions, but none of the readiness facts below.
+        // Primitive evidence fields have no null representation; -1 marks this inventory projection.
+        boolean inventoryProjection = snapshot.memberA() != null && snapshot.memberA().syncQueueDelta() == -1;
+        boolean missingObservationTime = Instant.EPOCH.equals(snapshot.snapshotTimestamp());
+        if (!inventoryProjection && !missingObservationTime) {
+            return report;
+        }
+        List<CheckResult> checks = report.checks().stream().map(result -> {
+            boolean unmeasured = (inventoryProjection && UNMEASURED_INVENTORY_CHECKS.contains(result.checkId()))
+                || (missingObservationTime && "preflight.clock_health".equals(result.checkId()));
+            if (!unmeasured
+                || result.status() == CheckStatus.INSUFFICIENT_EVIDENCE
+                || result.status() == CheckStatus.COLLECTION_FAILED
+                || ("preflight.policy_parity".equals(result.checkId()) && result.status() == CheckStatus.FAIL)) {
+                return result;
+            }
+            return CheckResult.insufficientEvidence(result.checkId(), result.name(), result.category(),
+                result.enforcement(), "Required readiness facts were not observed in inventory.",
+                "REMEDIATE_COLLECT_READINESS_EVIDENCE");
+        }).toList();
+        return PreflightReport.fromResults(report.clusterId(), report.maskedClusterName(), report.vendor(),
+            report.haMode(), checks, snapshot);
     }
 
     public List<PreflightCheckSummary> listRegisteredChecks() {
@@ -115,9 +149,10 @@ public class PreflightService {
             ClusterMemberEvidence evA = extractMemberEvidence(memA, runA, clusterRef);
             ClusterMemberEvidence evB = extractMemberEvidence(memB, runB, clusterRef);
 
-            String vendor = memA.vendorHint() != null ? memA.vendorHint().toUpperCase() : "CHECK_POINT";
-            boolean isPan = "PALO_ALTO".equalsIgnoreCase(vendor) || "PAN_OS".equalsIgnoreCase(vendor);
-            String haMode = isPan ? "PAN_ACTIVE_PASSIVE" : "CLUSTER_XL_HA";
+            String vendor = memA.vendorHint() != null ? memA.vendorHint().toUpperCase(Locale.ROOT) : "UNKNOWN";
+            String haMode = haModeForVendor(vendor);
+            Instant oldestObservation = runA.map(InventoryRun::collectedAt).orElse(Instant.EPOCH);
+            Instant peerObservation = runB.map(InventoryRun::collectedAt).orElse(Instant.EPOCH);
 
             return new ClusterEvidenceSnapshot(
                 clusterRef,
@@ -127,16 +162,15 @@ public class PreflightService {
                 null,
                 evA,
                 evB,
-                Instant.now()
+                oldestObservation.isBefore(peerObservation) ? oldestObservation : peerObservation
             );
         }
 
         // C-1 Fail-Closed Remediation:
         // Do NOT fabricate synthetic healthy nodes when fewer than 2 enrolled members exist.
         // Return actual evidence (or null members) so checks evaluate to INSUFFICIENT_EVIDENCE -> BLOCKING_CONDITIONS_PRESENT.
-        boolean isPan = clusterRef.toUpperCase().contains("PAN") || clusterRef.toUpperCase().contains("TANGO");
-        String vendor = isPan ? "PALO_ALTO" : "CHECK_POINT";
-        String haMode = isPan ? "PAN_ACTIVE_PASSIVE" : "CLUSTER_XL_HA";
+        String vendor = "UNKNOWN";
+        Instant observedAt = Instant.EPOCH;
 
         ClusterMemberEvidence evA = null;
         if (!members.isEmpty()) {
@@ -146,19 +180,20 @@ public class PreflightService {
                 : Optional.empty();
             evA = extractMemberEvidence(memA, runA, clusterRef);
             if (memA.vendorHint() != null) {
-                vendor = memA.vendorHint().toUpperCase();
+                vendor = memA.vendorHint().toUpperCase(Locale.ROOT);
             }
+            observedAt = runA.map(InventoryRun::collectedAt).orElse(Instant.EPOCH);
         }
 
         return new ClusterEvidenceSnapshot(
             clusterRef,
             maskedClusterName,
             vendor,
-            haMode,
+            haModeForVendor(vendor),
             null,
             evA,
             null,
-            Instant.now()
+            observedAt
         );
     }
 
@@ -191,35 +226,45 @@ public class PreflightService {
         // Peer state is UNKNOWN from a single member's perspective until independently corroborated
         String peerState = "UNKNOWN";
 
-        String version = member.observedSoftwareVersion().orElse("UNKNOWN");
+        String version = member.observedSoftwareVersion().orElse(null);
 
         return new ClusterMemberEvidence(
             member.deviceId(),
             maskedName,
             selfState,
             peerState,
-            "CLUSTER_XL_HA",
-            observed ? "SYNC_OK" : "UNKNOWN",
-            0,
-            observed,
-            0,
-            true,
+            haModeForVendor(member.vendorHint()),
+            "UNKNOWN",
+            -1,
+            false,
+            -1,
+            false,
             List.of(),
-            true,
-            0,
-            version,
-            "sha256:policysync",
-            24,
-            41,
-            5000,
-            100000,
             false,
-            0,
-            0,
+            -1,
+            version,
+            null,
+            -1,
+            -1,
+            -1,
+            -1,
+            false,
+            -1,
+            -1,
             false,
             observed,
-            observed ? run.get().collectedAt() : Instant.now()
+            observed ? run.get().collectedAt() : Instant.EPOCH
         );
+    }
+
+    private String haModeForVendor(String vendor) {
+        if ("CHECK_POINT".equalsIgnoreCase(vendor) || "CHECKPOINT".equalsIgnoreCase(vendor)) {
+            return "CLUSTER_XL_HA";
+        }
+        if ("PALO_ALTO".equalsIgnoreCase(vendor) || "PAN_OS".equalsIgnoreCase(vendor)) {
+            return "PAN_ACTIVE_PASSIVE";
+        }
+        return "UNKNOWN";
     }
 
     private String normalizeHaRole(String rawRole) {
