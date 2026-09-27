@@ -270,11 +270,15 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
-    public void recordHaPairClaim(String deviceId, String claim, String actorFingerprint, String actionId) {
-        Objects.requireNonNull(claim, "claim");
-        if (!claim.matches("(?:asa-failover|fgt-ha)\\|[0-9a-f]{16}")) {
+    public void recordHaPairClaim(String deviceId, String claimWithUnit, String actorFingerprint, String actionId) {
+        Objects.requireNonNull(claimWithUnit, "claim");
+        if (!claimWithUnit.matches("(?:asa-failover|fgt-ha)\\|[0-9a-f]{16}\\|[0-9a-f]{16}")) {
             throw new IllegalArgumentException("unsupported HA claim");
         }
+        // "<kind>|<pair>|<unit>": the pair part is what peers share; the unit token (a hash of the unit's own serial or
+        // address) keeps two records of the SAME unit from corroborating each other (PF-2, review 2026-09-27).
+        String claim = claimWithUnit.substring(0, claimWithUnit.lastIndexOf('|'));
+        String unit = claimWithUnit.substring(claimWithUnit.lastIndexOf('|') + 1);
         auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
             // ponytail: one lock serializes pair writes; use per-claim locks if throughput ever requires it.
             dsl.fetch("select pg_advisory_xact_lock(hashtext('ha_pair_claim'))");
@@ -290,6 +294,10 @@ public final class JooqDeviceRepository implements DeviceRepository {
             if (!claim.equals(oldClaim)) {
                 dsl.execute("update devices set ha_pair_claim = {0} where device_id = {1} and ha_pair_claim is distinct from {0}",
                         claim, deviceId);
+            }
+            dsl.execute("update devices set ha_unit_token = {0} where device_id = {1} and ha_unit_token is distinct from {0}",
+                    unit, deviceId);
+            if (!claim.equals(oldClaim)) {
                 if (oldClaim != null && oldClaim.equals(own.get("cluster_member_ref", String.class))) {
                     dsl.execute("update devices set cluster_member_ref = null where device_id = {0} and cluster_member_ref = {1}",
                             deviceId, oldClaim);
@@ -300,7 +308,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 }
             }
             List<String> peers = dsl.fetch("select device_id from devices where device_id <> {0} and vendor_hint = {1} "
-                    + "and ha_pair_claim = {2} and enrollment_state = 'ENROLLED' limit 2", deviceId, vendor, claim)
+                    + "and ha_pair_claim = {2} and enrollment_state = 'ENROLLED' and ha_unit_token is distinct from {3} limit 2",
+                    deviceId, vendor, claim, unit)
                     .getValues("device_id", String.class);
             if (peers.size() >= 2) {
                 LOG.log(System.Logger.Level.WARNING, "[HA] pair ambiguous: peers={0}", peers.size());

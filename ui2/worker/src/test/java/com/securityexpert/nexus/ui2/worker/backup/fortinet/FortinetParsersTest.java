@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.backup.fortinet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -75,8 +76,11 @@ class FortinetParsersTest {
         assertEquals(Optional.of("primary"), FortiGatePlan.haRole(measured, Optional.of("SYNTH00001")));
         assertEquals(Optional.of("secondary"), FortiGatePlan.haRole(measured, Optional.of("SYNTH00002")));
         var primaryClaim = FortiGatePlan.haPairClaim(measured, Optional.of("SYNTH00001"));
-        assertTrue(primaryClaim.orElseThrow().matches("fgt-ha\\|[0-9a-f]{16}"));
-        assertEquals(primaryClaim, FortiGatePlan.haPairClaim(measured.replace("operating", "cluster"), Optional.of("SYNTH00002")));
+        assertTrue(primaryClaim.orElseThrow().matches("fgt-ha\\|[0-9a-f]{16}\\|[0-9a-f]{16}"));
+        var secondaryClaim = FortiGatePlan.haPairClaim(measured.replace("operating", "cluster"), Optional.of("SYNTH00002"));
+        // Same pair part, different unit token.
+        assertEquals(primaryClaim.map(c -> c.substring(0, c.lastIndexOf('|'))), secondaryClaim.map(c -> c.substring(0, c.lastIndexOf('|'))));
+        assertNotEquals(primaryClaim, secondaryClaim);
         assertEquals(Optional.empty(), FortiGatePlan.haPairClaim(measured, Optional.of("SYNTH00003")));
         assertEquals(Optional.empty(), FortiGatePlan.haPairClaim("Mode: standalone\n" + measured, Optional.of("SYNTH00001")));
         assertEquals(Optional.empty(), FortiGatePlan.haPairClaim(measured + "Secondary: SYNTH00003, HA operating index = 2\n",

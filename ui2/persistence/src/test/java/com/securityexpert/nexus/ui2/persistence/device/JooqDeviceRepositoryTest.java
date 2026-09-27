@@ -29,12 +29,13 @@ class JooqDeviceRepositoryTest {
     private static final class PairState {
         String claim;
         String ref;
+        String unit;
     }
 
     @Test
     void haPairRequiresOneOtherEnrolledClaimAndDropsStalePair() {
         Map<String, PairState> state = new LinkedHashMap<>();
-        for (String id : List.of("x", "y", "z")) state.put(id, new PairState());
+        for (String id : List.of("x", "y", "z", "w")) state.put(id, new PairState());
         DSLContext create = DSL.using(SQLDialect.POSTGRES);
         var repository = new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
                 new MockConnection(context -> {
@@ -53,13 +54,17 @@ class JooqDeviceRepositoryTest {
                     }
                     if (sql.startsWith("select device_id from devices")) {
                         List<String> peers = state.entrySet().stream()
-                                .filter(e -> !e.getKey().equals(b[0]) && b[2].equals(e.getValue().claim))
+                                .filter(e -> !e.getKey().equals(b[0]) && b[2].equals(e.getValue().claim)
+                                        && !b[3].equals(e.getValue().unit))
                                 .map(Map.Entry::getKey).limit(2).toList();
-                        Result<Record> rows = create.fetchFromStringData(new String[] { "device_id" },
-                                peers.stream().map(id -> new String[] { id }).toArray(String[][]::new));
+                        List<String[]> data = new java.util.ArrayList<>();
+                        data.add(new String[] { "device_id" });
+                        peers.forEach(id -> data.add(new String[] { id }));
+                        Result<Record> rows = create.fetchFromStringData(data.toArray(String[][]::new));
                         return new MockResult[] { new MockResult(peers.size(), rows) };
                     }
                     if (sql.startsWith("update devices set ha_pair_claim")) state.get(b[1]).claim = (String) b[0];
+                    if (sql.startsWith("update devices set ha_unit_token")) state.get(b[1]).unit = (String) b[0];
                     if (sql.startsWith("update devices set cluster_member_ref = null where device_id <>")) {
                         state.forEach((id, s) -> { if (!id.equals(b[0]) && b[2].equals(s.claim) && b[2].equals(s.ref)) s.ref = null; });
                     } else if (sql.startsWith("update devices set cluster_member_ref = null")) {
@@ -73,16 +78,21 @@ class JooqDeviceRepositoryTest {
                 }), SQLDialect.POSTGRES)));
 
         String a = "asa-failover|aaaaaaaaaaaaaaaa";
-        repository.recordHaPairClaim("x", a, "synthetic-actor", "claim");
+        repository.recordHaPairClaim("x", a + "|1111111111111111", "synthetic-actor", "claim");
         assertEquals(null, state.get("x").ref);
-        repository.recordHaPairClaim("y", a, "synthetic-actor", "claim");
+        // A second record of the SAME unit (same unit token) never corroborates.
+        repository.recordHaPairClaim("w", a + "|1111111111111111", "synthetic-actor", "claim");
+        assertEquals(null, state.get("x").ref);
+        assertEquals(null, state.get("w").ref);
+        state.remove("w");
+        repository.recordHaPairClaim("y", a + "|2222222222222222", "synthetic-actor", "claim");
         assertEquals(a, state.get("x").ref);
         assertEquals(a, state.get("y").ref);
-        repository.recordHaPairClaim("z", a, "synthetic-actor", "claim");
+        repository.recordHaPairClaim("z", a + "|3333333333333333", "synthetic-actor", "claim");
         assertEquals(null, state.get("z").ref);
         assertEquals(a, state.get("x").ref);
         assertEquals(a, state.get("y").ref);
-        repository.recordHaPairClaim("x", "asa-failover|bbbbbbbbbbbbbbbb", "synthetic-actor", "claim");
+        repository.recordHaPairClaim("x", "asa-failover|bbbbbbbbbbbbbbbb|1111111111111111", "synthetic-actor", "claim");
         assertEquals(null, state.get("x").ref);
         assertEquals(null, state.get("y").ref);
     }

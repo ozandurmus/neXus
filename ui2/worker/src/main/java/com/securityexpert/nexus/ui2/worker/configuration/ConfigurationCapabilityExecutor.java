@@ -243,7 +243,14 @@ public final class ConfigurationCapabilityExecutor {
                 System.getLogger(ConfigurationCapabilityExecutor.class.getName()).log(System.Logger.Level.WARNING,
                         "[ASA] failover pairing ambiguous: {0} lines", pair.matchingLines());
             } else if (pair.reference().isPresent()) {
-                Objects.requireNonNull(deviceRepository, "deviceRepository").recordHaPairClaim(deviceId, pair.reference().get(),
+                String unit;
+                try {
+                    unit = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(target.host().getBytes(StandardCharsets.UTF_8)), 0, 8);
+                } catch (java.security.NoSuchAlgorithmException e) {
+                    throw new IllegalStateException(e);
+                }
+                Objects.requireNonNull(deviceRepository, "deviceRepository").recordHaPairClaim(deviceId, pair.reference().get() + "|" + unit,
                         WorkerActor.RESERVED_ACTOR_FINGERPRINT, "asa_failover_claim");
                 System.getLogger(ConfigurationCapabilityExecutor.class.getName()).log(System.Logger.Level.INFO,
                         "[ASA] failover pair claim recorded");

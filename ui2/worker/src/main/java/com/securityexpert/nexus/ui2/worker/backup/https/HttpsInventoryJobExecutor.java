@@ -120,10 +120,9 @@ public final class HttpsInventoryJobExecutor {
             done.identity().haPairClaim().ifPresent(claim -> devices.recordHaPairClaim(deviceId, claim, ACTOR,
                     "inventory_ha_pair_claim"));
         } catch (RuntimeException claimFailed) {
-            LOG.log(System.Logger.Level.WARNING, "[HA] pair claim write failed for inventory job {0}", jobId);
-            leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
-                    "inventory_ha_pair_claim_failed", "ha_pair_claim_write_failed");
-            return new JobOutcome.Failed("ha_pair_claim_write_failed");
+            // The inventory itself is stored; a failed pair claim only leaves the pairing as it was (review 2026-09-27).
+            LOG.log(System.Logger.Level.WARNING, "[HA] pair claim write failed for inventory job {0}: {1}", jobId,
+                    claimFailed.getClass().getSimpleName());
         }
         LOG.log(System.Logger.Level.INFO, "[JOB_COMPLETED] HTTPS inventory job {0} ({1}) in {2}ms: {3} context(s), {4} member(s)",
                 jobId, vendor, ms, done.contexts().size(), done.members().size());

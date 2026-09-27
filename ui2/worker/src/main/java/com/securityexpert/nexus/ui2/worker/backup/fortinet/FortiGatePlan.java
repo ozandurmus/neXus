@@ -130,7 +130,10 @@ public final class FortiGatePlan {
         String pair = primary.compareTo(secondary) < 0 ? primary + "|" + secondary : secondary + "|" + primary;
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(pair.getBytes(StandardCharsets.UTF_8));
-            return Optional.of("fgt-ha|" + HexFormat.of().formatHex(digest, 0, 8));
+            // The claim carries this unit's own token (hash of its serial): two records of the SAME unit (e.g. added once
+            // by the cluster address and once by its own address) must never corroborate each other (review 2026-09-27).
+            byte[] unit = MessageDigest.getInstance("SHA-256").digest(ownSerial.get().getBytes(StandardCharsets.UTF_8));
+            return Optional.of("fgt-ha|" + HexFormat.of().formatHex(digest, 0, 8) + "|" + HexFormat.of().formatHex(unit, 0, 8));
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
