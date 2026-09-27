@@ -77,3 +77,20 @@ Measured read-only on 2026-09-27 (HOST-A: Ubuntu 26.04.1 LTS, single-node k3s, n
    `deploy/hosta/nexus-audit.rules` (identity, sudoers, sshd, k3s config/cred/manifests, `/etc/nexus` read/write,
    chrony, systemd units, root commands run by logged-in users); ~40 MB/day, rotated by auditd.
 8. SSH keys: unchanged by the PO's decision -- `securitynexus` keeps its password login.
+
+## 6. Vulnerability review (2026-09-27, in-host only; tools installed temporarily and removed)
+Scope rule from the PO: every scan runs on HOST-A against HOST-A; nothing scans the network. (An earlier TCP connect
+sweep from the VPN was stopped at the PO's request.)
+- Lynis hardening index 69, no warnings, 41 suggestions (open items: unused protocols dccp/sctp/rds/tipc, sysctl,
+  AIDE, fail2ban, legal banner, process accounting).
+- testssl (127.0.0.1): TLS 1.2/1.3 only, P-256. **Fixed:** CBC suites removed (Traefik `tlsOptions.default`, AEAD only).
+- Trivy: Ubuntu -- 82 kernel CVEs, no fix released yet. **neXus image: 105 HIGH / 7 CRITICAL, fixed** by Spring Boot
+  3.5.16, Tomcat 10.1.60, Jackson 2.21.4, pgjdbc 42.7.13 and refreshed UBI9 bases (Java 21.0.12). Open: k3s bundled
+  components (Traefik, CoreDNS, metrics-server, helm, local-path), the local registry and the build executor image.
+- kube-bench (k3s CIS): 47 pass / 8 fail / 52 warn; the kubelet/apiserver FAILs verified false positives (anonymous
+  401, read-only port closed). Open: `protect-kernel-defaults`.
+- Exposure: Traefik NodePorts were reachable from outside (DNAT bypasses the input chain). **Fixed:** prerouting drop
+  of 30000-32767 on the outside interface. Port 53 seen from the VPN is not served by HOST-A (resolved listens on
+  loopback only; kube DNS rules target the service VIP) -- most likely the VPN's DNS interception.
+- RBAC: `aiview` holds operator, onboarding_admin, backup_admin and compliance_admin besides viewer/replay_viewer, so it
+  can start collections and backups (authorized, not a bypass). PO decision pending.
