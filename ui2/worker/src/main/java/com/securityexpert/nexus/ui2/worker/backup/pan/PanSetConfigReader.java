@@ -37,7 +37,10 @@ public final class PanSetConfigReader {
             "show config running");
 
     public sealed interface Outcome {
-        record Read(String setFormatText) implements Outcome {
+        /** {@code hierarchical}: PAN-OS 11.1 answers `show config running` in its brace format whatever
+         *  `config-output-format` says (measured 2026-09-27); the PO accepted that form (reversible, option A). */
+        record Read(String setFormatText, boolean hierarchical) implements Outcome {
+            public Read(String setFormatText) { this(setFormatText, false); }
         }
 
         record Unavailable(String reason) implements Outcome {
@@ -54,6 +57,14 @@ public final class PanSetConfigReader {
 
     public PanSetConfigReader(DeviceTransport transport) {
         this.transport = Objects.requireNonNull(transport, "transport");
+    }
+
+    /** A complete brace-format running config: opens with `config {`, closes its braces, has real content. */
+    static boolean isHierarchicalConfig(String text) {
+        if (!text.startsWith("config {") || !text.endsWith("}")) return false;
+        long open = text.chars().filter(c -> c == '{').count();
+        long close = text.chars().filter(c -> c == '}').count();
+        return open == close && text.lines().count() >= 20;
     }
 
     /** MEASURE (2026-09-27, PAN backups failing since 09-23): per command, the answer's kind and shape -- never values. */
@@ -106,6 +117,9 @@ public final class PanSetConfigReader {
             }
             String text = completed.output() == null ? "" : completed.output().strip();
             long setLines = text.lines().filter(line -> line.startsWith("set ")).count();
+            if (setLines < MIN_SET_LINES && isHierarchicalConfig(text)) {
+                return new Outcome.Read(text + "\n", true);
+            }
             if (setLines < MIN_SET_LINES) {
                 // MEASURE (2026-09-27: 0 set-lines in 20 KB, then 2 MB arrived later): shapes only, never values.
                 java.util.List<String> all = text.lines().toList();

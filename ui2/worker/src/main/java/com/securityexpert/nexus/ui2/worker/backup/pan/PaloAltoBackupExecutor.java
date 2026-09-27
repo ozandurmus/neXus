@@ -194,9 +194,11 @@ public final class PaloAltoBackupExecutor {
                 .scopeRef(sshHost, SSH_PORT);
         PanSetConfigReader.Outcome setConfig = new PanSetConfigReader(transport).read(sshTarget, credentialRef, trustRuleRef);
         String setText = null;
+        boolean hierarchical = false;
         String missing = null;
         if (setConfig instanceof PanSetConfigReader.Outcome.Read read) {
             setText = read.setFormatText();
+            hierarchical = read.hierarchical();
         } else {
             String why = ((PanSetConfigReader.Outcome.Unavailable) setConfig).reason();
             if (!panorama) {
@@ -222,7 +224,8 @@ public final class PaloAltoBackupExecutor {
                     tar.file(BUNDLE_RUNNING_CONFIG_XML, currentConfigXml.getBytes(StandardCharsets.UTF_8));
                 }
                 if (setText != null) {
-                    tar.file(BUNDLE_RUNNING_CONFIG_SET, setText.getBytes(StandardCharsets.UTF_8));
+                    tar.file(hierarchical ? BUNDLE_RUNNING_CONFIG_TEXT : BUNDLE_RUNNING_CONFIG_SET,
+                            setText.getBytes(StandardCharsets.UTF_8));
                 }
             }
             ArtefactStore.ArtefactMetadata metadata = handle.finish();
@@ -238,6 +241,8 @@ public final class PaloAltoBackupExecutor {
 
     public static final String BUNDLE_DEVICE_STATE = "device-state.tgz";
     public static final String BUNDLE_RUNNING_CONFIG_SET = "running-config.set";
+    /** The brace-format running config (PAN-OS 11.1 op-mode `show config running`), PO option A 2026-09-27. */
+    public static final String BUNDLE_RUNNING_CONFIG_TEXT = "running-config.txt";
     private static final int SSH_PORT = 22;
     private static final long MAX_BUFFERED_DEVICE_STATE_BYTES = 256L * 1024 * 1024;
 
