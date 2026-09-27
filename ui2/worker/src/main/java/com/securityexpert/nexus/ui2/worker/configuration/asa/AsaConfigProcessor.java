@@ -111,7 +111,11 @@ public final class AsaConfigProcessor {
         return lower.contains("password") || lower.contains("passwd") || lower.contains("secret")
                 || lower.contains("key") || lower.contains("passphrase")
                 // SNMP community strings: "snmp-server community <c>" and "snmp-server host <if> <ip> community <c>"
-                || (lower.startsWith("snmp-server") && lower.contains("community"));
+                || (lower.startsWith("snmp-server") && lower.contains("community"))
+                // SNMPv3 users carry localized auth/priv keys ("... encrypted auth sha <k> priv aes 128 <k>"); seen
+                // unmasked under aiview on 2026-09-27
+                || (lower.startsWith("snmp-server user") && (lower.contains(" auth ") || lower.contains(" priv ")))
+                || lower.contains(" engineid ");
     }
 
     private static String sha256(String text) {

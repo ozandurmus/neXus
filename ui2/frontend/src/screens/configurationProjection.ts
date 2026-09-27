@@ -482,10 +482,19 @@ export function projectAsa(text: string): Projection {
   let withheld = 0;
   let settings = 0;
   const add = (setting: string, value: string) => {
-    push(bySection, counters, { section, setting, value, origin: "LOCAL", context: "single" });
+    // The failover unit role differs between the two members by design: one member-specific setting, not a diff.
+    const unit = /^failover lan unit (primary|secondary)$/.exec(setting);
+    if (unit) {
+      push(bySection, counters, { section, setting: "failover lan unit", value: unit[1], origin: "MEMBER", context: "single" });
+    } else {
+      push(bySection, counters, { section, setting, value, origin: "LOCAL", context: "single" });
+    }
     settings++;
   };
-  for (const raw of text.split(/\r?\n/)) {
+  for (const source of text.split(/\r?\n/)) {
+    // Runs stored before 2026-09-27 kept SNMPv3 user keys in clear: withhold them here too.
+    const raw = /^\s*snmp-server user\b/i.test(source) && /\s(auth|priv|engineid)\s/i.test(source)
+      ? source.replace(/snmp-server user.*/i, "snmp-server [withheld]") : source;
     const line = raw.trim();
     if (!line || line === "!" || /^\s*:/.test(raw)) continue;
     if (/^\s/.test(raw)) {

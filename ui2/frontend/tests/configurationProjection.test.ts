@@ -239,3 +239,13 @@ describe("Palo Alto cluster member-specific settings", () => {
     expect(c.diffCount).toBe(1);
   });
 });
+
+describe("projectAsa member-specific and withheld lines", () => {
+  it("treats the failover unit role as member-specific and withholds SNMPv3 user keys", () => {
+    const p = projectAsa("failover lan unit primary\nsnmp-server user INVENTED grp v3 engineID 8000 encrypted auth sha 7c:b0 priv aes 128 8d:26\n: end\n");
+    const rows = p.sections.flatMap((s) => s.rows);
+    expect(rows.find((r) => r.setting === "failover lan unit")).toMatchObject({ value: "primary", origin: "MEMBER" });
+    expect(JSON.stringify(p)).not.toContain("7c:b0");
+    expect(p.withheldCount).toBe(1);
+  });
+});

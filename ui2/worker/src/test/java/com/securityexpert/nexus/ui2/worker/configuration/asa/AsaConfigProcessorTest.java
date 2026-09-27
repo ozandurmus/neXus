@@ -87,4 +87,14 @@ class AsaConfigProcessorTest {
         for (String line : dropped) assertFalse(p.sanitizedText().contains(line), line);
         assertTrue(p.sanitizedText().contains("no http server enable"));
     }
+
+    @org.junit.jupiter.api.Test
+    void snmpV3UserKeysAreWithheld() {
+        String text = "hostname invented\nsnmp-server user INVENTED grp v3 engineID 80000009fe encrypted auth sha "
+                + "7c:b0:03 priv aes 128 8d:26:50\nsnmp-server enable traps\n: end\n";
+        String out = AsaConfigProcessor.process(text).sanitizedText();
+        org.junit.jupiter.api.Assertions.assertFalse(out.contains("7c:b0:03"));
+        org.junit.jupiter.api.Assertions.assertFalse(out.contains("8d:26:50"));
+        org.junit.jupiter.api.Assertions.assertTrue(out.contains("snmp-server [withheld]"));
+    }
 }
