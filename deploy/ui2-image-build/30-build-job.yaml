@@ -36,6 +36,7 @@ spec:
             - --insecure
             - --skip-tls-verify
             - --cache=false
+            - --image-download-retry=5
             - --snapshot-mode=redo
             - --log-format=text
             - --verbosity=info
