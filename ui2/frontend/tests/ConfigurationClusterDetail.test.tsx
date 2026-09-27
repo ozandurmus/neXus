@@ -164,4 +164,31 @@ describe("Configuration device detail", () => {
     expect(screen.getByText("2026-09-23 01:57:54")).toBeInTheDocument();
     expect(screen.getAllByText("ACTIVE")[0]).toHaveAttribute("data-role", "ACTIVE");
   });
+
+  it("shows only Cisco ASA identity fields and uses the configuration run time", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, {
+      collected_at: "2026-09-22T22:57:54Z", vendor: "cisco_asa", sanitized_text_available: false,
+      index: [], overrides: [], supplementary_runs: [],
+    }))));
+    render(withTheme(<DeviceConfigurationDetail device={{
+      device_id: "asa-1", vendor_hint: "cisco_asa", enrollment_state: "ENROLLED", hostname: "FW-TANGO-04", model: "ASA 5516",
+      software_version: "9.18", serial_number: "SYNTHETIC-ASA-1", ha_role: "ACTIVE", cluster_member_ref: null,
+    }} />));
+    expect((await screen.findAllByText("Cisco ASA")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("ACTIVE").some((element) => element.getAttribute("data-role") === "ACTIVE")).toBe(true);
+    expect(await screen.findByText("2026-09-23 01:57:54")).toBeInTheDocument();
+    expect(screen.queryByText("HOTFIX / JUMBO TAKE")).toBeNull();
+    expect(screen.queryByText("VIRTUAL SYSTEMS (VSX)")).toBeNull();
+    expect(screen.queryByText("POLICY INSTALLED")).toBeNull();
+  });
+
+  it("shows Fortinet virtual systems as VDOMs", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }))));
+    render(withTheme(<DeviceConfigurationDetail device={{
+      device_id: "forti-1", vendor_hint: "fortinet", enrollment_state: "ENROLLED", hostname: "FW-JULIET-06", model: "FortiGate",
+      software_version: "7.4", ha_role: null, cluster_member_ref: null, virtual_systems: "root, guest",
+    }} />));
+    expect(await screen.findByText("VDOMS")).toBeInTheDocument();
+    expect(screen.getByText("2 · root, guest")).toBeInTheDocument();
+  });
 });

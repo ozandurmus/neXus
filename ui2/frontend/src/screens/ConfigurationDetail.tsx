@@ -52,6 +52,7 @@ export { contentVersionText } from "./DeviceShared";
 function vendorLabel(vendorHint: string | null | undefined): string {
   if (vendorHint === "check_point") return "Check Point";
   if (vendorHint === "palo_alto") return "Palo Alto Networks";
+  if (vendorHint === "cisco_asa") return "Cisco ASA";
   if (vendorHint === "infoblox") return "Infoblox";
   if (vendorHint === "radware") return "Radware";
   return vendorHint ?? "Unknown vendor";
@@ -228,23 +229,50 @@ interface IdentityTile {
 function identityTiles(device: DeviceSummary, collectedAt: string | null): IdentityTile[] {
   const vs = vsListOf(device);
   const isPaloAlto = device.vendor_hint === "palo_alto";
-  const needsGate = "not collected -- needs its own gated read";
-  return [
-    // PO, 2026-09-24: the Check Point appliance family ("Smart-1 5150 (ST-4150-00)", from show asset system) IS the
-    // model -- shown under Model, not appended to the vendor; the first-contact model wins when both exist.
+  const common: IdentityTile[] = [
     { label: "Vendor", value: vendorLabel(device.vendor_hint) },
     { label: "Model", value: device.model || device.platform_family || null, absent: "not read yet" },
+  ];
+  const tail: IdentityTile[] = [
+    { label: "Management address", value: device.management_ip ?? null, absent: "not recorded", mono: true },
+    { label: "Enrollment", value: device.enrollment_state || null, absent: "not recorded" },
+    { label: "Last configuration read", value: collectedAt ? <Ts at={collectedAt} /> : null, absent: "never" },
+  ];
+  const haRole: IdentityTile = { label: "HA role", value: device.ha_role ? <RoleChip role={device.ha_role} dense /> : null,
+    absent: device.role === "management_server" ? "not read -- MDS high availability needs its own read" : device.cluster_member_ref ? "not reported" : "standalone" };
+  if (device.vendor_hint === "fortinet") return [
+    ...common,
+    ...(device.serial_number ? [{ label: "Serial number", value: device.serial_number, mono: true } satisfies IdentityTile] : []),
+    { label: "Software version", value: device.software_version, absent: "not read at first contact" },
+    ...(device.uptime_text ? [{ label: "Uptime", value: device.uptime_text } satisfies IdentityTile] : []),
+    haRole,
+    ...(vs.length ? [{ label: "VDOMs", value: `${vs.length} · ${vs.join(", ")}` } satisfies IdentityTile] : []),
+    ...tail,
+  ];
+  if (device.vendor_hint === "cisco_asa") return [
+    ...common,
+    ...(device.serial_number ? [{ label: "Serial number", value: device.serial_number, mono: true } satisfies IdentityTile] : []),
+    { label: "Software version", value: device.software_version, absent: "not read at first contact" },
+    haRole,
+    ...tail,
+  ];
+  if (!isPaloAlto && device.vendor_hint !== "check_point") return [
+    ...common,
+    { label: "Software version", value: device.software_version, absent: "not read at first contact" },
+    ...tail,
+  ];
+  const needsGate = "not collected -- needs its own gated read";
+  return [
+    ...common,
     { label: "Serial number", value: device.serial_number ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate, mono: true },
     { label: "Software version", value: device.software_version, absent: "not read at first contact" },
     isPaloAlto
       ? { label: "Content versions", value: device.content_versions ? <ContentVersions versions={device.content_versions} /> : null, absent: "not read yet -- run Inventory collect" }
       : { label: "Hotfix / Jumbo take", value: device.hotfix_level ?? null, absent: needsGate },
     { label: "Uptime", value: device.uptime_text ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate },
-    { label: "HA role", value: device.ha_role ? <RoleChip role={device.ha_role} dense /> : null,
-      absent: device.role === "management_server" ? "not read -- MDS high availability needs its own read" : device.cluster_member_ref ? "not reported" : "standalone" },
+    haRole,
     { label: isPaloAlto ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },
-    { label: "Management address", value: device.management_ip ?? null, absent: "not recorded", mono: true },
-    { label: "Enrollment", value: device.enrollment_state || null, absent: "not recorded" },
+    ...tail.slice(0, 2),
     {
       label: "Policy installed",
       value: device.policy_installed_at
@@ -255,7 +283,7 @@ function identityTiles(device: DeviceSummary, collectedAt: string | null): Ident
         : "not read yet -- read every evening at 23:00",
     },
     { label: "Platform facts read", value: device.platform_facts_observed_at ? <Ts at={device.platform_facts_observed_at} /> : null, absent: "never" },
-    { label: "Last configuration read", value: collectedAt ? <Ts at={collectedAt} /> : null, absent: "never" },
+    tail[2],
   ];
 }
 
