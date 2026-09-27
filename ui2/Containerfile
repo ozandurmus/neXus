@@ -18,7 +18,7 @@
 # its output crosses into the Java stage; Node itself never does. Grafting
 # node binaries into the JDK image was tried and fails on library
 # versions (OPENSSL_3.4.0 required by libnode, absent from the JDK base).
-FROM registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:00f862eda4fcba6f07b1abb7b28714495f9a9b00291dc188d6c5c66cf6ff30e1 AS frontend
+FROM registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:9823eba78a979ab9b4346a91678d74518bdeb1fc762752689bf1354cbc492b54 AS frontend
 USER 0
 WORKDIR /build/frontend
 COPY ui2/frontend/package.json ui2/frontend/package-lock.json ./
@@ -36,7 +36,7 @@ COPY docs/design/ui2_mockups/ /build/docs/design/ui2_mockups/
 RUN npm run build
 
 # Stage 1 -- Java build.
-FROM registry.access.redhat.com/ubi9/openjdk-21@sha256:fa55b9f126da0d855e3709473e2237ad500f8d8e6a059f99b3ca10cdc2c5de58 AS build
+FROM registry.access.redhat.com/ubi9/openjdk-21@sha256:645710be17ff582b0f2eb5d52f572556a2b73f4367290548bbc89431213e3ece AS build
 USER 0
 ENV GRADLE_USER_HOME=/build/.gradle-home
 
@@ -65,7 +65,7 @@ RUN ./gradlew --no-daemon --console=plain -PfrontendPrebuilt=true :service:bootJ
 # ---------------------------------------------------------------------------
 # Stage 2 — runtime
 # ---------------------------------------------------------------------------
-FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:360822c35c5741f542ab78fe123e6c4d9b68e0113a88d6e0250bb1f377b17f29
+FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:908540a90db3dea9dcc8b80de84c9d44ced2dd328d3ed36930b0b04ad8a0f4e8
 
 # Ownership is by group 0, never by a uid: the uid this process runs as is
 # assigned at admission time and is not knowable here (§3.3). Group 0 is the

@@ -15,6 +15,12 @@ dependencies {
     api(project(":ldap-adapter"))
 
     implementation(libs.spring.boot.starter.web)
+    // Security floor for the embedded server (see libs.versions.toml `tomcat`).
+    constraints {
+        implementation(libs.tomcat.embed.core)
+        implementation(libs.tomcat.embed.el)
+        implementation(libs.tomcat.embed.websocket)
+    }
     // Failover Engine Stage 2 (durable schedules/ledger/quarantine): plain
     // JdbcTemplate over the same C1 section 6 DataSource bean, auto-configured
     // by Spring Boot once this starter is present -- no second DataSource, no
