@@ -96,8 +96,8 @@ public class PreflightService {
                 || (missingObservationTime && "preflight.clock_health".equals(result.checkId()));
             if (!unmeasured
                 || result.status() == CheckStatus.INSUFFICIENT_EVIDENCE
-                || result.status() == CheckStatus.COLLECTION_FAILED
-                || ("preflight.policy_parity".equals(result.checkId()) && result.status() == CheckStatus.FAIL)) {
+                || result.status() == CheckStatus.COLLECTION_FAILED) {
+                // A FAIL computed from unmeasured fields is as fabricated as a PASS (review 2026-09-27).
                 return result;
             }
             return CheckResult.insufficientEvidence(result.checkId(), result.name(), result.category(),
