@@ -86,3 +86,21 @@ registry. The legacy Python `utils/failover/` read-only rule is unchanged (this 
 Check 7 (new connections per second) is deferred: the approved `fw tab -t connections -s` reports the connection
 table's current population (#VALS) and peak (#PEAK), not a new-connection rate, and two samples cannot derive one.
 The first release runs checks 1-6 and 8; check 7 is added when the PO names the command that reports CPS.
+
+## 10. Amendment 2026-09-27 -- VSX: every Virtual System is its own failover unit (PO)
+The PO: "Biz VSLS kullanmıyoruz. VSX'ler kendileri failover oluyor, şasi bağımsız. ... önce vsenv ile içine
+giriyorum, her bir kontrolü spesifik olarak VSX için yapıyorum ve clusterXL_admin down ile failover yapıyorum."
+This replaces every "VSX at chassis level" statement above:
+- **Unit.** A failover unit is either a physical ClusterXL cluster (non-VSX) or **one Virtual System** of a VSX
+  cluster (cluster + VSID). The VSX chassis itself is not failed over by this feature.
+- **Context.** For a VS unit every pre-check, the failover, the wait loop, every post-check and the return run inside
+  `vsenv <VSID>` on each member (the existing VSX-wrapped command form, `bash -lc 'vsenv <VSID> && <command>'`), one
+  session per member, one command at a time.
+- **Commands.** Write: `clusterXL_admin down` / `clusterXL_admin up` in the VS context on the member where that VS
+  is Active (resp. the former active); new wrapped gate rows for both. Reads: the §2 checks in the VS context.
+- **Approval, runs, screen.** Approval windows, runs and the stepper are per unit: a window names clusters and/or
+  specific VSs; the Failover tab on a VSX cluster lists its VSs, each with its own window state, button, stepper
+  and check table, shown under the chassis. One active run per unit; runs on different VSs of the same chassis may
+  not overlap either (one at a time per chassis).
+- **Refusals.** Also refused: the VS is not exactly one Active + one Standby across the two members in its own
+  `cphaprob stat` (VS context).
