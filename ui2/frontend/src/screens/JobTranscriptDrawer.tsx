@@ -6,21 +6,13 @@ import Drawer from "@mui/material/Drawer";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { useSession } from "../auth/SessionContext";
 import { getJobTranscript, type JobTranscriptEntry } from "../auth/adminApi";
-
-export function canReadJobTranscript(roles: readonly string[]): boolean {
-  return !roles.includes("role:replay_viewer")
-    && (roles.includes("role:security_admin") || roles.includes("role:backup_admin"));
-}
 
 export function transcriptAsText(entries: readonly JobTranscriptEntry[]): string {
   return entries.map((entry) => `${entry.at} (+${entry.elapsedMs} ms) [${entry.channel.toUpperCase()}] ${entry.kind}\n${entry.text}`).join("\n\n");
 }
 
 export function JobTranscriptDrawer({ jobId, hasTranscript }: { readonly jobId: string; readonly hasTranscript: boolean }) {
-  const session = useSession();
-  const allowed = canReadJobTranscript(session?.roleTokens ?? []);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<JobTranscriptEntry[] | null>(null);
@@ -36,7 +28,7 @@ export function JobTranscriptDrawer({ jobId, hasTranscript }: { readonly jobId: 
 
   const visible = useMemo(() => (entries ?? []).filter((entry) =>
     `${entry.at} ${entry.channel} ${entry.kind} ${entry.text}`.toLowerCase().includes(query.toLowerCase())), [entries, query]);
-  if (!allowed || !hasTranscript) return null;
+  if (!hasTranscript) return null;
 
   return <>
     <Button size="small" onClick={(event) => { event.stopPropagation(); setOpen(true); }}>Transcript</Button>

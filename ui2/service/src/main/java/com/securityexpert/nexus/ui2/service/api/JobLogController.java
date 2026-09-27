@@ -15,6 +15,9 @@ import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.Facets;
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage;
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobQuery;
 import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
+import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
+import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
+import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -28,10 +31,15 @@ public final class JobLogController {
 
     private final JobLogQueryService jobLogQueryService;
     private final PrivacyMaskingResponseBodyAdvice masking;
+    private final ActionRegistry actionRegistry;
+    private final RbacEvaluator rbacEvaluator;
 
-    public JobLogController(JobLogQueryService jobLogQueryService, PrivacyMaskingResponseBodyAdvice masking) {
+    public JobLogController(JobLogQueryService jobLogQueryService, PrivacyMaskingResponseBodyAdvice masking,
+            ActionRegistry actionRegistry, RbacEvaluator rbacEvaluator) {
         this.jobLogQueryService = jobLogQueryService;
         this.masking = masking;
+        this.actionRegistry = actionRegistry;
+        this.rbacEvaluator = rbacEvaluator;
     }
 
     @GetMapping("/api/v2/jobs")
@@ -40,12 +48,16 @@ public final class JobLogController {
             @RequestParam(name = "device_id", required = false) String deviceId,
             @RequestParam(required = false) String since, @RequestParam(required = false) String until,
             @RequestParam(required = false) String q, @RequestParam(defaultValue = "1") int page,
-            @RequestParam(name = "page_size", defaultValue = "50") int pageSize) {
+            @RequestParam(name = "page_size", defaultValue = "50") int pageSize, HttpServletRequest request) {
         Optional<JobQuery> query = parse(state, jobType, deviceId, since, until, q, page, pageSize);
         if (query.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        return ResponseEntity.ok(jobLogQueryService.query(query.get()));
+        String actor = (String) request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
+        boolean allowed = actor != null && !PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)
+                && rbacEvaluator.evaluateAny(actor, actionRegistry.find(ActionRegistry.JOB_TRANSCRIPT_READ)
+                        .orElseThrow().requiredRoleTokens(), Instant.now()).outcome().proceeds();
+        return ResponseEntity.ok(jobLogQueryService.query(query.get()).withTranscriptAccess(allowed));
     }
 
     @GetMapping("/api/v2/jobs/stats")

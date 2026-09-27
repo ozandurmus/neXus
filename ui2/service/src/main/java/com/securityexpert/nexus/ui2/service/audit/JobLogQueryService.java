@@ -68,6 +68,12 @@ public final class JobLogQueryService {
             @JsonProperty("page") int page,
             @JsonProperty("page_size") int pageSize,
             @JsonProperty("total") long total) {
+        public JobPage withTranscriptAccess(boolean allowed) {
+            if (allowed) return this;
+            return new JobPage(items.stream().map(event -> new JobEvent(event.jobId(), event.jobType(),
+                    event.targetDeviceId(), event.deviceName(), event.state(), event.outcome(), event.terminalReason(),
+                    event.submittedAt(), event.finishedAt(), event.durationMs(), false)).toList(), page, pageSize, total);
+        }
     }
 
     /**

@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { SessionContext, type SessionInfo } from "../src/auth/SessionContext";
-import { canReadJobTranscript, JobTranscriptDrawer, transcriptAsText } from "../src/screens/JobTranscriptDrawer";
+import { JobTranscriptDrawer, transcriptAsText } from "../src/screens/JobTranscriptDrawer";
 import type { JobTranscriptEntry } from "../src/auth/adminApi";
 
 const entries: JobTranscriptEntry[] = [
@@ -9,26 +8,22 @@ const entries: JobTranscriptEntry[] = [
   { seq: 2, at: "2026-09-27T10:00:01Z", elapsedMs: 7, channel: "https", kind: "response", text: "synthetic answer" },
 ];
 
-function session(roleTokens: string[]): SessionInfo {
-  return { displayName: "Synthetic", roleTokens, permissions: [], onSignOut: () => undefined };
-}
-
 afterEach(() => vi.unstubAllGlobals());
 
 describe("backup job transcript access", () => {
-  it.each([["role:security_admin"], ["role:backup_admin"]])("shows the action for %s", (role) => {
-    render(<SessionContext.Provider value={session([role])}><JobTranscriptDrawer jobId="job-synthetic" hasTranscript /></SessionContext.Provider>);
+  it("shows the action when the server grants transcript access", () => {
+    render(<JobTranscriptDrawer jobId="job-synthetic" hasTranscript />);
     expect(screen.getByRole("button", { name: "Transcript" })).toBeInTheDocument();
   });
 
-  it.each([["role:viewer"], ["role:operator"], ["role:replay_viewer"]])("hides the action for %s", (role) => {
-    render(<SessionContext.Provider value={session([role])}><JobTranscriptDrawer jobId="job-synthetic" hasTranscript /></SessionContext.Provider>);
+  it("hides the action when the server does not grant transcript access", () => {
+    render(<JobTranscriptDrawer jobId="job-synthetic" hasTranscript={false} />);
     expect(screen.queryByRole("button", { name: "Transcript" })).toBeNull();
   });
 
   it("renders both channels and filters entries by search", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(entries))));
-    render(<SessionContext.Provider value={session(["role:backup_admin"])}><JobTranscriptDrawer jobId="job-synthetic" hasTranscript /></SessionContext.Provider>);
+    render(<JobTranscriptDrawer jobId="job-synthetic" hasTranscript />);
     fireEvent.click(screen.getByRole("button", { name: "Transcript" }));
     expect(await screen.findByText("show synthetic")).toBeInTheDocument();
     expect(screen.getByText("synthetic answer")).toBeInTheDocument();
@@ -48,7 +43,5 @@ describe("backup job transcript access", () => {
 
   it("builds a downloadable text representation", () => {
     expect(transcriptAsText(entries)).toContain("2026-09-27T10:00:00Z (+4 ms) [SSH] command\nshow synthetic");
-    expect(canReadJobTranscript(["role:viewer", "role:backup_admin"])).toBe(true);
-    expect(canReadJobTranscript(["role:replay_viewer", "role:backup_admin"])).toBe(false);
   });
 });
