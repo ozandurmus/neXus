@@ -103,14 +103,17 @@ final class NotificationMailRouter {
                 String backup = "(j.job_type like '%\\_backup' escape '\\' or j.job_type = 'https_vendor_backup')";
                 String predicate = type.equals("backup_failure")
                         ? backup + " and (j.state = 'FAILED' or (j.state = 'COMPLETED' and j.terminal_reason like 'partial:%'))"
-                        : "not " + backup + " and j.state = 'FAILED'";
+                        : "not " + backup + " and (j.state = 'FAILED' or "
+                            + "(j.job_type = 'cp_cluster_failover' and j.state = 'OUTCOME_UNKNOWN'))";
                 rows = dsl.fetch("select j.job_id, j.job_type, j.terminal_reason, j.finished_at, "
                         + "coalesce(d.observed_hostname, j.target_device_id) as device_name from jobs j "
                         + "left join devices d on d.device_id = j.target_device_id where j.finished_at > {0} and "
                         + predicate + " order by j.finished_at, j.job_id", Timestamp.from(from));
                 for (Record r : rows) {
                     newestTime = max(newestTime, at(r, "finished_at"));
-                    lines.add(at(r, "finished_at") + "  " + safe(r.get("device_name", String.class)) + "  "
+                    String deviceName = "cp_cluster_failover".equals(r.get("job_type", String.class))
+                            ? "CP failover unit" : safe(r.get("device_name", String.class));
+                    lines.add(at(r, "finished_at") + "  " + deviceName + "  "
                             + r.get("job_type", String.class) + ": " + safe(r.get("terminal_reason", String.class))
                             + "  /operations/jobs/" + r.get("job_id", String.class));
                 }

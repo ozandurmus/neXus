@@ -123,6 +123,9 @@ public final class ActionRegistry {
     public static final String JOB_TRANSCRIPT_READ = "job_transcript_read";
     /** Search includes setting values, so it has the same gate as the configuration text read. */
     public static final String GLOBAL_SEARCH_READ = "global_search_read";
+    public static final String CP_FAILOVER_APPROVE = "cp_failover_approve";
+    public static final String CP_FAILOVER_START = "cp_failover_start";
+    public static final String CP_FAILOVER_READ = "cp_failover_read";
 
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
@@ -202,6 +205,11 @@ public final class ActionRegistry {
         register(new ActionDescriptor(JOB_TRANSCRIPT_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(GLOBAL_SEARCH_READ, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        register(new ActionDescriptor(CP_FAILOVER_APPROVE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(CP_FAILOVER_START, true, Optional.of(RoleToken.OPERATOR),
+                java.util.Set.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(CP_FAILOVER_READ, true, Optional.of(RoleToken.OPERATOR),
+                java.util.Set.of(RoleToken.SECURITY_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

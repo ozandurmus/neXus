@@ -148,6 +148,10 @@ public final class Ui2WorkerMain {
                 new StoreBackedSshCredentialResolver(resolverComponents.credentialReferenceRepository(),
                         resolverComponents.credentialRepository(), resolverComponents.cipher());
         SshExecTransport sshTransport = new SshExecTransport(sshCredentialResolver, trustRuleResolver);
+        SshExecTransport strictFailoverSsh = new SshExecTransport(sshCredentialResolver,
+                new com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver(
+                        new com.securityexpert.nexus.ui2.persistence.discovery.JooqManagementEndpointSshTrustRepository(transactionBoundary),
+                        enrolledDeviceTrustRuleResolver, false), true);
         PanTrustRuleResolver panTrustRuleResolver = EnvironmentPanTrustRuleResolver.INSTANCE;
         PanXmlApiTransport panTransport = new PanXmlApiTransport(paloAltoTrustRuleRef, panTrustRuleResolver);
 
@@ -302,6 +306,9 @@ public final class Ui2WorkerMain {
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         for (int i = 0; i < 10; i++) {
+            var cpFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.CpFailoverJobExecutor(
+                    new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
+                    deviceRepository, leaseRepository, attemptRepository, strictFailoverSsh, gateRegistry);
             WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
                     confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
                     backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofMinutes(10), checkPointTrustRuleRef,
@@ -309,6 +316,7 @@ public final class Ui2WorkerMain {
                     .withHttpsConfirm(httpsConfirmJobExecutor)
                     .withHttpsInventory(httpsInventoryJobExecutor)
                     .withFortiManagerDiagnostic(diagnosticJobExecutor)
+                    .withCpFailover(cpFailoverExecutor)
                     .withDiagnosticReads(genericDiagnosticExecutor);
             claimLoops.add(claimLoop);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));

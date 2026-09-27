@@ -81,7 +81,9 @@ public class NotificationForwarder {
         List<Record> rows = transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 "select j.job_id, j.job_type, j.target_device_id, d.observed_hostname, j.terminal_reason, j.finished_at "
                         + "from jobs j left join devices d on d.device_id = j.target_device_id "
-                        + "where j.state = 'FAILED' and j.finished_at > {0} order by j.finished_at limit 200",
+                        + "where (j.state = 'FAILED' or (j.job_type = 'cp_cluster_failover' "
+                        + "and j.state = 'OUTCOME_UNKNOWN')) and j.finished_at > {0} "
+                        + "order by j.finished_at limit 200",
                 Timestamp.from(from)));
         if (rows.isEmpty()) {
             return;
@@ -93,7 +95,8 @@ public class NotificationForwarder {
             if (finished.isAfter(newest)) {
                 newest = finished;
             }
-            String device = r.get("observed_hostname", String.class) != null ? r.get("observed_hostname", String.class)
+            String device = "cp_cluster_failover".equals(r.get("job_type", String.class)) ? "CP failover unit"
+                    : r.get("observed_hostname", String.class) != null ? r.get("observed_hostname", String.class)
                     : r.get("target_device_id", String.class);
             String reason = r.get("terminal_reason", String.class);
             lines.add(finished + "  " + r.get("job_type", String.class) + "  " + device + "  "

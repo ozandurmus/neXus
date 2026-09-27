@@ -351,12 +351,16 @@ public final class InventoryCapabilityExecutor {
                 } else {
                     vsInterfaces = CheckPointFwGetifsParser.parse(halves.addrOutput());
                 }
-                execOutput(session, steps.get(2), preferInteractiveShell);
+                String vsHaOutput = execOutput(session, steps.get(2), preferInteractiveShell);
                 contexts.add(new InventoryContext(vsid,
                         toInventoryInterfaces(vsInterfaces),
                         toInventoryRoutes(CheckPointIpRouteParser.parse(halves.routeOutput()))));
-                String vsidRole = haState.perVsidLocalRole().get(vsid);
-                if (vsidRole != null) {
+                String vsidRole = CheckPointHaStateParser.parse(vsHaOutput).role();
+                if ("ACTIVE".equalsIgnoreCase(vsidRole) || "STANDBY".equalsIgnoreCase(vsidRole)) {
+                    haFacts.add(new InventoryHaFact(UUID.randomUUID().toString(), vsid, vsidRole, Optional.empty(),
+                            InventoryHaFact.SOURCE_CP_CPHAPROB_STAT));
+                } else if (haState.perVsidLocalRole().containsKey(vsid)) {
+                    vsidRole = haState.perVsidLocalRole().get(vsid);
                     haFacts.add(new InventoryHaFact(UUID.randomUUID().toString(), vsid, vsidRole, Optional.empty(),
                             InventoryHaFact.SOURCE_CP_VSLS_TABLE));
                 }

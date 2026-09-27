@@ -53,14 +53,20 @@ public record GateRow(
     }
 
     /**
-     * C4 §3.3 step 7: a class 2/3/4 row can never be {@code SIGNED_OFF} by
-     * construction (AGENTS.md "No new class 2, 3 or 4 command"). Enforced
-     * at gate-row creation (here) rather than re-checked per step
-     * resolution.
+     * C4 §3.3 step 7 keeps the class 2/3/4 denylist, except for the four
+     * exact Check Point failover forms approved by the later frozen contract.
      */
     public boolean violatesWriteMarkerDenylist() {
         boolean isSignedOff = signOffState == SignOffState.SIGNED_OFF;
-        boolean isHighClass = actionClass == ActionClass.CLASS_2_OPERATIONAL_STATE_CHANGE
+        boolean isHighClass = (actionClass == ActionClass.CLASS_2_OPERATIONAL_STATE_CHANGE
+                && !("check_point".equals(vendor) && "cp_gaia_gateway".equals(platformRoleScope)
+                    && "expert".equals(shellContext) && "SSH_EXEC".equals(transportKind)
+                    && (("cp_failover_down".equals(gateId) && "clusterXL_admin down".equals(canonicalCommandKey))
+                    || ("cp_failover_up".equals(gateId) && "clusterXL_admin up".equals(canonicalCommandKey))
+                    || ("cp_failover_down_vsid".equals(gateId)
+                        && "bash -lc 'vsenv <VSID> && clusterXL_admin down'".equals(canonicalCommandKey))
+                    || ("cp_failover_up_vsid".equals(gateId)
+                        && "bash -lc 'vsenv <VSID> && clusterXL_admin up'".equals(canonicalCommandKey)))))
                 || actionClass == ActionClass.CLASS_3_CONFIGURATION_WRITE
                 || actionClass == ActionClass.CLASS_4_POLICY_DEPLOYMENT;
         return isSignedOff && isHighClass;

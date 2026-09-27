@@ -59,14 +59,12 @@ public final class GateResolver {
         if (declaredActionClass.isPresent() && declaredActionClass.get() != row.actionClass()) {
             throw new GateActionClassMismatchException(row.gateId(), declaredActionClass.get(), row.actionClass());
         }
-        // Step 7: defensive re-check -- a SIGNED_OFF class-2/3/4 row should
-        // never exist by construction (enforced at gate-row creation), but
-        // resolution never trusts that invariant blindly.
+        // Step 7: defensive re-check, including the exact CP failover exception.
         if (row.violatesWriteMarkerDenylist()) {
             throw new IllegalStateException(
                     "WRITE_MARKER_DENYLIST_VIOLATION: gate " + row.gateId()
                             + " is SIGNED_OFF with action_class=" + row.actionClass()
-                            + " -- no class 2/3/4 command may ever be SIGNED_OFF (AGENTS.md)");
+                            + " -- no unapproved class 2/3/4 command may be SIGNED_OFF");
         }
 
         return new GateResolution.Known(row.gateId(), row.actionClass(), row.timeoutS());

@@ -20,6 +20,13 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public final class SecurityWebMvcConfig implements WebMvcConfigurer {
 
     static final Map<String, String> ACTION_ID_BY_ROUTE = Map.ofEntries(
+            Map.entry("GET /api/v2/cp-failover/units/*", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("POST /api/v2/cp-failover/approvals", ActionRegistry.CP_FAILOVER_APPROVE),
+            Map.entry("GET /api/v2/cp-failover/approvals", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("POST /api/v2/cp-failover/approvals/*/revoke", ActionRegistry.CP_FAILOVER_APPROVE),
+            Map.entry("POST /api/v2/cp-failover/runs", ActionRegistry.CP_FAILOVER_START),
+            Map.entry("GET /api/v2/cp-failover/runs", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("GET /api/v2/cp-failover/runs/*", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("POST /role-bindings/selections", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("GET /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),

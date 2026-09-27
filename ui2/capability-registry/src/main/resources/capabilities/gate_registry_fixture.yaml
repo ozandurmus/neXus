@@ -169,7 +169,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per device per run"
+    max_frequency: "pre/post once per member; cphaprob stat additionally every 3 s for at most 60 s per failover run"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "a standalone gateway reporting no cluster is a result, not an error"
     secret_output_risk: none
@@ -240,7 +240,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per device per run"
+    max_frequency: "once pre and once post per member per failover run"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "no cluster virtual interfaces is a result, not an error"
     secret_output_risk: none
@@ -389,7 +389,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per virtual system per run"
+    max_frequency: "once pre and once post per member per failover run"
     session_reuse_rule: "one session per device per run, VS0 never re-entered"
     unsupported_behavior_ref: "no cluster virtual interfaces for this VS is a result, not an error"
     secret_output_risk: none
@@ -406,7 +406,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per virtual system per run"
+    max_frequency: "pre/post once per member; cphaprob stat additionally every 3 s for at most 60 s per failover run"
     session_reuse_rule: "one session per device per run, VS0 never re-entered"
     unsupported_behavior_ref: "same standalone-result rule as entry 4"
     secret_output_risk: none
@@ -2374,3 +2374,207 @@ gates:
     secret_output_risk: 'interface identity and hardware data; log only masked shape and safe status enum'
     safe_telemetry_fields: []
     source_document_pointer: 'FortiManager 7.4 CLI Reference: fmnetwork interface detail; FORTINET_CONTRACT.md; DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md: diagnostic output/history'
+
+  - gate_id: cp_failover_tablestat
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "cphaprob tablestat"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre and once post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_arp
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "arp -an"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre and once post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_connections
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "fw tab -t connections -s"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre and once post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_traffic
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "cat /proc/net/dev"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "two samples 5 s apart pre and post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_down
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "clusterXL_admin down"
+    action_class: operational-state-change
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once on former active per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_up
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "clusterXL_admin up"
+    action_class: operational-state-change
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once on former active per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_tablestat_vsid
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && cphaprob tablestat'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre and once post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_arp_vsid
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && arp -an'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre and once post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_connections_vsid
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && fw tab -t connections -s'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre and once post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_traffic_vsid
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && cat /proc/net/dev'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "two samples 5 s apart pre and post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_down_vsid
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && clusterXL_admin down'"
+    action_class: operational-state-change
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once on former active per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_up_vsid
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && clusterXL_admin up'"
+    action_class: operational-state-change
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once on former active per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"

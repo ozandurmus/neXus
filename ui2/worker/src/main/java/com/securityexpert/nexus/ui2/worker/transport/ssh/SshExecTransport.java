@@ -59,10 +59,18 @@ public final class SshExecTransport implements DeviceTransport {
 
     private final SshCredentialResolver credentialResolver;
     private final TrustRuleResolver trustRuleResolver;
+    private final boolean derivedOnly;
 
     public SshExecTransport(SshCredentialResolver credentialResolver, TrustRuleResolver trustRuleResolver) {
+        this(credentialResolver, trustRuleResolver, false);
+    }
+
+    /** Failover commands retain raw output only in memory for immediate parsing. */
+    public SshExecTransport(SshCredentialResolver credentialResolver, TrustRuleResolver trustRuleResolver,
+            boolean derivedOnly) {
         this.credentialResolver = Objects.requireNonNull(credentialResolver, "credentialResolver");
         this.trustRuleResolver = Objects.requireNonNull(trustRuleResolver, "trustRuleResolver");
+        this.derivedOnly = derivedOnly;
     }
 
     @Override
@@ -80,7 +88,7 @@ public final class SshExecTransport implements DeviceTransport {
     private ConnectResult connectRaw(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
         if (spec.trustRuleRef() == null || spec.trustRuleRef().isBlank()) {
             LOG.log(System.Logger.Level.WARNING, "SSH connection aborted for {0}:{1}: trust rule ref is missing",
-                    target.host(), target.port());
+                    derivedOnly ? "<redacted>" : target.host(), target.port());
             return new ConnectResult.HostKeyRejected("TRUST_ENTRY_MISSING");
         }
         var algorithms = trustRuleResolver.authorizedAlgorithms(spec.trustRuleRef(), target.host(), target.port());
@@ -88,14 +96,15 @@ public final class SshExecTransport implements DeviceTransport {
             return new ConnectResult.HostKeyRejected("TRUST_ENTRY_MISSING");
         }
         SshCredentialMaterial credential = credentialResolver.resolve(spec.credentialRef());
-        JobTranscriptScope.add("ssh", "note", "connect ssh " + target.host() + ":" + target.port() + " as " + credential.username());
+        if (!derivedOnly) JobTranscriptScope.add("ssh", "note", "connect ssh " + target.host() + ":" + target.port() + " as " + credential.username());
         // Per-connect state: a rejection is determined by the key hook, never exception substrings.
         String[] trustFailure = {null};
         boolean[] trusted = {false};
         long connectStartMs = System.currentTimeMillis();
         LOG.log(System.Logger.Level.INFO,
                 "[SSH_CONNECT] START target={0}:{1} user={2} timeout={3}ms",
-                target.host(), target.port(), credential.username(), timeout.toMillis());
+                derivedOnly ? "<redacted>" : target.host(), target.port(),
+                derivedOnly ? "<redacted>" : credential.username(), timeout.toMillis());
 
         // Fast-fail socket pre-check: verify port reachability within 10000ms before blocking in JSch handshake
         try (java.net.Socket preSocket = new java.net.Socket()) {
@@ -105,13 +114,15 @@ public final class SshExecTransport implements DeviceTransport {
             long preElapsed = System.currentTimeMillis() - preStart;
             LOG.log(System.Logger.Level.INFO,
                     "[SSH_CONNECT] TCP pre-connect SUCCESS in {0}ms for {1}:{2}",
-                    preElapsed, target.host(), target.port());
+                    preElapsed, derivedOnly ? "<redacted>" : target.host(), target.port());
         } catch (java.io.IOException networkFailure) {
             long preElapsed = System.currentTimeMillis() - connectStartMs;
             LOG.log(System.Logger.Level.WARNING,
                     "[SSH_CONNECT] TCP pre-connect FAILED after {0}ms for {1}:{2}: {3}",
-                    preElapsed, target.host(), target.port(), networkFailure.getMessage());
-            return new ConnectResult.TimedOut("tcp_connect_timeout: port " + target.port() + " unreachable (" + networkFailure.getMessage() + ")");
+                    preElapsed, derivedOnly ? "<redacted>" : target.host(), target.port(),
+                    derivedOnly ? networkFailure.getClass().getSimpleName() : networkFailure.getMessage());
+            return new ConnectResult.TimedOut(derivedOnly ? "TCP_CONNECT_FAILED"
+                    : "tcp_connect_timeout: port " + target.port() + " unreachable (" + networkFailure.getMessage() + ")");
         }
 
         Session session = null;
@@ -134,7 +145,7 @@ public final class SshExecTransport implements DeviceTransport {
             long jschElapsed = System.currentTimeMillis() - jschStart;
             LOG.log(System.Logger.Level.INFO,
                     "[SSH_CONNECT] AUTHENTICATED for {0}:{1} in {2}ms (jsch={3}ms)",
-                    target.host(), target.port(), totalConnectElapsed, jschElapsed);
+                    derivedOnly ? "<redacted>" : target.host(), target.port(), totalConnectElapsed, jschElapsed);
 
             SshTransportSession wrapped = new SshTransportSession(UUID.randomUUID().toString(), session);
             return new ConnectResult.Authenticated(wrapped);
@@ -142,31 +153,34 @@ public final class SshExecTransport implements DeviceTransport {
             long totalConnectElapsed = System.currentTimeMillis() - connectStartMs;
             LOG.log(System.Logger.Level.WARNING,
                     "[SSH_CONNECT] FAILED for {0}:{1} after {2}ms: {3}",
-                    target.host(), target.port(), totalConnectElapsed, e.getMessage());
+                    derivedOnly ? "<redacted>" : target.host(), target.port(), totalConnectElapsed,
+                    derivedOnly ? e.getClass().getSimpleName() : e.getMessage());
             if (session != null) {
                 session.disconnect();
             }
             if (trustFailure[0] != null) {
+                String safeTrustFailure = derivedOnly && trustFailure[0].startsWith("host_key_mismatch:")
+                        ? "HOST_KEY_MISMATCH" : trustFailure[0];
                 LOG.log(System.Logger.Level.WARNING, "SSH connection aborted for {0}:{1}: {2}",
-                        target.host(), target.port(), trustFailure[0]);
-                return new ConnectResult.HostKeyRejected(trustFailure[0]);
+                        derivedOnly ? "<redacted>" : target.host(), target.port(), safeTrustFailure);
+                return new ConnectResult.HostKeyRejected(safeTrustFailure);
             }
             if (algorithms.isPresent()) {
-                return discoveryFailure(e, trustFailure[0], trusted[0]);
+                return discoveryFailure(e, derivedOnly ? null : trustFailure[0], trusted[0]);
             }
             String message = String.valueOf(e.getMessage());
             String lowerMessage = message.toLowerCase(java.util.Locale.ROOT);
             if (lowerMessage.contains("hostkey") || lowerMessage.contains("reject")) {
-                return new ConnectResult.HostKeyRejected(message);
+                return new ConnectResult.HostKeyRejected(derivedOnly ? "HOST_KEY_REJECTED" : message);
             }
             if (isNetworkFailure(e) || lowerMessage.contains("timeout") || lowerMessage.contains("timed out")
                     || message.contains("Auth cancel")) {
                 if (lowerMessage.contains("read timed out")) {
                     return new ConnectResult.TimedOut("ssh_banner_timeout: remote host did not respond to SSH banner exchange");
                 }
-                return new ConnectResult.TimedOut("ssh_connect_timeout: " + message);
+                return new ConnectResult.TimedOut(derivedOnly ? "SSH_CONNECT_TIMEOUT" : "ssh_connect_timeout: " + message);
             }
-            return new ConnectResult.AuthenticationFailed(message);
+            return new ConnectResult.AuthenticationFailed(derivedOnly ? "AUTH_FAILED" : message);
         } finally {
             if (session != null && !session.isConnected()) {
                 session.disconnect();
@@ -202,7 +216,7 @@ public final class SshExecTransport implements DeviceTransport {
     @Override
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
         ExecResult result = execRaw(session, spec, timeout);
-        recordAnswer(result);
+        if (!derivedOnly) recordAnswer(result);
         return result;
     }
 
@@ -213,7 +227,7 @@ public final class SshExecTransport implements DeviceTransport {
         long execStartMs = System.currentTimeMillis();
         LOG.log(System.Logger.Level.INFO,
                 "[SSH_EXEC] START cmd=\"{0}\" timeout={1}ms",
-                spec.command(), timeout.toMillis());
+                derivedOnly ? "<redacted>" : spec.command(), timeout.toMillis());
         ChannelExec channel = null;
         try {
             channel = (ChannelExec) sshSession.jschSession().openChannel("exec");
@@ -223,7 +237,7 @@ public final class SshExecTransport implements DeviceTransport {
             InputStream in = channel.getInputStream();
             InputStream err = channel.getErrStream();
             channel.connect((int) timeout.toMillis());
-            JobTranscriptScope.add("ssh", "command", spec.command());
+            if (!derivedOnly) JobTranscriptScope.add("ssh", "command", spec.command());
 
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             ByteArrayOutputStream errors = new ByteArrayOutputStream();
@@ -239,7 +253,8 @@ public final class SshExecTransport implements DeviceTransport {
                     if (firstByteMs < 0) {
                         firstByteMs = System.currentTimeMillis() - execStartMs;
                         LOG.log(System.Logger.Level.DEBUG,
-                                "[SSH_EXEC] FIRST_DATA cmd=\"{0}\" after {1}ms", spec.command(), firstByteMs);
+                                "[SSH_EXEC] FIRST_DATA cmd=\"{0}\" after {1}ms",
+                                derivedOnly ? "<redacted>" : spec.command(), firstByteMs);
                     }
                     buffer.write(chunk, 0, read);
                 }
@@ -257,19 +272,19 @@ public final class SshExecTransport implements DeviceTransport {
                     }
                     long durationMs = System.currentTimeMillis() - execStartMs;
                     String outStr = buffer.toString(java.nio.charset.StandardCharsets.UTF_8);
-                    if (errors.size() > 0) JobTranscriptScope.add("ssh", "answer", errors.toString(java.nio.charset.StandardCharsets.UTF_8));
+                    if (!derivedOnly && errors.size() > 0) JobTranscriptScope.add("ssh", "answer", errors.toString(java.nio.charset.StandardCharsets.UTF_8));
                     int lines = outStr.split("\r\n|\r|\n").length;
                     LOG.log(System.Logger.Level.INFO,
                             "[SSH_EXEC] COMPLETED cmd=\"{0}\" in {1}ms (exit={2}, bytes={3}, lines={4})",
-                            spec.command(), durationMs, channel.getExitStatus(), buffer.size(), lines);
+                            derivedOnly ? "<redacted>" : spec.command(), durationMs, channel.getExitStatus(), buffer.size(), lines);
                     return new ExecResult.Completed(outStr, channel.getExitStatus());
                 }
                 if (System.currentTimeMillis() > deadline) {
                     long durationMs = System.currentTimeMillis() - execStartMs;
                     LOG.log(System.Logger.Level.WARNING,
                             "[SSH_EXEC] TIMEOUT cmd=\"{0}\" HUNG for {1}ms! (timeout={2}ms, bytesReceived={3})",
-                            spec.command(), durationMs, timeout.toMillis(), buffer.size());
-                    if (buffer.size() > 0) JobTranscriptScope.add("ssh", "answer",
+                            derivedOnly ? "<redacted>" : spec.command(), durationMs, timeout.toMillis(), buffer.size());
+                    if (!derivedOnly && buffer.size() > 0) JobTranscriptScope.add("ssh", "answer",
                             buffer.toString(java.nio.charset.StandardCharsets.UTF_8));
                     return new ExecResult.TimedOut();
                 }
@@ -279,9 +294,10 @@ public final class SshExecTransport implements DeviceTransport {
             long durationMs = System.currentTimeMillis() - execStartMs;
             LOG.log(System.Logger.Level.WARNING,
                     "[SSH_EXEC] FAILED cmd=\"{0}\" after {1}ms: {2}",
-                    spec.command(), durationMs, e.getMessage());
+                    derivedOnly ? "<redacted>" : spec.command(), durationMs,
+                    derivedOnly ? e.getClass().getSimpleName() : e.getMessage());
             Thread.currentThread().interrupt();
-            return new ExecResult.ChannelFailed(String.valueOf(e.getMessage()));
+            return new ExecResult.ChannelFailed(derivedOnly ? "CHANNEL_FAILED" : String.valueOf(e.getMessage()));
         } finally {
             if (channel != null) {
                 channel.disconnect();
@@ -649,7 +665,8 @@ public final class SshExecTransport implements DeviceTransport {
                     if (decision == HostKeyVerifier.Decision.MISMATCH) {
                         LOG.log(System.Logger.Level.WARNING,
                                 "SSH host key mismatch for {0}:{1}: presented fingerprint {2}",
-                                target.host(), target.port(), presented);
+                                derivedOnly ? "<redacted>" : target.host(), target.port(),
+                                derivedOnly ? "<redacted>" : presented);
                     }
                     return trusted[0] ? OK : NOT_INCLUDED;
                 } catch (JSchException e) {

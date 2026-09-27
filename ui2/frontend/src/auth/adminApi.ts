@@ -1568,3 +1568,14 @@ export interface EstateView {
 export function getOverview(): Promise<OverviewView> {
   return call("/api/v2/overview", "GET");
 }
+
+export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
+export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN";
+export interface CpFailoverUnit { unitId: string; clusterId: string; label: string }
+export interface CpFailoverApproval { approvalId: string; windowFrom: string; windowUntil: string; reason: string; revokedAt: string | null }
+export interface CpFailoverRun {
+  runId: string; approvalId: string; scheduledFor: string; state: CpFailoverState; step: string;
+  outcome: string | null; failedCheck: string | null; message: string | null; steps: string[];
+}
+export interface CpFailoverCheck { phase: "pre" | "post"; member: string; checkNo: 1 | 2 | 3 | 5 | 6 | 8; status: CpFailoverCheckStatus; derived: string; observedAt: string }
+export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverCheck[] }
