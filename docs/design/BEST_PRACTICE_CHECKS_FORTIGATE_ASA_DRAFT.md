@@ -94,3 +94,9 @@ These are **not** approvals to run a new command. The read/provenance would need
 - [C4] Cisco, [ASA Command Reference: SSH version and timeout](https://www.cisco.com/c/en/us/td/docs/security/asa/asa-cli-reference/S/asa-command-ref-S/so-st-commands.html).
 - [C5] Cisco, [ASA 9.20 VPN CLI Guide: General VPN Parameters](https://www.cisco.com/c/en/us/td/docs/security/asa/asa920/configuration/vpn/asa-920-vpn-config/vpn-params.html).
 - [C6] Cisco, [ASA 9.20 General Operations: Failover for High Availability](https://www.cisco.com/content/en/us/td/docs/security/asa/asa920/configuration/general/asa-920-general-config.pdf).
+
+## Product Owner direction (2026-09-27)
+"CP ve PAN'da uyguladığın gibi hepsi için değerlendirebiliriz; yakalayabiliyorsak çekelim o veriyi Forti'de ve ASA'da."
+Implement the configuration-evaluable candidates for FortiGate and Cisco ASA the same way Check Point and Palo Alto
+controls work today; checks needing runtime reads wait for their command approval. Severity and framework mapping follow
+the closest existing Check Point / Palo Alto control until the PO adjusts them.

@@ -69,3 +69,16 @@ Official command references support the *candidate command names*, not this esta
 4. Should the first scope include VSX physical parent only, or per-VS readiness where `D-V9b` is resolved? VSLS action scope remains a separate decision; VSID is never an execution identity.
 5. Confirm that PAN A/A is excluded **from this A/P battery while the scope decision stays open**, with no standby inference from `active-secondary`; decide its eventual first-class/deferred treatment separately.
 6. What official vendor and approved real-environment evidence closes the open CP/PAN field semantics, PAN reciprocal B2 pair identity, and the existing fabricated-fact gap before any positive result is shown?
+
+## Product Owner decisions (2026-09-27)
+Recorded from the Product Owner's answer; the rest of this document stays DRAFT.
+1. **When the checks run:** immediately before a failover, fresh, as part of the failover request; a failover is
+   performed only if they are suitable at that moment (matches queue item `failover_recheck_on_request`). A displayed
+   result is never the decision.
+2. **Continuous active/standby monitoring:** valued -- the PO wants active/standby watched continuously, e.g. over SNMP.
+   SNMP is a new transport and credential type for neXus; it needs its own design (SNMP version, v3 credentials in the
+   credential store, the OIDs per vendor, polling interval) and PO approval before implementation.
+3. **Vendors:** evaluate the same way for every vendor where the data can be captured -- FortiGate and Cisco ASA
+   included, not only Check Point and Palo Alto.
+Open (still for the PO): which checks are blocking in the first release, and which new device reads are approved
+(questions 1, 2, 4-6 above).

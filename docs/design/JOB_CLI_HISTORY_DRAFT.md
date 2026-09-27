@@ -1,6 +1,7 @@
 # Job CLI history -- every job's device conversation, step by step (DRAFT)
 
-**Status:** DRAFT -- for Product Owner decision (questions in §6). Not implementation authority until ratified.
+**Status:** RATIFIED -- Product Owner decisions of 2026-09-27 in §7 are implementation authority; §2-§5 are read
+together with §7, which wins where they differ.
 
 Product Owner, 2026-09-27: "Job history istiyorum. Her backup işi Backbox'ta loglanıyor, CLI logu tutuluyor. Bunun gibi
 bir şeyi görmek istiyorum." -- for every job, see what neXus said to the device and what came back, step by step, the
@@ -61,3 +62,21 @@ Each is one Codex task, reviewed and deployed one at a time.
 2. If B/C: 30 days retention acceptable? Who may see excerpts (security_admin only, or also aiview masked)?
 3. Should the history also list steps neXus decided NOT to send (refused before contact: missing gate, wrong role),
    so a refused job shows why it never reached the device?
+
+## 7. Product Owner decisions (2026-09-27, RATIFIED)
+The Product Owner: "Her bir backup işi için açılan SSH ya da atılan curl için işin tam loglanmasını istiyorum. Maske vs
+yok. RBAC zaten bunu superadmin ve backup admine bağlar."
+1. **Scope: every backup job, every vendor.** Every SSH session (each command sent and the complete answer) and every
+   HTTPS request (method, path, status, headers without credentials, and the complete response body or, for a binary
+   download, its size and digest) of a backup job is recorded as that job's transcript. Other job types keep §2's
+   facts-only steps until the PO extends this.
+2. **No masking in the stored transcript.** It is the full device conversation, like Backbox's CLI log.
+3. **Access: `role:security_admin` and `role:backup_admin` only.** Never `role:replay_viewer` (aiview) or any other
+   role; the endpoint refuses them, and the transcript is never part of a masked/aiview response.
+4. **Storage: the existing encrypted artefact store**, one transcript artefact per job, linked from the job; retention
+   follows the job's backup artefact retention. This is the explicit evidence contract the raw-evidence law requires
+   (AGENTS.md "Raw-evidence law": retained because this contract authorizes it; privacy handling = encryption at rest +
+   the two roles above).
+5. **What is never recorded, even here:** secrets neXus itself types or sends (passwords answered to prompts,
+   Authorization/Cookie headers, session tokens, API keys) -- they are replaced by `[credential]` at the point of
+   capture, because they are neXus's own credentials, not the device's conversation.
