@@ -63,3 +63,7 @@ Measured read-only on 2026-09-27 (HOST-A: Ubuntu 26.04.1 LTS, single-node k3s, n
    loopback allowed, everything else dropped (rate-limited log `nexus-fw-drop`). Applied with a 5-minute automatic
    rollback armed; verified (new SSH, HTTPS 200, HTTP 301, 6443/10250 closed from outside, pods and services healthy)
    before the rollback was cancelled.
+   -> **Done 2026-09-27 (H3):** `secrets-encryption: true` in `/etc/rancher/k3s/config.yaml`, keys rotated and every
+   Secret re-encrypted (aescbc); verified no Secret value appears in clear in the datastore. A pre-change copy of the
+   datastore (plaintext) is kept in `/var/backups/k3s-before-secrets-encryption-*` for rollback; to be deleted, with
+   the PO's approval, after a few days of normal operation.
