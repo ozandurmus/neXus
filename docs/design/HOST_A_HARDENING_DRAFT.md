@@ -99,3 +99,9 @@ sweep from the VPN was stopped at the PO's request.)
   process), unused protocols dccp/sctp/rds/tipc blocked (`nexus-unused-protocols.modprobe.conf`), fail2ban sshd jail
   (5 tries / 10 min -> 15 min ban, nftables). k3s is already the newest stable (v1.36.4); its bundled components'
   CVEs wait for the next stable release. Open: AIDE, legal banner text, local registry and build executor images.
+- **Done 2026-09-27:** legal banner (`deploy/hosta/nexus-issue.net` -> /etc/issue, /etc/issue.net, sshd `Banner`); the
+  managed firewalls carry no custom banner text to reuse (Check Point banner on with the vendor default, FortiGate
+  off, ASA none), so a neutral EN/TR text without the company name. AIDE with `deploy/hosta/nexus-aide.conf`
+  (OS and configuration; k3s/container, log, backup and build paths excluded), daily check by `dailyaidecheck.timer`.
+  Local registry 2.8.3 -> 3.x pinned by digest (`deploy/ui2-image-build/05-registry.yaml`); pull and push verified by
+  a full deploy. Build executor (kaniko, archived upstream): accepted risk for now -- runs only during builds, in-cluster.
