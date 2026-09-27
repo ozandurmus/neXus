@@ -161,4 +161,15 @@ class InteractiveShellSessionReadTest {
         var shell = new InteractiveShellSession(in, out, "FGT-A # ");
         org.junit.jupiter.api.Assertions.assertTrue(shell.relearnPrompt(100));
     }
+
+    @org.junit.jupiter.api.Test
+    void aPromptRepaintedTwiceOnOneLineIsLearnedOnce() {
+        org.junit.jupiter.api.Assertions.assertEquals("admin@fw-invented(active)>",
+                InteractiveShellSession.singlePrompt("admin@fw-invented(active)> admin@fw-invented(active)>"));
+        org.junit.jupiter.api.Assertions.assertEquals("FGT-INVENTED #", InteractiveShellSession.singlePrompt("FGT-INVENTED #"));
+        org.junit.jupiter.api.Assertions.assertEquals("FGT-INVENTED # FGT-INVENTED (global) #",
+                InteractiveShellSession.singlePrompt("FGT-INVENTED # FGT-INVENTED (global) #"));
+        org.junit.jupiter.api.Assertions.assertEquals("[Expert@cp-invented:0]#",
+                InteractiveShellSession.singlePrompt("[Expert@cp-invented:0]#"));
+    }
 }

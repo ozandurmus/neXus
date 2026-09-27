@@ -408,10 +408,24 @@ final class InteractiveShellSession implements AutoCloseable {
             }
             char last = line.charAt(line.length() - 1);
             if (last == '>' || last == '#' || last == '$') {
-                return line;
+                return singlePrompt(line);
             }
         }
         return null;
+    }
+
+    /**
+     * A repainted prompt can land twice on one line ("u@fw(active)> u@fw(active)>", PAN-OS after `set cli pager off`,
+     * measured 2026-09-27); learning the doubled line made every later command wait for a prompt that never came.
+     * When the line is the same prompt repeated, keep one; any other line is returned unchanged.
+     */
+    static String singlePrompt(String line) {
+        String[] parts = line.split("(?<=[>#$])\\s+");
+        if (parts.length < 2) return line;
+        for (String part : parts) {
+            if (!part.equals(parts[0])) return line;
+        }
+        return parts[parts.length - 1];
     }
 
     static String shapeOf(String value) {
