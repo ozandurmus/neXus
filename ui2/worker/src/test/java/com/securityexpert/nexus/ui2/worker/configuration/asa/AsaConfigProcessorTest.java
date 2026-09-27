@@ -70,12 +70,12 @@ class AsaConfigProcessorTest {
                 "username invented password synthetic", "enable password synthetic", "aaa authentication ssh console LOCAL",
                 "aaa-server invented protocol radius", "ssl server-version tlsv1.2", "snmp-server community synthetic",
                 "logging enable", "failover", "monitor-interface inside", "prompt hostname",
-                "interface GigabitEthernet0/0", "mtu outside 1500", "route outside 0.0.0.0 0.0.0.0 192.0.2.254",
+                "interface GigabitEthernet0/0", "route outside 0.0.0.0 0.0.0.0 192.0.2.254",
                 "ipv6 route outside ::/0 2001:db8::1", "router ospf 1", "no http server enable",
                 "no logging timestamp", "no failover lan interface"};
         String[] dropped = {"object network INVENTED", "object-group network INVENTED", "access-list INVENTED permit ip any any",
                 "nat (inside,outside) source static INVENTED INVENTED", "crypto ca certificate chain INVENTED",
-                "tunnel-group INVENTED type remote-access", "webvpn"};
+                "tunnel-group INVENTED type remote-access", "webvpn", "mtu outside 1500"};
         StringBuilder raw = new StringBuilder();
         for (String line : allowed) raw.append(line).append("\n child [withheld]\n");
         for (String line : dropped) raw.append(line).append("\n secret [withheld]\n");

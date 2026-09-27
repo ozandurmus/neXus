@@ -30,7 +30,7 @@ public final class AsaConfigProcessor {
             Map.entry("ssl", "Management access"), Map.entry("snmp-server", "SNMP"),
             Map.entry("logging", "Logging"), Map.entry("failover", "Failover"),
             Map.entry("monitor-interface", "Failover"), Map.entry("prompt", "Failover"),
-            Map.entry("interface", "Interfaces"), Map.entry("mtu", "Interfaces"),
+            Map.entry("interface", "Interfaces"), // mtu: not wanted (PO 2026-09-27)
             Map.entry("route", "Routing"), Map.entry("ipv6 route", "Routing"), Map.entry("router", "Routing"));
 
     public record Processed(String canonicalHash, int withheldLineCount, String sanitizedText,

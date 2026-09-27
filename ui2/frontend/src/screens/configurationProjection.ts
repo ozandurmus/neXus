@@ -475,7 +475,7 @@ const ASA_PREFIX_GROUPS: Readonly<Record<string, string>> = {
   username: "Management access", enable: "Management access", aaa: "Management access",
   "aaa-server": "Management access", ssl: "Management access", "snmp-server": "SNMP", logging: "Logging",
   failover: "Failover", "monitor-interface": "Failover", prompt: "Failover", interface: "Interfaces",
-  mtu: "Interfaces", route: "Routing", "ipv6 route": "Routing", router: "Routing",
+  route: "Routing", "ipv6 route": "Routing", router: "Routing",
 };
 
 /** ASA's sanitized running configuration: indented lines belong to the preceding top-level block. */
