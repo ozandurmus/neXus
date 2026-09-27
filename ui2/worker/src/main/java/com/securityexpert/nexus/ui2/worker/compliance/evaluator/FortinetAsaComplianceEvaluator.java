@@ -117,9 +117,13 @@ public final class FortinetAsaComplianceEvaluator {
                 closed = false;
             } else if (line.equals("next") || line.equals("end")) {
                 if (stack.isEmpty()) { valid = false; continue; }
+                boolean closesVdom = line.equals("end") && stack.size() == 2
+                        && stack.getFirst().equals("config vdom") && stack.getLast().startsWith("edit ");
                 String top = stack.removeLast();
                 open.removeLast();
-                if ((line.equals("next") && !top.startsWith("edit ")) || (line.equals("end") && !top.startsWith("config "))) valid = false;
+                if ((line.equals("next") && !top.startsWith("edit "))
+                        || (line.equals("end") && !top.startsWith("config ") && !closesVdom)) valid = false;
+                if (closesVdom) { stack.removeLast(); open.removeLast(); }
                 current = open.isEmpty() ? null : open.getLast();
                 closed = stack.isEmpty() && line.equals("end");
             } else if (!line.isEmpty() && !line.startsWith("#")) {

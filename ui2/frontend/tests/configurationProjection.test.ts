@@ -3,6 +3,14 @@ import { describe, expect, it } from "vitest";
 import { filterProjection, projectAsa, projectCheckPoint, projectCluster, projectFortiGate, projectPaloAlto, projectProxySg } from "../src/screens/configurationProjection";
 
 describe("FortiGate projection", () => {
+  it("closes a final VDOM with one end and restores global context", () => {
+    const text = `config vdom\nedit root\nnext\nend\nconfig global\nconfig system global\nset timezone 04\nend\nend\nconfig vdom\nedit root\nconfig system settings\nset opmode nat\nend\nconfig router bgp\nset as 65001\nend\nend\nconfig system dns\nset primary 192.0.2.53\nend\n`;
+    const rows = projectFortiGate(text).sections.flatMap((section) => section.rows);
+    expect(rows.find((row) => row.setting === "Settings › Opmode")?.context).toBe("root");
+    expect(rows.find((row) => row.setting === "BGP › As")?.context).toBe("root");
+    expect(rows.find((row) => row.setting === "DNS › Primary")?.context).toBeNull();
+  });
+
   it("groups approved sections and hides excluded blocks from older runs", () => {
     const text = `config global
 config system global

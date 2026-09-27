@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor;
 import com.securityexpert.nexus.ui2.worker.compliance.evaluator.FortinetAsaComplianceEvaluator;
 import com.securityexpert.nexus.ui2.worker.compliance.model.Verdict;
+import com.securityexpert.nexus.ui2.configuration.FortiGateConfigurationAllowlist;
 
 class FortiGateConfigProcessorTest {
 
@@ -165,6 +166,65 @@ class FortiGateConfigProcessorTest {
         assertEquals(show + show, FortiGateConfigProcessor.replaceFullSection(show + show, "system global", full));
         assertEquals(CONFIG, FortiGateConfigProcessor.replaceFullSection(CONFIG, "system interface",
                 "config system interface\nedit \"port1\"\nset allowaccess ssh\nnext\nend\n"));
+    }
+
+    @Test
+    void singleEndClosesFinalVdomAndAllowsGlobalFullSectionMerge() {
+        String show = """
+                #config-version=synthetic
+                config vdom
+                edit root
+                next
+                end
+                config global
+                config system global
+                set admin-telnet enable
+                end
+                config system interface
+                edit port1
+                set allowaccess http
+                next
+                end
+                config system ha
+                set mode standalone
+                end
+                end
+                config vdom
+                edit root
+                config system settings
+                set opmode nat
+                end
+                config router bgp
+                set as 65001
+                end
+                end
+                """;
+        String merged = FortiGateConfigProcessor.replaceFullSection(show, "system global",
+                "config system global\nset admin-telnet disable\nset admin-ssh-v1 disable\n"
+                        + "set admin-https-ssl-versions tlsv1-2 tlsv1-3\nend\n");
+        merged = FortiGateConfigProcessor.replaceFullSection(merged, "system interface",
+                "config system interface\nedit port1\nset allowaccess ssh https\nnext\nend\n");
+        merged = FortiGateConfigProcessor.replaceFullSection(merged, "system ha",
+                "config system ha\nset mode a-p\nset hbdev \"ha1\" 50\nend\n");
+        assertEquals(1, merged.split("config system global", -1).length - 1);
+        assertEquals(1, merged.split("config system interface", -1).length - 1);
+        assertEquals(1, merged.split("config system ha", -1).length - 1);
+        assertTrue(merged.contains("config global\n#nexus-full-configuration system global\n"));
+        assertTrue(merged.endsWith("config router bgp\nset as 65001\nend\nend\n"));
+
+        String filtered = FortiGateConfigurationAllowlist.filter(merged).text();
+        assertTrue(filtered.endsWith("config router bgp\nset as 65001\nend\nend\n"));
+        var processed = FortiGateConfigProcessor.process(merged);
+        assertTrue(processed.index().stream().anyMatch(e -> e.context().equals("root") && e.section().equals("router bgp")));
+        for (String id : new String[] {"fg_global_telnet_disabled", "fg_ssh_v1_disabled", "fg_admin_tls_minimum",
+                "fg_admin_no_cleartext", "fg_ha_heartbeat_defined"}) {
+            assertEquals(Verdict.PASS, verdict(processed.sanitizedText(), id), id);
+        }
+
+        String invalid = merged.replace("set as 65001\nend\nend\n", "edit invented\nset as 65001\nend\nend\nend\n");
+        assertEquals(Verdict.UNKNOWN, verdict(invalid, "fg_global_telnet_disabled"));
+        assertEquals(invalid, FortiGateConfigProcessor.replaceFullSection(invalid, "system global",
+                "config system global\nset admin-telnet disable\nend\n"));
     }
 
     private static Verdict verdict(String text, String id) {

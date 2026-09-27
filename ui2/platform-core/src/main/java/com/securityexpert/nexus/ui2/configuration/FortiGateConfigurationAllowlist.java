@@ -91,8 +91,11 @@ public final class FortiGateConfigurationAllowlist {
                 if (visible) out.append(line).append('\n');
             } else if (t.equals("end") || t.equals("next")) {
                 if (!stack.isEmpty()) {
+                    boolean closesVdom = t.equals("end") && stack.size() == 2
+                            && stack.getFirst().name.equals("vdom") && stack.getLast().name.startsWith("edit ");
                     Frame frame = stack.removeLast();
                     if (frame.emitted) out.append(line).append('\n');
+                    if (closesVdom) stack.removeLast();
                 }
             } else {
                 if (visible) out.append(line).append('\n');

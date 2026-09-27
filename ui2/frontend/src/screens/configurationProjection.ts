@@ -436,8 +436,10 @@ export function projectFortiGate(text: string): Projection {
       if (inVdomList && stack.length === 1) vdom = t.slice(5).trim().replace(/^"|"$/g, "");
       stack.push("edit " + t.slice(5).trim());
     } else if (t === "next" || t === "end") {
+      const closesVdom = t === "end" && stack.length === 2 && stack[0] === "vdom" && stack[1].startsWith("edit ");
       const popped = stack.pop();
-      if (t === "end" && popped === "vdom" && stack.length === 0) { inVdomList = false; vdom = null; }
+      if (closesVdom) stack.pop();
+      if (t === "end" && (closesVdom || popped === "vdom" && stack.length === 0)) { inVdomList = false; vdom = null; }
     } else if (t.startsWith("set ") || t.startsWith("unset ")) {
       const outer = sectionName();
       if (!outer) continue;

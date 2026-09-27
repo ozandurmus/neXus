@@ -97,9 +97,12 @@ public final class FortiGateConfigProcessor {
                 starts.add(i);
             } else if (line.equals("end") || line.equals("next")) {
                 if (stack.isEmpty()) return null;
+                boolean closesVdom = line.equals("end") && stack.size() == 2
+                        && stack.getFirst().equals("config vdom") && stack.getLast().startsWith("edit ");
                 String opened = stack.removeLast();
                 int start = starts.removeLast();
-                if (line.equals("end") != opened.startsWith("config ")) return null;
+                if (!closesVdom && line.equals("end") != opened.startsWith("config ")) return null;
+                if (closesVdom) { stack.removeLast(); starts.removeLast(); }
                 if (opened.equals("config " + section)) {
                     if (!stack.isEmpty() && !(stack.size() == 1 && stack.getFirst().equals("config global")))
                         return null;
@@ -157,8 +160,11 @@ public final class FortiGateConfigProcessor {
                 stack.push("edit " + t.substring(5).strip());
             } else if (t.equals("next") || t.equals("end")) {
                 if (!stack.isEmpty()) {
+                    boolean closesVdom = t.equals("end") && stack.size() == 2
+                            && stack.peekLast().equals("vdom") && stack.peek().startsWith("edit ");
                     String popped = stack.pop();
-                    if (t.equals("end") && popped.equals("vdom") && stack.isEmpty()) {
+                    if (closesVdom) stack.pop();
+                    if (t.equals("end") && (closesVdom || popped.equals("vdom") && stack.isEmpty())) {
                         inVdomList = false;
                         vdom = "global";
                     }
