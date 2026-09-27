@@ -132,12 +132,12 @@ public final class GateChainInterceptor implements HandlerInterceptor {
                 } else {
                     replayViewer = false;
                     try {
-                        if (gateChain != null) {
-                            replayViewer = gateChain.isReplayViewer(proceed.actorFingerprint());
-                        } else {
+                        if (localIdentityResolver != null && localRoleTokenResolver != null) {
                             var identity = localIdentityResolver.resolve(proceed.actorFingerprint());
                             replayViewer = identity.isPresent() && localRoleTokenResolver.resolve(identity.get().localIdentityId())
                                     .contains(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER);
+                        } else {
+                            replayViewer = gateChain.isReplayViewer(proceed.actorFingerprint());
                         }
                         if (replayViewerBySession.size() > 10_000) {
                             replayViewerBySession.clear();
