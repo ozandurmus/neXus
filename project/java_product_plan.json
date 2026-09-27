@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "reviewed_at": "2026-09-23",
-  "reviewed_current_build": "NXS-LOCAL-0368",
+  "reviewed_at": "2026-09-27",
+  "reviewed_current_build": "NXS-LOCAL-0370",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -216,7 +216,29 @@
     "test_fixture_realistic_names_cleanup": "java_debt",
     "aiview_masked_readonly_admin": "java_feature",
     "m3_design_alignment_review": "java_feature",
-    "version_advisory_exposure": "java_feature"
+    "version_advisory_exposure": "java_feature",
+    "infoblox_member_facts": "java_feature",
+    "https_inventory_collect_radware": "java_feature",
+    "https_configuration_collect": "java_feature",
+    "ui_device_workspace_and_overview": "java_feature",
+    "asa_fortinet_cluster_view": "java_feature",
+    "asa_fortinet_configuration_plane": "java_feature",
+    "backup_remaining_vendors": "java_feature",
+    "radware_cc_identity_and_defensepro_reads": "java_feature",
+    "radware_defensepro_getcfg_measurement": "java_feature",
+    "mds_ha_second_mds_read": "java_feature",
+    "cp_spark_backup_settings_sftp": "java_feature",
+    "fmg_link_state_diagnose_nic": "java_feature",
+    "cp_backup_empty_status_poll_loop": "java_debt",
+    "cp_management_server_collect_duration": "java_debt",
+    "deploy_manifest_tests_eight_failures": "java_debt",
+    "hosta_rebuild_real_env_acceptance": "agent_operations",
+    "scheduled_fleet_backup_enable_decision": "agent_operations",
+    "hosta_export_include_build_namespace": "agent_operations",
+    "run_build_sets_configuration_image": "agent_operations",
+    "corporate_inspection_ca_verify_with_it": "agent_operations",
+    "old_export_copies_disposal": "agent_operations",
+    "cyber_controller_known_hosts_after_hosta_rebuild": "agent_operations"
   },
   "converted_lessons": [
     {
