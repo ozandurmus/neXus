@@ -94,3 +94,8 @@ sweep from the VPN was stopped at the PO's request.)
   loopback only; kube DNS rules target the service VIP) -- most likely the VPN's DNS interception.
 - RBAC: `aiview` holds operator, onboarding_admin, backup_admin and compliance_admin besides viewer/replay_viewer, so it
   can start collections and backups (authorized, not a bypass). PO decision pending.
+- **Done 2026-09-27 (Lynis/kube-bench follow-up):** kernel sysctl hardening + the kubelet-required values
+  (`deploy/hosta/60-nexus-hardening.sysctl.conf`), k3s `protect-kernel-defaults: true` (verified on the running
+  process), unused protocols dccp/sctp/rds/tipc blocked (`nexus-unused-protocols.modprobe.conf`), fail2ban sshd jail
+  (5 tries / 10 min -> 15 min ban, nftables). k3s is already the newest stable (v1.36.4); its bundled components'
+  CVEs wait for the next stable release. Open: AIDE, legal banner text, local registry and build executor images.

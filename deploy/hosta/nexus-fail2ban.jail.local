@@ -1,0 +1,10 @@
+# neXus HOST-A (Lynis DEB-0880; PO 2026-09-27). /etc/fail2ban/jail.d/nexus.local
+# SSH is already limited to the VPN and team-VM blocks; this stops password guessing inside them.
+[DEFAULT]
+banaction = nftables-multiport
+backend = systemd
+[sshd]
+enabled = true
+maxretry = 5
+findtime = 10m
+bantime = 15m
