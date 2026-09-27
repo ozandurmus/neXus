@@ -23,7 +23,7 @@ import { approveCpFailover, getCpFailoverRun, listCpFailoverApprovals, listCpFai
   type CpFailoverApproval, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
 
 const labels = ["Preparing", "Failing over", "Switched", "Checking", "No problems found"];
-const checks: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate" };
+const checks: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate", 9: "State synchronization", 10: "Installed policy parity" };
 const activeStates: CpFailoverState[] = ["PLANNED", "PRECHECK", "FAILING_OVER", "SWITCHED", "POSTCHECK", "RETURNING"];
 
 export function runStep(state: CpFailoverState, step: string): number {

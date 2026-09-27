@@ -2443,6 +2443,40 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
 
+  - gate_id: cp_failover_syncstat
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "cphaprob syncstat"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre and once post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §12"
+
+  - gate_id: cp_failover_fw_stat
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "fw stat"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre and once post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §12"
+
   - gate_id: cp_failover_down
     vendor: check_point
     platform_role_scope: cp_gaia_gateway
@@ -2544,6 +2578,40 @@ gates:
     secret_output_risk: none
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_failover_syncstat_vsid
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && cphaprob syncstat'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre and once post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §12"
+
+  - gate_id: cp_failover_fw_stat_vsid
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && fw stat'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre and once post per member per run"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §12"
 
   - gate_id: cp_failover_down_vsid
     vendor: check_point

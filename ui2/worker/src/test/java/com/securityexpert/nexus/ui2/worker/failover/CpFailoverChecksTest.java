@@ -17,6 +17,9 @@ class CpFailoverChecksTest {
         + "Interface Name: Status:\neth0 UP non sync\neth1 UP sync\n";
     private static final String CONN = "HOST NAME ID #VALS #PEAK #SLINKS\n"
         + "localhost connections 8158 100 150 0\n";
+    private static final String SYNC = "Delta Sync Statistics\nSync status: OK\nDrops:\n"
+        + "Lost updates................................. 0\nLost bulk update events...................... 0\n";
+    private static final String POLICY = "HOST POLICY DATE\nlocalhost Sample_Policy 10Sep2018 14:01:25 : [>eth0]\n";
     private static final String DEV_A = "Inter-| Receive | Transmit\n face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n"
         + "eth0: 100 0 0 0 0 0 0 0 200 0 0 0 0 0 0 0\n"
         + "eth1: 300 0 0 0 0 0 0 0 400 0 0 0 0 0 0 0\n";
@@ -51,7 +54,21 @@ class CpFailoverChecksTest {
         check(CpFailoverChecks.bytesByInterface("unsupported").isEmpty());
         check(CpFailoverChecks.trafficBytesPerSecond(Map.of(),Map.of(),Set.of("eth0"))==-1);
     }
+    @Test void syncAndPolicyPassFailUnknown() {
+        check(CpFailoverChecks.syncStatus(SYNC).equals("PASS"));
+        check(CpFailoverChecks.syncStatus(SYNC.replace("Sync status: OK", "Sync status: Off - Full-sync failure")).equals("FAIL"));
+        check(CpFailoverChecks.syncStatus(SYNC.replace("Lost updates................................. 0", "Lost updates................................. 1")).equals("FAIL"));
+        check(CpFailoverChecks.syncStatus(SYNC.replace("Lost bulk update events...................... 0", "Lost bulk update events...................... 2")).equals("FAIL"));
+        check(CpFailoverChecks.syncStatus(SYNC+"Unsynchronized updates...................... 1\n").equals("FAIL"));
+        check(CpFailoverChecks.syncStatus(SYNC.replace("Sync status: OK", "Sync status: strange")).equals("UNKNOWN"));
+        check(CpFailoverChecks.syncStatus("unsupported").equals("UNKNOWN"));
+        check(CpFailoverChecks.policy(POLICY).status().equals("PASS"));
+        check(CpFailoverChecks.policy(POLICY).name().equals("Sample_Policy"));
+        check(CpFailoverChecks.policy(POLICY).installedAt().equals("10Sep2018 14:01:25"));
+        check(CpFailoverChecks.policy("HOST POLICY DATE\n").status().equals("FAIL"));
+        check(CpFailoverChecks.policy("unsupported").status().equals("UNKNOWN"));
+    }
     public static void main(String[] args) {
-        var t=new CpFailoverChecksTest(); t.approvedChecksAndVsContext(); t.unrecognisedMeansUnknown();
+        var t=new CpFailoverChecksTest(); t.approvedChecksAndVsContext(); t.unrecognisedMeansUnknown(); t.syncAndPolicyPassFailUnknown();
     }
 }

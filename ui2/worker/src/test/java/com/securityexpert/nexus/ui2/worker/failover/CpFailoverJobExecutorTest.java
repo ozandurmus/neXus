@@ -45,7 +45,7 @@ class CpFailoverJobExecutorTest {
         }
     }
     private static final class Script {
-        boolean down,up,stuck,badPre,badPost;
+        boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
         int downCount,upCount,connectCount;
         final List<String> commands=new ArrayList<>();
         long bytesA=1000,bytesB=1000;
@@ -91,6 +91,12 @@ class CpFailoverJobExecutorTest {
                         return new ExecResult.Completed("Inter-| Receive | Transmit\nface |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n"
                             +"eth0: "+bytes+" 0 0 0 0 0 0 0 100 0 0 0 0 0 0 0\n",0);
                     }
+                    if(cmd.endsWith("cphaprob syncstat")) return new ExecResult.Completed(
+                        "Delta Sync Statistics\nSync status: OK\nDrops:\nLost updates................................. "
+                            +(badSync&&!first&&!down?"1":"0")+"\nLost bulk update events...................... 0\n",0);
+                    if(cmd.endsWith("fw stat")) return new ExecResult.Completed(
+                        "HOST POLICY DATE\nlocalhost "+((badPolicy&&!first&&!down || changedPolicyPost&&down)?"Other_Policy":"Sample_Policy")
+                            +" 10Sep2018 14:01:25 : [>eth0]\n",0);
                     throw new AssertionError(cmd);
                 });
         }
@@ -140,6 +146,8 @@ class CpFailoverJobExecutorTest {
         Store store=new Store(); Script script=new Script(); run(store,script);
         check(store.state.equals("DONE") && script.downCount==1 && script.upCount==1);
         check(store.checks.stream().anyMatch(s -> s.equals("post:8:PASS")));
+        check(store.checks.stream().anyMatch(s -> s.equals("post:9:PASS")));
+        check(store.checks.stream().anyMatch(s -> s.equals("post:10:PASS")));
     }
     @Test void precheckFailStopsBeforeWrite() {
         Store store=new Store(); Script script=new Script(); script.badPre=true; run(store,script);
@@ -151,10 +159,28 @@ class CpFailoverJobExecutorTest {
         check(store.state.equals("STOPPED") && "FAILOVER_TIMEOUT".equals(store.outcome));
         check(script.downCount==1 && script.upCount==0);
     }
+    @Test void syncFailureStopsBeforeWrite() {
+        Store store=new Store(); Script script=new Script(); script.badSync=true; run(store,script);
+        check(store.state.equals("STOPPED") && "STATE_SYNC_NOT_READY".equals(store.outcome));
+        check(script.downCount==0 && script.upCount==0);
+        check(store.checks.stream().anyMatch(s -> s.equals("pre:9:FAIL")));
+    }
+    @Test void policyMismatchStopsBeforeWrite() {
+        Store store=new Store(); Script script=new Script(); script.badPolicy=true; run(store,script);
+        check(store.state.equals("STOPPED") && "POLICY_NOT_MATCHED".equals(store.outcome));
+        check(script.downCount==0 && script.upCount==0);
+        check(store.checks.stream().anyMatch(s -> s.equals("pre:10:FAIL")));
+    }
     @Test void postcheckFailStopsWithoutUp() {
         Store store=new Store(); Script script=new Script(); script.badPost=true; run(store,script);
         check(store.state.equals("STOPPED") && script.downCount==1 && script.upCount==0);
         check(store.checks.stream().anyMatch(s -> s.equals("post:5:FAIL")));
+    }
+    @Test void changedPolicyAfterFailoverStopsWithoutUp() {
+        Store store=new Store(); Script script=new Script(); script.changedPolicyPost=true; run(store,script);
+        check(store.state.equals("STOPPED") && "POLICY_NOT_MATCHED".equals(store.outcome));
+        check(script.downCount==1 && script.upCount==0);
+        check(store.checks.stream().anyMatch(s -> s.equals("post:10:FAIL")));
     }
     @Test void expiredWindowNeverContactsDevice() {
         Store store=new Store(); store.valid=false; Script script=new Script(); run(store,script);
@@ -167,7 +193,9 @@ class CpFailoverJobExecutorTest {
     }
     public static void main(String[] args) {
         var t=new CpFailoverJobExecutorTest(); t.happyPath(); t.precheckFailStopsBeforeWrite();
-        t.failoverTimeoutStopsWithoutUp(); t.postcheckFailStopsWithoutUp(); t.expiredWindowNeverContactsDevice();
+        t.syncFailureStopsBeforeWrite(); t.policyMismatchStopsBeforeWrite();
+        t.failoverTimeoutStopsWithoutUp(); t.postcheckFailStopsWithoutUp(); t.changedPolicyAfterFailoverStopsWithoutUp();
+        t.expiredWindowNeverContactsDevice();
         t.vsxNeverUsesChassisContext();
     }
 }

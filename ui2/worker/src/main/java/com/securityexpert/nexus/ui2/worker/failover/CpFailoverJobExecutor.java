@@ -26,6 +26,7 @@ public final class CpFailoverJobExecutor {
     private static final int MAX_POLLS=21;
     private static final String STAT="cphaprob stat", TABLE="cphaprob tablestat", IF="cphaprob -a if";
     private static final String ARP="arp -an", CONN="fw tab -t connections -s", TRAFFIC="cat /proc/net/dev";
+    private static final String SYNC="cphaprob syncstat", POLICY="fw stat";
     private static final String DOWN="clusterXL_admin down", UP="clusterXL_admin up";
     private final JooqCpFailoverRepository store;
     private final DeviceRepository devices;
@@ -42,7 +43,8 @@ public final class CpFailoverJobExecutor {
 
     private record Member(String id, TransportSession session) {}
     private record Measure(CpFailoverChecks.State state, Set<String> table,
-            CpFailoverChecks.Interfaces interfaces, int arp, CpFailoverChecks.Connections connections, long traffic) {}
+            CpFailoverChecks.Interfaces interfaces, int arp, CpFailoverChecks.Connections connections, long traffic,
+            String policyName) {}
     private record Pair(Measure a, Measure b) {
         Measure forMember(Member member,Member first) { return member==first?a:b; }
     }
@@ -80,7 +82,7 @@ public final class CpFailoverJobExecutor {
             if(members.size()!=2 || members.stream().anyMatch(m -> !"check_point".equals(m.vendorHint())))
                 throw new Stop("CLUSTER_NOT_ELIGIBLE",0);
             if(!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
-            for(String command:List.of(STAT,TABLE,IF,ARP,CONN,TRAFFIC,DOWN,UP)) gate(command);
+            for(String command:List.of(STAT,TABLE,IF,ARP,CONN,TRAFFIC,SYNC,POLICY,DOWN,UP)) gate(command);
             first=connect(members.get(0)); second=connect(members.get(1));
             store.state(runId,"PRECHECK","PRECHECK",null,null,null);
             Pair before=checks("pre",first,second,null,null);
@@ -148,6 +150,8 @@ public final class CpFailoverJobExecutor {
             case ARP -> "cp_failover_arp";
             case CONN -> "cp_failover_connections";
             case TRAFFIC -> "cp_failover_traffic";
+            case SYNC -> "cp_failover_syncstat";
+            case POLICY -> "cp_failover_fw_stat";
             case DOWN -> "cp_failover_down";
             case UP -> "cp_failover_up";
             default -> throw new Stop("COMMAND_NOT_APPROVED",0);
@@ -239,7 +243,23 @@ public final class CpFailoverJobExecutor {
         record(phase,first,8,trafficStatus,rateA<0?"{}":"{\"bytesPerSecond\":"+rateA+"}");
         record(phase,second,8,trafficStatus,rateB<0?"{}":"{\"bytesPerSecond\":"+rateB+"}");
         if(!traffic) throw new Stop("TRAFFIC_BELOW_TOLERANCE",8);
-        return new Pair(new Measure(a,ta,ia,arpA,ca,rateA),new Measure(b,tb,ib,arpB,cb,rateB));
+        String syncA=before==null || active==first?CpFailoverChecks.syncStatus(command(first,SYNC)):null;
+        String syncB=before==null || active==second?CpFailoverChecks.syncStatus(command(second,SYNC)):null;
+        if(syncA!=null) record(phase,first,9,syncA,"{}");
+        if(syncB!=null) record(phase,second,9,syncB,"{}");
+        if("FAIL".equals(syncA) || "FAIL".equals(syncB) || "UNKNOWN".equals(syncA) || "UNKNOWN".equals(syncB))
+            throw new Stop("STATE_SYNC_NOT_READY",9);
+        var policyA=CpFailoverChecks.policy(command(first,POLICY));
+        var policyB=CpFailoverChecks.policy(command(second,POLICY));
+        String policyStatus="FAIL".equals(policyA.status()) || "FAIL".equals(policyB.status())?"FAIL"
+            :"UNKNOWN".equals(policyA.status()) || "UNKNOWN".equals(policyB.status())?"UNKNOWN"
+            :!policyA.name().equals(policyB.name()) || before!=null &&
+                (!policyA.name().equals(before.a().policyName()) || !policyB.name().equals(before.b().policyName()))?"FAIL":"PASS";
+        record(phase,first,10,policyStatus,policyA.installedAt()==null?"{}":"{\"installedAt\":\""+policyA.installedAt()+"\"}");
+        record(phase,second,10,policyStatus,policyB.installedAt()==null?"{}":"{\"installedAt\":\""+policyB.installedAt()+"\"}");
+        if(!"PASS".equals(policyStatus)) throw new Stop("POLICY_NOT_MATCHED",10);
+        return new Pair(new Measure(a,ta,ia,arpA,ca,rateA,policyA.name()),
+            new Measure(b,tb,ib,arpB,cb,rateB,policyB.name()));
     }
     private void record(String phase,Member member,int no,String status,String derived) {
         store.check(runId,phase,member.id(),vsId,no,status,derived);

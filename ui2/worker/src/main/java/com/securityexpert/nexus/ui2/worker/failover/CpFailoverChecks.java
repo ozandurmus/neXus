@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Strict, in-memory projections of the six approved Check Point checks. */
+/** Strict, in-memory projections of the approved Check Point checks. */
 public final class CpFailoverChecks {
     public static final double ARP_MIN_RATIO = 0.80;
     public static final double CONNECTION_MIN_RATIO = 0.80;
@@ -17,6 +17,8 @@ public final class CpFailoverChecks {
     private static final Pattern INTERFACE = Pattern.compile("(?m)^\\s*([A-Za-z][A-Za-z0-9_.:-]{0,63})\\s+(UP|DOWN|Non-Monitored)\\b(.*)$");
     private static final Pattern CONNECTION = Pattern.compile("(?im)^\\s*\\S+\\s+connections\\s+\\d+\\s+(\\d+)\\s+(\\d+)\\s+\\d+\\s*$");
     private static final Pattern DEV = Pattern.compile("(?m)^\\s*([A-Za-z0-9_.:-]{1,64}):\\s*((?:\\d+\\s+){15}\\d+)\\s*$");
+    private static final Pattern SYNC_STATUS = Pattern.compile("(?m)^Sync status:\\s*(OK|Off\\s*-.*|Fullsync in progress|Problem\\s*\\(.*\\))\\s*$");
+    private static final Pattern POLICY_ROW = Pattern.compile("(?m)^localhost\\s+(\\S+)\\s+(\\d{1,2}[A-Za-z]{3}\\d{4})\\s+(\\d{2}:\\d{2}:\\d{2})\\s+:.*$");
     private CpFailoverChecks() {}
 
     public record State(String mode, Map<String,String> members, String localId, String localRole) {
@@ -112,5 +114,33 @@ public final class CpFailoverChecks {
     }
     public static boolean ratio(long value,long baseline,double minimum) {
         return baseline>=0 && value>=0 && value>=baseline*minimum;
+    }
+    public static String syncStatus(String output) {
+        if(output==null) return "UNKNOWN";
+        Matcher status=SYNC_STATUS.matcher(output);
+        if(!status.find()) return "UNKNOWN";
+        String state=status.group(1);
+        if(status.find()) return "UNKNOWN";
+        if(!"OK".equals(state)) return "FAIL";
+        boolean lost=false;
+        String[] labels={"Lost updates", "Lost bulk update events", "Unsynchronized updates"};
+        for(int i=0;i<labels.length;i++) {
+            Matcher counter=Pattern.compile("(?m)^"+labels[i]+"\\.{2,}\\s*(\\d+)\\s*$").matcher(output);
+            boolean found=counter.find();
+            String value=found?counter.group(1):null;
+            if((!found && i<2) || (found && counter.find())) return "UNKNOWN";
+            if(found && !value.matches("0+")) lost=true;
+        }
+        return lost?"FAIL":"PASS";
+    }
+    public record Policy(String status,String name,String installedAt) {}
+    public static Policy policy(String output) {
+        if(output==null || !output.matches("(?s)^HOST POLICY DATE\\s*.*")) return new Policy("UNKNOWN",null,null);
+        Matcher row=POLICY_ROW.matcher(output);
+        if(!row.find()) return output.trim().equals("HOST POLICY DATE")
+            ?new Policy("FAIL",null,null):new Policy("UNKNOWN",null,null);
+        String name=row.group(1), installedAt=row.group(2)+" "+row.group(3);
+        if(row.find()) return new Policy("UNKNOWN",null,null);
+        return new Policy("PASS",name,installedAt);
     }
 }
