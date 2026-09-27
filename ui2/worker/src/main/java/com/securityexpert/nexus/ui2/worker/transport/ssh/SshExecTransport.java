@@ -523,7 +523,7 @@ public final class SshExecTransport implements DeviceTransport {
                     + " sha256=" + HexFormat.of().formatHex(digest.digest()));
             return bytes;
         } catch (IOException e) {
-            JobTranscriptScope.add("ssh", "note", "scp fetch failed: " + e.getClass().getSimpleName());
+            JobTranscriptScope.add("ssh", "note", "scp fetch failed: " + e.getMessage());
             throw e;
         }
     }

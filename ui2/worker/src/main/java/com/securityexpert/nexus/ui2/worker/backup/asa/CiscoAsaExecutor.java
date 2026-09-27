@@ -268,8 +268,9 @@ public final class CiscoAsaExecutor {
                     }
                 }
             } catch (IOException e) {
-                archiveProblem = Optional.of("ASA archive (SCP: " + String.valueOf(e.getMessage()).split(":", 2)[0]
-                        + "; is 'ssh scopy enable' set?)");
+                // The whole message: "scp channel" alone hid the cause, and the configuration already had scopy (2026-09-27).
+                LOG.log(System.Logger.Level.WARNING, "[ASA] archive SCP failed: " + e.getMessage());
+                archiveProblem = Optional.of("ASA archive (SCP: " + e.getMessage() + ")");
                 archiveBytes = -1;
             }
         }

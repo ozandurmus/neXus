@@ -82,3 +82,19 @@ Recorded from the Product Owner's answer; the rest of this document stays DRAFT.
    included, not only Check Point and Palo Alto.
 Open (still for the PO): which checks are blocking in the first release, and which new device reads are approved
 (questions 1, 2, 4-6 above).
+
+## Product Owner decisions (2026-09-27, second answer)
+Recorded from the Product Owner's answer to questions 1, 3 and 4 and the SNMP design question.
+1. **Blocking:** every check in this battery is blocking. A FAIL or UNKNOWN on any check means "do not fail over";
+   there are no advisory-only rows in the first release. (Rows whose semantics are unproven therefore block until
+   proven -- fail-closed, consistent with the UNKNOWN law.)
+2. **Cadence:** a periodic readiness pass every 4 hours, plus the fresh pass immediately before any failover
+   (decision 1 of the first answer). One SSH session per member per pass; the checks run one at a time, in order,
+   inside that session, with an optional configurable pause between checks.
+3. **VSX:** a VSX Virtual System failover is its own failover step, independent of the chassis (physical member)
+   failover. Per-VS readiness (CP-08) belongs to the VS failover step; CP-01..CP-07 belong to the chassis step.
+4. **SNMP monitoring** (later work, not this battery): optional per device; the poller must support SNMP v1, v2c and
+   v3 (the PO's own estate uses v3). Polling around once a minute. Its own design (OIDs per vendor, credential-store
+   types for communities and v3 users) comes before implementation.
+Still open: question 2 (which new device reads enter the command gate) -- each new read needs its own PO approval of
+the exact command before it is implemented; and question 6 (field-semantics evidence).

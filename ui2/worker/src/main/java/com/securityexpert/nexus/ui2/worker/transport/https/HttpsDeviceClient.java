@@ -330,6 +330,8 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
         for (int hop = 0; ; hop++) {
             String sentMethod = hop == 0 ? method : "GET";
             if (JobTranscriptScope.current() != null) JobTranscriptScope.add("https", "request", sentMethod + " " + JobTranscript.safePath(current)
+                    // The account is shown (PO 2026-09-27: "hangi account'u kullandığını göstersin"); the password never.
+                    + (creds.isSession() ? "" : "\nAuthorization: Basic (user " + creds.username() + ", password [credential])")
                     + (hop == 0 && body != null ? "\n" + (contentType != null && contentType.startsWith("application/json")
                             ? JobTranscript.safeJson(body) : JobTranscript.safeForm(body)) : ""));
             HttpRequest.Builder b = HttpRequest.newBuilder(target.uri(current)).timeout(timeout);
