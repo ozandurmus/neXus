@@ -26,6 +26,10 @@ public record ConfigurationRequest(
         return new ConfigurationRequest(ConfigurationVendor.CISCO_ASA, Optional.of(target), Optional.empty(), credentialRef, trustRuleRef);
     }
 
+    public static ConfigurationRequest proxySg(ConnectionTarget target) {
+        return new ConfigurationRequest(ConfigurationVendor.BLUECOAT, Optional.of(target), Optional.empty(), "", "");
+    }
+
     public static ConfigurationRequest paloAlto(ApiTarget target, String credentialRef) {
         return new ConfigurationRequest(ConfigurationVendor.PALO_ALTO, Optional.empty(), Optional.of(target),
                 credentialRef, "");

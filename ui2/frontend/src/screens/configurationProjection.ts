@@ -37,7 +37,7 @@ export interface SnapshotTile {
 }
 
 export interface Projection {
-  readonly vendor: "check_point" | "palo_alto" | "fortinet" | "cisco_asa";
+  readonly vendor: "check_point" | "palo_alto" | "fortinet" | "cisco_asa" | "bluecoat";
   readonly sourcePlane: string;
   readonly settingCount: number;
   readonly withheldCount: number;
@@ -474,4 +474,30 @@ export function projectAsa(text: string): Projection {
   if (block && !hasChildren) add(block, block);
   const sections = [...bySection.keys()].sort((a, b) => a.localeCompare(b)).map((label) => ({ label, rows: bySection.get(label) ?? [] }));
   return { vendor: "cisco_asa", sourcePlane: "asa-running-config", settingCount: settings, withheldCount: withheld, sections, snapshot: [] };
+}
+
+/** ProxySG's sanitized MC configuration: BEGIN blocks, or top-level keywords when markers are absent. */
+export function projectProxySg(text: string): Projection {
+  const bySection = new Map<string, SettingRow[]>();
+  const counters = new Map<string, number>();
+  const marked = text.includes("!- BEGIN ");
+  let section: string | null = null;
+  let withheld = 0;
+  let settings = 0;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    const begin = /^!- BEGIN (.+)$/i.exec(line);
+    if (begin) { section = begin[1].split(/[-_\s]+/).map((word) => titleCase(word.toLowerCase())).join(" "); continue; }
+    if (/^!- END /i.test(line)) { section = null; continue; }
+    if (!line || line === "exit" || line.startsWith("#")) continue;
+    if (!marked && !/^\s/.test(raw)) section = titleCase(line.split(/\s+/, 1)[0].toLowerCase());
+    if (!section) continue;
+    const hidden = line.endsWith(" [withheld]");
+    if (hidden) withheld++;
+    push(bySection, counters, { section, setting: line, value: hidden ? "[withheld]" : line,
+      origin: "LOCAL", context: "single" });
+    settings++;
+  }
+  return { vendor: "bluecoat", sourcePlane: "proxysg-mc-show-configuration", settingCount: settings,
+    withheldCount: withheld, sections: orderSections(bySection), snapshot: [] };
 }

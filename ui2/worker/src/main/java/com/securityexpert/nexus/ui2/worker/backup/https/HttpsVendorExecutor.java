@@ -746,6 +746,22 @@ public final class HttpsVendorExecutor {
         }
     }
 
+    /** The backup's existing MC device lookup and exact gated configuration read, without creating a backup bundle. */
+    public Optional<String> configurationProxySgViaManagementCenter(Target mc, String mcCredentialRef, String host) {
+        try {
+            Credentials creds = credentials.apply(mcCredentialRef);
+            Optional<JsonNode> entry = mcEntry(mc, creds, host);
+            if (entry.isEmpty()) return Optional.empty();
+            return Optional.of(mcCommand(mc, creds, entry.get().get("uuid").asText(),
+                    HttpsVendorPlan.MC_CMD_SHOW_CONFIGURATION));
+        } catch (RuntimeException | IOException | McCommandFailed e) {
+            return Optional.empty();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        }
+    }
+
     private static final java.util.regex.Pattern ABSENT_INTERFACE =
             java.util.regex.Pattern.compile("^%\\s*Ethernet interface \\S+ is not installed\\s*$");
 

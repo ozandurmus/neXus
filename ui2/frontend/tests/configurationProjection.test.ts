@@ -1,6 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { filterProjection, projectAsa, projectCheckPoint, projectCluster, projectPaloAlto } from "../src/screens/configurationProjection";
+import { filterProjection, projectAsa, projectCheckPoint, projectCluster, projectPaloAlto, projectProxySg } from "../src/screens/configurationProjection";
+
+describe("ProxySG projection", () => {
+  it("groups BEGIN blocks and withheld values", () => {
+    const p = projectProxySg("!- BEGIN network\ninterface 192.0.2.1\npassword [withheld]\n!- END network\n!- BEGIN policy\nallow 192.0.2.0/24\n!- END policy\n");
+    expect(p.vendor).toBe("bluecoat");
+    expect(p.sections.map((s) => s.label)).toEqual(["Network", "Policy"]);
+    expect(p.sections[0].rows[1]).toMatchObject({ value: "[withheld]", context: "single" });
+    expect(p.withheldCount).toBe(1);
+    expect(p.settingCount).toBe(3);
+  });
+
+  it("falls back to top-level keywords", () => {
+    const p = projectProxySg("interface 192.0.2.1\n address 192.0.2.2\npolicy allow\n");
+    expect(p.sections.map((s) => s.label)).toEqual(["Interface", "Policy"]);
+  });
+});
 
 describe("Cisco ASA projection", () => {
   it("groups flat and indented lines by block kind with withheld values", () => {

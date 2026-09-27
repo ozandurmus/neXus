@@ -31,6 +31,8 @@ import com.securityexpert.nexus.ui2.persistence.device.configuration.Configurati
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationReadKind;
 import com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator;
 import com.securityexpert.nexus.ui2.worker.confirm.PresentedIdentity;
+import com.securityexpert.nexus.ui2.worker.backup.https.CyberControllers;
+import com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor;
 import com.securityexpert.nexus.ui2.worker.configuration.cp.CheckPointGaiaConfigProcessor;
 import com.securityexpert.nexus.ui2.worker.configuration.pan.PaloAltoConfigStreamProcessor;
 import com.securityexpert.nexus.ui2.worker.configuration.pan.PanoramaCrossCheckPort;
@@ -72,6 +74,12 @@ public final class ConfigurationCapabilityExecutor {
     private final DeviceRepository deviceRepository;
     private final PanoramaCrossCheckPort panoramaCrossCheck;
     private final com.securityexpert.nexus.ui2.worker.configuration.server.ConfigurationServiceClient configServiceClient;
+    private HttpsVendorExecutor httpsVendorExecutor;
+
+    public ConfigurationCapabilityExecutor withHttpsVendorExecutor(HttpsVendorExecutor executor) {
+        this.httpsVendorExecutor = Objects.requireNonNull(executor, "executor");
+        return this;
+    }
 
     public ConfigurationCapabilityExecutor(DeviceTransport transport, PanCredentialResolver panCredentialResolver,
             ArtefactStore artefactStore, PanoramaCrossCheckPort panoramaCrossCheck) {
@@ -105,7 +113,38 @@ public final class ConfigurationCapabilityExecutor {
             case PALO_ALTO -> collectPaloAlto(request, deviceId, jobId, recordedIdentity, strictRefuseEnabled);
             case FORTINET -> collectFortiGate(request, deviceId, jobId);
             case CISCO_ASA -> collectCiscoAsa(request, deviceId, jobId);
+            case BLUECOAT -> collectProxySg(request, deviceId, jobId);
         };
+    }
+
+    private ConfigurationResult collectProxySg(ConfigurationRequest request, String deviceId, String jobId) {
+        ConnectionTarget target = request.connectionTarget()
+                .orElseThrow(() -> new IllegalArgumentException("bluecoat configuration collect requires a connectionTarget"));
+        if (httpsVendorExecutor == null || deviceRepository == null) {
+            return new ConfigurationResult.ConnectFailed("Management Center configuration reader unavailable");
+        }
+        Optional<String> raw = Optional.empty();
+        for (CyberControllers.Ref mc : CyberControllers.managers(deviceRepository, "bluecoat")) {
+            raw = httpsVendorExecutor.configurationProxySgViaManagementCenter(mc.target(), mc.credentialRef(), target.host());
+            if (raw.isPresent()) break;
+        }
+        if (raw.isEmpty() || raw.get().isBlank()) {
+            return new ConfigurationResult.ConnectFailed("no enrolled Management Center returned ProxySG configuration");
+        }
+        var processed = com.securityexpert.nexus.ui2.worker.configuration.bluecoat.ProxySgConfigProcessor.process(raw.get());
+        ArtefactStore.ArtefactHandle handle = null;
+        try {
+            handle = artefactStore.open(deviceId, jobId, "bluecoat", false);
+            handle.sink().write(raw.get().getBytes(StandardCharsets.UTF_8));
+            ArtefactStore.ArtefactMetadata metadata = handle.finish();
+            ConfigurationRunData runData = new ConfigurationRunData(ConfigurationReadKind.SHOW_CONFIGURATION, true,
+                    processed.canonicalHash(), processed.withheldLineCount(), Optional.of(processed.sanitizedText()),
+                    processed.index(), List.of(), toRecord(metadata, deviceId, jobId, "bluecoat"));
+            return new ConfigurationResult.Completed(List.of(runData));
+        } catch (IOException e) {
+            closeQuietly(handle);
+            return new ConfigurationResult.ArtefactStoreFailed("artefact store write failed: " + e.getMessage());
+        }
     }
 
     private ConfigurationResult collectCheckPoint(ConfigurationRequest request, String deviceId, String jobId,

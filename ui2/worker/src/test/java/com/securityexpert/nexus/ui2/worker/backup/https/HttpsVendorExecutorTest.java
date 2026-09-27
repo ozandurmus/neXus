@@ -273,6 +273,15 @@ class HttpsVendorExecutorTest {
     }
 
     @Test
+    void proxySgConfigurationUsesOnlyTheExistingMcRead() {
+        calls.mcDeviceList = "[{\"uuid\":\"A1055376-3448-4A94-82DB-D9BD30BBB421\",\"host\":\"192.0.2.41\",\"type\":\"sgos6x\"}]";
+        assertTrue(executor.configurationProxySgViaManagementCenter(T, "cred", "192.0.2.41")
+                .orElseThrow().contains("!- BEGIN networking"));
+        assertEquals(1, calls.log.stream().filter(l -> l.startsWith("PUT ")).count());
+        assertTrue(calls.log.stream().anyMatch(l -> l.startsWith("PUT ") && l.endsWith(" show configuration")));
+    }
+
+    @Test
     void cidrFromAddressAndDottedMask() {
         assertEquals(Optional.of("10.0.0.12/24"), InfobloxMembers.cidr(Optional.of("10.0.0.12"), Optional.of("255.255.255.0")));
         assertEquals(Optional.of("10.9.0.0/16"), InfobloxMembers.cidr(Optional.of("10.9.0.0"), Optional.of("255.255.0.0")));
@@ -340,6 +349,9 @@ class HttpsVendorExecutorTest {
         String downloadHost = "192.0.2.30";
         int loginStatus = 200;
         String deviceList = "{\"DefensePro Devices\": [{\"name\": \"DP-A\", \"managementIp\": \"192.0.2.41\"}]}";
+        String mcDeviceList = "[{\"uuid\": \"A1055376-3448-4A94-82DB-D9BD30BBB421\", \"name\": \"SG-B\", \"type\": \"sgos6x\", \"osVersion\": \"7.4.15.1\", \"build\": \"12345\","
+                + " \"model\": \"VA-20\", \"managementStatus\": \"Managed\", \"deploymentStatus\": \"Deployed\"},"
+                + " {\"uuid\": \"B2055376-3448-4A94-82DB-D9BD30BBB422\", \"name\": \"SG-A\", \"type\": \"sgos6x\"}, {\"uuid\": \"C3055376-3448-4A94-82DB-D9BD30BBB423\", \"name\": \"Reporter\", \"type\": \"rptr\"}]";
 
         @Override
         public TextResponse putRaw(Target target, String path, String body, Credentials creds, Duration timeout, int maxBytes) {
@@ -382,9 +394,7 @@ class HttpsVendorExecutorTest {
             }
             if (path.equals(HttpsVendorPlan.MC_DEVICES)) {
                 return new TextResponse(200, Optional.of("application/json"),
-                        "[{\"uuid\": \"A1055376-3448-4A94-82DB-D9BD30BBB421\", \"name\": \"SG-B\", \"type\": \"sgos6x\", \"osVersion\": \"7.4.15.1\", \"build\": \"12345\","
-                        + " \"model\": \"VA-20\", \"managementStatus\": \"Managed\", \"deploymentStatus\": \"Deployed\"},"
-                        + " {\"uuid\": \"B2055376-3448-4A94-82DB-D9BD30BBB422\", \"name\": \"SG-A\", \"type\": \"sgos6x\"}, {\"uuid\": \"C3055376-3448-4A94-82DB-D9BD30BBB423\", \"name\": \"Reporter\", \"type\": \"rptr\"}]",
+                        mcDeviceList,
                         false, Optional.of("mc.example"));
             }
             if (path.equals(HttpsVendorPlan.CC_ALLDEVICES)) {

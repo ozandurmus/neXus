@@ -139,6 +139,7 @@ public final class ConfigurationJobExecutor {
             case PALO_ALTO -> "palo_alto";
             case FORTINET -> "fortinet";
             case CISCO_ASA -> "cisco_asa";
+            case BLUECOAT -> "bluecoat";
         };
         // PO 2026-09-25: this run's identity refresh updates the device's observed hostname / version whenever they
         // differ (an MDS upgrade must show after the next read); the identity baseline stays untouched.

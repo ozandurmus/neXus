@@ -36,7 +36,8 @@ public final class ConfigurationCollectService {
             "check_point", ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT,
             "palo_alto", ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT,
             "fortinet", ConfigurationCapabilityIds.FGT_CONFIGURATION_COLLECT,
-            "cisco_asa", ConfigurationCapabilityIds.ASA_CONFIGURATION_COLLECT);
+            "cisco_asa", ConfigurationCapabilityIds.ASA_CONFIGURATION_COLLECT,
+            "bluecoat", ConfigurationCapabilityIds.PROXYSG_CONFIGURATION_COLLECT);
 
     private final DeviceRepository deviceRepository;
     private final JobAdmissionService jobAdmissionService;

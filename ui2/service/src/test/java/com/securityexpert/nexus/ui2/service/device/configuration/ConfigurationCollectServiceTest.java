@@ -132,6 +132,17 @@ class ConfigurationCollectServiceTest {
         return new CapabilityRegistryLoader(gates).load(spec);
     }
 
+    private static Capability proxySgCapability() {
+        CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilitySpec spec = new CapabilitySpec(ConfigurationCapabilityIds.PROXYSG_CONFIGURATION_COLLECT,
+                "bluecoat", "proxysg", TransportKind.HTTPS, MaturityState.CAP_OFFLINE,
+                List.of(connect), List.of(disconnect), "UNKNOWN", List.of(), false);
+        return new CapabilityRegistryLoader(key -> List.of()).load(spec);
+    }
+
     private static DeviceRecord enrolledDevice(String deviceId, String vendorHint) {
         return new DeviceRecord(deviceId, "gateway", vendorHint, "manual_registration", Instant.now(), false,
                 DeviceEnrollmentState.ENROLLED, false, "cred-ref-1");
@@ -151,7 +162,8 @@ class ConfigurationCollectServiceTest {
         CapabilityRegistry registry = CapabilityRegistry.of(List.of(
                 configurationCapability(ConfigurationCapabilityIds.CP_CONFIGURATION_COLLECT, "check_point"),
                 configurationCapability(ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT, "palo_alto"),
-                configurationCapability(ConfigurationCapabilityIds.ASA_CONFIGURATION_COLLECT, "cisco_asa")));
+                configurationCapability(ConfigurationCapabilityIds.ASA_CONFIGURATION_COLLECT, "cisco_asa"),
+                proxySgCapability()));
         DeviceEnrollmentReadPort enrollmentReadPort = deviceId -> Optional.ofNullable(devices.byId.get(deviceId))
                 .map(d -> new DeviceEnrollmentSnapshot(deviceId, d.enrollmentState(), d.disabled()));
         JobAdmissionService admissionService =
@@ -187,6 +199,19 @@ class ConfigurationCollectServiceTest {
         devices.byId.put("device-1", enrolledDevice("device-1", "cisco_asa"));
         var outcome = serviceFor(devices).requestCollect("device-1", "actor", Optional.of("nonce-1"));
         assertTrue(outcome instanceof ConfigurationCollectService.Outcome.Admitted, "expected Admitted, got " + outcome);
+    }
+
+    @Test
+    void aProxySgGatewayAdmitsButItsManagementServerDoesNot() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("proxy", enrolledDevice("proxy", "bluecoat"));
+        devices.byId.put("mc", enrolledManagementServer("mc", "bluecoat"));
+        ConfigurationCollectService service = serviceFor(devices);
+        assertTrue(service.requestCollect("proxy", "actor", Optional.of("nonce"))
+                instanceof ConfigurationCollectService.Outcome.Admitted);
+        var refused = service.requestCollect("mc", "actor", Optional.of("nonce"));
+        assertEquals("MANAGEMENT_SERVER_UNGATED",
+                ((ConfigurationCollectService.Outcome.AdmissionRefused) refused).code());
     }
 
     @Test

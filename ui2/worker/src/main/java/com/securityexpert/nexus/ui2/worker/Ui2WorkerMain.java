@@ -257,6 +257,7 @@ public final class Ui2WorkerMain {
                         }),
                 fortiManagerExecutor);
         httpsVendorExecutor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(sshTransport, artefactStore, sshTransport::scpFetch));
+        configurationCapabilityExecutor.withHttpsVendorExecutor(httpsVendorExecutor);
         backupJobExecutor.withHttpsVendorExecutor(httpsVendorExecutor,
                 new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(transactionBoundary));
         com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor httpsConfirmJobExecutor =

@@ -39,7 +39,7 @@ import {
   filterProjection,
   projectCheckPoint,
   projectCluster,
-  projectPaloAlto, projectFortiGate, projectAsa,
+  projectPaloAlto, projectFortiGate, projectAsa, projectProxySg,
   type ClusterProjection,
   type MemberRow,
   type Origin,
@@ -106,6 +106,8 @@ function useProjection(device: DeviceSummary | null, revision = 0): Loaded & { l
               ? projectFortiGate(text)
               : configuration.vendor === "cisco_asa" || device.vendor_hint === "cisco_asa"
                 ? projectAsa(text)
+              : configuration.vendor === "bluecoat" || device.vendor_hint === "bluecoat"
+                ? projectProxySg(text)
               : projectCheckPoint(text);
         }
         if (!cancelled) setState({ configuration, projection, error: null, loading: false });
