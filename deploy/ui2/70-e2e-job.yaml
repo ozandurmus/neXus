@@ -34,6 +34,8 @@ spec:
               value: /run/e2e
             - name: HOME
               value: /run/e2e
+            - name: NEXUS_E2E_OUTPUT_DIR
+              value: /run/e2e/out
           volumeMounts:
             - name: tmp
               mountPath: /run/e2e
