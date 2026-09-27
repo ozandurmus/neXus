@@ -87,6 +87,9 @@ class FortinetAsaComplianceEvaluatorTest {
         });
         assertEquals(Verdict.NOT_APPLICABLE, result("cisco_asa", "asa_http_aaa", asa("no http server enable")));
         assertEquals(Verdict.UNKNOWN, result("cisco_asa", "asa_http_sources_restricted", asa("http server enable\nhttp unparsed mask inside")));
+        assertEquals(Verdict.PASS, result("cisco_asa", "asa_telnet_absent", asa("telnet timeout 5")));
+        assertEquals(Verdict.PASS, result("cisco_asa", "asa_http_sources_restricted",
+                asa("http server enable\nhttp 192.0.2.0 255.255.255.0 inside\nhttp redirect outside 80")));
         assertEquals(Verdict.NOT_APPLICABLE, result("cisco_asa", "asa_failover_link", asa("no failover")));
         assertEquals(Verdict.FAIL, result("cisco_asa", "asa_failover_link", asa("failover\nno failover lan interface")));
         assertEquals(Verdict.UNKNOWN, result("cisco_asa", "asa_failover_link", asa("failover\nfailover lan interface HA GigabitEthernet0/1")));

@@ -206,13 +206,17 @@ public final class FortinetAsaComplianceEvaluator {
                 if (lines.contains("no http server enable") && lines.stream().anyMatch(s -> s.startsWith("http server enable"))) yield Verdict.UNKNOWN;
                 if (lines.contains("no http server enable")) yield Verdict.PASS;
                 if (!lines.contains("http server enable") && lines.stream().noneMatch(s -> s.startsWith("http server enable "))) yield Verdict.UNKNOWN;
-                List<String> rules = lines.stream().filter(s -> s.startsWith("http ") && !s.startsWith("http server ")).toList();
+                // `http redirect <if> <port>` is an HTTP-to-HTTPS redirect, not a source rule.
+                List<String> rules = lines.stream().filter(s -> s.startsWith("http ") && !s.startsWith("http server ")
+                        && !s.startsWith("http redirect ")).toList();
                 if (rules.isEmpty()) yield Verdict.UNKNOWN;
                 if (rules.stream().anyMatch(s -> s.matches("http (?:0\\.0\\.0\\.0 0\\.0\\.0\\.0|::/0) \\S+"))) yield Verdict.FAIL;
                 yield rules.stream().allMatch(FortinetAsaComplianceEvaluator::restrictedHttpRule) ? Verdict.PASS : Verdict.UNKNOWN;
             }
+            // `telnet timeout <n>` is in every running-config and grants no access; only source rules count.
             case "asa_telnet_absent" -> lines.stream().anyMatch(s -> s.matches("telnet \\S+ \\S+ \\S+")) ? Verdict.FAIL
-                    : lines.stream().anyMatch(s -> s.startsWith("telnet ")) ? Verdict.UNKNOWN : Verdict.PASS;
+                    : lines.stream().anyMatch(s -> s.startsWith("telnet ") && !s.matches("telnet timeout \\d+"))
+                            ? Verdict.UNKNOWN : Verdict.PASS;
             case "asa_ssh_aaa" -> aaa(lines, "ssh");
             case "asa_http_aaa" -> {
                 if (lines.contains("no http server enable") && lines.stream().anyMatch(s -> s.startsWith("http server enable"))) yield Verdict.UNKNOWN;
