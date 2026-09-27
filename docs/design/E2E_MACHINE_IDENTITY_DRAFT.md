@@ -33,17 +33,12 @@ the system itself authenticates it: inside the cluster, as a machine identity wh
    address and serial in the database; the suite hashes every IPv4/serial-shaped token it sees and fails on a match.
    Only digests leave the database; the runner never sees a real value.
 
-## 2. The blocker: a browser inside the cluster
-HOST-A reaches only the npm and Maven registries. Docker Hub, the Playwright CDN, Red Hat/Ubuntu/EPEL repositories
-and Google storage are unreachable (measured 2026-09-27). The Playwright image and its Chromium cannot be pulled or
-downloaded there. Options:
-- **(a) Open outbound access** for HOST-A to the Playwright CDN and one container registry (PO/network decision).
-  Cleanest; the Job uses the official Playwright image.
-- **(b) Build the image elsewhere** (a machine with internet access), push it to HOST-A's local registry. Needs a
-  build machine and a transfer path the PO approves.
-- **(c) No browser in the cluster:** the in-cluster Job runs API-level checks (every screen's read endpoints return
-  200, non-empty data, masked fields, transcript 403, read-only enforcement, canary) -- no rendering. The browser
-  suite stays as a manual/weekly run with a human login.
+## 2. The browser inside the cluster
+The runner uses the official Playwright image `mcr.microsoft.com/playwright:v<version>-noble` (version = the
+`@playwright/test` in `ui2/frontend/package.json`, pinned by digest). HOST-A reaches the Microsoft registry through
+the corporate proxy that k3s already uses (measured 2026-09-27: `mcr.microsoft.com/v2/` answers through the proxy;
+an earlier test without the proxy was wrong). At run time the Job talks only to the in-cluster service -- no outbound
+traffic. The image is ~1 GB compressed, pulled once per Playwright version.
 
 ## 3. Risk
 A new credential boundary: a token that yields a session without a password. Blast radius if the token leaks: what
@@ -52,5 +47,4 @@ rotation by deleting the Secret.
 
 ## 4. Questions for the Product Owner
 1. Approve the machine identity design (§1)?
-2. Browser option: (a), (b) or (c)?
-3. Cadence: after each deploy + every 4 h?
+2. Cadence: after each deploy + every 4 h?
