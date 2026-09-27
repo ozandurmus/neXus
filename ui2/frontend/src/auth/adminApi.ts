@@ -1236,6 +1236,20 @@ export interface JobEventView {
   readonly submitted_at: string;
   readonly finished_at?: string;
   readonly duration_ms?: number;
+  readonly has_transcript: boolean;
+}
+
+export interface JobTranscriptEntry {
+  readonly seq: number;
+  readonly at: string;
+  readonly elapsedMs: number;
+  readonly channel: "ssh" | "https";
+  readonly kind: string;
+  readonly text: string;
+}
+
+export function getJobTranscript(jobId: string): Promise<JobTranscriptEntry[]> {
+  return call(`/jobs/${encodeURIComponent(jobId)}/transcript`, "GET");
 }
 
 export interface JobQueryParams {

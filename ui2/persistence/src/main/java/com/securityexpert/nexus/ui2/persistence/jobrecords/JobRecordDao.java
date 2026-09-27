@@ -22,6 +22,10 @@ public interface JobRecordDao {
     record DiagnosticOutputRef(String reference, byte[] wrappedKey) {
         @Override public String toString() { return "DiagnosticOutputRef[redacted]"; }
     }
+    record BackupTranscriptRef(String reference, byte[] wrappedKey) {
+        @Override public String toString() { return "BackupTranscriptRef[redacted]"; }
+    }
+    default Optional<BackupTranscriptRef> backupTranscript(String jobId) { return Optional.empty(); }
     default DiagnosticAdmission insertDiagnosticRead(String jobId, String idempotencyKey, String deviceId,
             String command, String actor) { return new DiagnosticAdmission("UNSUPPORTED", null); }
     default java.util.List<DiagnosticJob> diagnosticHistory(String deviceId, int offset) { return java.util.List.of(); }

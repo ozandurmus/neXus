@@ -176,4 +176,15 @@ public final class RbacEvaluator {
         return new Decision(AuthzOutcome.DENIED, Optional.of(AUTHORITY),
                 Optional.of(REASON_ACTOR_NOT_IN_REQUIRED_BINDING), Optional.empty());
     }
+
+    public Decision evaluateAny(String actorFingerprint, java.util.Set<String> requiredTokens, Instant now) {
+        Decision refused = null;
+        for (String token : requiredTokens) {
+            Decision decision = evaluate(actorFingerprint, Optional.of(token), now);
+            if (decision.outcome().proceeds()) return decision;
+            if (refused == null || ("AUTHZ_NOT_EVALUATED".equals(decision.outcome().name())
+                    && !"AUTHZ_NOT_EVALUATED".equals(refused.outcome().name()))) refused = decision;
+        }
+        return refused == null ? Decision.noApplicableAuthority() : refused;
+    }
 }

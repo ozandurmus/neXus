@@ -39,10 +39,17 @@ public final class JobLogQueryService {
             @JsonProperty("terminal_reason") String terminalReason,
             @JsonProperty("submitted_at") Instant submittedAt,
             @JsonProperty("finished_at") Instant finishedAt,
-            @JsonProperty("duration_ms") Long durationMs) {
+            @JsonProperty("duration_ms") Long durationMs,
+            @JsonProperty("has_transcript") boolean hasTranscript) {
 
         public JobEvent(String jobId, String jobType, String targetDeviceId, String state, String terminalReason, Instant submittedAt) {
-            this(jobId, jobType, targetDeviceId, null, state, null, terminalReason, submittedAt, null, null);
+            this(jobId, jobType, targetDeviceId, null, state, null, terminalReason, submittedAt, null, null, false);
+        }
+
+        public JobEvent(String jobId, String jobType, String targetDeviceId, String deviceName, String state,
+                String outcome, String terminalReason, Instant submittedAt, Instant finishedAt, Long durationMs) {
+            this(jobId, jobType, targetDeviceId, deviceName, state, outcome, terminalReason, submittedAt,
+                    finishedAt, durationMs, false);
         }
     }
 
@@ -105,6 +112,7 @@ public final class JobLogQueryService {
     private static final String FROM = " from jobs j left join devices d on d.device_id = j.target_device_id";
     private static final String SELECT = "select j.job_id, j.job_type, j.target_device_id, d.observed_hostname as device_name, "
             + "j.state, j.outcome, j.terminal_reason, j.submitted_at, j.finished_at, "
+            + "j.transcript_artefact_ref is not null as has_transcript, "
             + "case when j.finished_at is not null then extract(epoch from (j.finished_at - j.submitted_at)) * 1000 "
             + "     else extract(epoch from (now() - j.submitted_at)) * 1000 end as duration_ms" + FROM;
 
@@ -248,6 +256,7 @@ public final class JobLogQueryService {
                 row.get("terminal_reason", String.class),
                 subTs != null ? subTs.toInstant() : null,
                 finTs != null ? finTs.toInstant() : null,
-                dur);
+                dur,
+                row.get("has_transcript", Boolean.class));
     }
 }

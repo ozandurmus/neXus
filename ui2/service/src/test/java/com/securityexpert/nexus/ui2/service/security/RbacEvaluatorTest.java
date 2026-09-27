@@ -215,6 +215,29 @@ class RbacEvaluatorTest {
     }
 
     @Test
+    void evaluateAnyPermitsEitherApprovedRoleAndRefusesAnUnrelatedActor() {
+        GroupReferenceCipher cipher = cipher();
+        FakeRoleBindingRepository bindings = new FakeRoleBindingRepository();
+        String securityGroup = "cn=security-admins,dc=example,dc=com";
+        String backupGroup = "cn=backup-admins,dc=example,dc=com";
+        bindings.addDirectory("security-binding", RoleToken.SECURITY_ADMIN,
+                cipher.encryptDirectory(securityGroup, "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
+        bindings.addDirectory("backup-binding", RoleToken.BACKUP_ADMIN,
+                cipher.encryptDirectory(backupGroup, "synthetic", com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP));
+        FakeActorAuthzStateRepository states = new FakeActorAuthzStateRepository(cipher);
+        Instant now = Instant.now();
+        states.put("security-actor", Set.of(securityGroup), now, now.plus(15, ChronoUnit.MINUTES));
+        states.put("backup-actor", Set.of(backupGroup), now, now.plus(15, ChronoUnit.MINUTES));
+        states.put("other-actor", Set.of("cn=operators,dc=example,dc=com"), now, now.plus(15, ChronoUnit.MINUTES));
+        RbacEvaluator evaluator = new RbacEvaluator(bindings, states, cipher);
+        Set<String> allowed = Set.of(RoleToken.SECURITY_ADMIN, RoleToken.BACKUP_ADMIN);
+
+        assertEquals(AuthzOutcome.PERMITTED, evaluator.evaluateAny("security-actor", allowed, now).outcome());
+        assertEquals(AuthzOutcome.PERMITTED, evaluator.evaluateAny("backup-actor", allowed, now).outcome());
+        assertEquals(AuthzOutcome.DENIED, evaluator.evaluateAny("other-actor", allowed, now).outcome());
+    }
+
+    @Test
     void unmappedIdentityNeverReceivesPermittedForAnyRoleGatedAction() {
         // Contract §8 test 7 (directory-dependent variant lives at the
         // adapter/integration layer): here, an identity with a resolved

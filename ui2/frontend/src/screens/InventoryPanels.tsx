@@ -43,9 +43,12 @@ import {
   type InventoryRoute,
   type Presence,
   type BackupArtefact,
+  type JobEventView,
   listDeviceBackups,
+  listJobs,
 } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
+import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 
 const POLL_INTERVAL_MS = 1750;
 
@@ -2296,6 +2299,9 @@ export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
     () => listDeviceBackups(deviceId),
     describeApiError,
   );
+  const transcriptJobs = useFetchOnMount<{ items: readonly JobEventView[] }>(
+    () => listJobs({ device_id: deviceId, job_type: "backup", page_size: 200 }), describeApiError,
+  );
 
   if (fetcher.error) {
     return (
@@ -2316,6 +2322,14 @@ export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
   return (
     <Stack spacing={2.5}>
       <RequestBackupControl deviceId={deviceId} onAdmitted={fetcher.refresh} />
+      {(transcriptJobs.data?.items ?? []).filter((job) => job.has_transcript).length > 0 && <Box>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>Backup job transcripts</Typography>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          {(transcriptJobs.data?.items ?? []).filter((job) => job.has_transcript).map((job) => <Box key={job.job_id}>
+            <Ts at={job.submitted_at} /> <JobTranscriptDrawer jobId={job.job_id} hasTranscript />
+          </Box>)}
+        </Stack>
+      </Box>}
       {backups.length === 0 ? (
         <EmptyPanel
           title="No backups"

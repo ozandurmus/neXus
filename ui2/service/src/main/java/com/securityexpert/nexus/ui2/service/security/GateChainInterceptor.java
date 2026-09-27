@@ -116,13 +116,14 @@ public final class GateChainInterceptor implements HandlerInterceptor {
                 Optional.ofNullable(request.getHeader("X-CSRF-Token")),
                 Optional.ofNullable(request.getHeader("Origin")),
                 actionId,
-                Optional.ofNullable(request.getParameter("target_ref")));
+                ActionRegistry.JOB_TRANSCRIPT_READ.equals(actionId)
+                        ? Optional.of(path.split("/")[2]) : Optional.ofNullable(request.getParameter("target_ref")));
 
         GateOutcome outcome = gateChain.evaluate(gateRequest, Instant.now());
         if (outcome instanceof GateOutcome.Proceed proceed) {
             request.setAttribute(ACTOR_FINGERPRINT_ATTRIBUTE, proceed.actorFingerprint());
             request.setAttribute(SESSION_ID_ATTRIBUTE, proceed.sessionId());
-            if (localIdentityResolver != null && localRoleTokenResolver != null) {
+            if (gateChain != null || (localIdentityResolver != null && localRoleTokenResolver != null)) {
                 // The replay-viewer answer per session, kept 60 s: two lookups on every request otherwise.
                 ReplayViewerAnswer cached = replayViewerBySession.get(proceed.sessionId());
                 boolean replayViewer;
@@ -131,9 +132,11 @@ public final class GateChainInterceptor implements HandlerInterceptor {
                 } else {
                     replayViewer = false;
                     try {
-                        var identity = localIdentityResolver.resolve(proceed.actorFingerprint());
-                        if (identity.isPresent()) {
-                            replayViewer = localRoleTokenResolver.resolve(identity.get().localIdentityId())
+                        if (gateChain != null) {
+                            replayViewer = gateChain.isReplayViewer(proceed.actorFingerprint());
+                        } else {
+                            var identity = localIdentityResolver.resolve(proceed.actorFingerprint());
+                            replayViewer = identity.isPresent() && localRoleTokenResolver.resolve(identity.get().localIdentityId())
                                     .contains(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER);
                         }
                         if (replayViewerBySession.size() > 10_000) {

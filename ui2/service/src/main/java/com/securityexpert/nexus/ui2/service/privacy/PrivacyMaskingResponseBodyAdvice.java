@@ -120,7 +120,8 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     maskedReason,
                     jobEvent.submittedAt(),
                     jobEvent.finishedAt(),
-                    jobEvent.durationMs());
+                    jobEvent.durationMs(),
+                    false);
         }
         // The job log page (Operations > Jobs) is a record, not a Map: before 2026-09-25 it passed through unmasked and
         // showed real device names to the aiview persona.

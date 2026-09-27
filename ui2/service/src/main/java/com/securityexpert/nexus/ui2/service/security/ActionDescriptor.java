@@ -16,5 +16,20 @@ import java.util.Optional;
  * @param requiredRoleToken   {@code empty} means {@code NO_APPLICABLE_AUTHORITY}
  *                             (open to any authenticated session) at {@code E4}
  */
-public record ActionDescriptor(String actionId, boolean consoleSubmittable, Optional<String> requiredRoleToken) {
+public record ActionDescriptor(String actionId, boolean consoleSubmittable, Optional<String> requiredRoleToken,
+        java.util.Set<String> alternativeRoleTokens) {
+    public ActionDescriptor(String actionId, boolean consoleSubmittable, Optional<String> requiredRoleToken) {
+        this(actionId, consoleSubmittable, requiredRoleToken, java.util.Set.of());
+    }
+
+    public ActionDescriptor {
+        alternativeRoleTokens = java.util.Set.copyOf(alternativeRoleTokens);
+    }
+
+    public java.util.Set<String> requiredRoleTokens() {
+        if (requiredRoleToken.isEmpty()) return java.util.Set.of();
+        java.util.Set<String> tokens = new java.util.HashSet<>(alternativeRoleTokens);
+        tokens.add(requiredRoleToken.get());
+        return java.util.Set.copyOf(tokens);
+    }
 }

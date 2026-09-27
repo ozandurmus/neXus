@@ -18,6 +18,7 @@ import { StatePanel, RestrictedPanel, isRestricted, Ts } from "../shell/States";
 import { formatDuration } from "../shell/time";
 import { MONO, m3 } from "../theme/m3Theme";
 import { jobTypeLabel } from "../jobs/jobTypeLabel";
+import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import {
   downloadJobsCsv,
   jobFacets,
@@ -307,12 +308,14 @@ export function JobLogsPanel({
                   <TableCell sx={{ fontWeight: 600 }}>Duration</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Result</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Submitted At</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Transcript</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {page.items.map((job) => {
                   const isExpanded = expandedJobId === job.job_id;
                   const vendor = devices[job.target_device_id]?.vendor;
+                  const isBackupJob = /backup|snapshot|export/i.test(job.job_type);
                   // The API's terminal_reason repeats the terminal state on a clean run (review §3); a
                   // completed job has nothing to explain, so the column reads "--" there and keeps the
                   // reason only where it is one -- a failure, rejection or unknown outcome.
@@ -352,9 +355,10 @@ export function JobLogsPanel({
                       <TableCell sx={{ whiteSpace: "nowrap" }}>
                         <Ts at={job.submitted_at} />
                       </TableCell>
+                      <TableCell><JobTranscriptDrawer jobId={job.job_id} hasTranscript={isBackupJob && job.has_transcript} /></TableCell>
                     </TableRow>
                     {isExpanded && <TableRow key={`${job.job_id}-details`}>
-                      <TableCell colSpan={6}>
+                      <TableCell colSpan={7}>
                         <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
                           {([["Job ID", job.job_id], ["Device ID", job.target_device_id]] as const).map(([label, value]) => (
                             <Stack key={label} direction="row" spacing={0.5} alignItems="center">

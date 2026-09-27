@@ -136,7 +136,9 @@ public final class GateChain {
         }
 
         // E4: the four D7 outcomes.
-        RbacEvaluator.Decision decision = rbacEvaluator.evaluate(actorFingerprint, action.requiredRoleToken(), now);
+        RbacEvaluator.Decision decision = action.alternativeRoleTokens().isEmpty()
+                ? rbacEvaluator.evaluate(actorFingerprint, action.requiredRoleToken(), now)
+                : rbacEvaluator.evaluateAny(actorFingerprint, action.requiredRoleTokens(), now);
         long decisionId = authzDecisionRepository.insert(sessionId, actorFingerprint, action.actionId(),
                 request.targetRef(), decision.outcome(), decision.authority(), decision.reasonCode(),
                 decision.bindingId());
@@ -157,6 +159,12 @@ public final class GateChain {
         // check here without changing this chain's shape.
 
         return new GateOutcome.Proceed(sessionId, actorFingerprint);
+    }
+
+    public boolean isReplayViewer(String actorFingerprint) {
+        RbacEvaluator.Decision decision = rbacEvaluator.evaluate(actorFingerprint,
+                Optional.of(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER), Instant.now());
+        return decision.outcome().proceeds() && !RbacEvaluator.ROOT_AUTHORITY.equals(decision.authority().orElse(null));
     }
 
     private static String endReasonCode(SessionRecord session) {

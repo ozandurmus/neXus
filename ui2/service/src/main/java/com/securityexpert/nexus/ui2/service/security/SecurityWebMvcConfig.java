@@ -94,6 +94,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/jobs/facets", ActionRegistry.JOB_LOG_READ),
             Map.entry("GET /api/v2/jobs/stats", ActionRegistry.JOB_LOG_READ),
             Map.entry("GET /api/v2/jobs/export.csv", ActionRegistry.JOB_LOG_READ),
+            Map.entry("GET /jobs/*/transcript", ActionRegistry.JOB_TRANSCRIPT_READ),
             // 13G: one resource, body-only (no path variable), matching
             // /role-bindings/revoke's own shape.
             Map.entry("POST /local-identities", ActionRegistry.LOCAL_IDENTITY_CREATE),
