@@ -1,0 +1,39 @@
+# Palo Alto HA failover: same approval / run / screen skeleton as Check Point
+
+**Status:** FROZEN -- Product Owner decisions 2026-09-27 (§5). Reuses everything in
+`FAILOVER_EXECUTION_CP_CONTRACT.md` (approval windows, roles, runs, stepper, refusals, audit) except the unit, the
+checks and the commands below.
+
+## 1. Unit
+A Palo Alto HA pair in **active-passive** mode (two direct firewalls, reciprocally paired). Active-active pairs are
+refused ("unsupported HA mode"). Virtual systems are never units: they are shown under their device (legacy view).
+
+## 2. Flow (per the CP contract §1, with these steps)
+1. Approval window and start: as CP.
+2. **Pre-checks** on both peers (direct firewall XML API, the approved `<show><high-availability><state/>` read).
+3. **Suspend** the active peer: `<request><high-availability><state><suspend/></state></high-availability></request>`.
+4. **Confirm the switch** (PO: "suspend ettiğinde diğerinin aktif olduğuna bakılması gerekiyor"): poll the HA state on
+   both peers every 3 s, up to 60 s, until the former passive reports **active** and the former active reports
+   **suspended**. Not reached -> stop and warn (no further command).
+5. **Post-checks** (same checks) on both peers.
+6. **Return**: on the former active `<request><high-availability><state><functional/></state></high-availability></request>`;
+   poll until it reports **passive** while the new active stays **active**.
+7. Any problem after step 3: stop, no automatic fail-back, notify.
+
+## 3. Checks (from `show high-availability state`, both peers)
+| # | Check | PASS when |
+| --- | --- | --- |
+| 1 | Mode and roles | both report active-passive; exactly one active and one passive (pre); after the switch the expected roles (post) |
+| 2 | Peer relationship | each peer's view of the other is the other device (reciprocal), peer connection status up |
+| 3 | HA links | HA1 (and HA1 backup if configured) and HA2 links up on both |
+| 4 | Configuration sync | running configuration synchronized on both |
+Unrecognised output -> UNKNOWN (blocks). Derived values only.
+
+## 4. Commands and gates
+Read: existing HA-state XML gate. Write (new, CLASS operational state change, exact-key exception like CP):
+the two `request high-availability state` op commands above, direct firewall only, never console-submittable.
+
+## 5. Product Owner decisions (2026-09-27)
+- Method: suspend, confirm the other peer became active, then functional on the former active.
+- Checks: HA state and connectivity only (option "HA durumu + bağlantı").
+- Same approval windows, roles and screen as Check Point; vsys under their device.
