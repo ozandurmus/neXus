@@ -63,6 +63,17 @@ class FortinetAsaComplianceEvaluatorTest {
     }
 
     @Test
+    void fortinetAbsentAllowaccessIsEmptyOnlyInAFullConfigurationSection() {
+        String interfaces = "config system interface\nedit \"port1\"\nset vdom \"root\"\nnext\n"
+                + "edit \"port2\"\nset allowaccess ping https ssh\nnext\nend\n";
+        assertEquals(Verdict.PASS, result("fortinet", "fg_admin_no_cleartext",
+                "#nexus-full-configuration system interface\n" + interfaces));
+        assertEquals(Verdict.UNKNOWN, result("fortinet", "fg_admin_no_cleartext", interfaces));
+        assertEquals(Verdict.FAIL, result("fortinet", "fg_admin_no_cleartext",
+                "#nexus-full-configuration system interface\n" + interfaces.replace("ping https ssh", "ping http")));
+    }
+
+    @Test
     void fortinetMultiLineQuotedValueIsNotAStatement() {
         String text = "config system replacemsg admin \"pre_admin-disclaimer-text\"\n"
                 + "set buffer \"Line one of the banner\nSecond line: %%LINK%%\n\"\nend\n"

@@ -23,7 +23,7 @@ public final class FortinetAsaComplianceEvaluator {
         String get(String key) { return settings.get(key); }
     }
 
-    private record Parsed(List<Block> blocks, boolean complete) {
+    private record Parsed(List<Block> blocks, boolean complete, Set<String> fullSections) {
         List<Block> section(String name) { return blocks.stream().filter(b -> b.section().equals(name)).toList(); }
     }
 
@@ -70,7 +70,11 @@ public final class FortinetAsaComplianceEvaluator {
     }
 
     private static Parsed parseForti(String text) {
-        if (text == null || text.isBlank()) return new Parsed(List.of(), false);
+        if (text == null || text.isBlank()) return new Parsed(List.of(), false, Set.of());
+        // Sections read with `show full-configuration` (marker written by FortiGateConfigProcessor).
+        Set<String> fullSections = new java.util.HashSet<>();
+        text.lines().map(String::strip).filter(l -> l.startsWith("#nexus-full-configuration "))
+                .forEach(l -> fullSections.add(l.substring("#nexus-full-configuration ".length())));
         List<Block> blocks = new ArrayList<>();
         List<String> stack = new ArrayList<>();
         // The block each open statement created: after next/end the enclosing block is simply the new top. (A key
@@ -122,7 +126,7 @@ public final class FortinetAsaComplianceEvaluator {
                 valid = false;
             }
         }
-        return new Parsed(blocks, valid && !inQuotedValue && stack.isEmpty() && closed && !blocks.isEmpty());
+        return new Parsed(blocks, valid && !inQuotedValue && stack.isEmpty() && closed && !blocks.isEmpty(), fullSections);
     }
 
     private static int unescapedQuotes(String line) {
@@ -164,7 +168,10 @@ public final class FortinetAsaComplianceEvaluator {
         return switch (id) {
             case "fg_admin_no_cleartext" -> blocks.stream().anyMatch(b -> containsWord(b.get("allowaccess"), "http")
                     || containsWord(b.get("allowaccess"), "telnet")) ? Verdict.FAIL
-                    : blocks.stream().allMatch(b -> visible(b.get("allowaccess"))) ? Verdict.PASS : Verdict.UNKNOWN;
+                    : blocks.stream().allMatch(b -> visible(b.get("allowaccess"))
+                            // full-configuration omits an empty allowaccess: absent there means no service allowed
+                            || (parsed.fullSections().contains("system interface") && b.get("allowaccess") == null))
+                            ? Verdict.PASS : Verdict.UNKNOWN;
             case "fg_remote_logging" -> blocks.stream().anyMatch(b -> "enable".equals(b.get("status"))
                     && visible(b.get("server"))) ? Verdict.PASS
                     : blocks.stream().anyMatch(b -> b.get("server") != null && b.get("server").contains("[withheld]"))

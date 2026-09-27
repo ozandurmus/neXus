@@ -34,6 +34,13 @@ public final class FortiGateConfigProcessor {
     private FortiGateConfigProcessor() {
     }
 
+    /**
+     * Precedes a block read with `show full-configuration <section>`: there an absent setting is an empty value, not an
+     * omitted default (measured 2026-09-27: full `system interface` prints ~97 settings per interface but no
+     * `allowaccess` line when no service is allowed).
+     */
+    public static final String FULL_SECTION_MARKER = "#nexus-full-configuration ";
+
     private record Range(int start, int end) {}
 
     /** Replace one global section only when both documents have an unambiguous, balanced block. */
@@ -67,6 +74,7 @@ public final class FortiGateConfigProcessor {
         List<String> merged = new ArrayList<>(source);
         merged.subList(start, end).clear();
         merged.addAll(start, replacement);
+        merged.add(start, FULL_SECTION_MARKER + section);
         return String.join("\n", merged) + "\n";
     }
 
@@ -122,6 +130,10 @@ public final class FortiGateConfigProcessor {
         for (String rawLine : text.split("\n")) {
             String line = rawLine.stripTrailing();
             String t = line.strip();
+            if (t.startsWith(FULL_SECTION_MARKER)) {
+                sanitized.append(t).append('\n'); // evidence provenance for the evaluator, constant per section
+                continue;
+            }
             if (t.startsWith("#")) {
                 continue; // the per-run header (config-version, conf_file_ver, buildno) never enters the hash or the text
             }
