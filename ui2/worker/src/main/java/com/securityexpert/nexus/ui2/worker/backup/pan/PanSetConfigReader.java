@@ -54,6 +54,20 @@ public final class PanSetConfigReader {
         this.transport = Objects.requireNonNull(transport, "transport");
     }
 
+    /** MEASURE (2026-09-27, PAN backups failing since 09-23): per command, the answer's kind and shape -- never values. */
+    private static void measure(String command, ExecResult result) {
+        String kind = result.getClass().getSimpleName();
+        String text = result instanceof ExecResult.Completed c && c.output() != null ? c.output() : "";
+        java.util.List<String> lines = text.lines().toList();
+        java.util.function.Function<String, String> shape = l -> {
+            String v = l.replaceAll("\"[^\"]*\"", "\"q\"").replaceAll("[A-Za-z]+", "a").replaceAll("[0-9]+", "9");
+            return v.length() > 60 ? v.substring(0, 60) : v;
+        };
+        System.getLogger(PanSetConfigReader.class.getName()).log(System.Logger.Level.INFO,
+                "[PAN] {0}: {1} chars={2} lines={3} first={4} last={5}", command, kind, text.length(), lines.size(),
+                lines.stream().limit(2).map(shape).toList(), lines.isEmpty() ? "" : shape.apply(lines.get(lines.size() - 1)));
+    }
+
     public Outcome read(ConnectionTarget sshTarget, String credentialRef, String trustRuleRef) {
         ConnectResult connectResult;
         try {
@@ -69,6 +83,7 @@ public final class PanSetConfigReader {
         try {
             for (int i = 0; i < COMMANDS.size() - 1; i++) {
                 ExecResult setup = transport.execInteractive(session, new ExecSpec(COMMANDS.get(i)), SETUP_TIMEOUT);
+                measure(COMMANDS.get(i), setup);
                 if (!(setup instanceof ExecResult.Completed)) {
                     // A CLI setting answers with an empty line and the prompt; the interactive shell reports
                     // that as ChannelFailed("empty output") rather than Completed -- only a timeout means trouble.
@@ -78,6 +93,7 @@ public final class PanSetConfigReader {
                 }
             }
             ExecResult show = transport.execInteractive(session, new ExecSpec(COMMANDS.get(COMMANDS.size() - 1)), SHOW_TIMEOUT);
+            measure(COMMANDS.get(COMMANDS.size() - 1), show);
             if (!(show instanceof ExecResult.Completed completed)) {
                 return new Outcome.Unavailable("show config running: " + show.getClass().getSimpleName());
             }
