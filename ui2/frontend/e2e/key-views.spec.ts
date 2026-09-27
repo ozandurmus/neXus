@@ -38,7 +38,8 @@ test("Inventory: Check Point failover units use the device list's VS names", asy
   const names = cluster!.virtual_systems!.split(/,\s*/).filter(Boolean);
   expect(names.length).toBeGreaterThan(0);
   await page.locator('[data-row="cluster"]').filter({ hasText: cluster!.cluster_member_ref! }).first().click();
-  const tabs = page.getByRole("tablist", { name: "Device detail", exact: true });
+  // A cluster opens the cluster detail (its own tablist name), not the device detail.
+  const tabs = page.getByRole("tablist", { name: "Cluster detail", exact: true });
   await tabs.getByRole("tab", { name: "Failover", exact: true }).click();
   const failover = page.getByLabel("Check Point failover");
   for (const name of names) {
