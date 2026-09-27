@@ -147,13 +147,17 @@ class ConfigurationQueryServiceTest {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.byId.put("device-1", device("device-1", vendor));
         FakeDeviceConfigurationRepository configRepository = new FakeDeviceConfigurationRepository();
-        configRepository.recordRun(showConfigurationRun("device-1", Instant.parse("2026-09-26T12:00:00Z"), "hostname x\n"),
+        String stored = vendor.equals("fortinet")
+                ? "config system dns\nset primary 192.0.2.53\nend\nconfig firewall policy\nset name invented\nend\n"
+                : "hostname x\n";
+        configRepository.recordRun(showConfigurationRun("device-1", Instant.parse("2026-09-26T12:00:00Z"), stored),
                 new ConfigurationArtefactRecord("artefact-1", "device-1", "job-1", vendor, "h", 1L, "h", 1L,
                         "none", "v1", new byte[] {1, 2, 3}),
                 "actor", "action-1");
         ConfigurationQueryService service = new ConfigurationQueryService(devices, configRepository);
 
-        assertEquals("hostname x\n", service.sanitizedText("device-1").orElseThrow());
+        assertEquals(vendor.equals("fortinet") ? "config system dns\nset primary 192.0.2.53\nend\n" : stored,
+                service.sanitizedText("device-1").orElseThrow());
     }
 
     @Test

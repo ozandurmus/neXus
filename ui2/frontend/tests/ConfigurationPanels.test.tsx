@@ -71,6 +71,28 @@ describe("ConfigurationScreen device selection and panels", () => {
     await waitFor(() => expect(screen.getByText(/set interface eth0 state on/)).toBeInTheDocument());
   });
 
+  it("hides excluded FortiGate sections from an older stored index", async () => {
+    const device = { ...CP_DEVICE, vendor: "fortinet", hostname: "FW-TANGO-04" };
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/configuration") return Promise.resolve(jsonResponse(200, { devices: [device] }));
+      if (url === "/devices/dev-1/configuration") return Promise.resolve(jsonResponse(200, {
+        device_id: "dev-1", vendor: "fortinet", read_kind: "show_configuration", collected_at: "2026-09-26T12:00:00Z",
+        sanitized_text_available: true, index: [
+          { context: "root", section: "system interface", source: null, entry_count: 1 },
+          { context: "root", section: "firewall policy", source: null, entry_count: 1 },
+        ], overrides: [], supplementary_runs: [],
+      }));
+      if (url === "/devices/dev-1/configuration/text") return Promise.resolve(textResponse(200, "config system interface\nset status enable\nend\n"));
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    }));
+    render(withTheme(<ConfigurationScreen />));
+    fireEvent.click(await screen.findByText("FW-TANGO-04"));
+    fireEvent.click(await screen.findByRole("tab", { name: "Details" }));
+    expect(await screen.findByText("system interface")).toBeInTheDocument();
+    expect(screen.queryByText("firewall policy")).not.toBeInTheDocument();
+  });
+
   it("shows no sanitized text tab content for a Palo Alto device (sanitized_text_available false)", async () => {
     const panDevice = { ...CP_DEVICE, vendor: "palo_alto" };
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {

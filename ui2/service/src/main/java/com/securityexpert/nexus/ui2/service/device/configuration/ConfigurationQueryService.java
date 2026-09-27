@@ -13,6 +13,7 @@ import com.securityexpert.nexus.ui2.persistence.device.configuration.Configurati
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationRun;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationRunView;
 import com.securityexpert.nexus.ui2.persistence.device.configuration.DeviceConfigurationRepository;
+import com.securityexpert.nexus.ui2.configuration.FortiGateConfigurationAllowlist;
 
 /**
  * {@code GET /devices/{id}/configuration}, {@code GET /devices/{id}/
@@ -77,7 +78,10 @@ public final class ConfigurationQueryService {
             return Optional.empty();
         }
         String vendor = device.get().vendorHint();
-        if ("check_point".equalsIgnoreCase(vendor) || "fortinet".equalsIgnoreCase(vendor) || "cisco_asa".equalsIgnoreCase(vendor)) {
+        if ("fortinet".equalsIgnoreCase(vendor)) {
+            return deviceConfigurationRepository.findLatestRun(deviceId, ConfigurationReadKind.SHOW_CONFIGURATION)
+                    .flatMap(ConfigurationRun::sanitizedText).map(text -> FortiGateConfigurationAllowlist.filter(text).text());
+        } else if ("check_point".equalsIgnoreCase(vendor) || "cisco_asa".equalsIgnoreCase(vendor)) {
             return deviceConfigurationRepository.findLatestRun(deviceId, ConfigurationReadKind.SHOW_CONFIGURATION)
                     .flatMap(ConfigurationRun::sanitizedText);
         } else if ("palo_alto".equalsIgnoreCase(vendor)) {

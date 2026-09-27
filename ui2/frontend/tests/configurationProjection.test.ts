@@ -1,6 +1,47 @@
 import { describe, expect, it } from "vitest";
 
-import { filterProjection, projectAsa, projectCheckPoint, projectCluster, projectPaloAlto, projectProxySg } from "../src/screens/configurationProjection";
+import { filterProjection, projectAsa, projectCheckPoint, projectCluster, projectFortiGate, projectPaloAlto, projectProxySg } from "../src/screens/configurationProjection";
+
+describe("FortiGate projection", () => {
+  it("groups approved sections and hides excluded blocks from older runs", () => {
+    const text = `config global
+config system global
+set hostname FW-TANGO-04
+end
+config log syslogd setting
+set server 192.0.2.10
+end
+config firewall policy
+set name invented
+end
+end
+config vdom
+edit root
+config system interface
+edit port1
+set ip 192.0.2.1 255.255.255.0
+next
+end
+config user ldap
+set server 192.0.2.20
+end
+config firewall address
+set comment "first
+end
+config system dns
+second"
+end
+next
+end
+`;
+    const p = projectFortiGate(text);
+    expect(p.sections.map((s) => s.label)).toEqual(["System", "Authentication", "Logging", "Interfaces"]);
+    expect(p.sections.find((s) => s.label === "Logging")?.rows[0]).toMatchObject({ setting: "Syslogd Setting › Server", value: "192.0.2.10" });
+    expect(p.sections.find((s) => s.label === "Interfaces")?.rows[0]).toMatchObject({ context: "root", setting: "Interface › port1 › IP" });
+    expect(p.settingCount).toBe(4);
+    expect(p.sections.flatMap((s) => s.rows).some((r) => r.value.includes("invented") || r.value.includes("second"))).toBe(false);
+  });
+});
 
 describe("ProxySG projection", () => {
   it("groups BEGIN blocks and withheld values", () => {

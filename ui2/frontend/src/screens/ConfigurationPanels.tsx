@@ -28,6 +28,7 @@ import {
 } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { InventoryEntityHeader } from "./InventoryPanels";
+import { FORTIGATE_SECTIONS } from "./configurationProjection";
 
 const POLL_INTERVAL_MS = 1750;
 
@@ -295,10 +296,10 @@ export function DeviceConfigurationPanels({
     );
   }
 
-  const index = configuration?.index ?? [];
   const overrides = configuration?.overrides ?? [];
   const deviation = configuration?.change_deviation_summary ?? null;
   const vendor = configuration?.vendor ?? device?.vendor_hint ?? vendorHint ?? "check_point";
+  const index = (configuration?.index ?? []).filter((entry) => vendor !== "fortinet" || FORTIGATE_SECTIONS[entry.section] !== undefined);
   const isPaloAlto = vendor === "palo_alto";
   const displayName = hostname ?? device?.facts?.hostname ?? deviceId;
   const collected = configuration?.collected_at ?? null;

@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationIndexEntry;
+import com.securityexpert.nexus.ui2.configuration.FortiGateConfigurationAllowlist;
 
 /**
  * A FortiOS configuration ("show" at the top level, every VDOM) parsed to the product's configuration plane
@@ -119,7 +120,10 @@ public final class FortiGateConfigProcessor {
     }
 
     public static Processed process(String raw) {
-        String text = raw == null ? "" : raw.replace("\r\n", "\n").replace("\r", "\n");
+        var filtered = FortiGateConfigurationAllowlist.filter(raw);
+        LOG.log(System.Logger.Level.INFO, "[FGT] configuration projection kept blocks={0}, dropped blocks={1}, dropped lines={2}",
+                filtered.keptBlocks(), filtered.droppedBlocks(), filtered.droppedLines());
+        String text = filtered.text();
         StringBuilder sanitized = new StringBuilder();
         Map<String, Integer> sectionCounts = new LinkedHashMap<>();
         Deque<String> stack = new ArrayDeque<>();
@@ -156,6 +160,7 @@ public final class FortiGateConfigProcessor {
                     String popped = stack.pop();
                     if (t.equals("end") && popped.equals("vdom") && stack.isEmpty()) {
                         inVdomList = false;
+                        vdom = "global";
                     }
                 }
             } else if (t.startsWith("set ") || t.startsWith("unset ")) {

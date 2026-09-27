@@ -54,8 +54,8 @@ class FortiGateConfigProcessorTest {
     @Test
     void sectionsPerVdomSettingsCountedSecretsWithheld() {
         var p = FortiGateConfigProcessor.process(CONFIG);
-        assertEquals(2, p.withheldLineCount());
-        assertEquals(6, p.settingCount());
+        assertEquals(1, p.withheldLineCount());
+        assertEquals(5, p.settingCount());
         assertFalse(p.sanitizedText().contains("AAAAbbbb"));
         assertFalse(p.sanitizedText().contains("ENC ccc"));
         assertTrue(p.sanitizedText().contains("set password [withheld]"));
@@ -64,8 +64,37 @@ class FortiGateConfigProcessorTest {
         assertEquals(2, counts.get("global|system global"));
         assertEquals(2, counts.get("global|system admin"));
         assertEquals(1, counts.get("root|system interface"));
-        assertEquals(1, counts.get("root|vpn ipsec phase1-interface"));
+        assertFalse(counts.containsKey("root|vpn ipsec phase1-interface"));
         assertEquals(p.canonicalHash(), FortiGateConfigProcessor.process(CONFIG.replace("446474735424624", "999")).canonicalHash());
+    }
+
+    @Test
+    void curatedSectionsKeepOnlyApprovedFamiliesAndBalancedWrappers() {
+        String[] kept = {"system global", "system settings", "system console", "system central-management", "system fortiguard",
+                "system dns", "system ntp", "system admin", "system accprofile", "system password-policy",
+                "system snmp sysinfo", "system snmp community", "system snmp user", "user tacacs+", "user radius", "user ldap",
+                "system ha", "log setting", "log syslogd setting", "log syslogd2 setting", "log syslogd3 setting",
+                "log syslogd4 setting", "log fortianalyzer setting", "log fortianalyzer2 setting", "log fortianalyzer3 setting",
+                "system interface", "system zone", "router static", "router static6", "router bgp", "router ospf"};
+        String[] dropped = {"firewall policy", "firewall address", "firewall service custom", "firewall internet-service",
+                "dlp sensor", "webfilter profile", "wanopt settings", "vpn ipsec phase1-interface", "user local"};
+        StringBuilder raw = new StringBuilder();
+        for (String scope : new String[] {"", "config global\n", "config vdom\nedit root\n"}) {
+            raw.append(scope);
+            for (String name : kept) raw.append("#nexus-full-configuration ").append(name).append("\nconfig ").append(name)
+                    .append("\nset status enable\nconfig child\nedit invented\nset mode enable\nnext\nend\nend\n");
+            for (String name : dropped) raw.append("config ").append(name)
+                    .append("\nedit invented\nset note \"first line\nend\nconfig system dns\nlast line\"\nnext\nend\n");
+            if (!scope.isEmpty()) raw.append(scope.startsWith("config vdom") ? "next\nend\n" : "end\n");
+        }
+        var p = FortiGateConfigProcessor.process(raw.toString());
+        assertEquals(kept.length * 3 * 2, p.settingCount());
+        assertEquals(kept.length * 2, p.index().size());
+        for (String name : kept) assertTrue(p.sanitizedText().contains("config " + name + "\n"));
+        for (String name : dropped) assertFalse(p.sanitizedText().contains("config " + name + "\n"));
+        assertFalse(p.sanitizedText().contains("last line"));
+        assertTrue(p.sanitizedText().contains("config global\n"));
+        assertTrue(p.sanitizedText().contains("config vdom\nedit root\n"));
     }
 
     @Test

@@ -384,11 +384,21 @@ export function filterProjection(sections: readonly Section[], query: string): S
     .filter((s) => s.rows.length > 0);
 }
 
-/**
- * FortiOS (PO 2026-09-26): the sanitized top-level "show". Sections are the outermost config blocks, prefixed by the
- * VDOM on a multi-VDOM box ("root · System Interface"); a setting is the "set" name under its edit path
- * ("port1 › ip"); a "[withheld]" value is a secret the worker withheld. Nothing is invented; unknown lines are skipped.
- */
+// PO decision 2026-09-27: Configuration uses these sections; backup retains the full show.
+export const FORTIGATE_SECTIONS: Readonly<Record<string, string>> = {
+  "system global": "System", "system settings": "System", "system console": "System",
+  "system central-management": "System", "system fortiguard": "System", "system dns": "DNS", "system ntp": "NTP",
+  "system admin": "Management", "system accprofile": "Management", "system password-policy": "Management",
+  "system snmp sysinfo": "Management", "system snmp community": "Management", "system snmp user": "Management",
+  "user tacacs+": "Authentication", "user radius": "Authentication", "user ldap": "Authentication",
+  "system ha": "High Availability", "log setting": "Logging", "log syslogd setting": "Logging",
+  "log syslogd2 setting": "Logging", "log syslogd3 setting": "Logging", "log syslogd4 setting": "Logging",
+  "log fortianalyzer setting": "Logging", "log fortianalyzer2 setting": "Logging", "log fortianalyzer3 setting": "Logging",
+  "system interface": "Interfaces", "system zone": "Interfaces", "router static": "Routing",
+  "router static6": "Routing", "router bgp": "Routing", "router ospf": "Routing",
+};
+
+/** FortiOS sanitized text, including older runs written before the worker allowlist. */
 export function projectFortiGate(text: string): Projection {
   const bySection = new Map<string, SettingRow[]>();
   const counters = new Map<string, number>();
@@ -397,16 +407,19 @@ export function projectFortiGate(text: string): Projection {
   let vdom: string | null = null;
   let inVdomList = false;
   let withheld = 0;
-  const all: string[] = [];
-  const sectionLabel = (): string | null => {
+  let settings = 0;
+  let quoted = false;
+  const sectionName = (): string | null => {
     const outer = stack.find((s) => !s.startsWith("edit ") && s !== "vdom" && s !== "global");
-    if (!outer) return null;
-    const label = outer.split(/\s+/).map(titleCase).join(" ");
-    return vdom && vdom !== "global" ? `${vdom} · ${label}` : label;
+    return outer && FORTIGATE_SECTIONS[outer] ? outer : null;
   };
-  const editPath = (): string => stack.filter((s) => s.startsWith("edit ")).map((s) => s.slice(5).replace(/^"|"$/g, "")).join(" › ");
+  const editPath = (): string => stack.filter((s, i) => s.startsWith("edit ") && !(i === 1 && stack[0] === "vdom"))
+    .map((s) => s.slice(5).replace(/^"|"$/g, "")).join(" › ");
   for (const raw of text.split(/\r?\n/)) {
     const t = raw.trim();
+    const quotes = (raw.replace(/\\./g, "").match(/"/g) ?? []).length;
+    if (quoted) { if (quotes % 2) quoted = false; continue; }
+    if (t.startsWith("set ") && quotes % 2) quoted = true;
     if (!t || t.startsWith("#")) continue;
     if (t.startsWith("config ")) {
       const name = t.slice(7).trim();
@@ -418,26 +431,30 @@ export function projectFortiGate(text: string): Projection {
       stack.push("edit " + t.slice(5).trim());
     } else if (t === "next" || t === "end") {
       const popped = stack.pop();
-      if (t === "end" && popped === "vdom" && stack.length === 0) inVdomList = false;
+      if (t === "end" && popped === "vdom" && stack.length === 0) { inVdomList = false; vdom = null; }
     } else if (t.startsWith("set ") || t.startsWith("unset ")) {
-      const section = sectionLabel();
-      if (!section) continue;
+      const outer = sectionName();
+      if (!outer) continue;
+      const section = FORTIGATE_SECTIONS[outer];
       const parts = t.split(/\s+/);
       const name = parts[1] ?? "";
       const value = t.startsWith("unset ") ? "unset" : parts.slice(2).join(" ").replace(/^"|"$/g, "");
       if (value === "[withheld]") withheld++;
       const path = editPath();
-      const setting = path ? `${path} › ${titleCase(name)}` : titleCase(name);
+      const subSection = outer.split(/\s+/).slice(1).map(titleCase).join(" ");
+      const setting = `${subSection} › ${path ? `${path} › ` : ""}${titleCase(name)}`;
       push(bySection, counters, { section, setting, value, origin: "LOCAL", context: vdom });
-      all.push(setting);
-      if (section.endsWith("System Global") && name === "hostname") snapshot.push({ group: "System", label: "Hostname", value, origin: "LOCAL" });
-      if (section.endsWith("System Global") && name === "timezone") snapshot.push({ group: "System", label: "Timezone", value, origin: "LOCAL" });
-      if (section.endsWith("System Ntp") && name === "ntpsync") snapshot.push({ group: "NTP", label: "NTP sync", value, origin: "LOCAL" });
-      if (section.endsWith("System Dns") && (name === "primary" || name === "secondary")) snapshot.push({ group: "DNS", label: titleCase(name), value, origin: "LOCAL" });
+      settings++;
+      if (outer === "system global" && name === "hostname") snapshot.push({ group: "System", label: "Hostname", value, origin: "LOCAL" });
+      if (outer === "system global" && name === "timezone") snapshot.push({ group: "System", label: "Timezone", value, origin: "LOCAL" });
+      if (outer === "system ntp" && name === "ntpsync") snapshot.push({ group: "NTP", label: "NTP sync", value, origin: "LOCAL" });
+      if (outer === "system dns" && (name === "primary" || name === "secondary")) snapshot.push({ group: "DNS", label: titleCase(name), value, origin: "LOCAL" });
     }
   }
-  const sections = [...bySection.keys()].sort((a, b) => a.localeCompare(b)).map((label) => ({ label, rows: bySection.get(label) ?? [] }));
-  return { vendor: "fortinet", sourcePlane: "fortios-show", settingCount: all.length, withheldCount: withheld, sections, snapshot };
+  const fortiOrder = ["System", "DNS", "NTP", "Management", "Authentication", "High Availability", "Logging", "Interfaces", "Routing"];
+  const sections = [...bySection.keys()].sort((a, b) => fortiOrder.indexOf(a) - fortiOrder.indexOf(b))
+    .map((label) => ({ label, rows: bySection.get(label) ?? [] }));
+  return { vendor: "fortinet", sourcePlane: "fortios-show", settingCount: settings, withheldCount: withheld, sections, snapshot };
 }
 
 /** ASA's sanitized running configuration: indented lines belong to the preceding top-level block. */
