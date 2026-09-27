@@ -9,6 +9,8 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor;
+import com.securityexpert.nexus.ui2.worker.compliance.evaluator.FortinetAsaComplianceEvaluator;
+import com.securityexpert.nexus.ui2.worker.compliance.model.Verdict;
 
 class FortiGateConfigProcessorTest {
 
@@ -83,5 +85,61 @@ class FortiGateConfigProcessorTest {
         assertEquals("down", st.get("port2"));
         assertEquals("up", st.get("port3"));
         assertEquals("down", st.get("port4"));
+    }
+
+    @Test
+    void fullSectionsReplaceTopLevelAndExposeDefaultControlValues() {
+        String show = "#config-version=synthetic\nconfig system global\nset timezone 04\nend\n"
+                + "config system interface\nedit \"port1\"\nnext\nend\n";
+        String global = "config system global\nset admin-telnet disable\nset admin-ssh-v1 disable\n"
+                + "set admin-https-ssl-versions tlsv1-2 tlsv1-3\nset secret ENC synthetic-value\nend\n";
+        String interfaces = "config system interface\nedit \"port1\"\nset allowaccess ssh https\nnext\nend\n";
+        String ha = "config system ha\nset mode a-p\nset hbdev \"ha1\" 50\nend\n";
+        String merged = FortiGateConfigProcessor.replaceFullSection(show, "system global", global);
+        merged = FortiGateConfigProcessor.replaceFullSection(merged, "system interface", interfaces);
+        merged = FortiGateConfigProcessor.replaceFullSection(merged, "system ha", ha);
+        assertEquals(1, merged.split("config system global", -1).length - 1);
+        assertEquals(1, merged.split("config system interface", -1).length - 1);
+        assertEquals(1, merged.split("config system ha", -1).length - 1);
+        var processed = FortiGateConfigProcessor.process(merged);
+        assertTrue(processed.sanitizedText().contains("set secret [withheld]"));
+        assertFalse(processed.sanitizedText().contains("synthetic-value"));
+        assertEquals(Verdict.PASS, verdict(processed.sanitizedText(), "fg_global_telnet_disabled"));
+        assertEquals(Verdict.PASS, verdict(processed.sanitizedText(), "fg_ssh_v1_disabled"));
+        assertEquals(Verdict.PASS, verdict(processed.sanitizedText(), "fg_admin_tls_minimum"));
+        assertEquals(Verdict.PASS, verdict(processed.sanitizedText(), "fg_admin_no_cleartext"));
+        assertEquals(Verdict.PASS, verdict(processed.sanitizedText(), "fg_ha_heartbeat_defined"));
+        assertEquals(Verdict.NOT_APPLICABLE, verdict(FortiGateConfigProcessor.process(
+                FortiGateConfigProcessor.replaceFullSection(merged, "system ha",
+                        "config system ha\nset mode standalone\nend\n")).sanitizedText(), "fg_ha_heartbeat_defined"));
+        assertEquals(show, FortiGateConfigProcessor.replaceFullSection(show, "system global", null));
+        assertEquals(show, FortiGateConfigProcessor.replaceFullSection(show, "system global",
+                "Command fail. Return code -61\n"));
+    }
+
+    @Test
+    void fullSectionInGlobalScopeAndAmbiguousReplacement() {
+        String show = "#config-version=synthetic\nconfig global\nconfig system global\nset timezone 04\nend\nend\n";
+        String full = "config system global\nset admin-telnet enable\nset admin-ssh-v1 enable\n"
+                + "set admin-https-ssl-versions tlsv1-1 tlsv1-2\nend\n";
+        String merged = FortiGateConfigProcessor.replaceFullSection(show, "system global", full);
+        merged = FortiGateConfigProcessor.replaceFullSection(merged, "system interface",
+                "config system interface\nedit \"port1\"\nset allowaccess http ssh\nnext\nend\n");
+        merged = FortiGateConfigProcessor.replaceFullSection(merged, "system ha",
+                "config system ha\nset mode a-p\nset hbdev \"\"\nend\n");
+        var text = FortiGateConfigProcessor.process(merged).sanitizedText();
+        assertEquals(Verdict.FAIL, verdict(text, "fg_global_telnet_disabled"));
+        assertEquals(Verdict.FAIL, verdict(text, "fg_ssh_v1_disabled"));
+        assertEquals(Verdict.FAIL, verdict(text, "fg_admin_tls_minimum"));
+        assertEquals(Verdict.FAIL, verdict(text, "fg_admin_no_cleartext"));
+        assertEquals(Verdict.FAIL, verdict(text, "fg_ha_heartbeat_defined"));
+        assertEquals(show + show, FortiGateConfigProcessor.replaceFullSection(show + show, "system global", full));
+        assertEquals(CONFIG, FortiGateConfigProcessor.replaceFullSection(CONFIG, "system interface",
+                "config system interface\nedit \"port1\"\nset allowaccess ssh\nnext\nend\n"));
+    }
+
+    private static Verdict verdict(String text, String id) {
+        return FortinetAsaComplianceEvaluator.evaluate("synthetic-device", "fortinet", text).items().stream()
+                .filter(i -> i.controlId().equals(id)).findFirst().orElseThrow().verdict();
     }
 }

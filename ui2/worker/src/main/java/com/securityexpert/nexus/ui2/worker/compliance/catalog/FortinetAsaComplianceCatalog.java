@@ -9,10 +9,10 @@ import com.securityexpert.nexus.ui2.worker.compliance.model.EvidenceRequirement;
 import com.securityexpert.nexus.ui2.worker.compliance.model.Severity;
 import com.securityexpert.nexus.ui2.worker.compliance.model.VendorBinding;
 
-/** The frozen configuration-only FortiGate and ASA controls. No additional device read is required. */
+/** The frozen configuration-only FortiGate and ASA controls. */
 public final class FortinetAsaComplianceCatalog {
     /** Bump on any catalog OR evaluator change: it is part of the stored-evaluation cache key (ComplianceService). */
-    public static final String CATALOG_VERSION = "2026.09.fgt-asa.3";
+    public static final String CATALOG_VERSION = "2026.09.fgt-asa.4";
     private FortinetAsaComplianceCatalog() {}
 
     private record Spec(String id, String title, Severity severity, String closest) {}

@@ -61,6 +61,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
  */
 public final class ConfigurationCapabilityExecutor {
 
+    private static final System.Logger LOG = System.getLogger(ConfigurationCapabilityExecutor.class.getName());
     private static final java.time.Duration IDENTITY_TIMEOUT = java.time.Duration.ofSeconds(30);
     private static final java.time.Duration CP_CONFIG_TIMEOUT = java.time.Duration.ofSeconds(60);
     private static final java.time.Duration PAN_EFFECTIVE_RUNNING_TIMEOUT = java.time.Duration.ofSeconds(120);
@@ -233,6 +234,26 @@ public final class ConfigurationCapabilityExecutor {
             String rawConfig = interactiveOutput(session, com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.SHOW, java.time.Duration.ofSeconds(600));
             if (rawConfig == null || !com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.isConfiguration(rawConfig)) {
                 return new ConfigurationResult.ConnectFailed("show gave no FortiOS configuration (no #config-version header)");
+            }
+            for (String section : List.of("system global", "system interface", "system ha")) {
+                String command = "show full-configuration " + section;
+                String full = interactiveOutput(session, command, java.time.Duration.ofSeconds(600));
+                if (full == null || com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.isCliError(full)) {
+                    transport.execInteractive(session, new ExecSpec("config global", true), IDENTITY_TIMEOUT);
+                    try {
+                        full = interactiveOutput(session, command, java.time.Duration.ofSeconds(600));
+                    } finally {
+                        transport.execInteractive(session, new ExecSpec("end", true), IDENTITY_TIMEOUT);
+                    }
+                }
+                if (full == null || full.isBlank() || com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.isCliError(full)) {
+                    LOG.log(System.Logger.Level.WARNING, "[FGT] full section unavailable: {0}", section);
+                    continue;
+                }
+                LOG.log(System.Logger.Level.INFO, "[FGT] full section {0}: lines={1} startsGlobal={2}",
+                        section, full.lines().count(), full.stripLeading().startsWith("config system global"));
+                rawConfig = com.securityexpert.nexus.ui2.worker.configuration.fortinet.FortiGateConfigProcessor
+                        .replaceFullSection(rawConfig, section, full);
             }
             var processed = com.securityexpert.nexus.ui2.worker.configuration.fortinet.FortiGateConfigProcessor.process(rawConfig);
             ArtefactStore.ArtefactHandle handle = null;

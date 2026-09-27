@@ -1846,6 +1846,54 @@ gates:
     secret_output_risk: 'none'
     safe_telemetry_fields: []
     source_document_pointer: 'FortiOS CLI reference; PO 2026-09-26'
+  - gate_id: fgt_show_full_configuration_system_global
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'top_or_global'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show full-configuration system global'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'once inside config global when refused at the top level'
+    max_frequency: 'once per configuration/backup collection'
+    session_reuse_rule: 'same SSH session as show'
+    unsupported_behavior_ref: 'refusal or empty answer -> original show section retained, warning logged'
+    secret_output_risk: 'full configuration contains secrets; same withholding as FortiGate show'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference; PO 2026-09-27'
+  - gate_id: fgt_show_full_configuration_system_interface
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'top_or_global'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show full-configuration system interface'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'once inside config global when refused at the top level'
+    max_frequency: 'once per configuration/backup collection'
+    session_reuse_rule: 'same SSH session as show'
+    unsupported_behavior_ref: 'refusal or empty answer -> original show section retained, warning logged'
+    secret_output_risk: 'full configuration contains secrets; same withholding as FortiGate show'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference; PO 2026-09-27'
+  - gate_id: fgt_show_full_configuration_system_ha
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'top_or_global'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show full-configuration system ha'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 600
+    retry_rule: 'once inside config global when refused at the top level'
+    max_frequency: 'once per configuration/backup collection'
+    session_reuse_rule: 'same SSH session as show'
+    unsupported_behavior_ref: 'refusal or empty answer -> original show section retained, warning logged'
+    secret_output_risk: 'full configuration contains secrets; same withholding as FortiGate show'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference; PO 2026-09-27'
   - gate_id: fgt_execute_ha_manage_list
     vendor: 'fortinet'
     platform_role_scope: 'fortigate'
