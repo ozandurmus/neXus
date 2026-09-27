@@ -146,7 +146,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         raise SystemExit("task must be a lowercase slug (letters, digits, dashes)")
     if args.model not in MODELS:
         raise SystemExit(f"model must be one of {MODELS}")
-    if _state_path(task).exists():
+    if _state_path(task).exists() and _phase(json.loads(_state_path(task).read_text())) != "cleaned":
         raise SystemExit(f"task {task!r} already exists; use status/result/clean")
     busy = _live_standalone() + _live_orchestrator_movements()
     if busy:
