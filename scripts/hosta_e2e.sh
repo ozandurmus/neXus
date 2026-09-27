@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Runs the in-cluster e2e screen suite on HOST-A (docs/design/E2E_MACHINE_IDENTITY_DRAFT.md, FROZEN):
+# builds the runner image from the context the last deploy streamed, runs the Job with that image, prints a summary.
+# Exit 0 = all tests passed, 1 = test failures, 2 = the build or the Job could not run.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+HOST=$(head -1 ~/.config/nexus/hosta)
+scp -q deploy/ui2-image-build/32-e2e-build-job.yaml deploy/ui2/70-e2e-job.yaml "$HOST":/tmp/ || exit 2
+ssh "$HOST" 'bash -s' <<'REMOTE' 2>&1 | grep -vE "Authorized|Yalnizca|^\*{10}"
+export KUBECONFIG=$HOME/.kube/config
+kubectl -n ui2-build delete job ui2-e2e-image-build --ignore-not-found >/dev/null
+kubectl apply -f /tmp/32-e2e-build-job.yaml >/dev/null
+for i in $(seq 1 180); do s=$(kubectl -n ui2-build get job ui2-e2e-image-build -o jsonpath='{.status.succeeded}{.status.failed}'); [ -n "$s" ] && break; sleep 10; done
+digest=$(kubectl -n ui2-build logs job/ui2-e2e-image-build --tail=1 2>/dev/null | grep -oE 'sha256:[0-9a-f]{64}' | tail -1)
+if [ -z "$digest" ]; then echo "E2E: runner image build failed"; exit 2; fi
+python3 - "$digest" <<'PY'
+import re,sys
+s=open('/tmp/70-e2e-job.yaml').read()
+job=[d for d in s.split('\n---\n') if re.search(r'^kind: Job$',d,re.M)][0]
+job=job.replace('nexus-ui2-e2e:SET_AT_DEPLOY','nexus-ui2-e2e@'+sys.argv[1]).replace('  suspend: true\n','  suspend: false\n',1)
+open('/tmp/70-e2e-job.run.yaml','w').write(job)
+PY
+kubectl -n ui2 delete job ui2-e2e --ignore-not-found >/dev/null
+kubectl apply -f /tmp/70-e2e-job.run.yaml >/dev/null
+rm -f /tmp/32-e2e-build-job.yaml /tmp/70-e2e-job.yaml /tmp/70-e2e-job.run.yaml
+for i in $(seq 1 120); do s=$(kubectl -n ui2 get job ui2-e2e -o jsonpath='{.status.succeeded}{.status.failed}'); [ -n "$s" ] && break; sleep 10; done
+kubectl -n ui2 logs job/ui2-e2e --tail=300 2>&1 | sed -E 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/<ip>/g' | grep -E '✘|[0-9]+ passed|[0-9]+ failed|flaky|^\s+Error:' | cut -c1-170 | head -40
+[ "$(kubectl -n ui2 get job ui2-e2e -o jsonpath='{.status.succeeded}')" = "1" ] && echo "E2E: PASS" || echo "E2E: FAIL"
+REMOTE

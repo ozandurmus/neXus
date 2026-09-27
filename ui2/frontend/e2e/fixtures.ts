@@ -67,7 +67,8 @@ export { expect };
 export async function visit(page: Page, query: string, heading: string) {
   try { await page.goto(`/?${query}`); }
   catch { throw new Error("Screen navigation failed (URL withheld)"); }
-  await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  // A screen may repeat its title in a sub-heading (Inventory: page title and the device list both say "Devices").
+  await expect(page.getByRole("heading", { name: heading, exact: true }).first()).toBeVisible();
 }
 
 export async function browserGet<T>(page: Page, path: string): Promise<{ status: number; body: T }> {
