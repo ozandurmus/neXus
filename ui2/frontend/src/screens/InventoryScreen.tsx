@@ -335,12 +335,21 @@ export function DeviceList(props: DeviceListProps) {
   useEffect(() => {
     if (!groupByManager || treeManagers.length === 0) return;
     let cancelled = false;
-    Promise.all(treeManagers.map((m) => getManagementTree(m.device_id).then((t) => [m.device_id, t] as const).catch(() => null)))
-      .then((rows) => {
-        if (cancelled) return;
-        setTrees(new Map(rows.filter((r): r is readonly [string, ManagementTree] => r !== null)));
-      });
-    return () => { cancelled = true; };
+    let timer: ReturnType<typeof setTimeout>;
+    const delays = [2000, 5000, 10000];
+    const fetchTrees = async (ids: string[], attempt: number) => {
+      const rows = await Promise.all(ids.map((id) => getManagementTree(id).then((tree) => [id, tree] as const).catch(() => null)));
+      if (cancelled) return;
+      const succeeded = rows.filter((row): row is readonly [string, ManagementTree] => row !== null);
+      if (succeeded.length) setTrees((previous) => new Map([...previous, ...succeeded]));
+      const failed = rows.filter((row): row is null => row === null);
+      if (failed.length && attempt < delays.length) {
+        const retryIds = ids.filter((id) => !succeeded.some(([successId]) => successId === id));
+        timer = setTimeout(() => { void fetchTrees(retryIds, attempt + 1); }, delays[attempt]);
+      }
+    };
+    void fetchTrees(treeManagers.map((m) => m.device_id), 0);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [groupByManager, managerKey]);
 
   if (!groupByManager || managers.length === 0 || (treeManagers.length > 0 && trees.size === 0)) return <FlatDeviceList devices={devices} {...rest} />;

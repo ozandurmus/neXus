@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { JobLogsPanel, jobTypeLabel, localInputToIso } from "../src/screens/JobLogsPanel";
+import { JobLogsPanel, localInputToIso } from "../src/screens/JobLogsPanel";
+import { jobTypeLabel } from "../src/jobs/jobTypeLabel";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -38,10 +39,33 @@ it.each([
   ["fmg_discovery_enumerate", undefined, "FortiManager · discovery"],
   ["device_confirm_https", "cisco_asa", "Cisco ASA · identity check"],
   ["https_diagnostic", "fortinet", "FortiGate · diagnostic read"],
+  ["rdw_cc_config_backup", undefined, "Radware Cyber Controller · backup"],
+  ["bcmc_discovery_enumerate", undefined, "Symantec · discovery"],
+  ["proxysg_configuration_collect", undefined, "Symantec · read configuration"],
+  ["ib_diagnostic", undefined, "Infoblox · diagnostic read"],
+  ["pulse_inventory_collect", undefined, "Pulse Secure · read inventory"],
+  ["device_confirm_cisco_asa", undefined, "Cisco ASA · identity check"],
+  ["https_inventory_collect", undefined, "read inventory"],
   ["unknown_capability", undefined, "unknown_capability"],
 ])("labels %s", (id, vendor, expected) => {
   expect(jobTypeLabel(id, vendor)).toBe(expected);
 });
+
+it.each([
+  ["device_confirm_check_point", "Check Point · identity check"], ["device_confirm_palo_alto", "Palo Alto · identity check"],
+  ["device_confirm_https", "identity check"], ["device_confirm_cisco_asa", "Cisco ASA · identity check"],
+  ["device_confirm_fortigate", "FortiGate · identity check"], ["cp_configuration_collect", "Check Point · read configuration"],
+  ["pan_configuration_collect", "Palo Alto · read configuration"], ["fgt_configuration_collect", "FortiGate · read configuration"],
+  ["asa_configuration_collect", "Cisco ASA · read configuration"], ["proxysg_configuration_collect", "Symantec · read configuration"],
+  ["cp_gateway_backup", "Check Point · backup"], ["cp_gaia_snapshot", "Check Point · backup"], ["pan_device_state_backup", "Palo Alto · backup"],
+  ["pan_set_config_read", "Palo Alto · backup"], ["cp_mds_export", "Check Point MDS · backup"], ["https_vendor_backup", "backup"],
+  ["rdw_cc_config_backup", "Radware Cyber Controller · backup"], ["asa_config_backup", "Cisco ASA · backup"], ["fgt_config_backup", "FortiGate · backup"],
+  ["cp_inventory_collect", "Check Point · read inventory"], ["pan_inventory_collect", "Palo Alto · read inventory"],
+  ["https_inventory_collect", "read inventory"], ["asa_inventory_collect", "Cisco ASA · read inventory"], ["fgt_inventory_collect", "FortiGate · read inventory"],
+  ["cp_discovery_enumerate", "Check Point · discovery"], ["pan_discovery_enumerate", "Palo Alto · discovery"],
+  ["rdw_discovery_enumerate", "Radware · discovery"], ["fmg_discovery_enumerate", "FortiManager · discovery"],
+  ["bcmc_discovery_enumerate", "Symantec · discovery"],
+])("labels worker capability %s", (id, expected) => expect(jobTypeLabel(id)).toBe(expected));
 
 it("keeps job and device UUIDs in the expandable details", async () => {
   const jobId = "00000000-0000-4000-8000-000000000001";

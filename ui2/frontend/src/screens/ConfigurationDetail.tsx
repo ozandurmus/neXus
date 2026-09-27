@@ -228,7 +228,7 @@ interface IdentityTile {
  * serial number, HA role, virtual systems. A value the product has not read
  * says so (UNKNOWN, with the reason); nothing is inferred.
  */
-function identityTiles(device: DeviceSummary, collectedAt: string | null): IdentityTile[] {
+export function identityTiles(device: DeviceSummary, collectedAt: string | null): IdentityTile[] {
   const vs = vsListOf(device);
   const isPaloAlto = device.vendor_hint === "palo_alto";
   const common: IdentityTile[] = [
@@ -240,8 +240,8 @@ function identityTiles(device: DeviceSummary, collectedAt: string | null): Ident
     { label: "Enrollment", value: device.enrollment_state || null, absent: "not recorded" },
     { label: "Last configuration read", value: collectedAt ? <Ts at={collectedAt} /> : null, absent: "never" },
   ];
-  const haRole: IdentityTile = { label: "HA role", value: device.ha_role ? <RoleChip role={device.ha_role} dense /> : null,
-    absent: device.role === "management_server" ? "not read -- MDS high availability needs its own read" : device.cluster_member_ref ? "not reported" : "standalone" };
+  const haRole: IdentityTile = { label: "HA role", value: device.ha_role ? <RoleChip role={device.ha_role} dense /> : device.cluster_member_ref ? null : "Standalone",
+    absent: device.role === "management_server" ? "not read -- MDS high availability needs its own read" : device.cluster_member_ref ? "not reported" : undefined };
   if (device.vendor_hint === "fortinet") return [
     ...common,
     ...(device.serial_number ? [{ label: "Serial number", value: device.serial_number, mono: true } satisfies IdentityTile] : []),

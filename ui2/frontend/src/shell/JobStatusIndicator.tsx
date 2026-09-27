@@ -2,6 +2,7 @@ import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Tooltip from "@mui/material/Tooltip";
 import { m3 } from "../theme/m3Theme";
+import { jobTypeLabel } from "../jobs/jobTypeLabel";
 
 export function JobStatusIndicator({
   state,
@@ -19,10 +20,11 @@ export function JobStatusIndicator({
   const normalized = state.toUpperCase();
   const dimension = size === "small" ? 18 : 22;
   const fontSize = size === "small" ? 11 : 13;
+  const label = type ? jobTypeLabel(type) : "Job";
 
   if (normalized === "EXECUTING") {
     return (
-      <Tooltip title={`In progress: ${type ?? "Job"} is running...`} arrow>
+      <Tooltip title={`In progress: ${label} is running...`} arrow>
         <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: dimension, height: dimension }}>
           <CircularProgress size={size === "small" ? 13 : 16} thickness={5} sx={{ color: m3.primary }} />
         </Box>
@@ -32,7 +34,7 @@ export function JobStatusIndicator({
 
   if (normalized === "COMPLETED" || normalized === "SUCCEEDED") {
     return (
-      <Tooltip title={`Completed: ${type ?? "Job"} finished successfully`} arrow>
+      <Tooltip title={`Completed: ${label} finished successfully`} arrow>
         <Box
           component="span"
           sx={{
@@ -57,7 +59,7 @@ export function JobStatusIndicator({
 
   if (normalized === "CLAIMED" || normalized === "REQUESTED") {
     return (
-      <Tooltip title={`Queued in worker: ${type ?? "Job"} waiting to execute`} arrow>
+      <Tooltip title={`Queued in worker: ${label} waiting to execute`} arrow>
         <Box
           component="span"
           sx={{

@@ -17,6 +17,7 @@ import Pagination from "@mui/material/Pagination";
 import { StatePanel, RestrictedPanel, isRestricted, Ts } from "../shell/States";
 import { formatDuration } from "../shell/time";
 import { MONO, m3 } from "../theme/m3Theme";
+import { jobTypeLabel } from "../jobs/jobTypeLabel";
 import {
   downloadJobsCsv,
   jobFacets,
@@ -53,22 +54,7 @@ export function localInputToIso(value: string): string | undefined {
 
 const PAGE_SIZES = [25, 50, 100, 200] as const;
 
-const VENDORS: Record<string, string> = {
-  cp: "Check Point", pan: "Palo Alto", fgt: "FortiGate", fmg: "FortiManager", asa: "Cisco ASA",
-  check_point: "Check Point", palo_alto: "Palo Alto", fortinet: "FortiGate", fortimanager: "FortiManager", cisco_asa: "Cisco ASA",
-};
-
-export function jobTypeLabel(capabilityId: string, vendorHint?: string): string {
-  const prefix = capabilityId.split("_")[0];
-  const vendor = VENDORS[vendorHint ?? ""] ?? VENDORS[prefix];
-  const action = capabilityId.endsWith("_inventory_collect") ? "read inventory"
-    : capabilityId.endsWith("_configuration_collect") ? "read configuration"
-      : /_(config|gateway)_backup$/.test(capabilityId) ? "backup"
-        : capabilityId.startsWith("device_confirm_") ? "identity check"
-          : capabilityId.endsWith("_discovery_enumerate") ? "discovery"
-            : capabilityId.includes("diagnostic") ? "diagnostic read" : undefined;
-  return vendor && action ? `${vendor} · ${action}` : capabilityId;
-}
+export { jobTypeLabel } from "../jobs/jobTypeLabel";
 
 /**
  * Jobs screen (Product Owner P0, 2026-09-22): the whole history, not the last

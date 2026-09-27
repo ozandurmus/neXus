@@ -455,7 +455,7 @@ export function projectAsa(text: string): Projection {
   };
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || line === "!") continue;
+    if (!line || line === "!" || /^\s*:/.test(raw)) continue;
     if (line.includes("[withheld]")) withheld++;
     if (/^\s/.test(raw)) {
       if (block) {

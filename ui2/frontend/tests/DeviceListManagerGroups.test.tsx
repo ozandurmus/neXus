@@ -1,9 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { DeviceSummary } from "../src/auth/adminApi";
 import { DeviceList } from "../src/screens/InventoryScreen";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 const dev = (id: string, hostname: string, extra: Partial<DeviceSummary> = {}): DeviceSummary => ({
   device_id: id, hostname, vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED",
@@ -32,6 +32,20 @@ it("nests a manager's clusters under it by domain and keeps unmanaged devices at
   expect(screen.queryByText("CLS-ROMEO-01")).toBeNull();
   fireEvent.click(screen.getByLabelText("Expand managed devices"));
   expect(screen.getByText("CLS-ROMEO-01")).toBeTruthy(); // a single domain with devices opens directly
+});
+
+it("retries a failed manager tree fetch and displays grouping after recovery", async () => {
+  vi.useFakeTimers();
+  const fetcher = vi.fn()
+    .mockRejectedValueOnce(new Error("service restarting"))
+    .mockResolvedValueOnce(new Response(JSON.stringify(tree)));
+  vi.stubGlobal("fetch", fetcher);
+  render(<DeviceList groupByManager devices={devices} selectedDeviceId={null} selectedClusterRef={null}
+    onSelectDevice={vi.fn()} onSelectCluster={vi.fn()} />);
+  expect(screen.getByText("FW-SOLO-09")).toBeTruthy();
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(screen.getByText("2 managed")).toBeTruthy();
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
 it("stays flat without grouping", () => {

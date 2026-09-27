@@ -30,6 +30,12 @@ describe("Cisco ASA projection", () => {
     expect(p.withheldCount).toBe(1);
     expect(p.settingCount).toBe(6);
   });
+
+  it("skips ASA comment and marker lines", () => {
+    const p = projectAsa(": Saved\ninterface GigabitEthernet0/0\n nameif outside\n: end\n");
+    expect(p.sections.map((section) => section.label)).toEqual(["Interface"]);
+    expect(p.sections.some((section) => section.label === ":")).toBe(false);
+  });
 });
 
 const CP_A = `# SecurityExpert Check Point Gaia configuration evidence (redacted)
