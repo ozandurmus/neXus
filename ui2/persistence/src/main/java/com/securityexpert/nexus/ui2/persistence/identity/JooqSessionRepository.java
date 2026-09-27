@@ -24,7 +24,7 @@ public final class JooqSessionRepository implements SessionRepository {
 
     private static final String COLUMNS = "session_id, actor_fingerprint, csrf_secret, state, created_at, "
             + "last_seen_at, idle_deadline_at, absolute_expires_at, superseded_by_session_id, "
-            + "ended_by_actor_fingerprint, end_reason";
+            + "ended_by_actor_fingerprint, end_reason, machine";
 
     private final TransactionBoundary transactionBoundary;
     private final AuditedTransactionBoundary auditedTransactionBoundary;
@@ -89,39 +89,60 @@ public final class JooqSessionRepository implements SessionRepository {
     @Override
     public SessionRecord createActive(String sessionId, String actorFingerprint, String csrfSecret,
             Instant now, Duration idleTimeout, Duration absoluteLifetime, String actionId) {
+        return create(sessionId, null, actorFingerprint, csrfSecret, now, idleTimeout, absoluteLifetime, actionId, false);
+    }
+
+    @Override
+    public SessionRecord createMachineActive(String sessionId, String actorFingerprint, String csrfSecret,
+            Instant now, Duration idleTimeout, Duration absoluteLifetime) {
+        return create(sessionId, null, actorFingerprint, csrfSecret, now, idleTimeout, absoluteLifetime,
+                "machine_session_login", true);
+    }
+
+    private SessionRecord create(String sessionId, String priorSessionId, String actorFingerprint, String csrfSecret,
+            Instant now, Duration idleTimeout, Duration absoluteLifetime, String actionId, boolean machine) {
         Instant idleDeadline = now.plus(idleTimeout);
         Instant absoluteExpires = now.plus(absoluteLifetime);
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
+            if (priorSessionId != null) {
+                dsl.execute("update sessions set state = 'SUPERSEDED' "
+                        + "where session_id = {0} and state = 'ACTIVE'", priorSessionId);
+            }
             dsl.execute("insert into sessions(session_id, actor_fingerprint, csrf_secret, state, "
-                    + "created_at, last_seen_at, idle_deadline_at, absolute_expires_at) "
-                    + "values ({0}, {1}, {2}, 'ACTIVE', {3}, {3}, {4}, {5})",
+                    + "created_at, last_seen_at, idle_deadline_at, absolute_expires_at, machine) "
+                    + "values ({0}, {1}, {2}, 'ACTIVE', {3}, {3}, {4}, {5}, {6})",
                     sessionId, actorFingerprint, csrfSecret, Timestamp.from(now),
-                    Timestamp.from(idleDeadline), Timestamp.from(absoluteExpires));
+                    Timestamp.from(idleDeadline), Timestamp.from(absoluteExpires), machine);
+            if (priorSessionId != null) {
+                dsl.execute("update sessions set superseded_by_session_id = {0}, end_reason = 'login_elsewhere' "
+                        + "where session_id = {1}", sessionId, priorSessionId);
+            }
+            if (machine) {
+                dsl.fetch("select audit_machine_session_event({0}, {1})", actionId, sessionId);
+            }
             return new SessionRecord(sessionId, actorFingerprint, csrfSecret, SessionState.ACTIVE, now, now,
-                    idleDeadline, absoluteExpires, Optional.empty(), Optional.empty(), Optional.empty());
+                    idleDeadline, absoluteExpires, Optional.empty(), Optional.empty(), Optional.empty(), machine);
         });
     }
 
     @Override
     public SessionRecord takeover(String priorSessionId, String newSessionId, String actorFingerprint,
             String csrfSecret, Instant now, Duration idleTimeout, Duration absoluteLifetime, String actionId) {
-        Instant idleDeadline = now.plus(idleTimeout);
-        Instant absoluteExpires = now.plus(absoluteLifetime);
-        // C3 §3.4: attributed to the NEW session's actor, one transaction,
-        // so the partial unique index is never transiently absent.
-        return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
-            dsl.execute("update sessions set state = 'SUPERSEDED' "
-                    + "where session_id = {0} and state = 'ACTIVE'", priorSessionId);
-            dsl.execute("insert into sessions(session_id, actor_fingerprint, csrf_secret, state, "
-                    + "created_at, last_seen_at, idle_deadline_at, absolute_expires_at) "
-                    + "values ({0}, {1}, {2}, 'ACTIVE', {3}, {3}, {4}, {5})",
-                    newSessionId, actorFingerprint, csrfSecret, Timestamp.from(now),
-                    Timestamp.from(idleDeadline), Timestamp.from(absoluteExpires));
-            dsl.execute("update sessions set superseded_by_session_id = {0}, end_reason = 'login_elsewhere' "
-                    + "where session_id = {1}", newSessionId, priorSessionId);
-            return new SessionRecord(newSessionId, actorFingerprint, csrfSecret, SessionState.ACTIVE, now, now,
-                    idleDeadline, absoluteExpires, Optional.empty(), Optional.empty(), Optional.empty());
-        });
+        return create(newSessionId, priorSessionId, actorFingerprint, csrfSecret, now, idleTimeout,
+                absoluteLifetime, actionId, false);
+    }
+
+    @Override
+    public SessionRecord takeoverMachine(String priorSessionId, String newSessionId, String actorFingerprint,
+            String csrfSecret, Instant now, Duration idleTimeout, Duration absoluteLifetime) {
+        return create(newSessionId, priorSessionId, actorFingerprint, csrfSecret, now, idleTimeout,
+                absoluteLifetime, "machine_session_login_takeover", true);
+    }
+
+    @Override
+    public void auditMachineRefusal(String actionId) {
+        transactionBoundary.inTransaction(dsl -> dsl.fetch(
+                "select audit_machine_session_event({0}, 'aiview-e2e (machine)')", actionId));
     }
 
     @Override
@@ -190,7 +211,7 @@ public final class JooqSessionRepository implements SessionRepository {
                 Optional.ofNullable(row.get("superseded_by_session_id", String.class)),
                 Optional.ofNullable(row.get("ended_by_actor_fingerprint", String.class)),
                 Optional.ofNullable(row.get("end_reason", String.class))
-                        .map(JooqSessionRepository::forColumn));
+                        .map(JooqSessionRepository::forColumn), row.get("machine", Boolean.class));
     }
 
     private static SessionEndReason forColumn(String column) {

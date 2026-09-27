@@ -44,7 +44,7 @@ for (const screen of SCREEN_IDS) {
     await safety.checkpoint();
   });
 
-  test(`${screen}: aiview visible text has no private addresses and no Transcript button`, async ({ page, safety }) => {
+  test(`${screen}: aiview visible text passes canary and Transcript checks`, async ({ page, safety }) => {
     await visit(page, `screen=${screen}`, headings[screen]);
     await screenHasData(page, screen);
     await safety.checkpoint();

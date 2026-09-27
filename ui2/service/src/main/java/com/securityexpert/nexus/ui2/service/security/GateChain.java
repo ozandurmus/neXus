@@ -87,6 +87,10 @@ public final class GateChain {
         if (!now.isBefore(session.absoluteExpiresAt())) {
             return refuse("E1", 401, "SESSION_EXPIRED", "absolute_expires_at elapsed");
         }
+        if (session.machine() && !isReadMethod(request.method())) {
+            sessionRepository.auditMachineRefusal("machine_session_read_only");
+            return refuse("MACHINE", 403, "MACHINE_SESSION_READ_ONLY", "machine session attempted a write");
+        }
         if (request.isStateChanging()) {
             if (request.csrfHeader().isEmpty() || !request.csrfHeader().get().equals(session.csrfSecret())) {
                 return refuse("E1", 401, "SESSION_INVALID", "CSRF token missing or mismatched");
@@ -113,7 +117,7 @@ public final class GateChain {
         // distinct, non-identity-bearing status. A non-local actor
         // fingerprint matches no local_credentials row and is never
         // restricted by this gate.
-        if (enforcePasswordChangeOnFirstLogin && localCredentialsRepository != null
+        if (!session.machine() && enforcePasswordChangeOnFirstLogin && localCredentialsRepository != null
                 && new LocalIdentityResolver(localCredentialsRepository)
                 .resolve(actorFingerprint).map(LocalCredentialRecord::mustChangePassword).orElse(false)) {
             Map<String, Object> body = new LinkedHashMap<>();
@@ -165,6 +169,20 @@ public final class GateChain {
         RbacEvaluator.Decision decision = rbacEvaluator.evaluate(actorFingerprint,
                 Optional.of(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER), Instant.now());
         return decision.outcome().proceeds() && !RbacEvaluator.ROOT_AUTHORITY.equals(decision.authority().orElse(null));
+    }
+
+    public Optional<GateOutcome.Refused> machineWriteRefusal(Optional<String> rawCookie, String method, Instant now) {
+        if (isReadMethod(method) || rawCookie.isEmpty()) return Optional.empty();
+        return sessionRepository.findBySessionId(SessionHasher.hash(rawCookie.get()), now)
+                .filter(session -> session.machine() && session.isActive(now))
+                .map(session -> {
+                    sessionRepository.auditMachineRefusal("machine_session_read_only");
+                    return refuse("MACHINE", 403, "MACHINE_SESSION_READ_ONLY", "machine session attempted a write");
+                });
+    }
+
+    private static boolean isReadMethod(String method) {
+        return "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
     }
 
     private static String endReasonCode(SessionRecord session) {

@@ -1,7 +1,7 @@
 # Read-only aiview screen smoke tests
 
-Run this suite from an engineering workstation that can reach the deployment,
-after each deploy. It uses the installed Google Chrome (`channel: "chrome"`),
+The in-cluster runner uses `aiview-e2e`; the human workstation mode below remains available.
+Workstation mode uses the installed Google Chrome (`channel: "chrome"`),
 the existing frontend dependencies, and no downloaded browser. Node 22 with
 `--experimental-strip-types` support or newer is required for the login helper.
 
@@ -74,8 +74,41 @@ Vitest includes only `tests/**/*.test.{ts,tsx}`, excluding the browser suite.
 - No submit, collect, delete, enroll, run, export/download or change control is
   clicked. One worker, no retries. Each visited screen/tab waits for its current
   read batch and fails on HTTP 5xx, uncaught page errors, load/API error text,
-  alerts, visible RFC 1918 addresses or a Transcript button. RFC 5737 synthetic
-  ranges are allowed. Checks print classifications, not leaked values.
+  alerts, a visible canary identity or a Transcript button. Checks print
+  classifications, not leaked values. If `NEXUS_E2E_CANARY_FILE` is absent,
+  the canary check is skipped with a clear log note.
+
+## In-cluster machine mode
+
+`ui2/frontend/Dockerfile.e2e` copies the suite and frontend source into an image
+built from `mcr.microsoft.com/playwright:v1.63.0-noble`; the engineering session
+pins the base and built image by digest. The image installs the already locked
+frontend dependencies at build time. `deploy/ui2/70-e2e-job.yaml` contains a
+suspended Job template and a suspended CronJob (every four hours). After the
+engineering session supplies image digests and Secrets, it enables the CronJob
+and creates a Job after each rollout. Its logs use the list reporter; screenshots,
+traces and video stay disabled.
+
+The engineering session creates `ui2-e2e-machine-token` on HOST-A with a random
+256-bit token under key `token` and its lowercase SHA-256 under key `sha256`.
+It creates optional `ui2-e2e-canary` key `sha256` with one lowercase SHA-256
+per line, derived locally from real address and serial values without printing
+those values. Rotation replaces both token keys together, then rolls the service
+and starts a fresh Job; removing the Secret disables machine login. No agent or
+person copies the plain token into a repository or chat. The Job receives the
+token as an environment variable; the service receives only its digest.
+
+The machine login is available only on internal port 8086, never through the
+Ingress or public port 8080. It creates an ordinary `aiview-e2e` session with
+the exact viewer and replay-viewer roles, a 30-minute absolute lifetime and a
+normal idle timeout. A new machine login supersedes that actor's previous
+session. The server refuses all machine-session methods except GET and HEAD,
+including session logout and collect/backup routes, with audited 403
+`MACHINE_SESSION_READ_ONLY`; replay-viewer masking still applies. The browser
+route guard independently enforces read-only requests. Storage state is written
+mode 0600 to the Job's memory-backed temporary directory and scoped to the
+in-cluster browser host; the normal Secure cookie setting on the server remains
+unchanged.
 
 ## Results and limits
 
@@ -91,8 +124,8 @@ Passing proves the tested screens load stored data under aiview with these
 read-only/privacy checks. It does not prove every number is correct, every
 device/tab/subfeature is covered, vendor output semantics, collection success,
 recovery behavior, backend authorization for every endpoint, or absence of
-every possible identity leak. RFC 1918 detection is not a general hostname,
-serial or secret detector. Existing background jobs/schedules are outside this
+every possible identity leak. Canary matching covers only supplied address and
+serial digests. Existing background jobs/schedules are outside this
 browser request guard. Empty estates, no standalone gateway, missing vendors,
 no enabled backup target or no backup history fail explicitly.
 

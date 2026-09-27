@@ -1,13 +1,22 @@
 import { test as base, expect, type Page, type Request } from "@playwright/test";
 import { baseURL } from "./settings.mjs";
-import { hasPrivateAddress, isAiview, loadErrorText, installReadOnlyGuard } from "./safety";
+import { hasCanaryToken, isAiview, loadErrorText, installReadOnlyGuard } from "./safety";
+import { existsSync, readFileSync } from "node:fs";
+
+const canaryFile = process.env.NEXUS_E2E_CANARY_FILE;
+const canaryDigests = canaryFile && existsSync(canaryFile)
+  ? new Set(readFileSync(canaryFile, "utf8").trim().split(/\r?\n/)) : null;
+if (canaryDigests && [...canaryDigests].some((digest) => !/^[0-9a-f]{64}$/.test(digest))) {
+  throw new Error("Invalid E2E canary digest file");
+}
+if (!canaryDigests) console.info("E2E canary privacy check skipped: digest file is absent");
 
 type Safety = { checkpoint: () => Promise<void> };
 
 export async function visibleSafety(page: Page) {
   const text = await page.locator("body").innerText();
   // Assert booleans, never actual text: failures must not print a leaked identity.
-  expect(hasPrivateAddress(text), "Visible text contains an RFC 1918 address (value withheld)").toBe(false);
+  if (canaryDigests) expect(hasCanaryToken(text, canaryDigests), "Visible text matches a privacy canary (value withheld)").toBe(false);
   expect(loadErrorText.test(text), "Visible unhandled API/load error text (content withheld)").toBe(false);
   expect(await page.getByRole("alert").count(), "A screen exposes an error/warning alert").toBe(0);
   expect(await page.getByRole("button", { name: /transcript/i }).count(), "Transcript button must be absent under aiview").toBe(0);

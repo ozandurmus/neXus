@@ -1,0 +1,10 @@
+# TODO: pin the base image by digest when the engineering session builds the runner.
+FROM mcr.microsoft.com/playwright:v1.63.0-noble
+WORKDIR /suite
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY playwright.config.ts ./
+COPY e2e/ ./e2e/
+COPY src/ ./src/
+USER pwuser
+CMD ["npx", "playwright", "test"]

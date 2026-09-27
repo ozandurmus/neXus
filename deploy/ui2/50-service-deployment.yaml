@@ -52,6 +52,8 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            - name: machine
+              containerPort: 8086
           env:
             # BK-11: the distinct backup credential (Admin > Credentials: Backup-User-LDAP), never the collection credential.
             - name: UI2_CP_BACKUP_CREDENTIAL_REF
@@ -86,6 +88,12 @@ spec:
                 configMapKeyRef:
                   name: ui2-config
                   key: session_cookie_secure
+            - name: UI2_E2E_MACHINE_TOKEN_SHA256
+              valueFrom:
+                secretKeyRef:
+                  name: ui2-e2e-machine-token
+                  key: sha256
+                  optional: true
             - name: LOGGING_LEVEL_ROOT
               valueFrom:
                 configMapKeyRef:

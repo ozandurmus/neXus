@@ -17,7 +17,16 @@ public record SessionRecord(
         Instant absoluteExpiresAt,
         Optional<String> supersededBySessionId,
         Optional<String> endedByActorFingerprint,
-        Optional<SessionEndReason> endReason) {
+        Optional<SessionEndReason> endReason,
+        boolean machine) {
+
+    public SessionRecord(String sessionId, String actorFingerprint, String csrfSecret, SessionState state,
+            Instant createdAt, Instant lastSeenAt, Instant idleDeadlineAt, Instant absoluteExpiresAt,
+            Optional<String> supersededBySessionId, Optional<String> endedByActorFingerprint,
+            Optional<SessionEndReason> endReason) {
+        this(sessionId, actorFingerprint, csrfSecret, state, createdAt, lastSeenAt, idleDeadlineAt,
+                absoluteExpiresAt, supersededBySessionId, endedByActorFingerprint, endReason, false);
+    }
 
     public boolean isActive(Instant asOf) {
         return state == SessionState.ACTIVE

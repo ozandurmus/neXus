@@ -13,11 +13,11 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 30_000 },
   outputDir: `${frontendRoot}/e2e-results`,
-  reporter: [["list"], ["html", { outputFolder: `${frontendRoot}/e2e-report`, open: "never" }]],
+  reporter: process.env.NEXUS_E2E_MACHINE_TOKEN ? [["list"]] : [["list"], ["html", { outputFolder: `${frontendRoot}/e2e-report`, open: "never" }]],
   use: {
     baseURL: baseURL(),
     storageState: statePath(),
-    channel: "chrome",
+    channel: process.env.NEXUS_E2E_MACHINE_TOKEN ? undefined : "chrome",
     serviceWorkers: "block",
     acceptDownloads: false,
     actionTimeout: 30_000,

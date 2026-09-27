@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui2-service-internal
+  namespace: ui2
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: service
+  ports:
+    - name: machine
+      port: 8086
+      targetPort: machine
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ui2-service-machine-port
+  namespace: ui2
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexus-ui2
+      app.kubernetes.io/component: service
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 1
+          endPort: 8085
+        - protocol: TCP
+          port: 8087
+          endPort: 65535
+        - protocol: UDP
+          port: 1
+          endPort: 65535
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: e2e
+      ports:
+        - protocol: TCP
+          port: 8086

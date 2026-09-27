@@ -1,4 +1,4 @@
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { existsSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -18,6 +18,7 @@ export function baseURL() {
 }
 
 export function statePath() {
+  if (process.env.NEXUS_E2E_MACHINE_TOKEN) return resolve(tmpdir(), "nexus-e2e-state.json");
   const value = process.env.NEXUS_E2E_STATE ?? "~/.nexus-e2e/aiview.json";
   const path = resolve(value.startsWith("~/") ? resolve(homedir(), value.slice(2)) : value);
   // Resolve existing ancestors too, so a symlink cannot put session material in the checkout.

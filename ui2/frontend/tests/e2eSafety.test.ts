@@ -1,6 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it, afterEach, vi } from "vitest";
-import { hasPrivateAddress, isAiview, readAllowed, installReadOnlyGuard } from "../e2e/safety";
+import { hasCanaryToken, isAiview, readAllowed, installReadOnlyGuard } from "../e2e/safety";
+import { createHash } from "node:crypto";
+import { readFileSync, statSync, unlinkSync } from "node:fs";
+import { machineSetup } from "../e2e/global-setup";
 import type { BrowserContext, Route } from "@playwright/test";
 import { baseURL, statePath } from "../e2e/settings.mjs";
 
@@ -65,13 +68,12 @@ describe("E2E safety boundaries", () => {
     expect(isAiview({ role_tokens: ["role:replay_viewer"] })).toBe(true);
   });
 
-  it("detects every RFC 1918 boundary without treating documentation ranges as private", () => {
-    // Construct classification inputs from octets; never embed environment addresses.
-    for (const octets of [[10, 0, 0, 0], [10, 255, 255, 255], [172, 16, 0, 0], [172, 31, 255, 255], [192, 168, 0, 1]]) {
-      expect(hasPrivateAddress(`Address ${octets.join(".")}/24`)).toBe(true);
-    }
-    for (const value of ["192.0.2.10", "198.51.100.10", "203.0.113.10", [172, 15, 0, 1].join("."),
-      [172, 32, 0, 1].join("."), [10, 999, 0, 1].join("."), "FW-TANGO-04"]) expect(hasPrivateAddress(value)).toBe(false);
+  it("matches only hashed canary values without printing them", () => {
+    const values = ["192.0.2.10", "SYNTHETIC-SERIAL-01"];
+    const digests = new Set(values.map((value) => createHash("sha256").update(value).digest("hex")));
+    for (const value of values) expect(hasCanaryToken(`Device ${value} visible`, digests)).toBe(true);
+    expect(hasCanaryToken("Device 198.51.100.10 visible", digests)).toBe(false);
+    expect(hasCanaryToken("Masked 203.0.113.11 visible", digests)).toBe(false);
   });
 
   it("requires an explicit credential-free deployment origin", () => {
@@ -86,5 +88,25 @@ describe("E2E safety boundaries", () => {
   it("refuses session state inside the checkout", () => {
     vi.stubEnv("NEXUS_E2E_STATE", "e2e-results/session.json");
     expect(() => statePath()).toThrow("outside the repository");
+  });
+
+  it("obtains machine state with a mocked request and saves a private browser cookie", async () => {
+    vi.stubEnv("NEXUS_E2E_MACHINE_TOKEN", "synthetic-token");
+    vi.stubEnv("NEXUS_E2E_BASE_URL", "http://example.invalid:8080");
+    const post = vi.fn().mockResolvedValue({ status: () => 200, json: async () => ({ csrf_token: "synthetic-csrf" }),
+      headers: () => ({ "set-cookie": "ui2_session=synthetic-cookie; Path=/; HttpOnly; Secure; SameSite=Strict" }) });
+    const dispose = vi.fn();
+    const api = { newContext: async () => ({ post, dispose }) };
+    try {
+      await machineSetup(api as never);
+      const state = JSON.parse(readFileSync(statePath(), "utf8"));
+      expect(post).toHaveBeenCalledWith(expect.stringContaining("/internal/machine-session"),
+        expect.objectContaining({ headers: { "X-Nexus-Machine-Token": "synthetic-token" } }));
+      expect(state.cookies[0]).toMatchObject({ domain: "example.invalid", secure: false });
+      expect(statSync(statePath()).mode & 0o777).toBe(0o600);
+      expect(dispose).toHaveBeenCalledOnce();
+    } finally {
+      unlinkSync(statePath());
+    }
   });
 });

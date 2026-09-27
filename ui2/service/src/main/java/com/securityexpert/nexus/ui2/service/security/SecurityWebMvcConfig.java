@@ -160,6 +160,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
     static final Set<String> EXPLICITLY_UNGATED_ROUTES = Set.of(
             "GET /",
             "POST /login",
+            "POST /internal/machine-session",
             "POST /auth/login",
             "POST /login/resolve",
             "POST /session/logout",

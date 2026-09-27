@@ -56,6 +56,11 @@ public interface SessionRepository {
     SessionRecord createActive(String sessionId, String actorFingerprint, String csrfSecret,
             Instant now, Duration idleTimeout, Duration absoluteLifetime, String actionId);
 
+    default SessionRecord createMachineActive(String sessionId, String actorFingerprint, String csrfSecret,
+            Instant now, Duration idleTimeout, Duration absoluteLifetime) {
+        throw new UnsupportedOperationException("machine sessions require durable support");
+    }
+
     /**
      * Takeover (C3 §3.3 row 2): {@code priorSessionId} → {@code SUPERSEDED},
      * {@code newSessionId} → {@code ACTIVE}, one transaction, attributed to
@@ -63,6 +68,15 @@ public interface SessionRepository {
      */
     SessionRecord takeover(String priorSessionId, String newSessionId, String actorFingerprint, String csrfSecret,
             Instant now, Duration idleTimeout, Duration absoluteLifetime, String actionId);
+
+    default SessionRecord takeoverMachine(String priorSessionId, String newSessionId, String actorFingerprint,
+            String csrfSecret, Instant now, Duration idleTimeout, Duration absoluteLifetime) {
+        throw new UnsupportedOperationException("machine sessions require durable support");
+    }
+
+    default void auditMachineRefusal(String actionId) {
+        throw new UnsupportedOperationException("machine audit requires durable support");
+    }
 
     /**
      * {@code last_seen_at}/{@code idle_deadline_at} touch only — never

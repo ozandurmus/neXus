@@ -101,7 +101,8 @@ public final class SessionStatusController {
             LocalCredentialRecord record = identity.get();
             body.put("display_name", record.localIdentityName());
             // PO directive 2026-09-14: the flag is only surfaced (and the screen only forced) when the posture is on.
-            body.put("must_change_password", enforcePasswordChangeOnFirstLogin && record.mustChangePassword());
+            body.put("must_change_password", !session.get().machine()
+                    && enforcePasswordChangeOnFirstLogin && record.mustChangePassword());
             List<String> roleTokens = localRoleTokenResolver.resolve(record.localIdentityId()).stream()
                     .toList();
             body.put("role_tokens", roleTokens);

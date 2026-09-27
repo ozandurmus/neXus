@@ -85,6 +85,14 @@ public final class GateChainInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
+        Optional<GateOutcome.Refused> machineRefusal = gateChain == null ? Optional.empty()
+                : gateChain.machineWriteRefusal(findSessionCookie(request), request.getMethod(), Instant.now());
+        if (machineRefusal.isPresent()) {
+            response.setStatus(403);
+            response.setContentType("application/json");
+            objectMapper.writeValue(response.getWriter(), machineRefusal.get().body());
+            return false;
+        }
         // Static resources are selected by Spring's resource handler, not a
         // controller. They carry no product action and must not need RBAC.
         if (handler instanceof ResourceHttpRequestHandler) {

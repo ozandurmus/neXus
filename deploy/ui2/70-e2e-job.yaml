@@ -1,0 +1,140 @@
+# Build ui2/frontend/Dockerfile.e2e, then replace this image with its digest.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ui2-e2e
+  namespace: ui2
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: e2e
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: playwright
+          image: registry.kube-system.svc.cluster.local/nexus-ui2-e2e:SET_AT_DEPLOY
+          env:
+            - name: NEXUS_E2E_BASE_URL
+              value: http://ui2-service.ui2.svc.cluster.local:8080
+            - name: NEXUS_E2E_MACHINE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ui2-e2e-machine-token
+                  key: token
+            - name: NEXUS_E2E_CANARY_FILE
+              value: /run/canary/sha256
+            - name: TMPDIR
+              value: /run/e2e
+            - name: HOME
+              value: /run/e2e
+          volumeMounts:
+            - name: tmp
+              mountPath: /run/e2e
+            - name: results
+              mountPath: /suite/e2e-results
+            - name: shm
+              mountPath: /dev/shm
+            - name: canary
+              mountPath: /run/canary
+              readOnly: true
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+        - name: results
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
+        - name: canary
+          secret:
+            secretName: ui2-e2e-canary
+            optional: true
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ui2-e2e
+  namespace: ui2
+spec:
+  schedule: "0 */4 * * *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/component: e2e
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          containers:
+            - name: playwright
+              image: registry.kube-system.svc.cluster.local/nexus-ui2-e2e:SET_AT_DEPLOY
+              env:
+                - name: NEXUS_E2E_BASE_URL
+                  value: http://ui2-service.ui2.svc.cluster.local:8080
+                - name: NEXUS_E2E_MACHINE_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: ui2-e2e-machine-token
+                      key: token
+                - name: NEXUS_E2E_CANARY_FILE
+                  value: /run/canary/sha256
+                - name: TMPDIR
+                  value: /run/e2e
+                - name: HOME
+                  value: /run/e2e
+              volumeMounts:
+                - name: tmp
+                  mountPath: /run/e2e
+                - name: results
+                  mountPath: /suite/e2e-results
+                - name: shm
+                  mountPath: /dev/shm
+                - name: canary
+                  mountPath: /run/canary
+                  readOnly: true
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+                seccompProfile:
+                  type: RuntimeDefault
+          volumes:
+            - name: tmp
+              emptyDir:
+                medium: Memory
+            - name: results
+              emptyDir: {}
+            - name: shm
+              emptyDir:
+                medium: Memory
+                sizeLimit: 512Mi
+            - name: canary
+              secret:
+                secretName: ui2-e2e-canary
+                optional: true

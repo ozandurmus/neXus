@@ -152,6 +152,20 @@ public final class LoginFlow {
         return new LoginResult.Conflict(conflictToken, prior);
     }
 
+    /** A machine login supersedes its prior session without an interactive conflict token. */
+    public LoginResult.NewSession machineLogin(String actorFingerprint, Instant now) {
+        String rawCookie = randomCookieValue();
+        String sessionId = SessionHasher.hash(rawCookie);
+        String csrfSecret = randomCookieValue();
+        Optional<SessionRecord> existing = sessionRepository.findActiveByActor(actorFingerprint, now);
+        SessionRecord session = existing.isPresent()
+                ? sessionRepository.takeoverMachine(existing.get().sessionId(), sessionId, actorFingerprint,
+                        csrfSecret, now, idleTimeout, Duration.ofMinutes(30))
+                : sessionRepository.createMachineActive(sessionId, actorFingerprint, csrfSecret, now,
+                        idleTimeout, Duration.ofMinutes(30));
+        return new LoginResult.NewSession(rawCookie, session);
+    }
+
     public sealed interface ResolveResult {
         record TakenOver(String rawCookieValue, SessionRecord session) implements ResolveResult {
         }

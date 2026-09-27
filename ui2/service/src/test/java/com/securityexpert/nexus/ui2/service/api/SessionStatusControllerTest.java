@@ -32,6 +32,28 @@ import com.securityexpert.nexus.ui2.service.security.SessionHasher;
 class SessionStatusControllerTest {
 
     @Test
+    void machineSessionDoesNotRequireItsUnusedPasswordToChange() {
+        SessionRepository sessions = mock(SessionRepository.class);
+        LocalIdentityResolver identities = mock(LocalIdentityResolver.class);
+        LocalRoleTokenResolver roles = mock(LocalRoleTokenResolver.class);
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getCookies()).thenReturn(new Cookie[]{new Cookie("ui2_session", "synthetic-cookie")});
+        Instant now = Instant.now();
+        SessionRecord machine = new SessionRecord(SessionHasher.hash("synthetic-cookie"), "synthetic-actor",
+                "synthetic-csrf", SessionState.ACTIVE, now.minusSeconds(10), now,
+                now.plusSeconds(600), now.plusSeconds(1800), Optional.empty(), Optional.empty(),
+                Optional.empty(), true);
+        when(sessions.findBySessionId(machine.sessionId())).thenReturn(Optional.of(machine));
+        when(identities.resolve("synthetic-actor")).thenReturn(Optional.of(new LocalCredentialRecord(
+                "synthetic-id", "aiview-e2e", null, null, null, 0, 0, 0, 0,
+                Optional.empty(), now, now, true, "synthetic-actor", now, true)));
+        when(roles.resolve("synthetic-id")).thenReturn(List.of(RoleToken.VIEWER, RoleToken.REPLAY_VIEWER));
+        var response = new SessionStatusController(sessions, identities, roles, true).status(request);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertFalse((Boolean) response.getBody().get("must_change_password"));
+    }
+
+    @Test
     void statusReturnsUnauthenticatedWhenNoCookie() {
         SessionRepository sessionRepo = mock(SessionRepository.class);
         LocalIdentityResolver identityResolver = mock(LocalIdentityResolver.class);

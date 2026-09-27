@@ -1,4 +1,5 @@
 import type { BrowserContext } from "@playwright/test";
+import { createHash } from "node:crypto";
 
 export function isAiview(body: unknown): boolean {
   if (!body || typeof body !== "object") return false;
@@ -14,12 +15,9 @@ export function readAllowed(method: string, url: string, origin: string, resourc
     && (new URL(url).origin === origin || resourceType === "stylesheet" || resourceType === "font");
 }
 
-export function hasPrivateAddress(text: string): boolean {
-  return [...text.matchAll(/\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b/g)].some((match) => {
-    const [a, b, c, d] = match.slice(1).map(Number);
-    return [a, b, c, d].every((n) => n <= 255)
-      && (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168));
-  });
+export function hasCanaryToken(text: string, digests: ReadonlySet<string>): boolean {
+  return [...text.matchAll(/\b[A-Za-z0-9][A-Za-z0-9._:-]*\b/g)].some(([token]) =>
+    digests.has(createHash("sha256").update(token).digest("hex")));
 }
 
 export const loadErrorText = /something went wrong|uncaught|unhandled (?:api|error)|failed to fetch|networkerror|(?:api|request|read|load) (?:failed|error)|could not be (?:read|loaded)|(?:inventory|overview|workspace|job logs|device registry) unavailable/i;
