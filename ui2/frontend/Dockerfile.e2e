@@ -1,5 +1,5 @@
-# TODO: pin the base image by digest when the engineering session builds the runner.
-FROM mcr.microsoft.com/playwright:v1.63.0-noble
+# Official Playwright image, pinned by digest (index for v1.63.0-noble, 2026-09-27). Pulled through the corporate proxy.
+FROM mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
 WORKDIR /suite
 COPY package.json package-lock.json ./
 RUN npm ci

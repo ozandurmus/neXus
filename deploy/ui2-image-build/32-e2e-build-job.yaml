@@ -1,0 +1,75 @@
+# The e2e runner image (ui2/frontend/Dockerfile.e2e), built from the same context PVC the service build uses.
+# Run after a deploy has streamed the context; see docs/reference/E2E_SCREEN_TESTS.md.
+# The in-cluster image build (BP-1). Kaniko builds the Containerfile from
+# the context claim and pushes the result to the cluster's own registry, so
+# the produced image is addressable by the Deployment without a push to an
+# external registry (BP-4).
+#
+# The tag comes from the `ui2-build-config` ConfigMap the operator creates
+# from the commit being built, so no two different filesystems ever share a
+# tag (BP-7). The Deployment references the resulting digest, not this tag.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ui2-e2e-image-build
+  namespace: ui2-build
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: e2e-image-build
+spec:
+  # Two retries: a base-image layer pull from the registry CDN through the proxy times out now and
+  # then (TLS handshake timeout, 2026-09-22, three times in a row); the build itself is deterministic.
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: nexus-ui2
+        app.kubernetes.io/component: e2e-image-build
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: builder
+          image: gcr.io/kaniko-project/executor@sha256:4e7a52dd1f14872430652bb3b027405b8dfd17c4538751c620ac005741ef9698
+          args:
+            - --context=dir:///workspace/ui2/frontend
+            - --dockerfile=/workspace/ui2/frontend/Dockerfile.e2e
+            - --destination=registry.kube-system.svc.cluster.local/nexus-ui2-e2e:$(UI2_IMAGE_TAG)
+            - --digest-file=/workspace/e2e-image-digest.txt
+            - --insecure
+            - --skip-tls-verify
+            - --cache=false
+            - --snapshot-mode=redo
+            - --log-format=text
+            - --verbosity=info
+          env:
+            - name: UI2_IMAGE_TAG
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-build-config
+                  key: image_tag
+            - name: HTTP_PROXY
+              value: http://tekprxv2:80
+            - name: HTTPS_PROXY
+              value: http://tekprxv2:80
+            - name: http_proxy
+              value: http://tekprxv2:80
+            - name: https_proxy
+              value: http://tekprxv2:80
+            - name: NO_PROXY
+              value: localhost,127.0.0.1,.svc,.cluster.local,registry.kube-system.svc.cluster.local
+            - name: no_proxy
+              value: localhost,127.0.0.1,.svc,.cluster.local,registry.kube-system.svc.cluster.local
+          volumeMounts:
+            - name: context
+              mountPath: /workspace
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "3"
+              memory: 4Gi
+      volumes:
+        - name: context
+          persistentVolumeClaim:
+            claimName: ui2-build-context
