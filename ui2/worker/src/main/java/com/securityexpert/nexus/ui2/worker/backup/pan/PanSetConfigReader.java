@@ -84,6 +84,15 @@ public final class PanSetConfigReader {
             String text = completed.output() == null ? "" : completed.output().strip();
             long setLines = text.lines().filter(line -> line.startsWith("set ")).count();
             if (setLines < MIN_SET_LINES) {
+                // MEASURE (2026-09-27: 0 set-lines in 20 KB, then 2 MB arrived later): shapes only, never values.
+                java.util.List<String> all = text.lines().toList();
+                java.util.function.Function<String, String> shape = l -> l.replaceAll("[A-Za-z]+", "a")
+                        .replaceAll("[0-9]+", "9").replaceAll("\"[^\"]*\"", "\"q\"");
+                System.getLogger(PanSetConfigReader.class.getName()).log(System.Logger.Level.INFO,
+                        "[PAN] show config running shape: lines={0} first={1} last={2}", all.size(),
+                        all.stream().limit(3).map(shape).map(l -> l.length() > 80 ? l.substring(0, 80) : l).toList(),
+                        all.isEmpty() ? "" : shape.apply(all.get(all.size() - 1)).substring(0,
+                                Math.min(80, shape.apply(all.get(all.size() - 1)).length())));
                 return new Outcome.Unavailable("show config running answered " + setLines + " set-lines (" + text.length()
                         + " chars); not a configuration");
             }
