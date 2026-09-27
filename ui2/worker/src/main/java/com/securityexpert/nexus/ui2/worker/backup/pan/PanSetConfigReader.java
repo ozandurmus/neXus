@@ -28,6 +28,8 @@ import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
  */
 public final class PanSetConfigReader {
 
+    static final java.time.Duration SETTLE = java.time.Duration.ofMillis(700);
+
     public static final List<String> COMMANDS = List.of(
             "set cli scripting-mode on",
             "set cli pager off",
@@ -82,6 +84,10 @@ public final class PanSetConfigReader {
         TransportSession session = authenticated.session();
         try {
             for (int i = 0; i < COMMANDS.size() - 1; i++) {
+                // PAN-OS repaints its prompt several times after a CLI setting (measured 2026-09-27); a command typed
+                // during the repaint was lost ('config-output-format set' never took effect). Wait for a quiet shell and
+                // relearn the prompt before each step.
+                transport.resyncPrompt(session, SETTLE);
                 ExecResult setup = transport.execInteractive(session, new ExecSpec(COMMANDS.get(i)), SETUP_TIMEOUT);
                 measure(COMMANDS.get(i), setup);
                 if (!(setup instanceof ExecResult.Completed)) {
@@ -92,6 +98,7 @@ public final class PanSetConfigReader {
                     }
                 }
             }
+            transport.resyncPrompt(session, SETTLE);
             ExecResult show = transport.execInteractive(session, new ExecSpec(COMMANDS.get(COMMANDS.size() - 1)), SHOW_TIMEOUT);
             measure(COMMANDS.get(COMMANDS.size() - 1), show);
             if (!(show instanceof ExecResult.Completed completed)) {
