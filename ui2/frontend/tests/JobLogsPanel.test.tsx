@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { JobLogsPanel, localInputToIso } from "../src/screens/JobLogsPanel";
+import { JobLogsPanel, jobTypeLabel, localInputToIso } from "../src/screens/JobLogsPanel";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -18,13 +18,44 @@ function stubApi(jobsPage: unknown, calls: string[] = []) {
   return calls;
 }
 
-it("shows the recorded device name with its byte-identical identifier", async () => {
+it("shows the recorded device name without its identifier in the main row", async () => {
   stubApi({ items: [{ job_id: "job-1", target_device_id: "opaque-001", job_type: "inventory", state: "COMPLETED" }], page: 1, page_size: 50, total: 1 });
 
   render(<JobLogsPanel />);
 
-  await waitFor(() => expect(screen.getByText("FW-TANGO-04 · opaque-001")).toBeInTheDocument());
+  await waitFor(() => expect(screen.getAllByText("FW-TANGO-04").some((node) => node.tagName === "TD")).toBe(true));
+  expect(screen.queryByText("opaque-001")).toBeNull();
+  fireEvent.click(screen.getAllByText("FW-TANGO-04").find((node) => node.tagName === "TD")!.closest("tr")!);
+  expect(await screen.findByText("opaque-001")).toBeInTheDocument();
   expect(screen.getByText("1–1 of 1 jobs")).toBeInTheDocument();
+});
+
+it.each([
+  ["asa_inventory_collect", undefined, "Cisco ASA · read inventory"],
+  ["cp_configuration_collect", undefined, "Check Point · read configuration"],
+  ["pan_config_backup", undefined, "Palo Alto · backup"],
+  ["fgt_gateway_backup", undefined, "FortiGate · backup"],
+  ["fmg_discovery_enumerate", undefined, "FortiManager · discovery"],
+  ["device_confirm_https", "cisco_asa", "Cisco ASA · identity check"],
+  ["https_diagnostic", "fortinet", "FortiGate · diagnostic read"],
+  ["unknown_capability", undefined, "unknown_capability"],
+])("labels %s", (id, vendor, expected) => {
+  expect(jobTypeLabel(id, vendor)).toBe(expected);
+});
+
+it("keeps job and device UUIDs in the expandable details", async () => {
+  const jobId = "00000000-0000-4000-8000-000000000001";
+  const deviceId = "00000000-0000-4000-8000-000000000002";
+  stubApi({ items: [{ job_id: jobId, target_device_id: deviceId, job_type: "asa_inventory_collect", state: "FAILED", terminal_reason: "COLLECTION_FAILED" }], page: 1, page_size: 50, total: 1 });
+  render(<JobLogsPanel />);
+  await screen.findByText("Unknown device");
+  expect(screen.getByText("Cisco ASA · read inventory")).toBeInTheDocument();
+  expect(screen.getByText("COLLECTION_FAILED")).toBeInTheDocument();
+  expect(screen.queryByText(jobId)).toBeNull();
+  expect(screen.queryByText(deviceId)).toBeNull();
+  fireEvent.click(screen.getByText("Unknown device").closest("tr")!);
+  expect(await screen.findByText(jobId)).toBeInTheDocument();
+  expect(screen.getByText(deviceId)).toBeInTheDocument();
 });
 
 describe("history, filters, pages and export (PO P0, 2026-09-22)", () => {

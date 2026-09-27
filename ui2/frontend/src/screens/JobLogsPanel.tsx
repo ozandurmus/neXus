@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
@@ -12,6 +12,7 @@ import Chip from "@mui/material/Chip";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import Paper from "@mui/material/Paper";
+import IconButton from "@mui/material/IconButton";
 import Pagination from "@mui/material/Pagination";
 import { StatePanel, RestrictedPanel, isRestricted, Ts } from "../shell/States";
 import { formatDuration } from "../shell/time";
@@ -52,6 +53,23 @@ export function localInputToIso(value: string): string | undefined {
 
 const PAGE_SIZES = [25, 50, 100, 200] as const;
 
+const VENDORS: Record<string, string> = {
+  cp: "Check Point", pan: "Palo Alto", fgt: "FortiGate", fmg: "FortiManager", asa: "Cisco ASA",
+  check_point: "Check Point", palo_alto: "Palo Alto", fortinet: "FortiGate", fortimanager: "FortiManager", cisco_asa: "Cisco ASA",
+};
+
+export function jobTypeLabel(capabilityId: string, vendorHint?: string): string {
+  const prefix = capabilityId.split("_")[0];
+  const vendor = VENDORS[vendorHint ?? ""] ?? VENDORS[prefix];
+  const action = capabilityId.endsWith("_inventory_collect") ? "read inventory"
+    : capabilityId.endsWith("_configuration_collect") ? "read configuration"
+      : /_(config|gateway)_backup$/.test(capabilityId) ? "backup"
+        : capabilityId.startsWith("device_confirm_") ? "identity check"
+          : capabilityId.endsWith("_discovery_enumerate") ? "discovery"
+            : capabilityId.includes("diagnostic") ? "diagnostic read" : undefined;
+  return vendor && action ? `${vendor} · ${action}` : capabilityId;
+}
+
 /**
  * Jobs screen (Product Owner P0, 2026-09-22): the whole history, not the last
  * 50; filters on the server (state, type, device, time window, free text);
@@ -84,7 +102,7 @@ export function JobLogsPanel({
   readonly emptyBody?: string;
 } = {}) {
   const [page, setPage] = useState<{ items: readonly JobEventView[]; total: number } | null>(null);
-  const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
+  const [devices, setDevices] = useState<Record<string, { name: string; vendor: string }>>({});
   const [facets, setFacets] = useState<JobFacetsView>({ states: [], job_types: [] });
   const [error, setError] = useState<ApiError | string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -127,15 +145,15 @@ export function JobLogsPanel({
       .then(({ devices }) => {
         // A device with no recorded hostname contributes no entry, so its rows
         // read as unknown rather than carrying an empty name beside the identifier.
-        setDeviceNames(Object.fromEntries(
+        setDevices(Object.fromEntries(
           (devices ?? [])
             .filter((device): device is typeof device & { hostname: string } => Boolean(device.hostname))
-            .map((device) => [device.device_id, device.hostname]),
+            .map((device) => [device.device_id, { name: device.hostname, vendor: device.vendor_hint }]),
         ));
       })
       // The identifier is the record; a name we could not read stays unknown
       // rather than blanking the log or failing the panel.
-      .catch(() => setDeviceNames({}));
+      .catch(() => setDevices({}));
   }, []);
 
   useEffect(() => {
@@ -189,7 +207,7 @@ export function JobLogsPanel({
   if (page === null) return <StatePanel variant="empty" title="Job logs" body="Loading…" />;
 
   const pageCount = Math.max(1, Math.ceil(page.total / pageSize));
-  const deviceOptions = Object.entries(deviceNames).sort((a, b) => a[1].localeCompare(b[1]));
+  const deviceOptions = Object.entries(devices).sort((a, b) => a[1].name.localeCompare(b[1].name));
   const isDefaultFilter = state === initialState && !jobType && !deviceId && !sinceLocal && !untilLocal && !text.trim();
 
   return (
@@ -221,7 +239,7 @@ export function JobLogsPanel({
         >
           <option value="">Any</option>
           {initialJobType && !facets.job_types.includes(initialJobType) && <option value={initialJobType}>any *_{initialJobType}</option>}
-          {facets.job_types.map((t) => <option key={t} value={t}>{t}</option>)}
+          {facets.job_types.map((t) => <option key={t} value={t}>{jobTypeLabel(t)}</option>)}
         </TextField>
         <TextField
           select
@@ -234,7 +252,7 @@ export function JobLogsPanel({
           sx={{ minWidth: 220 }}
         >
           <option value="">Any</option>
-          {deviceOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          {deviceOptions.map(([id, device]) => <option key={id} value={id}>{device.name}</option>)}
         </TextField>
         <TextField
           size="small"
@@ -297,7 +315,6 @@ export function JobLogsPanel({
             <Table size="small" aria-label="Job logs">
               <TableHead>
                 <TableRow sx={{ bgcolor: "action.hover" }}>
-                  <TableCell sx={{ fontWeight: 600 }}>Job ID</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Target Device</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
@@ -309,24 +326,23 @@ export function JobLogsPanel({
               <TableBody>
                 {page.items.map((job) => {
                   const isExpanded = expandedJobId === job.job_id;
+                  const vendor = devices[job.target_device_id]?.vendor;
                   // The API's terminal_reason repeats the terminal state on a clean run (review §3); a
                   // completed job has nothing to explain, so the column reads "--" there and keeps the
                   // reason only where it is one -- a failure, rejection or unknown outcome.
                   const reasonText = job.state === "COMPLETED" ? "—" : (job.terminal_reason || "—");
                   return (
+                    <Fragment key={job.job_id}>
                     <TableRow
-                      key={job.job_id}
                       hover
                       onClick={() => setExpandedJobId(isExpanded ? null : job.job_id)}
                       sx={{ cursor: "pointer" }}
+                      aria-expanded={isExpanded}
                     >
-                      <TableCell sx={{ fontFamily: MONO, fontSize: "0.8rem" }}>
-                        {isExpanded ? job.job_id : `${job.job_id.slice(0, 8)}...`}
-                      </TableCell>
                       <TableCell sx={{ fontWeight: 500 }}>
-                        {job.device_name ?? deviceNames[job.target_device_id] ?? "Unknown device"} · {job.target_device_id}
+                        {job.device_name ?? devices[job.target_device_id]?.name ?? "Unknown device"}
                       </TableCell>
-                      <TableCell sx={{ fontSize: "0.8rem" }}>{job.job_type}</TableCell>
+                      <TableCell sx={{ fontSize: "0.8rem" }} title={job.job_type}>{jobTypeLabel(job.job_type, vendor)}</TableCell>
                       <TableCell>
                         <Chip label={job.state} size="small" color={stateColor(job.state)} variant="outlined" />
                       </TableCell>
@@ -351,6 +367,22 @@ export function JobLogsPanel({
                         <Ts at={job.submitted_at} />
                       </TableCell>
                     </TableRow>
+                    {isExpanded && <TableRow key={`${job.job_id}-details`}>
+                      <TableCell colSpan={6}>
+                        <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+                          {([["Job ID", job.job_id], ["Device ID", job.target_device_id]] as const).map(([label, value]) => (
+                            <Stack key={label} direction="row" spacing={0.5} alignItems="center">
+                              <Typography variant="caption">{label}: <span style={{ fontFamily: MONO }}>{value}</span></Typography>
+                              <IconButton size="small" aria-label={`Copy ${label}`} onClick={(event) => {
+                                event.stopPropagation();
+                                void navigator.clipboard.writeText(value);
+                              }}>⧉</IconButton>
+                            </Stack>
+                          ))}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>}
+                    </Fragment>
                   );
                 })}
               </TableBody>
