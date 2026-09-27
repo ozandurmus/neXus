@@ -19,5 +19,6 @@ dependencies {
     implementation(libs.jackson.databind)
 
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.jooq) // CpFailoverJobExecutorTest fakes the repository transaction boundary
     testRuntimeOnly(libs.junit.platform.launcher)
 }
