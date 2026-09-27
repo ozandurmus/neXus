@@ -20,5 +20,6 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.jooq) // CpFailoverJobExecutorTest fakes the repository transaction boundary
+    testImplementation(libs.spring.boot.starter.test) // Mockito for PanFailoverJobExecutorTest (same artifacts as :service)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
