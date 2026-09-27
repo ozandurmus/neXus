@@ -460,6 +460,18 @@ export function projectFortiGate(text: string): Projection {
   return { vendor: "fortinet", sourcePlane: "fortios-show", settingCount: settings, withheldCount: withheld, sections, snapshot };
 }
 
+// PO decision 2026-09-27: Configuration keeps these families; backup retains the full running-config.
+const ASA_PREFIX_GROUPS: Readonly<Record<string, string>> = {
+  "asa version": "System", hostname: "System", "domain-name": "System", clock: "System", boot: "System",
+  firewall: "System", mode: "System", console: "System", dns: "DNS", "name-server": "DNS", ntp: "NTP",
+  ssh: "Management access", http: "Management access", telnet: "Management access",
+  "management-access": "Management access", banner: "Management access", "password-policy": "Management access",
+  username: "Management access", enable: "Management access", aaa: "Management access",
+  "aaa-server": "Management access", ssl: "Management access", "snmp-server": "SNMP", logging: "Logging",
+  failover: "Failover", "monitor-interface": "Failover", prompt: "Failover", interface: "Interfaces",
+  mtu: "Interfaces", route: "Routing", "ipv6 route": "Routing", router: "Routing",
+};
+
 /** ASA's sanitized running configuration: indented lines belong to the preceding top-level block. */
 export function projectAsa(text: string): Projection {
   const bySection = new Map<string, SettingRow[]>();
@@ -476,23 +488,25 @@ export function projectAsa(text: string): Projection {
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line || line === "!" || /^\s*:/.test(raw)) continue;
-    if (line.includes("[withheld]")) withheld++;
     if (/^\s/.test(raw)) {
       if (block) {
         hasChildren = true;
         add(`${block} › ${line}`, line);
+        if (line.includes("[withheld]")) withheld++;
       }
     } else {
       if (block && !hasChildren) add(block, block);
-      block = line;
-      const words = line.split(/\s+/);
-      const size = /^(object network |crypto map )/.test(line) ? 2 : 1;
-      section = words.slice(0, size).map(titleCase).join(" ");
+      const command = line.toLowerCase().replace(/^no\s+/, "");
+      section = Object.entries(ASA_PREFIX_GROUPS).find(([prefix]) => command === prefix || command.startsWith(prefix + " "))?.[1] ?? "";
+      block = section ? line : "";
+      if (block && line.includes("[withheld]")) withheld++;
       hasChildren = false;
     }
   }
   if (block && !hasChildren) add(block, block);
-  const sections = [...bySection.keys()].sort((a, b) => a.localeCompare(b)).map((label) => ({ label, rows: bySection.get(label) ?? [] }));
+  const order = ["System", "DNS", "NTP", "Management access", "SNMP", "Logging", "Failover", "Interfaces", "Routing"];
+  const sections = [...bySection.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b))
+    .map((label) => ({ label, rows: bySection.get(label) ?? [] }));
   return { vendor: "cisco_asa", sourcePlane: "asa-running-config", settingCount: settings, withheldCount: withheld, sections, snapshot: [] };
 }
 

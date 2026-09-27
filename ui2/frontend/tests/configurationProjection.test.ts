@@ -60,22 +60,29 @@ describe("ProxySG projection", () => {
 });
 
 describe("Cisco ASA projection", () => {
-  it("groups flat and indented lines by block kind with withheld values", () => {
+  it("groups allowed families and filters older policy blocks with their children", () => {
     const p = projectAsa(`ASA Version 9.22\ninterface GigabitEthernet0/0\n nameif outside\n ip address 192.0.2.1 255.255.255.0\nobject network WEB\n host 192.0.2.10\naccess-list OUTSIDE permit ip any any\nusername [withheld]\n`);
     expect(p.vendor).toBe("cisco_asa");
-    expect(p.sections.find((s) => s.label === "Interface")?.rows[0]).toMatchObject({
+    expect(p.sections.find((s) => s.label === "Interfaces")?.rows[0]).toMatchObject({
       setting: "interface GigabitEthernet0/0 › nameif outside", value: "nameif outside", context: "single",
     });
-    expect(p.sections.find((s) => s.label === "Object Network")?.rows).toHaveLength(1);
-    expect(p.sections.find((s) => s.label === "Access List")?.rows[0].setting).toBe("access-list OUTSIDE permit ip any any");
+    expect(p.sections.map((s) => s.label)).toEqual(["System", "Management access", "Interfaces"]);
     expect(p.withheldCount).toBe(1);
-    expect(p.settingCount).toBe(6);
+    expect(p.settingCount).toBe(4);
   });
 
   it("skips ASA comment and marker lines", () => {
     const p = projectAsa(": Saved\ninterface GigabitEthernet0/0\n nameif outside\n: end\n");
-    expect(p.sections.map((section) => section.label)).toEqual(["Interface"]);
+    expect(p.sections.map((section) => section.label)).toEqual(["Interfaces"]);
     expect(p.sections.some((section) => section.label === ":")).toBe(false);
+  });
+
+  it("keeps all curated groups, negative commands, and masked children", () => {
+    const p = projectAsa(`ASA Version 9.22\ndns domain-lookup outside\nntp server 192.0.2.54\nno http server enable\n username [withheld]\nsnmp-server community [withheld]\nno logging timestamp\nno failover\ninterface GigabitEthernet0/0\n nameif outside\nroute outside 0.0.0.0 0.0.0.0 192.0.2.254\nobject-group network INVENTED\n secret [withheld]\ncrypto map INVENTED\n certificate [withheld]\n`);
+    expect(p.sections.map((s) => s.label)).toEqual(["System", "DNS", "NTP", "Management access", "SNMP", "Logging", "Failover", "Interfaces", "Routing"]);
+    expect(p.sections.find((s) => s.label === "Management access")?.rows[0].setting).toContain("username [withheld]");
+    expect(p.withheldCount).toBe(2);
+    expect(p.settingCount).toBe(9);
   });
 });
 
