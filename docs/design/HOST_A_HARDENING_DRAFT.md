@@ -93,7 +93,9 @@ sweep from the VPN was stopped at the PO's request.)
   of 30000-32767 on the outside interface. Port 53 seen from the VPN is not served by HOST-A (resolved listens on
   loopback only; kube DNS rules target the service VIP) -- most likely the VPN's DNS interception.
 - RBAC: `aiview` holds operator, onboarding_admin, backup_admin and compliance_admin besides viewer/replay_viewer, so it
-  can start collections and backups (authorized, not a bypass). PO decision pending.
+  can start collections and backups (authorized, not a bypass). **PO decision 2026-09-27: keep** -- during development
+  the agent uses aiview to test end to end on its own ("senin çalışman değerli, kendi kendine test yapabiliyorsun").
+  Revisit before production.
 - **Done 2026-09-27 (Lynis/kube-bench follow-up):** kernel sysctl hardening + the kubelet-required values
   (`deploy/hosta/60-nexus-hardening.sysctl.conf`), k3s `protect-kernel-defaults: true` (verified on the running
   process), unused protocols dccp/sctp/rds/tipc blocked (`nexus-unused-protocols.modprobe.conf`), fail2ban sshd jail
