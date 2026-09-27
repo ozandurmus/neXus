@@ -100,7 +100,8 @@ This replaces every "VSX at chassis level" statement above:
   is Active (resp. the former active); new wrapped gate rows for both. Reads: the §2 checks in the VS context.
 - **Approval, runs, screen.** Approval windows, runs and the stepper are per unit: a window names clusters and/or
   specific VSs; the Failover tab on a VSX cluster lists its VSs, each with its own window state, button, stepper
-  and check table, shown under the chassis. One active run per unit; runs on different VSs of the same chassis may
-  not overlap either (one at a time per chassis).
+  and check table, shown under the chassis. One active run per unit. Different VSs of the same chassis may be failed
+  over, each in its own run, whenever each is covered by an approval (PO: "aynı şasideki iki VS tabii ki failover
+  edebilirsin, kapsamda varsa").
 - **Refusals.** Also refused: the VS is not exactly one Active + one Standby across the two members in its own
   `cphaprob stat` (VS context).
