@@ -73,6 +73,16 @@ class FortinetAsaComplianceEvaluatorTest {
     }
 
     @Test
+    void fortinetSettingAfterANestedConfigBelongsToTheEnclosingBlock() {
+        String text = "config firewall invented\nedit \"one\"\nconfig members 1\nset status enable\nend\n"
+                + "set trailing-setting 1 2\nnext\nend\n" + fg("system global", "set admin-telnet disable");
+        assertEquals(Verdict.PASS, result("fortinet", "fg_global_telnet_disabled", text));
+        String nestedInConfig = "config system invented\nconfig inner 1\nset a b\nend\nset after-inner 1\nend\n"
+                + fg("system global", "set admin-telnet enable");
+        assertEquals(Verdict.FAIL, result("fortinet", "fg_global_telnet_disabled", nestedInConfig));
+    }
+
+    @Test
     void asaControlsUseOnlyCompleteVisibleConfiguration() {
         Map<String, String[]> cases = Map.of(
                 "asa_http_sources_restricted", new String[] {

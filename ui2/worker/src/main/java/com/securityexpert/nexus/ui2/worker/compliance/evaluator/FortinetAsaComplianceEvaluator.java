@@ -73,6 +73,9 @@ public final class FortinetAsaComplianceEvaluator {
         if (text == null || text.isBlank()) return new Parsed(List.of(), false);
         List<Block> blocks = new ArrayList<>();
         List<String> stack = new ArrayList<>();
+        // The block each open statement created: after next/end the enclosing block is simply the new top. (A key
+        // lookup by section/scope/edit missed a config nested inside an edit: real FortiOS text, 2026-09-27.)
+        List<Block> open = new ArrayList<>();
         Block current = null;
         boolean valid = true;
         boolean closed = false;
@@ -91,12 +94,14 @@ public final class FortinetAsaComplianceEvaluator {
                 String scope = scope(stack);
                 current = new Block(name, scope, "", new HashMap<>());
                 blocks.add(current);
+                open.add(current);
                 closed = false;
             } else if (line.startsWith("edit ")) {
                 if (stack.isEmpty()) { valid = false; continue; }
                 stack.add(line);
                 current = new Block(section(stack), scope(stack), line.substring(5), new HashMap<>());
                 blocks.add(current);
+                open.add(current);
                 closed = false;
             } else if (line.startsWith("set ") || line.startsWith("unset ")) {
                 if (current == null || stack.isEmpty()) { valid = false; continue; }
@@ -109,9 +114,9 @@ public final class FortinetAsaComplianceEvaluator {
             } else if (line.equals("next") || line.equals("end")) {
                 if (stack.isEmpty()) { valid = false; continue; }
                 String top = stack.removeLast();
+                open.removeLast();
                 if ((line.equals("next") && !top.startsWith("edit ")) || (line.equals("end") && !top.startsWith("config "))) valid = false;
-                current = blocks.stream().filter(b -> b.section().equals(section(stack)) && b.scope().equals(scope(stack))
-                        && b.edit().equals(edit(stack))).reduce((a, b) -> b).orElse(null);
+                current = open.isEmpty() ? null : open.getLast();
                 closed = stack.isEmpty() && line.equals("end");
             } else if (!line.isEmpty() && !line.startsWith("#")) {
                 valid = false;
@@ -144,10 +149,6 @@ public final class FortinetAsaComplianceEvaluator {
         return "global";
     }
 
-    private static String edit(List<String> stack) {
-        for (int i = stack.size() - 1; i >= 0; i--) if (stack.get(i).startsWith("edit ")) return stack.get(i).substring(5);
-        return "";
-    }
 
     private static Verdict forti(String id, Parsed parsed) {
         List<Block> blocks = switch (id) {
