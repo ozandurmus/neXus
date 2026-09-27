@@ -6,11 +6,13 @@ import react from "@vitejs/plugin-react";
 // long-lived Node process in production.
 export default defineConfig({
   plugins: [react()],
+  cacheDir: ".cache/vite",
   build: {
     outDir: "dist",
     emptyOutDir: true,
   },
   test: {
+    include: ["tests/**/*.test.{ts,tsx}"],
     environment: "jsdom",
     globals: true,
     setupFiles: ["./tests/setup.ts"],

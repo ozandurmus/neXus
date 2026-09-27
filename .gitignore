@@ -115,4 +115,6 @@ render_only_*.log
 # movement failing verify on an untracked cache directory.
 /node_modules/
 ui2/node_modules/
+/ui2/frontend/e2e-results/
+/ui2/frontend/e2e-report/
 .claude/worktrees/
