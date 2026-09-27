@@ -1,0 +1,6 @@
+[Unit]
+Description=neXus encrypted platform backup
+After=k3s.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nexus-platform-backup

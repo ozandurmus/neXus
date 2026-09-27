@@ -65,5 +65,15 @@ Measured read-only on 2026-09-27 (HOST-A: Ubuntu 26.04.1 LTS, single-node k3s, n
    before the rollback was cancelled.
    -> **Done 2026-09-27 (H3):** `secrets-encryption: true` in `/etc/rancher/k3s/config.yaml`, keys rotated and every
    Secret re-encrypted (aescbc); verified no Secret value appears in clear in the datastore. A pre-change copy of the
-   datastore (plaintext) is kept in `/var/backups/k3s-before-secrets-encryption-*` for rollback; to be deleted, with
-   the PO's approval, after a few days of normal operation.
+   datastore (plaintext) was taken for rollback and deleted on the PO's instruction the same day.
+6. Backup (PO: "Silinsin ve şifreli bir backup alalım çalışan haliyle"). -> **Done 2026-09-27:**
+   `deploy/hosta/nexus-platform-backup.sh` (installed `/usr/local/sbin/nexus-platform-backup`, daily timer 01:30 UTC,
+   14 kept in `/var/backups/nexus`): k3s datastore (consistent sqlite copy), k3s cred incl. the Secrets encryption
+   config, tls, token, k3s config, `/etc/nexus` (local CA, firewall), sshd/chrony drop-ins and a `pg_dump` of ui2,
+   encrypted with age. First run 198 MB, decryption verified. The age identity is on HOST-A (root-only) and a copy was
+   handed to the PO to keep off the host. The artefact store (117 GB, already encrypted by neXus) needs an off-host
+   target -- PO to name it.
+7. Host audit (PO: "Sunucu düzeyindekini açalım"). -> **Done 2026-09-27 (M2):** auditd with
+   `deploy/hosta/nexus-audit.rules` (identity, sudoers, sshd, k3s config/cred/manifests, `/etc/nexus` read/write,
+   chrony, systemd units, root commands run by logged-in users); ~40 MB/day, rotated by auditd.
+8. SSH keys: unchanged by the PO's decision -- `securitynexus` keeps its password login.

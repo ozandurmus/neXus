@@ -1,0 +1,18 @@
+## neXus HOST-A audit baseline (hardening M2, PO 2026-09-27). Installed as /etc/audit/rules.d/60-nexus.rules.
+-w /etc/passwd -p wa -k identity
+-w /etc/group -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/sudoers -p wa -k sudoers
+-w /etc/sudoers.d/ -p wa -k sudoers
+-w /etc/ssh/sshd_config -p wa -k sshd
+-w /etc/ssh/sshd_config.d/ -p wa -k sshd
+-w /etc/rancher/k3s/ -p wa -k k3s-config
+-w /var/lib/rancher/k3s/server/cred/ -p wa -k k3s-cred
+-w /var/lib/rancher/k3s/server/manifests/ -p wa -k k3s-manifests
+-w /etc/nexus/ -p rwa -k nexus-keys
+-w /etc/chrony/ -p wa -k time
+-w /etc/systemd/system/ -p wa -k systemd
+-w /usr/local/bin/k3s -p x -k k3s-exec
+-a always,exit -F arch=b64 -S execve -F euid=0 -F auid>=1000 -F auid!=unset -k root-commands
+-a always,exit -F arch=b64 -S sethostname,setdomainname -k system-locale
+-w /var/log/sudo.log -p wa -k sudo-log
