@@ -37,3 +37,11 @@ the two `request high-availability state` op commands above, direct firewall onl
 - Method: suspend, confirm the other peer became active, then functional on the former active.
 - Checks: HA state and connectivity only (option "HA durumu + bağlantı").
 - Same approval windows, roles and screen as Check Point; vsys under their device.
+
+## 6. Amendment 2026-09-27 -- session sync, session takeover, version parity (PO: "Ekleyelim")
+| # | Check | Read (direct firewall XML API) | PASS when |
+| --- | --- | --- | --- |
+| 5 | Session synchronization (HA2) | `<show><high-availability><state-synchronization/></high-availability></show>` (new) | session sync reported current / in sync on both peers; a failed or disabled state -> FAIL; unrecognised -> UNKNOWN |
+| 6 | Sessions carried | `<show><session><info/></session></show>` (new) | pre: recorded on both; post: the new active's active-session count at least 80 % of the pre-check active's |
+| 7 | Version parity | `<show><system><info/></system></show>` (existing gate) | PAN-OS version and app / threat content versions equal on both peers |
+All three run as pre- and post-checks. New read gate rows for 5 and 6.
