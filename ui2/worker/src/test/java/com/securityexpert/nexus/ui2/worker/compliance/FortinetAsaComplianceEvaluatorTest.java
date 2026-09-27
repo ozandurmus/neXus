@@ -69,6 +69,8 @@ class FortinetAsaComplianceEvaluatorTest {
         assertEquals(Verdict.PASS, result("fortinet", "fg_admin_no_cleartext",
                 "#nexus-full-configuration system interface\n" + interfaces));
         assertEquals(Verdict.UNKNOWN, result("fortinet", "fg_admin_no_cleartext", interfaces));
+        assertEquals(Verdict.PASS, result("fortinet", "fg_admin_no_cleartext",
+                interfaces.replace("set vdom \"root\"", "set vdom \"root\"\nunset allowaccess")));
         assertEquals(Verdict.FAIL, result("fortinet", "fg_admin_no_cleartext",
                 "#nexus-full-configuration system interface\n" + interfaces.replace("ping https ssh", "ping http")));
     }

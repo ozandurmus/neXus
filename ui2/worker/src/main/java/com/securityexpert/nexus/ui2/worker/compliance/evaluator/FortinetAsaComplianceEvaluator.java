@@ -169,7 +169,9 @@ public final class FortinetAsaComplianceEvaluator {
             case "fg_admin_no_cleartext" -> blocks.stream().anyMatch(b -> containsWord(b.get("allowaccess"), "http")
                     || containsWord(b.get("allowaccess"), "telnet")) ? Verdict.FAIL
                     : blocks.stream().allMatch(b -> visible(b.get("allowaccess"))
-                            // full-configuration omits an empty allowaccess: absent there means no service allowed
+                            // `unset allowaccess` (full-configuration's form for an empty list): no service allowed
+                            || "".equals(b.get("allowaccess"))
+                            // full-configuration omits it on some interface types: absent there means none either
                             || (parsed.fullSections().contains("system interface") && b.get("allowaccess") == null))
                             ? Verdict.PASS : Verdict.UNKNOWN;
             case "fg_remote_logging" -> blocks.stream().anyMatch(b -> "enable".equals(b.get("status"))

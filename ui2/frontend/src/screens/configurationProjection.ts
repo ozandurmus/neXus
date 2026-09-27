@@ -402,6 +402,9 @@ export const FORTIGATE_SECTIONS: Readonly<Record<string, string>> = {
 };
 
 /** FortiOS sanitized text, including older runs written before the worker allowlist. */
+const FORTIGATE_INTERFACE_FIELDS = new Set(["vdom", "alias", "description", "type", "mode", "ip", "ip6-address",
+  "allowaccess", "status", "role", "interface", "vlanid", "member", "speed", "mtu-override", "mtu"]);
+
 export function projectFortiGate(text: string): Projection {
   const bySection = new Map<string, SettingRow[]>();
   const counters = new Map<string, number>();
@@ -441,6 +444,9 @@ export function projectFortiGate(text: string): Projection {
       const section = FORTIGATE_SECTIONS[outer];
       const parts = t.split(/\s+/);
       const name = parts[1] ?? "";
+      // Interfaces come from `show full-configuration` (~97 settings each): show the operator's fields, like Palo Alto.
+      // Only the interface's own settings; nested blocks (ipv6, secondaryip, ...) are not listed.
+      if (outer === "system interface" && (stack[stack.length - 2] !== "system interface" || !FORTIGATE_INTERFACE_FIELDS.has(name))) continue;
       const value = t.startsWith("unset ") ? "unset" : parts.slice(2).join(" ").replace(/^"|"$/g, "");
       if (value === "[withheld]") withheld++;
       const path = editPath();

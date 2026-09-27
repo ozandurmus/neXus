@@ -249,3 +249,12 @@ describe("projectAsa member-specific and withheld lines", () => {
     expect(p.withheldCount).toBe(1);
   });
 });
+
+describe("projectFortiGate interfaces", () => {
+  it("lists only the operator fields of each interface", () => {
+    const p = projectFortiGate("config system interface\nedit \"port1\"\nset vdom \"root\"\nset ip 192.0.2.1 255.255.255.0\nset dhcp-relay-service disable\nconfig ipv6\nset ip6-mode static\nend\nnext\nend\n");
+    const settings = p.sections.flatMap((s) => s.rows).map((r) => r.setting);
+    expect(settings).toHaveLength(2); // vdom and ip; dhcp-relay-service and the nested ipv6 block are not listed
+    expect(settings.some((x) => /dhcp|ip6/i.test(x))).toBe(false);
+  });
+});
