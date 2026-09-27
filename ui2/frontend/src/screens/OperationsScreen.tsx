@@ -464,7 +464,7 @@ export function OperationsScreen() {
                       <TableCell>{cp.length > 0 && <>{last?.outcome ?? "No run"} {cp.some(row => row.activeWindow) && <StatusChip label="Active window" tone="ok" dense />}</>}</TableCell>
                     </TableRow>
                     {cp.filter(row => row.unit.unitId !== row.unit.clusterId).map(row => <TableRow key={row.unit.unitId} onClick={() => setSelectedCluster(c.ref)} sx={{ cursor: "pointer" }}>
-                      <TableCell sx={{ pl: 4 }}><Typography variant="caption">Virtual System</Typography> {row.unit.label}</TableCell>
+                      <TableCell sx={{ pl: 4 }}><Typography variant="caption">Virtual System</Typography> {row.unit.virtual_system ?? row.unit.cluster_member_ref}</TableCell>
                       <TableCell colSpan={6} />
                       <TableCell>{row.outcome ?? "No run"} {row.activeWindow && <StatusChip label="Active window" tone="ok" dense />}</TableCell>
                     </TableRow>)}

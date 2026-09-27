@@ -43,6 +43,7 @@ const errorText = (error: unknown) => {
 };
 
 function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expanded: boolean; onExpand: () => void }) {
+  const label = unit.virtual_system ?? unit.cluster_member_ref;
   const [approvals, setApprovals] = useState<CpFailoverApproval[]>([]);
   const [run, setRun] = useState<CpFailoverRunDetail | null>(null);
   const [dialog, setDialog] = useState<"approve" | "schedule" | null>(null);
@@ -89,12 +90,12 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
     return statuses.includes("FAIL") ? "FAIL" : statuses.includes("UNKNOWN") ? "UNKNOWN" : statuses.length ? "PASS" : "—";
   };
   return <Card sx={{ p: 2, ml: unit.unitId === unit.clusterId ? 0 : 3, bgcolor: m3.scLow }}>
-    <M3Button emphasis="text" onClick={onExpand}>{unit.unitId === unit.clusterId ? unit.label : `Virtual System · ${unit.label}`}</M3Button>
+    <M3Button emphasis="text" onClick={onExpand}>{unit.unitId === unit.clusterId ? label : `Virtual System · ${label}`}</M3Button>
     {expanded && <Stack spacing={2} sx={{ mt: 1 }}>
       <Box>
         <Typography variant="subtitle1">Approval window</Typography>
         {approvals.length ? approvals.map(a => <Box key={a.approvalId} sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", mb: 0.5 }}>
-          <Typography variant="body2">{unit.label} · {local(a.windowFrom)} – {local(a.windowUntil)} · {a.reason} · Approved by {a.approvedBy}</Typography>
+          <Typography variant="body2">{label} · {local(a.windowFrom)} – {local(a.windowUntil)} · {a.reason} · Approved by {a.approvedBy}</Typography>
           <StatusChip label={a.revokedAt ? "Revoked" : Date.parse(a.windowUntil) <= now ? "Expired" : "Approved"} tone={a.revokedAt ? "neutral" : "ok"} dense />
           {unit.canApprove && !a.revokedAt && <M3Button emphasis="text" onClick={() => void act(() => revokeCpFailover(a.approvalId))}>Revoke</M3Button>}
         </Box>) : <Typography variant="body2">No approval window</Typography>}
@@ -127,7 +128,7 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
     <Dialog open={dialog !== null} onClose={() => setDialog(null)}><DialogTitle>{dialog === "approve" ? "Approve a window" : "Schedule failover"}</DialogTitle>
       <DialogContent><Stack spacing={2} sx={{ pt: 1, minWidth: 300 }}>
         {dialog === "approve" ? <>
-          <Typography>{unit.label}</Typography>
+          <Typography>{label}</Typography>
           <TextField label="From" type="datetime-local" InputLabelProps={{ shrink: true }} value={from} onChange={e => setFrom(e.target.value)} />
           <TextField label="Until" type="datetime-local" InputLabelProps={{ shrink: true }} value={until} onChange={e => setUntil(e.target.value)} />
           <TextField label="Reason" value={reason} onChange={e => setReason(e.target.value)} />

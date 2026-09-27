@@ -150,15 +150,15 @@ it("shows a VSX unit directly below its cluster with outcome and window", async 
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     const body = url === "/devices" ? { devices: MEMBERS }
-      : url.includes("/cp-failover/units?") ? [{ clusterId: "opaque-cluster", unitId: "opaque-vs", label: "Virtual System 07", canApprove: false, canStart: false, canSchedule: false }]
+      : url.includes("/cp-failover/units?") ? [{ clusterId: "opaque-cluster", unitId: "opaque-vs", cluster_member_ref: "CLS-ROMEO-01", virtual_system: "VS-ROMEO-01-07", canApprove: false, canStart: false, canSchedule: false }]
       : url.includes("/cp-failover/approvals?") ? [{ approvalId: "a", windowFrom: from, windowUntil: until, revokedAt: null }]
       : url.includes("/cp-failover/runs?") ? [{ runId: "r", state: "DONE", outcome: "PASS" }]
       : {};
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
   }));
   render(withTheme(<OperationsScreen />));
-  expect(await screen.findByText("Virtual System 07")).toBeInTheDocument();
-  const row = screen.getByText("Virtual System 07").closest("tr")!;
+  expect(await screen.findByText("VS-ROMEO-01-07")).toBeInTheDocument();
+  const row = screen.getByText("VS-ROMEO-01-07").closest("tr")!;
   expect(within(row).getByText("PASS")).toBeInTheDocument();
   expect(within(row).getByText("Active window")).toBeInTheDocument();
 });

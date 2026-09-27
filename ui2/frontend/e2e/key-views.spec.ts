@@ -28,6 +28,27 @@ test("Inventory: opens a device and every available detail tab including Interfa
   }
 });
 
+test("Inventory: Check Point failover units use the device list's VS names", async ({ page, safety }) => {
+  await visit(page, "screen=inventory", "Devices");
+  const devices = await browserGet<{ devices: DeviceSummary[] }>(page, "/devices");
+  expect(devices.status).toBe(200);
+  const cluster = devices.body.devices.find(d => d.vendor_hint === "check_point" && d.cluster_member_ref
+    && d.enrollment_state === "ENROLLED" && d.virtual_systems);
+  expect(Boolean(cluster), "An enrolled Check Point VSX cluster is required").toBe(true);
+  const names = cluster!.virtual_systems!.split(/,\s*/).filter(Boolean);
+  expect(names.length).toBeGreaterThan(0);
+  await page.locator('[data-row="cluster"]').filter({ hasText: cluster!.cluster_member_ref! }).first().click();
+  const tabs = page.getByRole("tablist", { name: "Device detail", exact: true });
+  await tabs.getByRole("tab", { name: "Failover", exact: true }).click();
+  const failover = page.getByLabel("Check Point failover");
+  for (const name of names) {
+    await expect(failover.getByRole("button", { name: `Virtual System · ${name}`, exact: true })).toBeVisible();
+  }
+  await failover.getByRole("button", { name: `Virtual System · ${names[0]}`, exact: true }).click();
+  await safety.checkpoint();
+  await expect(failover.getByText(/CLUSTER_NOT_FOUND|UNIT_NOT_FOUND|Request failed/)).toHaveCount(0);
+});
+
 for (const [vendor, label] of [["check_point", "Check Point"], ["palo_alto", "Palo Alto"], ["fortinet", "FortiGate"], ["cisco_asa", "Cisco ASA"]]) {
   test(`Compliance: shows a control assigned to at least one ${label} device`, async ({ page, safety }) => {
     await visit(page, "screen=compliance", "Compliance");

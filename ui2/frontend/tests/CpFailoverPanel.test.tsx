@@ -10,8 +10,8 @@ vi.mock("../src/auth/adminApi", () => ({
   listCpFailoverRuns: api.runs, getCpFailoverRun: api.detail,
 }));
 
-const cluster = { clusterId: "cluster-opaque", unitId: "cluster-opaque", label: "CLS-ROMEO-01", canApprove: false, canStart: true, canSchedule: true };
-const vs = { ...cluster, unitId: "vs-opaque", label: "Virtual System 07" };
+const cluster = { clusterId: "cluster-opaque", unitId: "cluster-opaque", cluster_member_ref: "CLS-ROMEO-01", canApprove: false, canStart: true, canSchedule: true };
+const vs = { ...cluster, unitId: "vs-opaque", virtual_system: "VS-ROMEO-01-07" };
 const renderPanel = () => render(<ThemeProvider theme={m3Theme}><CpFailoverPanel memberDeviceId="member-device-id" /></ThemeProvider>);
 
 beforeEach(() => {
@@ -35,7 +35,7 @@ describe("Check Point failover", () => {
     api.detail.mockResolvedValue({ runId: "run-opaque", state: "STOPPED", step: "POSTCHECK", failedCheck: "6",
       checks: [{ checkNo: 6, phase: "post", status: "FAIL", derived: "192.0.2.19 SECRET-DEVICE" }] });
     renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: /Virtual System · Virtual System 07/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Virtual System · VS-ROMEO-01-07/ }));
     expect(screen.getByText("Stopped: Connections")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Failover now" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Schedule" })).toBeDisabled();

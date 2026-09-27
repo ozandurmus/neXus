@@ -269,7 +269,8 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         result.put(key, value);
                     }
                 }
-                case "device_id" -> {
+                case "device_id", "unitId", "unit_id", "clusterId", "cluster_id", "runId", "run_id",
+                        "approvalId", "approval_id", "jobId", "job_id" -> {
                     // Opaque internal UUIDs preserved for seamless frontend routing
                     result.put(key, value);
                 }

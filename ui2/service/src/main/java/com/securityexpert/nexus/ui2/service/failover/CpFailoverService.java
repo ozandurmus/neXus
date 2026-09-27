@@ -18,7 +18,6 @@ import com.securityexpert.nexus.ui2.persistence.discovery.ManagementEndpointSshT
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
 import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
-import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 
 /** Server-owned approval and admission decisions; HTTP never supplies a command or device target. */
 @Service
@@ -35,13 +34,11 @@ public final class CpFailoverService {
     private final JooqCpFailoverRepository store;
     private final RbacEvaluator rbac;
     private final ManagementEndpointSshTrustRepository trust;
-    private final TopologyNamePseudonymizer names;
 
     public CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
-            JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
-            TopologyNamePseudonymizer names) {
+            JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust) {
         this.devices=devices; this.inventory=inventory; this.store=store; this.rbac=rbac;
-        this.trust=trust; this.names=names;
+        this.trust=trust;
     }
 
     private static String opaque(String source) {
@@ -69,7 +66,7 @@ public final class CpFailoverService {
         return units(opaque(clusterRef), actor);
     }
 
-    /** By a member's opaque device id: cluster names are pseudonymised for the aiview persona, device ids are not. */
+    /** By a member's opaque device id. */
     public List<Unit> unitsForMember(String memberDeviceId, String actor) {
         requireOperator(actor);
         String ref = memberDeviceId == null ? null : devices.listAll().stream()
@@ -104,9 +101,20 @@ public final class CpFailoverService {
             || inventory.findLatestRun(m.deviceId()).stream().flatMap(r -> r.contexts().stream())
                 .anyMatch(c -> !"physical".equals(c.context())));
         if (vsx && common.isEmpty()) throw new Refusal("VSX_CONTEXT_INCOMPLETE");
+        List<String> vsNames=pair.stream().flatMap(m -> m.virtualSystems().stream())
+            .flatMap(names -> java.util.Arrays.stream(names.split(",\\s*")))
+            .filter(name -> !name.isBlank()).distinct().sorted().toList();
+        java.util.Map<String,String> namesByVs=new java.util.HashMap<>();
+        for (String vs:common) vsNames.stream()
+            .filter(name -> name.endsWith("(VSID " + vs + ")") || name.equals("VSID " + vs))
+            .findFirst().ifPresent(name -> namesByVs.put(vs,name));
+        List<String> unnamed=common.stream().filter(vs -> !namesByVs.containsKey(vs)).toList();
+        List<String> remaining=vsNames.stream().filter(name -> !namesByVs.containsValue(name)).toList();
+        if (unnamed.size()==remaining.size())
+            for (int i=0;i<unnamed.size();i++) namesByVs.put(unnamed.get(i),remaining.get(i));
         if (!common.isEmpty()) return common.stream().map(vs -> new Unit(opaque(cluster+":"+vs), clusterId,
-            names.maskVirtualSystem(vs,cluster), vs, pair)).toList();
-        return List.of(new Unit(clusterId, clusterId, names.maskClusterName(cluster), null, pair));
+            namesByVs.getOrDefault(vs,vs), vs, pair)).toList();
+        return List.of(new Unit(clusterId, clusterId, cluster, null, pair));
     }
     private Unit unit(String clusterId, String unitId, String actor) {
         return units(clusterId,actor).stream().filter(u -> u.id().equals(unitId)).findFirst()
@@ -180,9 +188,8 @@ public final class CpFailoverService {
         requireOperator(actor);
         return store.detail(runId);
     }
-    public String maskedMember(String memberId, String clusterRef) {
-        return names.maskDeviceName(devices.findSummary(memberId)
-            .flatMap(DeviceSummaryRecord::observedHostname).orElse(memberId),clusterRef);
+    public Optional<String> memberName(String memberId) {
+        return devices.findSummary(memberId).flatMap(DeviceSummaryRecord::observedHostname);
     }
 
     @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 3000, initialDelay = 3000)

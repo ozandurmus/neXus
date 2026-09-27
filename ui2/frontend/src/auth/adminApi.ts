@@ -1571,18 +1571,18 @@ export function getOverview(): Promise<OverviewView> {
 
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
 export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN";
-export interface CpFailoverUnit { unitId: string; clusterId: string; label: string; canApprove: boolean; canStart: boolean; canSchedule: boolean }
+export interface CpFailoverUnit { unitId: string; clusterId: string; cluster_member_ref: string; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean }
 export interface CpFailoverApproval { approvalId: string; windowFrom: string; windowUntil: string; reason: string; approvedBy: string; revokedAt: string | null }
 export interface CpFailoverRun {
   runId: string; approvalId: string; scheduledFor: string; state: CpFailoverState; step: string;
   outcome: string | null; failedCheck: string | null; message: string | null; steps: string[];
 }
-export interface CpFailoverCheck { phase: "pre" | "post"; member: string; checkNo: 1 | 2 | 3 | 5 | 6 | 8; status: CpFailoverCheckStatus; derived: string; observedAt: string }
+export interface CpFailoverCheck { phase: "pre" | "post"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 5 | 6 | 8; status: CpFailoverCheckStatus; derived: string; observedAt: string }
 export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverCheck[] }
 
 const cpFailover = "/api/v2/cp-failover";
 const cpQuery = (unit: CpFailoverUnit) => `clusterId=${encodeURIComponent(unit.clusterId)}&unitId=${encodeURIComponent(unit.unitId)}`;
-/** By a member's device id -- cluster names are pseudonymised for aiview, device ids are not. */
+/** By a member's device id; display names are masked by the server for aiview. */
 export const listCpFailoverUnits = (memberDeviceId: string) => call<CpFailoverUnit[]>(`${cpFailover}/units?memberDeviceId=${encodeURIComponent(memberDeviceId)}`, "GET");
 export const listCpFailoverApprovals = (unit: CpFailoverUnit) => call<CpFailoverApproval[]>(`${cpFailover}/approvals?${cpQuery(unit)}`, "GET");
 export const listCpFailoverRuns = (unit: CpFailoverUnit) => call<CpFailoverRun[]>(`${cpFailover}/runs?${cpQuery(unit)}`, "GET");

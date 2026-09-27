@@ -160,6 +160,32 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void failoverIdsRemainOpaqueAndVsMatchesDeviceList() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        String cluster = "CLS-TEST-01";
+        String vs = "VS-TEST-APP (VSID 13)";
+        String id = "opaque-CLS-TEST-01-VS-TEST-APP (VSID 13)";
+        @SuppressWarnings("unchecked")
+        Map<String, Object> device = (Map<String, Object>) advice.beforeBodyWrite(
+            Map.of("cluster_member_ref", cluster, "virtual_systems", vs), null, null, null, serverRequest, null);
+        Map<String, Object> unit = new LinkedHashMap<>();
+        unit.put("cluster_member_ref", cluster);
+        unit.put("virtual_system", vs);
+        for (String key : List.of("device_id", "unitId", "unit_id", "clusterId", "cluster_id",
+                "runId", "run_id", "approvalId", "approval_id", "jobId", "job_id")) {
+            unit.put(key, id);
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> masked = (Map<String, Object>) advice.beforeBodyWrite(unit, null, null, null, serverRequest, null);
+        assertThat(masked.get("virtual_system")).isEqualTo(device.get("virtual_systems"));
+        assertThat(masked.get("cluster_member_ref")).isEqualTo(device.get("cluster_member_ref"));
+        for (String key : List.of("device_id", "unitId", "unit_id", "clusterId", "cluster_id",
+                "runId", "run_id", "approvalId", "approval_id", "jobId", "job_id")) {
+            assertThat(masked.get(key)).as(key).isEqualTo(id);
+        }
+    }
+
+    @Test
     void masksDeviceAndClusterInventoryForReplayViewer() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
 

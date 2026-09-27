@@ -39,6 +39,13 @@ public final class CpFailoverController {
         m.put("steps",List.of("PRECHECK","FAILING_OVER","SWITCHED","POSTCHECK","RETURNING","DONE"));
         return m;
     }
+    private static Map<String,Object> unit(CpFailoverService.Unit u) {
+        Map<String,Object> m=new LinkedHashMap<>();
+        m.put("unitId",u.id()); m.put("clusterId",u.clusterId());
+        m.put("cluster_member_ref",u.members().get(0).clusterMemberRef().orElseThrow());
+        if (u.vsId()!=null) m.put("virtual_system",u.label());
+        return m;
+    }
     private static ResponseEntity<?> result(java.util.function.Supplier<Object> action) {
         try { return ResponseEntity.ok(action.get()); }
         catch (CpFailoverService.Refusal refused) {
@@ -50,16 +57,20 @@ public final class CpFailoverController {
     @GetMapping("/units/{clusterId}")
     public ResponseEntity<?> units(@PathVariable String clusterId,HttpServletRequest request) {
         return result(() -> service.units(clusterId,actor(request)).stream()
-            .map(u -> Map.of("unitId",u.id(),"clusterId",u.clusterId(),"label",u.label())).toList());
+            .map(CpFailoverController::unit).toList());
     }
     @GetMapping("/units")
     public ResponseEntity<?> unitsForRef(@RequestParam(required = false) String clusterRef,
             @RequestParam(required = false) String memberDeviceId, HttpServletRequest request) {
         return result(() -> (memberDeviceId != null ? service.unitsForMember(memberDeviceId,actor(request))
                 : service.unitsForRef(clusterRef,actor(request))).stream()
-            .map(u -> Map.of("unitId",u.id(),"clusterId",u.clusterId(),"label",u.label(),
-                "canApprove",service.mayApprove(actor(request)),"canStart",service.mayStart(actor(request)),
-                "canSchedule",service.mayStart(actor(request)))).toList());
+            .map(u -> {
+                Map<String,Object> m=unit(u);
+                m.put("canApprove",service.mayApprove(actor(request)));
+                m.put("canStart",service.mayStart(actor(request)));
+                m.put("canSchedule",service.mayStart(actor(request)));
+                return m;
+            }).toList());
     }
     @PostMapping("/approvals")
     public ResponseEntity<?> approve(@RequestBody ApprovalRequest body,HttpServletRequest request) {
@@ -86,10 +97,15 @@ public final class CpFailoverController {
     public ResponseEntity<?> detail(@PathVariable String runId,HttpServletRequest request) {
         return result(() -> service.detail(runId,actor(request)).map(d -> {
             Map<String,Object> view=run(d.run());
-            view.put("checks",d.checks().stream().map(c -> Map.of(
-                "phase",c.phase(),"member", service.maskedMember(c.memberRef(),d.run().clusterRef()),
-                "checkNo",c.checkNo(),"status",c.status(),"derived",c.derived(),
-                "observedAt",c.observedAt())).toList());
+            view.put("checks",d.checks().stream().map(c -> {
+                Map<String,Object> check=new LinkedHashMap<>();
+                check.put("phase",c.phase()); check.put("device_id",c.memberRef());
+                check.put("cluster_member_ref",d.run().clusterRef());
+                check.put("hostname",service.memberName(c.memberRef()).orElse(null));
+                check.put("checkNo",c.checkNo()); check.put("status",c.status());
+                check.put("derived",c.derived()); check.put("observedAt",c.observedAt());
+                return check;
+            }).toList());
             return view;
         }).orElseThrow(() -> new CpFailoverService.Refusal("RUN_NOT_FOUND")));
     }

@@ -26,8 +26,7 @@ class CpFailoverServiceTest {
     private final JooqCpFailoverRepository store=mock(JooqCpFailoverRepository.class);
     private final RbacEvaluator rbac=mock(RbacEvaluator.class);
     private final ManagementEndpointSshTrustRepository trust=mock(ManagementEndpointSshTrustRepository.class);
-    private final CpFailoverService service=new CpFailoverService(devices,inventory,store,rbac,trust,
-        new com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer(new byte[32]));
+    private final CpFailoverService service=new CpFailoverService(devices,inventory,store,rbac,trust);
 
     private static DeviceSummaryRecord summary(String id) {
         return new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
@@ -59,10 +58,40 @@ class CpFailoverServiceTest {
         var units=service.unitsForRef(CLUSTER,"actor-1");
         assertEquals(1,units.size());
         assertEquals(CLUSTER_ID,units.get(0).id());
+        assertEquals(CLUSTER,units.get(0).label());
         assertTrue(service.mayApprove("actor-1"));
         assertTrue(service.mayStart("actor-1"));
         assertEquals("CLUSTER_NOT_FOUND",assertThrows(CpFailoverService.Refusal.class,
             () -> service.unitsForRef("unknown","actor-1")).code());
+    }
+    @Test void vsUnitsUseRawNamesFromDeviceSummaryAndVsidWhenMissing() {
+        ready("ACTIVE","STANDBY");
+        when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(
+            summaryWithVs(A, "VS-TEST-APP (VSID 13)"), summaryWithVs(B, "VS-TEST-APP (VSID 13)")));
+        when(inventory.findLatestRun(A)).thenReturn(Optional.of(runWithVs(A, "13", "35")));
+        when(inventory.findLatestRun(B)).thenReturn(Optional.of(runWithVs(B, "13", "35")));
+        var units=service.units(CLUSTER_ID,"actor-1");
+        assertEquals(List.of("VS-TEST-APP (VSID 13)", "35"), units.stream().map(CpFailoverService.Unit::label).toList());
+        assertEquals(List.of("13", "35"), units.stream().map(CpFailoverService.Unit::vsId).toList());
+        assertTrue(units.stream().allMatch(u -> CLUSTER_ID.equals(u.clusterId())));
+        when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(
+            summaryWithVs(A, "VS-TEST-APP, VS-TEST-DB"), summaryWithVs(B, "VS-TEST-APP, VS-TEST-DB")));
+        assertEquals(List.of("VS-TEST-APP", "VS-TEST-DB"),
+            service.units(CLUSTER_ID,"actor-1").stream().map(CpFailoverService.Unit::label).toList());
+        when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(
+            summaryWithVs(A, "VS-TEST-DB (VSID 35), VS-TEST-APP"),
+            summaryWithVs(B, "VS-TEST-DB (VSID 35), VS-TEST-APP")));
+        assertEquals(List.of("VS-TEST-APP", "VS-TEST-DB (VSID 35)"),
+            service.units(CLUSTER_ID,"actor-1").stream().map(CpFailoverService.Unit::label).toList());
+    }
+    private static DeviceSummaryRecord summaryWithVs(String id,String vsNames) {
+        return new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(CLUSTER),
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(vsNames));
+    }
+    private static InventoryRun runWithVs(String id,String... vsids) {
+        return new InventoryRun("inventory-"+id,id,"job-"+id,Instant.EPOCH,vsids.length,
+            java.util.Arrays.stream(vsids).map(vs -> new InventoryContext(vs,List.of(),List.of())).toList());
     }
     @Test void wrongRoleRefusedBeforeAdmission() {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
