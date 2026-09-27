@@ -5,19 +5,26 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** PO decision 2026-09-27: Configuration shows curated sections; backup retains the full show. */
+/**
+ * PO decision 2026-09-27: Configuration shows curated sections; backup retains the full show. Baseline: what the
+ * Check Point / Palo Alto planes show plus what their compliance controls read (ssh-config: SSH ciphers; ddns;
+ * log filters: system/config log forwarding; log disk/memory: log quota).
+ */
 public final class FortiGateConfigurationAllowlist {
     public static final Map<String, String> SECTIONS = sections();
 
     private static Map<String, String> sections() {
         Map<String, String> sections = new LinkedHashMap<>();
-        for (String name : List.of("system global", "system settings", "system console", "system central-management", "system fortiguard")) sections.put(name, "System");
+        for (String name : List.of("system global", "system settings", "system console", "system central-management", "system fortiguard", "system ddns")) sections.put(name, "System");
         sections.put("system dns", "DNS");
         sections.put("system ntp", "NTP");
-        for (String name : List.of("system admin", "system accprofile", "system password-policy", "system snmp sysinfo", "system snmp community", "system snmp user")) sections.put(name, "Management");
+        for (String name : List.of("system admin", "system accprofile", "system password-policy", "system snmp sysinfo", "system snmp community", "system snmp user", "system ssh-config")) sections.put(name, "Management");
         for (String name : List.of("user tacacs+", "user radius", "user ldap")) sections.put(name, "Authentication");
         sections.put("system ha", "High Availability");
-        for (String name : List.of("log setting", "log syslogd setting", "log syslogd2 setting", "log syslogd3 setting", "log syslogd4 setting", "log fortianalyzer setting", "log fortianalyzer2 setting", "log fortianalyzer3 setting")) sections.put(name, "Logging");
+        for (String name : List.of("log setting", "log syslogd setting", "log syslogd2 setting", "log syslogd3 setting", "log syslogd4 setting", "log fortianalyzer setting", "log fortianalyzer2 setting", "log fortianalyzer3 setting",
+                "log syslogd filter", "log syslogd2 filter", "log syslogd3 filter", "log syslogd4 filter",
+                "log fortianalyzer filter", "log fortianalyzer2 filter", "log fortianalyzer3 filter",
+                "log disk setting", "log memory setting")) sections.put(name, "Logging");
         for (String name : List.of("system interface", "system zone")) sections.put(name, "Interfaces");
         for (String name : List.of("router static", "router static6", "router bgp", "router ospf")) sections.put(name, "Routing");
         return Map.copyOf(sections);

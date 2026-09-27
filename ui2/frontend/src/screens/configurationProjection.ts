@@ -387,13 +387,16 @@ export function filterProjection(sections: readonly Section[], query: string): S
 // PO decision 2026-09-27: Configuration uses these sections; backup retains the full show.
 export const FORTIGATE_SECTIONS: Readonly<Record<string, string>> = {
   "system global": "System", "system settings": "System", "system console": "System",
-  "system central-management": "System", "system fortiguard": "System", "system dns": "DNS", "system ntp": "NTP",
+  "system central-management": "System", "system fortiguard": "System", "system ddns": "System", "system ssh-config": "Management", "system dns": "DNS", "system ntp": "NTP",
   "system admin": "Management", "system accprofile": "Management", "system password-policy": "Management",
   "system snmp sysinfo": "Management", "system snmp community": "Management", "system snmp user": "Management",
   "user tacacs+": "Authentication", "user radius": "Authentication", "user ldap": "Authentication",
   "system ha": "High Availability", "log setting": "Logging", "log syslogd setting": "Logging",
   "log syslogd2 setting": "Logging", "log syslogd3 setting": "Logging", "log syslogd4 setting": "Logging",
   "log fortianalyzer setting": "Logging", "log fortianalyzer2 setting": "Logging", "log fortianalyzer3 setting": "Logging",
+  "log syslogd filter": "Logging", "log syslogd2 filter": "Logging", "log syslogd3 filter": "Logging", "log syslogd4 filter": "Logging",
+  "log fortianalyzer filter": "Logging", "log fortianalyzer2 filter": "Logging", "log fortianalyzer3 filter": "Logging",
+  "log disk setting": "Logging", "log memory setting": "Logging",
   "system interface": "Interfaces", "system zone": "Interfaces", "router static": "Routing",
   "router static6": "Routing", "router bgp": "Routing", "router ospf": "Routing",
 };
