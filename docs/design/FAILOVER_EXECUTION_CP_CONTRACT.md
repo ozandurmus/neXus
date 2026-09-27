@@ -109,3 +109,13 @@ This replaces every "VSX at chassis level" statement above:
 Check 4 ("critical devices") is removed: it was not in the PO's list and needs `cphaprob -l list`, which is not
 approved. Check 2 is the cluster IP table comparison. See `PO_DECISION_RECORD_2026_09_27_CP_FAILOVER_EXECUTION.md`
 for how this contract relates to `PRODUCT_DIRECTION_RECORD.md` items 37, 39 and 368.
+
+## 12. Amendment 2026-09-27 -- state sync and policy parity (PO approved the two reads)
+From the older OP.0a stop-conditions (state sync current; version/policy parity) the PO approved: "Bu komutları da
+ekleyelim."
+| # | Check | Command (Expert; VSX via `vsenv <VSID>`) | PASS when |
+| --- | --- | --- | --- |
+| 9 | State synchronization | `cphaprob syncstat` | sync status reported OK on both members and no lost / unsynchronized update counters (a non-zero lost count or a non-OK status -> FAIL; unrecognised output -> UNKNOWN) |
+| 10 | Installed policy parity | `fw stat` | both members report the same installed policy name (install time recorded, not compared); a member with no policy -> FAIL |
+Both are pre-checks and post-checks (post: 9 on the new active; 10 unchanged on both). New gate rows (plain and
+`vsenv`-wrapped), read-only.
