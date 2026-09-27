@@ -25,9 +25,8 @@ Supersedes, for Check Point execution, the read-only-only scope of `FAILOVER_REA
 | # | Check | Command (Expert) | PASS when |
 | --- | --- | --- | --- |
 | 1 | Cluster state | `cphaprob stat` | exactly one Active and one Standby, both members listed by both, mode supported |
-| 2 | Sync tables | `cphaprob tablestat` | synchronized tables present and consistent on both members |
+| 2 | Cluster IP table | `cphaprob tablestat` | both members report the same cluster virtual IP / interface mapping (it is the cluster IP table, not a sync check -- Check Point CLI reference) |
 | 3 | Cluster interfaces | `cphaprob -a if` | every required interface UP on both; CCP up |
-| 4 | Critical devices | derived from 1 (`cphaprob stat` problem notification) | no problem notification on either member |
 | 5 | ARP | `arp -an` (entry count only) | standby has a comparable ARP population (recorded for §3) |
 | 6 | Connections | `fw tab -t connections -s` (#VALS, #PEAK) | recorded; standby within sync tolerance of active |
 | 7 | New connections / s | **deferred** -- `fw tab -t connections -s` gives the table population and peak, not a rate (Check Point CLI reference); the PO names the CPS command, then it is added | -- |
@@ -36,7 +35,7 @@ Unrecognised output -> UNKNOWN (blocks). Values are stored as derived numbers an
 
 ## 3. Post-checks (same commands on both members)
 - 1: the former standby is Active, the former active is Down (then Standby after step 6).
-- 2, 3, 4: as in the pre-checks, on the new active.
+- 2, 3: as in the pre-checks, on the new active.
 - 5: new active ARP count at least 80 % of the pre-check active's.
 - 6: new active connection count at least 80 % of the pre-check active's (sync carried them).
 - 8: new active carries traffic: rate at least 50 % of the pre-check active's (not zero). (7 deferred, §2.)
@@ -105,3 +104,8 @@ This replaces every "VSX at chassis level" statement above:
   edebilirsin, kapsamda varsa").
 - **Refusals.** Also refused: the VS is not exactly one Active + one Standby across the two members in its own
   `cphaprob stat` (VS context).
+
+## 11. Amendment 2026-09-27 -- checks are exactly the PO's list
+Check 4 ("critical devices") is removed: it was not in the PO's list and needs `cphaprob -l list`, which is not
+approved. Check 2 is the cluster IP table comparison. See `PO_DECISION_RECORD_2026_09_27_CP_FAILOVER_EXECUTION.md`
+for how this contract relates to `PRODUCT_DIRECTION_RECORD.md` items 37, 39 and 368.
