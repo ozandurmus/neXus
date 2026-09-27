@@ -28,6 +28,9 @@ public interface JobRecordDao {
     default Optional<DiagnosticOutputRef> diagnosticOutput(String jobId, String actor) { return Optional.empty(); }
     default boolean writeDiagnosticOutput(String jobId, String reference, byte[] key, int exitStatus, int lines) { return false; }
 
+    /** Store the encrypted backup transcript location and its wrapped data key. */
+    default boolean writeBackupTranscript(String jobId, long leaseEpoch, String reference, byte[] wrappedKey) { return false; }
+
     /** @return the inserted row's own {@code job_id} if this key was new, {@code empty} on a duplicate key. */
     Optional<String> insertRequestedIfAbsent(String jobId, String idempotencyKey, String capabilityId,
             String targetDeviceId, String actionClass, String jobType, String actorFingerprint, String actionId);

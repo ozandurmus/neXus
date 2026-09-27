@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.worker.backup;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
@@ -10,6 +11,13 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.lang.reflect.Proxy;
+import java.io.IOException;
+import java.io.InputStream;
+
+import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactRef;
+import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -32,6 +40,55 @@ import com.securityexpert.nexus.ui2.platform.HostnameFingerprint;
  * ConfigurationJobExecutorEndToEndTest}'s own shape.
  */
 class BackupJobExecutorEndToEndTest {
+
+    private static JobRecordDao transcriptJobs(AtomicReference<String> ref, AtomicReference<byte[]> key) {
+        return (JobRecordDao) Proxy.newProxyInstance(JobRecordDao.class.getClassLoader(), new Class<?>[] {JobRecordDao.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("writeBackupTranscript")) {
+                        ref.set((String) args[2]);
+                        key.set((byte[]) args[3]);
+                        return true;
+                    }
+                    throw new AssertionError("unexpected DAO call: " + method.getName());
+                });
+    }
+
+    @Test void storesTranscriptRefAndPreservesOutcomeOnStoreFailure(@TempDir Path tempDir) throws Exception {
+        ScriptedBackupTransport transport = happyPathTransportUpTo("succeeded");
+        transport.fetchedContent = "archive-bytes-content";
+        transport.execOutputs.put(BackupReadPlan.archiveDigestCommand(ARCHIVE_NAME),
+                sha256Hex(transport.fetchedContent) + "  " + ARCHIVE_NAME + "\n");
+        transport.execOutputs.put(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME), "");
+        ArtefactStore store = newArtefactStore(tempDir);
+        Harness success = new Harness(transport, store, Duration.ofMillis(5), Duration.ofSeconds(5), tempDir);
+        AtomicReference<String> ref = new AtomicReference<>();
+        AtomicReference<byte[]> key = new AtomicReference<>();
+        success.executor.withTranscript(store, transcriptJobs(ref, key));
+        assertTrue(success.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request()) instanceof JobOutcome.Completed);
+        assertNotNull(ref.get());
+        try (InputStream in = store.retrieve(new ArtefactRef(ref.get()), key.get(), true)) {
+            String transcript = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(transcript.contains("\"channel\":\"ssh\""));
+            assertTrue(transcript.contains("\"kind\":\"command\""));
+        }
+
+        ScriptedBackupTransport next = happyPathTransportUpTo("succeeded");
+        next.fetchedContent = "archive-bytes-content";
+        next.execOutputs.put(BackupReadPlan.archiveDigestCommand(ARCHIVE_NAME),
+                sha256Hex(next.fetchedContent) + "  " + ARCHIVE_NAME + "\n");
+        next.execOutputs.put(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME), "");
+        Harness failedStore = new Harness(next, store, Duration.ofMillis(5), Duration.ofSeconds(5), tempDir);
+        ArtefactStore broken = new ArtefactStore() {
+            @Override public ArtefactHandle open(String deviceId, String jobId, String vendor, boolean gzip) throws IOException {
+                throw new IOException("synthetic store failure");
+            }
+            @Override public InputStream retrieve(ArtefactRef reference, byte[] wrappedKey, boolean gzip) throws IOException {
+                throw new IOException("unused");
+            }
+        };
+        failedStore.executor.withTranscript(broken, transcriptJobs(new AtomicReference<>(), new AtomicReference<>()));
+        assertTrue(failedStore.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request()) instanceof JobOutcome.Completed);
+    }
 
     private static final String JOB_ID = "job-backup-1";
     private static final long LEASE_EPOCH = 7L;

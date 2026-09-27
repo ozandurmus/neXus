@@ -9,6 +9,9 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
+import java.security.MessageDigest;
+import java.security.DigestOutputStream;
+import java.util.HexFormat;
 
 import com.jcraft.jsch.Channel;
 import com.jcraft.jsch.ChannelExec;
@@ -35,6 +38,7 @@ import com.securityexpert.nexus.ui2.jobs.transport.TransportNotImplementedExcept
 import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
+import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
 
 /**
  * The {@code ssh_exec} adapter (contract §5) -- the only transport
@@ -63,6 +67,17 @@ public final class SshExecTransport implements DeviceTransport {
 
     @Override
     public ConnectResult connect(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
+        try {
+            ConnectResult result = connectRaw(target, spec, timeout);
+            JobTranscriptScope.add("ssh", "note", "connect outcome: " + result.getClass().getSimpleName());
+            return result;
+        } catch (RuntimeException e) {
+            JobTranscriptScope.add("ssh", "note", "connect outcome: " + e.getClass().getSimpleName());
+            throw e;
+        }
+    }
+
+    private ConnectResult connectRaw(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
         if (spec.trustRuleRef() == null || spec.trustRuleRef().isBlank()) {
             LOG.log(System.Logger.Level.WARNING, "SSH connection aborted for {0}:{1}: trust rule ref is missing",
                     target.host(), target.port());
@@ -73,6 +88,7 @@ public final class SshExecTransport implements DeviceTransport {
             return new ConnectResult.HostKeyRejected("TRUST_ENTRY_MISSING");
         }
         SshCredentialMaterial credential = credentialResolver.resolve(spec.credentialRef());
+        JobTranscriptScope.add("ssh", "note", "connect ssh " + target.host() + ":" + target.port() + " as " + credential.username());
         // Per-connect state: a rejection is determined by the key hook, never exception substrings.
         String[] trustFailure = {null};
         boolean[] trusted = {false};
@@ -185,6 +201,12 @@ public final class SshExecTransport implements DeviceTransport {
 
     @Override
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
+        ExecResult result = execRaw(session, spec, timeout);
+        recordAnswer(result);
+        return result;
+    }
+
+    private ExecResult execRaw(TransportSession session, ExecSpec spec, Duration timeout) {
         if (!(session instanceof SshTransportSession sshSession)) {
             return new ExecResult.ChannelFailed("not an ssh_exec session");
         }
@@ -201,8 +223,10 @@ public final class SshExecTransport implements DeviceTransport {
             InputStream in = channel.getInputStream();
             InputStream err = channel.getErrStream();
             channel.connect((int) timeout.toMillis());
+            JobTranscriptScope.add("ssh", "command", spec.command());
 
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            ByteArrayOutputStream errors = new ByteArrayOutputStream();
             byte[] chunk = new byte[4096];
             long deadline = System.currentTimeMillis() + timeout.toMillis();
             long firstByteMs = -1;
@@ -220,9 +244,12 @@ public final class SshExecTransport implements DeviceTransport {
                     buffer.write(chunk, 0, read);
                 }
                 while (err.available() > 0) {
-                    if (err.read(chunk, 0, chunk.length) < 0) {
+                    int read = err.read(chunk, 0, chunk.length);
+                    if (read < 0) {
                         break;
                     }
+                    if (errors.size() < 64 * 1024 * 1024)
+                        errors.write(chunk, 0, Math.min(read, 64 * 1024 * 1024 - errors.size()));
                 }
                 if (channel.isClosed()) {
                     if (in.available() > 0) {
@@ -230,6 +257,7 @@ public final class SshExecTransport implements DeviceTransport {
                     }
                     long durationMs = System.currentTimeMillis() - execStartMs;
                     String outStr = buffer.toString(java.nio.charset.StandardCharsets.UTF_8);
+                    if (errors.size() > 0) JobTranscriptScope.add("ssh", "answer", errors.toString(java.nio.charset.StandardCharsets.UTF_8));
                     int lines = outStr.split("\r\n|\r|\n").length;
                     LOG.log(System.Logger.Level.INFO,
                             "[SSH_EXEC] COMPLETED cmd=\"{0}\" in {1}ms (exit={2}, bytes={3}, lines={4})",
@@ -241,6 +269,8 @@ public final class SshExecTransport implements DeviceTransport {
                     LOG.log(System.Logger.Level.WARNING,
                             "[SSH_EXEC] TIMEOUT cmd=\"{0}\" HUNG for {1}ms! (timeout={2}ms, bytesReceived={3})",
                             spec.command(), durationMs, timeout.toMillis(), buffer.size());
+                    if (buffer.size() > 0) JobTranscriptScope.add("ssh", "answer",
+                            buffer.toString(java.nio.charset.StandardCharsets.UTF_8));
                     return new ExecResult.TimedOut();
                 }
                 Thread.sleep(50);
@@ -269,6 +299,12 @@ public final class SshExecTransport implements DeviceTransport {
      */
     @Override
     public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
+        ExecResult result = execInteractiveRaw(session, spec, timeout);
+        recordAnswer(result);
+        return result;
+    }
+
+    private ExecResult execInteractiveRaw(TransportSession session, ExecSpec spec, Duration timeout) {
         if (!(session instanceof SshTransportSession sshSession)) {
             return new ExecResult.ChannelFailed("not an ssh_exec session");
         }
@@ -277,6 +313,8 @@ public final class SshExecTransport implements DeviceTransport {
             InteractiveShellSession shell = sshSession.interactiveShell();
             InteractiveShellSession.Result result = shell.runForResult(spec.command(), (int) timeout.toMillis());
             String output = result.text();
+            if (result.kind() != InteractiveShellSession.Result.Kind.OUTPUT && output != null && !output.isEmpty())
+                JobTranscriptScope.add("ssh", "answer", output);
             long elapsedMs = System.currentTimeMillis() - startMs;
             switch (result.kind()) {
                 case TIMED_OUT -> {
@@ -337,6 +375,25 @@ public final class SshExecTransport implements DeviceTransport {
     @Override
     public ExecResult execInteractiveAnswering(TransportSession session, ExecSpec spec,
             java.util.List<com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer> answers, Duration timeout) {
+        ExecResult result = execInteractiveAnsweringRaw(session, spec, answers, timeout);
+        recordAnswer(result, answers);
+        return result;
+    }
+
+    static void recordAnswer(ExecResult result,
+            java.util.List<com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer> answers) {
+        if (result instanceof ExecResult.Completed completed) {
+            String safe = completed.output();
+            for (com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer answer : answers) {
+                String sent = new String(answer.reply());
+                if (!sent.isEmpty()) safe = safe.replace(sent, "[credential]");
+            }
+            JobTranscriptScope.add("ssh", "answer", safe);
+        } else recordAnswer(result);
+    }
+
+    private ExecResult execInteractiveAnsweringRaw(TransportSession session, ExecSpec spec,
+            java.util.List<com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer> answers, Duration timeout) {
         if (!(session instanceof SshTransportSession sshSession)) {
             return new ExecResult.ChannelFailed("not an ssh_exec session");
         }
@@ -376,6 +433,18 @@ public final class SshExecTransport implements DeviceTransport {
     @Override
     public FetchStreamResult fetchStreaming(TransportSession session, FetchSpec spec, Duration timeout,
             OutputStream sink) {
+        if (JobTranscriptScope.current() == null) return fetchStreamingRaw(session, spec, timeout, sink);
+        MessageDigest digest = sha256();
+        FetchStreamResult result = fetchStreamingRaw(session, spec, timeout, new DigestOutputStream(sink, digest));
+        if (result instanceof FetchStreamResult.Fetched fetched)
+            JobTranscriptScope.add("ssh", "answer", "path=" + spec.remotePath() + " size=" + fetched.bytesTransferred()
+                    + " sha256=" + HexFormat.of().formatHex(digest.digest()));
+        else JobTranscriptScope.add("ssh", "note", result.getClass().getSimpleName());
+        return result;
+    }
+
+    private FetchStreamResult fetchStreamingRaw(TransportSession session, FetchSpec spec, Duration timeout,
+            OutputStream sink) {
         if (!(session instanceof SshTransportSession sshSession)) {
             return new FetchStreamResult.Failed("not an ssh_exec session");
         }
@@ -384,6 +453,7 @@ public final class SshExecTransport implements DeviceTransport {
         try {
             channel = (ChannelSftp) sshSession.jschSession().openChannel("sftp");
             channel.connect((int) timeout.toMillis());
+            JobTranscriptScope.add("ssh", "command", "sftp fetch " + spec.remotePath());
             bounded = new BoundedCountingOutputStream(sink, spec.maxBytes());
             channel.get(spec.remotePath(), bounded);
             return new FetchStreamResult.Fetched(bounded.count());
@@ -445,6 +515,21 @@ public final class SshExecTransport implements DeviceTransport {
      */
     public long scpFetch(TransportSession session, String remotePath, ScpSink sink, long maxBytes, Duration timeout)
             throws IOException {
+        MessageDigest digest = JobTranscriptScope.current() == null ? null : sha256();
+        ScpSink captured = digest == null ? sink : size -> new DigestOutputStream(sink.open(size), digest);
+        try {
+            long bytes = scpFetchRaw(session, remotePath, captured, maxBytes, timeout);
+            if (digest != null) JobTranscriptScope.add("ssh", "answer", "path=" + remotePath + " size=" + bytes
+                    + " sha256=" + HexFormat.of().formatHex(digest.digest()));
+            return bytes;
+        } catch (IOException e) {
+            JobTranscriptScope.add("ssh", "note", "scp fetch failed: " + e.getClass().getSimpleName());
+            throw e;
+        }
+    }
+
+    private long scpFetchRaw(TransportSession session, String remotePath, ScpSink sink, long maxBytes, Duration timeout)
+            throws IOException {
         if (!(session instanceof SshTransportSession sshSession)) {
             throw new IOException("not an ssh session");
         }
@@ -459,6 +544,7 @@ public final class SshExecTransport implements DeviceTransport {
             OutputStream out = channel.getOutputStream();
             InputStream in = channel.getInputStream();
             channel.connect((int) Math.min(timeout.toMillis(), 30_000));
+            JobTranscriptScope.add("ssh", "command", "scp -f " + remotePath);
             out.write(0);
             out.flush();
             int c = in.read();
@@ -517,6 +603,17 @@ public final class SshExecTransport implements DeviceTransport {
             sb.append((char) c);
         }
         return sb.toString();
+    }
+
+    static void recordAnswer(ExecResult result) {
+        if (result instanceof ExecResult.Completed completed)
+            JobTranscriptScope.add("ssh", "answer", completed.output());
+        else JobTranscriptScope.add("ssh", "note", result.getClass().getSimpleName());
+    }
+
+    private static MessageDigest sha256() {
+        try { return MessageDigest.getInstance("SHA-256"); }
+        catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
     }
 
     @Override

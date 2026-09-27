@@ -36,6 +36,8 @@ import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiStreamHandler;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiStreamOutcome;
+import com.securityexpert.nexus.ui2.worker.transcript.JobTranscript;
+import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
 
 /**
  * The {@code xml_api_call} adapter (WORKER.md "ADAPTER") -- the only
@@ -107,6 +109,8 @@ public final class PanXmlApiTransport implements DeviceTransport {
             return new XmlApiResult.Failed("trust rule could not be resolved into a usable TLS configuration");
         }
         try {
+            if (JobTranscriptScope.current() != null) JobTranscriptScope.add("https", "request", "POST " + uri.getRawPath() + "\n"
+                    + JobTranscript.safeForm(formEncode(resolveFormParams(spec))));
             HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                     .timeout(timeout)
                     .POST(HttpRequest.BodyPublishers.ofString(formEncode(resolveFormParams(spec)), StandardCharsets.UTF_8))
@@ -115,6 +119,9 @@ public final class PanXmlApiTransport implements DeviceTransport {
                 builder.header(header.getKey(), header.getValue());
             }
             HttpResponse<String> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (JobTranscriptScope.current() != null) JobTranscriptScope.add("https", "response", "HTTP " + response.statusCode() + "\nContent-Type: "
+                    + response.headers().firstValue("Content-Type").orElse("") + "\n"
+                    + JobTranscript.safeHeaders(response.headers().map()) + "\n" + safeBody(spec, response.body()));
             return new XmlApiResult.Completed(response.statusCode(), response.body());
         } catch (IllegalArgumentException e) {
             return new XmlApiResult.Failed("invalid api target URI: " + e.getMessage());
@@ -150,6 +157,8 @@ public final class PanXmlApiTransport implements DeviceTransport {
             return new XmlApiStreamOutcome.Failed<>("trust rule could not be resolved into a usable TLS configuration");
         }
         try {
+            if (JobTranscriptScope.current() != null) JobTranscriptScope.add("https", "request", "POST " + uri.getRawPath() + "\n"
+                    + JobTranscript.safeForm(formEncode(resolveFormParams(spec))));
             HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                     .timeout(timeout)
                     .POST(HttpRequest.BodyPublishers.ofString(formEncode(resolveFormParams(spec)), StandardCharsets.UTF_8))
@@ -160,8 +169,55 @@ public final class PanXmlApiTransport implements DeviceTransport {
             HttpResponse<InputStream> response =
                     client.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream body = response.body()) {
-                T handled = handler.handle(body);
-                return new XmlApiStreamOutcome.Completed<>(response.statusCode(), handled);
+                java.io.ByteArrayOutputStream captured = JobTranscriptScope.current() == null ? null : new java.io.ByteArrayOutputStream();
+                java.security.MessageDigest digest = captured == null ? null : sha256();
+                long[] received = {0};
+                boolean[] compressed = {false};
+                InputStream observed = captured == null ? body : new java.io.FilterInputStream(body) {
+                    private boolean checked;
+                    private void observe(byte[] b, int off, int len) {
+                        digest.update(b, off, len);
+                        received[0] += len;
+                        if (captured.size() < 2) {
+                            int head = Math.min(len, 2 - captured.size());
+                            captured.write(b, off, head);
+                            off += head;
+                            len -= head;
+                        }
+                        if (!checked && captured.size() >= 2) {
+                            compressed[0] = gzip(captured);
+                            checked = true;
+                        }
+                        if (!compressed[0] && len > 0 && captured.size() < 64 * 1024 * 1024)
+                            captured.write(b, off, Math.min(len, 64 * 1024 * 1024 - captured.size()));
+                    }
+                    @Override public int read() throws IOException {
+                        int value = super.read();
+                        if (value >= 0) observe(new byte[] {(byte) value}, 0, 1);
+                        return value;
+                    }
+                    @Override public int read(byte[] b, int off, int len) throws IOException {
+                        int n = super.read(b, off, len);
+                        if (n > 0) observe(b, off, n);
+                        return n;
+                    }
+                };
+                try {
+                    T handled = handler.handle(observed);
+                    return new XmlApiStreamOutcome.Completed<>(response.statusCode(), handled);
+                } finally {
+                    if (captured != null) {
+                        String type = response.headers().firstValue("Content-Type").orElse("");
+                        String text = captured.toString(StandardCharsets.UTF_8);
+                        boolean binary = compressed[0] || (("export".equalsIgnoreCase(spec.type())
+                                || type.toLowerCase(java.util.Locale.ROOT).contains("octet-stream"))
+                                && !text.stripLeading().startsWith("<"));
+                        JobTranscriptScope.add("https", "response", "HTTP " + response.statusCode()
+                                + "\nContent-Type: " + type + "\n" + JobTranscript.safeHeaders(response.headers().map())
+                                + "\n" + (binary ? "size=" + received[0] + " sha256="
+                                        + java.util.HexFormat.of().formatHex(digest.digest()) : safeBody(spec, text)));
+                    }
+                }
             }
         } catch (IllegalArgumentException e) {
             return new XmlApiStreamOutcome.Failed<>("invalid api target URI: " + e.getMessage());
@@ -178,6 +234,31 @@ public final class PanXmlApiTransport implements DeviceTransport {
         // T-1: this transport holds no session of its own -- xmlApiCall is session-less by
         // the port's own signature. Nothing to close here; the caller's in-memory key
         // disposal (PanoramaEnumerationAdapter) is what T-1's "closed when the run ends" means.
+    }
+
+    static String safeBody(XmlApiSpec spec, String body) {
+        if (body == null) return "";
+        String safe = JobTranscript.withoutSentSecrets(body, resolveFormParams(spec));
+        safe = "keygen".equalsIgnoreCase(spec.type())
+                ? safe.replaceAll("(?s)(<key>)[^<]*(</key>)", "$1[credential]$2") : safe;
+        for (Map.Entry<String, String> header : spec.headers().entrySet()) {
+            String name = header.getKey().toLowerCase(java.util.Locale.ROOT);
+            if ((name.contains("key") || name.contains("token") || name.contains("auth"))
+                    && header.getValue() != null && !header.getValue().isEmpty())
+                safe = safe.replace(header.getValue(), "[credential]");
+        }
+        return safe;
+    }
+
+    private static boolean gzip(java.io.ByteArrayOutputStream bytes) {
+        if (bytes.size() < 2) return false;
+        byte[] head = bytes.toByteArray();
+        return (head[0] & 0xff) == 0x1f && (head[1] & 0xff) == 0x8b;
+    }
+
+    private static java.security.MessageDigest sha256() {
+        try { return java.security.MessageDigest.getInstance("SHA-256"); }
+        catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
     }
 
     private HttpClient buildClient(URI endpoint) {

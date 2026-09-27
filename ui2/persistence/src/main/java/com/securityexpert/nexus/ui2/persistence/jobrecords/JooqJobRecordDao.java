@@ -161,6 +161,14 @@ public final class JooqJobRecordDao implements JobRecordDao {
     }
 
     @Override
+    public boolean writeBackupTranscript(String jobId, long leaseEpoch, String reference, byte[] wrappedKey) {
+        return auditedTransactionBoundary.inTransaction("system:worker", "backup_transcript_recorded", dsl ->
+                dsl.execute("update jobs set transcript_artefact_ref={2}, transcript_artefact_key={3} "
+                        + "where job_id={0} and lease_epoch={1} and transcript_artefact_ref is null",
+                        jobId, leaseEpoch, reference, wrappedKey) == 1);
+    }
+
+    @Override
     public DiagnosticAdmission insertDiagnosticRead(String jobId, String idempotencyKey, String deviceId, String command, String actor) {
         return auditedTransactionBoundary.inTransaction(actor, "diagnostic_read_submitted", dsl -> {
             if (dsl.fetchOne("select device_id from devices where device_id={0} for update", deviceId) == null)

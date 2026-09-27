@@ -102,6 +102,7 @@ final class InteractiveShellSession implements AutoCloseable {
         try {
             out.write((normalized + "\n").getBytes(StandardCharsets.UTF_8));
             out.flush();
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "command", normalized);
         } catch (IOException e) {
             return new Result(Result.Kind.NOT_SENT, null);
         }
@@ -225,6 +226,7 @@ final class InteractiveShellSession implements AutoCloseable {
         try {
             out.write((normalized + "\n").getBytes(StandardCharsets.UTF_8));
             out.flush();
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "command", normalized);
         } catch (IOException e) {
             return new Result(Result.Kind.NOT_SENT, null);
         }
@@ -261,6 +263,7 @@ final class InteractiveShellSession implements AutoCloseable {
                         try {
                             out.write((new String(answers.get(i).reply()) + "\n").getBytes(StandardCharsets.UTF_8));
                             out.flush();
+                            recordPromptReply(answers.get(i).reply());
                         } catch (IOException e) {
                             return new Result(Result.Kind.NOT_SENT, null);
                         }
@@ -297,6 +300,10 @@ final class InteractiveShellSession implements AutoCloseable {
             return new Result(Result.Kind.EMPTY, "");
         }
         return new Result(looksLikeCliError(stdout) ? Result.Kind.CLI_ERROR : Result.Kind.OUTPUT, stdout);
+    }
+
+    static void recordPromptReply(char[] reply) {
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "command", "[credential]");
     }
 
     /** The command's output, or {@code null} for any non-output ending (the "try the next form" contract). */

@@ -14,6 +14,11 @@ import java.util.Base64;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+
+import com.securityexpert.nexus.ui2.worker.transcript.JobTranscript;
+import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
@@ -145,6 +150,9 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
     @Override
     public FormReply formRequest(Target target, String path, Map<String, String> form, String cookies, Duration timeout, int maxBytes)
             throws IOException, InterruptedException {
+        if (JobTranscriptScope.current() != null) JobTranscriptScope.add("https", "request",
+                (form == null ? "GET " : "POST ") + JobTranscript.safePath(path)
+                + (form == null ? "" : "\n" + JobTranscript.safeForm(form)));
         HttpRequest.Builder b = HttpRequest.newBuilder(target.uri(path)).timeout(timeout);
         if (cookies != null && !cookies.isBlank()) {
             b.header("Cookie", cookies);
@@ -164,19 +172,36 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
         }
         HttpResponse<java.io.InputStream> r = client.send(b.build(), HttpResponse.BodyHandlers.ofInputStream());
         byte[] data;
+        String captured = null;
         try (java.io.InputStream in = r.body()) {
             data = in.readNBytes(maxBytes);
+            if (JobTranscriptScope.current() != null) captured = binary(r)
+                    ? binarySummary(in, data) : captureRemaining(in, data);
         }
         java.util.List<String> set = r.headers().allValues("Set-Cookie").stream().map(v -> v.split(";", 2)[0].strip())
                 .filter(v -> v.contains("=")).toList();
+        if (captured != null) recordResponse(r, withoutCookieSecrets(
+                JobTranscript.withoutSentSecrets(captured, form), cookies));
         return new FormReply(r.statusCode(), set, r.headers().firstValue("Location"), new String(data, StandardCharsets.UTF_8));
     }
 
     @Override
     public SessionLogin login(Target target, String path, String json, Duration timeout) throws IOException, InterruptedException {
+        if (JobTranscriptScope.current() != null) JobTranscriptScope.add("https", "request",
+                "POST " + JobTranscript.safePath(path) + "\n" + JobTranscript.safeJson(json));
         HttpRequest request = HttpRequest.newBuilder(target.uri(path)).timeout(timeout).header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8)).build();
-        HttpResponse<Void> r = client.send(request, HttpResponse.BodyHandlers.discarding());
+        HttpResponse<?> r;
+        if (JobTranscriptScope.current() == null) {
+            r = client.send(request, HttpResponse.BodyHandlers.discarding());
+        } else {
+            HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            try (InputStream in = response.body()) {
+                recordResponse(response, JobTranscript.withoutSentSecrets(
+                        captureRemaining(in, new byte[0]), json, "application/json"));
+            }
+            r = response;
+        }
         Optional<String> cookie = r.headers().allValues("Set-Cookie").stream()
                 .map(v -> v.split(";", 2)[0].strip())
                 .filter(v -> v.toUpperCase(Locale.ROOT).startsWith("JSESSIONID="))
@@ -227,8 +252,17 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
             String contentType = body != null ? "application/x-www-form-urlencoded" : requestContentType;
             HttpResponse<InputStream> r = send(target, method, path, contentType, body,
                     creds, timeout, HttpResponse.BodyHandlers.ofInputStream());
+            MessageDigest digest = JobTranscriptScope.current() == null ? null : sha256();
             try (InputStream in = r.body()) {
                 if (r.statusCode() < 200 || r.statusCode() >= 300) {
+                    if (JobTranscriptScope.current() != null) {
+                        String type = r.headers().firstValue("Content-Type").orElse("").toLowerCase(Locale.ROOT);
+                        String refused = type.contains("text") || type.contains("json") || type.contains("xml")
+                                || type.contains("html") ? captureRemaining(in, new byte[0]) : binarySummary(in);
+                        recordResponse(r, withoutCookieSecrets(
+                                JobTranscript.withoutSentSecrets(refused, body, contentType),
+                                new String(creds.password())));
+                    }
                     return new DownloadResult.Refused(r.statusCode(), "HTTP " + r.statusCode());
                 }
                 byte[] buf = new byte[65536];
@@ -236,17 +270,23 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
                 int n;
                 while ((n = in.read(buf)) >= 0) {
                     total += n;
+                    if (digest != null) digest.update(buf, 0, n);
                     if (total > maxBytes) {
+                        recordResponse(r, "size=" + total + " sha256="
+                                + (digest == null ? "" : HexFormat.of().formatHex(digest.digest())) + " [bound exceeded]");
                         return new DownloadResult.Failed("larger than the " + maxBytes + "-byte bound");
                     }
                     sink.write(buf, 0, n);
                 }
+                recordResponse(r, "size=" + total + " sha256=" + (digest == null ? "" : HexFormat.of().formatHex(digest.digest())));
                 return new DownloadResult.Downloaded(r.statusCode(), total, r.headers().firstValue("Content-Type"));
             }
         } catch (IOException e) {
+            JobTranscriptScope.add("https", "note", "download failed: " + e.getClass().getSimpleName());
             return new DownloadResult.Failed(e.getClass().getSimpleName() + ": " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            JobTranscriptScope.add("https", "note", "download interrupted");
             return new DownloadResult.Failed("interrupted");
         }
     }
@@ -276,6 +316,9 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
             byte[] bytes = in.readNBytes(maxBytes + 1);
             boolean truncated = bytes.length > maxBytes;
             String s = new String(bytes, 0, Math.min(bytes.length, maxBytes), StandardCharsets.UTF_8);
+            if (JobTranscriptScope.current() != null) recordResponse(r, binary(r) ? binarySummary(in, bytes)
+                    : withoutCookieSecrets(JobTranscript.withoutSentSecrets(captureRemaining(in, bytes), body, contentType),
+                            new String(creds.password())));
             return new TextResponse(r.statusCode(), r.headers().firstValue("Content-Type"), s, truncated,
                     r.sslSession().flatMap(HttpsDeviceClient::peerCertificateName));
         }
@@ -285,6 +328,10 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
             Duration timeout, HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
         String current = path;
         for (int hop = 0; ; hop++) {
+            String sentMethod = hop == 0 ? method : "GET";
+            if (JobTranscriptScope.current() != null) JobTranscriptScope.add("https", "request", sentMethod + " " + JobTranscript.safePath(current)
+                    + (hop == 0 && body != null ? "\n" + (contentType != null && contentType.startsWith("application/json")
+                            ? JobTranscript.safeJson(body) : JobTranscript.safeForm(body)) : ""));
             HttpRequest.Builder b = HttpRequest.newBuilder(target.uri(current)).timeout(timeout);
             if (creds.isSession()) {
                 b.header("Cookie", new String(creds.password()));
@@ -314,6 +361,7 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
                 Optional<String> next = r.headers().firstValue("Location").flatMap(loc -> loc.startsWith("/")
                         ? Optional.of(loc) : sameHostPath(target, loc));
                 if (next.isPresent()) {
+                    recordResponse(r, "redirect");
                     if (r.body() instanceof InputStream in) {
                         in.close();
                     }
@@ -335,5 +383,66 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
                     .append(java.net.URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8));
         }
         return b.toString();
+    }
+
+    static void recordResponse(HttpResponse<?> response, String body) {
+        if (JobTranscriptScope.current() == null) return;
+        String contentType = response.headers().firstValue("Content-Type").orElse("");
+        JobTranscriptScope.add("https", "response", "HTTP " + response.statusCode() + "\nContent-Type: "
+                + contentType + "\n" + JobTranscript.safeHeaders(response.headers().map()) + "\n"
+                + JobTranscript.safeResponseBody(contentType, body));
+    }
+
+    private static String captureRemaining(InputStream in, byte[] first) throws IOException {
+        int cap = 64 * 1024 * 1024 - 1024;
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        out.write(first, 0, Math.min(first.length, cap));
+        byte[] buf = new byte[8192];
+        while (out.size() < cap) {
+            int n = in.read(buf, 0, Math.min(buf.length, cap - out.size()));
+            if (n < 0) return out.toString(StandardCharsets.UTF_8);
+            out.write(buf, 0, n);
+        }
+        return out.toString(StandardCharsets.UTF_8) + "\n[response truncated at 64 MB]";
+    }
+
+    private static String binarySummary(InputStream in) throws IOException {
+        return binarySummary(in, new byte[0]);
+    }
+
+    private static String binarySummary(InputStream in, byte[] first) throws IOException {
+        MessageDigest digest = sha256();
+        digest.update(first);
+        byte[] buf = new byte[8192];
+        long bytes = first.length;
+        int n;
+        while (bytes < 64L * 1024 * 1024 && (n = in.read(buf, 0,
+                (int) Math.min(buf.length, 64L * 1024 * 1024 - bytes))) >= 0) {
+            digest.update(buf, 0, n);
+            bytes += n;
+        }
+        return "size=" + bytes + " sha256=" + HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static boolean binary(HttpResponse<?> response) {
+        String type = response.headers().firstValue("Content-Type").orElse("").toLowerCase(Locale.ROOT);
+        return type.contains("octet-stream") || type.contains("gzip") || type.contains("zip")
+                || type.startsWith("image/");
+    }
+
+    private static String withoutCookieSecrets(String body, String cookies) {
+        if (cookies == null || cookies.isEmpty()) return body;
+        String safe = body.replace(cookies, "[credential]");
+        for (String part : cookies.split(";")) {
+            int equals = part.indexOf('=');
+            if (equals >= 0 && equals + 1 < part.length())
+                safe = safe.replace(part.substring(equals + 1).trim(), "[credential]");
+        }
+        return safe;
+    }
+
+    private static MessageDigest sha256() {
+        try { return MessageDigest.getInstance("SHA-256"); }
+        catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
     }
 }

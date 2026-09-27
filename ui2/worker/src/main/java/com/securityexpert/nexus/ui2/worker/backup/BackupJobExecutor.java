@@ -19,9 +19,12 @@ import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestR
 import com.securityexpert.nexus.ui2.persistence.artefact.BackupEndpointEligibilityRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.platform.ActionClass;
 import com.securityexpert.nexus.ui2.platform.HostnameFingerprint;
 import com.securityexpert.nexus.ui2.platform.WorkerActor;
+import com.securityexpert.nexus.ui2.worker.transcript.JobTranscript;
+import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
 
 /**
  * The {@code cp_gateway_backup} job's own C2-compliant executor -- copies
@@ -100,6 +103,14 @@ public final class BackupJobExecutor {
     private final BackupEndpointEligibilityRepository eligibilityRepository;
     private final HostnameFingerprint hostnameFingerprint;
     private final String recoveryVolumePath;
+    private ArtefactStore transcriptStore;
+    private JobRecordDao transcriptJobs;
+
+    public BackupJobExecutor withTranscript(ArtefactStore store, JobRecordDao jobs) {
+        this.transcriptStore = Objects.requireNonNull(store);
+        this.transcriptJobs = Objects.requireNonNull(jobs);
+        return this;
+    }
     /** V41 content listing; null in compositions that do not list (tests, the CLI). */
     private final com.securityexpert.nexus.ui2.persistence.artefact.content.ArchiveContentListingService contentListing;
 
@@ -160,6 +171,26 @@ public final class BackupJobExecutor {
     }
 
     public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, BackupRequest request, String capabilityId) {
+        JobTranscript transcript = new JobTranscript();
+        try (JobTranscriptScope ignored = JobTranscriptScope.open(transcript)) {
+            return executeScoped(jobId, leaseEpoch, targetDeviceId, request, capabilityId);
+        } finally {
+            if (transcriptStore != null && transcriptJobs != null) {
+                ArtefactStore.ArtefactMetadata stored = null;
+                try (ArtefactStore.ArtefactHandle handle = transcriptStore.open(targetDeviceId, jobId, "transcript", true)) {
+                    transcript.writeTo(handle.sink());
+                    stored = handle.finish();
+                    if (!transcriptJobs.writeBackupTranscript(jobId, leaseEpoch, stored.ref().value(), stored.wrappedDataKey()))
+                        throw new IllegalStateException("job transcript reference not recorded");
+                } catch (Exception e) {
+                    if (stored != null) discardStoredArtefact(stored);
+                    LOG.warning("[TRANSCRIPT] not stored: " + e.getClass().getSimpleName());
+                }
+            }
+        }
+    }
+
+    private JobOutcome executeScoped(String jobId, long leaseEpoch, String targetDeviceId, BackupRequest request, String capabilityId) {
         Optional<com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentSnapshot> enrollment =
                 deviceEnrollmentReadPort.findEnrollment(targetDeviceId);
         if (enrollment.isEmpty() || !enrollment.get().permitsReadCollection()) {

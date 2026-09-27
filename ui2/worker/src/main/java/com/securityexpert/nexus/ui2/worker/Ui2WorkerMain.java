@@ -293,6 +293,7 @@ public final class Ui2WorkerMain {
                 .withFortiManager(fortiManagerExecutor);
 
         JobRecordDao jobRecordDao = new JooqJobRecordDao(transactionBoundary);
+        backupJobExecutor.withTranscript(artefactStore, jobRecordDao);
         var diagnosticJobExecutor = new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerDiagnosticJobExecutor(
                 leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceInventoryRepository,
                 jobRecordDao, fortiManagerExecutor, gateRegistry);
