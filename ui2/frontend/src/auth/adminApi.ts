@@ -1571,24 +1571,24 @@ export function getOverview(): Promise<OverviewView> {
 
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
 export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN";
-export interface CpFailoverUnit { unitId: string; clusterId: string; cluster_member_ref: string; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean }
+export interface CpFailoverUnit { unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean }
 export interface CpFailoverApproval { approvalId: string; windowFrom: string; windowUntil: string; reason: string; approvedBy: string; revokedAt: string | null }
 export interface CpFailoverRun {
   runId: string; approvalId: string; scheduledFor: string; state: CpFailoverState; step: string;
   outcome: string | null; failedCheck: string | null; message: string | null; steps: string[];
 }
-export interface CpFailoverCheck { phase: "pre" | "post"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 5 | 6 | 8 | 9 | 10; status: CpFailoverCheckStatus; derived: string; observedAt: string }
+export interface CpFailoverCheck { phase: "pre" | "post"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 8 | 9 | 10; status: CpFailoverCheckStatus; derived: string; observedAt: string }
 export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverCheck[] }
 
-const cpFailover = "/api/v2/cp-failover";
+const failoverPath = (vendor?: string) => vendor === "palo_alto" ? "/api/v2/pan-failover" : "/api/v2/cp-failover";
 const cpQuery = (unit: CpFailoverUnit) => `clusterId=${encodeURIComponent(unit.clusterId)}&unitId=${encodeURIComponent(unit.unitId)}`;
 /** By a member's device id; display names are masked by the server for aiview. */
-export const listCpFailoverUnits = (memberDeviceId: string) => call<CpFailoverUnit[]>(`${cpFailover}/units?memberDeviceId=${encodeURIComponent(memberDeviceId)}`, "GET");
-export const listCpFailoverApprovals = (unit: CpFailoverUnit) => call<CpFailoverApproval[]>(`${cpFailover}/approvals?${cpQuery(unit)}`, "GET");
-export const listCpFailoverRuns = (unit: CpFailoverUnit) => call<CpFailoverRun[]>(`${cpFailover}/runs?${cpQuery(unit)}`, "GET");
-export const getCpFailoverRun = (runId: string) => call<CpFailoverRunDetail>(`${cpFailover}/runs/${encodeURIComponent(runId)}`, "GET");
+export const listCpFailoverUnits = (memberDeviceId: string, vendor?: string) => call<CpFailoverUnit[]>(`${failoverPath(vendor)}/units?memberDeviceId=${encodeURIComponent(memberDeviceId)}`, "GET");
+export const listCpFailoverApprovals = (unit: CpFailoverUnit) => call<CpFailoverApproval[]>(`${failoverPath(unit.vendor)}/approvals?${cpQuery(unit)}`, "GET");
+export const listCpFailoverRuns = (unit: CpFailoverUnit) => call<CpFailoverRun[]>(`${failoverPath(unit.vendor)}/runs?${cpQuery(unit)}`, "GET");
+export const getCpFailoverRun = (runId: string, vendor?: string) => call<CpFailoverRunDetail>(`${failoverPath(vendor)}/runs/${encodeURIComponent(runId)}`, "GET");
 export const approveCpFailover = (unit: CpFailoverUnit, from: string, until: string, reason: string) =>
-  call<CpFailoverApproval>(`${cpFailover}/approvals`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, windowFrom: from, windowUntil: until, reason });
-export const revokeCpFailover = (approvalId: string) => call<{ revoked: boolean }>(`${cpFailover}/approvals/${encodeURIComponent(approvalId)}/revoke`, "POST");
+  call<CpFailoverApproval>(`${failoverPath(unit.vendor)}/approvals`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, windowFrom: from, windowUntil: until, reason });
+export const revokeCpFailover = (approvalId: string, vendor?: string) => call<{ revoked: boolean }>(`${failoverPath(vendor)}/approvals/${encodeURIComponent(approvalId)}/revoke`, "POST");
 export const startCpFailover = (unit: CpFailoverUnit, scheduledFor: string | null) =>
-  call<{ runId: string }>(`${cpFailover}/runs`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, scheduledFor });
+  call<{ runId: string }>(`${failoverPath(unit.vendor)}/runs`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, scheduledFor });

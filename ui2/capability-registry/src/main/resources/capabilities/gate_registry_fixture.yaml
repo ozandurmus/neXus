@@ -557,7 +557,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per device per run"
+    max_frequency: "pre/post once per peer; additionally every 3 s for at most 60 s per transition"
     session_reuse_rule: "the one key-generation session per run"
     unsupported_behavior_ref: "HA disabled means no peer, a result, not an error"
     secret_output_risk: none
@@ -2391,6 +2391,40 @@ gates:
     secret_output_risk: none
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: pan_failover_suspend
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "<request><high-availability><state><suspend/></state></high-availability></request>"
+    action_class: operational-state-change
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once on former active per run"
+    session_reuse_rule: "one key per peer per run"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_PAN_CONTRACT.md §4"
+
+  - gate_id: pan_failover_functional
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "<request><high-availability><state><functional/></state></high-availability></request>"
+    action_class: operational-state-change
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once on former active per run"
+    session_reuse_rule: "one key per peer per run"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/FAILOVER_EXECUTION_PAN_CONTRACT.md §4"
 
   - gate_id: cp_failover_arp
     vendor: check_point

@@ -66,30 +66,39 @@ public final class CpFailoverService {
         return allowed(actor, RoleToken.OPERATOR) || mayApprove(actor);
     }
     public List<Unit> unitsForRef(String clusterRef, String actor) {
+        return unitsForRef(clusterRef,actor,"check_point");
+    }
+    public List<Unit> unitsForRef(String clusterRef, String actor, String vendor) {
         requireReader(actor);
         if (clusterRef == null || devices.listAll().stream().noneMatch(d -> d.clusterMemberRef().filter(clusterRef::equals).isPresent()))
             throw new Refusal("CLUSTER_NOT_FOUND");
-        return units(opaque(clusterRef), actor);
+        return units(opaque(clusterRef), actor, vendor);
     }
 
     /** By a member's opaque device id. */
     public List<Unit> unitsForMember(String memberDeviceId, String actor) {
+        return unitsForMember(memberDeviceId,actor,"check_point");
+    }
+    public List<Unit> unitsForMember(String memberDeviceId, String actor, String vendor) {
         requireReader(actor);
         String ref = memberDeviceId == null ? null : devices.listAll().stream()
             .filter(d -> d.deviceId().equals(memberDeviceId)).findFirst()
             .flatMap(DeviceSummaryRecord::clusterMemberRef).orElse(null);
         if (ref == null) throw new Refusal("CLUSTER_NOT_FOUND");
-        return units(opaque(ref), actor);
+        return units(opaque(ref), actor, vendor);
     }
 
     public List<Unit> units(String clusterId, String actor) {
+        return units(clusterId,actor,"check_point");
+    }
+    public List<Unit> units(String clusterId, String actor, String vendor) {
         requireReader(actor);
         List<String> clusters = devices.listAll().stream().map(DeviceSummaryRecord::clusterMemberRef)
             .flatMap(Optional::stream).distinct().filter(ref -> opaque(ref).equals(clusterId)).toList();
         if (clusters.size() != 1) throw new Refusal("CLUSTER_NOT_FOUND");
         String cluster=clusters.get(0);
         List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(cluster);
-        if (members.size()!=2 || members.stream().anyMatch(m -> !"check_point".equals(m.vendorHint())
+        if (members.size()!=2 || members.stream().anyMatch(m -> !vendor.equals(m.vendorHint())
                 || devices.find(m.deviceId()).filter(d -> d.permitsReadCollection()).isEmpty()
                 || devices.findEndpointByDeviceId(m.deviceId()).isEmpty()))
             throw new Refusal("CLUSTER_NOT_ELIGIBLE");
@@ -97,6 +106,17 @@ public final class CpFailoverService {
         List<DeviceSummaryRecord> pair=members;
         if (pair.stream().anyMatch(m -> inventory.findLatestRun(m.deviceId()).isEmpty()))
             throw new Refusal("INVENTORY_REQUIRED");
+        if ("palo_alto".equals(vendor)) {
+            if (pair.stream().anyMatch(m -> devices.findEndpointByDeviceId(m.deviceId())
+                    .filter(e -> "pan_xml_api".equalsIgnoreCase(e.transportKind())).isEmpty()))
+                throw new Refusal("CLUSTER_NOT_ELIGIBLE");
+            boolean supported=pair.stream().allMatch(m -> inventory.findLatestRun(m.deviceId()).stream()
+                .flatMap(r -> r.haFacts().stream())
+                .anyMatch(f -> InventoryHaFact.SOURCE_PAN_HIGH_AVAILABILITY_STATE.equals(f.source())
+                    && f.clusterMode().map(mode -> "active-passive".equalsIgnoreCase(mode)).orElse(false)));
+            if (!supported) throw new Refusal("UNSUPPORTED_HA_MODE");
+            return List.of(new Unit(clusterId,clusterId,cluster,null,pair));
+        }
         List<String> common=inventory.findLatestRun(pair.get(0).deviceId()).stream()
             .flatMap(r -> r.contexts().stream()).map(c -> c.context())
             .filter(c -> !"physical".equals(c) && c.matches("[0-9]{1,10}"))
@@ -123,40 +143,61 @@ public final class CpFailoverService {
         return List.of(new Unit(clusterId, clusterId, cluster, null, pair));
     }
     private Unit unit(String clusterId, String unitId, String actor) {
-        return units(clusterId,actor).stream().filter(u -> u.id().equals(unitId)).findFirst()
+        return unit(clusterId,unitId,actor,"check_point");
+    }
+    private Unit unit(String clusterId, String unitId, String actor, String vendor) {
+        return units(clusterId,actor,vendor).stream().filter(u -> u.id().equals(unitId)).findFirst()
             .orElseThrow(() -> new Refusal("UNIT_NOT_FOUND"));
     }
 
     public JooqCpFailoverRepository.Approval approve(String clusterId, String unitId, Instant from,
             Instant until, String reason, String actor) {
+        return approve(clusterId,unitId,from,until,reason,actor,"check_point");
+    }
+    public JooqCpFailoverRepository.Approval approve(String clusterId, String unitId, Instant from,
+            Instant until, String reason, String actor, String vendor) {
         requireAdmin(actor);
-        Unit unit=unit(clusterId,unitId,actor);
+        Unit unit=unit(clusterId,unitId,actor,vendor);
         if (from==null || until==null || !until.isAfter(from) || !until.isAfter(Instant.now())
                 || reason==null || reason.isBlank() || reason.length()>500) throw new Refusal("INVALID_WINDOW");
+        if ("check_point".equals(vendor)) return store.createApproval(unit.members().get(0).clusterMemberRef().orElseThrow(),
+            unit.vsId(),from,until,reason,actor);
         return store.createApproval(unit.members().get(0).clusterMemberRef().orElseThrow(), unit.vsId(),
-            from,until,reason,actor);
+            from,until,reason,actor,vendor);
     }
     public List<JooqCpFailoverRepository.Approval> approvals(String clusterId, String unitId, String actor) {
-        Unit u=unit(clusterId,unitId,actor);
-        return store.approvals(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId());
+        return approvals(clusterId,unitId,actor,"check_point");
+    }
+    public List<JooqCpFailoverRepository.Approval> approvals(String clusterId, String unitId, String actor,String vendor) {
+        Unit u=unit(clusterId,unitId,actor,vendor);
+        return "check_point".equals(vendor)
+            ?store.approvals(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId())
+            :store.approvals(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),vendor);
     }
     public boolean revoke(String approvalId,String actor) { requireAdmin(actor); return store.revoke(approvalId,actor); }
 
     /** Latest independent member observations are only an admission filter; the worker rechecks live. */
     public String request(String clusterId,String unitId,Instant scheduledFor,String actor) {
+        return request(clusterId,unitId,scheduledFor,actor,"check_point");
+    }
+    public String request(String clusterId,String unitId,Instant scheduledFor,String actor,String vendor) {
         requireOperator(actor);
-        Unit u=unit(clusterId,unitId,actor);
+        Unit u=unit(clusterId,unitId,actor,vendor);
         Instant now=Instant.now();
         Instant when=scheduledFor==null ? now : scheduledFor;
         if (when.isBefore(now.minusSeconds(2))) throw new Refusal("OUTSIDE_WINDOW");
-        String a=observedRole(u.members().get(0),u.vsId());
-        String b=observedRole(u.members().get(1),u.vsId());
-        if (!("ACTIVE".equals(a) && "STANDBY".equals(b)
-                || "STANDBY".equals(a) && "ACTIVE".equals(b))) throw new Refusal("CLUSTER_STATE_NOT_READY");
-        for (DeviceSummaryRecord member:u.members()) requireTrusted(member);
+        String a=observedRole(u.members().get(0),u.vsId(),vendor);
+        String b=observedRole(u.members().get(1),u.vsId(),vendor);
+        String passive="palo_alto".equals(vendor)?"PASSIVE":"STANDBY";
+        if (!("ACTIVE".equals(a) && passive.equals(b)
+                || passive.equals(a) && "ACTIVE".equals(b))) throw new Refusal("CLUSTER_STATE_NOT_READY");
+        if ("check_point".equals(vendor)) for (DeviceSummaryRecord member:u.members()) requireTrusted(member);
         try {
-            var decision=store.request(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
-                when,actor,u.members().get(0).deviceId(),scheduledFor==null);
+            var decision="check_point".equals(vendor)
+                ?store.request(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
+                    when,actor,u.members().get(0).deviceId(),scheduledFor==null)
+                :store.request(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
+                    when,actor,u.members().get(0).deviceId(),scheduledFor==null,vendor);
             if (!"ADMITTED".equals(decision.code())) throw new Refusal(decision.code());
             return decision.runId();
         } catch (org.springframework.dao.DuplicateKeyException duplicate) {
@@ -166,10 +207,11 @@ public final class CpFailoverService {
             throw duplicate;
         }
     }
-    private String observedRole(DeviceSummaryRecord member,String vsId) {
+    private String observedRole(DeviceSummaryRecord member,String vsId,String vendor) {
         return inventory.findLatestRun(member.deviceId()).stream().flatMap(r -> r.haFacts().stream())
             .filter(f -> (vsId==null ? "physical" : vsId).equals(f.context()))
-            .filter(f -> InventoryHaFact.SOURCE_CP_CPHAPROB_STAT.equals(f.source()))
+            .filter(f -> ("palo_alto".equals(vendor) ? InventoryHaFact.SOURCE_PAN_HIGH_AVAILABILITY_STATE
+                : InventoryHaFact.SOURCE_CP_CPHAPROB_STAT).equals(f.source()))
             .map(f -> f.role().toUpperCase(java.util.Locale.ROOT)).findFirst().orElse("UNKNOWN");
     }
     private void requireTrusted(DeviceSummaryRecord member) {
@@ -187,8 +229,13 @@ public final class CpFailoverService {
         catch(RuntimeException unavailable) { throw new Refusal("TRUST_NOT_EVALUABLE"); }
     }
     public List<JooqCpFailoverRepository.Run> runs(String clusterId,String unitId,String actor) {
-        Unit u=unit(clusterId,unitId,actor);
-        return store.runs(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId());
+        return runs(clusterId,unitId,actor,"check_point");
+    }
+    public List<JooqCpFailoverRepository.Run> runs(String clusterId,String unitId,String actor,String vendor) {
+        Unit u=unit(clusterId,unitId,actor,vendor);
+        return "check_point".equals(vendor)
+            ?store.runs(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId())
+            :store.runs(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),vendor);
     }
     public Optional<JooqCpFailoverRepository.Detail> detail(String runId,String actor) {
         requireReader(actor);
@@ -202,14 +249,17 @@ public final class CpFailoverService {
     public void startDue() {
         for (var run: store.due()) {
             List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(run.clusterRef());
-            if (members.size()!=2 || !("ACTIVE".equals(observedRole(members.get(0),run.vsId()))
-                    && "STANDBY".equals(observedRole(members.get(1),run.vsId()))
-                    || "STANDBY".equals(observedRole(members.get(0),run.vsId()))
-                    && "ACTIVE".equals(observedRole(members.get(1),run.vsId())))) {
+            String vendor=run.vendor();
+            String passive="palo_alto".equals(vendor)?"PASSIVE":"STANDBY";
+            if (members.size()!=2 || members.stream().anyMatch(m -> !vendor.equals(m.vendorHint()))
+                    || !("ACTIVE".equals(observedRole(members.get(0),run.vsId(),vendor))
+                    && passive.equals(observedRole(members.get(1),run.vsId(),vendor))
+                    || passive.equals(observedRole(members.get(0),run.vsId(),vendor))
+                    && "ACTIVE".equals(observedRole(members.get(1),run.vsId(),vendor)))) {
                 store.stopPlanned(run.id(),"CLUSTER_STATE_NOT_READY");
                 continue;
             }
-            try { members.forEach(this::requireTrusted); }
+            try { if ("check_point".equals(vendor)) members.forEach(this::requireTrusted); }
             catch (Refusal refused) {
                 store.stopPlanned(run.id(),refused.code());
                 continue;

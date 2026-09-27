@@ -15,7 +15,14 @@ public class JooqCpFailoverRepository {
             String reason, String approvedBy, Instant revokedAt) {}
     public record Run(String id, String clusterRef, String vsId, String approvalId, String requestedBy,
             Instant scheduledFor, String jobId, String state, String step, String outcome,
-            String failedCheck, String message) {}
+            String failedCheck, String message, String vendor) {
+        public Run(String id, String clusterRef, String vsId, String approvalId, String requestedBy,
+                Instant scheduledFor, String jobId, String state, String step, String outcome,
+                String failedCheck, String message) {
+            this(id, clusterRef, vsId, approvalId, requestedBy, scheduledFor, jobId, state, step,
+                outcome, failedCheck, message, "check_point");
+        }
+    }
     public record Check(String phase, String memberRef, String vsId, int checkNo, String status,
             String derived, Instant observedAt) {}
     public record Detail(Run run, List<Check> checks) {}
@@ -41,25 +48,32 @@ public class JooqCpFailoverRepository {
             r.get("approval_id", String.class), r.get("requested_by", String.class),
             r.get("scheduled_for", java.time.OffsetDateTime.class).toInstant(), r.get("job_id", String.class),
             r.get("state", String.class), r.get("step", String.class), r.get("outcome", String.class),
-            r.get("failed_check", String.class), r.get("message", String.class));
+            r.get("failed_check", String.class), r.get("message", String.class), r.get("vendor", String.class));
     }
 
     public Approval createApproval(String cluster, String vsId, Instant from, Instant until, String reason, String actor) {
+        return createApproval(cluster,vsId,from,until,reason,actor,"check_point");
+    }
+    public Approval createApproval(String cluster, String vsId, Instant from, Instant until, String reason, String actor,
+            String vendor) {
         String id = UUID.randomUUID().toString();
-        return audited.inTransaction(actor, "cp_failover_approval_create", dsl -> approval(dsl.fetchOne(
-            "insert into failover_approval(approval_id,cluster_ref,vs_id,window_from,window_until,reason,approved_by) "
-            + "values({0},{1},{2},{3},{4},{5},{6}) returning *", id, cluster, vsId,
-            Timestamp.from(from), Timestamp.from(until), reason, actor)));
+        return audited.inTransaction(actor, "failover_approval_create", dsl -> approval(dsl.fetchOne(
+            "insert into failover_approval(approval_id,cluster_ref,vs_id,window_from,window_until,reason,approved_by,vendor) "
+            + "values({0},{1},{2},{3},{4},{5},{6},{7}) returning *", id, cluster, vsId,
+            Timestamp.from(from), Timestamp.from(until), reason, actor, vendor)));
     }
 
     public List<Approval> approvals(String cluster, String vsId) {
+        return approvals(cluster,vsId,"check_point");
+    }
+    public List<Approval> approvals(String cluster, String vsId, String vendor) {
         return boundary.inTransaction(dsl -> dsl.fetch("select * from failover_approval where cluster_ref={0} "
-            + "and vs_id is not distinct from {1} order by window_from desc", cluster, vsId)
+            + "and vs_id is not distinct from {1} and vendor={2} order by window_from desc", cluster, vsId, vendor)
             .map(JooqCpFailoverRepository::approval));
     }
 
     public boolean revoke(String id, String actor) {
-        return audited.inTransaction(actor, "cp_failover_approval_revoke", dsl -> dsl.execute(
+        return audited.inTransaction(actor, "failover_approval_revoke", dsl -> dsl.execute(
             "update failover_approval set revoked_at=now(),revoked_by={1} "
             + "where approval_id={0} and revoked_at is null", id, actor) == 1);
     }
@@ -67,31 +81,36 @@ public class JooqCpFailoverRepository {
     /** The active-unit unique index and the selected approval are checked in the same transaction. */
     public Decision request(String cluster, String vsId, Instant scheduledFor, String actor, String targetDeviceId,
             boolean immediate) {
-        return audited.inTransaction(actor, "cp_failover_run_request", dsl -> {
+        return request(cluster,vsId,scheduledFor,actor,targetDeviceId,immediate,"check_point");
+    }
+    public Decision request(String cluster, String vsId, Instant scheduledFor, String actor, String targetDeviceId,
+            boolean immediate, String vendor) {
+        return audited.inTransaction(actor, "failover_run_request", dsl -> {
             Record a = dsl.fetchOne("select * from failover_approval where cluster_ref={0} "
                 + "and vs_id is not distinct from {1} and revoked_at is null "
-                + "and window_from <= {2} and window_until > {2} order by approved_at desc limit 1 for share",
-                cluster, vsId, Timestamp.from(scheduledFor));
+                + "and window_from <= {2} and window_until > {2} and vendor={3} "
+                + "order by approved_at desc limit 1 for share", cluster, vsId, Timestamp.from(scheduledFor), vendor);
             if (a == null) return new Decision("NO_PRE_APPROVAL", null);
             Record active = dsl.fetchOne("select run_id from failover_run where cluster_ref={0} "
-                + "and vs_id is not distinct from {1} and state not in ('DONE','STOPPED') limit 1",
-                cluster, vsId);
+                + "and vs_id is not distinct from {1} and vendor={2} and state not in ('DONE','STOPPED') limit 1",
+                cluster, vsId, vendor);
             if (active != null) return new Decision("RUN_ALREADY_ACTIVE", null);
             String id = UUID.randomUUID().toString();
-            dsl.execute("insert into failover_run(run_id,cluster_ref,vs_id,approval_id,requested_by,scheduled_for,state,step) "
-                + "values({0},{1},{2},{3},{4},{5},'PLANNED','PLANNED')", id, cluster, vsId,
-                a.get("approval_id", String.class), actor, Timestamp.from(scheduledFor));
-            if (immediate) admit(dsl, id, targetDeviceId, actor);
+            dsl.execute("insert into failover_run(run_id,cluster_ref,vs_id,approval_id,requested_by,scheduled_for,state,step,vendor) "
+                + "values({0},{1},{2},{3},{4},{5},'PLANNED','PLANNED',{6})", id, cluster, vsId,
+                a.get("approval_id", String.class), actor, Timestamp.from(scheduledFor), vendor);
+            if (immediate) admit(dsl, id, targetDeviceId, actor, vendor);
             return new Decision("ADMITTED", id);
         });
     }
 
-    private static void admit(org.jooq.DSLContext dsl, String runId, String targetDeviceId, String actor) {
+    private static void admit(org.jooq.DSLContext dsl, String runId, String targetDeviceId, String actor, String vendor) {
         String jobId = UUID.randomUUID().toString();
+        String kind = "palo_alto".equals(vendor) ? "pan_cluster_failover" : "cp_cluster_failover";
         dsl.execute("insert into jobs(job_id,job_type,capability_id,target_device_id,target_kind,"
             + "submitted_by_actor_fingerprint,idempotency_key,action_class,state) "
-            + "values({0},'cp_cluster_failover','cp_cluster_failover',{1},'device',{2},{3},"
-            + "'operational-state-change','REQUESTED')", jobId, targetDeviceId, actor, "cp-failover:" + runId);
+            + "values({0},{1},{1},{2},'device',{3},{4},"
+            + "'operational-state-change','REQUESTED')", jobId, kind, targetDeviceId, actor, kind + ":" + runId);
         dsl.execute("update failover_run set job_id={1},started_at=now(),step='QUEUED' where run_id={0}", runId, jobId);
     }
 
@@ -102,7 +121,7 @@ public class JooqCpFailoverRepository {
     }
 
     public String startDue(String id, String targetDeviceId) {
-        return audited.inTransaction("system:cp-failover-scheduler", "cp_failover_schedule_start", dsl -> {
+        return audited.inTransaction("system:failover-scheduler", "failover_schedule_start", dsl -> {
             Record r = dsl.fetchOne("select r.*,a.window_until,a.revoked_at from failover_run r "
                 + "join failover_approval a on a.approval_id=r.approval_id where r.run_id={0} for update of r", id);
             if (r == null || !"PLANNED".equals(r.get("state", String.class)) || r.get("job_id") != null) return "ALREADY_CLAIMED";
@@ -111,13 +130,13 @@ public class JooqCpFailoverRepository {
                     + "message='WINDOW_EXPIRED',finished_at=now() where run_id={0}", id);
                 return "WINDOW_EXPIRED";
             }
-            admit(dsl, id, targetDeviceId, r.get("requested_by", String.class));
+            admit(dsl, id, targetDeviceId, r.get("requested_by", String.class), r.get("vendor", String.class));
             return "ADMITTED";
         });
     }
 
     public void stopPlanned(String id, String reason) {
-        audited.inTransaction("system:cp-failover-scheduler", "cp_failover_schedule_stop", dsl -> dsl.execute(
+        audited.inTransaction("system:failover-scheduler", "failover_schedule_stop", dsl -> dsl.execute(
             "update failover_run set state='STOPPED',step='PLANNED',outcome={1},message={1},finished_at=now() "
             + "where run_id={0} and state='PLANNED' and job_id is null", id, reason));
     }
@@ -142,23 +161,26 @@ public class JooqCpFailoverRepository {
                     c.get("derived", JSONB.class).data(), c.get("observed_at", java.time.OffsetDateTime.class).toInstant())))));
     }
     public List<Run> runs(String cluster, String vsId) {
+        return runs(cluster,vsId,"check_point");
+    }
+    public List<Run> runs(String cluster, String vsId, String vendor) {
         return boundary.inTransaction(dsl -> dsl.fetch("select * from failover_run where cluster_ref={0} "
-            + "and vs_id is not distinct from {1} order by scheduled_for desc limit 50", cluster, vsId)
+            + "and vs_id is not distinct from {1} and vendor={2} order by scheduled_for desc limit 50", cluster, vsId, vendor)
             .map(JooqCpFailoverRepository::run));
     }
     public void state(String id, String state, String step, String outcome, String failedCheck, String message) {
-        audited.inTransaction("system:cp-failover-worker", "cp_failover_state_change", id, dsl -> dsl.execute(
+        audited.inTransaction("system:failover-worker", "failover_state_change", id, dsl -> dsl.execute(
             "update failover_run set state={1},step={2},outcome={3},failed_check={4},message={5},"
             + "finished_at=case when {1} in ('DONE','STOPPED') then now() else null end where run_id={0}",
             id, state, step, outcome, failedCheck, message));
     }
     /** An audited pre-contact state change is the command ledger entry. */
     public void command(String id, String gateId) {
-        audited.inTransaction("system:cp-failover-worker", "cp_failover_command_" + gateId, id,
+        audited.inTransaction("system:failover-worker", "failover_command_" + gateId, id,
             dsl -> dsl.execute("update failover_run set message={1} where run_id={0}", id, gateId));
     }
     public void check(String id, String phase, String member, String vsId, int no, String status, String derived) {
-        audited.inTransaction("system:cp-failover-worker", "cp_failover_check", id, dsl -> dsl.execute(
+        audited.inTransaction("system:failover-worker", "failover_check", id, dsl -> dsl.execute(
             "insert into failover_check_result(run_id,phase,member_ref,vs_id,check_no,status,derived) "
             + "values({0},{1},{2},{3},{4},{5},{6}::jsonb)", id, phase, member, vsId, no, status, derived));
     }

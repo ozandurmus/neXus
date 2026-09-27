@@ -23,7 +23,8 @@ import { approveCpFailover, getCpFailoverRun, listCpFailoverApprovals, listCpFai
   type CpFailoverApproval, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
 
 const labels = ["Preparing", "Failing over", "Switched", "Checking", "No problems found"];
-const checks: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate", 9: "State synchronization", 10: "Installed policy parity" };
+const cpChecks: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate", 9: "State synchronization", 10: "Installed policy parity" };
+const panChecks: Record<number, string> = { 1: "HA mode and roles", 2: "Peer relationship", 3: "HA links", 4: "Configuration sync" };
 const activeStates: CpFailoverState[] = ["PLANNED", "PRECHECK", "FAILING_OVER", "SWITCHED", "POSTCHECK", "RETURNING"];
 
 export function runStep(state: CpFailoverState, step: string): number {
@@ -44,6 +45,7 @@ const errorText = (error: unknown) => {
 
 function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expanded: boolean; onExpand: () => void }) {
   const label = unit.virtual_system ?? unit.cluster_member_ref;
+  const checks = unit.vendor === "palo_alto" ? panChecks : cpChecks;
   const [approvals, setApprovals] = useState<CpFailoverApproval[]>([]);
   const [run, setRun] = useState<CpFailoverRunDetail | null>(null);
   const [dialog, setDialog] = useState<"approve" | "schedule" | null>(null);
@@ -58,7 +60,7 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
     try {
       const [windows, runs] = await Promise.all([listCpFailoverApprovals(unit), listCpFailoverRuns(unit)]);
       setApprovals(windows);
-      setRun(runs[0] ? await getCpFailoverRun(runs[0].runId) : null);
+      setRun(runs[0] ? await getCpFailoverRun(runs[0].runId, unit.vendor) : null);
       setError(null);
     } catch (e) { setError(errorText(e)); }
   }, [unit]);
@@ -97,7 +99,7 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
         {approvals.length ? approvals.map(a => <Box key={a.approvalId} sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", mb: 0.5 }}>
           <Typography variant="body2">{label} · {local(a.windowFrom)} – {local(a.windowUntil)} · {a.reason} · Approved by {a.approvedBy}</Typography>
           <StatusChip label={a.revokedAt ? "Revoked" : Date.parse(a.windowUntil) <= now ? "Expired" : "Approved"} tone={a.revokedAt ? "neutral" : "ok"} dense />
-          {unit.canApprove && !a.revokedAt && <M3Button emphasis="text" onClick={() => void act(() => revokeCpFailover(a.approvalId))}>Revoke</M3Button>}
+          {unit.canApprove && !a.revokedAt && <M3Button emphasis="text" onClick={() => void act(() => revokeCpFailover(a.approvalId, unit.vendor))}>Revoke</M3Button>}
         </Box>) : <Typography variant="body2">No approval window</Typography>}
         {unit.canApprove && <M3Button emphasis="outlined" onClick={() => setDialog("approve")}>Approve a window</M3Button>}
       </Box>
@@ -143,12 +145,12 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
   </Card>;
 }
 
-export function CpFailoverPanel({ memberDeviceId }: { memberDeviceId: string }) {
+export function CpFailoverPanel({ memberDeviceId, vendor = "check_point" }: { memberDeviceId: string; vendor?: "check_point" | "palo_alto" }) {
   const [units, setUnits] = useState<CpFailoverUnit[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { listCpFailoverUnits(memberDeviceId).then(setUnits).catch(e => setError(errorText(e))); }, [memberDeviceId]);
-  return <Stack spacing={1} aria-label="Check Point failover">
+  useEffect(() => { listCpFailoverUnits(memberDeviceId, vendor).then(setUnits).catch(e => setError(errorText(e))); }, [memberDeviceId, vendor]);
+  return <Stack spacing={1} aria-label={`${vendor === "palo_alto" ? "Palo Alto" : "Check Point"} failover`}>
     {error && <Typography color="error">{error}</Typography>}
     {!error && units.length === 0 && <Typography>No eligible failover units</Typography>}
     {units.map(unit => <UnitPanel key={unit.unitId} unit={unit} expanded={selected === unit.unitId} onExpand={() => setSelected(selected === unit.unitId ? null : unit.unitId)} />)}

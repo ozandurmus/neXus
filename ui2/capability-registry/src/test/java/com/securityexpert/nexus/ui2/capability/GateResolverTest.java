@@ -96,6 +96,19 @@ class GateResolverTest {
     }
 
     @Test
+    void panFailoverWriteExceptionRequiresExactKeyAndScope() {
+        String command="<request><high-availability><state><suspend/></state></high-availability></request>";
+        GateRow approved=new GateRow("pan_failover_suspend","palo_alto","pan_firewall","not_applicable",
+            "PAN_XML_API",command,ActionClass.CLASS_2_OPERATIONAL_STATE_CHANGE,SignOffState.SIGNED_OFF,
+            30,"none","once per run","one key per run","UNKNOWN","none",List.of(),"test");
+        assertTrue(!approved.violatesWriteMarkerDenylist());
+        GateRow nearMiss=new GateRow("pan_failover_suspend","palo_alto","pan_firewall","not_applicable",
+            "PAN_XML_API",command+" ",ActionClass.CLASS_2_OPERATIONAL_STATE_CHANGE,SignOffState.SIGNED_OFF,
+            30,"none","once per run","one key per run","UNKNOWN","none",List.of(),"test");
+        assertTrue(nearMiss.violatesWriteMarkerDenylist());
+    }
+
+    @Test
     void sftpPutIsRefusedUnconditionallyAtSpecValidation() {
         CapabilityStep sftpPut = new CapabilityStep(StepKind.SFTP_PUT, "not_applicable", "push", false,
                 Optional.empty(), Optional.empty(), Optional.empty());

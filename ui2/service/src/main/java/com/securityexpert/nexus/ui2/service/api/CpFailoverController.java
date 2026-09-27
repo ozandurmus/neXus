@@ -14,9 +14,9 @@ import com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository;
 import com.securityexpert.nexus.ui2.service.failover.CpFailoverService;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
-/** Opaque-unit API for the Check Point failover screen. */
+/** Opaque-unit API for the Check Point and Palo Alto failover screens. */
 @RestController
-@RequestMapping("/api/v2/cp-failover")
+@RequestMapping({"/api/v2/cp-failover", "/api/v2/pan-failover"})
 public final class CpFailoverController {
     public record ApprovalRequest(String clusterId, String unitId, Instant windowFrom, Instant windowUntil, String reason) {}
     public record RunRequest(String clusterId, String unitId, Instant scheduledFor) {}
@@ -24,6 +24,9 @@ public final class CpFailoverController {
     public CpFailoverController(CpFailoverService service) { this.service=service; }
     private static String actor(HttpServletRequest request) {
         return (String)request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
+    }
+    private static String vendor(HttpServletRequest request) {
+        return request.getServletPath().startsWith("/api/v2/pan-failover") ? "palo_alto" : "check_point";
     }
     private static Map<String,Object> approval(JooqCpFailoverRepository.Approval a) {
         Map<String,Object> m=new LinkedHashMap<>();
@@ -56,16 +59,17 @@ public final class CpFailoverController {
     }
     @GetMapping("/units/{clusterId}")
     public ResponseEntity<?> units(@PathVariable String clusterId,HttpServletRequest request) {
-        return result(() -> service.units(clusterId,actor(request)).stream()
+        return result(() -> service.units(clusterId,actor(request),vendor(request)).stream()
             .map(CpFailoverController::unit).toList());
     }
     @GetMapping("/units")
     public ResponseEntity<?> unitsForRef(@RequestParam(required = false) String clusterRef,
             @RequestParam(required = false) String memberDeviceId, HttpServletRequest request) {
-        return result(() -> (memberDeviceId != null ? service.unitsForMember(memberDeviceId,actor(request))
-                : service.unitsForRef(clusterRef,actor(request))).stream()
+        return result(() -> (memberDeviceId != null ? service.unitsForMember(memberDeviceId,actor(request),vendor(request))
+                : service.unitsForRef(clusterRef,actor(request),vendor(request))).stream()
             .map(u -> {
                 Map<String,Object> m=unit(u);
+                m.put("vendor",vendor(request));
                 m.put("canApprove",service.mayApprove(actor(request)));
                 m.put("canStart",service.mayStart(actor(request)));
                 m.put("canSchedule",service.mayStart(actor(request)));
@@ -75,11 +79,11 @@ public final class CpFailoverController {
     @PostMapping("/approvals")
     public ResponseEntity<?> approve(@RequestBody ApprovalRequest body,HttpServletRequest request) {
         return result(() -> approval(service.approve(body.clusterId(),body.unitId(),body.windowFrom(),
-            body.windowUntil(),body.reason(),actor(request))));
+            body.windowUntil(),body.reason(),actor(request),vendor(request))));
     }
     @GetMapping("/approvals")
     public ResponseEntity<?> approvals(@RequestParam String clusterId,@RequestParam String unitId,HttpServletRequest request) {
-        return result(() -> service.approvals(clusterId,unitId,actor(request)).stream().map(CpFailoverController::approval).toList());
+        return result(() -> service.approvals(clusterId,unitId,actor(request),vendor(request)).stream().map(CpFailoverController::approval).toList());
     }
     @PostMapping("/approvals/{approvalId}/revoke")
     public ResponseEntity<?> revoke(@PathVariable String approvalId,HttpServletRequest request) {
@@ -87,15 +91,15 @@ public final class CpFailoverController {
     }
     @PostMapping("/runs")
     public ResponseEntity<?> start(@RequestBody RunRequest body,HttpServletRequest request) {
-        return result(() -> Map.of("runId",service.request(body.clusterId(),body.unitId(),body.scheduledFor(),actor(request))));
+        return result(() -> Map.of("runId",service.request(body.clusterId(),body.unitId(),body.scheduledFor(),actor(request),vendor(request))));
     }
     @GetMapping("/runs")
     public ResponseEntity<?> runs(@RequestParam String clusterId,@RequestParam String unitId,HttpServletRequest request) {
-        return result(() -> service.runs(clusterId,unitId,actor(request)).stream().map(CpFailoverController::run).toList());
+        return result(() -> service.runs(clusterId,unitId,actor(request),vendor(request)).stream().map(CpFailoverController::run).toList());
     }
     @GetMapping("/runs/{runId}")
     public ResponseEntity<?> detail(@PathVariable String runId,HttpServletRequest request) {
-        return result(() -> service.detail(runId,actor(request)).map(d -> {
+        return result(() -> service.detail(runId,actor(request)).filter(d -> vendor(request).equals(d.run().vendor())).map(d -> {
             Map<String,Object> view=run(d.run());
             view.put("checks",d.checks().stream().map(c -> {
                 Map<String,Object> check=new LinkedHashMap<>();

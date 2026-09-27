@@ -76,9 +76,9 @@ export function OperationsScreen() {
   useEffect(() => {
     if (!clusters) return;
     let mounted = true;
-    void Promise.all(clusters.filter(c => c.members[0]?.vendor_hint === "check_point").map(async c => {
+    void Promise.all(clusters.filter(c => ["check_point", "palo_alto"].includes(c.members[0]?.vendor_hint ?? "")).map(async c => {
       try {
-        const units = await listCpFailoverUnits(c.members[0].device_id);
+        const units = await listCpFailoverUnits(c.members[0].device_id, c.members[0].vendor_hint);
         const rows = await Promise.all(units.map(async unit => {
           const [windows, runs] = await Promise.all([listCpFailoverApprovals(unit), listCpFailoverRuns(unit)]);
           const now = Date.now();

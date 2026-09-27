@@ -53,8 +53,8 @@ public record GateRow(
     }
 
     /**
-     * C4 §3.3 step 7 keeps the class 2/3/4 denylist, except for the four
-     * exact Check Point failover forms approved by the later frozen contract.
+     * C4 §3.3 step 7 keeps the class 2/3/4 denylist, except for exact
+     * failover forms approved by the frozen vendor contracts.
      */
     public boolean violatesWriteMarkerDenylist() {
         boolean isSignedOff = signOffState == SignOffState.SIGNED_OFF;
@@ -66,9 +66,15 @@ public record GateRow(
                     || ("cp_failover_down_vsid".equals(gateId)
                         && "bash -lc 'vsenv <VSID> && clusterXL_admin down'".equals(canonicalCommandKey))
                     || ("cp_failover_up_vsid".equals(gateId)
-                        && "bash -lc 'vsenv <VSID> && clusterXL_admin up'".equals(canonicalCommandKey)))))
+                        && "bash -lc 'vsenv <VSID> && clusterXL_admin up'".equals(canonicalCommandKey))))
+                && !("palo_alto".equals(vendor) && "pan_firewall".equals(platformRoleScope)
+                    && "not_applicable".equals(shellContext) && "PAN_XML_API".equals(transportKind)
+                    && (("pan_failover_suspend".equals(gateId)
+                        && "<request><high-availability><state><suspend/></state></high-availability></request>".equals(canonicalCommandKey))
+                    || ("pan_failover_functional".equals(gateId)
+                        && "<request><high-availability><state><functional/></state></high-availability></request>".equals(canonicalCommandKey))))
                 || actionClass == ActionClass.CLASS_3_CONFIGURATION_WRITE
-                || actionClass == ActionClass.CLASS_4_POLICY_DEPLOYMENT;
+                || actionClass == ActionClass.CLASS_4_POLICY_DEPLOYMENT);
         return isSignedOff && isHighClass;
     }
 }

@@ -2099,6 +2099,7 @@ export function ClusterDetailPanels({
                   </Typography>
                   <CollectNowButton deviceId={m.device_id} onCollected={refresh} enrollmentState={m.enrollment_state} />
                 </Box>
+                {isPaloAlto && m.virtual_systems && <Typography variant="caption" color="text.secondary">VSYS: {m.virtual_systems}</Typography>}
               </Box>
             );
           })}
@@ -2201,7 +2202,8 @@ export function ClusterDetailPanels({
               </Stack>
             ),
           },
-          ...(firstMember?.vendor_hint === "check_point" ? [{ label: "Failover", panel: <CpFailoverPanel memberDeviceId={firstMember.device_id} /> }] : []),
+          ...(firstMember && (firstMember.vendor_hint === "check_point" || firstMember.vendor_hint === "palo_alto")
+            ? [{ label: "Failover", panel: <CpFailoverPanel memberDeviceId={firstMember.device_id} vendor={firstMember.vendor_hint} /> }] : []),
         ]}
       />
     </Stack>

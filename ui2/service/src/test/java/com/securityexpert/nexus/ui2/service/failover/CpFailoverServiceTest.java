@@ -132,11 +132,31 @@ class CpFailoverServiceTest {
         assertEquals("TRUSTED_HOST_KEY_REQUIRED",refused.code());
         verifyNoInteractions(store);
     }
+    @Test void panActiveActiveRefusedWithoutVsUnits() {
+        ready("ACTIVE","STANDBY");
+        var panA=new DeviceSummaryRecord(A,"gateway","palo_alto",DeviceEnrollmentState.ENROLLED,
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(CLUSTER));
+        var panB=new DeviceSummaryRecord(B,"gateway","palo_alto",DeviceEnrollmentState.ENROLLED,
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(CLUSTER));
+        when(devices.listAll()).thenReturn(List.of(panA,panB));
+        when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(panA,panB));
+        for (String id:List.of(A,B)) when(devices.findEndpointByDeviceId(id)).thenReturn(Optional.of(
+            new EndpointRecord("endpoint-"+id,id,"pan_xml_api",A.equals(id)?"192.0.2.11":"192.0.2.12",Instant.EPOCH)));
+        for (String id:List.of(A,B)) when(inventory.findLatestRun(id)).thenReturn(Optional.of(new InventoryRun(
+            "inventory-"+id,id,"job-"+id,Instant.now(),1,
+            List.of(new InventoryContext("physical",List.of(),List.of())),
+            List.of(new InventoryHaFact("ha-"+id,"physical","ACTIVE",Optional.of("Active-Active"),
+                InventoryHaFact.SOURCE_PAN_HIGH_AVAILABILITY_STATE)))));
+        assertEquals("UNSUPPORTED_HA_MODE",assertThrows(CpFailoverService.Refusal.class,
+            () -> service.units(CLUSTER_ID,"actor-1","palo_alto")).code());
+        verifyNoInteractions(store);
+    }
     public static void main(String[] args) {
         new CpFailoverServiceTest().wrongRoleRefusedBeforeAdmission();
         new CpFailoverServiceTest().noWindowRefusedBeforeJob();
         new CpFailoverServiceTest().concurrentRunRefusedBeforeJob();
         new CpFailoverServiceTest().incorrectMemberStateRefusedBeforeAdmission();
         new CpFailoverServiceTest().untrustedHostRefusedBeforeAdmission();
+        new CpFailoverServiceTest().panActiveActiveRefusedWithoutVsUnits();
     }
 }

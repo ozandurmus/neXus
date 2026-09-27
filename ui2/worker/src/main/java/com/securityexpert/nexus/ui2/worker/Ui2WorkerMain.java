@@ -309,6 +309,9 @@ public final class Ui2WorkerMain {
             var cpFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.CpFailoverJobExecutor(
                     new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
                     deviceRepository, leaseRepository, attemptRepository, strictFailoverSsh, gateRegistry);
+            var panFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.PanFailoverJobExecutor(
+                    new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
+                    deviceRepository, leaseRepository, attemptRepository, panTransport, panCredentialResolver, gateRegistry);
             WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
                     confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
                     backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofMinutes(10), checkPointTrustRuleRef,
@@ -317,6 +320,7 @@ public final class Ui2WorkerMain {
                     .withHttpsInventory(httpsInventoryJobExecutor)
                     .withFortiManagerDiagnostic(diagnosticJobExecutor)
                     .withCpFailover(cpFailoverExecutor)
+                    .withPanFailover(panFailoverExecutor)
                     .withDiagnosticReads(genericDiagnosticExecutor);
             claimLoops.add(claimLoop);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));

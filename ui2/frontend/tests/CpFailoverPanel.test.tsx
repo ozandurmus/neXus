@@ -68,4 +68,15 @@ describe("Check Point failover", () => {
     expect(screen.getByRole("button", { name: "Failover now" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Schedule" })).toBeEnabled();
   });
+  it("shows PAN pair checks without virtual-system units", async () => {
+    api.units.mockResolvedValue([{ ...cluster, vendor: "palo_alto" }]);
+    api.runs.mockResolvedValue([{ runId: "pan-run" }]);
+    api.detail.mockResolvedValue({ runId: "pan-run", state: "STOPPED", step: "POSTCHECK", failedCheck: "4",
+      checks: [{ checkNo: 4, phase: "post", status: "UNKNOWN", derived: "{}" }] });
+    render(<ThemeProvider theme={m3Theme}><CpFailoverPanel memberDeviceId="member-device-id" vendor="palo_alto" /></ThemeProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "CLS-ROMEO-01" }));
+    expect(await screen.findByText("Stopped: Configuration sync")).toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Failover checks" })).getByText("Configuration sync")).toBeInTheDocument();
+    expect(screen.queryByText(/Virtual System/)).toBeNull();
+  });
 });
