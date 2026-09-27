@@ -1,0 +1,14 @@
+# Loads the neXus host firewall at boot, after k3s's own rules exist. See nexus-host-firewall.nft.
+[Unit]
+Description=neXus HOST-A inbound firewall (table inet nexus_host)
+After=network-online.target k3s.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/nexus/firewall.nft
+ExecStop=/usr/sbin/nft delete table inet nexus_host
+
+[Install]
+WantedBy=multi-user.target

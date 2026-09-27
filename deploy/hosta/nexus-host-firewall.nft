@@ -1,0 +1,29 @@
+#!/usr/sbin/nft -f
+# neXus HOST-A host firewall, hardening H2 (docs/design/HOST_A_HARDENING_DRAFT.md, PO 2026-09-27).
+# Inbound only, in its own table: k3s keeps managing its iptables(nft) rules untouched. Installed as
+# /etc/nexus/firewall.nft and loaded by nexus-host-firewall.service. Revert: `nft delete table inet nexus_host`.
+table inet nexus_host
+delete table inet nexus_host
+table inet nexus_host {
+    set ssh_allowed {
+        type ipv4_addr
+        flags interval
+        # VPN block and the team's virtual-machine block (PO 2026-09-27). Template: the real CIDRs are filled in
+        # only in /etc/nexus/firewall.nft on HOST-A, never in the repository.
+        elements = { @VPN_BLOCK@, @TEAM_VM_BLOCK@ }
+    }
+    chain input {
+        type filter hook input priority filter - 10; policy drop;
+        iif "lo" accept
+        ct state established,related accept
+        ct state invalid drop
+        # pods and the overlay reach the node (API server via the service VIP, kubelet, DNS)
+        iifname { "cni0", "flannel.1" } accept
+        ip saddr { 10.42.0.0/16, 10.43.0.0/16 } accept
+        meta l4proto { icmp, ipv6-icmp } accept
+        tcp dport 22 ip saddr @ssh_allowed accept
+        # the console: HTTPS for everyone, HTTP only to be redirected
+        tcp dport { 80, 443 } accept
+        limit rate 10/minute log prefix "nexus-fw-drop " level info
+    }
+}

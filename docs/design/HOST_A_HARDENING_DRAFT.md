@@ -53,3 +53,13 @@ Measured read-only on 2026-09-27 (HOST-A: Ubuntu 26.04.1 LTS, single-node k3s, n
    `/etc/chrony/sources.d/nexus-corporate.sources`; the unreachable Ubuntu NTS pool renamed `.disabled-by-nexus`.
    Clock synchronized (stratum 2). SIEM: later.
 4. Maintenance window: any time.
+5. SSH/firewall blocks: the VPN block (/19) and the team's virtual-machine block (/27, "32 IP"), given by the PO;
+   the values live only in `/etc/nexus/firewall.nft` on HOST-A.
+   -> **Done 2026-09-27 (H4):** `/etc/ssh/sshd_config.d/10-nexus-hardening.conf` -- root login off, password login off
+   except for `securitynexus` (password-only today; key-only once it has a key), no X11/TCP/agent forwarding,
+   MaxAuthTries 3, idle timeout, `AllowUsers aiadmin securitynexus`.
+   -> **Done 2026-09-27 (H2):** nftables table `inet nexus_host` (`deploy/hosta/nexus-host-firewall.nft`, loaded at boot by
+   `nexus-host-firewall.service`): inbound 22 from the two blocks only, 80/443 for everyone, pod/overlay traffic and
+   loopback allowed, everything else dropped (rate-limited log `nexus-fw-drop`). Applied with a 5-minute automatic
+   rollback armed; verified (new SSH, HTTPS 200, HTTP 301, 6443/10250 closed from outside, pods and services healthy)
+   before the rollback was cancelled.
