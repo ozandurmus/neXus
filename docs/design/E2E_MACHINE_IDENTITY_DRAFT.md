@@ -48,3 +48,8 @@ rotation by deleting the Secret.
 ## 4. Questions for the Product Owner
 1. Approve the machine identity design (§1)?
 2. Cadence: after each deploy + every 4 h?
+
+## 5. Product Owner decision (2026-09-27)
+"Devamına ok veriyorum, devam et" -- §1 (machine identity, internal port, server-enforced read-only, audit), §2 (the
+official Playwright image through the corporate proxy) and the cadence (after each deploy + every 4 h) are approved
+for implementation. The console now serves HTTPS (hardening H1); in-cluster the runner calls the service directly.
