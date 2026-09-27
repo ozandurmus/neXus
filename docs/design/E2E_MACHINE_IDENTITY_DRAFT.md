@@ -1,6 +1,6 @@
 # End-to-end screen tests without a human login: an in-cluster machine identity (DRAFT)
 
-**Status:** DRAFT -- proposal for Product Owner review; not implementation authority.
+**Status:** FROZEN -- Product Owner approved 2026-09-27 (§5); implementation authority for §1, §2 and the cadence.
 
 Product Owner, 2026-09-27: the e2e screen suite (`ui2/frontend/e2e`, `docs/reference/E2E_SCREEN_TESTS.md`) needs a
 human aiview login each day, and running it as `aiview` signs the PO out (one session per identity). "User
