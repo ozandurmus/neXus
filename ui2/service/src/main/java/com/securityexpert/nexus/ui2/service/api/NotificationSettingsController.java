@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.service.api;
 
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.securityexpert.nexus.ui2.service.notification.NotificationSettings;
+import com.securityexpert.nexus.ui2.service.notification.NotificationRoute;
 import com.securityexpert.nexus.ui2.service.notification.NotificationSettingsStore;
 import com.securityexpert.nexus.ui2.service.notification.SmtpRelaySender;
 import com.securityexpert.nexus.ui2.service.notification.SyslogSender;
@@ -39,7 +41,7 @@ public final class NotificationSettingsController {
 
     @PutMapping("/api/v2/config/notifications")
     public ResponseEntity<Object> save(@RequestBody NotificationSettings settings, HttpServletRequest request) {
-        List<String> problems = settings.problems();
+        List<String> problems = problems(settings);
         if (!problems.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "INVALID_SETTINGS", "problems", problems));
         }
@@ -62,15 +64,38 @@ public final class NotificationSettingsController {
         return ResponseEntity.ok(body);
     }
 
+    public record TestMailRequest(String type, NotificationSettings settings) {}
+
+    private static List<String> problems(NotificationSettings settings) {
+        if (settings == null) return List.of("notification settings are missing");
+        List<String> problems = new ArrayList<>(settings.problems());
+        if (settings.routes() == null || settings.routes().isEmpty()) {
+            problems.add("all seven notification types must be provided once");
+        }
+        return problems;
+    }
+
     @PostMapping("/api/v2/config/notifications/test-mail")
-    public ResponseEntity<Map<String, Object>> testMail() {
-        NotificationSettings settings = store.read();
+    public ResponseEntity<Map<String, Object>> testMail(@RequestBody(required = false) TestMailRequest request) {
+        NotificationSettings settings = request != null && request.settings() != null ? request.settings() : store.read();
+        String type = request == null ? null : request.type();
+        if (type != null && !NotificationRoute.TYPES.contains(type)) {
+            return ResponseEntity.badRequest().body(Map.of("sent", false, "detail", "unknown notification type"));
+        }
+        List<String> problems = problems(settings);
+        if (!problems.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("sent", false, "detail", String.join("; ", problems)));
+        }
+        List<String> recipients = type == null ? settings.recipients() : settings.routes().stream()
+                .filter(r -> type.equals(r.type())).findFirst()
+                .map(r -> r.effectiveRecipients(settings)).orElse(List.of());
         Map<String, Object> body = new LinkedHashMap<>();
         try {
-            SmtpRelaySender.send(settings, "neXus notification test",
-                    "This is a test message from neXus. The SMTP relay settings are working.\n");
+            SmtpRelaySender.send(settings, recipients,
+                    type == null ? "neXus notification test" : "neXus – " + type + ": test digest",
+                    "This is a sample neXus " + (type == null ? "notification" : type) + " digest.\n");
             body.put("sent", true);
-            body.put("detail", "accepted by the relay for " + settings.recipients().size() + " recipient(s)");
+            body.put("detail", "accepted by the relay for " + recipients.size() + " recipient(s)");
         } catch (java.io.IOException | RuntimeException e) {
             body.put("sent", false);
             body.put("detail", e.getMessage());

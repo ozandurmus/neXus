@@ -17,9 +17,19 @@ import {
   testNotification,
   type ApiError,
   type NotificationSettingsView,
+  type NotificationRouteView,
 } from "../../auth/adminApi";
 
 type Message = { text: string; type: "success" | "error" | "info" };
+const TYPES: { type: NotificationRouteView["type"]; title: string; description: string }[] = [
+  { type: "admin_event", title: "Administration changes", description: "Identity, roles, credentials, devices, backup target and notification settings" },
+  { type: "login_security", title: "Sign-in and access", description: "Rejected sign-ins and sessions, and session takeover" },
+  { type: "backup_failure", title: "Backup failures", description: "Failed or partial backup jobs" },
+  { type: "job_failure", title: "Other job failures", description: "Failed jobs other than backups" },
+  { type: "config_change", title: "Configuration changes", description: "New configuration notifications" },
+  { type: "compliance_regression", title: "Compliance regressions", description: "Controls changing from PASS to FAIL" },
+  { type: "device_health", title: "Device reachability", description: "Unreachable, reachable again and host-key mismatch" },
+];
 
 function problemsOf(err: unknown): string {
   const body = (err as ApiError)?.body as { problems?: string[]; error?: string } | undefined;
@@ -30,13 +40,13 @@ function problemsOf(err: unknown): string {
 
 /**
  * Administration › Notifications: remote logging (syslog, RFC 5424 over UDP/TCP) and an internal SMTP relay,
- * the two first-release triggers, and a test send for each. Save first, then test: a test uses the saved
- * settings.
+ * per-type routes, and a test send using the current form values.
  */
 export function NotificationSettingsPanel() {
   const [s, setS] = useState<NotificationSettingsView | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [problems, setProblems] = useState<string[]>([]);
 
   const [restricted, setRestricted] = useState(false);
   useEffect(() => {
@@ -54,24 +64,29 @@ export function NotificationSettingsPanel() {
   }
   if (!s) return message ? <Alert severity={message.type} sx={{ maxWidth: 900 }}>{message.text}</Alert> : <Typography sx={{ p: 3 }}>Loading notification settings…</Typography>;
   const change = <K extends keyof NotificationSettingsView>(k: K, v: NotificationSettingsView[K]) => setS({ ...s, [k]: v });
+  const routeChange = (type: NotificationRouteView["type"], patch: Partial<NotificationRouteView>) =>
+    change("routes", s.routes.map((route) => route.type === type ? { ...route, ...patch } : route));
+  const fieldProblem = (name: string) => problems.find((problem) => problem.includes(name));
 
   const save = async () => {
     setBusy("save");
     setMessage(null);
+    setProblems([]);
     try {
       setS(await saveNotificationSettings(s));
       setMessage({ text: "Notification settings saved.", type: "success" });
     } catch (e) {
+      setProblems(((e as ApiError)?.body as { problems?: string[] } | undefined)?.problems ?? []);
       setMessage({ text: `Not saved: ${problemsOf(e)}`, type: "error" });
     } finally {
       setBusy(null);
     }
   };
-  const test = async (kind: "syslog" | "mail") => {
-    setBusy(kind);
+  const test = async (kind: "syslog" | "mail", type?: NotificationRouteView["type"]) => {
+    setBusy(type ?? kind);
     setMessage(null);
     try {
-      const r = await testNotification(kind);
+      const r = await testNotification(kind, type, s);
       setMessage({ text: `${kind === "syslog" ? "Syslog" : "Mail"} test: ${r.sent ? "sent" : "failed"} -- ${r.detail}`, type: r.sent ? "success" : "error" });
     } catch (e) {
       setMessage({ text: `Test refused: ${problemsOf(e)}`, type: "error" });
@@ -95,30 +110,43 @@ export function NotificationSettingsPanel() {
           <TextField label="Facility" type="number" value={s.syslog_facility} onChange={(e) => change("syslog_facility", Number(e.target.value))} helperText="16 = local0" sx={{ width: { sm: 130 } }} />
         </Stack>
         <FormControlLabel control={<Switch checked={s.forward_audit_to_syslog} onChange={(e) => change("forward_audit_to_syslog", e.target.checked)} />} label="Forward audit events (table, operation, action, actor, time -- never the changed values)" />
+        <FormControlLabel control={<Switch checked={s.notify_job_failure} onChange={(e) => change("notify_job_failure", e.target.checked)} />} label="Forward failed jobs to syslog" />
       </Stack></CardContent></Card>
 
       <Card variant="outlined"><CardContent><Stack spacing={2}>
-        <Typography variant="h6">SMTP relay</Typography>
+        <Typography variant="h6">Mail relay</Typography>
+        <Typography variant="body2" color="text.secondary">Standard SMTP relay without an account; the relay must accept mail from this server's address.</Typography>
         <FormControlLabel control={<Switch checked={s.smtp_enabled} onChange={(e) => change("smtp_enabled", e.target.checked)} />} label="Send mail through an internal relay" />
         <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
           <TextField label="Relay host" value={s.smtp_host ?? ""} onChange={(e) => change("smtp_host", e.target.value)} fullWidth autoComplete="off" />
           <TextField label="Port" type="number" value={s.smtp_port} onChange={(e) => change("smtp_port", Number(e.target.value))} sx={{ width: { sm: 130 } }} />
         </Stack>
         <FormControlLabel control={<Switch checked={s.smtp_starttls} onChange={(e) => change("smtp_starttls", e.target.checked)} />} label="STARTTLS (certificate verified against the corporate CA)" />
-        <TextField label="From address" value={s.smtp_from ?? ""} onChange={(e) => change("smtp_from", e.target.value)} fullWidth />
-        <TextField label="Recipients" value={s.smtp_to ?? ""} onChange={(e) => change("smtp_to", e.target.value)} helperText="Comma-separated. The relay must accept this host without a login; relays that require authentication are not supported yet." fullWidth />
+        <TextField label="From address" value={s.smtp_from ?? ""} onChange={(e) => change("smtp_from", e.target.value)} error={!!fieldProblem("from address")} helperText={fieldProblem("from address")} fullWidth />
+        <TextField label="Default recipients" value={s.smtp_to ?? ""} onChange={(e) => change("smtp_to", e.target.value)} error={problems.some((p) => p.startsWith("not an e-mail address:"))} helperText={problems.find((p) => p.startsWith("not an e-mail address:")) ?? "Comma separated; used by types without their own list."} fullWidth />
       </Stack></CardContent></Card>
 
       <Card variant="outlined"><CardContent><Stack spacing={2}>
-        <Typography variant="h6">Triggers</Typography>
-        <FormControlLabel control={<Switch checked={s.notify_job_failure} onChange={(e) => change("notify_job_failure", e.target.checked)} />} label="When a job fails: one syslog message per job and one mail per minute listing them" />
-        <Typography variant="body2" color="text.secondary">More triggers (backup overdue, collection failures by device, compliance changes) will be added to this list.</Typography>
+        <Typography variant="h6">Notification types</Typography>
+        {TYPES.map(({ type, title, description }) => {
+          const route = s.routes.find((item) => item.type === type);
+          if (!route) return null;
+          return <Stack key={type} data-testid={`route-${type}`} spacing={1} sx={{ py: 1, borderTop: 1, borderColor: "divider" }}>
+            <FormControlLabel control={<Switch checked={route.enabled} onChange={(e) => routeChange(type, { enabled: e.target.checked })} />} label={title} />
+            <Typography variant="body2" color="text.secondary">{description}</Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <TextField label={`${title} recipients`} value={route.recipients ?? ""} onChange={(e) => routeChange(type, { recipients: e.target.value })}
+                placeholder="default recipients" error={!!fieldProblem(`${type} recipients`)} helperText={fieldProblem(`${type} recipients`) ?? "Comma separated"} fullWidth />
+              <M3Button emphasis="outlined" disabled={busy !== null} onClick={() => void test("mail", type)}>{busy === type ? "Sending…" : "Send test"}</M3Button>
+            </Stack>
+            <Typography variant="caption" color="text.secondary">Last sent: {route.last_sent_at ?? "Never"}{route.last_error ? ` · Last error: ${route.last_error}` : ""}</Typography>
+          </Stack>;
+        })}
       </Stack></CardContent></Card>
 
       <Stack direction="row" spacing={1.5}>
         <M3Button emphasis="filled" disabled={busy !== null} onClick={() => void save()}>{busy === "save" ? "Saving…" : "Save"}</M3Button>
         <M3Button emphasis="outlined" disabled={busy !== null} onClick={() => void test("syslog")}>{busy === "syslog" ? "Sending…" : "Send test syslog"}</M3Button>
-        <M3Button emphasis="outlined" disabled={busy !== null} onClick={() => void test("mail")}>{busy === "mail" ? "Sending…" : "Send test mail"}</M3Button>
       </Stack>
     </Stack>
   );

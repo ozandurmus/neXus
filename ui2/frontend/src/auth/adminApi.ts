@@ -1442,6 +1442,15 @@ export interface NotificationSettingsView {
   forward_audit_to_syslog: boolean;
   notify_job_failure: boolean;
   updated_at?: string | null;
+  routes: NotificationRouteView[];
+}
+
+export interface NotificationRouteView {
+  type: "admin_event" | "login_security" | "backup_failure" | "job_failure" | "config_change" | "compliance_regression" | "device_health";
+  enabled: boolean;
+  recipients: string | null;
+  last_sent_at: string | null;
+  last_error: string | null;
 }
 
 export function getNotificationSettings(): Promise<NotificationSettingsView> {
@@ -1452,8 +1461,8 @@ export function saveNotificationSettings(settings: NotificationSettingsView): Pr
   return call("/api/v2/config/notifications", "PUT", settings);
 }
 
-export function testNotification(kind: "syslog" | "mail"): Promise<{ sent: boolean; detail: string }> {
-  return call(`/api/v2/config/notifications/test-${kind}`, "POST", {});
+export function testNotification(kind: "syslog" | "mail", type?: NotificationRouteView["type"], settings?: NotificationSettingsView): Promise<{ sent: boolean; detail: string }> {
+  return call(`/api/v2/config/notifications/test-${kind}`, "POST", type ? { type, settings } : {});
 }
 
 export interface PodStatusView {

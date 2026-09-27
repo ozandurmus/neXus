@@ -13,15 +13,15 @@ import org.springframework.stereotype.Service;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
 /**
- * The two first-release triggers, every 60 s, each off until switched on:
+ * Syslog forwarding and seven independent SMTP routes, every 60 s:
  * <ul>
  * <li>audit events to syslog: table, operation, action, actor fingerprint and time -- never the before/after
  * row image (it can carry device identities);</li>
- * <li>job failures: one syslog message per failed job and one mail per tick listing them (job type, device,
- * reason), device identifiers as stored -- a mail goes to the operators' own relay.</li>
+ * <li>job failures: one syslog message per failed job when selected;</li>
+ * <li>mail: one digest per enabled route, with its own watermark.</li>
  * </ul>
- * Watermarks advance only after a successful send, so an unreachable target repeats nothing and loses nothing;
- * a single run forwards at most 500 audit events and 200 failures.
+ * Watermarks advance only after a successful send; a single syslog run forwards at most 500 audit events
+ * and 200 failures.
  */
 @Service
 public class NotificationForwarder {
@@ -44,12 +44,13 @@ public class NotificationForwarder {
         } catch (RuntimeException e) {
             return;
         }
-        if (settings.syslogEnabled() && settings.forwardAuditToSyslog()) {
-            forwardAudit(settings);
-        }
-        if (settings.notifyJobFailure() && (settings.syslogEnabled() || settings.smtpEnabled())) {
-            forwardJobFailures(settings);
-        }
+        transactionBoundary.inTransaction(dsl -> {
+            if (!Boolean.TRUE.equals(dsl.fetchValue("select pg_try_advisory_xact_lock(10010051)", Boolean.class))) return null;
+            if (settings.syslogEnabled() && settings.forwardAuditToSyslog()) forwardAudit(settings);
+            if (settings.notifyJobFailure() && settings.syslogEnabled()) forwardJobFailures(settings);
+            NotificationMailRouter.tick(dsl, settings);
+            return null;
+        });
     }
 
     void forwardAudit(NotificationSettings settings) {
@@ -109,16 +110,6 @@ public class NotificationForwarder {
                     delivered = false;
                     break;
                 }
-            }
-        }
-        if (settings.smtpEnabled()) {
-            try {
-                SmtpRelaySender.send(settings, "neXus: " + lines.size() + " job(s) failed",
-                        "The following neXus jobs failed:\n\n" + String.join("\n", lines)
-                                + "\n\nOpen Operations > Jobs for the details.\n");
-            } catch (java.io.IOException e) {
-                LOG.log(System.Logger.Level.WARNING, "[NOTIFY_SMTP_FAILED] job failure mail: {0}", e.getMessage());
-                delivered = false;
             }
         }
         if (delivered) {

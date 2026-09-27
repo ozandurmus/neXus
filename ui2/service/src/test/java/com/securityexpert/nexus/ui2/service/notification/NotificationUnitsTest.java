@@ -35,4 +35,19 @@ class NotificationUnitsTest {
         assertEquals(List.of("a@example.test", "b@example.test", "c@example.test"),
                 settings(false, null, false, null, "a@example.test; b@example.test c@example.test").recipients());
     }
+
+    @Test
+    void routeRecipientsAreValidatedAndDefaultRecipientsMayBeEmptyWhenRoutesSupplyThem() {
+        List<NotificationRoute> routes = NotificationRoute.TYPES.stream()
+                .map(type -> new NotificationRoute(type, type.equals("admin_event"),
+                        type.equals("admin_event") ? "admin@example.test" : null, null, null)).toList();
+        NotificationSettings valid = new NotificationSettings(false, null, 514, "udp", 16, true,
+                "relay.example.test", 25, false, "nexus@example.test", null, false, false, null, routes);
+        assertEquals(List.of(), valid.problems());
+        List<NotificationRoute> invalid = routes.stream().map(route -> route.type().equals("admin_event")
+                ? new NotificationRoute(route.type(), true, "invalid-address", null, null) : route).toList();
+        NotificationSettings bad = new NotificationSettings(false, null, 514, "udp", 16, true,
+                "relay.example.test", 25, false, "nexus@example.test", null, false, false, null, invalid);
+        assertTrue(bad.problems().stream().anyMatch(p -> p.startsWith("admin_event recipients:")));
+    }
 }

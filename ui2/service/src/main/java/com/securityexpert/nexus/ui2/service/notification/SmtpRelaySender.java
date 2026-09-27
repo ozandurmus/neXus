@@ -30,7 +30,10 @@ public final class SmtpRelaySender {
     }
 
     public static void send(NotificationSettings settings, String subject, String body) throws IOException {
-        List<String> recipients = settings.recipients();
+        send(settings, settings.recipients(), subject, body);
+    }
+
+    public static void send(NotificationSettings settings, List<String> recipients, String subject, String body) throws IOException {
         if (settings.smtpHost() == null || settings.smtpHost().isBlank() || settings.smtpFrom() == null || recipients.isEmpty()) {
             throw new IOException("SMTP relay host, from address or recipients are not configured");
         }
