@@ -22,7 +22,9 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
 import com.securityexpert.nexus.ui2.worker.compliance.catalog.CheckPointComplianceCatalog;
+import com.securityexpert.nexus.ui2.worker.compliance.catalog.FortinetAsaComplianceCatalog;
 import com.securityexpert.nexus.ui2.worker.compliance.evaluator.CheckPointGaiaComplianceEvaluator;
+import com.securityexpert.nexus.ui2.worker.compliance.evaluator.FortinetAsaComplianceEvaluator;
 import com.securityexpert.nexus.ui2.worker.compliance.model.ComplianceControl;
 import com.securityexpert.nexus.ui2.worker.compliance.model.EvaluationResult;
 import com.securityexpert.nexus.ui2.worker.configuration.core.ConfigFormat;
@@ -91,15 +93,19 @@ public final class Ui2ComplianceServer {
             }
             int cpCount = CheckPointComplianceCatalog.getControls().size();
             int panCount = com.securityexpert.nexus.ui2.worker.compliance.catalog.PaloAltoComplianceCatalog.getControls().size();
+            int fortiCount = FortinetAsaComplianceCatalog.getControls("fortinet").size();
+            int asaCount = FortinetAsaComplianceCatalog.getControls("cisco_asa").size();
             sendResponse(exchange, 200, Map.of(
                     "status", "UP",
                     "service", "ui2-compliance",
                     "version", "1.0.0",
-                    "catalog_version", CheckPointComplianceCatalog.CATALOG_VERSION,
-                    "controls_count", cpCount + panCount,
+                    "catalog_version", CheckPointComplianceCatalog.CATALOG_VERSION + "+" + FortinetAsaComplianceCatalog.CATALOG_VERSION,
+                    "controls_count", cpCount + panCount + fortiCount + asaCount,
                     "controls_by_vendor", Map.of(
                             "check_point", cpCount,
-                            "palo_alto", panCount
+                            "palo_alto", panCount,
+                            "fortinet", fortiCount,
+                            "cisco_asa", asaCount
                     )
             ));
         }
@@ -116,16 +122,22 @@ public final class Ui2ComplianceServer {
             List<ComplianceControl> controls;
             if (query != null && query.contains("vendor=palo_alto")) {
                 controls = com.securityexpert.nexus.ui2.worker.compliance.catalog.PaloAltoComplianceCatalog.getControls();
+            } else if (query != null && query.contains("vendor=fortinet")) {
+                controls = FortinetAsaComplianceCatalog.getControls("fortinet");
+            } else if (query != null && query.contains("vendor=cisco_asa")) {
+                controls = FortinetAsaComplianceCatalog.getControls("cisco_asa");
             } else if (query != null && query.contains("vendor=check_point")) {
                 controls = CheckPointComplianceCatalog.getControls();
             } else {
                 List<ComplianceControl> combined = new java.util.ArrayList<>();
                 combined.addAll(CheckPointComplianceCatalog.getControls());
                 combined.addAll(com.securityexpert.nexus.ui2.worker.compliance.catalog.PaloAltoComplianceCatalog.getControls());
+                combined.addAll(FortinetAsaComplianceCatalog.getControls("fortinet"));
+                combined.addAll(FortinetAsaComplianceCatalog.getControls("cisco_asa"));
                 controls = combined;
             }
             sendResponse(exchange, 200, Map.of(
-                    "version", CheckPointComplianceCatalog.CATALOG_VERSION,
+                    "version", CheckPointComplianceCatalog.CATALOG_VERSION + "+" + FortinetAsaComplianceCatalog.CATALOG_VERSION,
                     "count", controls.size(),
                     "controls", controls
             ));
@@ -149,7 +161,9 @@ public final class Ui2ComplianceServer {
             }
 
             try {
-                if ("palo_alto".equals(vendor)) {
+                if ("fortinet".equals(vendor) || "cisco_asa".equals(vendor)) {
+                    sendResponse(exchange, 200, FortinetAsaComplianceEvaluator.evaluate(deviceId, vendor, configContent));
+                } else if ("palo_alto".equals(vendor)) {
                     EvaluationResult evalResult = com.securityexpert.nexus.ui2.worker.compliance.evaluator.PaloAltoPanOsComplianceEvaluator.evaluate(
                             deviceId,
                             vendor,

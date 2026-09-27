@@ -131,9 +131,25 @@ class ComplianceServiceCacheParityTest {
                 String id = "dev-" + d;
                 out.add(new Target(id, Optional.of("FW-TANGO-" + d), d % 3 == 0 ? "palo_alto" : "check_point", Optional.of(hashes.get(id))));
             }
-            out.add(new Target("dev-other", Optional.of("FW-OTHER-01"), "fortinet", Optional.of("h")));
+            out.add(new Target("dev-other", Optional.of("FW-OTHER-01"), "infoblox", Optional.of("h")));
             return out;
         }, id -> Optional.ofNullable(configs.get(id)), now::get, parallelism, Duration.ofHours(6), store);
+    }
+
+    @Test
+    void fortinetAndAsaTargetsContributeToComplianceFigures() {
+        DeviceRepository repo = (DeviceRepository) Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[] {DeviceRepository.class}, (p, m, a) -> m.getName().startsWith("find") ? Optional.empty() : null);
+        ComplianceService service = new ComplianceService(null, repo,
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                () -> List.of(new Target("fg", Optional.of("FW-TANGO-01"), "fortinet", Optional.of("fg-hash")),
+                        new Target("asa", Optional.of("FW-JULIET-06"), "cisco_asa", Optional.of("asa-hash")),
+                        new Target("other", Optional.empty(), "infoblox", Optional.of("other-hash"))),
+                id -> Optional.of("C1=on\n"), now::get, 1, Duration.ofHours(6), ComplianceEvaluationStore.inMemory());
+        Map<String, Object> overview = service.getOverview();
+        assertThat(overview.get("total_firewalls")).isEqualTo(3);
+        assertThat(overview.get("evaluated_firewalls")).isEqualTo(2);
+        assertThat(evaluations.get()).isEqualTo(2);
     }
 
     @Test

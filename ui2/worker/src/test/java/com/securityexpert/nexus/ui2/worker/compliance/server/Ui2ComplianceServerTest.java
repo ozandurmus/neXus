@@ -53,14 +53,16 @@ class Ui2ComplianceServerTest {
         JsonNode json = mapper.readTree(response.body());
         assertEquals("UP", json.get("status").asText());
         assertEquals("ui2-compliance", json.get("service").asText());
-        assertEquals(48, json.get("controls_count").asInt());
+        assertEquals(64, json.get("controls_count").asInt());
         assertEquals(24, json.get("controls_by_vendor").get("check_point").asInt());
         assertEquals(24, json.get("controls_by_vendor").get("palo_alto").asInt());
+        assertEquals(7, json.get("controls_by_vendor").get("fortinet").asInt());
+        assertEquals(9, json.get("controls_by_vendor").get("cisco_asa").asInt());
     }
 
     @Test
     void catalogEndpointReturnsAllControlsAndFiltersByVendor() throws Exception {
-        // Combined catalog (48 controls)
+        // Combined catalog (64 controls)
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://127.0.0.1:" + port + "/api/v1/compliance/catalog"))
                 .GET()
@@ -70,9 +72,9 @@ class Ui2ComplianceServerTest {
         assertEquals(200, response.statusCode());
 
         JsonNode json = mapper.readTree(response.body());
-        assertEquals(48, json.get("count").asInt());
+        assertEquals(64, json.get("count").asInt());
         assertTrue(json.get("controls").isArray());
-        assertEquals(48, json.get("controls").size());
+        assertEquals(64, json.get("controls").size());
 
         // Palo Alto filtered catalog (24 controls)
         HttpRequest panRequest = HttpRequest.newBuilder()
@@ -154,5 +156,24 @@ class Ui2ComplianceServerTest {
         assertEquals(24, json.get("totalAssigned").asInt());
         assertEquals(4, json.get("dataUnavailableCount").asInt());
         assertTrue(json.get("passCount").asInt() >= 1);
+    }
+
+    @Test
+    void evaluateEndpointAcceptsFortinetAndAsaProjections() throws Exception {
+        for (String vendor : new String[] {"fortinet", "cisco_asa"}) {
+            String config = vendor.equals("fortinet")
+                    ? "config system global\nset admin-ssh-v1 disable\nend\n"
+                    : "logging enable\nend\n";
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("http://127.0.0.1:" + port + "/api/v1/compliance/evaluate"))
+                    .header("X-Nexus-Vendor", vendor)
+                    .header("X-Nexus-Device-Id", "synthetic-device")
+                    .POST(HttpRequest.BodyPublishers.ofString(config, StandardCharsets.UTF_8)).build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, response.statusCode());
+            JsonNode result = mapper.readTree(response.body());
+            assertEquals(vendor.equals("fortinet") ? 7 : 9, result.get("totalAssigned").asInt());
+            assertTrue(result.get("passCount").asInt() >= 1);
+        }
     }
 }

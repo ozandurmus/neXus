@@ -397,7 +397,8 @@ public final class ComplianceService {
 
     private static List<Target> evaluable(List<Target> all) {
         return all.stream()
-                .filter(d -> "check_point".equalsIgnoreCase(d.vendor()) || "palo_alto".equalsIgnoreCase(d.vendor()))
+                .filter(d -> "check_point".equalsIgnoreCase(d.vendor()) || "palo_alto".equalsIgnoreCase(d.vendor())
+                        || "fortinet".equalsIgnoreCase(d.vendor()) || "cisco_asa".equalsIgnoreCase(d.vendor()))
                 .toList();
     }
 
