@@ -85,6 +85,8 @@ interface Loaded {
   readonly configuration: DeviceConfiguration | null;
   readonly projection: Projection | null;
   readonly error: string | null;
+  /** The configuration was read but this session's roles do not include reading its text (HTTP 403). */
+  readonly textForbidden?: boolean;
 }
 
 /** The vendor's projection of a sanitized configuration text -- one choice for single devices and cluster members. */
@@ -108,11 +110,17 @@ function useProjection(device: DeviceSummary | null, revision = 0): Loaded & { l
       try {
         const configuration = await getDeviceConfiguration(device.device_id);
         let projection: Projection | null = null;
+        let textForbidden = false;
         if (configuration.sanitized_text_available) {
-          const text = await getDeviceConfigurationText(device.device_id);
-          projection = projectFor(configuration, device.vendor_hint, text);
+          try {
+            const text = await getDeviceConfigurationText(device.device_id);
+            projection = projectFor(configuration, device.vendor_hint, text);
+          } catch (textError) {
+            if ((textError as { status?: number })?.status !== 403) throw textError;
+            textForbidden = true;
+          }
         }
-        if (!cancelled) setState({ configuration, projection, error: null, loading: false });
+        if (!cancelled) setState({ configuration, projection, error: null, loading: false, textForbidden });
       } catch (error) {
         if (!cancelled) setState({ configuration: null, projection: null, error: error instanceof Error ? error.message : "The configuration could not be read.", loading: false });
       }
@@ -363,7 +371,7 @@ function headerChips(device: DeviceSummary, extra: ReactNode = null) {
 export function DeviceConfigurationDetail({ device, embedded = false }: { readonly device: DeviceSummary; readonly embedded?: boolean }) {
   const [revision, setRevision] = useState(0);
   const refresh = () => setRevision(v => v + 1);
-  const { configuration, projection, error, loading } = useProjection(device, revision);
+  const { configuration, projection, error, loading, textForbidden } = useProjection(device, revision);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<ReadonlySet<string> | null>(null);
   useEffect(() => { setQuery(""); setOpen(null); }, [device.device_id]);
@@ -390,7 +398,11 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
       <IdentityCard title={device.hostname ?? device.device_id} tiles={identityTiles(device, collectedAt)} />
       {error && <EmptyPanel title="Configuration unavailable" body={error} />}
       {!error && loading && <EmptyPanel title="Configuration" body="Reading the device's configuration…" />}
-      {!error && !loading && !projection && (
+      {!error && !loading && !projection && textForbidden && (
+        <EmptyPanel title="Configuration settings not shown for your role"
+          body="A configuration was read for this device, but your role does not include viewing its settings. A security administrator can grant it." />
+      )}
+      {!error && !loading && !projection && !textForbidden && (
         <EmptyPanel title="No configuration read yet" body="Use Collect now to read this device's configuration." />
       )}
       {projection && (
