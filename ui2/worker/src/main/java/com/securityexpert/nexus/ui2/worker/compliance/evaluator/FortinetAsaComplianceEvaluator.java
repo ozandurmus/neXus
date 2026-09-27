@@ -76,8 +76,15 @@ public final class FortinetAsaComplianceEvaluator {
         Block current = null;
         boolean valid = true;
         boolean closed = false;
+        boolean inQuotedValue = false;
         for (String raw : text.lines().toList()) {
             String line = raw.strip();
+            // A quoted value can span lines (replacement-message buffers); its continuation lines are not statements.
+            if (inQuotedValue) {
+                if (unescapedQuotes(raw) % 2 == 1) inQuotedValue = false;
+                continue;
+            }
+            if ((line.startsWith("set ") || line.startsWith("unset ")) && unescapedQuotes(line) % 2 == 1) inQuotedValue = true;
             if (line.startsWith("config ")) {
                 String name = line.substring(7);
                 stack.add("config " + name);
@@ -110,7 +117,16 @@ public final class FortinetAsaComplianceEvaluator {
                 valid = false;
             }
         }
-        return new Parsed(blocks, valid && stack.isEmpty() && closed && !blocks.isEmpty());
+        return new Parsed(blocks, valid && !inQuotedValue && stack.isEmpty() && closed && !blocks.isEmpty());
+    }
+
+    private static int unescapedQuotes(String line) {
+        int count = 0;
+        for (int i = 0; i < line.length(); i++) {
+            if (line.charAt(i) == '\\') { i++; continue; }
+            if (line.charAt(i) == '"') count++;
+        }
+        return count;
     }
 
     private static String section(List<String> stack) {
@@ -283,7 +299,7 @@ public final class FortinetAsaComplianceEvaluator {
         if (methods.size() != 1) return lines.contains("no aaa authentication " + service + " console") ? Verdict.FAIL : Verdict.UNKNOWN;
         String method = methods.getFirst().substring(prefix.length());
         if (method.equalsIgnoreCase("NONE")) return Verdict.FAIL;
-        if (method.equals("LOCAL")) return lines.stream().anyMatch(s -> s.matches("username \\S+ .+")) ? Verdict.PASS : Verdict.UNKNOWN;
+        if (method.equals("LOCAL")) return lines.stream().anyMatch(s -> s.startsWith("username ")) ? Verdict.PASS : Verdict.UNKNOWN;
         String group = method.split("\\s+")[0];
         return lines.stream().anyMatch(s -> s.startsWith("aaa-server " + group + " protocol "))
                 && lines.stream().anyMatch(s -> s.startsWith("aaa-server " + group + " (") && s.contains(") host "))
@@ -295,7 +311,8 @@ public final class FortinetAsaComplianceEvaluator {
         return switch (id) {
             case "asa_http_sources_restricted", "asa_http_aaa" -> Set.of("http", "aaa").contains(first);
             case "asa_telnet_absent" -> first.equals("telnet");
-            case "asa_ssh_aaa" -> Set.of("aaa", "username", "aaa-server").contains(first);
+            // `username` lines carry a password and are masked whole; a masked line still proves the account exists.
+            case "asa_ssh_aaa" -> Set.of("aaa", "aaa-server").contains(first);
             case "asa_logging_enabled", "asa_remote_syslog", "asa_log_timestamps" -> first.equals("logging");
             case "asa_ntp_server" -> first.equals("ntp");
             case "asa_failover_link" -> first.equals("failover");

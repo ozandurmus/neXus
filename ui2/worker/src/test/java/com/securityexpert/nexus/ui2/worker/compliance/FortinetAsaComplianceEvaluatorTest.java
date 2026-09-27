@@ -63,6 +63,16 @@ class FortinetAsaComplianceEvaluatorTest {
     }
 
     @Test
+    void fortinetMultiLineQuotedValueIsNotAStatement() {
+        String text = "config system replacemsg admin \"pre_admin-disclaimer-text\"\n"
+                + "set buffer \"Line one of the banner\nSecond line: %%LINK%%\n\"\nend\n"
+                + fg("system global", "set admin-telnet disable");
+        assertEquals(Verdict.PASS, result("fortinet", "fg_global_telnet_disabled", text));
+        assertEquals(Verdict.UNKNOWN, result("fortinet", "fg_global_telnet_disabled",
+                "config system global\nset admin-telnet disable\nset buffer \"never closed\nend\n"));
+    }
+
+    @Test
     void asaControlsUseOnlyCompleteVisibleConfiguration() {
         Map<String, String[]> cases = Map.of(
                 "asa_http_sources_restricted", new String[] {
@@ -88,6 +98,9 @@ class FortinetAsaComplianceEvaluatorTest {
         assertEquals(Verdict.NOT_APPLICABLE, result("cisco_asa", "asa_http_aaa", asa("no http server enable")));
         assertEquals(Verdict.UNKNOWN, result("cisco_asa", "asa_http_sources_restricted", asa("http server enable\nhttp unparsed mask inside")));
         assertEquals(Verdict.PASS, result("cisco_asa", "asa_telnet_absent", asa("telnet timeout 5")));
+        assertEquals(Verdict.PASS, result("cisco_asa", "asa_ssh_aaa", asa("username [withheld]\n"
+                + "aaa-server INVENTED protocol tacacs+\naaa-server INVENTED (inside) host 192.0.2.5\n"
+                + "aaa authentication ssh console INVENTED LOCAL")));
         assertEquals(Verdict.PASS, result("cisco_asa", "asa_http_sources_restricted",
                 asa("http server enable\nhttp 192.0.2.0 255.255.255.0 inside\nhttp redirect outside 80")));
         assertEquals(Verdict.NOT_APPLICABLE, result("cisco_asa", "asa_failover_link", asa("no failover")));
