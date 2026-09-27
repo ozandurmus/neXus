@@ -50,6 +50,12 @@ public final class CpFailoverService {
     private void requireAdmin(String actor) {
         if (!allowed(actor, RoleToken.SECURITY_ADMIN)) throw new Refusal("WRONG_ROLE");
     }
+    private void requireReader(String actor) {
+        if (!allowed(actor, RoleToken.OPERATOR) && !allowed(actor, RoleToken.SECURITY_ADMIN)
+                && !allowed(actor, RoleToken.VIEWER))
+            throw new Refusal("WRONG_ROLE");
+    }
+
     private void requireOperator(String actor) {
         if (!allowed(actor, RoleToken.OPERATOR) && !allowed(actor, RoleToken.SECURITY_ADMIN))
             throw new Refusal("WRONG_ROLE");
@@ -60,7 +66,7 @@ public final class CpFailoverService {
         return allowed(actor, RoleToken.OPERATOR) || mayApprove(actor);
     }
     public List<Unit> unitsForRef(String clusterRef, String actor) {
-        requireOperator(actor);
+        requireReader(actor);
         if (clusterRef == null || devices.listAll().stream().noneMatch(d -> d.clusterMemberRef().filter(clusterRef::equals).isPresent()))
             throw new Refusal("CLUSTER_NOT_FOUND");
         return units(opaque(clusterRef), actor);
@@ -68,7 +74,7 @@ public final class CpFailoverService {
 
     /** By a member's opaque device id. */
     public List<Unit> unitsForMember(String memberDeviceId, String actor) {
-        requireOperator(actor);
+        requireReader(actor);
         String ref = memberDeviceId == null ? null : devices.listAll().stream()
             .filter(d -> d.deviceId().equals(memberDeviceId)).findFirst()
             .flatMap(DeviceSummaryRecord::clusterMemberRef).orElse(null);
@@ -77,7 +83,7 @@ public final class CpFailoverService {
     }
 
     public List<Unit> units(String clusterId, String actor) {
-        requireOperator(actor);
+        requireReader(actor);
         List<String> clusters = devices.listAll().stream().map(DeviceSummaryRecord::clusterMemberRef)
             .flatMap(Optional::stream).distinct().filter(ref -> opaque(ref).equals(clusterId)).toList();
         if (clusters.size() != 1) throw new Refusal("CLUSTER_NOT_FOUND");
@@ -185,7 +191,7 @@ public final class CpFailoverService {
         return store.runs(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId());
     }
     public Optional<JooqCpFailoverRepository.Detail> detail(String runId,String actor) {
-        requireOperator(actor);
+        requireReader(actor);
         return store.detail(runId);
     }
     public Optional<String> memberName(String memberId) {

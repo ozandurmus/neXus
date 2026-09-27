@@ -208,8 +208,9 @@ public final class ActionRegistry {
         register(new ActionDescriptor(CP_FAILOVER_APPROVE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(CP_FAILOVER_START, true, Optional.of(RoleToken.OPERATOR),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN)));
+        // Viewers see failover units, windows and runs (read-only); approving and starting stay with their roles.
         register(new ActionDescriptor(CP_FAILOVER_READ, true, Optional.of(RoleToken.OPERATOR),
-                java.util.Set.of(RoleToken.SECURITY_ADMIN)));
+                java.util.Set.of(RoleToken.SECURITY_ADMIN, RoleToken.VIEWER)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without
