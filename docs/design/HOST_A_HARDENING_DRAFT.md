@@ -40,3 +40,16 @@ Measured read-only on 2026-09-27 (HOST-A: Ubuntu 26.04.1 LTS, single-node k3s, n
 4. Maintenance window for package updates and reboots (neXus is down during a reboot).
 5. Order: proposed H1 -> H3 -> H4 -> H2 -> M1..M4 -> L1..L3, one change at a time, each verified and reversible
    (firewall changes applied with an automatic rollback timer so a mistake cannot lock the host out).
+
+## 5. Product Owner decisions (2026-09-27) and progress
+1. TLS: the corporate CA later (the PO can register a host name); until then a neXus local CA, whose root the PO adds
+   to their own trust store. -> **Done 2026-09-27 (H1):** local CA + server certificate in `/etc/nexus/pki` (keys
+   root-only, never in Kubernetes or the repository); Traefik default certificate + permanent HTTP->HTTPS redirect
+   (`deploy/hosta/traefik-config.yaml`); session cookie `Secure`. HSTS deferred until the corporate certificate.
+2. SSH: only the VPN block and the team's virtual-machine block. HTTPS: open to everyone. Every other port closed.
+   (Pending: the exact CIDRs of both blocks.)
+3. NTP: the corporate servers the managed firewalls use. -> **Done 2026-09-27 (M1):** the three most-used servers that
+   answer, taken from the stored firewall configurations on HOST-A (values never left the host), in
+   `/etc/chrony/sources.d/nexus-corporate.sources`; the unreachable Ubuntu NTS pool renamed `.disabled-by-nexus`.
+   Clock synchronized (stratum 2). SIEM: later.
+4. Maintenance window: any time.

@@ -1,0 +1,25 @@
+# HOST-A (local k3s stage) only -- the corporate platform terminates TLS on its own Route. Hardening H1
+# (docs/design/HOST_A_HARDENING_DRAFT.md, PO decisions 2026-09-27): HTTPS with the neXus local CA certificate as
+# Traefik's default certificate (the console is reached by node address, so no SNI name matches), and every plain-HTTP
+# request redirected permanently to HTTPS. Installed as /var/lib/rancher/k3s/server/manifests/traefik-config.yaml;
+# deleting that file reverts Traefik to its defaults. The certificate Secret `nexus-default-tls` (kube-system) is
+# created from /etc/nexus/pki by hand; its key never enters the repository.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ports:
+      web:
+        http:
+          redirections:
+            entryPoint:
+              to: websecure
+              scheme: https
+              permanent: true
+    tlsStore:
+      default:
+        defaultCertificate:
+          secretName: nexus-default-tls

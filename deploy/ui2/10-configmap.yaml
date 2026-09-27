@@ -28,7 +28,8 @@ data:
   # left every login succeeding server-side while the client stayed
   # unauthenticated. Raise this to "true" the moment the ingress serves HTTPS;
   # it is a per-stage value, not a manifest difference (PORT-2).
-  session_cookie_secure: "false"
+  # HOST-A serves HTTPS since 2026-09-27 (hardening H1, deploy/hosta/traefik-config.yaml).
+  session_cookie_secure: "true"
 
   # FIRST-1: the database workload initializes an empty cluster, creates the
   # `ui2` database and the `ui2_migrate` and `ui2_app` roles, and nothing
