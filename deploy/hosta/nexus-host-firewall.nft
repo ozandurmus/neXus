@@ -16,8 +16,10 @@ table inet nexus_host {
     # interface before kube-proxy's dstnat (priority -100). Scan 2026-09-27 found Traefik's NodePorts reachable.
     chain prerouting {
         type filter hook prerouting priority -150; policy accept;
-        iifname "ens160" tcp dport 30000-32767 drop
-        iifname "ens160" udp dport 30000-32767 drop
+        # NEW only: replies to pods' masqueraded outbound connections can carry a destination port in this range
+        # (a stateless drop cut device, proxy and registry downloads at random -- fixed 2026-09-27).
+        iifname "ens160" ct state new tcp dport 30000-32767 drop
+        iifname "ens160" ct state new udp dport 30000-32767 drop
     }
     chain input {
         type filter hook input priority filter - 10; policy drop;
