@@ -1,4 +1,5 @@
-**Status:** DRAFT -- proposal for Product Owner review; not implementation authority.
+**Status:** FROZEN for the 16 controls listed in "Frozen scope (PO decision 2026-09-27, option A)" at the end of this
+document; every other candidate row stays DRAFT and is not implementation authority.
 
 # FortiGate and Cisco ASA best-practice check candidates
 
@@ -100,3 +101,33 @@ These are **not** approvals to run a new command. The read/provenance would need
 Implement the configuration-evaluable candidates for FortiGate and Cisco ASA the same way Check Point and Palo Alto
 controls work today; checks needing runtime reads wait for their command approval. Severity and framework mapping follow
 the closest existing Check Point / Palo Alto control until the PO adjusts them.
+
+## Frozen scope (PO decision 2026-09-27, option A)
+The Product Owner chose option A: freeze the candidates that the stored sanitized configuration can evaluate today,
+with the draft severities as written, and implement them now. This section is implementation authority for exactly
+these 16 control ids; the rest of the document remains DRAFT.
+
+**FortiGate (7):** `fg_admin_no_cleartext`, `fg_remote_logging`, `fg_ntp_configured`, `fg_ssh_v1_disabled`,
+`fg_admin_tls_minimum`, `fg_global_telnet_disabled`, `fg_ha_heartbeat_defined`.
+
+**Cisco ASA (9):** `asa_http_sources_restricted`, `asa_telnet_absent`, `asa_ssh_aaa`, `asa_http_aaa`,
+`asa_logging_enabled`, `asa_remote_syslog`, `asa_log_timestamps`, `asa_ntp_server`, `asa_failover_link`.
+
+Rules that bind the implementation:
+1. PASS / FAIL / UNKNOWN exactly as each row's rule states. A missing line without a proven default, a masked
+   (`[withheld]` or masked-by-keyword) line, a partial collection, or an unproven VDOM/context yields UNKNOWN
+   (displayed as data unavailable), never PASS or FAIL.
+2. Severity: the row's severity. Framework mapping: the closest existing Check Point / Palo Alto control's mapping,
+   named in a code comment; the PO may adjust later without re-freezing.
+3. `asa_http_sources_restricted`: until the PO supplies approved management ranges, "unrestricted" means an
+   explicit any-source rule (`http 0.0.0.0 0.0.0.0 <interface>`, or `::/0`) -> FAIL; HTTPS server proven disabled,
+   or every `http` rule narrower than any-source -> PASS; otherwise UNKNOWN.
+4. HA rows (`fg_ha_heartbeat_defined`, `asa_failover_link`) make no health claim; NOT_APPLICABLE only when the
+   configuration explicitly shows no HA/failover.
+5. No new device command, no new read: evaluation uses only the already-stored configuration projections.
+
+Excluded until their UNKNOWNs are resolved (PO baseline, runtime read, or version proof): `fg_admin_trusted_hosts`,
+`fg_admin_idle_timeout`, `fg_admin_lockout_attempts`, `fg_admin_lockout_duration`, `fg_admin_mfa`,
+`fg_snmp_legacy_community`, `fg_ha_mode_consistent`, `fg_firmware_supported`, `asa_ssh_sources_restricted`,
+`asa_ssh_idle_timeout`, `asa_admin_accounting`, `asa_ssh_v2`, `asa_tls_floor`, `asa_stateful_link`,
+`asa_firmware_supported`.
