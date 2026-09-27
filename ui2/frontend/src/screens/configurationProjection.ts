@@ -403,7 +403,7 @@ export const FORTIGATE_SECTIONS: Readonly<Record<string, string>> = {
 
 /** FortiOS sanitized text, including older runs written before the worker allowlist. */
 const FORTIGATE_INTERFACE_FIELDS = new Set(["vdom", "alias", "description", "type", "mode", "ip", "ip6-address",
-  "allowaccess", "status", "role", "interface", "vlanid", "member", "speed", "mtu-override", "mtu"]);
+  "allowaccess", "status", "role", "interface", "vlanid", "member", "speed"]); // no mtu (PO 2026-09-27)
 
 export function projectFortiGate(text: string): Projection {
   const bySection = new Map<string, SettingRow[]>();

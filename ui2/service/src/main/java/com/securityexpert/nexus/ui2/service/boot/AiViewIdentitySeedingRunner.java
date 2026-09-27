@@ -46,5 +46,18 @@ public class AiViewIdentitySeedingRunner implements ApplicationRunner {
         } else {
             LOG.debug("ui2 aiview identity already exists, skipping seeding");
         }
+        // PO 2026-09-27: a second masked identity for the end-to-end screen tests, so they never supersede the PO's
+        // own aiview session. Its initial password is random and never shown: a security_admin sets it under
+        // Administration > Local identities ("Set password").
+        if (repository.findByName(E2E_NAME).isEmpty()) {
+            char[] password = new char[40];
+            java.security.SecureRandom random = new java.security.SecureRandom();
+            String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+            for (int i = 0; i < password.length; i++) password[i] = alphabet.charAt(random.nextInt(alphabet.length()));
+            seeder.seed(List.of(new FirstBootIdentityRoleBindingSeeder.IdentitySpec(E2E_NAME, password, AIVIEW_ROLE_TOKENS)));
+            LOG.info("ui2 aiview-e2e identity and replay-viewer role bindings seeded (password to be set by an administrator)");
+        }
     }
+
+    static final String E2E_NAME = "aiview-e2e";
 }

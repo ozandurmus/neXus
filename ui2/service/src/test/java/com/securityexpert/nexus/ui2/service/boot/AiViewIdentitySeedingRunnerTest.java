@@ -28,6 +28,7 @@ class AiViewIdentitySeedingRunnerTest {
         FirstBootIdentityRoleBindingSeeder seeder = mock(FirstBootIdentityRoleBindingSeeder.class);
 
         when(repository.findByName(BootstrapCredentialDefaults.AIVIEW_NAME)).thenReturn(Optional.empty());
+        when(repository.findByName(AiViewIdentitySeedingRunner.E2E_NAME)).thenReturn(Optional.of(mock(LocalCredentialRecord.class)));
 
         AiViewIdentitySeedingRunner runner = new AiViewIdentitySeedingRunner(repository, seeder);
         runner.run(null);
@@ -50,10 +51,27 @@ class AiViewIdentitySeedingRunnerTest {
         LocalCredentialRecord existing = mock(LocalCredentialRecord.class);
 
         when(repository.findByName(BootstrapCredentialDefaults.AIVIEW_NAME)).thenReturn(Optional.of(existing));
+        when(repository.findByName(AiViewIdentitySeedingRunner.E2E_NAME)).thenReturn(Optional.of(existing));
 
         AiViewIdentitySeedingRunner runner = new AiViewIdentitySeedingRunner(repository, seeder);
         runner.run(null);
 
         verify(seeder, never()).seed(anyList());
+    }
+
+    @Test
+    void seedsTheE2eIdentityWithReplayViewerAndARandomPassword() {
+        LocalCredentialsRepository repository = mock(LocalCredentialsRepository.class);
+        FirstBootIdentityRoleBindingSeeder seeder = mock(FirstBootIdentityRoleBindingSeeder.class);
+        when(repository.findByName(BootstrapCredentialDefaults.AIVIEW_NAME)).thenReturn(Optional.of(mock(LocalCredentialRecord.class)));
+        when(repository.findByName(AiViewIdentitySeedingRunner.E2E_NAME)).thenReturn(Optional.empty());
+        new AiViewIdentitySeedingRunner(repository, seeder).run(null);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<IdentitySpec>> captor = ArgumentCaptor.forClass(List.class);
+        verify(seeder).seed(captor.capture());
+        IdentitySpec spec = captor.getValue().get(0);
+        assertThat(spec.localIdentityName()).isEqualTo("aiview-e2e");
+        assertThat(spec.roleTokens()).containsExactly(RoleToken.VIEWER, RoleToken.REPLAY_VIEWER);
+        assertThat(spec.rootIdentity()).isFalse();
     }
 }
