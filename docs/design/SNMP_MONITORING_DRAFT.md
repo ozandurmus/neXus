@@ -115,3 +115,19 @@ SNMP polling is a **new network-device read path**, not a free extension of SSH/
 3. Are 7 days raw and 90 days at 5-minute resolution acceptable retention targets?
 4. Is an inbound trap receiver wanted after fleet polling, or should P3 be dropped?
 5. What minimum per-device polling interval may an administrator set?
+
+## 10. Product Owner answers (2026-09-28)
+1. **Versions:** v1, v2c and v3 are all selectable per device (a setting, with the §2 warnings); the PO's own devices
+   use **v3**.
+2. **Pilot (P1):** the enabled devices whose name contains "test" (measured 2026-09-28: 8 devices, Check Point, Palo
+   Alto and one proxy vendor; the list is resolved in neXus, never written here).
+3. **Retention:** **raw samples 90 days** (replaces the 7-day proposal; 5-minute rollups become optional). The
+   **OID set is entered per vendor/device by an administrator** -- neXus does not poll "everything".
+4. **Traps:** not needed now (P3 dropped from the plan until asked).
+5. **Interval:** **60 seconds**.
+
+Sizing for 90 days raw at 60 s (129,600 samples per series; ~120 bytes per row with its index, to be measured):
+150 devices x 15 scalar OIDs = 2,250 series -> ~290 M rows -> **~35 GB**. Interface tables multiply: 20 interfaces x
+3 counters on every device adds 9,000 series -> ~1.2 B rows -> **~140 GB**. HOST-A has ~670 GB free (2026-09-28),
+so both fit; to keep it small, status-type values (e.g. `ifOperStatus`, HA state) are stored on change only, and
+interface counters only for interfaces an administrator selects.
