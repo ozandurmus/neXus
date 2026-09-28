@@ -16,7 +16,13 @@ public interface JobRecordDao {
     }
 
     record DiagnosticJob(String jobId, String targetDeviceId, String port, String state,
-            String statusToken, boolean statusPresent, Integer lineCount, String shapeId, String maskedOutput, String command, String actor, java.time.Instant submittedAt, Integer exitStatus) {
+            String statusToken, boolean statusPresent, Integer lineCount, String shapeId, String maskedOutput, String command, String actor, java.time.Instant submittedAt, Integer exitStatus, String gateId) {
+        public DiagnosticJob(String jobId, String targetDeviceId, String port, String state,
+                String statusToken, boolean statusPresent, Integer lineCount, String shapeId, String maskedOutput,
+                String command, String actor, java.time.Instant submittedAt, Integer exitStatus) {
+            this(jobId,targetDeviceId,port,state,statusToken,statusPresent,lineCount,shapeId,maskedOutput,
+                command,actor,submittedAt,exitStatus,null);
+        }
     }
 
     record DiagnosticOutputRef(String reference, byte[] wrappedKey) {
@@ -28,6 +34,8 @@ public interface JobRecordDao {
     default Optional<BackupTranscriptRef> backupTranscript(String jobId) { return Optional.empty(); }
     default DiagnosticAdmission insertDiagnosticRead(String jobId, String idempotencyKey, String deviceId,
             String command, String actor) { return new DiagnosticAdmission("UNSUPPORTED", null); }
+    default DiagnosticAdmission insertDiagnosticRead(String jobId, String idempotencyKey, String deviceId,
+            String gateId, String command, String actor) { return new DiagnosticAdmission("UNSUPPORTED", null); }
     default java.util.List<DiagnosticJob> diagnosticHistory(String deviceId, int offset) { return java.util.List.of(); }
     default Optional<DiagnosticOutputRef> diagnosticOutput(String jobId, String actor) { return Optional.empty(); }
     default boolean writeDiagnosticOutput(String jobId, String reference, byte[] key, int exitStatus, int lines) { return false; }

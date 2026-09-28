@@ -130,7 +130,8 @@ public final class JooqJobRecordDao implements JobRecordDao {
                 r.get("diagnostic_line_count", Integer.class), r.get("diagnostic_shape_id", String.class),
                 r.get("diagnostic_masked_output", String.class), command != null ? command : "diagnose fmnetwork interface detail " + port,
                 r.get("submitted_by_actor_fingerprint", String.class),
-                r.get("submitted_at", java.time.OffsetDateTime.class).toInstant(), r.get("diagnostic_exit_status", Integer.class));
+                r.get("submitted_at", java.time.OffsetDateTime.class).toInstant(), r.get("diagnostic_exit_status", Integer.class),
+                r.get("diagnostic_gate_id", String.class));
     }
 
     @Override
@@ -179,13 +180,14 @@ public final class JooqJobRecordDao implements JobRecordDao {
     }
 
     @Override
-    public DiagnosticAdmission insertDiagnosticRead(String jobId, String idempotencyKey, String deviceId, String command, String actor) {
+    public DiagnosticAdmission insertDiagnosticRead(String jobId, String idempotencyKey, String deviceId, String gateId, String command, String actor) {
         return auditedTransactionBoundary.inTransaction(actor, "diagnostic_read_submitted", dsl -> {
             if (dsl.fetchOne("select device_id from devices where device_id={0} for update", deviceId) == null)
                 return new DiagnosticAdmission("DEVICE_NOT_FOUND", null);
-            var prior = dsl.fetchOne("select job_id,target_device_id,diagnostic_command,submitted_by_actor_fingerprint from jobs where idempotency_key={0}", idempotencyKey);
+            var prior = dsl.fetchOne("select job_id,target_device_id,diagnostic_gate_id,diagnostic_command,submitted_by_actor_fingerprint from jobs where idempotency_key={0}", idempotencyKey);
             if (prior != null) {
-                boolean same = actor.equals(prior.get("submitted_by_actor_fingerprint", String.class)) && deviceId.equals(prior.get("target_device_id", String.class)) && command.equals(prior.get("diagnostic_command", String.class));
+                boolean same = actor.equals(prior.get("submitted_by_actor_fingerprint", String.class)) && deviceId.equals(prior.get("target_device_id", String.class))
+                    && gateId.equals(prior.get("diagnostic_gate_id", String.class)) && command.equals(prior.get("diagnostic_command", String.class));
                 return new DiagnosticAdmission(same ? "DEDUPLICATED" : "IDEMPOTENCY_CONFLICT", same ? prior.get("job_id", String.class) : null);
             }
             if (Boolean.TRUE.equals(dsl.fetchOne("select exists(select 1 from jobs where target_device_id={0} "
@@ -193,8 +195,8 @@ public final class JooqJobRecordDao implements JobRecordDao {
                 + "and (state in ('REQUESTED','CLAIMED','EXECUTING') or submitted_at > now()-interval '1 minute')) as busy", deviceId).get("busy", Boolean.class)))
                 return new DiagnosticAdmission("RATE_LIMITED_OR_RUNNING", null);
             var inserted = dsl.fetchOne("insert into jobs(job_id,job_type,capability_id,target_device_id,target_kind,submitted_by_actor_fingerprint,"
-                + "submitted_at,idempotency_key,action_class,state,diagnostic_command) values ({0},'diagnostic_read','diagnostic_read',{1},'device',"
-                + "{2},now(),{3},'read','REQUESTED',{4}) on conflict(idempotency_key) do nothing returning job_id", jobId,deviceId,actor,idempotencyKey,command);
+                + "submitted_at,idempotency_key,action_class,state,diagnostic_gate_id,diagnostic_command) values ({0},'diagnostic_read','diagnostic_read',{1},'device',"
+                + "{2},now(),{3},'read','REQUESTED',{4},{5}) on conflict(idempotency_key) do nothing returning job_id", jobId,deviceId,actor,idempotencyKey,gateId,command);
             return inserted == null ? new DiagnosticAdmission("IDEMPOTENCY_CONFLICT", null) : new DiagnosticAdmission("ADMITTED", jobId);
         });
     }

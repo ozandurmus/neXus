@@ -20,6 +20,7 @@ import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
+import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
@@ -91,7 +92,10 @@ class DiagnosticServiceTest {
         when(summary.vendorHint()).thenReturn("fortinet");
         when(summary.role()).thenReturn("management_server");
         when(summary.observedHostname()).thenReturn(Optional.of("synthetic-device-name"));
+        when(summary.observedModel()).thenReturn(Optional.empty());
         when(devices.listAll()).thenReturn(List.of(summary));
+        when(devices.findEndpointByDeviceId("device-1")).thenReturn(Optional.of(
+            new EndpointRecord("endpoint-1","device-1","ssh_exec","192.0.2.10",Instant.now())));
         String projected = service.targets(true).get(0).target();
         assertTrue(projected.startsWith("FW-"));
         assertFalse(projected.contains("synthetic-device-name"));
@@ -99,5 +103,43 @@ class DiagnosticServiceTest {
         when(summary.vendorHint()).thenReturn("cisco");
         when(summary.role()).thenReturn("gateway");
         assertEquals(1, service.targets(false).size());
+    }
+
+    @Test
+    void targetCommandsAndAdmissionFollowDeviceScopeAndRejectUnknownGateBeforeJobCreation() {
+        var devices=mock(DeviceRepository.class);
+        var jobs=mock(JobRecordDao.class);
+        var rows=GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader()
+            .getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
+        var service=new DiagnosticService(devices,mock(DeviceInventoryRepository.class),mock(JobAdmissionService.class),jobs,
+            new TopologyNamePseudonymizer("synthetic-test-key".getBytes()),
+            key -> rows.stream().filter(row -> row.key().equals(key)).toList(),
+            new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(
+                mock(com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore.class)),
+            mock(com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver.class),
+            mock(com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker.class));
+        var device=new DeviceRecord("device-1","gateway","fortinet","manual",Instant.now(),false,
+            DeviceEnrollmentState.ENROLLED,false,"credential-ref");
+        when(devices.find("device-1")).thenReturn(Optional.of(device));
+        when(devices.findEndpointByDeviceId("device-1")).thenReturn(Optional.of(
+            new EndpointRecord("endpoint-1","device-1","ssh_exec","192.0.2.10",Instant.now())));
+        var summary=mock(DeviceSummaryRecord.class);
+        when(summary.deviceId()).thenReturn("device-1");
+        when(summary.vendorHint()).thenReturn("fortinet");
+        when(summary.role()).thenReturn("gateway");
+        when(summary.observedHostname()).thenReturn(Optional.of("synthetic-device-name"));
+        when(summary.observedModel()).thenReturn(Optional.empty());
+        when(devices.listAll()).thenReturn(List.of(summary));
+        when(devices.findSummary("device-1")).thenReturn(Optional.of(summary));
+        var commands=service.targets(true).get(0).commands();
+        assertTrue(commands.stream().anyMatch(c -> "fgt_get_system_status".equals(c.get("gate_id"))));
+        assertFalse(commands.stream().anyMatch(c -> String.valueOf(c.get("gate_id")).startsWith("cp_")));
+        assertFalse(commands.stream().anyMatch(c -> "fgt_context_moves".equals(c.get("gate_id"))));
+        String requestId="00000000-0000-0000-0000-000000000001";
+        assertTrue(service.submitRead("device-1","unknown_gate",null,requestId,"actor")
+            instanceof com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Refused);
+        assertTrue(service.submitRead("device-1","fgt_execute_ha_manage_list","bad;token",requestId,"actor")
+            instanceof com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Refused);
+        verifyNoInteractions(jobs);
     }
 }

@@ -63,11 +63,15 @@ public final class DiagnosticController {
 
     @PostMapping("/api/v2/diagnostics")
     public ResponseEntity<?> run(@RequestBody Map<String, Object> request, HttpServletRequest servletRequest) {
-        if (request.keySet().equals(Set.of("device_id","command","request_id"))
-                && request.get("device_id") instanceof String device && request.get("command") instanceof String command
-                && request.get("request_id") instanceof String requestId) {
+        if (Set.of("device_id","gate_id","parameter","request_id").containsAll(request.keySet())
+                && request.get("device_id") instanceof String deviceId
+                && request.get("gate_id") instanceof String gateId
+                && (!request.containsKey("request_id") || request.get("request_id") instanceof String)
+                && (!request.containsKey("parameter") || request.get("parameter") instanceof String)) {
             String actor=(String)servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
-            return admitted(service.submitRead(device,command,requestId,actor));
+            String requestId = request.containsKey("request_id") ? (String)request.get("request_id")
+                : java.util.UUID.randomUUID().toString();
+            return admitted(service.submitRead(deviceId,gateId,(String)request.get("parameter"),requestId,actor));
         }
         if (!request.keySet().equals(Set.of("device_id", "port", "request_id"))
                 || !(request.get("device_id") instanceof String deviceId)

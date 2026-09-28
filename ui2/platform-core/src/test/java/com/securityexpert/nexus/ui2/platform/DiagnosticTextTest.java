@@ -14,4 +14,12 @@ class DiagnosticTextTest {
         assertFalse(ai.contains("192.0.2.10"));
         assertFalse(ai.contains("synthetic"));
     }
+    @Test void secretBearingLinesAndEncBlobsAreRemovedBeforeStorage() {
+        String safe=DiagnosticText.scrubSecrets("Status: UP\nPSK: synthetic-value\ncommunity synthetic-value\n"
+            + "api_key=synthetic-value\nkey synthetic-value\nset value ENC(synthetic-value)");
+        assertTrue(safe.contains("Status: UP"));
+        assertFalse(safe.contains("synthetic-value"));
+        assertEquals(5,safe.lines().filter(line -> line.equals("[SECRET REDACTED]")).count());
+        assertEquals(262_144,DiagnosticText.MAX_BYTES);
+    }
 }

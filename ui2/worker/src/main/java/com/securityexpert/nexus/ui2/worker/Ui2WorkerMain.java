@@ -305,7 +305,7 @@ public final class Ui2WorkerMain {
                 leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceInventoryRepository,
                 jobRecordDao, fortiManagerExecutor, gateRegistry);
         var genericDiagnosticExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.DiagnosticJobExecutor(
-                leaseRepository, attemptRepository, deviceRepository, jobRecordDao, sshTransport, gateRegistry, artefactStore);
+                leaseRepository, attemptRepository, deviceRepository, jobRecordDao, strictFailoverSsh, gateRegistry, artefactStore);
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         for (int i = 0; i < 10; i++) {

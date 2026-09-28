@@ -50,4 +50,20 @@ class DiagnosticControllerTest {
         assertEquals(400, response.getStatusCode().value());
         verifyNoInteractions(service);
     }
+
+    @Test
+    void acceptsGateIdAndParameterWithoutBrowserCommandText() {
+        var service=mock(DiagnosticService.class);
+        var controller=new DiagnosticController(service,
+            mock(com.securityexpert.nexus.ui2.service.security.RbacEvaluator.class));
+        var request=mock(HttpServletRequest.class);
+        when(request.getAttribute(com.securityexpert.nexus.ui2.service.security.GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE))
+            .thenReturn("synthetic-actor");
+        when(service.submitRead("device-1","fmg_ssh_fmnetwork_interface_detail","port5",
+                "00000000-0000-0000-0000-000000000001","synthetic-actor"))
+            .thenReturn(new com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Admitted("job-1"));
+        var response=controller.run(Map.of("device_id","device-1","gate_id","fmg_ssh_fmnetwork_interface_detail",
+            "parameter","port5","request_id","00000000-0000-0000-0000-000000000001"),request);
+        assertEquals(202,response.getStatusCode().value());
+    }
 }

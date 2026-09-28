@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.nio.charset.StandardCharsets;
 import com.securityexpert.nexus.ui2.jobs.JobState;
 import com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead;
+import com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.stepattempt.JobStepAttemptRepository;
 import com.securityexpert.nexus.ui2.jobs.transport.*;
@@ -32,8 +33,12 @@ public final class DiagnosticJobExecutor {
     public void execute(String jobId, long epoch, String deviceId, String host, int port, String credentialRef) {
         var device=devices.find(deviceId);
         var job=jobs.findDiagnostic(jobId);
-        var read=device.flatMap(d -> job.flatMap(j -> DiagnosticRead.resolve(d.vendorHint(),d.role(),j.command(),gates)));
+        String model=devices.findSummary(deviceId).flatMap(s -> s.observedModel()).orElse(null);
+        var read=device.flatMap(d -> job.flatMap(j -> j.gateId()==null
+            ? DiagnosticRead.resolve(d.vendorHint(),d.role(),model,j.command(),gates)
+            : DiagnosticRead.resolveStored(d.vendorHint(),d.role(),model,j.gateId(),j.command(),gates)));
         if (device.isEmpty() || !device.get().permitsReadCollection() || job.isEmpty()
+                || devices.findEndpointByDeviceId(deviceId).filter(e -> "ssh_exec".equals(e.transportKind())).isEmpty()
                 || !deviceId.equals(job.get().targetDeviceId()) || read.isEmpty() || store==null) {
             leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.REJECTED,"system:worker","diagnostic_claim_check","DIAGNOSTIC_UNAVAILABLE");
             return;
@@ -50,12 +55,16 @@ public final class DiagnosticJobExecutor {
                 finish(jobId,epoch,JobState.FAILED,"CONNECTION_FAILED"); return;
             }
             session=authenticated.session();
-            var result=ssh.execInteractive(session,new ExecSpec(read.get().command(),true),Duration.ofSeconds(read.get().timeoutSeconds()));
+            boolean cpExpert="check_point".equals(device.get().vendorHint())
+                && !CheckPointSparkModelHint.isKnownSparkModel(Optional.ofNullable(model));
+            var spec=new ExecSpec(read.get().command(),true);
+            var result=cpExpert ? ssh.exec(session,spec,Duration.ofSeconds(read.get().timeoutSeconds()))
+                : ssh.execInteractive(session,spec,Duration.ofSeconds(read.get().timeoutSeconds()));
             if (!(result instanceof ExecResult.Completed completed)) { finish(jobId,epoch,JobState.OUTCOME_UNKNOWN,"OUTPUT_UNAVAILABLE"); return; }
             String output=DiagnosticText.scrubSecrets(completed.output());
             byte[] bytes=output.getBytes(StandardCharsets.UTF_8);
             if (bytes.length>DiagnosticText.MAX_BYTES) {
-                output=new String(java.util.Arrays.copyOf(bytes,DiagnosticText.MAX_BYTES),StandardCharsets.UTF_8)+"\n[TRUNCATED]";
+                output=new String(bytes,0,DiagnosticText.MAX_BYTES-32,StandardCharsets.UTF_8)+"\n[TRUNCATED]";
                 bytes=output.getBytes(StandardCharsets.UTF_8);
             }
             try (var handle=store.open(deviceId,jobId,device.get().vendorHint(),false)) {

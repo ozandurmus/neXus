@@ -806,6 +806,8 @@ export interface DiagnosticPreview {
 export interface DiagnosticTarget {
   readonly deviceId: string;
   readonly target: string;
+  readonly vendor: string;
+  readonly commands: ReadonlyArray<{ gate_id: string; command_template: string; timeout_s: number }>;
 }
 
 export function listFmgDiagnosticTargets(): Promise<{ targets: DiagnosticTarget[]; canExecute: boolean }> {
@@ -823,8 +825,9 @@ export interface DiagnosticHistoryRow {
 export function diagnosticHistory(deviceId: string, page: number): Promise<{ runs: DiagnosticHistoryRow[] }> {
   return call(`/api/v2/diagnostics/history?page=${page}${deviceId ? `&device_id=${encodeURIComponent(deviceId)}` : ""}`, "GET");
 }
-export function runDiagnostic(deviceId: string, command: string, requestId: string): Promise<{ job_id: string }> {
-  return call("/api/v2/diagnostics", "POST", { device_id: deviceId, command, request_id: requestId });
+export function runDiagnostic(deviceId: string, gateId: string, parameter: string | undefined, requestId: string): Promise<{ job_id: string }> {
+  return call("/api/v2/diagnostics", "POST", { device_id: deviceId, gate_id: gateId,
+    ...(parameter === undefined ? {} : { parameter }), request_id: requestId });
 }
 
 export interface DiagnosticResult extends DiagnosticHistoryRow {

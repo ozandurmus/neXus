@@ -34,7 +34,8 @@ public final class DiagnosticService {
             int gateRevision, int timeoutSeconds, String retry, String frequency) {
     }
 
-    public record TargetOption(String deviceId, String target) {
+    public record TargetOption(String deviceId, String target, String vendor,
+            List<java.util.Map<String,Object>> commands) {
     }
 
     private final DeviceRepository devices;
@@ -61,18 +62,28 @@ public final class DiagnosticService {
         this.outputStore=store.storeOrNull(); this.identities=identities; this.ipMasker=ipMasker;
     }
 
-    public Optional<com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.Read> read(String deviceId, String command) {
-        return devices.find(deviceId).filter(d -> d.permitsReadCollection()).flatMap(d ->
-            com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.resolve(d.vendorHint(),d.role(),command,gates));
+    private boolean sshTarget(String deviceId) {
+        return devices.find(deviceId).filter(d -> d.permitsReadCollection()).isPresent()
+            && devices.findEndpointByDeviceId(deviceId).filter(e -> "ssh_exec".equals(e.transportKind())).isPresent();
     }
 
-    public AdmissionResult submitRead(String deviceId, String command, String requestId, String actor) {
-        if (actor==null || outputStore==null || read(deviceId,command).isEmpty())
+    public AdmissionResult submitRead(String deviceId, String gateId, String parameter, String requestId, String actor) {
+        if (actor == null || outputStore == null || !sshTarget(deviceId))
             return new AdmissionResult.Refused("DIAGNOSTIC_UNAVAILABLE", "Command or transport is not approved for this device");
+        var device = devices.find(deviceId).orElseThrow();
+        var read = com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.resolve(device.vendorHint(),device.role(),
+            devices.findSummary(deviceId).flatMap(s -> s.observedModel()).orElse(null),gateId,parameter,gates);
+        return submitResolved(deviceId, read, requestId, actor);
+    }
+
+    private AdmissionResult submitResolved(String deviceId,
+            Optional<com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.Read> read, String requestId, String actor) {
+        if (read.isEmpty()) return new AdmissionResult.Refused("DIAGNOSTIC_UNAVAILABLE", "Command unavailable");
         try { UUID.fromString(requestId); } catch (RuntimeException invalid) {
             return new AdmissionResult.Refused("INVALID_REQUEST_ID", "Request ID must be a UUID");
         }
-        var result=jobs.insertDiagnosticRead(UUID.randomUUID().toString(),"diagnostic:"+requestId,deviceId,command,actor);
+        var result=jobs.insertDiagnosticRead(UUID.randomUUID().toString(),"diagnostic:"+requestId,
+            deviceId,read.get().gateId(),read.get().command(),actor);
         return switch(result.kind()) {
             case "ADMITTED" -> new AdmissionResult.Admitted(result.jobId());
             case "DEDUPLICATED" -> new AdmissionResult.Deduplicated(result.jobId());
@@ -91,6 +102,7 @@ public final class DiagnosticService {
         result.put("jobId",job.jobId()); result.put("targetDeviceId",job.targetDeviceId());
         result.put("target",masked ? names.maskDeviceName(target,null) : target);
         result.put("command",job.command()); result.put("state",job.state()); result.put("submittedAt",job.submittedAt());
+        result.put("gateId",job.gateId());
         String actor=identities.resolve(job.actor()).map(r -> r.localIdentityName()).orElse(job.actor());
         result.put("actor",masked ? names.maskSerial(job.actor()) : actor);
         result.put("exitStatus",job.exitStatus());
@@ -181,9 +193,14 @@ public final class DiagnosticService {
 
     public List<TargetOption> targets(boolean masked) {
         return devices.listAll().stream()
+                .filter(d -> sshTarget(d.deviceId()))
                 .map(d -> new TargetOption(d.deviceId(), d.observedHostname()
                         .map(name -> masked ? names.maskDeviceName(name, d.clusterMemberRef().orElse(null)) : name)
-                        .orElse("Unknown"))).toList();
+                        .orElse("Unknown"), d.vendorHint(),
+                        com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.commands(d.vendorHint(),d.role(),
+                            d.observedModel().orElse(null),gates).stream().map(c -> java.util.Map.<String,Object>of(
+                                "gate_id",c.gateId(),"command_template",c.commandTemplate(),"timeout_s",c.timeoutS()))
+                            .toList())).toList();
     }
 
     public AdmissionResult submit(String deviceId, String port, String requestId, String actor) {

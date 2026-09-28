@@ -7,8 +7,8 @@ import java.util.function.Function;
 
 /** Bounded diagnostic output; unknown tokens are never passed through to AIView. */
 public final class DiagnosticText {
-    public static final int MAX_BYTES = 65_536;
-    private static final Pattern SECRET = Pattern.compile("(?i)(password|passwd|secret|token|private.key|community|authorization|api.key)");
+    public static final int MAX_BYTES = 262_144;
+    private static final Pattern SECRET = Pattern.compile("(?i)\\b(password|passwd|secret|token|key|api[_-]?key|community|psk|enc|encrypted|passphrase|authorization|credential)\\b");
     private static final Pattern TOKEN = Pattern.compile("[\\p{L}\\p{N}\\p{M}_./@%+-]+");
     private static final Set<String> SAFE = Set.of("status", "up", "down", "auto", "speed", "duplex", "full", "half",
         "link", "encap", "ethernet", "inet", "inet6", "addr", "address", "mask", "bcast", "hwaddr", "mtu", "metric",

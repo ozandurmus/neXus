@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { getFmgDiagnostic, listFmgDiagnosticTargets, diagnosticHistory, runDiagnostic,
@@ -13,7 +14,8 @@ export function DiagnosticPanel() {
   const [canExecute, setCanExecute] = useState(false);
   const [devices, setDevices] = useState<DiagnosticTarget[]>([]);
   const [deviceId, setDeviceId] = useState("");
-  const [command, setCommand] = useState("");
+  const [gateId, setGateId] = useState("");
+  const [parameter, setParameter] = useState("");
   const [result, setResult] = useState<DiagnosticResult | null>(null);
   const [jobId, setJobId] = useState("");
   const [message, setMessage] = useState("");
@@ -24,6 +26,10 @@ export function DiagnosticPanel() {
   const [refresh, setRefresh] = useState(0);
   const requestId = useRef<string | null>(null);
   const busy = submitting || running;
+  const device = devices.find(d => d.deviceId === deviceId);
+  const selected = device?.commands.find(c => c.gate_id === gateId);
+  const needsParameter = selected?.command_template.includes("<") ?? false;
+  const validParameter = !needsParameter || /^[A-Za-z0-9_.-]{1,31}$/.test(parameter);
 
   useEffect(() => {
     listFmgDiagnosticTargets().then(r => {
@@ -55,16 +61,16 @@ export function DiagnosticPanel() {
   }, [jobId]);
 
   async function run() {
-    if (!canExecute || !deviceId || !command.trim() || busy) return;
+    if (!canExecute || !deviceId || !selected || !validParameter || busy) return;
     setSubmitting(true); setMessage("");
     requestId.current ??= crypto.randomUUID();
     try {
-      const admitted = await runDiagnostic(deviceId, command, requestId.current);
+      const admitted = await runDiagnostic(deviceId, gateId, needsParameter ? parameter : undefined, requestId.current);
       setResult(null); setRunning(true); setJobId(admitted.job_id); requestId.current = null;
       setRefresh(v => v + 1);
     } catch (error) {
       const code = (error as ApiError).body?.code;
-      setMessage(code === "DIAGNOSTIC_UNAVAILABLE" ? "This command is not approved or its transport is not supported for this device."
+      setMessage(code === "DIAGNOSTIC_UNAVAILABLE" ? "This read is unavailable for this device."
         : code === "RATE_LIMITED_OR_RUNNING" ? "A command is running or was submitted within the last minute."
         : "Request refused or not confirmed. Retry uses the same request ID.");
     } finally { setSubmitting(false); }
@@ -75,13 +81,20 @@ export function DiagnosticPanel() {
     <Typography variant="h6">Debug / Parser</Typography>
     {allowed === false ? <Typography role="status">Super administrator role required.</Typography> : allowed ? <>
       <TextField select SelectProps={{ native: true }} label="Device" value={deviceId} disabled={busy}
-        onChange={e => { setDeviceId(e.target.value); setPage(0); requestId.current = null; }}>
+        onChange={e => { setDeviceId(e.target.value); setGateId(""); setParameter(""); setPage(0); requestId.current = null; }}>
         <option value="">Select a device</option>
         {devices.map(d => <option key={d.deviceId} value={d.deviceId}>{d.target}</option>)}
       </TextField>
-      <TextField label="Command" value={command} disabled={!deviceId || busy} inputProps={{ maxLength: 512 }}
-        onChange={e => { setCommand(e.target.value); requestId.current = null; }} placeholder="Enter a diagnostic read command" />
-      <Button variant="contained" onClick={run} disabled={!canExecute || !deviceId || !command.trim() || busy}>Run read</Button>
+      {device && <Chip label={device.vendor} size="small" sx={{ justifySelf: "start" }} />}
+      <TextField select SelectProps={{ native: true }} label="Command" value={gateId} disabled={!deviceId || busy}
+        onChange={e => { setGateId(e.target.value); setParameter(""); requestId.current = null; }}>
+        <option value="">Select a read command</option>
+        {device?.commands.map(c => <option key={c.gate_id} value={c.gate_id}>{c.command_template}</option>)}
+      </TextField>
+      {needsParameter && <TextField label="Parameter" value={parameter} disabled={busy} inputProps={{ maxLength: 31 }}
+        onChange={e => { setParameter(e.target.value); requestId.current = null; }}
+        error={parameter.length > 0 && !validParameter} helperText="One token: letters, digits, underscore, period or hyphen" />}
+      <Button variant="contained" onClick={run} disabled={!canExecute || !selected || !validParameter || busy}>Run read</Button>
       {!canExecute && <Typography variant="body2">This session can inspect history and masked output.</Typography>}
     </> : null}
     {message && <Typography role="alert">{message}</Typography>}
