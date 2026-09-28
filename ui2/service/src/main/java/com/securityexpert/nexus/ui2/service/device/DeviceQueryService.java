@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
@@ -52,5 +53,11 @@ public final class DeviceQueryService {
     /** {@code GET /devices}: every device, newest first. */
     public List<DeviceSummaryRecord> listDevices() {
         return deviceRepository.listAll();
+    }
+
+    public static boolean backupReceiverSupported(String vendor, String role, Optional<String> observedModel) {
+        return ("radware".equals(vendor) && "management_server".equals(role))
+                || ("check_point".equals(vendor) && "gateway".equals(role)
+                        && CheckPointSparkModelHint.isKnownSparkModel(observedModel));
     }
 }

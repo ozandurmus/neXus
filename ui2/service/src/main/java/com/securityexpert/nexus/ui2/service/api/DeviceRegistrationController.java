@@ -305,6 +305,8 @@ public final class DeviceRegistrationController {
         body.put("device_id", device.deviceId());
         body.put("role", device.role());
         body.put("vendor_hint", device.vendorHint());
+        body.put("backup_receiver_supported", DeviceQueryService.backupReceiverSupported(
+                device.vendorHint(), device.role(), facts.observedModel()));
         body.put("enrollment_state", device.enrollmentState().name());
         body.put("disabled", device.disabled());
         body.put("facts", toFactsBody(facts));
@@ -360,6 +362,8 @@ public final class DeviceRegistrationController {
         body.put("device_id", summary.deviceId());
         body.put("role", summary.role());
         body.put("vendor_hint", summary.vendorHint());
+        body.put("backup_receiver_supported", DeviceQueryService.backupReceiverSupported(
+                summary.vendorHint(), summary.role(), summary.observedModel()));
         body.put("backup_target", summary.backupTarget());
         body.put("enrollment_state", summary.enrollmentState().name());
         body.put("hostname", summary.observedHostname().orElse(null));

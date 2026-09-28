@@ -29,6 +29,8 @@ PO direction 2026-09-28: "7 go almamız lazım" (Quantum Spark backup: bring it 
 - `show configuration` / `load configuration` are not in the Spark CLI guide: UNKNOWN on Spark.
 
 ## 3. Proposed method: device pushes over SFTP to HOST-A's receiver
+Amendment (PO 2026-09-28): Spark shares the existing `nexus-cc` account and inbox with the Cyber Controller. Its four source addresses are in the `nexus-cc` sshd Match rule and `sftp_push_allowed`. A Spark-side leak of the inline receiver password gives upload access to this shared inbox; the Product Owner accepts this risk.
+
 Same model as the Radware Cyber Controller (OS-3a): a chrooted, SFTP-only receiver account on HOST-A
 (`nexus-spark`, `internal-sftp`, one upload directory, only the Spark management addresses allowed by the sshd Match
 rule and the `sftp_push_allowed` nftables set). The worker, in the device's clish session:

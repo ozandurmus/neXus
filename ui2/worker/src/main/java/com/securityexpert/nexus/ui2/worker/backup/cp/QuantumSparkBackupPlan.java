@@ -2,11 +2,13 @@ package com.securityexpert.nexus.ui2.worker.backup.cp;
 
 import java.util.List;
 
+import com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupExecutor;
+
 /** The two approved Gaia Embedded clish forms for a push backup. */
 public final class QuantumSparkBackupPlan {
     public static final String LOG = "show backup-settings-log";
     public static final String PUSH = "backup settings to sftp server %s filename %s file-encryption on password %s "
-            + "backup-policy on username nexus-spark password %s";
+            + "backup-policy on username " + CyberControllerBackupExecutor.RECEIVER_USER + " password %s";
     public static final List<String> LITERALS = List.of(LOG, PUSH);
 
     private QuantumSparkBackupPlan() {

@@ -47,7 +47,8 @@ class QuantumSparkBackupExecutorTest {
 
     @Test
     void uploadIsBundledAndBothInlineSecretsAreAbsentFromTranscript() throws Exception {
-        Path inbox = Files.createDirectory(temp.resolve("in"));
+        Path inbox = Files.createDirectory(temp.resolve("cc-inbox"));
+        Path otherUpload = Files.writeString(inbox.resolve("other-run.tgz"), "unrelated upload");
         ArtefactStore store = store();
         FakeTransport transport = new FakeTransport(inbox, true);
         QuantumSparkBackupExecutor executor = new QuantumSparkBackupExecutor(transport, store, inbox, "192.0.2.20",
@@ -60,7 +61,8 @@ class QuantumSparkBackupExecutorTest {
         assertTrue(result instanceof BackupResult.Completed, String.valueOf(result));
         assertEquals(2, transport.logReads);
         assertEquals(1, transport.pushes);
-        try (var files = Files.list(inbox)) { assertEquals(0, files.count()); }
+        assertEquals("unrelated upload", Files.readString(otherUpload));
+        try (var files = Files.list(inbox)) { assertEquals(1, files.count()); }
         ByteArrayOutputStream transcriptBytes = new ByteArrayOutputStream();
         transcript.writeTo(transcriptBytes);
         String text = transcriptBytes.toString(StandardCharsets.UTF_8);
@@ -126,6 +128,9 @@ class QuantumSparkBackupExecutorTest {
             Matcher password = Pattern.compile("file-encryption on password ([A-Za-z0-9]{24}) ").matcher(command);
             assertTrue(filename.find());
             assertTrue(password.find());
+            assertTrue(command.contains("username "
+                    + com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupExecutor.RECEIVER_USER
+                    + " password " + RECEIVER_SECRET));
             encryptionPassword = password.group(1);
             if (upload) {
                 byte[] zip = new byte[2048];

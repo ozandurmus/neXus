@@ -439,7 +439,7 @@ public class DeviceCompositionConfiguration {
                 Optional.empty(), Optional.empty(), Optional.empty());
         String read = "show backup-settings-log";
         String push = "backup settings to sftp server %s filename %s file-encryption on password %s "
-                + "backup-policy on username nexus-spark password %s";
+                + "backup-policy on username nexus-cc password %s";
         List<CapabilityStep> steps = List.of(connect,
                 new CapabilityStep(StepKind.EXEC, "clish", read, false, Optional.empty(), Optional.empty(), Optional.empty()),
                 new CapabilityStep(StepKind.EXEC, "clish", push, false, Optional.empty(), Optional.empty(), Optional.empty()),

@@ -192,4 +192,13 @@ class DeviceQueryServiceTest {
 
         assertEquals(List.of(summary), result);
     }
+
+    @Test
+    void backupReceiverSupportFollowsObservedSparkModelOrCyberControllerRole() {
+        assertTrue(DeviceQueryService.backupReceiverSupported("radware", "management_server", Optional.empty()));
+        assertTrue(DeviceQueryService.backupReceiverSupported("check_point", "gateway", Optional.of("Quantum Spark 1590")));
+        assertEquals(false, DeviceQueryService.backupReceiverSupported("check_point", "gateway", Optional.empty()));
+        assertEquals(false, DeviceQueryService.backupReceiverSupported("check_point", "management_server", Optional.of("1590")));
+        assertEquals(false, DeviceQueryService.backupReceiverSupported("radware", "appliance", Optional.of("1590")));
+    }
 }

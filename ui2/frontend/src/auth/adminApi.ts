@@ -525,6 +525,7 @@ export interface DeviceSummary {
   readonly device_id: string;
   readonly role?: string;
   readonly vendor_hint: string;
+  readonly backup_receiver_supported?: boolean;
   readonly enrollment_state: string;
   readonly hostname: string | null;
   readonly model: string | null;

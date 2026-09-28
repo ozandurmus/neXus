@@ -34,3 +34,21 @@ it("replaces a draft Radware device's login credential and checks it again (PO, 
   expect(calls).toContain("PUT /devices/d1/credential");
   expect(calls).toContain("POST /devices/d1/confirm");
 });
+
+it("links the backup receiver credential when the server supports it", async () => {
+  const calls: string[] = [];
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    calls.push(`${init?.method ?? "GET"} ${url}`);
+    if (url === "/credentials") return Promise.resolve(json({ credentials: [
+      { credential_id: "c1", credential_reference_id: "receiver-ref", display_name: "SFTP Receiver", kind: "api_password" },
+    ] }));
+    return Promise.resolve(json({ ok: true }));
+  }));
+  const device = { device_id: "d2", vendor_hint: "check_point", enrollment_state: "ENROLLED",
+    hostname: "FW-TANGO-04", backup_receiver_supported: true } as DeviceSummary;
+  render(<ChangeCredentialsDialog device={device} onClose={() => {}} onChanged={() => {}} />);
+  fireEvent.mouseDown(screen.getByLabelText("Backup receiver credential"));
+  fireEvent.click(within(await screen.findByRole("listbox")).getByText("SFTP Receiver"));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(calls).toContain("POST /devices/d2/secrets/backup_receiver"));
+});

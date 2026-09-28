@@ -66,7 +66,7 @@ class JobTranscriptTest {
 
     @Test void sparkInlinePasswordsAreAbsentFromCommandAndAnswer() {
         String command = "backup settings to sftp server 192.0.2.20 filename abcdef0123456789 "
-                + "file-encryption on password SyntheticZipSecret123456 backup-policy on username nexus-spark "
+                + "file-encryption on password SyntheticZipSecret123456 backup-policy on username nexus-cc "
                 + "password SyntheticReceiverSecret42";
         String safe = JobTranscript.safeSshCommand(command);
         String answer = JobTranscript.safeSshAnswer(command, "echo SyntheticZipSecret123456 SyntheticReceiverSecret42");

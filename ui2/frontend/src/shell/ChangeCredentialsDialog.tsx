@@ -16,7 +16,7 @@ import { m3 } from "../theme/m3Theme";
 
 /**
  * Change a device's credentials after it was added (PO, 2026-09-24: "user değiştirme imkanım olmalı"): the login
- * credential, and for Radware the export passphrase. References only, never values. A device still waiting for its
+ * credential, and optional backup credentials. References only, never values. A device still waiting for its
  * first confirm is checked again with the new credential.
  */
 export function ChangeCredentialsDialog({ device, onClose, onChanged }: {
@@ -35,7 +35,6 @@ export function ChangeCredentialsDialog({ device, onClose, onChanged }: {
   // A Radware appliance is a DefensePro (export passphrase); a Radware management server is a Cyber Controller (its
   // own backup is pushed to HOST-A's SFTP receiver, whose credential is set here -- V69).
   const isRadware = device.vendor_hint === "radware" && device.role !== "management_server";
-  const isCyberController = device.vendor_hint === "radware" && device.role === "management_server";
   const [receiver, setReceiver] = useState("");
   const isDraft = device.enrollment_state === "DRAFT";
   // Only Check Point is reached with an SSH key; every other vendor takes a username and password.
@@ -47,7 +46,7 @@ export function ChangeCredentialsDialog({ device, onClose, onChanged }: {
     try {
       if (login) await setDeviceCredential(device.device_id, login);
       if (isRadware && passphrase) await setDeviceSecret(device.device_id, "export_passphrase", passphrase);
-      if (isCyberController && receiver) await setDeviceSecret(device.device_id, "backup_receiver", receiver);
+      if (device.backup_receiver_supported && receiver) await setDeviceSecret(device.device_id, "backup_receiver", receiver);
       if (login && isDraft) await retryDeviceConfirm(device.device_id);
       onChanged();
       onClose();
@@ -74,10 +73,10 @@ export function ChangeCredentialsDialog({ device, onClose, onChanged }: {
               {eligible.map((c) => <MenuItem key={c.credential_id} value={c.credential_reference_id}>{c.display_name}</MenuItem>)}
             </TextField>
           )}
-          {isCyberController && (
+          {device.backup_receiver_supported && (
             <TextField label="Backup receiver credential" select size="small" fullWidth value={receiver}
               onChange={(e) => setReceiver(e.target.value)}
-              helperText="The HOST-A SFTP account the Cyber Controller pushes its own backup to. Leave empty to keep the current one.">
+              helperText="The SFTP receiver credential for device backups. Leave empty to keep the current one.">
               {eligible.map((c) => <MenuItem key={c.credential_id} value={c.credential_reference_id}>{c.display_name}</MenuItem>)}
             </TextField>
           )}

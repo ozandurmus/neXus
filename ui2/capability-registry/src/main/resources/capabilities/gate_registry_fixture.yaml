@@ -2737,7 +2737,7 @@ gates:
     platform_role_scope: gaia_embedded
     shell_context: clish
     transport_kind: SSH_EXEC
-    canonical_command_key: "backup settings to sftp server %s filename %s file-encryption on password %s backup-policy on username nexus-spark password %s"
+    canonical_command_key: "backup settings to sftp server %s filename %s file-encryption on password %s backup-policy on username nexus-cc password %s"
     action_class: read
     sign_off_state: SIGNED_OFF
     timeout_s: 180
