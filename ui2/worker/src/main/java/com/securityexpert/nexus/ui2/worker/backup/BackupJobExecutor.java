@@ -84,6 +84,13 @@ public final class BackupJobExecutor {
     }
 
     private com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupExecutor cyberControllerBackupExecutor;
+    private com.securityexpert.nexus.ui2.worker.backup.cp.QuantumSparkBackupExecutor quantumSparkBackupExecutor;
+
+    public BackupJobExecutor withQuantumSparkBackupExecutor(
+            com.securityexpert.nexus.ui2.worker.backup.cp.QuantumSparkBackupExecutor executor) {
+        this.quantumSparkBackupExecutor = executor;
+        return this;
+    }
 
     /** V69: a Radware Cyber Controller's own configuration backup; unset, such a job fails closed. */
     public BackupJobExecutor withCyberControllerBackupExecutor(com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupExecutor executor) {
@@ -205,7 +212,8 @@ public final class BackupJobExecutor {
         }
 
         String attemptId = attemptRepository.insertPreContact(jobId, leaseEpoch, 0, "BACKUP_COLLECT",
-                ActionClass.CLASS_1_RECOVERY_WRITE.id(), 1);
+                com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_SPARK_SFTP_BACKUP.equals(capabilityId)
+                        ? ActionClass.CLASS_0_READ.id() : ActionClass.CLASS_1_RECOVERY_WRITE.id(), 1);
         if (attemptId == null) {
             return new JobOutcome.ZombieStopped();
         }
@@ -247,7 +255,9 @@ public final class BackupJobExecutor {
                 }
             }
         }
-        if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.RDW_CC_CONFIG_BACKUP.equals(capabilityId)) {
+        if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_SPARK_SFTP_BACKUP.equals(capabilityId)) {
+            result = sparkBackup(request, targetDeviceId, jobId);
+        } else if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.RDW_CC_CONFIG_BACKUP.equals(capabilityId)) {
             result = cyberControllerBackupExecutor == null
                     ? new BackupResult.ConnectFailed("cyber controller backup executor not configured in this worker")
                     : cyberControllerBackupExecutor.collect(request, deviceSecrets.find(targetDeviceId,
@@ -290,6 +300,10 @@ public final class BackupJobExecutor {
             result = snapshotExecutor.collectSnapshot(request, targetDeviceId, jobId);
         } else {
             result = backupExecutor.collect(request, targetDeviceId, jobId);
+            if (result instanceof BackupResult.SubmitRefused refused
+                    && BackupCapabilityExecutor.SPARK_DETECTED.equals(refused.reason())) {
+                result = sparkBackup(request, targetDeviceId, jobId);
+            }
         }
 
         String outcomeToken = result instanceof BackupResult.Completed ? "MATCHED" : "EXPECTATION_UNMET";
@@ -327,6 +341,14 @@ public final class BackupJobExecutor {
 
         leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, ACTION_FAILED, describeFailure(result));
         return new JobOutcome.Failed(describeFailure(result));
+    }
+
+    private BackupResult sparkBackup(BackupRequest request, String deviceId, String jobId) {
+        return quantumSparkBackupExecutor == null
+                ? new BackupResult.SubmitRefused("Spark backup executor is not configured")
+                : quantumSparkBackupExecutor.collect(request, deviceSecrets.find(deviceId,
+                        com.securityexpert.nexus.ui2.persistence.device.DeviceSecretReferenceRepository.BACKUP_RECEIVER),
+                        deviceId, jobId);
     }
 
     private JobOutcome handleCompleted(String jobId, long leaseEpoch, String deviceId, BackupResult.Completed completed,

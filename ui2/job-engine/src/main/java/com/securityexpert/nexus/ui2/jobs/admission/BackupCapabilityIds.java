@@ -13,6 +13,7 @@ import java.util.Set;
 public final class BackupCapabilityIds {
 
     public static final String CP_GAIA_BACKUP_LOCAL = "cp_gateway_backup";
+    public static final String CP_SPARK_SFTP_BACKUP = "cp_spark_sftp_backup";
     public static final String CP_GAIA_SNAPSHOT = "cp_gaia_snapshot";
     public static final String PAN_DEVICE_STATE_BACKUP = "pan_device_state_backup";
     /** The CLI half of the PAN bundle (V43); registered for gate alignment, run inside PAN_DEVICE_STATE_BACKUP, never submitted alone (hence not in ALL). */
@@ -28,7 +29,7 @@ public final class BackupCapabilityIds {
     public static final String ASA_CONFIG_BACKUP = "asa_config_backup";
     /** FortiGate configuration ("show" at the top level, every VDOM) over SSH (V80, FORTINET_CONTRACT.md). */
     public static final String FGT_CONFIG_BACKUP = "fgt_config_backup";
-    public static final Set<String> ALL = Set.of(CP_GAIA_BACKUP_LOCAL, CP_GAIA_SNAPSHOT, PAN_DEVICE_STATE_BACKUP, CP_MDS_EXPORT,
+    public static final Set<String> ALL = Set.of(CP_GAIA_BACKUP_LOCAL, CP_SPARK_SFTP_BACKUP, CP_GAIA_SNAPSHOT, PAN_DEVICE_STATE_BACKUP, CP_MDS_EXPORT,
             HTTPS_VENDOR_BACKUP, RDW_CC_CONFIG_BACKUP, ASA_CONFIG_BACKUP, FGT_CONFIG_BACKUP);
 
     private BackupCapabilityIds() {

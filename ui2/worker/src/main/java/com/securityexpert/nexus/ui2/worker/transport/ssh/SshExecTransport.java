@@ -316,7 +316,10 @@ public final class SshExecTransport implements DeviceTransport {
     @Override
     public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
         ExecResult result = execInteractiveRaw(session, spec, timeout);
-        recordAnswer(result);
+        if (result instanceof ExecResult.Completed completed)
+            JobTranscriptScope.add("ssh", "answer", com.securityexpert.nexus.ui2.worker.transcript.JobTranscript
+                    .safeSshAnswer(spec.command(), completed.output()));
+        else recordAnswer(result);
         return result;
     }
 
@@ -330,23 +333,24 @@ public final class SshExecTransport implements DeviceTransport {
             InteractiveShellSession.Result result = shell.runForResult(spec.command(), (int) timeout.toMillis());
             String output = result.text();
             if (result.kind() != InteractiveShellSession.Result.Kind.OUTPUT && output != null && !output.isEmpty())
-                JobTranscriptScope.add("ssh", "answer", output);
+                JobTranscriptScope.add("ssh", "answer", com.securityexpert.nexus.ui2.worker.transcript.JobTranscript
+                        .safeSshAnswer(spec.command(), output));
             long elapsedMs = System.currentTimeMillis() - startMs;
             switch (result.kind()) {
                 case TIMED_OUT -> {
                     LOG.log(System.Logger.Level.WARNING, "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" TIMED OUT after {1}ms",
-                            spec.command(), elapsedMs);
+                            com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(spec.command()), elapsedMs);
                     return new ExecResult.TimedOut();
                 }
                 case EMPTY -> {
                     // prompt came back with no text: a completed setting, not a timeout
                     LOG.log(System.Logger.Level.INFO, "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" completed with no output in {1}ms",
-                            spec.command(), elapsedMs);
+                            com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(spec.command()), elapsedMs);
                     return new ExecResult.ChannelFailed("empty output");
                 }
                 case CLI_ERROR -> {
                     LOG.log(System.Logger.Level.WARNING, "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" answered a CLI error after {1}ms",
-                            spec.command(), elapsedMs);
+                            com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(spec.command()), elapsedMs);
                     return new ExecResult.ChannelFailed("cli error");
                 }
                 case NOT_SENT -> {
@@ -358,13 +362,14 @@ public final class SshExecTransport implements DeviceTransport {
             }
             LOG.log(System.Logger.Level.INFO,
                     "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" completed in {1}ms (length={2})",
-                    spec.command(), elapsedMs, output.length());
+                    com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(spec.command()), elapsedMs, output.length());
             return new ExecResult.Completed(output, 0);
         } catch (JSchException | IOException e) {
             long elapsedMs = System.currentTimeMillis() - startMs;
             LOG.log(System.Logger.Level.WARNING,
                     "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" failed after {1}ms: {2}",
-                    spec.command(), elapsedMs, e.getMessage());
+                    com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(spec.command()), elapsedMs,
+                    e.getClass().getSimpleName());
             sshSession.closeInteractiveShell();
             return new ExecResult.ChannelFailed(String.valueOf(e.getMessage()));
         }

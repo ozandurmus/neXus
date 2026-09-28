@@ -50,6 +50,19 @@ public final class BackupCapabilities {
         return new CapabilityRegistryLoader(gateRegistry).load(spec);
     }
 
+    public static Capability checkPointSpark(GateRegistryPort gateRegistry) {
+        List<CapabilityStep> steps = List.of(connectStep(),
+                new CapabilityStep(StepKind.EXEC, "clish", com.securityexpert.nexus.ui2.worker.backup.cp.QuantumSparkBackupPlan.LOG,
+                        false, Optional.empty(), Optional.empty(), Optional.empty()),
+                new CapabilityStep(StepKind.EXEC, "clish", com.securityexpert.nexus.ui2.worker.backup.cp.QuantumSparkBackupPlan.PUSH,
+                        false, Optional.empty(), Optional.empty(), Optional.empty()),
+                new CapabilityStep(StepKind.EXEC, "clish", com.securityexpert.nexus.ui2.worker.backup.cp.QuantumSparkBackupPlan.LOG,
+                        false, Optional.empty(), Optional.empty(), Optional.empty()));
+        return new CapabilityRegistryLoader(gateRegistry).load(new CapabilitySpec(BackupCapabilityIds.CP_SPARK_SFTP_BACKUP,
+                "check_point", "gaia_embedded", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, steps,
+                List.of(disconnectStep()), "Quantum Spark backup", List.of(), false));
+    }
+
     /** The two XML API reads {@code worker.backup.pan.PaloAltoBackupExecutor} issues, gated as
      * pan_backup_config_show / pan_backup_export_device_state (V40). Until this existed the capability
      * id was known to admission but never registered, so every PAN backup was refused as unknown. */
@@ -111,7 +124,7 @@ public final class BackupCapabilities {
     }
 
     public static List<Capability> all(GateRegistryPort gateRegistry) {
-        return List.of(checkPoint(gateRegistry), paloAlto(gateRegistry), paloAltoSetConfig(gateRegistry),
+        return List.of(checkPoint(gateRegistry), checkPointSpark(gateRegistry), paloAlto(gateRegistry), paloAltoSetConfig(gateRegistry),
                 checkPointMdsExport(gateRegistry), radwareCyberControllerBackup(gateRegistry));
     }
 

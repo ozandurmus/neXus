@@ -47,6 +47,20 @@ class BackupCollectServiceTest {
 
     private static final class StubDeviceRepository implements DeviceRepository {
         private final Map<String, DeviceRecord> devices = new HashMap<>();
+        private String model;
+
+        StubDeviceRepository withModel(String model) {
+            this.model = model;
+            return this;
+        }
+
+        @Override
+        public Optional<DeviceSummaryRecord> findSummary(String deviceId) {
+            DeviceRecord d = devices.get(deviceId);
+            return d == null ? Optional.empty() : Optional.of(new DeviceSummaryRecord(deviceId, d.role(), d.vendorHint(),
+                    d.enrollmentState(), Optional.empty(), Optional.ofNullable(model), Optional.empty(),
+                    Optional.empty(), Optional.empty()));
+        }
 
         StubDeviceRepository put(String deviceId, String vendorHint) {
             devices.put(deviceId, new DeviceRecord(deviceId, "gateway", vendorHint, "manual", Instant.now(), false,
@@ -129,10 +143,12 @@ class BackupCollectServiceTest {
 
     private static final class InMemoryAdmissionRepository implements JobAdmissionRepository {
         private final Map<String, String> jobsByIdempotencyKey = new HashMap<>();
+        private String lastCapabilityId;
 
         @Override
         public Optional<String> createRequestedIfAbsent(String jobId, String idempotencyKey, String capabilityId,
                 String targetDeviceId, String actionClassId, String actorFingerprint, String actionId) {
+            lastCapabilityId = capabilityId;
             if (jobsByIdempotencyKey.containsKey(idempotencyKey)) {
                 return Optional.empty();
             }
@@ -154,6 +170,10 @@ class BackupCollectServiceTest {
     }
 
     private static JobAdmissionService admissionService() {
+        return admissionService(new InMemoryAdmissionRepository());
+    }
+
+    private static JobAdmissionService admissionService(InMemoryAdmissionRepository repository) {
         DeviceEnrollmentReadPort enrolledEverywhere = deviceId ->
                 Optional.of(new DeviceEnrollmentSnapshot(deviceId, DeviceEnrollmentState.ENROLLED, false));
         Capability alwaysEligible = new Capability(BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, "check_point",
@@ -162,11 +182,32 @@ class BackupCollectServiceTest {
         Capability cpSnapshot = new Capability(BackupCapabilityIds.CP_GAIA_SNAPSHOT, "check_point",
                 "cp_gaia_gateway", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, List.of(), List.of(), Map.of(),
                 true);
+        Capability spark = new Capability(BackupCapabilityIds.CP_SPARK_SFTP_BACKUP, "check_point",
+                "gaia_embedded", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, List.of(), List.of(), Map.of(), true);
         Capability panBackup = new Capability(BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, "palo_alto",
                 "pan_os_firewall", TransportKind.PAN_XML_API, MaturityState.CAP_VALIDATED, List.of(), List.of(), Map.of(),
                 true);
-        return new JobAdmissionService(CapabilityRegistry.of(List.of(alwaysEligible, cpSnapshot, panBackup)), enrolledEverywhere,
-                new InMemoryAdmissionRepository());
+        return new JobAdmissionService(CapabilityRegistry.of(List.of(alwaysEligible, spark, cpSnapshot, panBackup)), enrolledEverywhere,
+                repository);
+    }
+
+    @Test
+    void knownSparkModelRoutesToSparkAndOrdinaryGatewayStaysOnGaia() {
+        InMemoryAdmissionRepository jobs = new InMemoryAdmissionRepository();
+        BackupCollectService spark = new BackupCollectService(
+                new StubDeviceRepository().put(PILOT_DEVICE, "check_point").withModel("Quantum Spark 1590"),
+                admissionService(jobs), Set.of(PILOT_DEVICE), true);
+        assertTrue(spark.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty())
+                instanceof BackupCollectService.Outcome.Admitted);
+        assertEquals(BackupCapabilityIds.CP_SPARK_SFTP_BACKUP, jobs.lastCapabilityId);
+
+        jobs = new InMemoryAdmissionRepository();
+        BackupCollectService gaia = new BackupCollectService(
+                new StubDeviceRepository().put(PILOT_DEVICE, "check_point").withModel("Gaia gateway"),
+                admissionService(jobs), Set.of(PILOT_DEVICE), true);
+        assertTrue(gaia.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty())
+                instanceof BackupCollectService.Outcome.Admitted);
+        assertEquals(BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, jobs.lastCapabilityId);
     }
 
     /** Product Owner, 2026-09-22: a device switched on under Backups > Backup targets is admitted

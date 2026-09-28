@@ -2714,3 +2714,37 @@ gates:
     secret_output_risk: none
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+
+  - gate_id: cp_spark_backup_log
+    vendor: check_point
+    platform_role_scope: gaia_embedded
+    shell_context: clish
+    transport_kind: SSH_EXEC
+    canonical_command_key: "show backup-settings-log"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: "up to 2"
+    max_frequency: "before and after each backup run"
+    session_reuse_rule: "one clish session"
+    unsupported_behavior_ref: "unrecognised output -> shape only, no inferred outcome"
+    secret_output_risk: "server or user may appear; shape only"
+    safe_telemetry_fields: []
+    source_document_pointer: "QUANTUM_SPARK_BACKUP_DRAFT.md #3 and #5; PO go 2026-09-28"
+
+  - gate_id: cp_spark_backup_push
+    vendor: check_point
+    platform_role_scope: gaia_embedded
+    shell_context: clish
+    transport_kind: SSH_EXEC
+    canonical_command_key: "backup settings to sftp server %s filename %s file-encryption on password %s backup-policy on username nexus-spark password %s"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 180
+    retry_rule: none
+    max_frequency: "once per backup run"
+    session_reuse_rule: "one clish session"
+    unsupported_behavior_ref: "no valid uploaded ZIP within 180 seconds -> refused"
+    secret_output_risk: "two inline passwords; transcript and logs redacted"
+    safe_telemetry_fields: []
+    source_document_pointer: "QUANTUM_SPARK_BACKUP_DRAFT.md #3 and #5; PO go 2026-09-28"

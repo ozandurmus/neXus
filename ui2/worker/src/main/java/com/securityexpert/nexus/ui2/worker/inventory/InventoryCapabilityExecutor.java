@@ -117,7 +117,7 @@ public final class InventoryCapabilityExecutor {
         ConnectionTarget target = request.connectionTarget()
                 .orElseThrow(() -> new IllegalArgumentException("check_point inventory requires a connectionTarget"));
         boolean preferInteractiveShell =
-                com.securityexpert.nexus.ui2.worker.transport.CheckPointSparkModelHint.isKnownSparkModel(request.modelHint());
+                com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint.isKnownSparkModel(request.modelHint());
         long overallStart = System.currentTimeMillis();
         LOG.log(System.Logger.Level.INFO, "[INVENTORY_COLLECT_START] Check Point target={0}:{1}", target.host(), target.port());
         ConnectSpec spec = new ConnectSpec(request.credentialRef(), request.trustRuleRef(), Optional.empty());
@@ -1058,7 +1058,7 @@ public final class InventoryCapabilityExecutor {
     /**
      * @param preferInteractiveShell true when this device's discovery-known model already names a
      * Quantum Spark/Gaia Embedded appliance ({@link
-     * com.securityexpert.nexus.ui2.worker.transport.CheckPointSparkModelHint#isKnownSparkModel}) --
+     * com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint#isKnownSparkModel}) --
      * the interactive shell is tried first (Product Owner, 2026-09-22: "discovery'den sonra
      * inventory pull bir metod değil mi. Cihaz tipini biliyorsak neden en başta doğru yöntemle
      * çekemiyoruz?"), skipping the exec attempt that is otherwise doomed to run out its full

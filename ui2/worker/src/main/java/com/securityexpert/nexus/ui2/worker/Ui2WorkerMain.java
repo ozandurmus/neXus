@@ -278,6 +278,10 @@ public final class Ui2WorkerMain {
         backupJobExecutor.withCyberControllerBackupExecutor(new com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupExecutor(
                 compositeTransport, artefactStore, ccInbox == null || ccInbox.isBlank() ? null : java.nio.file.Path.of(ccInbox),
                 System.getenv("UI2_CC_RECEIVER_HOST"), ref -> panCredentialResolver.resolve(ref).password()));
+        String sparkInbox = System.getenv("NEXUS_SPARK_INBOX");
+        backupJobExecutor.withQuantumSparkBackupExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.QuantumSparkBackupExecutor(
+                compositeTransport, artefactStore, sparkInbox == null || sparkInbox.isBlank() ? null : java.nio.file.Path.of(sparkInbox),
+                System.getenv("UI2_CC_RECEIVER_HOST"), ref -> panCredentialResolver.resolve(ref).password()));
         // V61: MDS export -- mds_backup of the whole server; its run time on this estate is still to be measured, so
         // the deadline is generous and configurable (UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS).
         backupJobExecutor.withMdsExportExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor(compositeTransport,

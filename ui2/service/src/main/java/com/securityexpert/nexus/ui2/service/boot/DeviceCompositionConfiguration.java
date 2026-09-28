@@ -198,6 +198,7 @@ public class DeviceCompositionConfiguration {
                 checkPointConfigurationCapability(gateRegistryPort),
                 paloAltoConfigurationCapability(gateRegistryPort),
                 checkPointBackupCapability(gateRegistryPort),
+                checkPointSparkBackupCapability(gateRegistryPort),
                 paloAltoBackupCapability(gateRegistryPort),
                 paloAltoSetConfigCapability(gateRegistryPort),
                 checkPointMdsExportCapability(gateRegistryPort),
@@ -429,6 +430,23 @@ public class DeviceCompositionConfiguration {
                 "cp_gaia_gateway", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, steps, List.of(disconnect),
                 "14H", List.of(), false);
         return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
+    }
+
+    private static Capability checkPointSparkBackupCapability(GateRegistryPort gateRegistryPort) {
+        CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        CapabilityStep disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
+                Optional.empty(), Optional.empty(), Optional.empty());
+        String read = "show backup-settings-log";
+        String push = "backup settings to sftp server %s filename %s file-encryption on password %s "
+                + "backup-policy on username nexus-spark password %s";
+        List<CapabilityStep> steps = List.of(connect,
+                new CapabilityStep(StepKind.EXEC, "clish", read, false, Optional.empty(), Optional.empty(), Optional.empty()),
+                new CapabilityStep(StepKind.EXEC, "clish", push, false, Optional.empty(), Optional.empty(), Optional.empty()),
+                new CapabilityStep(StepKind.EXEC, "clish", read, false, Optional.empty(), Optional.empty(), Optional.empty()));
+        return new CapabilityRegistryLoader(gateRegistryPort).load(new CapabilitySpec(BackupCapabilityIds.CP_SPARK_SFTP_BACKUP,
+                "check_point", "gaia_embedded", TransportKind.SSH_EXEC, MaturityState.CAP_VALIDATED, steps,
+                List.of(disconnect), "Quantum Spark backup", List.of(), false));
     }
 
     @Bean

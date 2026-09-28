@@ -94,7 +94,7 @@ public final class ConfirmCapabilityExecutor {
         }
         TransportSession session = authenticated.session();
         boolean preferInteractiveShell =
-                com.securityexpert.nexus.ui2.worker.transport.CheckPointSparkModelHint.isKnownSparkModel(request.modelHint());
+                com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint.isKnownSparkModel(request.modelHint());
         try {
             String identityOutput = execOutput(session,
                     DeviceFirstContactCommandSet.forStep(Vendor.CHECK_POINT, ContactStepKind.IDENTITY_READ),

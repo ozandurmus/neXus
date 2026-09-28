@@ -34,7 +34,7 @@ spec:
         runAsNonRoot: true
         # OS-3a (amendment 2026-09-24): the group of the Radware Cyber Controller push inbox (HOST-A nexuscc, gid
         # 2600), so the worker can read and delete its uploads -- a supplemental group, not a fixed uid/gid (FS-7).
-        supplementalGroups: [2600]
+        supplementalGroups: [2600, 2601]
       priorityClassName: system-cluster-critical
       tolerations:
         - key: "node.kubernetes.io/disk-pressure"
@@ -127,6 +127,8 @@ spec:
             # HOST-A's SFTP receiver (local configuration in a ConfigMap, never a repository literal).
             - name: UI2_CC_INBOX_DIR
               value: /app/cc-inbox
+            - name: NEXUS_SPARK_INBOX
+              value: /app/spark-inbox
             - name: UI2_CC_RECEIVER_HOST
               valueFrom:
                 configMapKeyRef:
@@ -193,6 +195,8 @@ spec:
               mountPath: /app/artefact-store
             - name: cc-inbox
               mountPath: /app/cc-inbox
+            - name: spark-inbox
+              mountPath: /app/spark-inbox
       volumes:
         - name: tmp
           emptyDir: {}
@@ -225,4 +229,8 @@ spec:
         - name: cc-inbox
           hostPath:
             path: /var/lib/nexus-cc/in
+            type: Directory
+        - name: spark-inbox
+          hostPath:
+            path: /var/lib/nexus-spark/in
             type: Directory

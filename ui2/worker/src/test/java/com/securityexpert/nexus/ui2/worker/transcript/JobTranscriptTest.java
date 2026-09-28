@@ -63,4 +63,18 @@ class JobTranscriptTest {
         assertFalse(JobTranscript.safeResponseBody("text/html", "<input name='xsauth' value='" + secret + "'>")
                 .contains(secret));
     }
+
+    @Test void sparkInlinePasswordsAreAbsentFromCommandAndAnswer() {
+        String command = "backup settings to sftp server 192.0.2.20 filename abcdef0123456789 "
+                + "file-encryption on password SyntheticZipSecret123456 backup-policy on username nexus-spark "
+                + "password SyntheticReceiverSecret42";
+        String safe = JobTranscript.safeSshCommand(command);
+        String answer = JobTranscript.safeSshAnswer(command, "echo SyntheticZipSecret123456 SyntheticReceiverSecret42");
+        assertEquals(2, safe.split("\\[credential]", -1).length - 1);
+        assertFalse(safe.contains("SyntheticZipSecret123456"));
+        assertFalse(safe.contains("SyntheticReceiverSecret42"));
+        assertFalse(safe.contains("192.0.2.20"));
+        assertFalse(answer.contains("SyntheticZipSecret123456"));
+        assertFalse(answer.contains("SyntheticReceiverSecret42"));
+    }
 }

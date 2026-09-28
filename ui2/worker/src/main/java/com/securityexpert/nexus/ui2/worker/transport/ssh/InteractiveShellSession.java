@@ -102,7 +102,8 @@ final class InteractiveShellSession implements AutoCloseable {
         try {
             out.write((normalized + "\n").getBytes(StandardCharsets.UTF_8));
             out.flush();
-            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "command", normalized);
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "command",
+                    com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(normalized));
         } catch (IOException e) {
             return new Result(Result.Kind.NOT_SENT, null);
         }
@@ -241,7 +242,8 @@ final class InteractiveShellSession implements AutoCloseable {
         try {
             out.write((normalized + "\n").getBytes(StandardCharsets.UTF_8));
             out.flush();
-            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "command", normalized);
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "command",
+                    com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(normalized));
         } catch (IOException e) {
             return new Result(Result.Kind.NOT_SENT, null);
         }

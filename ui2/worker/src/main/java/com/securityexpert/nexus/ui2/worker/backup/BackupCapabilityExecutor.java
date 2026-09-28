@@ -36,6 +36,8 @@ import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
  */
 public final class BackupCapabilityExecutor {
 
+    static final String SPARK_DETECTED = "gaia_embedded_backup_route";
+
     private static final System.Logger LOG = System.getLogger(BackupCapabilityExecutor.class.getName());
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
@@ -136,8 +138,7 @@ public final class BackupCapabilityExecutor {
                 if (isGaiaEmbeddedCliError(diskspace.output()) || isGaiaEmbeddedCliError(df.output())) {
                     // Measured 2026-09-25: a Quantum Spark (Gaia Embedded) answers Gaia commands with "Bad parameter
                     // starting at ..."; its backup is "backup settings to sftp ..." -- a different contract, not built yet.
-                    return new BackupResult.SubmitRefused("unsupported_platform: this appliance runs Gaia Embedded "
-                            + "(Quantum Spark), whose backup is 'backup settings to sftp', not 'add backup local'; not built yet");
+                    return new BackupResult.SubmitRefused(SPARK_DETECTED);
                 }
                 return new BackupResult.InsufficientFreeSpace(
                         "neither show diskspace nor df -P /var/log could be parsed for a free-space value; refusing (fail-closed)");

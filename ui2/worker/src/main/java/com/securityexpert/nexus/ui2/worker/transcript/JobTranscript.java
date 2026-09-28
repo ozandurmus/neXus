@@ -20,6 +20,7 @@ public final class JobTranscript {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final long LIMIT = 64L * 1024 * 1024;
     private static final String CREDENTIAL = "[credential]";
+    private static final String SPARK_BACKUP = "backup settings to sftp server ";
     private final long started = System.nanoTime();
     private final List<byte[]> lines = new ArrayList<>();
     private long bytes;
@@ -60,6 +61,28 @@ public final class JobTranscript {
         return n.equals("password") || n.equals("passwd") || n.equals("secret") || n.equals("token")
                 || n.equals("key") || n.equals("api_key") || n.equals("apikey") || n.equals("passphrase")
                 || n.equals("session") || n.equals("xsauth") || n.equals("formdatastr");
+    }
+
+    /** The Spark CLI carries two passwords inline; neither the command nor an echoed answer is reportable. */
+    public static String safeSshCommand(String command) {
+        return command != null && command.startsWith(SPARK_BACKUP)
+                ? "backup settings to sftp server [receiver] filename [token] file-encryption on password [credential] "
+                        + "backup-policy on username [receiver] password [credential]"
+                : command;
+    }
+
+    public static String safeSshAnswer(String command, String answer) {
+        return command != null && (command.startsWith(SPARK_BACKUP) || command.equals("show backup-settings-log"))
+                ? lineShape(answer) : answer;
+    }
+
+    /** No words, identities, or secret bytes survive this measurement projection. */
+    public static String lineShape(String value) {
+        if (value == null || value.isBlank()) return "<empty>";
+        String first = value.strip().split("\\R", 2)[0];
+        String shape = first.replaceAll("[A-Za-z]+", "A").replaceAll("[0-9]+", "#")
+                .replaceAll("[^A# ]", "?");
+        return shape.length() > 160 ? shape.substring(0, 160) + "..." : shape;
     }
 
     public static String safeJson(String body) {

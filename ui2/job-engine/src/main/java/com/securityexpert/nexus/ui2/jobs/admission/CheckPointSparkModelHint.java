@@ -1,4 +1,4 @@
-package com.securityexpert.nexus.ui2.worker.transport;
+package com.securityexpert.nexus.ui2.jobs.admission;
 
 import java.util.Optional;
 import java.util.Set;

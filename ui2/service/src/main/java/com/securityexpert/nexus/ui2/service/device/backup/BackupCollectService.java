@@ -142,6 +142,11 @@ public final class BackupCollectService {
             capabilityId = BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP;
         } else if ("snapshot".equalsIgnoreCase(backupType)) {
             capabilityId = BackupCapabilityIds.CP_GAIA_SNAPSHOT;
+        } else if ("check_point".equals(vendorHint) && !checkPointManagement
+                && com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint.isKnownSparkModel(
+                        deviceRepository.findSummary(deviceId).flatMap(
+                                com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedModel))) {
+            capabilityId = BackupCapabilityIds.CP_SPARK_SFTP_BACKUP;
         } else {
             capabilityId = BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL;
         }

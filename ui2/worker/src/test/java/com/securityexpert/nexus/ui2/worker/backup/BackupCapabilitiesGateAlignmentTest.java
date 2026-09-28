@@ -47,6 +47,14 @@ class BackupCapabilitiesGateAlignmentTest {
         assertTrue(capability.executionEligible());
     }
 
+    @Test
+    void sparkPushAndLogGateRowsResolveEligible() {
+        var registry = realFixtureGateRegistry();
+        assertTrue(BackupCapabilities.checkPointSpark(registry).executionEligible());
+        assertTrue(BackupCapabilities.all(registry).stream()
+                .anyMatch(c -> c.id().equals(BackupCapabilityIds.CP_SPARK_SFTP_BACKUP)));
+    }
+
     /** Measured live (2026-09-22): "Run Fleet Backup" with two Palo Alto targets issued nothing --
      * the capability id was known to admission but never registered (BackupCapabilities.all returned
      * Check Point only) and had no gate rows, so every PAN request was refused as unknown. */
