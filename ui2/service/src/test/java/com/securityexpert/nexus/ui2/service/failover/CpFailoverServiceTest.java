@@ -151,6 +151,54 @@ class CpFailoverServiceTest {
             () -> service.units(CLUSTER_ID,"actor-1","palo_alto")).code());
         verifyNoInteractions(store);
     }
+    @Test void summaryIncludesCpVsxAndPanWithWindowsAndLatestRuns() {
+        when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
+            AuthzOutcome.PERMITTED,Optional.empty(),Optional.empty(),Optional.empty()));
+        var cpA = summary(A);
+        var cpB = summary(B);
+        var vsA = new DeviceSummaryRecord("VS-A", "gateway", "check_point", DeviceEnrollmentState.ENROLLED,
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of("CLS-TEST-VSX"),
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.of("VS-TEST-APP (VSID 13)"));
+        var vsB = new DeviceSummaryRecord("VS-B", "gateway", "check_point", DeviceEnrollmentState.ENROLLED,
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of("CLS-TEST-VSX"),
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.of("VS-TEST-APP (VSID 13)"));
+        var panA = new DeviceSummaryRecord("PAN-A", "gateway", "palo_alto", DeviceEnrollmentState.ENROLLED,
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of("CLS-TEST-PAN"));
+        var panB = new DeviceSummaryRecord("PAN-B", "gateway", "palo_alto", DeviceEnrollmentState.ENROLLED,
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of("CLS-TEST-PAN"));
+        when(devices.listAll()).thenReturn(List.of(cpA, cpB, vsA, vsB, panA, panB));
+        var member = new JooqCpFailoverRepository.SummaryMember(A,true,"ssh_exec",true,"physical",false);
+        when(store.summaryMembers()).thenReturn(List.of(member,
+            new JooqCpFailoverRepository.SummaryMember(B,true,"ssh_exec",true,"physical",false),
+            new JooqCpFailoverRepository.SummaryMember("VS-A",true,"ssh_exec",true,"13",false),
+            new JooqCpFailoverRepository.SummaryMember("VS-B",true,"ssh_exec",true,"13",false),
+            new JooqCpFailoverRepository.SummaryMember("PAN-A",true,"pan_xml_api",true,"physical",true),
+            new JooqCpFailoverRepository.SummaryMember("PAN-B",true,"pan_xml_api",true,"physical",true)));
+        Instant runAt = Instant.parse("2026-09-28T10:00:00Z");
+        when(store.summaryStatuses()).thenReturn(List.of(
+            new JooqCpFailoverRepository.SummaryStatus(CLUSTER,null,"check_point",false,null,null,null),
+            new JooqCpFailoverRepository.SummaryStatus("CLS-TEST-VSX","13","check_point",true,"DONE","PASS",runAt),
+            new JooqCpFailoverRepository.SummaryStatus("CLS-TEST-PAN",null,"palo_alto",false,"STOPPED","FAILED",runAt)));
+        var rows = service.summary("actor-1");
+        assertEquals(3, rows.size());
+        assertTrue(rows.stream().anyMatch(r -> r.unit().clusterId().equals(CLUSTER_ID)
+            && !r.activeWindow() && r.lastRunAt() == null));
+        assertTrue(rows.stream().anyMatch(r -> "13".equals(r.unit().vsId()) && r.activeWindow()
+            && "VS-TEST-APP (VSID 13)".equals(r.unit().label()) && "PASS".equals(r.lastRunOutcome())));
+        assertTrue(rows.stream().anyMatch(r -> "palo_alto".equals(r.vendor()) && !r.activeWindow()
+            && "STOPPED".equals(r.lastRunState()) && runAt.equals(r.lastRunAt())));
+        verify(store).summaryMembers();
+        verify(store).summaryStatuses();
+        verify(devices).listAll();
+        verifyNoInteractions(inventory, trust);
+    }
+    @Test void summaryRequiresReaderBeforeBulkReads() {
+        when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
+            AuthzOutcome.DENIED,Optional.empty(),Optional.empty(),Optional.empty()));
+        assertEquals("WRONG_ROLE", assertThrows(CpFailoverService.Refusal.class,
+            () -> service.summary("actor-1")).code());
+        verifyNoInteractions(store, devices, inventory, trust);
+    }
     public static void main(String[] args) {
         new CpFailoverServiceTest().wrongRoleRefusedBeforeAdmission();
         new CpFailoverServiceTest().noWindowRefusedBeforeJob();

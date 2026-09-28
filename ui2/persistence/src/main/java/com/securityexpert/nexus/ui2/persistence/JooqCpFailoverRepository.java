@@ -27,6 +27,10 @@ public class JooqCpFailoverRepository {
             String derived, Instant observedAt) {}
     public record Detail(Run run, List<Check> checks) {}
     public record Decision(String code, String runId) {}
+    public record SummaryMember(String deviceId, boolean readable, String transportKind,
+            boolean inventoryPresent, String context, boolean panSupported) {}
+    public record SummaryStatus(String clusterRef, String vsId, String vendor, boolean activeWindow,
+            String state, String outcome, Instant scheduledFor) {}
 
     private final TransactionBoundary boundary;
     private final AuditedTransactionBoundary audited;
@@ -49,6 +53,46 @@ public class JooqCpFailoverRepository {
             r.get("scheduled_for", java.time.OffsetDateTime.class).toInstant(), r.get("job_id", String.class),
             r.get("state", String.class), r.get("step", String.class), r.get("outcome", String.class),
             r.get("failed_check", String.class), r.get("message", String.class), r.get("vendor", String.class));
+    }
+
+    /** Bulk eligibility facts; no device addresses or raw observations leave this projection. */
+    public List<SummaryMember> summaryMembers() {
+        return boundary.inTransaction(dsl -> dsl.fetch("select d.device_id, "
+            + "(not d.disabled and d.enrollment_state in ('ENROLLED','DEGRADED')) as readable, "
+            + "ep.transport_kind, r.run_id is not null as inventory_present, ctx.context, "
+            + "exists(select 1 from device_inventory_ha h where h.run_id=r.run_id "
+            + "and h.source='pan_high_availability_state' and lower(h.cluster_mode)='active-passive') as pan_supported "
+            + "from devices d left join lateral "
+            + "(select transport_kind from endpoints where device_id=d.device_id order by created_at limit 1) ep on true "
+            + "left join lateral (select run_id from device_inventory_run where device_id=d.device_id "
+            + "order by collected_at desc limit 1) r on true "
+            + "left join lateral (select distinct context from "
+            + "(select context from device_interface where run_id=r.run_id union all "
+            + "select context from device_route where run_id=r.run_id) contexts) ctx on true")
+            .map(r -> new SummaryMember(r.get("device_id", String.class),
+                Boolean.TRUE.equals(r.get("readable", Boolean.class)), r.get("transport_kind", String.class),
+                Boolean.TRUE.equals(r.get("inventory_present", Boolean.class)), r.get("context", String.class),
+                Boolean.TRUE.equals(r.get("pan_supported", Boolean.class)))));
+    }
+
+    /** Latest run and currently valid window per vendor/cluster/VSID in one read. */
+    public List<SummaryStatus> summaryStatuses() {
+        return boundary.inTransaction(dsl -> dsl.fetch("with unit_keys as "
+            + "(select vendor,cluster_ref,vs_id from failover_approval union "
+            + "select vendor,cluster_ref,vs_id from failover_run) "
+            + "select k.vendor,k.cluster_ref,k.vs_id, "
+            + "exists(select 1 from failover_approval a where a.vendor=k.vendor and a.cluster_ref=k.cluster_ref "
+            + "and a.vs_id is not distinct from k.vs_id and a.revoked_at is null "
+            + "and a.window_from<=now() and now()<a.window_until) as active_window, "
+            + "r.state,r.outcome,r.scheduled_for from unit_keys k left join lateral "
+            + "(select state,outcome,scheduled_for from failover_run r where r.vendor=k.vendor "
+            + "and r.cluster_ref=k.cluster_ref and r.vs_id is not distinct from k.vs_id "
+            + "order by scheduled_for desc limit 1) r on true")
+            .map(r -> new SummaryStatus(r.get("cluster_ref", String.class), r.get("vs_id", String.class),
+                r.get("vendor", String.class), Boolean.TRUE.equals(r.get("active_window", Boolean.class)),
+                r.get("state", String.class), r.get("outcome", String.class),
+                Optional.ofNullable(r.get("scheduled_for", java.time.OffsetDateTime.class))
+                    .map(java.time.OffsetDateTime::toInstant).orElse(null))));
     }
 
     public Approval createApproval(String cluster, String vsId, Instant from, Instant until, String reason, String actor) {

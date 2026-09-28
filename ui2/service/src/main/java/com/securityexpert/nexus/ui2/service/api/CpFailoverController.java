@@ -76,6 +76,18 @@ public final class CpFailoverController {
                 return m;
             }).toList());
     }
+    @GetMapping("/summary")
+    public ResponseEntity<?> summary(HttpServletRequest request) {
+        return result(() -> service.summary(actor(request)).stream().map(s -> {
+            Map<String,Object> m = unit(s.unit());
+            m.put("vendor", s.vendor());
+            m.put("activeWindow", s.activeWindow());
+            m.put("lastRunState", s.lastRunState());
+            m.put("lastRunOutcome", s.lastRunOutcome());
+            m.put("lastRunAt", s.lastRunAt());
+            return m;
+        }).toList());
+    }
     @PostMapping("/approvals")
     public ResponseEntity<?> approve(@RequestBody ApprovalRequest body,HttpServletRequest request) {
         return result(() -> approval(service.approve(body.clusterId(),body.unitId(),body.windowFrom(),

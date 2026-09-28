@@ -21,6 +21,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
 
     static final Map<String, String> ACTION_ID_BY_ROUTE = Map.ofEntries(
             Map.entry("GET /api/v2/cp-failover/units", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("GET /api/v2/cp-failover/summary", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("GET /api/v2/cp-failover/units/*", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("POST /api/v2/cp-failover/approvals", ActionRegistry.CP_FAILOVER_APPROVE),
             Map.entry("GET /api/v2/cp-failover/approvals", ActionRegistry.CP_FAILOVER_READ),

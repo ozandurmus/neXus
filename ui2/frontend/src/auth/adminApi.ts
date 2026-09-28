@@ -1572,6 +1572,9 @@ export function getOverview(): Promise<OverviewView> {
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
 export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN";
 export interface CpFailoverUnit { unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean }
+export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system"> {
+  activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null;
+}
 export interface CpFailoverApproval { approvalId: string; windowFrom: string; windowUntil: string; reason: string; approvedBy: string; revokedAt: string | null }
 export interface CpFailoverRun {
   runId: string; approvalId: string; scheduledFor: string; state: CpFailoverState; step: string;
@@ -1584,6 +1587,7 @@ const failoverPath = (vendor?: string) => vendor === "palo_alto" ? "/api/v2/pan-
 const cpQuery = (unit: CpFailoverUnit) => `clusterId=${encodeURIComponent(unit.clusterId)}&unitId=${encodeURIComponent(unit.unitId)}`;
 /** By a member's device id; display names are masked by the server for aiview. */
 export const listCpFailoverUnits = (memberDeviceId: string, vendor?: string) => call<CpFailoverUnit[]>(`${failoverPath(vendor)}/units?memberDeviceId=${encodeURIComponent(memberDeviceId)}`, "GET");
+export const listCpFailoverSummary = () => call<CpFailoverSummary[]>("/api/v2/cp-failover/summary", "GET");
 export const listCpFailoverApprovals = (unit: CpFailoverUnit) => call<CpFailoverApproval[]>(`${failoverPath(unit.vendor)}/approvals?${cpQuery(unit)}`, "GET");
 export const listCpFailoverRuns = (unit: CpFailoverUnit) => call<CpFailoverRun[]>(`${failoverPath(unit.vendor)}/runs?${cpQuery(unit)}`, "GET");
 export const getCpFailoverRun = (runId: string, vendor?: string) => call<CpFailoverRunDetail>(`${failoverPath(vendor)}/runs/${encodeURIComponent(runId)}`, "GET");

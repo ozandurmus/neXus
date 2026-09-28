@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -145,14 +145,11 @@ describe("job totals reconcile (review 2026-09-23)", () => {
 });
 
 it("shows a VSX unit directly below its cluster with outcome and window", async () => {
-  const until = new Date(Date.now() + 3600_000).toISOString();
   const from = new Date(Date.now() - 3600_000).toISOString();
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     const body = url === "/devices" ? { devices: MEMBERS }
-      : url.includes("/cp-failover/units?") ? [{ clusterId: "opaque-cluster", unitId: "opaque-vs", cluster_member_ref: "CLS-ROMEO-01", virtual_system: "VS-ROMEO-01-07", canApprove: false, canStart: false, canSchedule: false }]
-      : url.includes("/cp-failover/approvals?") ? [{ approvalId: "a", windowFrom: from, windowUntil: until, revokedAt: null }]
-      : url.includes("/cp-failover/runs?") ? [{ runId: "r", state: "DONE", outcome: "PASS" }]
+      : url.endsWith("/cp-failover/summary") ? [{ clusterId: "opaque-cluster", unitId: "opaque-vs", cluster_member_ref: "CLS-ROMEO-01", virtual_system: "VS-ROMEO-01-07", vendor: "check_point", activeWindow: true, lastRunState: "DONE", lastRunOutcome: "PASS", lastRunAt: from }]
       : {};
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
   }));
@@ -161,4 +158,6 @@ it("shows a VSX unit directly below its cluster with outcome and window", async 
   const row = screen.getByText("VS-ROMEO-01-07").closest("tr")!;
   expect(within(row).getByText("PASS")).toBeInTheDocument();
   expect(within(row).getByText("Active window")).toBeInTheDocument();
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input).includes("cp-failover"))).toHaveLength(1));
+  expect(String(vi.mocked(fetch).mock.calls.find(([input]) => String(input).includes("cp-failover"))?.[0])).toBe("/api/v2/cp-failover/summary");
 });

@@ -25,7 +25,7 @@ import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel } from "./JobLogsPanel";
 import { DiagnosticPanel } from "./DiagnosticPanel";
 import { urlParam } from "../shell/urlParams";
-import { getJobStats, listDevices, listCpFailoverUnits, listCpFailoverApprovals, listCpFailoverRuns, type CpFailoverUnit, type DeviceSummary } from "../auth/adminApi";
+import { getJobStats, listDevices, listCpFailoverSummary, type CpFailoverSummary, type DeviceSummary } from "../auth/adminApi";
 import { deriveClusterTitle } from "./InventoryPanels";
 
 interface PreflightCheckItem {
@@ -72,24 +72,17 @@ export function OperationsScreen() {
       .catch(() => setClusters([]));
   }, []);
   const selected = clusters?.find((c) => c.ref === selectedCluster) ?? null;
-  const [cpRows, setCpRows] = useState<Record<string, Array<{ unit: CpFailoverUnit; outcome: string | null; lastRunAt: string | null; activeWindow: boolean }>>>({});
+  const [cpRows, setCpRows] = useState<Record<string, CpFailoverSummary[]>>({});
   useEffect(() => {
-    if (!clusters) return;
     let mounted = true;
-    void Promise.all(clusters.filter(c => ["check_point", "palo_alto"].includes(c.members[0]?.vendor_hint ?? "")).map(async c => {
-      try {
-        const units = await listCpFailoverUnits(c.members[0].device_id, c.members[0].vendor_hint);
-        const rows = await Promise.all(units.map(async unit => {
-          const [windows, runs] = await Promise.all([listCpFailoverApprovals(unit), listCpFailoverRuns(unit)]);
-          const now = Date.now();
-          return { unit, outcome: runs[0]?.outcome ?? runs[0]?.state ?? null, lastRunAt: runs[0]?.scheduledFor ?? null,
-            activeWindow: windows.some(w => !w.revokedAt && Date.parse(w.windowFrom) <= now && now < Date.parse(w.windowUntil)) };
-        }));
-        return [c.ref, rows] as const;
-      } catch { return [c.ref, []] as const; }
-    })).then(entries => { if (mounted) setCpRows(Object.fromEntries(entries)); });
+    void listCpFailoverSummary().then(rows => {
+      if (!mounted) return;
+      const byRef: Record<string, CpFailoverSummary[]> = {};
+      for (const row of rows) (byRef[row.cluster_member_ref] ??= []).push(row);
+      setCpRows(byRef);
+    }).catch(() => { if (mounted) setCpRows({}); });
     return () => { mounted = false; };
-  }, [clusters]);
+  }, []);
   const [selectedCheck, setSelectedCheck] = useState<PreflightCheckItem | null>(null);
   const [filter, setFilter] = useState<"ALL" | "BLOCKING" | "ADVISORY">("ALL");
   const [isRunning, setIsRunning] = useState(false);
@@ -461,12 +454,12 @@ export function OperationsScreen() {
                           ? <StatusChip tone={report!.verdict === "NO_BLOCKING_CONDITIONS_OBSERVED" ? "ok" : report!.verdict === "ADVISORY_CONDITIONS_PRESENT" ? "warn" : "bad"} label={report!.verdict} dense />
                           : <Unknown word="NOT EVALUATED" reason="No preflight has been read for this cluster in this session." />}
                       </TableCell>
-                      <TableCell>{cp.length > 0 && <>{last?.outcome ?? "No run"} {cp.some(row => row.activeWindow) && <StatusChip label="Active window" tone="ok" dense />}</>}</TableCell>
+                      <TableCell>{cp.length > 0 && <>{last?.lastRunOutcome ?? last?.lastRunState ?? "No run"} {cp.some(row => row.activeWindow) && <StatusChip label="Active window" tone="ok" dense />}</>}</TableCell>
                     </TableRow>
-                    {cp.filter(row => row.unit.unitId !== row.unit.clusterId).map(row => <TableRow key={row.unit.unitId} onClick={() => setSelectedCluster(c.ref)} sx={{ cursor: "pointer" }}>
-                      <TableCell sx={{ pl: 4 }}><Typography variant="caption">Virtual System</Typography> {row.unit.virtual_system ?? row.unit.cluster_member_ref}</TableCell>
+                    {cp.filter(row => row.unitId !== row.clusterId).map(row => <TableRow key={row.unitId} onClick={() => setSelectedCluster(c.ref)} sx={{ cursor: "pointer" }}>
+                      <TableCell sx={{ pl: 4 }}><Typography variant="caption">Virtual System</Typography> {row.virtual_system ?? row.cluster_member_ref}</TableCell>
                       <TableCell colSpan={6} />
-                      <TableCell>{row.outcome ?? "No run"} {row.activeWindow && <StatusChip label="Active window" tone="ok" dense />}</TableCell>
+                      <TableCell>{row.lastRunOutcome ?? row.lastRunState ?? "No run"} {row.activeWindow && <StatusChip label="Active window" tone="ok" dense />}</TableCell>
                     </TableRow>)}
                   </Fragment>);
                 })}
