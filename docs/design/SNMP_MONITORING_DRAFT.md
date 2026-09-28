@@ -131,3 +131,24 @@ Sizing for 90 days raw at 60 s (129,600 samples per series; ~120 bytes per row w
 3 counters on every device adds 9,000 series -> ~1.2 B rows -> **~140 GB**. HOST-A has ~670 GB free (2026-09-28),
 so both fit; to keep it small, status-type values (e.g. `ifOperStatus`, HA state) are stored on change only, and
 interface counters only for interfaces an administrator selects.
+
+## 11. Positioning (PO, 2026-09-28): a signal layer for HA and failover, OIDs by role
+PO: "OID dinamik olmalı ... HA status için OID kontrolü yaparız, bununla aktif standby konumlarını besleriz ...
+failover kısmına hizmet edecek şekilde ... CPS, HA, state ... failover sonrası kontrollerde kullanılabilir." Approved
+with the engineering objection below ("ok ilerletelim").
+- **OID profiles.** A `security_admin` maintains an OID profile per vendor (optionally per device): each entry is an
+  OID, a **role tag** (`ha_state`, `cps`, `connections`, `cpu`, `memory`, `if_oper_status`, ...), a value map (e.g.
+  `1 -> active`, `2 -> standby`) and a table/scalar kind. Features read **roles, never OIDs**. Every profile change is
+  audited; saving a profile is the approval of what neXus reads from devices (RBAC over prohibition), replacing a
+  per-OID code change. The §3 table becomes the seed profile, UNKNOWN rows left empty.
+- **Consumers.** (1) HA role on device/cluster views, minute-fresh, labelled with its source and age ("SNMP: active,
+  1 min ago"); it never overwrites the SSH-established identity or role evidence. (2) Failover pre-check: HA state
+  stable over the last N minutes (no role flaps) from the time series. (3) During a failover run: the unit's
+  `ha_state` polled every few seconds (burst mode, only for that unit, only during the run). (4) Failover post-check:
+  `cps`, `connections` and traffic compared with the pre-failover per-minute baseline -- a candidate for the deferred
+  CP check 7 (CPS) **if** a vendor OID for it is confirmed in the pilot.
+- **Objection accepted:** SNMP results are **additional evidence** in the failover check table first; the approved
+  SSH checks keep deciding pass/stop. Promotion of an SNMP check to a deciding check is a later PO decision after the
+  pilot shows SNMP and SSH agree.
+- **Credential store:** extended with SNMP kinds (v1/v2c community; v3 user, auth protocol + secret, priv protocol +
+  secret, security level) -- approved to build now, independent of the rest.
