@@ -9,19 +9,17 @@ now it accepted only ten exact commands for FortiManager, FortiGate and Cisco AS
 only `security_admin` may run it. The PO needed to run Quantum Spark identity reads (`show diag`,
 `show software-version`) and found the menu refused them.
 
-## Decision
-1. Every enrolled device neXus reaches over SSH (Check Point Gaia and Gaia Embedded, Palo Alto, FortiGate,
-   FortiManager, Cisco ASA, and any later SSH vendor) is a Diagnostics target.
-2. The command is typed by the operator, not chosen from a fixed list. **The running `security_admin` is the
-   approver of that exact command** for that one run: this is how the 2026-09-26 ad hoc diagnostics amendment
-   (AGENTS.md, "exact command ... approved before execution") is met for this menu. The audit row carries the actor,
-   the device, the exact command and the time.
-3. **Read-only guard (engineering condition, PO informed):** a command is admitted only if it starts with a
-   read verb of its vendor/shell (per-vendor allowlist in code, e.g. `show`, `get`, `display`, and named read
-   commands such as `cphaprob`, `fw stat`, `cpstat`) and contains none of `; | & > < $ \` ` or a newline. Verbs that
-   change state are refused before contact (`set`, `delete`, `add`, `clear`, `execute`, `config`, `configure`,
-   `request`, `reboot`, `debug`, `diagnose` except named read forms, `test`, `commit`, `save`, `write`, `copy`, ...).
-   The allowlist lives in one class with tests; widening it is a code change the PO sees.
-4. Unchanged: `security_admin` only runs; other roles see history and masked output; output is masked (aiview) and
-   secret-bearing lines are redacted as in the existing panel; one run at a time per device; timeout 30 s; host keys
-   trusted; no Browser -> device path beyond this typed intent (the service resolves transport and shell).
+## Decision (as refined by the PO the same day)
+PO: "Tüm SSH yetkili cihazlar; izin verilenlerde bizim veri toplarken kullandıklarımız olacak. Şu ana kadar kod
+dizisinde neleri kullandık, onlar safe komutlar. Ek istersen sen bana sorarsın, ben ok dersem oraya ekleriz."
+1. Every enrolled device neXus reaches over SSH (any vendor, any role) is a Diagnostics target.
+2. **Allowed commands = the read commands neXus already sends while collecting**: every `gate_registry` row that is
+   SIGNED_OFF, action class `read`, transport SSH, for that device's vendor / platform scope / shell (templates with a
+   `<parameter>` accept one safe token `[A-Za-z0-9_.-]{1,31}`, as today). Nothing else is accepted -- no free text,
+   no verb prefixes. Write-class rows (backup submits, failover `clusterXL_admin`, `backup settings ...`) are never
+   offered, even though they are gated.
+3. **Additions:** the engineering session asks the PO for each new command; on the PO's "ok" it is added as a gate row
+   (read, SIGNED_OFF, by migration with the PO's words in `source_document_pointer`) and appears in the menu.
+4. The picker shows the allowed commands for the chosen device (a list, not a free text box). `security_admin` runs;
+   other roles see history and masked output; output masked (aiview) and secret-bearing lines redacted; one run at a
+   time per device; the gate row's own timeout; audit row with actor, device, gate id and exact command.
