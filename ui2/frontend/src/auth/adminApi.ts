@@ -1358,7 +1358,8 @@ export interface ComplianceFrameworkMapping {
 export interface ComplianceControlItem {
   readonly control_id: string;
   readonly title: string;
-  readonly description: string;
+  readonly description: string | null;
+  readonly family?: string | null;
   readonly severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
   readonly category: string;
   readonly frameworks: readonly ComplianceFrameworkMapping[];
@@ -1413,6 +1414,21 @@ export function getComplianceOverview(): Promise<ComplianceOverview> {
 
 export function getComplianceControls(): Promise<ComplianceControlsResponse> {
   return call<ComplianceControlsResponse>("/compliance/controls", "GET");
+}
+
+export interface ComplianceControlDetail {
+  readonly control_id: string;
+  readonly title: string;
+  readonly severity: string;
+  readonly status: string;
+  readonly rationale: string | null;
+  readonly frameworks: readonly ComplianceFrameworkMapping[];
+  readonly expected: readonly { vendor: string; text: string }[];
+  readonly devices: readonly { device_id: string; hostname: string | null; vendor: string; status: string; observed_value: string | null; message: string | null }[];
+}
+
+export function getComplianceControlDetail(id: string): Promise<ComplianceControlDetail> {
+  return call<ComplianceControlDetail>(`/api/v2/compliance/controls/${encodeURIComponent(id)}`, "GET");
 }
 
 export function getDeviceCompliance(deviceId: string): Promise<DeviceComplianceResult> {

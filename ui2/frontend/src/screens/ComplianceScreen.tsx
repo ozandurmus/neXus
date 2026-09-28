@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { urlParam } from "../shell/urlParams";
 
 /** Overview link values -> this screen's filter values (framework names are matched by keyword). */
@@ -36,9 +36,11 @@ import { responsesAreMasked } from "../auth/adminApi";
 import {
   getComplianceOverview,
   getComplianceControls,
+  getComplianceControlDetail,
   triggerComplianceEvaluation,
   type ComplianceOverview,
   type ComplianceControlItem,
+  type ComplianceControlDetail,
 } from "../auth/adminApi";
 
 type StatusFilter = "ALL" | "FAILING" | "UNAVAILABLE" | "PASSING";
@@ -53,6 +55,7 @@ const NIST_FAMILIES: Record<string, string> = {
 };
 
 export function familyOf(c: ComplianceControlItem): string {
+  if (c.family) return `${c.family} · ${NIST_FAMILIES[c.family] ?? "NIST family"}`;
   if (c.category && c.category !== "null") return c.category;
   for (const f of c.frameworks ?? []) {
     if (!/NIST/i.test(f.framework)) continue;
@@ -133,6 +136,11 @@ export function ComplianceScreen() {
   const [severityFilter, setSeverityFilter] = useState<string>(() => (urlParam("severity") ? urlParam("severity")!.toUpperCase() : "ALL"));
   const [frameworkFilter, setFrameworkFilter] = useState<string>(() => frameworkFromUrl(urlParam("framework")));
   const [selectedControl, setSelectedControl] = useState<ComplianceControlItem | null>(null);
+  const [detail, setDetail] = useState<ComplianceControlDetail | null>(null);
+  const [detailError, setDetailError] = useState(false);
+  const [deviceFilter, setDeviceFilter] = useState("ALL");
+  const [familyFilter, setFamilyFilter] = useState(() => urlParam("family") ?? "");
+  const controlsRef = useRef<HTMLDivElement>(null);
   const [loadError, setLoadError] = useState<{ message: string; restricted: boolean } | null>(null);
 
   const loadData = useCallback(async () => {
@@ -157,6 +165,34 @@ export function ComplianceScreen() {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (!selectedControl) { setDetail(null); return; }
+    let active = true;
+    setDetail(null);
+    setDetailError(false);
+    setDeviceFilter("ALL");
+    getComplianceControlDetail(selectedControl.control_id)
+      .then((value) => { if (active) setDetail(value); })
+      .catch(() => { if (active) setDetailError(true); });
+    return () => { active = false; };
+  }, [selectedControl]);
+
+  const selectFamily = (name: string) => {
+    const family = name.split(" · ")[0];
+    setFamilyFilter(family);
+    const url = new URL(window.location.href);
+    if (family) url.searchParams.set("family", family);
+    else url.searchParams.delete("family");
+    window.history.pushState({}, "", url);
+    controlsRef.current?.scrollIntoView?.({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    const onPop = () => setFamilyFilter(urlParam("family") ?? "");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   const handleReEvaluate = async () => {
     try {
       setReEvaluating(true);
@@ -171,12 +207,13 @@ export function ComplianceScreen() {
 
   const filteredControls = useMemo(() => {
     return controls.filter((c) => {
+      if (familyFilter && familyOf(c).split(" · ")[0] !== familyFilter) return false;
       // Search
       const q = searchQuery.toLowerCase().trim();
       if (q) {
         const inTitle = c.title.toLowerCase().includes(q);
         const inId = c.control_id.toLowerCase().includes(q);
-        const inDesc = c.description.toLowerCase().includes(q) || (c.category ?? "").toLowerCase().includes(q);
+        const inDesc = (c.description ?? "").toLowerCase().includes(q) || (c.category ?? "").toLowerCase().includes(q);
         const inFw = c.frameworks?.some((f) => {
           const ref = f.reference || f.clauseId || "";
           const fw = f.framework || "";
@@ -201,7 +238,7 @@ export function ComplianceScreen() {
 
       return true;
     });
-  }, [controls, searchQuery, statusFilter, severityFilter, frameworkFilter]);
+  }, [controls, searchQuery, statusFilter, severityFilter, frameworkFilter, familyFilter]);
 
   const failingCount = useMemo(() => controls.filter((c) => c.status === "FAIL").length, [controls]);
   const unavailCount = useMemo(() => controls.filter((c) => c.status === "DATA_UNAVAILABLE").length, [controls]);
@@ -365,7 +402,7 @@ export function ComplianceScreen() {
         <Card sx={{ bgcolor: m3.scLowest, borderRadius: "10px", boxShadow: "none", border: "1px solid", borderColor: m3.outlineVar, overflow: "hidden" }}>
           <Box sx={{ px: 2, pt: 1.75, pb: 0.5 }}>
             <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Control families</Typography>
-            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>grouped by NIST SP 800-53 family · a check is one control on one firewall · coverage = checks with evidence · click a family to filter the list</Typography>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>grouped by NIST SP 800-53 family · a check is one control on one firewall · coverage = checks with evidence · click a family to see its controls</Typography>
           </Box>
           <Table size="small">
             <TableHead>
@@ -380,7 +417,7 @@ export function ComplianceScreen() {
             </TableHead>
             <TableBody>
               {families.map((f) => (
-                <TableRow key={f.name} hover sx={{ cursor: "pointer" }} onClick={() => setSearchQuery(f.name === "Unmapped" ? "" : f.name.split(" · ")[0] + "-")}>
+                <TableRow key={f.name} hover sx={{ cursor: "pointer" }} onClick={() => selectFamily(f.name)}>
                   <TableCell sx={{ fontWeight: 600 }}>{f.name}</TableCell>
                   <TableCell align="right">{f.controls}</TableCell>
                   <TableCell align="right">{f.checks}</TableCell>
@@ -491,6 +528,7 @@ export function ComplianceScreen() {
 
           {/* Status Filter Pills */}
           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+            {familyFilter && <Chip label={`Family: ${familyFilter} · ${NIST_FAMILIES[familyFilter] ?? "Unmapped"}`} onDelete={() => selectFamily("")} />}
             <Chip
               clickable
               label={`All · ${controls.length}`}
@@ -536,7 +574,7 @@ export function ComplianceScreen() {
       </Card>
 
       {/* Controls Table */}
-      <Card
+      <Card ref={controlsRef}
         sx={{
           bgcolor: m3.scLowest,
           borderRadius: "10px",
@@ -776,89 +814,34 @@ export function ComplianceScreen() {
               />
             </Stack>
 
-            {/* Missing Data Warning Alert if DATA_UNAVAILABLE */}
-            {selectedControl.status === "DATA_UNAVAILABLE" && (
-              <Card sx={{ bgcolor: m3.warningContainer, p: 2, borderRadius: "12px", border: "1px solid", borderColor: m3.warning }}>
-                <Stack spacing={1}>
-                  <Typography sx={{ fontWeight: 600, color: m3.onWarningContainer, fontSize: 14 }}>
-                    ⚠ Data Unavailable / Command Not Collected
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: m3.onWarningContainer, lineHeight: 1.5 }}>
-                    {selectedControl.missing_reason ??
-                      "The diagnostic command required for this control has not been collected from the firewall yet. The control has not been skipped; per audit integrity standards, it is reported as 'Data Unavailable'. When the command is added to the collection scope, it will be evaluated automatically."}
-                  </Typography>
-                </Stack>
-              </Card>
-            )}
-
-            {/* Description & Security Rationale */}
-            <Card sx={{ bgcolor: m3.scLowest, p: 2, borderRadius: "12px", border: "1px solid", borderColor: m3.outlineVar }}>
-              <Typography sx={{ fontWeight: 600, fontSize: 13, mb: 1, color: m3.onSurface }}>
-                Security Rationale & Audit Objective
-              </Typography>
-              <Typography variant="body2" sx={{ color: m3.onSurfaceVar, lineHeight: 1.6 }}>
-                {selectedControl.description}
-              </Typography>
-            </Card>
-
-            {/* Regulatory Framework Mappings */}
-            <Card sx={{ bgcolor: m3.scLowest, p: 2, borderRadius: "12px", border: "1px solid", borderColor: m3.outlineVar }}>
-              <Typography sx={{ fontWeight: 600, fontSize: 13, mb: 1.5, color: m3.onSurface }}>
-                Framework Mappings & Clauses
-              </Typography>
-              <Stack spacing={1}>
-                {selectedControl.frameworks?.map((f, idx) => (
-                  <Box key={f.reference || f.clauseId || idx} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.5, borderBottom: `1px solid ${m3.scHigh}` }}>
-                    <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
-                      {f.framework.replace("_", " ")}
-                    </Typography>
-                    <Chip
-                      size="small"
-                      label={`Section ${f.reference || f.clauseId || ""} (${f.version || f.frameworkVersion || ""})`}
-                      sx={{ bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, fontSize: 11 }}
-                    />
-                  </Box>
-                ))}
+            {detailError && <Typography>Could not load control detail.</Typography>}
+            {!detail && !detailError && <Typography>Loading control detail...</Typography>}
+            {detail?.rationale && <Card sx={{ p: 2 }}><Typography sx={{ fontWeight: 600 }}>Why it matters</Typography><Typography>{detail.rationale}</Typography></Card>}
+            {detail && <Card sx={{ p: 2 }}>
+              <Typography sx={{ fontWeight: 600 }}>What it should be</Typography>
+              {detail.expected.map((line, i) => <Typography key={i}>{line.vendor}: {line.text}</Typography>)}
+            </Card>}
+            {detail && <Card sx={{ p: 2 }}>
+              <Typography sx={{ fontWeight: 600, mb: 1 }}>Devices</Typography>
+              <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: "wrap" }}>
+                {(["ALL", "FAIL", "PASS", "DATA_UNAVAILABLE"] as const).map((status) => <Chip key={status} clickable
+                  label={`${({ ALL: "All", FAIL: "Failing", PASS: "Passing", DATA_UNAVAILABLE: "Not yet checked" })[status]} · ${status === "ALL" ? detail.devices.length : detail.devices.filter((d) => d.status === status).length}`}
+                  color={deviceFilter === status ? "primary" : "default"} onClick={() => setDeviceFilter(status)} />)}
               </Stack>
-            </Card>
-
-            {/* Affected Firewalls */}
-            <Card sx={{ bgcolor: m3.scLowest, p: 2, borderRadius: "12px", border: "1px solid", borderColor: m3.outlineVar }}>
-              <Typography sx={{ fontWeight: 600, fontSize: 13, mb: 1, color: m3.onSurface }}>
-                Target Firewalls & Status
-              </Typography>
-              <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 1.5 }}>
-                Total {selectedControl.target_device_count} {selectedControl.target_device_count === 1 ? "device" : "devices"} evaluated.
-              </Typography>
-              <Stack spacing={1}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 1, bgcolor: m3.scLow, borderRadius: "8px" }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
-                    {selectedControl.affected_devices?.length > 0
-                      ? selectedControl.affected_devices.join(", ")
-                      : "No firewall listed for this control"}
-                  </Typography>
-                  <Chip
-                    size="small"
-                    label={selectedControl.status}
-                    sx={{
-                      fontSize: 11,
-                      bgcolor:
-                        selectedControl.status === "PASS"
-                          ? m3.successContainer
-                          : selectedControl.status === "FAIL"
-                          ? m3.errorContainer
-                          : m3.warningContainer,
-                      color:
-                        selectedControl.status === "PASS"
-                          ? m3.onSuccessContainer
-                          : selectedControl.status === "FAIL"
-                          ? m3.onErrorContainer
-                          : m3.onWarningContainer,
-                    }}
-                  />
-                </Box>
-              </Stack>
-            </Card>
+              <TableContainer><Table size="small"><TableHead><TableRow>
+                <TableCell>Device</TableCell><TableCell>Vendor</TableCell><TableCell>Status</TableCell><TableCell>Current value</TableCell><TableCell>Message</TableCell>
+              </TableRow></TableHead><TableBody>
+                {detail.devices.filter((d) => deviceFilter === "ALL" || d.status === deviceFilter).map((d) => <TableRow key={d.device_id}>
+                  <TableCell>{d.hostname ?? d.device_id}</TableCell><TableCell>{d.vendor}</TableCell>
+                  <TableCell><Chip size="small" label={d.status === "FAIL" ? "Fail" : d.status === "PASS" ? "Pass" : "Not yet checked"} /></TableCell>
+                  <TableCell>{d.observed_value ?? (d.message === "Evidence withheld" ? "withheld" : "not available")}</TableCell><TableCell>{d.message ?? "—"}</TableCell>
+                </TableRow>)}
+              </TableBody></Table></TableContainer>
+            </Card>}
+            {detail && <Card sx={{ p: 2 }}>
+              <Typography sx={{ fontWeight: 600 }}>Framework mappings</Typography>
+              {detail.frameworks?.map((f, i) => <Typography key={i}>{f.framework.replace("_", " ")} · {f.reference || f.clauseId || ""}</Typography>)}
+            </Card>}
           </Stack>
         )}
       </Drawer>

@@ -81,6 +81,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /compliance", ActionRegistry.DEVICE_READ),
             Map.entry("GET /compliance/overview", ActionRegistry.DEVICE_READ),
             Map.entry("GET /compliance/controls", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /api/v2/compliance/controls/*", ActionRegistry.DEVICE_READ),
             Map.entry("GET /devices/*/compliance", ActionRegistry.DEVICE_READ),
             Map.entry("POST /compliance/evaluate", ActionRegistry.DEVICE_READ),
             Map.entry("GET /notifications", ActionRegistry.NOTIFICATIONS_READ),

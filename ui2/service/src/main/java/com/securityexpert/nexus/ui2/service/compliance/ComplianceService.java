@@ -442,7 +442,10 @@ public final class ComplianceService {
     }
 
     public List<Map<String, Object>> getControls() {
-        List<Map<String, Object>> catalog = fetchCatalog();
+        return getControls(fetchCatalog());
+    }
+
+    private List<Map<String, Object>> getControls(List<Map<String, Object>> catalog) {
         List<Target> evaluated = evaluable(allDevices());
 
         // One evaluation per device, computed before the catalog loop. Measured live (2026-09-22): the
@@ -461,7 +464,7 @@ public final class ComplianceService {
         for (Map<String, Object> c : catalog) {
             String controlId = String.valueOf(c.get("id"));
             String title = String.valueOf(c.get("title"));
-            String desc = String.valueOf(c.get("description"));
+            String desc = c.get("rationale") == null ? null : String.valueOf(c.get("rationale"));
             String severity = String.valueOf(c.get("severity"));
             // The catalog carries no category today; never turn its absence into the text "null".
             String category = c.get("category") == null ? null : String.valueOf(c.get("category"));
@@ -513,6 +516,7 @@ public final class ComplianceService {
             row.put("control_id", controlId);
             row.put("title", title);
             row.put("description", desc);
+            row.put("family", familyOf(frameworks));
             row.put("severity", severity);
             row.put("category", category);
             row.put("frameworks", frameworks);
@@ -531,6 +535,100 @@ public final class ComplianceService {
         }
 
         return result;
+    }
+
+    private static String familyOf(Object frameworks) {
+        if (frameworks instanceof List<?> mappings) {
+            for (Object mapping : mappings) {
+                if (mapping instanceof Map<?, ?> m && "NIST_800_53".equals(m.get("framework"))) {
+                    Object ref = m.get("reference");
+                    if (ref == null) ref = m.get("clauseId");
+                    if (ref instanceof String s && s.matches("^[A-Z]{2}-.*")) return s.substring(0, 2);
+                }
+            }
+        }
+        return null;
+    }
+
+    public Map<String, Object> getControlDetail(String controlId) {
+        List<Map<String, Object>> catalog = fetchCatalog();
+        Map<String, Object> control = catalog.stream()
+                .filter(c -> controlId.equals(c.get("id"))).findFirst().orElse(null);
+        if (control == null) return null;
+        Map<String, Object> summary = getControls(catalog).stream()
+                .filter(c -> controlId.equals(c.get("control_id"))).findFirst().orElseThrow();
+        List<Map<String, Object>> expected = new ArrayList<>();
+        Object bindings = control.get("bindings");
+        if (bindings instanceof List<?> list) for (Object entry : list) {
+            if (entry instanceof Map<?, ?> binding) {
+                Map<String, Object> line = new LinkedHashMap<>();
+                line.put("vendor", binding.get("vendor"));
+                line.put("text", assertionText(binding.get("assertion")));
+                expected.add(line);
+            }
+        }
+        boolean secret = isSecretEvidence(bindings);
+        List<Map<String, Object>> devices = new ArrayList<>();
+        List<Target> targets = evaluable(allDevices());
+        Map<String, Map<String, Object>> evaluations = evaluateAll(targets, false, new int[1]);
+        for (Target target : targets) {
+            Map<String, Object> evaluation = evaluations.get(target.deviceId());
+            if (evaluation == null) continue;
+            for (Map<String, Object> item : getItems(evaluation)) {
+                if (!controlId.equals(item.get("controlId")) || "NOT_APPLICABLE".equals(item.get("displayStatus"))) continue;
+                Map<String, Object> device = new LinkedHashMap<>();
+                device.put("device_id", target.deviceId());
+                device.put("hostname", target.hostname().orElse(null));
+                device.put("vendor", target.vendor());
+                device.put("status", item.get("displayStatus"));
+                device.put("observed_value", secret ? null : item.get("observedValue"));
+                device.put("message", secret ? "Evidence withheld" : item.get("message"));
+                devices.add(device);
+                break;
+            }
+        }
+        devices.sort(java.util.Comparator.comparingInt(d -> switch (String.valueOf(d.get("status"))) {
+            case "FAIL" -> 0;
+            case "PASS" -> 2;
+            default -> 1;
+        }));
+        Map<String, Object> detail = new LinkedHashMap<>();
+        for (String key : List.of("control_id", "title", "severity", "status", "frameworks")) detail.put(key, summary.get(key));
+        detail.put("rationale", summary.get("description"));
+        detail.put("expected", expected);
+        detail.put("devices", devices);
+        return detail;
+    }
+
+    private static boolean isSecretEvidence(Object bindings) {
+        if (!(bindings instanceof List<?> list)) return false;
+        for (Object entry : list) {
+            if (!(entry instanceof Map<?, ?> binding) || !(binding.get("evidenceRequirement") instanceof Map<?, ?> evidence)) continue;
+            String path = String.valueOf(evidence.get("settingKey")).toLowerCase(Locale.ROOT);
+            if (path.matches(".*(community|pre.?shared|password.hash|expert.hash|grub2.hash|private.key|secret|key.material).*")) return true;
+        }
+        return false;
+    }
+
+    static String assertionText(Object assertion) {
+        if (!(assertion instanceof Map<?, ?> rule)) return "see benchmark";
+        String target = String.valueOf(rule.get("targetString"));
+        String number = String.valueOf(rule.get("targetNumber"));
+        Object rawList = rule.get("targetList");
+        String values = rawList instanceof List<?> list ? String.join(", ", list.stream().map(String::valueOf).toList()) : "";
+        return switch (String.valueOf(rule.get("op"))) {
+            case "gte", "count_gte" -> "at least " + number;
+            case "lte", "count_lte" -> "at most " + number;
+            case "equals" -> "set to " + target;
+            case "not_equals" -> "not set to " + target;
+            case "present" -> "configured";
+            case "absent" -> "not configured";
+            case "in" -> "one of: " + values;
+            case "matches", "any_match" -> "matches the required pattern";
+            case "not_match", "none_match" -> "does not match the prohibited pattern";
+            case "not_in" -> "not one of: " + values;
+            default -> "see benchmark";
+        };
     }
 
     public Map<String, Object> getDeviceCompliance(String deviceId) {

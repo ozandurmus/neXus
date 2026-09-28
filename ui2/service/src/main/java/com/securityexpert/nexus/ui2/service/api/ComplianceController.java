@@ -44,6 +44,12 @@ public final class ComplianceController {
         ));
     }
 
+    @GetMapping("/api/v2/compliance/controls/{controlId}")
+    public ResponseEntity<Map<String, Object>> getControlDetail(@PathVariable String controlId) {
+        Map<String, Object> detail = complianceService.getControlDetail(controlId);
+        return detail == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(detail);
+    }
+
     @GetMapping("/devices/{deviceId}/compliance")
     public ResponseEntity<Map<String, Object>> getDeviceCompliance(@PathVariable String deviceId) {
         Map<String, Object> result = complianceService.getDeviceCompliance(deviceId);

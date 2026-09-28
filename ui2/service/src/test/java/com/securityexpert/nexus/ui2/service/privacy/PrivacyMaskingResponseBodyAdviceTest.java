@@ -38,6 +38,22 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void masksControlDetailTextAndHostnameButPreservesDeviceId() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) advice.beforeBodyWrite(Map.of("devices", List.of(Map.of(
+                "device_id", "opaque-device-1", "hostname", "edge-lab-01",
+                "observed_value", "192.0.2.10/24", "message", "edge-lab-01 at 192.0.2.10"))),
+                null, null, null, serverRequest, null);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> device = ((List<Map<String, Object>>) result.get("devices")).get(0);
+        assertThat(device.get("device_id")).isEqualTo("opaque-device-1");
+        assertThat(device.get("hostname")).isNotEqualTo("edge-lab-01");
+        assertThat((String) device.get("observed_value")).doesNotContain("192.0.2.10");
+        assertThat((String) device.get("message")).doesNotContain("192.0.2.10", "edge-lab-01");
+    }
+
+    @Test
     void marksAMaskedResponseWithTheMaskedHeaderAndOnlyThat() {
         org.springframework.http.server.ServerHttpResponse masked = mock(org.springframework.http.server.ServerHttpResponse.class);
         org.springframework.http.HttpHeaders maskedHeaders = new org.springframework.http.HttpHeaders();

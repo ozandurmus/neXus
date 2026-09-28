@@ -95,5 +95,6 @@ class ComplianceControllerTest {
         assertEquals(HttpStatus.OK, controlsRes.getStatusCode());
         assertNotNull(controlsRes.getBody());
         assertTrue(controlsRes.getBody().containsKey("controls"));
+        assertEquals(HttpStatus.NOT_FOUND, controller.getControlDetail("unknown").getStatusCode());
     }
 }

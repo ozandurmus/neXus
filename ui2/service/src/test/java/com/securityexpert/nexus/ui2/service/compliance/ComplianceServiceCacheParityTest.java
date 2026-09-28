@@ -59,7 +59,9 @@ class ComplianceServiceCacheParityTest {
             for (int i = 0; i < CONTROLS.length; i++) {
                 b.append(i == 0 ? "" : ",").append("{\"id\":\"").append(CONTROLS[i]).append("\",\"title\":\"t").append(i)
                         .append("\",\"description\":\"d\",\"severity\":\"").append(i == 0 ? "CRITICAL" : "HIGH")
-                        .append("\",\"frameworks\":[{\"framework\":\"CIS\"}]}");
+                        .append("\",\"frameworks\":[{\"framework\":\"CIS\"},{\"framework\":\"NIST_800_53\",\"reference\":\"AC-1\"}],\"bindings\":[{\"vendor\":\"check_point\",\"assertion\":{\"op\":\"gte\",\"targetNumber\":5},\"evidenceRequirement\":{\"settingKey\":\"")
+                        .append(i == 1 ? "gaia.expert.hash" : "gaia.session.timeout")
+                        .append("\"}}]}");
             }
             send(ex, b.append("]}").toString());
         });
@@ -84,7 +86,7 @@ class ComplianceServiceCacheParityTest {
                 gap += st.equals("DATA_UNAVAILABLE") ? 1 : 0;
                 items.append(i == 0 ? "" : ",").append("{\"controlId\":\"").append(c).append("\",\"displayStatus\":\"").append(st)
                         .append("\",\"severity\":\"").append(i == 0 ? "CRITICAL" : "HIGH").append("\",\"message\":\"m-").append(c)
-                        .append("\",\"frameworks\":[{\"framework\":\"").append(i % 2 == 0 ? "CIS" : "NIST_800_53").append("\"}]}");
+                        .append("\",\"observedValue\":\"secret-fixture\",\"frameworks\":[{\"framework\":\"").append(i % 2 == 0 ? "CIS" : "NIST_800_53").append("\"}]}");
             }
             double observed = pass + fail == 0 ? 0 : Math.round(pass * 1000.0 / (pass + fail)) / 10.0;
             send(ex, "{\"passCount\":" + pass + ",\"failCount\":" + fail + ",\"dataUnavailableCount\":" + gap
@@ -134,6 +136,27 @@ class ComplianceServiceCacheParityTest {
             out.add(new Target("dev-other", Optional.of("FW-OTHER-01"), "infoblox", Optional.of("h")));
             return out;
         }, id -> Optional.ofNullable(configs.get(id)), now::get, parallelism, Duration.ofHours(6), store);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void detailUsesStoredEvaluationsOrdersDevicesAndWithholdsSecretEvidence() {
+        ComplianceService current = service(ComplianceService.PARALLELISM);
+        assertThat(current.getControlDetail("unknown")).isNull();
+        Map<String, Object> detail = current.getControlDetail("C1");
+        assertThat(detail.get("rationale")).isNull();
+        assertThat(((List<Map<String, Object>>) detail.get("expected")).get(0).get("text")).isEqualTo("at least 5");
+        List<Map<String, Object>> devices = (List<Map<String, Object>>) detail.get("devices");
+        assertThat(devices).isNotEmpty();
+        assertThat(devices.stream().map(d -> d.get("status")).toList()).isSortedAccordingTo(
+                java.util.Comparator.comparingInt(s -> "FAIL".equals(s) ? 0 : "PASS".equals(s) ? 2 : 1));
+        assertThat(devices.get(0)).containsKeys("device_id", "hostname", "vendor", "observed_value", "message");
+        assertThat(current.getControls().get(0).get("family")).isEqualTo("AC");
+        List<Map<String, Object>> secretDevices = (List<Map<String, Object>>) current.getControlDetail("C2").get("devices");
+        assertThat(secretDevices).isNotEmpty().allSatisfy(d -> {
+            assertThat(d.get("observed_value")).isNull();
+            assertThat(d.get("message")).isEqualTo("Evidence withheld");
+        });
     }
 
     @Test

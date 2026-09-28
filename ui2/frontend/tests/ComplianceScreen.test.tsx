@@ -12,7 +12,7 @@ const OVERVIEW = {
 };
 
 const control = (id: string, category: string, status: "PASS" | "FAIL" | "DATA_UNAVAILABLE", counts: [number, number, number], affected: string[] = []) => ({
-  control_id: id, title: `Control ${id}`, description: "d", severity: "HIGH", category, frameworks: [{ framework: "CIS", reference: "2.1.1" }],
+  control_id: id, title: `Control ${id}`, description: null, family: category === "Authentication" ? "AC" : "AU", severity: "HIGH", category, frameworks: [{ framework: "CIS", reference: "2.1.1" }],
   status, compliance_pct: 40, target_device_count: counts[0] + counts[1] + counts[2],
   pass_count: counts[0], fail_count: counts[1], data_unavailable_count: counts[2], affected_devices: affected,
   ...(status === "DATA_UNAVAILABLE" ? { missing_reason: "command not in the collection scope" } : {}),
@@ -20,7 +20,14 @@ const control = (id: string, category: string, status: "PASS" | "FAIL" | "DATA_U
 
 function stub() {
   vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(
-    url.includes("/compliance/overview") ? OVERVIEW : {
+    url.includes("/api/v2/compliance/controls/") ? {
+      control_id: "c1", title: "Control c1", severity: "HIGH", status: "FAIL", rationale: null,
+      frameworks: [], expected: [{ vendor: "check_point", text: "at least 5" }], devices: [
+        { device_id: "d1", hostname: "FW-TANGO-04", vendor: "check_point", status: "FAIL", observed_value: "3", message: "Too low" },
+        { device_id: "d2", hostname: "FW-JULIET-06", vendor: "check_point", status: "PASS", observed_value: "6", message: "OK" },
+        { device_id: "d3", hostname: "FW-BRAVO-02", vendor: "check_point", status: "DATA_UNAVAILABLE", observed_value: null, message: null },
+      ],
+    } : url.includes("/compliance/overview") ? OVERVIEW : {
       controls: [
         control("c1", "Authentication", "FAIL", [40, 22, 0], ["FW-TANGO-04"]),
         control("c2", "Authentication", "PASS", [62, 0, 0]),
@@ -49,10 +56,10 @@ describe("Compliance -- UI review 2026-09-23", () => {
     stub();
     render(<ComplianceScreen />);
     const table = (await screen.findByText("Control families")).closest("div")!.parentElement!;
-    const auth = within(table).getByText("Authentication").closest("tr")!;
+    const auth = within(table).getByText("AC · Access Control").closest("tr")!;
     expect(auth.textContent).toContain("124"); // checks 62 + 62
     expect(auth.textContent).toContain("22"); // findings
-    const logging = within(table).getByText("Logging").closest("tr")!;
+    const logging = within(table).getByText("AU · Audit and Accountability").closest("tr")!;
     expect(logging.textContent).toContain("0%"); // no evidence at all
   });
 
@@ -60,9 +67,10 @@ describe("Compliance -- UI review 2026-09-23", () => {
     stub();
     render(<ComplianceScreen />);
     expect((await screen.findAllByText("Evidence not collected")).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByText("Control c2"));
-    expect(await screen.findByText("No firewall listed for this control")).toBeInTheDocument();
-    expect(document.body.textContent).not.toContain("FW-JULIET-06");
+    fireEvent.click(screen.getByText("Control c1"));
+    expect(await screen.findByText(/at least 5/)).toBeInTheDocument();
+    expect(screen.getByText("FW-JULIET-06")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("null");
   });
 
   it("exports the audit report from what the screen read", async () => {
@@ -82,6 +90,16 @@ describe("Compliance -- UI review 2026-09-23", () => {
 });
 
 describe("control families", () => {
+  it("filters by family and keeps the URL", async () => {
+    stub();
+    render(<ComplianceScreen />);
+    fireEvent.click((await screen.findByText("AC · Access Control")).closest("tr")!);
+    expect(screen.getByText("Family: AC · Access Control")).toBeInTheDocument();
+    expect(window.location.search).toContain("family=AC");
+    expect(screen.queryByText("Control c3")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("CancelIcon"));
+    expect(screen.getByText("Control c3")).toBeInTheDocument();
+  });
   it("groups by the NIST SP 800-53 family when the catalog carries no category", async () => {
     const { familyOf } = await import("../src/screens/ComplianceScreen");
     const base = { control_id: "x", title: "t", description: "d", severity: "HIGH", status: "PASS", compliance_pct: 0, target_device_count: 0,

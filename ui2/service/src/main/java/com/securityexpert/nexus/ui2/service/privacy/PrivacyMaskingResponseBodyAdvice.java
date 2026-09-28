@@ -80,6 +80,8 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 if (("address".equals(key) || "destination".equals(key) || "management_ip".equals(key)
                         || "network".equals(key)) && val instanceof String s) {
                     ipMasker.registerSubnet(s);
+                } else if ("hostname".equals(key) && val instanceof String s) {
+                    topologyPseudonymizer.maskDeviceName(s, null);
                 } else {
                     preRegisterSubnets(val);
                 }
@@ -262,7 +264,7 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         result.put(key, value);
                     }
                 }
-                case "terminal_reason", "latest_job_terminal_reason", "peer_follow_reason" -> {
+                case "terminal_reason", "latest_job_terminal_reason", "peer_follow_reason", "observed_value", "message" -> {
                     if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskText(ipMasker.maskText(s)));
                     } else {
