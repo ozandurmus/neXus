@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -56,7 +58,7 @@ public final class BackupCapabilityExecutor {
     private static final Pattern FIRST_INTEGER = Pattern.compile("(\\d+)");
 
     private enum BackupStatus {
-        IN_PROGRESS, SUCCEEDED, FAILED
+        IN_PROGRESS, SUCCEEDED, FAILED, NOT_STARTED
     }
 
     private final DeviceTransport transport;
@@ -65,6 +67,8 @@ public final class BackupCapabilityExecutor {
     private final long freeSpaceThresholdBytes;
     private final Duration pollInterval;
     private final Duration runDeadline;
+    private final Supplier<Instant> now;
+    private final Consumer<Duration> pause;
 
     /** V45: the device-side archives this product created and has not yet deleted; null in compositions without one. */
     private final com.securityexpert.nexus.ui2.persistence.artefact.DeviceArchiveLedger archiveLedger;
@@ -77,12 +81,22 @@ public final class BackupCapabilityExecutor {
     public BackupCapabilityExecutor(DeviceTransport transport, ArtefactStore artefactStore,
             long freeSpaceThresholdBytes, Duration pollInterval, Duration runDeadline,
             com.securityexpert.nexus.ui2.persistence.artefact.DeviceArchiveLedger archiveLedger) {
+        this(transport, artefactStore, freeSpaceThresholdBytes, pollInterval, runDeadline, archiveLedger,
+                Instant::now, BackupCapabilityExecutor::sleep);
+    }
+
+    BackupCapabilityExecutor(DeviceTransport transport, ArtefactStore artefactStore,
+            long freeSpaceThresholdBytes, Duration pollInterval, Duration runDeadline,
+            com.securityexpert.nexus.ui2.persistence.artefact.DeviceArchiveLedger archiveLedger,
+            Supplier<Instant> now, Consumer<Duration> pause) {
         this.archiveLedger = archiveLedger;
         this.transport = Objects.requireNonNull(transport, "transport");
         this.artefactStore = Objects.requireNonNull(artefactStore, "artefactStore");
         this.freeSpaceThresholdBytes = freeSpaceThresholdBytes;
         this.pollInterval = Objects.requireNonNull(pollInterval, "pollInterval");
         this.runDeadline = Objects.requireNonNull(runDeadline, "runDeadline");
+        this.now = Objects.requireNonNull(now, "now");
+        this.pause = Objects.requireNonNull(pause, "pause");
     }
 
     public BackupResult collect(BackupRequest request, String deviceId, String jobId) {
@@ -152,9 +166,11 @@ public final class BackupCapabilityExecutor {
 
         // Entry 2 (BK-5): submit -- never retried.
         ExecOutcome submit = exec(session, BackupReadPlan.CP_ADD_BACKUP_LOCAL, SUBMIT_TIMEOUT);
+        String submitShape = maskedShape(String.join("\n", submit.output().lines().limit(2).toList()));
+        LOG.log(System.Logger.Level.INFO, "[BACKUP_SUBMIT] shape={0}", submitShape);
         if (!submit.succeeded()) {
             // BK-8: a vendor refusal (snapshot in progress, an open management client) is the failure reason.
-            return new BackupResult.SubmitRefused("add backup local was refused: " + submit.output());
+            return new BackupResult.SubmitRefused("add backup local was refused: " + submitShape);
         }
         // Measured live (2026-09-22) and in the reference backup trail: a non-interactive
         // "add backup local" only announces that the package is being created -- the archive is
@@ -163,8 +179,12 @@ public final class BackupCapabilityExecutor {
         Optional<String> archivePath = parseArchiveName(submit.output());
 
         // Entry 3 (BK-5): poll until terminal or the run's own deadline.
-        Poll poll = pollUntilTerminalOrDeadline(session);
+        Poll poll = pollUntilTerminalOrDeadline(session, now.get());
         BackupStatus status = poll.status();
+        if (status == BackupStatus.NOT_STARTED) {
+            return new BackupResult.SubmitRefused("the device did not start a backup; add backup local said: "
+                    + submitShape);
+        }
         if (archivePath.isEmpty()) {
             archivePath = parseBackupLocation(poll.lastOutput());
         }
@@ -300,18 +320,24 @@ public final class BackupCapabilityExecutor {
     private record Poll(BackupStatus status, String lastOutput) {
     }
 
-    private Poll pollUntilTerminalOrDeadline(TransportSession session) {
-        Instant deadline = Instant.now().plus(runDeadline);
+    private Poll pollUntilTerminalOrDeadline(TransportSession session, Instant submittedAt) {
+        Instant deadline = submittedAt.plus(runDeadline);
+        Instant noStartDeadline = submittedAt.plus(Duration.ofMinutes(3));
+        boolean alwaysEmpty = true;
         while (true) {
             ExecOutcome statusOutcome = exec(session, BackupReadPlan.CP_SHOW_BACKUP_STATUS, POLL_TIMEOUT);
             BackupStatus status = classifyStatus(statusOutcome.output());
             if (status == BackupStatus.SUCCEEDED || status == BackupStatus.FAILED) {
                 return new Poll(status, statusOutcome.output());
             }
-            if (!Instant.now().plus(pollInterval).isBefore(deadline)) {
+            alwaysEmpty &= statusOutcome.succeeded() && statusOutcome.output().isEmpty();
+            if (alwaysEmpty && !now.get().isBefore(noStartDeadline)) {
+                return new Poll(BackupStatus.NOT_STARTED, "");
+            }
+            if (!now.get().plus(pollInterval).isBefore(deadline)) {
                 return new Poll(BackupStatus.IN_PROGRESS, statusOutcome.output()); // never terminal before the deadline -> OUTCOME_UNKNOWN
             }
-            sleep(pollInterval);
+            pause.accept(pollInterval);
         }
     }
 
@@ -380,12 +406,15 @@ public final class BackupCapabilityExecutor {
         return Optional.empty();
     }
 
-    /** Structure-only projection for a diagnostic log: digit runs become {@code #}, whitespace collapses. */
+    /** Structure-only projection for a diagnostic log: names and archives are removed, digits masked. */
     static String maskedShape(String output) {
         if (output == null) {
             return "<null>";
         }
-        String s = output.replaceAll("\\d+", "#").replaceAll("\\s+", " ").trim();
+        String s = output.replaceAll("(?i)\\S+\\.tgz", "<archive>")
+                .replaceAll("\\b(?:[A-Za-z0-9-]+\\.)+[A-Za-z0-9-]+\\b", "<host>")
+                .replaceAll("\\b[A-Za-z][A-Za-z0-9_-]*[-_][A-Za-z0-9_-]*\\d+[A-Za-z0-9_-]*\\b", "<host>")
+                .replaceAll("\\d+", "#").replaceAll("\\s+", " ").trim();
         return s.length() > 160 ? s.substring(0, 160) + "..." : s;
     }
 
