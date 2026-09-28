@@ -64,3 +64,13 @@ keyboard-interactive authentication on a known-hosts mismatch and closes after t
 2026-09-28: `next methods="publickey,password,keyboard-interactive"`, then client close; `HOST_A_REBUILD_RUNBOOK.md`).
 The receiver model itself is sound; the fix is on the Cyber Controller (remove the stale entry). A Spark appliance
 has no stale entry for HOST-A; if its client pins host keys, the §4 measurement records it.
+
+## 7. Identity reads from the appliance (PO approved 2026-09-28: "gönder ekle")
+The model, version and name of a Spark come today only from the nightly management discovery (failing since
+2026-09-25), so the four Spark devices show no model. The PO approved two clish reads, Gaia Embedded only, read class,
+offered in Operations › Diagnostics and then used by confirm/inventory:
+- `show diag` (R81.10.X CLI guide p.1891: image name/version, HW version, unit model, serial, voltages/temperatures)
+  -- parse image version and model; the serial is identity (masked on screen); voltages/temperatures not stored.
+- `show software-version` (p.1930: version and build).
+The hostname is the clish prompt (`<name>>`), already seen by the interactive shell. Whether `show diag`'s "Unit
+model" is the marketing model (e.g. 1590) or an internal code is UNKNOWN until the first run is recorded here.
