@@ -107,3 +107,12 @@ sweep from the VPN was stopped at the PO's request.)
   (OS and configuration; k3s/container, log, backup and build paths excluded), daily check by `dailyaidecheck.timer`.
   Local registry 2.8.3 -> 3.x pinned by digest (`deploy/ui2-image-build/05-registry.yaml`); pull and push verified by
   a full deploy. Build executor (kaniko, archived upstream): accepted risk for now -- runs only during builds, in-cluster.
+
+## 7. Regression found and fixed 2026-09-27 -- the Radware Cyber Controller SFTP receiver
+The receiver (`RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md`) is HOST-A's own sshd, user `nexus-cc`, chrooted, only
+from the Cyber Controller's address. Two hardening changes of the same day blocked it: `AllowUsers` without `nexus-cc`,
+and the host firewall's port-22 rule limited to the VPN and team-VM blocks. Fixed: `nexus-cc` added to `AllowUsers`
+(the `Match User nexus-cc Address` rules still confine it); a `sftp_push_allowed` set in the firewall filled from that
+Match rule. Independently, Cyber Controller pushes had been failing since the 2026-09-24/25 reinstall: the client
+offers keyboard-interactive only and the new sshd default disabled it; `KbdInteractiveAuthentication yes` was added
+inside the Cyber Controller's Match block only (`/etc/ssh/sshd_config.bak-nexus-kbd` kept).
