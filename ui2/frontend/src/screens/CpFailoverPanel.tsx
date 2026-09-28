@@ -24,7 +24,7 @@ import { approveCpFailover, getCpFailoverRun, listCpFailoverApprovals, listCpFai
 
 const labels = ["Preparing", "Failing over", "Switched", "Checking", "No problems found"];
 const cpChecks: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate", 9: "State synchronization", 10: "Installed policy parity" };
-const panChecks: Record<number, string> = { 1: "HA mode and roles", 2: "Peer relationship", 3: "HA links", 4: "Configuration sync" };
+const panChecks: Record<number, string> = { 1: "HA mode and roles", 2: "Peer relationship", 3: "HA links", 4: "Configuration sync", 5: "Session synchronization", 6: "Sessions carried", 7: "Version parity" };
 const activeStates: CpFailoverState[] = ["PLANNED", "PRECHECK", "FAILING_OVER", "SWITCHED", "POSTCHECK", "RETURNING"];
 
 export function runStep(state: CpFailoverState, step: string): number {

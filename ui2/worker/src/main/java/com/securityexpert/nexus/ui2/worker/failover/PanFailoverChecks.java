@@ -12,6 +12,7 @@ import org.xml.sax.InputSource;
 
 /** Derived, fail-closed facts from each firewall's direct HA-state response. */
 public final class PanFailoverChecks {
+    public static final int SESSION_TOLERANCE_PERCENT = 80;
     public record State(String mode, String role, String localSerial, String peerSerial,
             String peerConnection, String ha1, String ha1Backup, boolean backupConfigured,
             String ha2, String runningSync) {}
@@ -30,9 +31,8 @@ public final class PanFailoverChecks {
     private static String value(Element parent,String name) {
         return text(parent,name).toLowerCase(Locale.ROOT);
     }
-    public static State parse(String xml) {
-        State unknown=new State("","","","","","","",false,"","");
-        if (xml==null || xml.isBlank() || xml.length()>262144) return unknown;
+    private static Element result(String xml) {
+        if (xml==null || xml.isBlank() || xml.length()>262144) return null;
         try {
             var factory=DocumentBuilderFactory.newInstance();
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl",true);
@@ -41,8 +41,14 @@ public final class PanFailoverChecks {
             factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING,true);
             factory.setExpandEntityReferences(false);
             var response=factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml))).getDocumentElement();
-            if (!"response".equals(response.getTagName()) || !"success".equals(response.getAttribute("status"))) return unknown;
-            Element result=child(response,"result"), group=child(result,"group");
+            return "response".equals(response.getTagName()) && "success".equals(response.getAttribute("status"))
+                ?child(response,"result"):null;
+        } catch (Exception invalid) { return null; }
+    }
+    public static State parse(String xml) {
+        State unknown=new State("","","","","","","",false,"","");
+        try {
+            Element group=child(result(xml),"group");
             if (group==null) return unknown;
             Element local=child(group,"local-info"),peer=child(group,"peer-info");
             if (local==null || peer==null) return unknown;
@@ -52,6 +58,29 @@ public final class PanFailoverChecks {
                 !value(local,"ha1-backup-ipaddr").isEmpty(),value(child(peer,"conn-ha2"),"conn-status"),
                 value(group,"running-sync"));
         } catch (Exception invalid) { return unknown; }
+    }
+    public static String sessionSync(String xml) {
+        String state=value(result(xml),"session-sync");
+        return status("current".equals(state) || "in-sync".equals(state),
+            "failed".equals(state) || "disabled".equals(state));
+    }
+    public static Long sessions(String xml) {
+        String count=text(result(xml),"active-sessions");
+        try { return count.matches("[0-9]+")?Long.parseLong(count):null; }
+        catch (NumberFormatException invalid) { return null; }
+    }
+    public static String carried(Long before,Long after) {
+        if (before==null || after==null) return "UNKNOWN";
+        return after>=Math.ceil(before*SESSION_TOLERANCE_PERCENT/100.0)?"PASS":"FAIL";
+    }
+    public static String versions(String first,String second) {
+        Element a=child(result(first),"system"),b=child(result(second),"system");
+        boolean mismatch=false;
+        for (String field:new String[]{"sw-version","app-version","threat-version"}) {
+            if (text(a,field).isEmpty() || text(b,field).isEmpty()) return "UNKNOWN";
+            if (!text(a,field).equals(text(b,field))) mismatch=true;
+        }
+        return mismatch?"FAIL":"PASS";
     }
     private static String status(boolean pass, boolean fail) { return pass?"PASS":fail?"FAIL":"UNKNOWN"; }
     private static boolean knownRole(String role) {

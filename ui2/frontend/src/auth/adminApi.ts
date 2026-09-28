@@ -1580,7 +1580,7 @@ export interface CpFailoverRun {
   runId: string; approvalId: string; scheduledFor: string; state: CpFailoverState; step: string;
   outcome: string | null; failedCheck: string | null; message: string | null; steps: string[];
 }
-export interface CpFailoverCheck { phase: "pre" | "post"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 8 | 9 | 10; status: CpFailoverCheckStatus; derived: string; observedAt: string }
+export interface CpFailoverCheck { phase: "pre" | "post"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10; status: CpFailoverCheckStatus; derived: string; observedAt: string }
 export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverCheck[] }
 
 const failoverPath = (vendor?: string) => vendor === "palo_alto" ? "/api/v2/pan-failover" : "/api/v2/cp-failover";

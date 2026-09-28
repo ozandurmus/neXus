@@ -26,7 +26,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMateria
 class PanFailoverJobExecutorTest {
     private static final String CLUSTER="CLS-TEST-01", A="FW-TEST-01", B="FW-TEST-02";
     private static final class Script {
-        boolean suspended,functional,stuck,badPre,badPost;
+        boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,badVersion,lowPostSessions;
         int suspendCount,functionalCount;
         DeviceTransport transport() {
             return (DeviceTransport) Proxy.newProxyInstance(DeviceTransport.class.getClassLoader(),
@@ -45,6 +45,17 @@ class PanFailoverJobExecutorTest {
                         return new XmlApiResult.Completed(200,"<response status=\"success\"/>");
                     }
                     boolean first=A.equals(((ApiTarget)args[0]).endpointId());
+                    if (command.contains("<state-synchronization/>"))
+                        return new XmlApiResult.Completed(200,"<response status=\"success\"><result><session-sync>"
+                            +(badSync&&!first?"disabled":"in-sync")+"</session-sync></result></response>");
+                    if (command.contains("<session><info/>"))
+                        return new XmlApiResult.Completed(200,"<response status=\"success\"><result><active-sessions>"
+                            +(badSessions&&!first?"invalid":lowPostSessions&&suspended&&!first?"79":"100")
+                            +"</active-sessions></result></response>");
+                    if (command.contains("<system><info/>"))
+                        return new XmlApiResult.Completed(200,"<response status=\"success\"><result><system>"
+                            +"<sw-version>1</sw-version><app-version>2</app-version><threat-version>"
+                            +(badVersion&&!first?"4":"3")+"</threat-version></system></result></response>");
                     String local=first?(functional?"passive":suspended&&!stuck?"suspended":"active")
                         :(suspended&&!stuck?"active":"passive");
                     String peer=first?(suspended&&!stuck?"active":"passive")
@@ -124,7 +135,7 @@ class PanFailoverJobExecutorTest {
         Script script=new Script(); Result result=run(script);
         assertEquals("DONE",result.state());
         assertEquals(1,script.suspendCount); assertEquals(1,script.functionalCount);
-        assertTrue(result.checks().contains("post:4:PASS"));
+        assertTrue(result.checks().contains("post:7:PASS"));
     }
     @Test void precheckFailNeverWrites() {
         Script script=new Script(); script.badPre=true; Result result=run(script);
@@ -143,8 +154,27 @@ class PanFailoverJobExecutorTest {
         assertEquals(1,script.suspendCount); assertEquals(0,script.functionalCount);
         assertTrue(result.checks().contains("post:3:FAIL"));
     }
+    @Test void addedPrecheckFailuresNeverSuspend() {
+        for (int check=5;check<=7;check++) {
+            Script script=new Script();
+            script.badSync=check==5; script.badSessions=check==6; script.badVersion=check==7;
+            Result result=run(script);
+            assertEquals("STOPPED",result.state());
+            assertEquals(0,script.suspendCount);
+            assertTrue(result.checks().contains("pre:"+check+":"+(check==6?"UNKNOWN":"FAIL")));
+        }
+    }
+    @Test void lowSessionCarryStopsBeforeReturn() {
+        Script script=new Script(); script.lowPostSessions=true;
+        Result result=run(script);
+        assertEquals("STOPPED",result.state());
+        assertEquals(1,script.suspendCount);
+        assertEquals(0,script.functionalCount);
+        assertTrue(result.checks().contains("post:6:FAIL"));
+    }
     public static void main(String[] args) {
         var test=new PanFailoverJobExecutorTest(); test.happyPath(); test.precheckFailNeverWrites();
-        test.switchTimeoutDoesNotReturn(); test.postcheckFailDoesNotReturn();
+        test.switchTimeoutDoesNotReturn(); test.postcheckFailDoesNotReturn(); test.addedPrecheckFailuresNeverSuspend();
+        test.lowSessionCarryStopsBeforeReturn();
     }
 }

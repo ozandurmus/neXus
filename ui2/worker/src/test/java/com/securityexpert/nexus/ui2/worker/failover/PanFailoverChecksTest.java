@@ -38,7 +38,24 @@ class PanFailoverChecksTest {
             .replace("Active-Passive","Active-Active"));
         assertEquals("FAIL",PanFailoverChecks.roles(a,b,"active","passive"));
     }
+    private static String result(String body) {
+        return "<response status=\"success\"><result>"+body+"</result></response>";
+    }
+    @Test void addedChecksPassFailUnknown() {
+        assertEquals("PASS",PanFailoverChecks.sessionSync(result("<session-sync>in-sync</session-sync>")));
+        assertEquals("FAIL",PanFailoverChecks.sessionSync(result("<session-sync>disabled</session-sync>")));
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(result("<session-sync>other</session-sync>")));
+        assertEquals(100L,PanFailoverChecks.sessions(result("<active-sessions>100</active-sessions>")));
+        assertEquals(null,PanFailoverChecks.sessions(result("<active-sessions>bad</active-sessions>")));
+        assertEquals("PASS",PanFailoverChecks.carried(100L,80L));
+        assertEquals("FAIL",PanFailoverChecks.carried(101L,80L));
+        assertEquals("UNKNOWN",PanFailoverChecks.carried(null,80L));
+        String version=result("<system><sw-version>1</sw-version><app-version>2</app-version><threat-version>3</threat-version></system>");
+        assertEquals("PASS",PanFailoverChecks.versions(version,version));
+        assertEquals("FAIL",PanFailoverChecks.versions(version,version.replace("<threat-version>3", "<threat-version>4")));
+        assertEquals("UNKNOWN",PanFailoverChecks.versions(version,result("<system/>")));
+    }
     public static void main(String[] args) {
-        var test=new PanFailoverChecksTest(); test.pairPassFailAndUnknown(); test.activeActiveRefused();
+        var test=new PanFailoverChecksTest(); test.pairPassFailAndUnknown(); test.activeActiveRefused(); test.addedChecksPassFailUnknown();
     }
 }
