@@ -1,6 +1,8 @@
 # Check Point Quantum Spark (Gaia Embedded) configuration backup
 
-**Status:** DRAFT -- DO NOT FREEZE. Awaiting the Product Owner's command approval (§5) and the §4 measurement.
+**Status:** FROZEN -- Product Owner approved the §5 commands and the §3 method on 2026-09-28 ("go"). The §4
+measurement is the first real run on one appliance; until it is recorded here, success is decided only by the
+fail-closed rule in §3 (upload present, > 1 KiB, zip header), never by device output text.
 PO direction 2026-09-28: "7 go almamız lazım" (Quantum Spark backup: bring it to a go/no-go).
 
 ## 1. Today (measured 2026-09-28, aiview)
@@ -53,6 +55,10 @@ Record the exact commands and the sanitized output shape next to this file befor
 | `backup settings to sftp server ... file-encryption on ... backup-policy on username ... password ...` | CLASS_0 read in effect (outbound copy + a device log line; no configuration change) -- PO to confirm | 180 s / none (never retried in the same run) | nightly with the fleet backup | high: two secrets on the command line -- redacted from transcripts, never in job reasons |
 Plus the host side: new `nexus-spark` receiver account and Match rule, Spark addresses in `sftp_push_allowed`.
 
-## 6. Open risk
-The Cyber Controller push into the same kind of receiver currently fails (client closes after the `none` auth probe;
-cause under investigation). The Spark receiver must not be built until that cause is known.
+## 6. Cyber Controller failure: resolved as unrelated (2026-09-28)
+The Cyber Controller push fails because HOST-A's SSH host key changed in the 2026-09-25 reinstall and the Cyber
+Controller's OpenSSH client keeps the old key: under `StrictHostKeyChecking no` it disables password and
+keyboard-interactive authentication on a known-hosts mismatch and closes after the `none` probe (sshd DEBUG3 trace
+2026-09-28: `next methods="publickey,password,keyboard-interactive"`, then client close; `HOST_A_REBUILD_RUNBOOK.md`).
+The receiver model itself is sound; the fix is on the Cyber Controller (remove the stale entry). A Spark appliance
+has no stale entry for HOST-A; if its client pins host keys, the §4 measurement records it.
