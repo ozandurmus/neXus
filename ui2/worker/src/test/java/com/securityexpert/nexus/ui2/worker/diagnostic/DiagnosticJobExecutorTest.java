@@ -16,8 +16,9 @@ import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
 import com.securityexpert.nexus.ui2.capability.GateRegistryFixtureLoader;
 class DiagnosticJobExecutorTest {
-    @Test void checkPointClishUsesExecAndGaiaEmbeddedUsesInteractiveShell() {
+    @Test void checkPointGateScopeChoosesShell() {
         assertShell(null,"cp_configuration_show_version_all","clish -c 'show version all'",true);
+        assertShell(null,"cp_spark_backup_log","show backup-settings-log",false);
         assertShell("1550","cp_spark_backup_log","show backup-settings-log",false);
     }
 

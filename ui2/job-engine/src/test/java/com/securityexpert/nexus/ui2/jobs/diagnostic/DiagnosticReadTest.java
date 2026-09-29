@@ -19,6 +19,13 @@ class DiagnosticReadTest {
         GateRegistryPort gates=key -> rows.stream().filter(r -> r.key().equals(key)).toList();
         var cp=DiagnosticRead.commands("check_point","gateway",null,gates);
         assertTrue(cp.stream().anyMatch(c -> c.gateId().equals("cp_inventory_vsid_cphaprob_stat")));
+        assertTrue(cp.stream().anyMatch(c -> c.gateId().equals("cp_spark_backup_log")));
+        assertTrue(DiagnosticRead.commands("check_point","gateway","1550",gates).stream()
+            .noneMatch(c -> c.gateId().equals("cp_configuration_show_version_all")));
+        assertTrue(DiagnosticRead.commands("check_point","gateway","known gaia",gates).stream()
+            .noneMatch(c -> c.gateId().equals("cp_spark_backup_log")));
+        assertTrue(DiagnosticRead.resolveStored("check_point","gateway",null,"cp_configuration_show_version_all",
+            "clish -c 'show version all'",gates).isPresent());
         assertFalse(cp.stream().anyMatch(c -> c.gateId().equals("rb3b_add_backup_local")));
         assertTrue(DiagnosticRead.commands("check_point","management_server",null,gates).stream()
             .anyMatch(c -> c.gateId().equals("mds_show_version_all")));

@@ -6,7 +6,6 @@ import java.util.UUID;
 import java.nio.charset.StandardCharsets;
 import com.securityexpert.nexus.ui2.jobs.JobState;
 import com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead;
-import com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.stepattempt.JobStepAttemptRepository;
 import com.securityexpert.nexus.ui2.jobs.transport.*;
@@ -55,11 +54,11 @@ public final class DiagnosticJobExecutor {
                 finish(jobId,epoch,JobState.FAILED,"CONNECTION_FAILED"); return;
             }
             session=authenticated.session();
-            boolean cpExpert="check_point".equals(device.get().vendorHint())
-                && !CheckPointSparkModelHint.isKnownSparkModel(Optional.ofNullable(model));
+            boolean interactive=!"check_point".equals(device.get().vendorHint())
+                || "gaia_embedded".equals(read.get().platformRoleScope());
             var spec=new ExecSpec(read.get().command(),true);
-            var result=cpExpert ? ssh.exec(session,spec,Duration.ofSeconds(read.get().timeoutSeconds()))
-                : ssh.execInteractive(session,spec,Duration.ofSeconds(read.get().timeoutSeconds()));
+            var result=interactive ? ssh.execInteractive(session,spec,Duration.ofSeconds(read.get().timeoutSeconds()))
+                : ssh.exec(session,spec,Duration.ofSeconds(read.get().timeoutSeconds()));
             if (!(result instanceof ExecResult.Completed completed)) { finish(jobId,epoch,JobState.OUTCOME_UNKNOWN,"OUTPUT_UNAVAILABLE"); return; }
             String output=DiagnosticText.scrubSecrets(completed.output());
             byte[] bytes=output.getBytes(StandardCharsets.UTF_8);

@@ -22,7 +22,7 @@ public final class DiagnosticRead {
     private static final List<GateRow> ROWS = GateRegistryFixtureLoader.loadFromStream(
         DiagnosticRead.class.getClassLoader().getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
     public record Command(String gateId, String commandTemplate, int timeoutS) {}
-    public record Read(String command, String gateId, int timeoutSeconds) {}
+    public record Read(String command, String gateId, int timeoutSeconds, String platformRoleScope) {}
 
     public static List<Command> commands(String vendor, String role, String model, GateRegistryPort gates) {
         return ROWS.stream().filter(row -> eligible(row, vendor, role, model))
@@ -42,12 +42,12 @@ public final class DiagnosticRead {
             if ((start < 0) != (parameter == null) || (start >= 0 &&
                     (end < 0 || template.indexOf('<', end + 1) >= 0))) continue;
             String command = start < 0 ? template : template.substring(0, start) + parameter + template.substring(end + 1);
-            if ("check_point".equals(vendor) && !CheckPointSparkModelHint.isKnownSparkModel(Optional.ofNullable(model))
+            if ("check_point".equals(vendor) && !"gaia_embedded".equals(row.platformRoleScope())
                     && "clish".equals(row.shellContext()) && !command.startsWith("clish -c "))
                 command = "clish -c '" + command + "'";
             if (command.length() > 512) continue;
             var known = resolveGate(row, gates);
-            if (known.isPresent()) return Optional.of(new Read(command, gateId, known.get().timeoutS()));
+            if (known.isPresent()) return Optional.of(new Read(command, gateId, known.get().timeoutS(), row.platformRoleScope()));
         }
         return Optional.empty();
     }
@@ -58,8 +58,14 @@ public final class DiagnosticRead {
     }
 
     public static Optional<Read> resolve(String vendor, String role, String model, String command, GateRegistryPort gates) {
+        return resolveCommand(vendor, role, model, null, command, gates);
+    }
+
+    private static Optional<Read> resolveCommand(String vendor, String role, String model, String gateId,
+            String command, GateRegistryPort gates) {
         if (command == null || command.isBlank() || command.length() > 512) return Optional.empty();
         for (Command option : commands(vendor, role, model, gates)) {
+            if (gateId != null && !gateId.equals(option.gateId())) continue;
             String template = option.commandTemplate();
             int start = template.indexOf('<'), end = template.indexOf('>', start + 1);
             String parameter = null;
@@ -78,8 +84,7 @@ public final class DiagnosticRead {
     public static Optional<Read> resolveStored(String vendor, String role, String model, String gateId,
             String command, GateRegistryPort gates) {
         if (gateId == null || command == null) return Optional.empty();
-        return resolve(vendor,role,model,command,gates).filter(read -> gateId.equals(read.gateId())
-            && command.equals(read.command()));
+        return resolveCommand(vendor,role,model,gateId,command,gates).filter(read -> command.equals(read.command()));
     }
 
     private static boolean eligible(GateRow row, String vendor, String role, String model) {
@@ -89,7 +94,7 @@ public final class DiagnosticRead {
         String scope = switch (vendor) {
             case "check_point" -> "management_server".equals(role) ? "cp_multi_domain_server" :
                 "gateway".equals(role) ? CheckPointSparkModelHint.isKnownSparkModel(Optional.ofNullable(model))
-                    ? "gaia_embedded" : "cp_gaia_gateway" : "unsupported";
+                    ? "gaia_embedded" : model == null || model.isBlank() ? "unknown_cp_gateway" : "cp_gaia_gateway" : "unsupported";
             case "palo_alto" -> "gateway".equals(role) ? "pan_firewall" : "panorama";
             case "fortinet" -> "management_server".equals(role) ? "fortimanager" :
                 "gateway".equals(role) ? "fortigate" : "unsupported";
@@ -97,7 +102,8 @@ public final class DiagnosticRead {
             case "radware" -> "management_server".equals(role) ? "radware_cyber_controller" : "unsupported";
             default -> "unsupported";
         };
-        return row.platformRoleScope().equals(scope);
+        return row.platformRoleScope().equals(scope) || "unknown_cp_gateway".equals(scope)
+            && ("cp_gaia_gateway".equals(row.platformRoleScope()) || "gaia_embedded".equals(row.platformRoleScope()));
     }
 
     private static Optional<GateResolution.Known> resolveGate(GateRow row, GateRegistryPort gates) {
