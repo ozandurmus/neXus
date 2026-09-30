@@ -32,7 +32,7 @@ subprojects {
 
         // One security baseline, including modules that only use Jackson transitively.
         dependencies {
-            add("api", platform(libs.jackson.bom))
+            add("api", platform(rootProject.extensions.getByType<VersionCatalogsExtension>().named("libs").findLibrary("jackson-bom").get()))
         }
 
         extensions.configure<JavaPluginExtension> {
