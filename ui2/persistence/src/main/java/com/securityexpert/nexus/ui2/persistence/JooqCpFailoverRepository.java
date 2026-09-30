@@ -111,7 +111,7 @@ public class JooqCpFailoverRepository {
             + "from failover_check_result c where c.run_id=r.run_id and c.phase='pre'),'[]'::jsonb) checks "
             + "from failover_run r where r.run_kind='READINESS' and r.run_id in (select distinct on "
             + "(vendor,cluster_ref,coalesce(vs_id,'')) run_id from failover_run where run_kind='READINESS' "
-            + "and state in ('DONE','STOPPED') order by vendor,cluster_ref,coalesce(vs_id,''),finished_at desc))")
+            + "and state in ('DONE','STOPPED') order by vendor,cluster_ref,coalesce(vs_id,''),finished_at desc)")
             .map(r -> new ReadinessStatus(r.get("cluster_ref", String.class), r.get("vs_id", String.class),
                 r.get("vendor", String.class), r.get("outcome", String.class),
                 Optional.ofNullable(r.get("finished_at", java.time.OffsetDateTime.class))
