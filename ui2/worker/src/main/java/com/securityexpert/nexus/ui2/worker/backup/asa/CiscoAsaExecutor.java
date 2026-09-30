@@ -65,11 +65,15 @@ public final class CiscoAsaExecutor {
     private record Shell(TransportSession session, Optional<String> refusal, boolean authFailure) {
     }
 
-    private Shell open(Target target, String credentialRef) {
+    private ConnectResult connect(Target target, String credentialRef) {
         ConnectionTarget ct = new ConnectionTarget(UUID.randomUUID().toString(), target.host(), target.port());
         ConnectSpec spec = new ConnectSpec(credentialRef,
                 PersistedManagementEndpointTrustResolver.scopeRef(target.host(), target.port()), Optional.empty());
-        ConnectResult r = ssh.connect(ct, spec, CONNECT);
+        return ssh.connect(ct, spec, CONNECT);
+    }
+
+    private Shell open(Target target, String credentialRef) {
+        ConnectResult r = connect(target, credentialRef);
         return switch (r) {
             case ConnectResult.Authenticated a -> {
                 TransportSession s = a.session();
@@ -256,15 +260,18 @@ public final class CiscoAsaExecutor {
             try {
                 temp = java.nio.file.Files.createTempFile("asa-archive-", ".part");
                 java.nio.file.Path tempFile = temp;
-                Shell pull = open(target, credentialRef);
-                if (pull.session() == null) {
-                    archiveProblem = Optional.of("ASA archive (SCP connection: " + pull.refusal().orElse("failed") + ")");
+                // ASA permits one channel per session: this connection must never open a shell.
+                ConnectResult pull = connect(target, credentialRef);
+                if (!(pull instanceof ConnectResult.Authenticated authenticated)) {
+                    archiveProblem = Optional.of("ASA archive (SCP connection: " + pull.getClass().getSimpleName() + ")");
                 } else {
                     try {
-                        archiveBytes = scp.fetch(pull.session(), CiscoAsaPlan.scpPath(archiveName),
+                        LOG.log(System.Logger.Level.INFO, "[ASA] archive SCP session={0} purpose=scp_only",
+                                authenticated.session().sessionId());
+                        archiveBytes = scp.fetch(authenticated.session(), CiscoAsaPlan.scpPath(archiveName),
                                 size -> java.nio.file.Files.newOutputStream(tempFile), MAX_ARCHIVE_BYTES, ARCHIVE);
                     } finally {
-                        ssh.disconnect(pull.session());
+                        ssh.disconnect(authenticated.session());
                     }
                 }
             } catch (IOException e) {

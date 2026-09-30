@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.worker.backup.pan;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -49,14 +50,23 @@ public final class PanSetConfigReader {
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration SETUP_TIMEOUT = Duration.ofSeconds(20);
-    private static final Duration SHOW_TIMEOUT = Duration.ofSeconds(180);
     /** A real firewall's set-format configuration runs to hundreds of lines; fewer than this is a refusal or an error page. */
     private static final int MIN_SET_LINES = 5;
 
     private final DeviceTransport transport;
+    private final Duration showTimeout;
 
     public PanSetConfigReader(DeviceTransport transport) {
+        this(transport, Duration.ofSeconds(Long.parseLong(
+                System.getenv().getOrDefault("UI2_PAN_BACKUP_RUNNING_CONFIG_TIMEOUT_SECONDS", "300"))));
+    }
+
+    PanSetConfigReader(DeviceTransport transport, Duration showTimeout) {
         this.transport = Objects.requireNonNull(transport, "transport");
+        this.showTimeout = Objects.requireNonNull(showTimeout, "showTimeout");
+        if (showTimeout.toMillis() <= 0 || showTimeout.toMillis() > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("running-config timeout must fit a positive millisecond timeout");
+        }
     }
 
     /** A complete brace-format running config: opens with `config {`, closes its braces, has real content. */
@@ -110,7 +120,15 @@ public final class PanSetConfigReader {
                 }
             }
             transport.resyncPrompt(session, SETTLE);
-            ExecResult show = transport.execInteractive(session, new ExecSpec(COMMANDS.get(COMMANDS.size() - 1)), SHOW_TIMEOUT);
+            long started = System.nanoTime();
+            ExecResult show = transport.execInteractive(session, new ExecSpec(COMMANDS.get(COMMANDS.size() - 1)), showTimeout);
+            long durationMs = Duration.ofNanos(System.nanoTime() - started).toMillis();
+            // TimedOut/ChannelFailed carry no output; count bytes returned to this reader, never infer partial bytes.
+            int returnedBytes = show instanceof ExecResult.Completed c && c.output() != null
+                    ? c.output().getBytes(StandardCharsets.UTF_8).length : 0;
+            System.getLogger(PanSetConfigReader.class.getName()).log(System.Logger.Level.INFO,
+                    "[PAN] running-config read: outcome={0} returned_bytes={1} duration_ms={2} timeout_ms={3}",
+                    show.getClass().getSimpleName(), returnedBytes, durationMs, showTimeout.toMillis());
             measure(COMMANDS.get(COMMANDS.size() - 1), show);
             if (!(show instanceof ExecResult.Completed completed)) {
                 return new Outcome.Unavailable("show config running: " + show.getClass().getSimpleName());
