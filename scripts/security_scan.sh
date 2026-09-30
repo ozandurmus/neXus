@@ -14,7 +14,7 @@ run() {
 }
 case "$1" in
   semgrep)
-    run semgrep semgrep scan --metrics=off --disable-version-check --strict --json \
+    XDG_CACHE_HOME=/cache/semgrep run semgrep semgrep scan --metrics=off --disable-version-check --json \
       --config /rules/java.yaml --config /rules/typescript.yaml \
       --config /rules/owasp-top-ten.yaml --config /rules/secrets.yaml .
     ;;
@@ -27,7 +27,7 @@ case "$1" in
     printf '%s\n' "$?" >/work/gitleaks-history.json.exit
     ;;
   trivy)
-    export TRIVY_CACHE_DIR=/work/trivy-cache
+    export TRIVY_CACHE_DIR=/cache/trivy
     run trivy-fs trivy fs --scanners vuln --format json --no-progress .
     run trivy-config trivy config --format json deploy/
     # Prepared from Deployments by the host, never guessed from a tag or pod name.

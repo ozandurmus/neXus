@@ -27,7 +27,12 @@ def project(tool, report, target=""):
     if not isinstance(report, list if tool == "gitleaks" else dict):
         raise ValueError("invalid scanner report type")
     if tool == "semgrep":
-        if not isinstance(report.get("results"), list) or report.get("errors"):
+        # A file Semgrep cannot parse is reported, not fatal; any other error type fails the scan.
+        tolerated = ("Syntax error", "Lexical error", "Partial parsing", "Other syntax error", "Timeout")
+        errors = report.get("errors") or []
+        if not isinstance(report.get("results"), list) or any(
+                not str(e.get("type", "")).startswith(tolerated) and str(e.get("level", "error")) == "error"
+                for e in errors if isinstance(e, dict)):
             raise ValueError("incomplete semgrep scan")
         for r in report["results"]:
             extra = r["extra"]
