@@ -243,6 +243,22 @@
       "reason": "SSLContext \"TLS\" trusting only the cluster CA from the service-account mount; the JDK 21 runtime disables TLS 1.0/1.1. Reviewed 2026-09-30 -- false positive on the protocol name only.",
       "owner": "PO",
       "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.yaml.kubernetes.security.run-as-non-root-unsafe-value.run-as-non-root-unsafe-value",
+      "location": "deploy/ui2-image-build/30-build-job.yaml:30",
+      "reason": "Kaniko image builds run as root by design (documented exception, same as the KSV-0014/KSV-0118 acceptances for these Jobs).",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.yaml.kubernetes.security.run-as-non-root-unsafe-value.run-as-non-root-unsafe-value",
+      "location": "deploy/ui2-image-build/32-e2e-build-job.yaml:32",
+      "reason": "Kaniko image builds run as root by design (documented exception, same as the KSV-0014/KSV-0118 acceptances for these Jobs).",
+      "owner": "PO",
+      "review_date": "2026-12-31"
     }
   ]
 }
