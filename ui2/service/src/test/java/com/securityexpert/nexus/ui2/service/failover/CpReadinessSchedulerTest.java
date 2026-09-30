@@ -35,8 +35,8 @@ class CpReadinessSchedulerTest {
         scheduler.run();
     }
 
-    @Test void waitsForCadenceThenPreservesOrderCompletionAndPause() {
-        Instant due = START.plus(CADENCE);
+    @Test void firstPassAfterStartDelayThenCadencePreservesOrderCompletionAndPause() {
+        Instant due = START.plus(CpReadinessScheduler.FIRST_PASS_DELAY);
         tick(due.minusMillis(1));
         verifyNoInteractions(service, store);
         tick(due);
@@ -63,7 +63,7 @@ class CpReadinessSchedulerTest {
     }
 
     @Test void stuckRunReleasesCursorAtHardCapAndStillHonorsPause() {
-        Instant due = START.plus(CADENCE);
+        Instant due = START.plus(CpReadinessScheduler.FIRST_PASS_DELAY);
         tick(due);
         tick(due.plusSeconds(599));
         verify(service, never()).requestScheduledReadiness(second);
@@ -78,7 +78,7 @@ class CpReadinessSchedulerTest {
     @Test void refusedUnitDoesNotBlockTheRestOfThePass() {
         when(service.requestScheduledReadiness(first))
             .thenThrow(new CpFailoverService.Refusal("RUN_ALREADY_ACTIVE"));
-        Instant due = START.plus(CADENCE);
+        Instant due = START.plus(CpReadinessScheduler.FIRST_PASS_DELAY);
         tick(due);
         tick(due.plusSeconds(1));
         verify(service, never()).requestScheduledReadiness(second);
@@ -89,7 +89,7 @@ class CpReadinessSchedulerTest {
 
     @Test void emptyPassWaitsForTheNextCadence() {
         when(service.readinessTargets()).thenReturn(List.of());
-        Instant due = START.plus(CADENCE);
+        Instant due = START.plus(CpReadinessScheduler.FIRST_PASS_DELAY);
         tick(due);
         tick(due.plusSeconds(5));
         verify(service).readinessTargets();

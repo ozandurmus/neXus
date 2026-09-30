@@ -19,12 +19,13 @@ import com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository;
 public final class CpReadinessScheduler {
     private static final Logger LOG = LoggerFactory.getLogger(CpReadinessScheduler.class);
     private static final Duration RUN_CAP = Duration.ofMinutes(10);
+    static final Duration FIRST_PASS_DELAY = Duration.ofMinutes(10);
     private final CpFailoverService service;
     private final JooqCpFailoverRepository store;
     private final Duration unitPause;
     private final Duration cadence;
     private final Clock clock;
-    // ponytail: restart resets the pass; persist the cursor if restart continuity is required.
+    // A restart resets the pass; the first pass starts FIRST_PASS_DELAY after start so frequent deploys never starve it.
     private Iterator<CpFailoverService.ReadinessTarget> targets;
     private Instant nextPassAt;
     private Instant nextUnitAt;
@@ -45,7 +46,7 @@ public final class CpReadinessScheduler {
         this.unitPause = Duration.ofMillis(Math.max(0, unitPauseMs));
         this.cadence = Duration.ofMillis(Math.max(0, cadenceMs));
         this.clock = clock;
-        this.nextPassAt = clock.instant().plus(cadence);
+        this.nextPassAt = clock.instant().plus(FIRST_PASS_DELAY.compareTo(cadence) < 0 ? FIRST_PASS_DELAY : cadence);
     }
 
     @Scheduled(fixedDelay = 5000, initialDelay = 5000)
