@@ -22,6 +22,12 @@ public class JooqCpFailoverRepository {
             this(id, clusterRef, vsId, approvalId, requestedBy, scheduledFor, jobId, state, step,
                 outcome, failedCheck, message, "check_point", "FAILOVER");
         }
+        public Run(String id, String clusterRef, String vsId, String approvalId, String requestedBy,
+                Instant scheduledFor, String jobId, String state, String step, String outcome,
+                String failedCheck, String message, String vendor) {
+            this(id, clusterRef, vsId, approvalId, requestedBy, scheduledFor, jobId, state, step,
+                outcome, failedCheck, message, vendor, "FAILOVER");
+        }
     }
     public record Check(String phase, String memberRef, String vsId, int checkNo, String status,
             String derived, Instant observedAt) {}

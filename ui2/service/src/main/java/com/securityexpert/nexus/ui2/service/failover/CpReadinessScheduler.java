@@ -23,7 +23,7 @@ public final class CpReadinessScheduler {
     @Scheduled(fixedDelayString="${ui2.failover.readiness-cadence-ms:14400000}",
         initialDelayString="${ui2.failover.readiness-cadence-ms:14400000}")
     public void run() {
-        for (var target:service.readinessTargets().stream().filter(t -> "check_point".equals(t.vendor())).toList()) {
+        for (var target:service.readinessTargets()) {
             try {
                 String runId=service.requestScheduledReadiness(target);
                 while (!store.finished(runId)) Thread.sleep(1000);

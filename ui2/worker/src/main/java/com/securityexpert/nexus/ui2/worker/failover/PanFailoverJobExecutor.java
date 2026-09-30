@@ -34,10 +34,12 @@ public final class PanFailoverJobExecutor {
     private static final Pattern KEY=Pattern.compile("<key>\\s*([^<\\s]+)\\s*</key>");
     private static final Duration POLL=Duration.ofSeconds(3);
     private static final int MAX_POLLS=21;
+    private static final String READINESS_KIND="READINESS";
     private record Peer(String id,ApiTarget target,String key,String identity) {}
     private static final class Stop extends RuntimeException {
-        final String code; final int check;
-        Stop(String code,int check) { super(code); this.code=code; this.check=check; }
+        final String code; final int check; final String status;
+        Stop(String code,int check) { this(code,check,"FAIL"); }
+        Stop(String code,int check,String status) { super(code); this.code=code; this.check=check; this.status=status; }
     }
     private final JooqCpFailoverRepository store;
     private final DeviceRepository devices;
@@ -47,21 +49,29 @@ public final class PanFailoverJobExecutor {
     private final PanCredentialResolver credentials;
     private final GateRegistryPort gates;
     private final Pause pause;
+    private final Duration commandPause;
     private String jobId,runId;
     private long epoch;
     private int commandIndex;
     private boolean wrote,writeInFlight;
+    private boolean readiness;
 
     public PanFailoverJobExecutor(JooqCpFailoverRepository store,DeviceRepository devices,
             JobLeaseRepository leases,JobStepAttemptRepository attempts,DeviceTransport transport,
             PanCredentialResolver credentials,GateRegistryPort gates) {
-        this(store,devices,leases,attempts,transport,credentials,gates,d -> Thread.sleep(d.toMillis()));
+        this(store,devices,leases,attempts,transport,credentials,gates,d -> Thread.sleep(d.toMillis()),Duration.ofSeconds(2));
     }
     public PanFailoverJobExecutor(JooqCpFailoverRepository store,DeviceRepository devices,
             JobLeaseRepository leases,JobStepAttemptRepository attempts,DeviceTransport transport,
             PanCredentialResolver credentials,GateRegistryPort gates,Pause pause) {
+        this(store,devices,leases,attempts,transport,credentials,gates,pause,Duration.ofSeconds(2));
+    }
+    public PanFailoverJobExecutor(JooqCpFailoverRepository store,DeviceRepository devices,
+            JobLeaseRepository leases,JobStepAttemptRepository attempts,DeviceTransport transport,
+            PanCredentialResolver credentials,GateRegistryPort gates,Pause pause,Duration commandPause) {
         this.store=store; this.devices=devices; this.leases=leases; this.attempts=attempts;
         this.transport=transport; this.credentials=credentials; this.gates=gates; this.pause=pause;
+        this.commandPause=commandPause;
     }
     public void execute(String jobId,long epoch) {
         var run=store.runByJob(jobId);
@@ -71,20 +81,28 @@ public final class PanFailoverJobExecutor {
             return;
         }
         this.jobId=jobId; this.runId=run.get().id(); this.epoch=epoch;
+        this.readiness=READINESS_KIND.equals(run.get().kind());
         this.commandIndex=0; this.wrote=false; this.writeInFlight=false;
         if (!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:pan-failover-worker","pan_failover_start")) return;
         try {
-            if (!store.windowValid(runId)) throw new Stop("WINDOW_EXPIRED",0);
+            if (!readiness && !store.windowValid(runId)) throw new Stop("WINDOW_EXPIRED",0);
             List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(run.get().clusterRef());
             if (members.size()!=2 || members.stream().anyMatch(m -> !"palo_alto".equals(m.vendorHint())))
                 throw new Stop("CLUSTER_NOT_ELIGIBLE",0);
             if (!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
-            for (String command:List.of(STATE,SESSION_SYNC,SESSIONS,SYSTEM,SUSPEND,FUNCTIONAL)) gate(command);
+            for (String command:List.of(STATE,SESSION_SYNC,SESSIONS,SYSTEM)) gate(command);
+            if (!readiness) { gate(SUSPEND); gate(FUNCTIONAL); }
             Peer first=peer(members.get(0)),second=peer(members.get(1));
             store.state(runId,"PRECHECK","PRECHECK",null,null,null);
             PanFailoverChecks.State a=read(first),b=read(second);
             Long before=checks("pre",first,second,a,b,null,null);
+            if (readiness) {
+                store.state(runId,"DONE","DONE","READY",null,"READY");
+                leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
+                    "system:pan-failover-worker","pan_readiness_done","READY");
+                return;
+            }
             Peer formerActive="active".equals(a.role())?first:second;
             Peer newActive=formerActive==first?second:first;
             store.state(runId,"FAILING_OVER","FAILING_OVER",null,null,null);
@@ -103,15 +121,27 @@ public final class PanFailoverJobExecutor {
             store.state(runId,"DONE","DONE","SUCCEEDED",null,"NO_PROBLEMS_FOUND");
             leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
                 "system:pan-failover-worker","pan_failover_done","SUCCEEDED");
-        } catch (Stop stopped) { stop(stopped.code,stopped.check); }
-        catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); stop("INTERRUPTED",0); }
-        catch (RuntimeException unexpected) { stop(wrote?"OUTCOME_UNCERTAIN":"PRECHECK_UNAVAILABLE",0); }
+        } catch (Stop stopped) {
+            if (readiness) finishReadiness(stopped.code,stopped.check,stopped.status); else stop(stopped.code,stopped.check);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            if (readiness) finishReadiness("INTERRUPTED",0,"UNKNOWN"); else stop("INTERRUPTED",0);
+        } catch (RuntimeException unexpected) {
+            if (readiness) finishReadiness("COLLECTION_FAILED",0,"UNKNOWN");
+            else stop(wrote?"OUTCOME_UNCERTAIN":"PRECHECK_UNAVAILABLE",0);
+        }
     }
     private void stop(String code,int check) {
         store.state(runId,"STOPPED",store.runByJob(jobId).map(JooqCpFailoverRepository.Run::step).orElse("UNKNOWN"),
             code,check==0?null:String.valueOf(check),code);
         leases.transitionState(jobId,epoch,JobState.EXECUTING,writeInFlight || "OUTCOME_UNCERTAIN".equals(code)
             ?JobState.OUTCOME_UNKNOWN:JobState.FAILED,"system:pan-failover-worker","pan_failover_stopped",code);
+    }
+    private void finishReadiness(String code,int check,String status) {
+        String outcome="FAIL".equals(status)?"NOT_READY":"UNKNOWN";
+        store.state(runId,"DONE","DONE",outcome,check==0?null:String.valueOf(check),code);
+        leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
+            "system:pan-failover-worker","pan_readiness_done",outcome);
     }
     private Peer peer(DeviceSummaryRecord summary) {
         var device=devices.find(summary.deviceId()).filter(d -> d.permitsReadCollection())
@@ -131,6 +161,7 @@ public final class PanFailoverJobExecutor {
         return new Peer(summary.deviceId(),target,match.group(1),identity);
     }
     private GateResolution.Known gate(String command) {
+        if (readiness && !writeAllowed(READINESS_KIND,command)) throw new Stop("READINESS_WRITE_REFUSED",0);
         String expected=STATE.equals(command)?"pan_inventory_show_ha_state"
             :SESSION_SYNC.equals(command)?"pan_failover_session_sync"
             :SESSIONS.equals(command)?"pan_failover_session_info"
@@ -145,11 +176,15 @@ public final class PanFailoverJobExecutor {
             throw new Stop("COMMAND_GATE_UNAVAILABLE",0);
         return known;
     }
+    static boolean writeAllowed(String kind,String command) {
+        return !READINESS_KIND.equals(kind) || !(SUSPEND.equals(command) || FUNCTIONAL.equals(command));
+    }
     private static boolean isRead(String command) {
         return STATE.equals(command) || SESSION_SYNC.equals(command) || SESSIONS.equals(command) || SYSTEM.equals(command);
     }
-    private String call(Peer peer,String command) {
+    private String call(Peer peer,String command) throws InterruptedException {
         var g=gate(command);
+        if (commandIndex > 0 && !commandPause.isZero()) pause.sleep(commandPause);
         if (!attempts.findByJobAndStep(jobId,commandIndex).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
         String attempt=attempts.insertPreContact(jobId,epoch,commandIndex++,g.gateId(),g.actionClass().id(),1);
         if (attempt==null) throw new Stop("PRE_CONTACT_RECORD_FAILED",0);
@@ -169,13 +204,13 @@ public final class PanFailoverJobExecutor {
         writeInFlight=false;
         return completed.body();
     }
-    private PanFailoverChecks.State read(Peer peer) {
+    private PanFailoverChecks.State read(Peer peer) throws InterruptedException {
         var state=PanFailoverChecks.parse(call(peer,STATE));
         if (!peer.identity().equals(state.localSerial())) throw new Stop("IDENTITY_NOT_VERIFIED",0);
         return state;
     }
     private Long checks(String phase,Peer first,Peer second,PanFailoverChecks.State a,
-            PanFailoverChecks.State b,Peer oldActive,Long before) {
+            PanFailoverChecks.State b,Peer oldActive,Long before) throws InterruptedException {
         String role=oldActive==null
             ?("active".equals(a.role())?PanFailoverChecks.roles(a,b,"active","passive")
                 :PanFailoverChecks.roles(a,b,"passive","active"))
@@ -201,7 +236,7 @@ public final class PanFailoverJobExecutor {
             store.check(runId,phase,second.id(),null,no,statuses[i],derived);
         }
         for (int i=0;i<statuses.length;i++) if (!"PASS".equals(statuses[i]))
-            throw new Stop("CHECK_NOT_READY",i+1);
+            throw new Stop("CHECK_NOT_READY",i+1,statuses[i]);
         return active;
     }
     private boolean waitFor(Peer first,Peer second,Peer active,String activeRole,Peer other,String otherRole)

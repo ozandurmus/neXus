@@ -113,13 +113,14 @@ class PanFailoverJobExecutorTest {
             .getResourceAsStream("/capabilities/gate_registry_fixture.yaml"));
         return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
     }
-    private static Result run(Script script) {
+    private static Result run(Script script) { return run(script,false); }
+    private static Result run(Script script,boolean readiness) {
         JooqCpFailoverRepository store=mock(JooqCpFailoverRepository.class);
         AtomicReference<String> state=new AtomicReference<>("PLANNED"),outcome=new AtomicReference<>();
         List<String> checks=new ArrayList<>();
         when(store.runByJob("job-1")).thenAnswer(inv -> Optional.of(new JooqCpFailoverRepository.Run(
-            "run-1",CLUSTER,null,"approval-1","actor-1",Instant.now(),"job-1",
-            state.get(),state.get(),outcome.get(),null,null,"palo_alto")));
+            "run-1",CLUSTER,null,readiness?null:"approval-1","actor-1",Instant.now(),"job-1",
+            state.get(),state.get(),outcome.get(),null,null,"palo_alto",readiness?"READINESS":"FAILOVER")));
         when(store.windowValid("run-1")).thenReturn(true);
         doAnswer(inv -> {state.set(inv.getArgument(1)); outcome.set(inv.getArgument(3)); return null;})
             .when(store).state(anyString(),anyString(),anyString(),nullable(String.class),nullable(String.class),nullable(String.class));
@@ -172,9 +173,20 @@ class PanFailoverJobExecutorTest {
         assertEquals(0,script.functionalCount);
         assertTrue(result.checks().contains("post:6:FAIL"));
     }
+    @Test void readinessNeverWritesAndRejectsWriteCommands() {
+        Script script=new Script(); Result result=run(script,true);
+        assertEquals("DONE",result.state());
+        assertEquals("READY",result.outcome());
+        assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount);
+        assertFalse(PanFailoverJobExecutor.writeAllowed("READINESS",
+            "<request><high-availability><state><suspend/></state></high-availability></request>"));
+        assertFalse(PanFailoverJobExecutor.writeAllowed("READINESS",
+            "<request><high-availability><state><functional/></state></high-availability></request>"));
+    }
     public static void main(String[] args) {
         var test=new PanFailoverJobExecutorTest(); test.happyPath(); test.precheckFailNeverWrites();
         test.switchTimeoutDoesNotReturn(); test.postcheckFailDoesNotReturn(); test.addedPrecheckFailuresNeverSuspend();
         test.lowSessionCarryStopsBeforeReturn();
+        test.readinessNeverWritesAndRejectsWriteCommands();
     }
 }
