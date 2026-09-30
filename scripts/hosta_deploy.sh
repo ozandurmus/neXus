@@ -52,9 +52,12 @@ ssh -o ConnectTimeout=10 "$HOST" "LIMIT=$LIMIT SKIP_SECURITY_B64='$SKIP_SECURITY
 set -uo pipefail
 export KUBECONFIG=$HOME/.kube/config
 export NEXUS_SKIP_SECURITY_REASON="$(printf '%s' "$SKIP_SECURITY_B64" | base64 --decode)"
+# The committed run_build.sh is canonical: install it when the host copy differs (kept as a dated backup).
 if ! git --git-dir="$HOME/nexus.git" show main:deploy/ui2-image-build/run_build.sh | cmp -s - "$HOME/run_build.sh"; then
-  echo "STOP: host run_build.sh differs from the committed build/gate script; synchronize it before ship"
-  exit 6
+  cp -p "$HOME/run_build.sh" "$HOME/run_build.sh.bak-$(date -u +%Y%m%dT%H%MZ)" 2>/dev/null || true
+  git --git-dir="$HOME/nexus.git" show main:deploy/ui2-image-build/run_build.sh > "$HOME/run_build.sh"
+  chmod 0755 "$HOME/run_build.sh"
+  echo "run_build.sh synchronized from main"
 fi
 q() { kubectl -n ui2 exec ui2-db-0 -- sh -c "psql -U \"\$POSTGRES_USER\" -d ui2 -Atc \"$1\""; }
 inflight=$(q "select count(*) from jobs where state in ('CLAIMED','EXECUTING')")

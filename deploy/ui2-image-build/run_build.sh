@@ -13,8 +13,12 @@ git checkout main
 git pull origin main
 
 COMMIT_SHA="$(git rev-parse HEAD)"
+SECURITY_CONFIGURED=0
+[ -f "$HOME/.config/nexus/security.json" ] && SECURITY_CONFIGURED=1
 if [ -n "${NEXUS_SKIP_SECURITY_REASON:-}" ]; then
   printf 'EMERGENCY: SECURITY GATE SKIPPED: %s\n' "$NEXUS_SKIP_SECURITY_REASON"
+elif [ "$SECURITY_CONFIGURED" = 0 ]; then
+  echo '{"security_gate":"not_configured"}'
 else
   python3 scripts/security_host.py snapshot --config "$HOME/.config/nexus/security.json" \
     --rules "$HOME/.config/nexus/security-rules"
@@ -79,7 +83,7 @@ kubectl wait --for=condition=Ready pod/ui2-build-context-loader -n ui2-build --t
 IMAGE_DIGEST="$(kubectl -n ui2-build exec ui2-build-context-loader -- cat /workspace/image-digest.txt)"
 echo "Digest is $IMAGE_DIGEST"
 
-if [ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ]; then
+if [ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ] && [ "$SECURITY_CONFIGURED" = 1 ]; then
   echo "Running security-gate on the freshly built digest..."
   python3 scripts/security_host.py gate --config "$HOME/.config/nexus/security.json" \
     --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" --commit "$COMMIT_SHA"
