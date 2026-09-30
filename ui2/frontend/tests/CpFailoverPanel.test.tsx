@@ -10,7 +10,10 @@ vi.mock("../src/auth/adminApi", () => ({
   listCpFailoverRuns: api.runs, getCpFailoverRun: api.detail, runCpFailoverReadiness: api.readiness,
 }));
 
-const cluster = { clusterId: "cluster-opaque", unitId: "cluster-opaque", cluster_member_ref: "CLS-ROMEO-01", canApprove: false, canStart: true, canSchedule: true };
+const cluster = { clusterId: "cluster-opaque", unitId: "cluster-opaque", cluster_member_ref: "CLS-ROMEO-01", canApprove: false, canStart: true, canSchedule: true, masked: true, members: [
+  { device_id: "opaque-1", hostname: "FW-ROMEO-01-M1", ha_role: "ACTIVE" },
+  { device_id: "opaque-2", hostname: "FW-ROMEO-01-M2", ha_role: "STANDBY" },
+] };
 const vs = { ...cluster, unitId: "vs-opaque", virtual_system: "VS-ROMEO-01-07" };
 const renderPanel = () => render(<ThemeProvider theme={m3Theme}><CpFailoverPanel memberDeviceId="member-device-id" /></ThemeProvider>);
 
@@ -67,15 +70,15 @@ describe("Check Point failover", () => {
     renderPanel();
     fireEvent.click(await screen.findByRole("button", { name: "CLS-ROMEO-01" }));
     const table = await screen.findByRole("table", { name: "Readiness results" });
-    expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Check", "Member 1", "Member 2", "Result"]);
+    expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Check", "FW-ROMEO-01-M1 · active", "FW-ROMEO-01-M2 · standby"]);
     const cells = within(within(table).getByText("Cluster state").closest("tr")!).getAllByRole("cell");
-    expect(cells[1]).toHaveTextContent("Active");
-    expect(cells[2]).toHaveTextContent("Standby");
-    expect(within(table).getByText("Blocking")).toBeInTheDocument();
-    expect(within(table).getByText("Informational")).toBeInTheDocument();
+    expect(cells[0]).toHaveTextContent("Active");
+    expect(cells[1]).toHaveTextContent("Standby");
+    expect(within(table).getByRole("img", { name: "Blocking" })).toBeInTheDocument();
+    expect(within(table).getByText("info")).toBeInTheDocument();
     expect(within(table).getByText("Not collected")).toBeInTheDocument();
-    expect(screen.getByText("Readiness: NOT_READY")).toBeInTheDocument();
-    expect(screen.getByText(/Observed 1 min ago/)).toBeInTheDocument();
+    expect(screen.getByText("Not ready · 1 blocker")).toBeInTheDocument();
+    expect(screen.getByText(/1 min ago/)).toBeInTheDocument();
     expect(table.textContent).not.toMatch(/SYNTHETIC-PRIVATE|[{}]/);
   });
 

@@ -1,4 +1,4 @@
-import { ReadinessChecksTable } from "./ReadinessChecksTable";
+import { ReadinessCard } from "./ReadinessChecksTable";
 import { Fragment, useState, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
@@ -434,7 +434,6 @@ export function OperationsScreen() {
                   {clusterName}
                 </Typography>
                 <Chip size="small" label={vendorLabel} sx={{ bgcolor: m3.scHighest, color: m3.onSurfaceVar }} />
-                <Chip size="small" label="AIView Pseudonymized" sx={{ bgcolor: m3.primaryContainer, color: m3.onPrimaryContainer }} />
               </Box>
               <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mt: 0.5 }}>
                 Active: {roleOf("active")} • Standby: {roleOf("standby") !== "UNKNOWN" ? roleOf("standby") : roleOf("passive")}
@@ -472,20 +471,11 @@ export function OperationsScreen() {
           </Card>
         )}
 
-        <Card sx={{ bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "12px", p: 2 }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2 }}>
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Readiness: {readinessLabel(detailRow)}</Typography>
-              <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Latest read-only pre-check result. Failover runs still perform fresh checks.</Typography>
-            </Box>
-            {detailRow?.canRunReadiness && <M3Button emphasis="tonal" disabled={isRunning === detailRow.unitId}
-              onClick={() => void handleRunReadiness(detailRow)}>{isRunning === detailRow.unitId ? "Running…" : "Run pre-checks"}</M3Button>}
-          </Box>
-          {readinessError && <Typography role="alert" variant="body2" sx={{ color: m3.error, mt: 1 }}>{readinessError}</Typography>}
-          {checks.length > 0 && <TableContainer sx={{ mt: 2 }}>
-            <ReadinessChecksTable checks={checks} />
-          </TableContainer>}
-        </Card>
+        <ReadinessCard checks={checks} members={detailRow?.members} status={detailRow?.readiness?.status}
+          cluster={detailRow?.virtual_system ?? detailRow?.cluster_member_ref ?? clusterName ?? "Unknown cluster"}
+          vendor={detailRow?.vendor} observedAt={detailRow?.readiness?.observedAt} masked={detailRow?.masked === true}
+          running={Boolean(detailRow && isRunning === detailRow.unitId)} canRun={detailRow?.canRunReadiness ?? false}
+          onRun={() => { if (detailRow) void handleRunReadiness(detailRow); }} error={readinessError} />
 
         {/* Action Controls & Gate Disclosure */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 2, bgcolor: m3.scLow, borderRadius: "12px", flexWrap: "wrap", gap: 2 }}>

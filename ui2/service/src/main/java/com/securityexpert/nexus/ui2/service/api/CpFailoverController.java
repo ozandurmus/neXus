@@ -14,6 +14,7 @@ import com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository;
 import com.securityexpert.nexus.ui2.service.failover.CpFailoverService;
 import com.securityexpert.nexus.ui2.service.failover.ReadinessCheckView;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
+import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
 
 /** Opaque-unit API for the Check Point and Palo Alto failover screens. */
 @RestController
@@ -50,6 +51,14 @@ public final class CpFailoverController {
         Map<String,Object> m=new LinkedHashMap<>();
         m.put("unitId",u.id()); m.put("clusterId",u.clusterId());
         m.put("cluster_member_ref",u.members().get(0).clusterMemberRef().orElseThrow());
+        m.put("members", u.members().stream().sorted(java.util.Comparator.comparing(
+            com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::deviceId)).map(member -> {
+                Map<String,Object> view = new LinkedHashMap<>();
+                view.put("device_id", member.deviceId());
+                view.put("hostname", member.observedHostname().orElse(null));
+                view.put("ha_role", member.observedHaRole().orElse(null));
+                return view;
+            }).toList());
         if (u.vsId()!=null) m.put("virtual_system",u.label());
         return m;
     }
@@ -74,6 +83,7 @@ public final class CpFailoverController {
             .map(u -> {
                 Map<String,Object> m=unit(u);
                 m.put("vendor",vendor(request));
+                m.put("masked",PrivacyMaskingResponseBodyAdvice.isReplayViewer(request));
                 m.put("canApprove",service.mayApprove(actor(request)));
                 m.put("canStart",service.mayStart(actor(request)));
                 m.put("canSchedule",service.mayStart(actor(request)));
@@ -85,6 +95,7 @@ public final class CpFailoverController {
         return result(() -> service.summary(actor(request)).stream().map(s -> {
             Map<String,Object> m = unit(s.unit());
             m.put("vendor", s.vendor());
+            m.put("masked", PrivacyMaskingResponseBodyAdvice.isReplayViewer(request));
             m.put("activeWindow", s.activeWindow());
             m.put("lastRunState", s.lastRunState());
             m.put("lastRunOutcome", s.lastRunOutcome());
@@ -103,11 +114,12 @@ public final class CpFailoverController {
                             row.path("status").asText(),row.path("derived"),readiness.observedAt());
                         ((com.fasterxml.jackson.databind.node.ObjectNode)row).setAll(
                             (com.fasterxml.jackson.databind.node.ObjectNode)JSON.valueToTree(fields));
+                        ((com.fasterxml.jackson.databind.node.ObjectNode)row).put("device_id",row.path("memberRef").asText());
                         ((com.fasterxml.jackson.databind.node.ObjectNode)row).remove("memberRef");
                     });
                     m.put("readiness", Map.of("status", readiness.outcome(), "observedAt", readiness.observedAt(),
                         "failedCheck", readiness.failedCheck() == null ? "" : readiness.failedCheck(),
-                        "checks", rows));
+                        "checks", JSON.convertValue(rows, List.class)));
                 } catch (java.io.IOException invalidStoredJson) {
                     throw new IllegalStateException("Stored readiness checks are invalid", invalidStoredJson);
                 }

@@ -192,7 +192,8 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 }
                 case "virtual_system", "member" -> {
                     if (value instanceof String s) {
-                        result.put(key, "member".equals(key) && "grid".equals(s) ? s
+                        result.put(key, "member".equals(key) && ("grid".equals(s)
+                                || map.containsKey("checkNo") && s.matches("Member [12]")) ? s
                                 : topologyPseudonymizer.maskVirtualSystem(s, clusterRef));
                     } else {
                         result.put(key, value);

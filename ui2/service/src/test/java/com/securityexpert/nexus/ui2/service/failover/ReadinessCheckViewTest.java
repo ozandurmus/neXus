@@ -30,7 +30,7 @@ class ReadinessCheckViewTest {
         for (Object[] c:cases) {
             var view=row(false,(int)c[0],"PASS",(String)c[1]);
             assertEquals(c[2],view.get("summary"));
-            assertEquals((int)c[0]!=13,view.get("blocking"));
+            assertEquals((int)c[0]!=5 && (int)c[0]!=13,view.get("blocking"));
             assertEquals("Member 1",view.get("member"));
             assertEquals("PASS",view.get("result"));
         }

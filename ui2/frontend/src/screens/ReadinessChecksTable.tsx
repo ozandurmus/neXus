@@ -1,27 +1,93 @@
+import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
+import Chip from "@mui/material/Chip";
+import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
-import type { ReadinessCheck } from "../auth/adminApi";
+import { Icon } from "../shell/Icon";
+import type { ReadinessCheck, ReadinessMember } from "../auth/adminApi";
+import { M3Button } from "../shell/M3Widgets";
+import { m3 } from "../theme/m3Theme";
 
-export function ReadinessChecksTable({ checks }: { checks: ReadinessCheck[] }) {
-  const numbers = [...new Set(checks.map(check => check.checkNo))].sort((a, b) => a - b);
+function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = []) {
+  return [...new Set(checks.map(check => check.checkNo))].sort((a, b) => a - b).map(no => {
+    const members = ["Member 1", "Member 2"].map((member, index) => checks.find(check => check.checkNo === no && (check.device_id && labels.length ? check.device_id === labels[index]?.device_id : check.member === member)));
+    const first = checks.find(check => check.checkNo === no)!;
+    const blocking = checks.some(check => check.checkNo === no && check.blocking);
+    const failed = blocking && members.some(check => check?.result === "FAIL");
+    const passed = blocking && members.every(check => check?.result === "PASS");
+    return { no, title: first.title, members, blocking, failed, passed };
+  });
+}
+
+export function ReadinessChecksTable({ checks, members = [] }: { checks: ReadinessCheck[]; members?: ReadinessMember[] }) {
   return <Table size="small" aria-label="Readiness results">
-    <TableHead><TableRow><TableCell>Check</TableCell><TableCell>Member 1</TableCell><TableCell>Member 2</TableCell><TableCell>Result</TableCell></TableRow></TableHead>
-    <TableBody>{numbers.map(no => {
-      const rows = checks.filter(check => check.checkNo === no);
-      const statuses = rows.map(row => row.result);
-      const result = statuses.includes("FAIL") ? "FAIL" : statuses.includes("UNKNOWN") || rows.length < 2 ? "UNKNOWN" : statuses.includes("WARN") ? "WARN" : "PASS";
-      return <TableRow key={no}>
-        <TableCell>{rows[0].title}<Typography variant="caption" display="block">{rows[0].blocking ? "Blocking" : "Informational"}</Typography></TableCell>
-        {["Member 1", "Member 2"].map(member => {
-          const row = rows.find(check => check.member === member);
-          return <TableCell key={member}>{row?.summary ?? "Not collected"}<Typography variant="caption" display="block">{row?.result ?? "UNKNOWN"}</Typography></TableCell>;
-        })}
-        <TableCell>{result}</TableCell>
+    <TableHead><TableRow>
+      <TableCell>Check</TableCell>
+      {[0, 1].map(index => <TableCell key={index}>
+        {members[index]?.hostname ?? `Member ${index + 1}`}
+        <Typography component="span" variant="caption" sx={{ color: m3.onSurfaceVar }}> · {members[index]?.ha_role?.toLowerCase() ?? "role unknown"}</Typography>
+      </TableCell>)}
+    </TableRow></TableHead>
+    <TableBody>{checkRows(checks, members).map(row => {
+      const icon = row.failed ? "x-circle" : row.passed ? "check-circle" : "info";
+      const result = row.failed ? "Blocking" : row.passed ? "Passed" : !row.blocking ? "Info" : "Unknown";
+      return <TableRow key={row.no} sx={{ bgcolor: row.failed ? m3.errorContainer : undefined }}>
+        <TableCell component="th" scope="row" sx={{ py: 1.5, width: "32%" }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Box component="span" role="img" aria-label={result} sx={{ display: "flex", color: row.failed ? m3.onErrorContainer : row.passed ? m3.goodInk : m3.onSurfaceVar }}><Icon name={icon} /></Box>
+            <Typography variant="body2">{row.title}</Typography>
+            {!row.blocking && <Chip size="small" label="info" sx={{ height: 20, bgcolor: m3.sc, color: m3.onSurfaceVar }} />}
+          </Stack>
+        </TableCell>
+        {row.members.map((check, index) => <TableCell key={index} sx={{ py: 1.5 }}>{check?.summary ?? "Not collected"}</TableCell>)}
       </TableRow>;
     })}</TableBody>
   </Table>;
+}
+
+export function ReadinessCard({ checks, members, status, cluster, vendor, observedAt, masked = false, running = false, disabled = false, canRun, onRun, error }: {
+  checks: ReadinessCheck[]; members?: ReadinessMember[]; status?: string | null; cluster: string;
+  vendor?: string; observedAt?: string | null; masked?: boolean; running?: boolean; disabled?: boolean; canRun: boolean;
+  onRun: () => void; error?: string | null;
+}) {
+  const rows = checkRows(checks, members);
+  const blocking = rows.filter(row => row.failed).length;
+  const ready = !running && status === "READY";
+  const notReady = !running && status === "NOT_READY";
+  const verdict = running ? "Running pre-checks" : ready ? "Ready" : notReady
+    ? `Not ready${blocking ? ` · ${blocking} ${blocking === 1 ? "blocker" : "blockers"}` : ""}` : "Unknown";
+  const icon = ready ? "check-circle" : notReady ? "x-circle" : "warning";
+  const observed = observedAt ? Date.parse(observedAt) : NaN;
+  const minutes = Math.max(0, Math.floor((Date.now() - observed) / 60_000));
+  const age = Number.isFinite(minutes) ? minutes < 60 ? `${minutes} min ago` : `${Math.floor(minutes / 60)} h ago` : "Not evaluated";
+  const vendorLabel = vendor === "palo_alto" ? "Palo Alto · Active/passive" : "Check Point · ClusterXL HA";
+  return <Card component="section" aria-label="Readiness checks" sx={{ p: { xs: 2, md: 3 }, bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: 3 }}>
+    <Stack direction="row" alignItems="center" spacing={2} useFlexGap sx={{ flexWrap: "wrap" }}>
+      <Box sx={{ display: "flex", p: 1.25, borderRadius: "50%", bgcolor: ready ? m3.successContainer : notReady ? m3.errorContainer : m3.warningContainer,
+        color: ready ? m3.onSuccessContainer : notReady ? m3.onErrorContainer : m3.onWarningContainer }}><Icon name={icon} size={24} /></Box>
+      <Box sx={{ flex: 1, minWidth: 180 }}>
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>{verdict}</Typography>
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{cluster} · {vendorLabel} · {age}</Typography>
+        {masked && <Chip size="small" label="AIView Pseudonymized" sx={{ mt: 0.75, bgcolor: m3.sc, color: m3.onSurfaceVar }} />}
+      </Box>
+      {canRun && <M3Button emphasis="outlined" disabled={running || disabled} onClick={onRun}>Run pre-checks</M3Button>}
+    </Stack>
+    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 1.5, my: 2.5 }}>
+      {[["Passed", rows.filter(row => row.passed).length], ["Blocking", blocking], ["Info", rows.filter(row => !row.blocking).length]].map(([label, count]) =>
+        <Box key={label} aria-label={`${label}: ${count}`} sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: 2, px: 2, py: 1 }}>
+          <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{label}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>{count}</Typography>
+        </Box>)}
+    </Box>
+    {error && <Typography role="alert" variant="body2" sx={{ color: m3.criticalInk, mb: 1 }}>{error}</Typography>}
+    <TableContainer><ReadinessChecksTable checks={checks} members={members} /></TableContainer>
+    {!checks.length && <Typography variant="body2" sx={{ color: m3.onSurfaceVar, py: 2 }}>No observations yet</Typography>}
+    <Typography variant="caption" sx={{ display: "block", color: m3.onSurfaceVar, mt: 2 }}>Failover runs re-check everything at start.</Typography>
+  </Card>;
 }
