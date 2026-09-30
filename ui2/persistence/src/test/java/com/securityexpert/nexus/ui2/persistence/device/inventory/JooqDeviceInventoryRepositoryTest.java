@@ -89,6 +89,23 @@ class JooqDeviceInventoryRepositoryTest {
     }
 
     @Test
+    void contextPickerReadsOnlyStoredIdentifiersWithoutExpandingInventory() {
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var result = create.fetchFromStringData(new String[] { "context" }, new String[] { "001" });
+        var queries = new ArrayList<String>();
+        MockDataProvider provider = ctx -> {
+            queries.add(ctx.sql());
+            return new MockResult[] { new MockResult(1, result) };
+        };
+        var repository = new JooqDeviceInventoryRepository(new JooqTransactionBoundary(
+                DSL.using(new MockConnection(provider), SQLDialect.POSTGRES)));
+        assertEquals(List.of("001"), repository.findLatestContextIds("device-1"));
+        assertEquals(1, queries.size());
+        assertTrue(queries.get(0).contains("select context from device_interface"));
+        assertTrue(queries.get(0).contains("union select context from device_route"));
+    }
+
+    @Test
     void findLatestRunReassemblesContextsInterfacesAddressesAndRoutes() {
         DSLContext create = DSL.using(SQLDialect.POSTGRES);
 

@@ -91,6 +91,45 @@ class CollectionEngineDatabasePlaceholderTest {
         }
     }
 
+    @Test
+    void diagnosticOvertakesSeventyTwoBackupsAndAdmissionSerializesEachDevice() throws SQLException {
+        var boundary = new JooqTransactionBoundary(DSL.using(appDataSource, SQLDialect.POSTGRES));
+        var jobs = new com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao(boundary);
+        String diagnostic = java.util.UUID.randomUUID().toString();
+        String request = "diagnostic:" + java.util.UUID.randomUUID();
+        var backups = new ArrayList<String>();
+        try (Connection app = fixture.appConnection()) {
+            for (int i = 0; i < 72; i++) {
+                backups.add(CollectionEngineRows.insertJobWithCapability(app, deviceId, "cp_gateway_backup"));
+            }
+        }
+        try {
+            assertEquals("ADMITTED", jobs.insertDiagnosticRead(diagnostic, request, deviceId,
+                    "cp_inventory_cphaprob_stat", "cphaprob stat", Ui2Rows.ACTOR).kind());
+            assertEquals(1, jobs.diagnosticQueuePosition(diagnostic).orElseThrow());
+            assertEquals("RATE_LIMITED_OR_RUNNING", jobs.insertDiagnosticRead(java.util.UUID.randomUUID().toString(),
+                    "diagnostic:" + java.util.UUID.randomUUID(), deviceId,
+                    "cp_inventory_cphaprob_stat", "cphaprob stat", Ui2Rows.ACTOR).kind());
+            var claimed = leaseRepository.claimNext("diagnostic-worker", List.of("cp_gateway_backup", "diagnostic_read"),
+                    Duration.ofSeconds(60)).orElseThrow();
+            assertEquals(diagnostic, claimed.jobId());
+            assertTrue(jobs.diagnosticQueuePosition(diagnostic).isEmpty());
+            assertTrue(leaseRepository.transitionState(diagnostic, claimed.leaseEpoch(), JobState.CLAIMED,
+                    JobState.EXECUTING, Ui2Rows.ACTOR, "harness.diagnostic_execute"));
+            assertEquals("RATE_LIMITED_OR_RUNNING", jobs.insertDiagnosticRead(java.util.UUID.randomUUID().toString(),
+                    "diagnostic:" + java.util.UUID.randomUUID(), deviceId,
+                    "cp_inventory_cphaprob_stat", "cphaprob stat", Ui2Rows.ACTOR).kind());
+            var next = leaseRepository.claimNext("backup-worker", List.of("cp_gateway_backup", "diagnostic_read"),
+                    Duration.ofSeconds(60)).orElseThrow();
+            assertTrue(backups.contains(next.jobId()));
+        } finally {
+            new com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary(boundary)
+                    .inTransaction(Ui2Rows.ACTOR, "harness.diagnostic_cleanup", dsl -> dsl.execute(
+                            "update jobs set state='CANCELLED' where job_id={0} or job_id=any(string_to_array({1}, ','))",
+                            diagnostic, String.join(",", backups)));
+        }
+    }
+
     @AfterAll
     static void drop() {
         if (fixture != null) {

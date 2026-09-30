@@ -40,7 +40,7 @@ const TABS = [
   { label: "Jobs", marker: "All jobs" },
   { label: "Queue", marker: "Queued and running jobs" },
   { label: "History", marker: "Finished jobs" },
-  { label: "Diagnostics", marker: "Super administrator role required." },
+  { label: "Diagnostics", marker: "Diagnostics could not be loaded or access is unavailable." },
 ];
 
 describe("OperationsScreen tabs", () => {

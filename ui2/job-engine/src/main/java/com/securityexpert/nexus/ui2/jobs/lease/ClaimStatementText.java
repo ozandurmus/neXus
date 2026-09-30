@@ -33,11 +33,12 @@ public final class ClaimStatementText {
                         WHERE state IN ('CLAIMED', 'EXECUTING')
                           AND capability_id = ANY(ARRAY['cp_inventory_collect', 'pan_inventory_collect'])) < 10)
                 ORDER BY CASE
+                    WHEN capability_id = 'diagnostic_read' THEN 0
                     WHEN capability_id = ANY(ARRAY['cp_inventory_collect', 'pan_inventory_collect']) THEN 1
                     WHEN capability_id = ANY(ARRAY['cp_configuration_collect', 'pan_configuration_collect']) THEN 2
                     WHEN capability_id = ANY(ARRAY['cp_discovery_enumerate', 'pan_discovery_enumerate']) THEN 3
                     ELSE 4
-                END, submitted_at
+                END, submitted_at, job_id
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
             )

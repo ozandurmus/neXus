@@ -24,7 +24,7 @@ import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 
-/** One server-owned FortiManager diagnostic template; callers provide a target and one inventoried port, never a command. */
+/** Server-owned approved diagnostic reads; callers select a gate and target, never command text. */
 @Service
 public final class DiagnosticService {
     private static final Pattern PORT = Pattern.compile("[A-Za-z0-9_.-]{1,31}");
@@ -35,7 +35,33 @@ public final class DiagnosticService {
     }
 
     public record TargetOption(String deviceId, String target, String vendor,
-            List<java.util.Map<String,Object>> commands) {
+            String cluster, List<String> virtualSystems, List<java.util.Map<String,Object>> commands) {
+    }
+
+    private static final java.util.Map<String, String> DESCRIPTIONS = java.util.Map.ofEntries(
+            java.util.Map.entry("fgt_get_system_status", "System version and status"),
+            java.util.Map.entry("fgt_get_system_ha_status", "High availability status"),
+            java.util.Map.entry("fmg_ssh_fmnetwork_interface_detail", "Network interface details"),
+            java.util.Map.entry("asa_show_version", "System version"),
+            java.util.Map.entry("asa_show_failover_this_host", "Local failover status"),
+            java.util.Map.entry("asa_show_route", "Routing table"),
+            java.util.Map.entry("cp_spark_show_diag", "System diagnostics"),
+            java.util.Map.entry("cp_spark_show_software_version", "Software version"),
+            java.util.Map.entry("cp_configuration_show_version_all", "System version"),
+            java.util.Map.entry("cp_inventory_vsx_stat_v", "Virtual systems"),
+            java.util.Map.entry("cp_inventory_cphaprob_stat", "Cluster member status"),
+            java.util.Map.entry("cp_inventory_cphaprob_a_if", "Cluster interfaces"),
+            java.util.Map.entry("cp_inventory_vsid_cphaprob_stat", "Virtual system cluster status"),
+            java.util.Map.entry("cp_inventory_vsid_cphaprob_a_if", "Virtual system cluster interfaces"),
+            java.util.Map.entry("cp_inventory_vsid_addr_and_route", "Virtual system addresses and routes"),
+            java.util.Map.entry("cp_inventory_vsid_fw_getifs_and_route", "Virtual system interfaces and routes"),
+            java.util.Map.entry("cp_inventory_vsid_ip_addr_show_state_only", "Virtual system interface state"),
+            java.util.Map.entry("cp_inventory_ip_route_show_table_all", "Routing tables"),
+            java.util.Map.entry("cp_inventory_ip_addr_show_v4", "IPv4 interface addresses"),
+            java.util.Map.entry("cp_inventory_ip_addr_show_v6", "IPv6 interface addresses"));
+
+    private static String description(String gateId, String command) {
+        return gateId == null ? command : DESCRIPTIONS.getOrDefault(gateId, command);
     }
 
     private final DeviceRepository devices;
@@ -116,11 +142,17 @@ public final class DiagnosticService {
 
     private java.util.Map<String,Object> summary(JobRecordDao.DiagnosticJob job,boolean masked) {
         var result=new java.util.LinkedHashMap<String,Object>();
-        String target=devices.findSummary(job.targetDeviceId()).flatMap(d->d.observedHostname()).orElse("Unknown");
+        var device = devices.findSummary(job.targetDeviceId());
+        String target=device.flatMap(d->d.observedHostname()).orElse("Unknown");
         result.put("jobId",job.jobId()); result.put("targetDeviceId",job.targetDeviceId());
-        result.put("target",masked ? names.maskDeviceName(target,null) : target);
+        result.put("target",masked ? names.maskDeviceName(target,device.flatMap(d->d.clusterMemberRef()).orElse(null)) : target);
         result.put("command",job.command()); result.put("state",job.state()); result.put("submittedAt",job.submittedAt());
         result.put("gateId",job.gateId());
+        result.put("description",description(job.gateId(),job.command()));
+        result.put("startedAt",job.startedAt());
+        result.put("finishedAt",job.finishedAt());
+        result.put("durationMs",job.startedAt() == null ? null : Math.max(0,
+                Duration.between(job.startedAt(),job.finishedAt() == null ? Instant.now() : job.finishedAt()).toMillis()));
         String actor=identities.resolve(job.actor()).map(r -> r.localIdentityName()).orElse(job.actor());
         result.put("actor",masked ? names.maskSerial(job.actor()) : actor);
         result.put("exitStatus",job.exitStatus());
@@ -133,6 +165,8 @@ public final class DiagnosticService {
             answer.put("lineCount",job.lineCount()); answer.put("shapeId",job.shapeId());
             answer.put("statusPresent",job.statusPresent()); answer.put("statusToken",job.statusToken());
             answer.put("masked",masked);
+            answer.put("queuePosition","REQUESTED".equals(job.state())
+                    ? jobs.diagnosticQueuePosition(jobId).orElse(null) : null);
             answer.put("terminalReason",jobs.find(jobId).map(r -> r.terminalReason())
                     .filter(r -> r.matches("[A-Z_]{1,100}")).orElse(null));
             String output=job.maskedOutput();
@@ -226,12 +260,20 @@ public final class DiagnosticService {
                     List<java.util.Map<String, Object>> commands = commandsByProfile.computeIfAbsent(profile, k ->
                             com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.commands(d.vendorHint(), d.role(),
                                     model, cachedGates).stream().map(c -> java.util.Map.<String, Object>of(
-                                    "gate_id", c.gateId(), "command_template", c.commandTemplate(), "timeout_s", c.timeoutS()))
+                                    "gate_id", c.gateId(), "command_template", c.commandTemplate(), "description", description(c.gateId(), c.commandTemplate()), "timeout_s", c.timeoutS()))
                                     .toList());
                     return new TargetOption(d.deviceId(), d.observedHostname()
                             .map(name -> masked ? names.maskDeviceName(name, d.clusterMemberRef().orElse(null)) : name)
-                            .orElse("Unknown"), d.vendorHint(), commands);
+                            .orElse("Unknown"), d.vendorHint(),
+                            d.clusterMemberRef().map(ref -> masked ? names.maskClusterName(ref) : ref).orElse(null),
+                            virtualSystems(d.deviceId()), commands);
                 }).toList();
+    }
+
+    private List<String> virtualSystems(String deviceId) {
+        return inventory.findLatestContextIds(deviceId).stream()
+                .filter(context -> !InventoryContext.PHYSICAL.equals(context))
+                .filter(context -> PORT.matcher(context).matches()).distinct().sorted().toList();
     }
 
     public AdmissionResult submit(String deviceId, String port, String requestId, String actor) {

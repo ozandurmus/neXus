@@ -16,7 +16,14 @@ public interface JobRecordDao {
     }
 
     record DiagnosticJob(String jobId, String targetDeviceId, String port, String state,
-            String statusToken, boolean statusPresent, Integer lineCount, String shapeId, String maskedOutput, String command, String actor, java.time.Instant submittedAt, Integer exitStatus, String gateId) {
+            String statusToken, boolean statusPresent, Integer lineCount, String shapeId, String maskedOutput, String command, String actor, java.time.Instant submittedAt, Integer exitStatus, String gateId,
+            java.time.Instant startedAt, java.time.Instant finishedAt) {
+        public DiagnosticJob(String jobId, String targetDeviceId, String port, String state,
+                String statusToken, boolean statusPresent, Integer lineCount, String shapeId, String maskedOutput,
+                String command, String actor, java.time.Instant submittedAt, Integer exitStatus, String gateId) {
+            this(jobId,targetDeviceId,port,state,statusToken,statusPresent,lineCount,shapeId,maskedOutput,
+                command,actor,submittedAt,exitStatus,gateId,null,null);
+        }
         public DiagnosticJob(String jobId, String targetDeviceId, String port, String state,
                 String statusToken, boolean statusPresent, Integer lineCount, String shapeId, String maskedOutput,
                 String command, String actor, java.time.Instant submittedAt, Integer exitStatus) {
@@ -24,6 +31,9 @@ public interface JobRecordDao {
                 command,actor,submittedAt,exitStatus,null);
         }
     }
+
+    /** Position among queued priority diagnostics; running jobs are not queued. */
+    default Optional<Integer> diagnosticQueuePosition(String jobId) { return Optional.empty(); }
 
     record DiagnosticOutputRef(String reference, byte[] wrappedKey) {
         @Override public String toString() { return "DiagnosticOutputRef[redacted]"; }

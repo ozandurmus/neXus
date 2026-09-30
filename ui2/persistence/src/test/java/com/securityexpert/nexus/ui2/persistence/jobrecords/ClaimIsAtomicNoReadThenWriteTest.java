@@ -62,6 +62,15 @@ class ClaimIsAtomicNoReadThenWriteTest {
     }
 
     @Test
+    void diagnosticPriorityPrecedesEveryExistingQueueClassWithDeterministicTies() {
+        String sql = JooqJobLeaseDao.CLAIM_SQL;
+        assertTrue(sql.contains("WHEN capability_id = 'diagnostic_read' THEN 0"));
+        assertTrue(sql.indexOf("WHEN capability_id = 'diagnostic_read' THEN 0")
+                < sql.indexOf("THEN 1"));
+        assertTrue(sql.contains("END, submitted_at, job_id"));
+    }
+
+    @Test
     void claimSqlMatchesJobEnginesSharedConstantByteForByte() throws IOException {
         String persistenceSql = extractTextBlock(readSource("persistence/src/main/java/com/securityexpert/"
                 + "nexus/ui2/persistence/jobrecords/JooqJobLeaseDao.java"));

@@ -117,7 +117,7 @@ public final class JooqJobRecordDao implements JobRecordDao {
     @Override
     public Optional<DiagnosticJob> findDiagnostic(String jobId) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
-                "select * from jobs where job_id = {0} and capability_id in ('fmg_interface_detail','diagnostic_read')", jobId)
+                "select jobs.*, (select min(created_at) from job_step_attempt a where a.job_id=jobs.job_id) as diagnostic_started_at from jobs where job_id = {0} and capability_id in ('fmg_interface_detail','diagnostic_read')", jobId)
                 .stream().findFirst().map(JooqJobRecordDao::toDiagnostic));
     }
 
@@ -131,15 +131,28 @@ public final class JooqJobRecordDao implements JobRecordDao {
                 r.get("diagnostic_masked_output", String.class), command != null ? command : "diagnose fmnetwork interface detail " + port,
                 r.get("submitted_by_actor_fingerprint", String.class),
                 r.get("submitted_at", java.time.OffsetDateTime.class).toInstant(), r.get("diagnostic_exit_status", Integer.class),
-                r.get("diagnostic_gate_id", String.class));
+                r.get("diagnostic_gate_id", String.class),
+                Optional.ofNullable(r.get("diagnostic_started_at", java.time.OffsetDateTime.class)).map(java.time.OffsetDateTime::toInstant).orElse(null),
+                Optional.ofNullable(r.get("finished_at", java.time.OffsetDateTime.class)).map(java.time.OffsetDateTime::toInstant).orElse(null));
     }
 
     @Override
     public java.util.List<DiagnosticJob> diagnosticHistory(String deviceId, int offset) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
-                "select * from jobs where capability_id in ('fmg_interface_detail','diagnostic_read') "
+                "select jobs.*, (select min(created_at) from job_step_attempt a where a.job_id=jobs.job_id) as diagnostic_started_at "
+                + "from jobs where capability_id in ('fmg_interface_detail','diagnostic_read') "
                 + "and ({0}::text is null or target_device_id = {0}) order by submitted_at desc, job_id desc limit 50 offset {1}",
                 deviceId, Math.max(0, offset)).stream().map(JooqJobRecordDao::toDiagnostic).toList());
+    }
+
+    @Override
+    public Optional<Integer> diagnosticQueuePosition(String jobId) {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch("""
+                select position from (
+                    select job_id, row_number() over (order by submitted_at, job_id) as position
+                    from jobs where state='REQUESTED' and capability_id='diagnostic_read'
+                ) queued where job_id={0}
+                """, jobId).stream().findFirst().map(r -> r.get("position", Integer.class)));
     }
 
     @Override

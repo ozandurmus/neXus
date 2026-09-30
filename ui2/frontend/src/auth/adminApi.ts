@@ -807,7 +807,9 @@ export interface DiagnosticTarget {
   readonly deviceId: string;
   readonly target: string;
   readonly vendor: string;
-  readonly commands: ReadonlyArray<{ gate_id: string; command_template: string; timeout_s: number }>;
+  readonly cluster?: string | null;
+  readonly virtualSystems?: readonly string[];
+  readonly commands: ReadonlyArray<{ gate_id: string; command_template: string; description?: string; timeout_s: number }>;
 }
 
 export function listFmgDiagnosticTargets(): Promise<{ targets: DiagnosticTarget[]; canExecute: boolean }> {
@@ -821,6 +823,7 @@ export function getFmgDiagnosticPorts(deviceId: string): Promise<{ ports: string
 export interface DiagnosticHistoryRow {
   jobId: string; targetDeviceId: string; target: string; command: string; actor: string;
   submittedAt: string; state: string; exitStatus: number | null;
+  description?: string; startedAt?: string | null; finishedAt?: string | null; durationMs?: number | null;
 }
 export function diagnosticHistory(deviceId: string, page: number): Promise<{ runs: DiagnosticHistoryRow[] }> {
   return call(`/api/v2/diagnostics/history?page=${page}${deviceId ? `&device_id=${encodeURIComponent(deviceId)}` : ""}`, "GET");
@@ -831,6 +834,7 @@ export function runDiagnostic(deviceId: string, gateId: string, parameter: strin
 }
 
 export interface DiagnosticResult extends DiagnosticHistoryRow {
+  readonly queuePosition?: number | null;
   readonly terminalReason?: string | null;
   readonly output: string | null;
   readonly masked: boolean;
