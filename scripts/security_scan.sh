@@ -28,6 +28,8 @@ case "$1" in
     ;;
   trivy)
     export TRIVY_CACHE_DIR=/cache/trivy
+    # Image layers are extracted under TMPDIR: keep them on the disk-backed cache, not the 1 GiB memory /tmp.
+    mkdir -p /cache/tmp && export TMPDIR=/cache/tmp
     run trivy-fs trivy fs --scanners vuln --format json --no-progress .
     run trivy-config trivy config --format json deploy/
     # Prepared from Deployments by the host, never guessed from a tag or pod name.
