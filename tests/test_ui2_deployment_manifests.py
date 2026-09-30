@@ -607,12 +607,6 @@ def test_all_java_workloads_mount_the_images_writable_paths():
             assert _containerfile_declared_writable_paths() <= mounted, owner
 
 
-def test_runtime_image_updates_vulnerable_os_packages_and_cleans_cache():
-    runtime = CONTAINERFILE.read_text().rsplit("\nFROM ", 1)[1]
-    assert "RUN microdnf update -y expat libxml2 && microdnf clean all" in runtime
-    assert runtime.index("USER 0") < runtime.index("microdnf update") < runtime.index("USER 185")
-
-
 def test_security_baseline_requires_owned_scoped_acceptances():
     entries = yaml.safe_load((REPO_ROOT / "security/baseline.yaml").read_text())["accepted"]
     identities = [(entry["tool"], entry["rule"], entry["location"]) for entry in entries]

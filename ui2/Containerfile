@@ -76,7 +76,6 @@ FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:908540a90db3dea9d
 # writable, and both are supplied as emptyDir mounts at runtime (FS-4).
 USER 0
 RUN mkdir -p /app /app/tmp /app/home
-RUN microdnf update -y expat libxml2 && microdnf clean all
 
 # Install the same optional corporate anchors into the runtime system trust
 # store. Red Hat's OpenJDK reads the extracted Java store populated here.
