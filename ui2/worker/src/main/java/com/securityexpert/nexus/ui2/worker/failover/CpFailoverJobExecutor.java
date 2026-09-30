@@ -179,7 +179,7 @@ public final class CpFailoverJobExecutor {
         if(!(resolution instanceof GateResolution.Known known)) throw new Stop("COMMAND_GATE_UNAVAILABLE",0);
         String expected=switch(command) {
             case STAT -> vsId==null?"cp_inventory_cphaprob_stat":"cp_inventory_vsid_cphaprob_stat";
-            case IF -> vsId==null?"cp_inventory_cphaprob_a_m_if":"cp_inventory_vsid_cphaprob_a_m_if";
+            case IF -> vsId==null?"cp_inventory_cphaprob_a_if":"cp_inventory_vsid_cphaprob_a_if";
             case TABLE -> "cp_failover_tablestat";
             case ARP -> "cp_failover_arp";
             case CONN -> "cp_failover_connections";

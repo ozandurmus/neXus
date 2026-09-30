@@ -31,6 +31,7 @@ public final class PanFailoverJobExecutor {
     private static final String SYSTEM="<show><system><info/></system></show>";
     private static final String SUSPEND="<request><high-availability><state><suspend/></state></high-availability></request>";
     private static final String FUNCTIONAL="<request><high-availability><state><functional/></state></high-availability></request>";
+    private static final Pattern SUCCESS=Pattern.compile("status\\s*=\\s*[\"']success[\"']");
     private static final Pattern KEY=Pattern.compile("<key>\\s*([^<\\s]+)\\s*</key>");
     private static final Duration POLL=Duration.ofSeconds(3);
     private static final int MAX_POLLS=21;
@@ -164,7 +165,7 @@ public final class PanFailoverJobExecutor {
             Map.of("user",credential.username(),"password",new String(credential.password())),Map.of()),Duration.ofSeconds(30));
         String body=result instanceof XmlApiResult.Completed c && c.httpStatus()==200?c.body():"";
         var match=KEY.matcher(body);
-        if (!body.contains("status=\"success\"") || !match.find()) throw new Stop("AUTH_UNAVAILABLE",0);
+        if (!SUCCESS.matcher(body).find() || !match.find()) throw new Stop("AUTH_UNAVAILABLE",0);
         return new Peer(summary.deviceId(),target,match.group(1),identity);
     }
     private GateResolution.Known gate(String command) {
@@ -202,7 +203,7 @@ public final class PanFailoverJobExecutor {
             Map.of("cmd",command),Map.of("X-PAN-KEY",peer.key())),Duration.ofSeconds(g.timeoutS()));
         if (!(result instanceof XmlApiResult.Completed completed) || completed.httpStatus()!=200
                 || completed.body()==null || completed.body().length()>262144
-                || !completed.body().contains("status=\"success\"")) {
+                || !SUCCESS.matcher(completed.body()).find()) {
             attempts.writeOutcome(attempt,epoch,"FAILED","COMMAND_UNAVAILABLE",false,null,null,null);
             throw new Stop("COMMAND_UNAVAILABLE",0);
         }

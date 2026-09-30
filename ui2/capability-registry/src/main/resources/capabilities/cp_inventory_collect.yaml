@@ -63,7 +63,7 @@ steps:
   - kind: exec
     shell_context: expert
     send: "cphaprob -a if"
-    gate_reference: cp_inventory_cphaprob_a_m_if
+    gate_reference: cp_inventory_cphaprob_a_if
   - kind: exec
     shell_context: expert
     send: "vsx stat -v"

@@ -230,7 +230,7 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md §3 -- measured 2026-09-22"
 
-  - gate_id: cp_inventory_cphaprob_a_m_if
+  - gate_id: cp_inventory_cphaprob_a_if
     vendor: check_point
     platform_role_scope: cp_gaia_gateway
     shell_context: expert
@@ -338,7 +338,7 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 10"
 
-  - gate_id: cp_inventory_cphaprob_a_m_if_vsenv0
+  - gate_id: cp_inventory_cphaprob_a_if_vsenv0
     vendor: check_point
     platform_role_scope: cp_gaia_gateway
     shell_context: expert
@@ -379,7 +379,7 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 12"
 
-  - gate_id: cp_inventory_vsid_cphaprob_a_m_if
+  - gate_id: cp_inventory_vsid_cphaprob_a_if
     vendor: check_point
     platform_role_scope: cp_gaia_gateway
     shell_context: expert
