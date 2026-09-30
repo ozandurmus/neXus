@@ -95,6 +95,7 @@ class NotificationMailRouterTest {
     void everyTypeQueriesItsSyntheticEventSource() throws Exception {
         DSLContext dsl = fixture();
         for (String type : NotificationRoute.TYPES) {
+            if (type.equals("security_scan")) continue; // File-backed source covered by SecurityScanSummaryTest.
             NotificationMailRouter.Batch batch = NotificationMailRouter.collect(dsl, type, 10, FROM);
             assertFalse(batch.lines().isEmpty(), type);
         }

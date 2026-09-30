@@ -23,11 +23,17 @@ set -uo pipefail
 # ~/.config/nexus/hosta (e.g. user@address).
 HOST="${NEXUS_HOST:-$(head -1 "$HOME/.config/nexus/hosta" 2>/dev/null)}"
 if [ -z "$HOST" ]; then echo "set NEXUS_HOST or write user@host to ~/.config/nexus/hosta" >&2; exit 64; fi
-LIMIT="${NEXUS_DEPLOY_LIMIT_S:-720}"
+LIMIT="${NEXUS_DEPLOY_LIMIT_S:-4500}"
+SKIP_SECURITY_B64=""
 APPLY=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --apply) APPLY+=("$2"); shift 2 ;;
+    --skip-security)
+      [ $# -ge 2 ] && [ -n "${2//[[:space:]]/}" ] || { echo "--skip-security requires a reason" >&2; exit 64; }
+      printf 'EMERGENCY: SECURITY GATE SKIPPED: %s\n' "$2"
+      SKIP_SECURITY_B64=$(printf '%s' "$2" | base64 | tr -d '\n')
+      shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 64 ;;
   esac
 done
@@ -42,9 +48,14 @@ for m in "${APPLY[@]:-}"; do [ -n "$m" ] && APPLY_NAMES="$APPLY_NAMES /tmp/$(bas
 # repository (~/nexus.git), which ~/nexus (run_build.sh's checkout) pulls from.
 git -C "$(dirname "$0")/.." push -q "ssh://$HOST/~/nexus.git" main || { echo "STOP: push to the host repository failed" >&2; exit 6; }
 
-ssh -o ConnectTimeout=10 "$HOST" "LIMIT=$LIMIT APPLY_NAMES='$APPLY_NAMES' bash -s" <<'REMOTE'
+ssh -o ConnectTimeout=10 "$HOST" "LIMIT=$LIMIT SKIP_SECURITY_B64='$SKIP_SECURITY_B64' APPLY_NAMES='$APPLY_NAMES' bash -s" <<'REMOTE'
 set -uo pipefail
 export KUBECONFIG=$HOME/.kube/config
+export NEXUS_SKIP_SECURITY_REASON="$(printf '%s' "$SKIP_SECURITY_B64" | base64 --decode)"
+if ! git --git-dir="$HOME/nexus.git" show main:deploy/ui2-image-build/run_build.sh | cmp -s - "$HOME/run_build.sh"; then
+  echo "STOP: host run_build.sh differs from the committed build/gate script; synchronize it before ship"
+  exit 6
+fi
 q() { kubectl -n ui2 exec ui2-db-0 -- sh -c "psql -U \"\$POSTGRES_USER\" -d ui2 -Atc \"$1\""; }
 inflight=$(q "select count(*) from jobs where state in ('CLAIMED','EXECUTING')")
 if [ "$inflight" != "0" ]; then echo "STOP: $inflight job(s) in flight; deploy not started"; exit 4; fi
@@ -62,6 +73,7 @@ while true; do
   echo "t=${t}s build=$bstate new=[$(echo "$new" | tr '\n' ';')]"
   # run_build.sh ended without "Done." -> it failed or stopped on purpose; say why instead of waiting out the limit
   if ! pgrep -f "bash $HOME/run_build.sh" >/dev/null && ! pgrep -f "bash ~/run_build.sh" >/dev/null && ! grep -q '^Done\.' /tmp/nexus_build.log; then
+    grep '^{"passed":' /tmp/nexus_build.log || true
     echo "STOP: run_build.sh ended without Done."; tail -4 /tmp/nexus_build.log | cut -c1-220; exit 5
   fi
   # waiting for in-flight jobs before the worker changes: not a hang, and not counted against the limit
@@ -79,6 +91,8 @@ while true; do
   if [ "$up" -ge 2 ] && grep -q '^Done\.' /tmp/nexus_build.log; then echo "UP after ${t}s"; break; fi
   if [ $t -gt "$LIMIT" ]; then echo "STOP: over ${LIMIT}s"; tail -3 /tmp/nexus_build.log; exit 3; fi
 done
+# Already validated counts from security_host.py; preserve the whole summary for the ship caller.
+grep '^{"passed":' /tmp/nexus_build.log || true
 # HTTPS since 2026-09-27 (HTTP answers 301); -k: the local CA is not in the host's trust store.
 echo "site $(curl -sk --noproxy '*' -o /dev/null -w '%{http_code}' https://127.0.0.1/)"
 echo "schema $(q "select version || ' ' || success from flyway_schema_history order by installed_rank desc limit 1")"

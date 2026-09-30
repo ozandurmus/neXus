@@ -68,7 +68,7 @@ public record NotificationSettings(
             if (routes.size() != NotificationRoute.TYPES.size()
                     || !routes.stream().map(NotificationRoute::type).toList().containsAll(NotificationRoute.TYPES)
                     || routes.stream().map(NotificationRoute::type).distinct().count() != NotificationRoute.TYPES.size()) {
-                problems.add("all seven notification types must be provided once");
+                problems.add("all notification types must be provided once");
             }
             for (NotificationRoute route : routes) {
                 if (route.type() == null || !NotificationRoute.TYPES.contains(route.type())) continue;

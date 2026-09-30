@@ -292,19 +292,34 @@ def cmd_clean(args: argparse.Namespace) -> int:
     return 0
 
 
-def _deploy() -> None:
+def _deploy(skip_security: str | None = None) -> None:
     """scripts/hosta_deploy.sh with its exit-4 retry (a job in flight), then ui2-configuration set to the service image."""
     log = STATE_DIR / "last_deploy.log"
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     for _ in range(30):
         with open(log, "w") as out:
-            rc = subprocess.run(["bash", "scripts/hosta_deploy.sh"], cwd=str(REPO_ROOT), stdout=out, stderr=subprocess.STDOUT).returncode
+            command = ["bash", "scripts/hosta_deploy.sh"]
+            if skip_security is not None:
+                command += ["--skip-security", skip_security]
+            rc = subprocess.run(command, cwd=str(REPO_ROOT), stdout=out, stderr=subprocess.STDOUT).returncode
         if rc != 4:
             break
         time.sleep(25)
     tail = log.read_text(errors="replace").strip().splitlines()[-3:]
+    from security_host import safe_summary
+    security_passed = False
+    for line in log.read_text(errors="replace").splitlines():
+        if line.startswith('{"passed":'):
+            try:
+                summary = safe_summary(line)
+                print(json.dumps(summary), flush=True)
+                security_passed = summary["passed"]
+            except RuntimeError:
+                raise SystemExit("security gate summary malformed; ship stopped") from None
     if rc != 0:
         raise SystemExit(f"deploy failed (rc={rc}); see {log}: " + " | ".join(t[:160] for t in tail))
+    if skip_security is None and not security_passed:
+        raise SystemExit("security gate success missing; ship stopped before configuration sync")
     host = (Path.home() / ".config" / "nexus" / "hosta").read_text().splitlines()[0].strip()
     sync = ('export KUBECONFIG=$HOME/.kube/config; '
             'IMG=$(kubectl -n ui2 get deploy ui2-service -o jsonpath="{.spec.template.spec.containers[0].image}"); '
@@ -330,6 +345,11 @@ def _pr_body(branch: str, commits: str, notes: str) -> str:
 
 def cmd_ship(args: argparse.Namespace) -> int:
     """Ship through a pull request (PO 2026-09-30): push the lane branch, open a PR, merge it, deploy from main."""
+    skip_security = getattr(args, "skip_security", None)
+    if skip_security is not None:
+        if not skip_security.strip() or len(skip_security) > 200 or any(ord(c) < 32 for c in skip_security):
+            raise SystemExit("--skip-security requires a nonempty, single-line reason (maximum 200 characters)")
+        print("EMERGENCY: SECURITY GATE SKIPPED: " + skip_security, flush=True)
     if _git("status", "--porcelain", "--untracked-files=no"):
         raise SystemExit("main checkout has uncommitted tracked changes; commit or set them aside first")
     _git("fetch", "-q", "origin")
@@ -384,7 +404,7 @@ def cmd_ship(args: argparse.Namespace) -> int:
     _git("merge", "-q", "--ff-only", "origin/main")
     _git("push", "-q", "hosta", "main")
     print(json.dumps({"pr": url, "merged": _git("rev-parse", "--short", "HEAD")}))
-    _deploy()
+    _deploy(skip_security)
     # The in-cluster e2e screen suite after every deploy (PO 2026-09-27); a failure is reported, not rolled back.
     e2e = subprocess.run(["bash", "scripts/hosta_e2e.sh"], cwd=str(REPO_ROOT), capture_output=True, text=True)
     lines = [l for l in e2e.stdout.splitlines() if l.strip()]
@@ -423,6 +443,7 @@ def main(argv: list[str] | None = None) -> int:
     sh.add_argument("--branch", help="ship a local branch (a reviewer hotfix) through a pull request")
     sh.add_argument("--title")
     sh.add_argument("--notes", help="extra lines for the PR body (live validation, measurements)")
+    sh.add_argument("--skip-security", metavar="REASON", help="emergency bypass; a reason is mandatory and printed")
     c = sub.add_parser("clean")
     c.add_argument("--task", required=True)
     c.add_argument("--force", action="store_true")

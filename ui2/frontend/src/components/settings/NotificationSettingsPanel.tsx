@@ -29,6 +29,7 @@ const TYPES: { type: NotificationRouteView["type"]; title: string; description: 
   { type: "config_change", title: "Configuration changes", description: "New configuration notifications" },
   { type: "compliance_regression", title: "Compliance regressions", description: "Controls changing from PASS to FAIL" },
   { type: "device_health", title: "Device reachability", description: "Unreachable, reachable again and host-key mismatch" },
+  { type: "security_scan", title: "Security scans", description: "Daily and weekly security findings: new, fixed and accepted counts" },
 ];
 
 function problemsOf(err: unknown): string {

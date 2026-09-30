@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh neXus scan inputs before the daily scan
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 Europe/Istanbul
+Persistent=true
+Unit=security-source-refresh.service
+
+[Install]
+WantedBy=timers.target
