@@ -1592,16 +1592,17 @@ export function getOverview(): Promise<OverviewView> {
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
 export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN" | "WARN";
 export interface CpFailoverUnit { unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean }
+export interface ReadinessCheck { checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean }
 export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system"> {
   activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null; canRunReadiness: boolean;
-  readiness: { status: "READY" | "NOT_READY" | "UNKNOWN"; observedAt: string; failedCheck: string; checks: Array<{ checkNo: number; status: CpFailoverCheckStatus; derived: Record<string, unknown> }> } | null;
+  readiness: { status: "READY" | "NOT_READY" | "UNKNOWN"; observedAt: string; failedCheck: string; checks: Array<ReadinessCheck & { status: CpFailoverCheckStatus; derived: Record<string, unknown> }> } | null;
 }
 export interface CpFailoverApproval { approvalId: string; windowFrom: string; windowUntil: string; reason: string; approvedBy: string; revokedAt: string | null }
 export interface CpFailoverRun {
   runId: string; approvalId: string; scheduledFor: string; state: CpFailoverState; step: string;
   outcome: string | null; failedCheck: string | null; message: string | null; steps: string[]; kind?: "FAILOVER" | "READINESS";
 }
-export interface CpFailoverCheck { phase: "pre" | "post"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14; status: CpFailoverCheckStatus; derived: string; observedAt: string }
+export interface CpFailoverCheck extends ReadinessCheck { phase: "pre" | "post"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14; status: CpFailoverCheckStatus; derived: string; observedAt: string }
 export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverCheck[] }
 
 const failoverPath = (vendor?: string) => vendor === "palo_alto" ? "/api/v2/pan-failover" : "/api/v2/cp-failover";

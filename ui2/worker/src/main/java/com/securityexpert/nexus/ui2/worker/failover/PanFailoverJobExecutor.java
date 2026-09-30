@@ -56,6 +56,7 @@ public final class PanFailoverJobExecutor {
     private int commandIndex;
     private boolean wrote,writeInFlight;
     private boolean readiness;
+    private Stop readinessFailure;
     private ReadinessShapeLog shapes;
     private final Map<Integer,Boolean> fieldsFound=new java.util.HashMap<>();
 
@@ -85,6 +86,7 @@ public final class PanFailoverJobExecutor {
         }
         this.jobId=jobId; this.runId=run.get().id(); this.epoch=epoch;
         this.readiness=READINESS_KIND.equals(run.get().kind());
+        this.readinessFailure=null;
         this.shapes=new ReadinessShapeLog("palo_alto");
         this.fieldsFound.clear();
         this.commandIndex=0; this.wrote=false; this.writeInFlight=false;
@@ -103,9 +105,7 @@ public final class PanFailoverJobExecutor {
             PanFailoverChecks.State a=read(first),b=read(second);
             Long before=checks("pre",first,second,a,b,null,null);
             if (readiness) {
-                store.state(runId,"DONE","DONE","READY",null,"READY");
-                leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
-                    "system:pan-failover-worker","pan_readiness_done","READY");
+                finishReadiness("READY",0,"PASS");
                 return;
             }
             Peer formerActive="active".equals(a.role())?first:second;
@@ -127,7 +127,7 @@ public final class PanFailoverJobExecutor {
             leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
                 "system:pan-failover-worker","pan_failover_done","SUCCEEDED");
         } catch (Stop stopped) {
-            if (readiness) finishReadiness(stopped.code,stopped.check,stopped.status); else stop(stopped.code,stopped.check);
+            if (readiness) finishReadiness(stopped.code,stopped.check,stopped.check==0?"UNKNOWN":stopped.status); else stop(stopped.code,stopped.check);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             if (readiness) finishReadiness("INTERRUPTED",0,"UNKNOWN"); else stop("INTERRUPTED",0);
@@ -143,7 +143,10 @@ public final class PanFailoverJobExecutor {
             ?JobState.OUTCOME_UNKNOWN:JobState.FAILED,"system:pan-failover-worker","pan_failover_stopped",code);
     }
     private void finishReadiness(String code,int check,String status) {
-        String outcome="FAIL".equals(status)?"NOT_READY":"UNKNOWN";
+        if (readinessFailure!=null && (!"FAIL".equals(status) || "FAIL".equals(readinessFailure.status))) {
+            code=readinessFailure.code; check=readinessFailure.check; status=readinessFailure.status;
+        }
+        String outcome="PASS".equals(status)?"READY":"FAIL".equals(status)?"NOT_READY":"UNKNOWN";
         store.state(runId,"DONE","DONE",outcome,check==0?null:checkName(check),code);
         leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
             "system:pan-failover-worker","pan_readiness_done",outcome);
@@ -253,13 +256,18 @@ public final class PanFailoverJobExecutor {
             int no=i+1;
             shapes.logUnknown(no,statuses[i]);
             String reason=PanFailoverChecks.unknownDerived(no,statuses[i],fieldsFound.getOrDefault(no,false));
+            if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsA+"}";
             String derived=no==1?"{\"role\":\""+a.role()+"\"}":reason;
             store.check(runId,phase,first.id(),null,no,statuses[i],derived);
+            if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsB+"}";
             derived=no==1?"{\"role\":\""+b.role()+"\"}":reason;
             store.check(runId,phase,second.id(),null,no,statuses[i],derived);
         }
-        for (int i=0;i<statuses.length;i++) if (!"PASS".equals(statuses[i]))
-            throw new Stop("CHECK_NOT_READY",i+1,statuses[i]);
+        for (int i=0;i<statuses.length;i++) if (!"PASS".equals(statuses[i])) {
+            if (!readiness) throw new Stop("CHECK_NOT_READY",i+1,statuses[i]);
+            if (readinessFailure==null || !"FAIL".equals(readinessFailure.status) && "FAIL".equals(statuses[i]))
+                readinessFailure=new Stop("CHECK_NOT_READY",i+1,statuses[i]);
+        }
         return active;
     }
     private boolean waitFor(Peer first,Peer second,Peer active,String activeRole,Peer other,String otherRole)

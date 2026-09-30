@@ -184,6 +184,8 @@ class CpFailoverJobExecutorTest {
         Store store=new Store(); Script script=new Script(); script.badPre=true; run(store,script);
         check(store.state.equals("STOPPED") && script.downCount==0 && script.upCount==0);
         check(store.checks.stream().anyMatch(s -> s.equals("pre:2:FAIL")));
+        check(store.checks.size()==4);
+        check(script.commands.size()==4);
     }
     @Test void differingVsTablesStayUnknownAndStopWithoutWrites() {
         for(boolean extra:List.of(false,true)) {
@@ -198,6 +200,33 @@ class CpFailoverJobExecutorTest {
         }
     }
 
+    @Test void readinessCollectsBothMembersAfterFailAndUnknown() {
+        for (boolean unknownFirst:List.of(false,true)) {
+            Store store=new Store(); store.kind="READINESS";
+            Script script=new Script(); script.badPre=!unknownFirst; script.badPnotes=unknownFirst;
+            script.unknownCommand="cphaprob -a if";
+            run(store,script);
+            check("NOT_READY".equals(store.outcome));
+            check(store.checks.size()==24);
+            check(store.checks.contains("pre:3:UNKNOWN"));
+            check(store.checks.stream().filter(c -> c.equals("pre:14:PASS")).count()==2);
+            check(script.connectCount==2 && script.commands.size()==26);
+            check(script.downCount==0 && script.upCount==0);
+        }
+    }
+    @Test void readinessStopsWhenCommandUnavailable() {
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script(); script.failedCommand="cphaprob tablestat";
+        run(store,script);
+        check("UNKNOWN".equals(store.outcome) && store.checks.size()==2);
+        check(script.commands.size()==3 && script.downCount==0);
+    }
+    @Test void informationalUnknownDoesNotBlockReadiness() {
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script(); script.unknownCommand="cphaprob show_failover";
+        run(store,script);
+        check("READY".equals(store.outcome) && store.checks.size()==24);
+    }
     @Test void readinessCompletesWithoutWriteAndWriteGateRefuses() {
         Store store=new Store(); store.kind="READINESS"; Script script=new Script(); run(store,script);
         check(store.state.equals("DONE") && "READY".equals(store.outcome));

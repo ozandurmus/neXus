@@ -122,13 +122,13 @@ class PanFailoverJobExecutorTest {
     private static Result run(Script script) { return run(script,false); }
     private static Result run(Script script,boolean readiness) {
         JooqCpFailoverRepository store=mock(JooqCpFailoverRepository.class);
-        AtomicReference<String> state=new AtomicReference<>("PLANNED"),outcome=new AtomicReference<>();
+        AtomicReference<String> state=new AtomicReference<>("PLANNED"),outcome=new AtomicReference<>(),failedCheck=new AtomicReference<>();
         List<String> checks=new ArrayList<>(),derived=new ArrayList<>();
         when(store.runByJob("job-1")).thenAnswer(inv -> Optional.of(new JooqCpFailoverRepository.Run(
             "run-1",CLUSTER,null,readiness?null:"approval-1","actor-1",Instant.now(),"job-1",
             state.get(),state.get(),outcome.get(),null,null,"palo_alto",readiness?"READINESS":"FAILOVER")));
         when(store.windowValid("run-1")).thenReturn(true);
-        doAnswer(inv -> {state.set(inv.getArgument(1)); outcome.set(inv.getArgument(3)); return null;})
+        doAnswer(inv -> {state.set(inv.getArgument(1)); outcome.set(inv.getArgument(3)); failedCheck.set(inv.getArgument(4)); return null;})
             .when(store).state(anyString(),anyString(),anyString(),nullable(String.class),nullable(String.class),nullable(String.class));
         doAnswer(inv -> {checks.add(inv.getArgument(1)+":"+inv.getArgument(4)+":"+inv.getArgument(5));
             derived.add(inv.getArgument(6)); return null;})
@@ -136,9 +136,9 @@ class PanFailoverJobExecutorTest {
         new PanFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),
             ref -> new PanCredentialMaterial("synthetic-user","synthetic-password".toCharArray()),gates(),d -> {})
             .execute("job-1",1);
-        return new Result(state.get(),outcome.get(),checks,derived);
+        return new Result(state.get(),outcome.get(),checks,derived,failedCheck.get());
     }
-    private record Result(String state,String outcome,List<String> checks,List<String> derived) {}
+    private record Result(String state,String outcome,List<String> checks,List<String> derived,String failedCheck) {}
     @Test void happyPath() {
         Script script=new Script(); Result result=run(script);
         assertEquals("DONE",result.state());
@@ -201,6 +201,21 @@ class PanFailoverJobExecutorTest {
             assertEquals(expected,result.derived().get((check-1)*2));
             assertEquals(expected,result.derived().get((check-1)*2+1));
         }
+    }
+    @Test void readinessRecordsEveryCheckAndFailureOutranksEarlierUnknown() {
+        Script script=new Script(); script.missingFields=true; script.badVersion=true;
+        Result result=run(script,true);
+        assertEquals("NOT_READY",result.outcome());
+        assertEquals(14,result.checks().size());
+        assertTrue(result.checks().contains("pre:4:UNKNOWN"));
+        assertEquals(2,result.checks().stream().filter(c -> c.equals("pre:7:FAIL")).count());
+        assertEquals(0,script.suspendCount);
+        // The execution path still stops on its first non-PASS verdict.
+        Result failover=run(script,false);
+        assertEquals("STOPPED",failover.state());
+        assertEquals("CHECK_NOT_READY",failover.outcome());
+        assertEquals("4",failover.failedCheck());
+        assertEquals(0,script.suspendCount);
     }
     public static void main(String[] args) {
         var test=new PanFailoverJobExecutorTest(); test.happyPath(); test.precheckFailNeverWrites();

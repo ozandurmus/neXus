@@ -107,7 +107,7 @@ public class JooqCpFailoverRepository {
     public List<ReadinessStatus> readinessStatuses() {
         return boundary.inTransaction(dsl -> dsl.fetch("select r.cluster_ref,r.vs_id,r.vendor,r.outcome,"
             + "r.finished_at,r.failed_check,coalesce((select jsonb_agg(jsonb_build_object("
-            + "'checkNo',c.check_no,'status',c.status,'derived',c.derived) order by c.check_no,c.member_ref) "
+            + "'memberRef',c.member_ref,'observedAt',c.observed_at,'checkNo',c.check_no,'status',c.status,'derived',c.derived) order by c.check_no,c.member_ref) "
             + "from failover_check_result c where c.run_id=r.run_id and c.phase='pre'),'[]'::jsonb) checks "
             + "from failover_run r where r.run_kind='READINESS' and r.run_id in (select distinct on "
             + "(vendor,cluster_ref,coalesce(vs_id,'')) run_id from failover_run where run_kind='READINESS' "
