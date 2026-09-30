@@ -97,6 +97,7 @@ test("aiview: a listed backup job transcript GET is forbidden with HTTP 403", as
   expect(jobs.items.length, "At least one listed backup job is required to prove transcript denial").toBeGreaterThan(0);
   expect(/backup/i.test(jobs.items[0].job_type), "Listed job must be a backup job").toBe(true);
   await expect(page.getByRole("table", { name: "Job logs" }).getByRole("row").nth(1)).toBeVisible();
+  safety.expectForbiddenTranscript(`/jobs/${encodeURIComponent(jobs.items[0].job_id)}/transcript`);
   const result = await browserGet<null>(page, `/jobs/${encodeURIComponent(jobs.items[0].job_id)}/transcript`);
   expect(result.status, "aiview must receive 403 even for a real listed backup job").toBe(403);
   await safety.checkpoint();

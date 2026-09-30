@@ -1,6 +1,7 @@
 import { test as base, expect, type Page, type Request } from "@playwright/test";
 import { baseURL } from "./settings.mjs";
-import { hasCanaryToken, isAiview, loadErrorText, installReadOnlyGuard } from "./safety";
+import { hasCanaryToken, isErrorAlert, isAiview, loadErrorText, installReadOnlyGuard } from "./safety";
+import { fullMode, latencyViolation, pathTemplate } from "./latency";
 import { existsSync, readFileSync } from "node:fs";
 
 const canaryFile = process.env.NEXUS_E2E_CANARY_FILE;
@@ -11,14 +12,15 @@ if (canaryDigests && [...canaryDigests].some((digest) => !/^[0-9a-f]{64}$/.test(
 }
 if (!canaryDigests) console.info("E2E canary privacy check skipped: digest file is absent");
 
-type Safety = { checkpoint: () => Promise<void> };
+type Safety = { apiTimings: readonly { path: string; elapsedMs: number }[]; checkpoint: () => Promise<void>; expectForbiddenTranscript: (path: string) => void };
 
 export async function visibleSafety(page: Page) {
   const text = await page.locator("body").innerText();
   // Assert booleans, never actual text: failures must not print a leaked identity.
   if (canaryDigests) expect(hasCanaryToken(text, canaryDigests), "Visible text matches a privacy canary (value withheld)").toBe(false);
   expect(loadErrorText.test(text), "Visible unhandled API/load error text (content withheld)").toBe(false);
-  expect(await page.getByRole("alert").count(), "A screen exposes an error/warning alert").toBe(0);
+  const alerts = await page.getByRole("alert").evaluateAll(elements => elements.map(element => element.className));
+  expect(alerts.some(isErrorAlert), "A screen exposes an error/warning alert").toBe(false);
   expect(await page.getByRole("button", { name: /transcript/i }).count(), "Transcript button must be absent under aiview").toBe(0);
 }
 
@@ -30,13 +32,34 @@ export const test = base.extend<{ safety: Safety }>({
   safety: [async ({ context }, use) => {
     const violations: string[] = [];
     const pending = new Set<Request>();
+    const started = new Map<Request, number>();
+    const apiTimings: { path: string; elapsedMs: number }[] = [];
+    const forbiddenTranscripts = new Set<string>();
+    const enforceLatency = fullMode();
     let changedAt = Date.now();
     const relevant = (request: Request) => ["fetch", "xhr", "document"].includes(request.resourceType());
-    context.on("request", (request) => { if (relevant(request)) { pending.add(request); changedAt = Date.now(); } });
-    context.on("requestfinished", (request) => { if (pending.delete(request)) changedAt = Date.now(); });
-    context.on("requestfailed", (request) => { if (pending.delete(request)) changedAt = Date.now(); });
+    context.on("request", (request) => {
+      if (new URL(request.url()).pathname.startsWith("/api/")) started.set(request, Date.now());
+      if (relevant(request)) { pending.add(request); changedAt = Date.now(); } });
+    context.on("requestfinished", (request) => {
+      const start = started.get(request);
+      if (start !== undefined) {
+        const elapsedMs = Date.now() - start;
+        apiTimings.push({ path: pathTemplate(request.url()), elapsedMs });
+        const violation = enforceLatency ? latencyViolation(request.url(), elapsedMs) : null;
+        if (violation) violations.push(violation);
+      }
+      started.delete(request);
+      if (pending.delete(request)) changedAt = Date.now();
+    });
+    context.on("requestfailed", (request) => {
+      started.delete(request);
+      if (pending.delete(request)) { changedAt = Date.now(); violations.push("Screen request failed (URL withheld)"); }
+    });
     context.on("response", (response) => {
-      if (relevant(response.request()) && response.status() >= 500) violations.push(`API/document returned HTTP ${response.status()} (URL withheld)`);
+      const expectedDenial = response.status() === 403 && response.request().method() === "GET"
+        && forbiddenTranscripts.delete(new URL(response.url()).pathname);
+      if (relevant(response.request()) && response.status() >= 400 && !expectedDenial) violations.push(`API/document returned HTTP ${response.status()} (URL withheld)`);
     });
     context.on("page", (page) => page.on("pageerror", () => violations.push("Uncaught page error (content withheld)")));
     await installReadOnlyGuard(context, baseURL(), (message) => violations.push(message));
@@ -57,7 +80,11 @@ export const test = base.extend<{ safety: Safety }>({
       expect(violations, "Read-only/session/API/page safety checks").toEqual([]);
       for (const page of context.pages()) if (!page.isClosed()) await visibleSafety(page);
     };
-    try { await use({ checkpoint }); }
+    const expectForbiddenTranscript = (path: string) => {
+      if (!/^\/jobs\/[^/]+\/transcript$/.test(path)) throw new Error("Only the transcript denial probe may expect HTTP 403");
+      forbiddenTranscripts.add(path);
+    };
+    try { await use({ checkpoint, expectForbiddenTranscript, apiTimings }); }
     finally { await checkpoint(); }
   }, { auto: true }],
 });

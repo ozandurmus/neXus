@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { fullMode } from "./e2e/latency";
 import { baseURL, frontendRoot, statePath } from "./e2e/settings.mjs";
 
 // Avoid automatic DOM dumps on a privacy failure. Traces also contain session cookies and API bodies.
@@ -9,7 +10,7 @@ const outputRoot = process.env.NEXUS_E2E_OUTPUT_DIR ?? frontendRoot;
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "**/*.spec.ts",
+  testMatch: fullMode() ? "**/*.spec.ts" : ["**/screens.spec.ts", "**/key-views.spec.ts"],
   globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
   workers: 1,

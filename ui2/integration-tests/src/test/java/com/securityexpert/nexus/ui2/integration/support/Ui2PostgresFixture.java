@@ -157,6 +157,11 @@ public final class Ui2PostgresFixture implements AutoCloseable {
     }
 
     private static String adminPassword() {
+        String file = System.getenv("UI2_TEST_DB_PASSWORD_FILE");
+        if (file != null && !file.isBlank()) {
+            try { return Files.readString(Path.of(file)).strip(); }
+            catch (IOException e) { throw new IllegalStateException("could not read test database password file"); }
+        }
         String configured = System.getenv(JDBC_URL_ENV);
         if (configured != null && !configured.isBlank()) {
             String password = queryParameter(configured, "password");

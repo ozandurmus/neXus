@@ -409,17 +409,27 @@ def cmd_ship(args: argparse.Namespace) -> int:
     print(json.dumps({"pr": url, "merged": _git("rev-parse", "--short", "HEAD")}))
     _deploy(skip_security)
     # The in-cluster e2e screen suite after every deploy (PO 2026-09-27); a failure is reported, not rolled back.
-    e2e = subprocess.run(["bash", "scripts/hosta_e2e.sh"], cwd=str(REPO_ROOT), capture_output=True, text=True)
+    e2e = subprocess.run(["bash", "scripts/hosta_e2e.sh", "--full" if getattr(args, "full", False) else "--quick"], cwd=str(REPO_ROOT), capture_output=True, text=True)
     lines = [l for l in e2e.stdout.splitlines() if l.strip()]
     verdict = "pass" if e2e.returncode == 0 and "E2E: PASS" in e2e.stdout else "FAIL"
     print(json.dumps({"e2e": verdict, "summary": lines[-6:]}))
     subprocess.run(["gh", "pr", "comment", url, "--body",
                     "Deployed to HOST-A. In-cluster e2e: **" + verdict + "** (" + (lines[-2] if len(lines) > 1 else "") + ")"],
                    cwd=str(REPO_ROOT), capture_output=True, text=True)
+    integration_ok = True
+    if getattr(args, "full", False):
+        integration = subprocess.run(["bash", "scripts/hosta_integration.sh"], cwd=str(REPO_ROOT),
+                                     capture_output=True, text=True)
+        integration_ok = integration.returncode == 0 and "INTEGRATION: PASS" in integration.stdout
+        summary = "PASS" if integration_ok else "FAIL"
+        print(json.dumps({"integration": summary}))
+        subprocess.run(["gh", "pr", "comment", url, "--body",
+                        "Full ship: ephemeral PostgreSQL 16 integration tests: **" + summary + "**."],
+                       cwd=str(REPO_ROOT), capture_output=True, text=True)
     if args.task and Path(r["worktree"]).exists():
         args.force = True
         cmd_clean(args)
-    return 0
+    return 0 if verdict == "pass" and integration_ok else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -445,6 +455,7 @@ def main(argv: list[str] | None = None) -> int:
     sh.add_argument("--task")
     sh.add_argument("--branch", help="ship a local branch (a reviewer hotfix) through a pull request")
     sh.add_argument("--title")
+    sh.add_argument("--full", action="store_true", help="run every-tab/latency E2E and real PostgreSQL integration tests")
     sh.add_argument("--notes", help="extra lines for the PR body (live validation, measurements)")
     sh.add_argument("--skip-security", metavar="REASON", help="emergency bypass; a reason is mandatory and printed")
     c = sub.add_parser("clean")

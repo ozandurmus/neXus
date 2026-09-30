@@ -2,10 +2,7 @@ import { SCREEN_IDS, type ScreenId } from "../src/shell/types";
 import { test, expect, visit } from "./fixtures";
 import type { Page } from "@playwright/test";
 
-const headings: Record<ScreenId, string> = {
-  overview: "Overview", inventory: "Devices", configuration: "Devices", compliance: "Compliance",
-  backups: "Backups", operations: "Operations", administration: "Administration",
-};
+import { SCREEN_HEADINGS as headings } from "../src/shell/tabCoverage";
 
 async function screenHasData(page: Page, screen: ScreenId) {
   switch (screen) {
