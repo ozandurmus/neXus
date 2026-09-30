@@ -103,6 +103,19 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
     }
 
     @Override
+    public List<String> findLatestContextIds(String deviceId) {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch("""
+                with latest as (
+                    select run_id from device_inventory_run where device_id={0}
+                    order by collected_at desc limit 1
+                )
+                select context from device_interface where run_id in (select run_id from latest)
+                union select context from device_route where run_id in (select run_id from latest)
+                order by context
+                """, deviceId).stream().map(row -> row.get("context", String.class)).toList());
+    }
+
+    @Override
     public List<InventoryRun> findLatestRuns(List<String> deviceIds) {
         if (deviceIds.isEmpty()) {
             return List.of();

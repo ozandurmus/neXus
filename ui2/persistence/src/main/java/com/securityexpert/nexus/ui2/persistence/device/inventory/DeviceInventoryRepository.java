@@ -29,6 +29,12 @@ public interface DeviceInventoryRepository {
     /** The newest run for one device, fully reassembled with its contexts, or empty if none was ever recorded. */
     Optional<InventoryRun> findLatestRun(String deviceId);
 
+    /** Stored context identifiers only, without loading addresses, routes or raw topology. */
+    default List<String> findLatestContextIds(String deviceId) {
+        return findLatestRun(deviceId).stream().flatMap(run -> run.contexts().stream())
+                .map(InventoryContext::context).distinct().sorted().toList();
+    }
+
     /** The newest run per device, for every device id in {@code deviceIds} that has at least one recorded run. */
     List<InventoryRun> findLatestRuns(List<String> deviceIds);
 }

@@ -36,13 +36,15 @@ class DiagnosticServiceTest {
         var platform = mock(com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.class);
         var rows = GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader()
                 .getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
-        var service = new DiagnosticService(devices, mock(DeviceInventoryRepository.class), null,
+        var inventory = mock(DeviceInventoryRepository.class);
+        when(inventory.findLatestContextIds("device-1")).thenReturn(List.of("physical", "001"));
+        var service = new DiagnosticService(devices, inventory, null,
                 mock(JobRecordDao.class), new TopologyNamePseudonymizer("synthetic-test-key".getBytes()),
                 key -> rows.stream().filter(row -> row.key().equals(key)).toList(),
                 new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(null),
                 null, null, platform);
         var summary = new DeviceSummaryRecord("device-1", "gateway", "check_point", DeviceEnrollmentState.ENROLLED,
-                Optional.of("FW-TANGO-04"), Optional.of("V0"), Optional.empty(), Optional.empty(), Optional.empty());
+                Optional.of("FW-TANGO-04"), Optional.of("V0"), Optional.empty(), Optional.empty(), Optional.of("synthetic-cluster"));
         when(devices.listAll()).thenReturn(List.of(summary));
         when(devices.find("device-1")).thenReturn(Optional.of(new DeviceRecord("device-1", "gateway", "check_point",
                 "manual", Instant.now(), false, DeviceEnrollmentState.ENROLLED, false, "credential-ref")));
@@ -52,7 +54,12 @@ class DiagnosticServiceTest {
                 "device-1", Optional.empty(), Optional.empty(), Optional.of("gaia_embedded"),
                 java.util.Map.of(), Optional.empty(), "cp_spark_show_diag_software_version", Optional.empty())));
 
-        var commands = service.targets(false).get(0).commands();
+        var target = service.targets(true).get(0);
+        assertEquals(List.of("001"), target.virtualSystems());
+        assertTrue(target.cluster().startsWith("CLS-"));
+        assertFalse(target.cluster().contains("synthetic-cluster"));
+        var commands = target.commands();
+        assertTrue(commands.stream().anyMatch(command -> "System diagnostics".equals(command.get("description"))));
         assertTrue(commands.stream().anyMatch(command -> "cp_spark_show_diag".equals(command.get("gate_id"))));
         assertTrue(commands.stream().anyMatch(command -> "cp_spark_show_software_version".equals(command.get("gate_id"))));
     }
@@ -84,6 +91,31 @@ class DiagnosticServiceTest {
         assertFalse(ai.contains("synthetic-private-name"));
         assertFalse(ai.contains("192.0.2.44"));
         assertFalse(service.output(id,"actor",true).orElseThrow().containsKey("wrappedKey"));
+    }
+
+    @Test
+    void projectsQueuePositionAndMeasuredExecutionDuration() {
+        var jobs = mock(JobRecordDao.class);
+        var service = new DiagnosticService(mock(DeviceRepository.class), mock(DeviceInventoryRepository.class), null, jobs,
+                new TopologyNamePseudonymizer("synthetic-test-key".getBytes()), k -> List.of(),
+                new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(null),
+                mock(com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver.class), null);
+        String id = "00000000-0000-0000-0000-000000000001";
+        Instant submitted = Instant.parse("2026-09-30T10:00:00Z");
+        when(jobs.findDiagnostic(id)).thenReturn(Optional.of(new JobRecordDao.DiagnosticJob(id, "device-1", null,
+                "REQUESTED", null, false, null, null, null, "get system status", "actor", submitted, null,
+                "fgt_get_system_status")));
+        when(jobs.diagnosticQueuePosition(id)).thenReturn(Optional.of(2));
+        var queued = service.output(id, "actor", true).orElseThrow();
+        assertEquals(2, queued.get("queuePosition"));
+        assertEquals(null, queued.get("durationMs"));
+        when(jobs.findDiagnostic(id)).thenReturn(Optional.of(new JobRecordDao.DiagnosticJob(id, "device-1", null,
+                "COMPLETED", null, false, null, null, null, "get system status", "actor", submitted, 0,
+                "fgt_get_system_status", submitted.plusSeconds(10), submitted.plusSeconds(12))));
+        var done = service.output(id, "actor", true).orElseThrow();
+        assertEquals(null, done.get("queuePosition"));
+        assertEquals(2000L, done.get("durationMs"));
+        assertEquals("System version and status", done.get("description"));
     }
 
     @Test
