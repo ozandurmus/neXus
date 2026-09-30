@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository;
 import com.securityexpert.nexus.ui2.service.failover.CpFailoverService;
+import com.securityexpert.nexus.ui2.service.failover.ReadinessCheckView;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
 /** Opaque-unit API for the Check Point and Palo Alto failover screens. */
@@ -92,9 +93,21 @@ public final class CpFailoverController {
             if (s.readiness() != null) {
                 var readiness = s.readiness();
                 try {
+                    var rows=JSON.readTree(readiness.checks());
+                    var members=new java.util.TreeSet<String>();
+                    rows.forEach(row -> members.add(row.path("memberRef").asText()));
+                    var ordered=List.copyOf(members);
+                    rows.forEach(row -> {
+                        var fields=ReadinessCheckView.fields(s.vendor(),row.path("checkNo").asInt(),
+                            "Member "+(ordered.indexOf(row.path("memberRef").asText())+1),
+                            row.path("status").asText(),row.path("derived"),readiness.observedAt());
+                        ((com.fasterxml.jackson.databind.node.ObjectNode)row).setAll(
+                            (com.fasterxml.jackson.databind.node.ObjectNode)JSON.valueToTree(fields));
+                        ((com.fasterxml.jackson.databind.node.ObjectNode)row).remove("memberRef");
+                    });
                     m.put("readiness", Map.of("status", readiness.outcome(), "observedAt", readiness.observedAt(),
                         "failedCheck", readiness.failedCheck() == null ? "" : readiness.failedCheck(),
-                        "checks", JSON.readTree(readiness.checks())));
+                        "checks", rows));
                 } catch (java.io.IOException invalidStoredJson) {
                     throw new IllegalStateException("Stored readiness checks are invalid", invalidStoredJson);
                 }
@@ -135,11 +148,18 @@ public final class CpFailoverController {
     public ResponseEntity<?> detail(@PathVariable String runId,HttpServletRequest request) {
         return result(() -> service.detail(runId,actor(request)).filter(d -> vendor(request).equals(d.run().vendor())).map(d -> {
             Map<String,Object> view=run(d.run());
+            var members=d.checks().stream().map(JooqCpFailoverRepository.Check::memberRef).distinct().sorted().toList();
             view.put("checks",d.checks().stream().map(c -> {
                 Map<String,Object> check=new LinkedHashMap<>();
                 check.put("phase",c.phase()); check.put("device_id",c.memberRef());
                 check.put("cluster_member_ref",d.run().clusterRef());
-                check.put("hostname",service.memberName(c.memberRef()).orElse(null));
+                check.put("hostname",null);
+                try {
+                    check.putAll(ReadinessCheckView.fields(d.run().vendor(),c.checkNo(),
+                        "Member "+(members.indexOf(c.memberRef())+1),c.status(),JSON.readTree(c.derived()),c.observedAt()));
+                } catch (java.io.IOException invalid) {
+                    throw new IllegalStateException("Stored readiness checks are invalid",invalid);
+                }
                 check.put("checkNo",c.checkNo()); check.put("status",c.status());
                 check.put("derived",c.derived()); check.put("observedAt",c.observedAt());
                 return check;

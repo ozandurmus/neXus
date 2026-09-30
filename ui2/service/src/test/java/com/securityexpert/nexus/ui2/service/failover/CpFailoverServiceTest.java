@@ -167,12 +167,41 @@ class CpFailoverServiceTest {
             .andExpect(jsonPath("$[0].readiness.failedCheck").value(failedCheck == null ? "" : failedCheck))
             .andExpect(jsonPath("$[0].readiness.observedAt").value(observedAt.toString()))
             .andExpect(jsonPath("$[0].readiness.checks[0].checkNo").value(9))
-            .andExpect(jsonPath("$[0].readiness.checks[0].status").value(checkStatus));
+            .andExpect(jsonPath("$[0].readiness.checks[0].status").value(checkStatus))
+            .andExpect(jsonPath("$[0].readiness.checks[0].result").value(checkStatus))
+            .andExpect(jsonPath("$[0].readiness.checks[0].title").value("State synchronization"))
+            .andExpect(jsonPath("$[0].readiness.checks[0].member").value("Member 1"))
+            .andExpect(jsonPath("$[0].readiness.checks[0].blocking").value(true))
+            .andExpect(jsonPath("$[0].readiness.checks[0].summary").isString());
         when(store.readinessStatuses()).thenReturn(List.of());
         mvc.perform(get("/api/v2/cp-failover/summary")
                 .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"actor-1"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].readiness").value(org.hamcrest.Matchers.nullValue()));
+    }
+    @ParameterizedTest
+    @ValueSource(strings = {"check_point", "palo_alto"})
+    void detailProjectsSafeMemberLabelsAndSummaries(String vendor) throws Exception {
+        ready("ACTIVE","STANDBY");
+        Instant observed=Instant.parse("2026-09-30T10:00:00Z");
+        var run=new JooqCpFailoverRepository.Run("run-1",CLUSTER,null,null,"actor-1",observed,
+            "job-1","DONE","DONE","READY",null,null,vendor,"READINESS");
+        when(store.detail("run-1")).thenReturn(Optional.of(new JooqCpFailoverRepository.Detail(run,List.of(
+            new JooqCpFailoverRepository.Check("pre",B,null,1,"PASS","{\"role\":\"STANDBY\"}",observed),
+            new JooqCpFailoverRepository.Check("pre",A,null,1,"PASS","{\"role\":\"ACTIVE\"}",observed)))));
+        var json=new ObjectMapper().findAndRegisterModules().disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        var mvc=MockMvcBuilders.standaloneSetup(new CpFailoverController(service))
+            .setMessageConverters(new MappingJackson2HttpMessageConverter(json)).build();
+        String path="/api/v2/"+("palo_alto".equals(vendor)?"pan":"cp")+"-failover/runs/run-1";
+        mvc.perform(get(path).servletPath(path)
+                .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"actor-1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.checks[0].member").value("Member 2"))
+            .andExpect(jsonPath("$.checks[1].member").value("Member 1"))
+            .andExpect(jsonPath("$.checks[1].summary").value("Active"))
+            .andExpect(jsonPath("$.checks[1].result").value("PASS"))
+            .andExpect(jsonPath("$.checks[1].derived").value("{\"role\":\"ACTIVE\"}"));
+        verify(devices,never()).findSummary(anyString());
     }
     @Test void incorrectMemberStateRefusedBeforeAdmission() {
         ready("ACTIVE","ACTIVE");

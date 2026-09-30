@@ -22,6 +22,8 @@ import { m3 } from "../theme/m3Theme";
 import { approveCpFailover, getCpFailoverRun, listCpFailoverApprovals, listCpFailoverRuns, listCpFailoverUnits, revokeCpFailover, startCpFailover,
   runCpFailoverReadiness, type CpFailoverApproval, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
 
+import { ReadinessChecksTable } from "./ReadinessChecksTable";
+
 const labels = ["Preparing", "Failing over", "Switched", "Checking", "No problems found"];
 const cpChecks: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate", 9: "State synchronization", 10: "Installed policy parity", 11: "Critical devices", 12: "Bond interfaces", 13: "Last failover", 14: "Routing" };
 const panChecks: Record<number, string> = { 1: "HA mode and roles", 2: "Peer relationship", 3: "HA links", 4: "Configuration sync", 5: "Session synchronization", 6: "Sessions carried", 7: "Version parity" };
@@ -120,11 +122,10 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
       </Box>
       {readinessRun && <Box aria-label="Readiness checks">
         <Typography variant="subtitle1">Readiness: {activeStates.includes(readinessRun.state) ? "Running" : readinessRun.outcome ?? "UNKNOWN"}</Typography>
-        <Table size="small"><TableHead><TableRow><TableCell>Check</TableCell><TableCell>Value</TableCell><TableCell>Result</TableCell></TableRow></TableHead>
-          <TableBody>{readinessRun.checks.filter(check => check.phase === "pre").map((check, index) => <TableRow key={`${check.checkNo}-${index}`}>
-            <TableCell>{checks[check.checkNo] ?? `Check ${check.checkNo}`}</TableCell><TableCell>{check.derived}</TableCell><TableCell>{check.status}</TableCell>
-          </TableRow>)}</TableBody>
-        </Table>
+        <Typography variant="body2">{readinessRun.checks.length
+          ? `Observed ${Math.max(0, Math.floor((now - Math.max(...readinessRun.checks.map(check => Date.parse(check.observedAt)))) / 60_000))} min ago`
+          : "No observations yet"}</Typography>
+        <ReadinessChecksTable checks={readinessRun.checks.filter(check => check.phase === "pre")} />
       </Box>}
       {run && <Box aria-label="Failover run">
         <Stepper activeStep={Math.max(step, 0)} alternativeLabel>

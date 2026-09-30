@@ -1,3 +1,4 @@
+import { ReadinessChecksTable } from "./ReadinessChecksTable";
 import { Fragment, useState, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
@@ -167,11 +168,7 @@ export function OperationsScreen() {
     return row.readiness.status === "READY" ? `Ready · ${ago}`
       : row.readiness.status === "NOT_READY" ? `Not ready · ${row.readiness.failedCheck} · ${ago}` : `Unknown · ${ago}`;
   };
-  const checkName = (vendor: string | undefined, number: number) => {
-    const cp: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate", 9: "State synchronization", 10: "Installed policy parity" };
-    const pan: Record<number, string> = { 1: "Mode and roles", 2: "Peer relationship", 3: "HA links", 4: "Configuration sync", 5: "Session synchronization", 6: "Sessions carried", 7: "Version parity" };
-    return (vendor === "palo_alto" ? pan : cp)[number] ?? `Check ${number}`;
-  };
+
 
   const handleAuthorizeAndDryRun = async () => {
     if (!selectedCluster) return;
@@ -486,11 +483,7 @@ export function OperationsScreen() {
           </Box>
           {readinessError && <Typography role="alert" variant="body2" sx={{ color: m3.error, mt: 1 }}>{readinessError}</Typography>}
           {checks.length > 0 && <TableContainer sx={{ mt: 2 }}>
-            <Table size="small"><TableHead><TableRow><TableCell>Check</TableCell><TableCell>Value</TableCell><TableCell>Result</TableCell></TableRow></TableHead>
-              <TableBody>{checks.map((check, index) => <TableRow key={`${check.checkNo}-${index}`}>
-                <TableCell>{checkName(detailRow?.vendor, check.checkNo)}</TableCell><TableCell>{JSON.stringify(check.derived)}</TableCell><TableCell>{check.status}</TableCell>
-              </TableRow>)}</TableBody>
-            </Table>
+            <ReadinessChecksTable checks={checks} />
           </TableContainer>}
         </Card>
 

@@ -55,6 +55,30 @@ describe("Check Point failover", () => {
     expect(screen.queryByRole("table", { name: "Failover checks" })).toBeNull();
   });
 
+  it.each(["check_point", "palo_alto"])("shows %s readiness side by side without diagnostic JSON", async (vendor) => {
+    api.units.mockResolvedValue([{ ...cluster, vendor }]);
+    api.runs.mockResolvedValue([{ runId: "readiness-run", kind: "READINESS" }]);
+    api.detail.mockResolvedValue({ runId: "readiness-run", kind: "READINESS", state: "DONE", outcome: "NOT_READY",
+      checks: [
+        { checkNo: 1, title: "Cluster state", member: "Member 2", result: "FAIL", summary: "Standby", blocking: true },
+        { checkNo: 1, title: "Cluster state", member: "Member 1", result: "FAIL", summary: "Active", blocking: true },
+        { checkNo: 13, title: "Last failover", member: "Member 1", result: "UNKNOWN", summary: "Last failover time unavailable", blocking: false },
+      ].map(check => ({ ...check, phase: "pre", status: check.result, derived: '{"up":0,"private":"SYNTHETIC-PRIVATE"}', observedAt: new Date(Date.now() - 60_000).toISOString() })) });
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "CLS-ROMEO-01" }));
+    const table = await screen.findByRole("table", { name: "Readiness results" });
+    expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Check", "Member 1", "Member 2", "Result"]);
+    const cells = within(within(table).getByText("Cluster state").closest("tr")!).getAllByRole("cell");
+    expect(cells[1]).toHaveTextContent("Active");
+    expect(cells[2]).toHaveTextContent("Standby");
+    expect(within(table).getByText("Blocking")).toBeInTheDocument();
+    expect(within(table).getByText("Informational")).toBeInTheDocument();
+    expect(within(table).getByText("Not collected")).toBeInTheDocument();
+    expect(screen.getByText("Readiness: NOT_READY")).toBeInTheDocument();
+    expect(screen.getByText(/Observed 1 min ago/)).toBeInTheDocument();
+    expect(table.textContent).not.toMatch(/SYNTHETIC-PRIVATE|[{}]/);
+  });
+
   it("hides approval and start controls when server flags deny them", async () => {
     api.units.mockResolvedValue([{ ...cluster, canApprove: false, canStart: false, canSchedule: false }]);
     renderPanel();

@@ -14,7 +14,10 @@ const MEMBERS = [
 ];
 
 const READY_SUMMARY = [{ clusterId: "opaque-cluster", unitId: "opaque-cluster", cluster_member_ref: "CLS-ROMEO-01", vendor: "check_point", activeWindow: false, lastRunState: null, lastRunOutcome: null, lastRunAt: null, canRunReadiness: true,
-  readiness: { status: "READY", observedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), failedCheck: "", checks: [{ checkNo: 1, status: "PASS", derived: { role: "ACTIVE" } }] } }];
+  readiness: { status: "READY", observedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), failedCheck: "", checks: [
+    { checkNo: 1, title: "Cluster state", member: "Member 1", status: "PASS", result: "PASS", summary: "Active", blocking: true, derived: { role: "ACTIVE" } },
+    { checkNo: 1, title: "Cluster state", member: "Member 2", status: "PASS", result: "PASS", summary: "Standby", blocking: true, derived: { role: "STANDBY" } },
+  ] } }];
 
 function stubFetch(devices: unknown[], summary: unknown | null) {
   vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
@@ -75,7 +78,12 @@ describe("OperationsScreen tabs", () => {
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
     expect(await screen.findByText("Readiness: Ready · 2 h ago")).toBeInTheDocument();
-    expect(screen.getByText('{"role":"ACTIVE"}')).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Readiness results" });
+    expect(within(table).getByText("Active")).toBeInTheDocument();
+    expect(within(table).getByText("Standby")).toBeInTheDocument();
+    expect(within(table).getByText("Member 1")).toBeInTheDocument();
+    expect(within(table).getByText("Member 2")).toBeInTheDocument();
+    expect(table.textContent).not.toMatch(/[{}]/);
     expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("/preflight"))).toBe(false);
     fireEvent.click(screen.getByText("All clusters"));
     expect(await screen.findByText("1 clusters enrolled")).toBeInTheDocument();

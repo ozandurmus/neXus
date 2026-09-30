@@ -49,6 +49,7 @@ public final class CpFailoverJobExecutor {
     private boolean wrote;
     private boolean writeInFlight;
     private boolean readiness;
+    private Stop readinessFailure;
     private ReadinessShapeLog shapes;
 
     private record Member(String id, TransportSession session) {}
@@ -89,6 +90,7 @@ public final class CpFailoverJobExecutor {
         }
         this.jobId=jobId; this.runId=run.get().id(); this.vsId=run.get().vsId();
         this.readiness="READINESS".equals(run.get().kind());
+        this.readinessFailure=null;
         this.shapes=new ReadinessShapeLog("check_point");
         this.epoch=epoch; this.commandIndex=0; this.wrote=false; this.writeInFlight=false;
         if(!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
@@ -106,9 +108,7 @@ public final class CpFailoverJobExecutor {
             store.state(runId,"PRECHECK","PRECHECK",null,null,null);
             Pair before=checks("pre",first,second,null,null);
             if (readiness) {
-                store.state(runId,"DONE","DONE","READY",null,"READY");
-                leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
-                    "system:cp-failover-worker","cp_readiness_done","READY");
+                finishReadiness("READY",0,"PASS");
                 return;
             }
             Member formerActive="ACTIVE".equals(before.a().state().localRole())?first:second;
@@ -129,7 +129,7 @@ public final class CpFailoverJobExecutor {
             leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
                 "system:cp-failover-worker","cp_failover_done","SUCCEEDED");
         } catch (Stop stopped) {
-            if (readiness) finishReadiness(stopped.code,stopped.check,stopped.status);
+            if (readiness) finishReadiness(stopped.code,stopped.check,stopped.check==0?"UNKNOWN":stopped.status);
             else stop(stopped.code,stopped.check);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
@@ -149,7 +149,10 @@ public final class CpFailoverJobExecutor {
             ?JobState.OUTCOME_UNKNOWN:JobState.FAILED,"system:cp-failover-worker","cp_failover_stopped",code);
     }
     private void finishReadiness(String code,int check,String status) {
-        String outcome="FAIL".equals(status)?"NOT_READY":"UNKNOWN";
+        if (readinessFailure!=null && (!"FAIL".equals(status) || "FAIL".equals(readinessFailure.status))) {
+            code=readinessFailure.code; check=readinessFailure.check; status=readinessFailure.status;
+        }
+        String outcome="PASS".equals(status)?"READY":"FAIL".equals(status)?"NOT_READY":"UNKNOWN";
         store.state(runId,"DONE","DONE",outcome,check==0?null:checkName(check),code);
         leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
             "system:cp-failover-worker","cp_readiness_done",outcome);
@@ -252,7 +255,7 @@ public final class CpFailoverJobExecutor {
         String stateStatus=states?"PASS":"HA".equals(a.mode()) && "HA".equals(b.mode())?"FAIL":"UNKNOWN";
         record(phase,first,1,stateStatus,"{\"role\":\""+a.localRole()+"\"}");
         record(phase,second,1,stateStatus,"{\"role\":\""+b.localRole()+"\"}");
-        if(!states) throw new Stop("CLUSTER_STATE_NOT_READY",1,stateStatus);
+        if(!states) checkFailed("CLUSTER_STATE_NOT_READY",1,stateStatus);
         var ta=CpFailoverChecks.ipTable(command(first,TABLE));
         var tb=CpFailoverChecks.ipTable(command(second,TABLE));
         boolean tables=CpFailoverChecks.twoTableMembers(ta) && ta.equals(tb);
@@ -263,12 +266,12 @@ public final class CpFailoverJobExecutor {
             ?"{\"reason\":\"tables differ\",\"a\":"+ta.size()+",\"b\":"+tb.size()+"}":null;
         record(phase,first,2,tableStatus,difference!=null?difference:"{\"entries\":"+ta.size()+"}");
         record(phase,second,2,tableStatus,difference!=null?difference:"{\"entries\":"+tb.size()+"}");
-        if(!tables) throw new Stop("CLUSTER_IP_TABLE_MISMATCH",2,tableStatus);
+        if(!tables) checkFailed("CLUSTER_IP_TABLE_MISMATCH",2,tableStatus);
         var ia=CpFailoverChecks.interfaces(command(first,IF));
         var ib=CpFailoverChecks.interfaces(command(second,IF));
-        record(phase,first,3,ia.healthy()?"PASS":ia.ccpPresent()?"FAIL":"UNKNOWN","{\"up\":"+ia.names().size()+"}");
-        record(phase,second,3,ib.healthy()?"PASS":ib.ccpPresent()?"FAIL":"UNKNOWN","{\"up\":"+ib.names().size()+"}");
-        if(!ia.healthy() || !ib.healthy()) throw new Stop("INTERFACE_NOT_READY",3,
+        record(phase,first,3,ia.healthy()?"PASS":ia.ccpPresent()?"FAIL":"UNKNOWN",json(Map.of("up",ia.names().size(),"required",ia.required())));
+        record(phase,second,3,ib.healthy()?"PASS":ib.ccpPresent()?"FAIL":"UNKNOWN",json(Map.of("up",ib.names().size(),"required",ib.required())));
+        if(!ia.healthy() || !ib.healthy()) checkFailed("INTERFACE_NOT_READY",3,
             !ia.ccpPresent() || !ib.ccpPresent() ? "UNKNOWN" : "FAIL");
         int arpA=CpFailoverChecks.arpCount(command(first,ARP));
         int arpB=CpFailoverChecks.arpCount(command(second,ARP));
@@ -290,10 +293,10 @@ public final class CpFailoverJobExecutor {
         boolean conn=ca!=null && cb!=null && (before==null
             ?CpFailoverChecks.ratio(active==first?cb.count():ca.count(),baseConn,CpFailoverChecks.CONNECTION_MIN_RATIO)
             :CpFailoverChecks.ratio(currentConn,baseConn,CpFailoverChecks.CONNECTION_MIN_RATIO));
-        String connStatus=conn?"PASS":ca==null || cb==null?"UNKNOWN":"FAIL";
+        String connStatus=before==null && !states?"UNKNOWN":conn?"PASS":ca==null || cb==null?"UNKNOWN":"FAIL";
         record(phase,first,6,connStatus,ca==null?"{}":"{\"count\":"+ca.count()+",\"peak\":"+ca.peak()+"}");
         record(phase,second,6,connStatus,cb==null?"{}":"{\"count\":"+cb.count()+",\"peak\":"+cb.peak()+"}");
-        if(!conn) throw new Stop("CONNECTIONS_BELOW_TOLERANCE",6,connStatus);
+        if(!"PASS".equals(connStatus)) checkFailed("CONNECTIONS_BELOW_TOLERANCE",6,connStatus);
         var preA=CpFailoverChecks.bytesByInterface(command(first,TRAFFIC));
         var preB=CpFailoverChecks.bytesByInterface(command(second,TRAFFIC));
         pause.sleep(Duration.ofSeconds(5));
@@ -309,7 +312,7 @@ public final class CpFailoverJobExecutor {
         String trafficStatus=traffic?"PASS":rateA<0 || rateB<0?"UNKNOWN":"FAIL";
         record(phase,first,8,trafficStatus,rateA<0?"{}":"{\"bytesPerSecond\":"+rateA+"}");
         record(phase,second,8,trafficStatus,rateB<0?"{}":"{\"bytesPerSecond\":"+rateB+"}");
-        if(!traffic) throw new Stop("TRAFFIC_BELOW_TOLERANCE",8,trafficStatus);
+        if(!traffic) checkFailed("TRAFFIC_BELOW_TOLERANCE",8,trafficStatus);
         String syncOutputA=before==null || active==first?command(first,SYNC):null;
         String syncOutputB=before==null || active==second?command(second,SYNC):null;
         String syncA=syncOutputA==null?null:CpFailoverChecks.syncStatus(syncOutputA);
@@ -317,7 +320,7 @@ public final class CpFailoverJobExecutor {
         if(syncA!=null) record(phase,first,9,syncA,json(CpFailoverChecks.syncInformation(syncOutputA)));
         if(syncB!=null) record(phase,second,9,syncB,json(CpFailoverChecks.syncInformation(syncOutputB)));
         if("FAIL".equals(syncA) || "FAIL".equals(syncB) || "UNKNOWN".equals(syncA) || "UNKNOWN".equals(syncB))
-            throw new Stop("STATE_SYNC_NOT_READY",9,"FAIL".equals(syncA) || "FAIL".equals(syncB)?"FAIL":"UNKNOWN");
+            checkFailed("STATE_SYNC_NOT_READY",9,"FAIL".equals(syncA) || "FAIL".equals(syncB)?"FAIL":"UNKNOWN");
         var policyA=CpFailoverChecks.policy(command(first,POLICY));
         var policyB=CpFailoverChecks.policy(command(second,POLICY));
         String policyStatus="FAIL".equals(policyA.status()) || "FAIL".equals(policyB.status())?"FAIL"
@@ -326,22 +329,24 @@ public final class CpFailoverJobExecutor {
                 (!policyA.name().equals(before.a().policyName()) || !policyB.name().equals(before.b().policyName()))?"FAIL":"PASS";
         record(phase,first,10,policyStatus,policyA.installedAt()==null?"{}":"{\"installedAt\":\""+policyA.installedAt()+"\"}");
         record(phase,second,10,policyStatus,policyB.installedAt()==null?"{}":"{\"installedAt\":\""+policyB.installedAt()+"\"}");
-        if(!"PASS".equals(policyStatus)) throw new Stop("POLICY_NOT_MATCHED",10,policyStatus);
+        if(!"PASS".equals(policyStatus)) checkFailed("POLICY_NOT_MATCHED",10,policyStatus);
         for(Member member:List.of(first,second)) {
             // The intentionally down former active reports ADMIN_DOWN after the switch.
             if(before!=null && member!=active) continue;
             var pnotes=CpFailoverChecks.pnotes(command(member,PNOTES));
             record(phase,member,11,pnotes.status(),json(Map.of("pnotes",pnotes.names())));
-            if(!"PASS".equals(pnotes.status())) throw new Stop("PNOTES_NOT_READY",11,pnotes.status());
-            String bonds=CpFailoverChecks.bonds(command(member,BONDS));
-            record(phase,member,12,bonds,"{}");
-            if(!"PASS".equals(bonds)) throw new Stop("BOND_NOT_READY",12,bonds);
+            if(!"PASS".equals(pnotes.status())) checkFailed("PNOTES_NOT_READY",11,pnotes.status());
+            String bondOutput=command(member,BONDS);
+            String bonds=CpFailoverChecks.bonds(bondOutput);
+            record(phase,member,12,bonds,json(Map.of("noneConfigured",
+                bondOutput.strip().equals("No bond interfaces are configured."))));
+            if(!"PASS".equals(bonds)) checkFailed("BOND_NOT_READY",12,bonds);
         }
         for(Member member:List.of(first,second)) {
             String output=null;
             try { output=command(member,FAILOVER); }
             catch(Stop unavailable) {
-                if(!"COMMAND_UNAVAILABLE".equals(unavailable.code)) throw unavailable;
+                if(readiness || !"COMMAND_UNAVAILABLE".equals(unavailable.code)) throw unavailable;
             }
             var event=CpFailoverChecks.lastFailover(output,Instant.now());
             record(phase,member,13,event.status(),event.lastFailoverAt()==null?"{}":json(Map.of(
@@ -356,16 +361,22 @@ public final class CpFailoverJobExecutor {
                 :routing.defaultRoute() && routing.count()==before.forMember(oldActive,first).routing().count()?"PASS":"FAIL";
             record(phase,member,14,status,routing==null?"{}":json(Map.of(
                 "routeCount",routing.count(),"defaultRoute",routing.defaultRoute())));
-            if(!"PASS".equals(status)) throw new Stop("ROUTING_NOT_READY",14,status);
+            if(!"PASS".equals(status)) checkFailed("ROUTING_NOT_READY",14,status);
         }
         return new Pair(new Measure(a,ta,ia,arpA,ca,rateA,policyA.name(),routingA),
             new Measure(b,tb,ib,arpB,cb,rateB,policyB.name(),routingB));
+    }
+    private void checkFailed(String code,int check,String status) {
+        if (!readiness) throw new Stop(code,check,status);
     }
     private static String json(Object value) {
         try { return JSON.writeValueAsString(value); }
         catch(JsonProcessingException invalid) { throw new IllegalStateException("Derived projection unavailable"); }
     }
     private void record(String phase,Member member,int no,String status,String derived) {
+        if (readiness && no!=13 && !"PASS".equals(status)
+                && (readinessFailure==null || !"FAIL".equals(readinessFailure.status) && "FAIL".equals(status)))
+            readinessFailure=new Stop("CHECK_NOT_READY",no,status);
         shapes.logUnknown(no,status);
         store.check(runId,phase,member.id(),vsId,no,status,derived);
     }
