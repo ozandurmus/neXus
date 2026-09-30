@@ -256,10 +256,13 @@ public final class CpFailoverJobExecutor {
         var ta=CpFailoverChecks.ipTable(command(first,TABLE));
         var tb=CpFailoverChecks.ipTable(command(second,TABLE));
         boolean tables=CpFailoverChecks.twoTableMembers(ta) && ta.equals(tb);
-        String tableStatus=tables?"PASS":CpFailoverChecks.twoTableMembers(ta)
+        String tableStatus=tables?"PASS":vsId==null && CpFailoverChecks.twoTableMembers(ta)
             && CpFailoverChecks.twoTableMembers(tb)?"FAIL":"UNKNOWN";
-        record(phase,first,2,tableStatus,"{\"entries\":"+ta.size()+"}");
-        record(phase,second,2,tableStatus,"{\"entries\":"+tb.size()+"}");
+        shapes.logTables(tableStatus,ta,tb);
+        String difference=!tables && vsId!=null && !ta.equals(tb)
+            ?"{\"reason\":\"tables differ\",\"a\":"+ta.size()+",\"b\":"+tb.size()+"}":null;
+        record(phase,first,2,tableStatus,difference!=null?difference:"{\"entries\":"+ta.size()+"}");
+        record(phase,second,2,tableStatus,difference!=null?difference:"{\"entries\":"+tb.size()+"}");
         if(!tables) throw new Stop("CLUSTER_IP_TABLE_MISMATCH",2,tableStatus);
         var ia=CpFailoverChecks.interfaces(command(first,IF));
         var ib=CpFailoverChecks.interfaces(command(second,IF));

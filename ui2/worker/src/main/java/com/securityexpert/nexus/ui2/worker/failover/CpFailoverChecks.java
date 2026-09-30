@@ -25,7 +25,7 @@ public final class CpFailoverChecks {
     public static final double TRAFFIC_MIN_RATIO = 0.50;
     private static final Pattern LOCAL = Pattern.compile("(?i)\\(local\\)");
     private static final Pattern IP_ROW = Pattern.compile("(?m)^\\s*([^\\s()]+)\\s+(\\d+)\\s+([0-9a-fA-F:.]+)(?:[ \\t]+[0-9a-fA-F:]+)?[ \\t]*$");
-    private static final Pattern INTERFACE = Pattern.compile("(?m)^\\s*([A-Za-z][A-Za-z0-9_.:-]{0,63})[ \\t]+(?:\\(([A-Z]+)\\)[ \\t]+)?(UP|DOWN|Non-Monitored)\\b(.*)$");
+    private static final Pattern INTERFACE = Pattern.compile("(?m)^\\s*([A-Za-z][A-Za-z0-9_.:-]{0,63})[ \\t]+(?:\\(((?:S|HA|LS|LM|P)(?:,[ \t]*(?:S|HA|LS|LM|P))*)\\)[ \\t]+)?(UP|DOWN|Non-Monitored)\\b(.*)$");
     private static final Pattern CONNECTION = Pattern.compile("(?im)^\\s*\\S+\\s+connections\\s+\\d+\\s+(\\d+)\\s+(\\d+)\\s+\\d+\\s*$");
     private static final Pattern DEV = Pattern.compile("(?m)^\\s*([A-Za-z0-9_.:-]{1,64}):\\s*((?:\\d+\\s+){15}\\d+)\\s*$");
     private static final Pattern SYNC_STATUS = Pattern.compile("(?m)^Sync status:\\s*(OK|Off\\s*-.*|Fullsync in progress|Problem\\s*\\(.*\\))\\s*$");
@@ -67,7 +67,8 @@ public final class CpFailoverChecks {
     public static Set<String> ipTable(String output) {
         if (output==null || !output.contains("Unique IP's Table")) return Set.of();
         Set<String> rows=new HashSet<>(); Map<String,String> mapping=new HashMap<>();
-        for(String line:output.split("\\R")) {
+        for(String raw:output.split("\\R")) {
+            String line=LOCAL.matcher(raw).replaceAll(" ");
             if(!line.strip().matches("[0-9].*")) continue;
             Matcher m=IP_ROW.matcher(line);
             if(!m.matches()) return Set.of();
@@ -86,7 +87,7 @@ public final class CpFailoverChecks {
     public static Interfaces interfaces(String output) {
         if(output==null) return new Interfaces(Set.of(),Set.of(),0,false,false);
         Matcher count=Pattern.compile("(?im)^\\s*Required interfaces:\\s*(\\d+)\\s*$").matcher(output);
-        Matcher ccp=Pattern.compile("(?im)^\\s*CCP mode:\\s*(Automatic|Manual[^\\r\\n]*)$").matcher(output);
+        Matcher ccp=Pattern.compile("(?im)^\\s*CCP mode:\\s*(Automatic|Manual[^\\r\\n]*)[ \t]*$").matcher(output);
         boolean hasCount=count.find(), hasCcp=ccp.find();
         boolean framed=output.matches("(?s).*Virtual cluster interfaces:[ \t]*[0-9]+.*");
         if((output.contains("CCP mode:") && !hasCcp) || (output.contains("Required interfaces:") && !hasCount))
@@ -100,14 +101,15 @@ public final class CpFailoverChecks {
         for(String line:output.split("(?i)Virtual cluster interfaces:",2)[0].split("\\R")) {
             String text=line.strip();
             if(text.isEmpty() || text.matches("-+") || text.startsWith("vsid ") || text.startsWith("Required ")
-                || text.startsWith("CCP mode:") || text.startsWith("Interface Name:")) continue;
+                || text.startsWith("CCP mode:") || text.startsWith("Interface Name:")
+                || text.equals("S - sync, HA/LS - bond type, LM - link monitor, P - probing")) continue;
             Matcher m=INTERFACE.matcher(line);
             if(!m.matches()) return new Interfaces(Set.of(),Set.of(),required,false,false);
             if("Non-Monitored".equals(m.group(3))) continue;
             monitored++;
             if("UP".equals(m.group(3))) {
                 up.add(m.group(1));
-                boolean sync="S".equals(m.group(2)) || "Sync".equalsIgnoreCase(m.group(1))
+                boolean sync=(m.group(2)!=null && java.util.Arrays.asList(m.group(2).split(",[ \t]*")).contains("S")) || "Sync".equalsIgnoreCase(m.group(1))
                     || (m.group(4).toLowerCase(Locale.ROOT).contains("sync")
                         && !m.group(4).toLowerCase(Locale.ROOT).contains("non sync"));
                 if(!sync) traffic.add(m.group(1));

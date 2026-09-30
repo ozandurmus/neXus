@@ -1,0 +1,14 @@
+vsid 12:                                                                                            
+CCP mode: Manual (Unicast)                                                                          
+Required interfaces: 2                                                                              
+Required secured interfaces: 1                                                                      
+                                                                                                    
+Interface Name:      Status:                                                                        
+Sync (S)             UP                                                                             
+Mgmt                 Non-Monitored                                                                  
+bond1.3843 (LS)      UP                                                                             
+                                                                                                    
+S - sync, HA/LS - bond type, LM - link monitor, P - probing                                         
+                                                                                                    
+Virtual cluster interfaces: 1                                                                       
+bond1.3843      198.51.100.68       VMAC address: 02:00:00:00:00:01                                 

@@ -17,7 +17,7 @@ final class ReadinessShapeLog {
     private static final System.Logger LOG=System.getLogger(ReadinessShapeLog.class.getName());
     private static final int MAX_BYTES=2048;
     private static final Pattern TOKENS=Pattern.compile(
-        "(?<![\\p{L}\\p{N}_])(?:Cluster Mode|High Availability|Active|ACTIVE|Standby|STANDBY|Down|DOWN|READY|\\(local\\)|ID|State|Name)(?![\\p{L}\\p{N}_])");
+        "(?<![\\p{L}\\p{N}_])(?:Cluster Mode|High Availability|Active|ACTIVE|Standby|STANDBY|Down|DOWN|UP|Non-Monitored|\\((?:S|HA|LS|LM|P)(?:,[ \t]*(?:S|HA|LS|LM|P))*\\)|READY|\\(local\\)|ID|State|Name)(?![\\p{L}\\p{N}_])");
     private final String vendor;
     private final Map<Integer,String> shapes=new HashMap<>();
     private final Set<Integer> logged=new HashSet<>();
@@ -37,6 +37,29 @@ final class ReadinessShapeLog {
         LOG.log(System.Logger.Level.INFO,message);
         shapes.remove(check);
         return message;
+    }
+
+    String logTables(String status,Set<String> a,Set<String> b) {
+        if ((!"FAIL".equals(status) && !"UNKNOWN".equals(status)) || !logged.add(2)) return null;
+        String message=bounded("[READINESS_SHAPE] vendor="+vendor+" check=2"
+            +" a="+tableShape(a)+" b="+tableShape(b)+" shape="+shapes.getOrDefault(2,""));
+        LOG.log(System.Logger.Level.INFO,message);
+        shapes.remove(2);
+        return message;
+    }
+
+    private static String tableShape(Set<String> rows) {
+        // Only numeric table coordinates are approved here; addresses never enter the log.
+        var members=new java.util.TreeSet<String>();
+        var interfaces=new java.util.TreeSet<String>();
+        for(String row:rows) {
+            String[] columns=row.split("\\|",3);
+            if(columns.length==3 && columns[0].matches("[0-9]+") && columns[1].matches("[0-9]+")) {
+                members.add(columns[0]);
+                interfaces.add(columns[1]);
+            }
+        }
+        return "{entries="+rows.size()+",members="+members+",interfaces="+interfaces+"}";
     }
 
     static String textShape(String output) {

@@ -120,10 +120,34 @@ class CpFailoverChecksTest {
         check(CpFailoverChecks.interfaces(interfaces).healthy());
         check(!CpFailoverChecks.interfaces(interfaces.replace("(LS) UP","(LS) UNKNOWN")).healthy());
     }
+    @Test void paddedPtyInterfacesAcceptFlagsLegendAndRequiredCount() {
+        for(String shape:new String[]{"ha","vsx_vs"}) {
+            String fixture=Fixtures.read("cp/failover_interfaces_"+shape+"_pty.txt");
+            check(fixture.contains(" \r\n"));
+            var parsed=CpFailoverChecks.interfaces(fixture);
+            check(parsed.healthy() && parsed.required()==2);
+            check(CpFailoverChecks.interfaces(fixture.replace("Manual (Unicast)","Automatic")).healthy());
+            check(parsed.names().equals(Set.of("Sync","bond1.3843")));
+            check(parsed.trafficNames().equals(Set.of("bond1.3843")));
+            check(!CpFailoverChecks.interfaces(fixture.replace("Required interfaces: 2","Required interfaces: 3")).healthy());
+            check(!CpFailoverChecks.interfaces(fixture.replace("UP","DOWN")).healthy());
+            check(!CpFailoverChecks.interfaces(fixture.replace("(LS)","(INVALID)")).ccpPresent());
+            for(String flags:new String[]{"S, LS","HA","LS","LM","P","HA, LM, P"}) {
+                var combined=CpFailoverChecks.interfaces(fixture.replace("(LS)","("+flags+")"));
+                check(combined.healthy());
+                check(combined.trafficNames().contains("bond1.3843")==!flags.startsWith("S,"));
+            }
+        }
+    }
+
     @Test void measuredTablesIgnoreMacButPreserveMemberAndInterfaceMappings() {
         String table=Fixtures.read("cp/failover_tablestat.txt");
         var rows=CpFailoverChecks.ipTable(table);
         check(rows.size()==4 && CpFailoverChecks.twoTableMembers(rows));
+        check(rows.equals(CpFailoverChecks.ipTable(table.replace("(Local)\n", "")
+            .replace("1  4", "1 (Local) 4"))));
+        check(rows.equals(CpFailoverChecks.ipTable(table.replace("(Local)\n", "")
+            .replace("0  4", "(Local) 0 4").replace("\n", "   \r\n"))));
         check(rows.equals(CpFailoverChecks.ipTable(table.replace("(Local)\n", "")
             .replace("1  4", "(Local)\n1  4").replace("00:00:5e:00:53:06","00:00:5e:00:53:16"))));
         check(!rows.equals(CpFailoverChecks.ipTable(table.replace("0  4", "1  4").replace("1  5", "0  5"))));

@@ -52,6 +52,7 @@ class CpFailoverJobExecutorTest {
         boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
         boolean readyMember,badPnotes,badBonds,badRoutes,missingDefault,recentFailover;
         String unknownCommand, failedCommand;
+        boolean extraTableRows;
         int downCount,upCount,connectCount;
         final List<String> commands=new ArrayList<>();
         long bytesA=1000,bytesB=1000;
@@ -87,6 +88,7 @@ class CpFailoverJobExecutorTest {
                     if(cmd.endsWith("cphaprob tablestat")) {
                         String text="---- Unique IP's Table ----\nMember Interface IP-Address\n"
                             +"0 1 192.0.2.21\n1 1 "+(badPre&&!first&&!down?"192.0.2.99":"192.0.2.22")+"\n";
+                        if(extraTableRows && first) text+="0 2 198.51.100.21\n1 2 198.51.100.22\n";
                         return new ExecResult.Completed(text,0);
                     }
                     if(cmd.endsWith("cphaprob -a if")) return new ExecResult.Completed(
@@ -183,6 +185,19 @@ class CpFailoverJobExecutorTest {
         check(store.state.equals("STOPPED") && script.downCount==0 && script.upCount==0);
         check(store.checks.stream().anyMatch(s -> s.equals("pre:2:FAIL")));
     }
+    @Test void differingVsTablesStayUnknownAndStopWithoutWrites() {
+        for(boolean extra:List.of(false,true)) {
+            Store store=new Store(); store.kind="READINESS"; store.vsId="12";
+            Script script=new Script(); script.badPre=!extra; script.extraTableRows=extra;
+            run(store,script);
+            check("UNKNOWN".equals(store.outcome));
+            check(store.checks.contains("pre:2:UNKNOWN"));
+            check(store.derivedValues.stream().filter(d -> d.equals(
+                "{\"reason\":\"tables differ\",\"a\":"+(extra?4:2)+",\"b\":2}")).count()==2);
+            check(script.downCount==0 && script.upCount==0);
+        }
+    }
+
     @Test void readinessCompletesWithoutWriteAndWriteGateRefuses() {
         Store store=new Store(); store.kind="READINESS"; Script script=new Script(); run(store,script);
         check(store.state.equals("DONE") && "READY".equals(store.outcome));

@@ -7,10 +7,25 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ReadinessShapeLogTest {
     @Test void textMasksNamesAddressesAndUnicodeButKeepsOnlyApprovedTokens() {
-        String tokens="Cluster Mode High Availability Active ACTIVE Standby STANDBY Down DOWN READY (local) ID State Name";
+        String tokens="Cluster Mode High Availability Active ACTIVE Standby STANDBY Down DOWN UP Non-Monitored (S) (LS) (HA) (S, LS) READY (local) ID State Name";
         assertEquals(tokens,ReadinessShapeLog.textShape(tokens));
         assertEquals("aa-aaaa-99 999.9.9.99 aaa9",ReadinessShapeLog.textShape("gw-test-01 192.0.2.10 é界Ω3"));
         assertEquals("aaaaaaaaaa aaaaaaaa",ReadinessShapeLog.textShape("ActiveName xActivex"));
+    }
+
+    @Test void tableFailuresLogBothMembersCoordinatesWithoutAddressesOnce() {
+        for(String status:java.util.List.of("FAIL","UNKNOWN")) {
+            var log=new ReadinessShapeLog("check_point");
+            var a=java.util.Set.of("01|04|192.0.2.1","02|05|198.51.100.1");
+            var b=java.util.Set.of("02|05|198.51.100.2");
+            assertNull(log.logTables("PASS",a,b));
+            log.capture(2,"192.0.2.1");
+            assertEquals("[READINESS_SHAPE] vendor=check_point check=2"
+                +" a={entries=2,members=[01, 02],interfaces=[04, 05]}"
+                +" b={entries=1,members=[02],interfaces=[05]} shape=999.9.9.9",log.logTables(status,a,b));
+            assertNull(log.logTables(status,a,b));
+            assertNull(log.logUnknown(2,"UNKNOWN"));
+        }
     }
 
     @Test void xmlEmitsOnlyElementNamesNeverTextAttributesCommentsOrCdata() {
