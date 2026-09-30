@@ -79,6 +79,7 @@ export function DiagnosticPanel() {
 
   return <Box sx={{ display: "grid", gap: 2, maxWidth: 1000 }}>
     <Typography variant="h6">Debug / Parser</Typography>
+    {allowed === null ? <Typography role="status">Loading devices and approved commands…</Typography> : null}
     {allowed === false ? <Typography role="status">Super administrator role required.</Typography> : allowed ? <>
       <TextField select SelectProps={{ native: true }} label="Device" value={deviceId} disabled={busy}
         onChange={e => { setDeviceId(e.target.value); setGateId(""); setParameter(""); setPage(0); requestId.current = null; }}>

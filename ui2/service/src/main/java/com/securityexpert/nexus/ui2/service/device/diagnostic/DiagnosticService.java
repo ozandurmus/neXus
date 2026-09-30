@@ -210,15 +210,28 @@ public final class DiagnosticService {
     }
 
     public List<TargetOption> targets(boolean masked) {
+        // Measured 2026-09-30: resolving every gate row per device (81 devices x ~100 rows, one registry query each)
+        // took 31 s. The registry answer depends only on the canonical key, and a device's command list only on
+        // (vendor, role, model/platform): both are memoised for this one request.
+        java.util.Map<com.securityexpert.nexus.ui2.capability.CanonicalCommandKey,
+                List<com.securityexpert.nexus.ui2.capability.GateRow>> rowsByKey = new java.util.HashMap<>();
+        com.securityexpert.nexus.ui2.capability.GateRegistryPort cachedGates =
+                key -> rowsByKey.computeIfAbsent(key, gates::findByCanonicalKey);
+        java.util.Map<String, List<java.util.Map<String, Object>>> commandsByProfile = new java.util.HashMap<>();
         return devices.listAll().stream()
                 .filter(d -> sshTarget(d.deviceId()))
-                .map(d -> new TargetOption(d.deviceId(), d.observedHostname()
-                        .map(name -> masked ? names.maskDeviceName(name, d.clusterMemberRef().orElse(null)) : name)
-                        .orElse("Unknown"), d.vendorHint(),
-                        com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.commands(d.vendorHint(),d.role(),
-                            modelOrPlatform(d.deviceId(), d.observedModel().orElse(null)),gates).stream().map(c -> java.util.Map.<String,Object>of(
-                                "gate_id",c.gateId(),"command_template",c.commandTemplate(),"timeout_s",c.timeoutS()))
-                            .toList())).toList();
+                .map(d -> {
+                    String model = modelOrPlatform(d.deviceId(), d.observedModel().orElse(null));
+                    String profile = d.vendorHint() + "|" + d.role() + "|" + model;
+                    List<java.util.Map<String, Object>> commands = commandsByProfile.computeIfAbsent(profile, k ->
+                            com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.commands(d.vendorHint(), d.role(),
+                                    model, cachedGates).stream().map(c -> java.util.Map.<String, Object>of(
+                                    "gate_id", c.gateId(), "command_template", c.commandTemplate(), "timeout_s", c.timeoutS()))
+                                    .toList());
+                    return new TargetOption(d.deviceId(), d.observedHostname()
+                            .map(name -> masked ? names.maskDeviceName(name, d.clusterMemberRef().orElse(null)) : name)
+                            .orElse("Unknown"), d.vendorHint(), commands);
+                }).toList();
     }
 
     public AdmissionResult submit(String deviceId, String port, String requestId, String actor) {
