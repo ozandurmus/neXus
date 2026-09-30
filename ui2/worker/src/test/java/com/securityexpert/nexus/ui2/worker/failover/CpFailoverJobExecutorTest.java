@@ -69,7 +69,8 @@ class CpFailoverJobExecutorTest {
                     String literal=((ExecSpec)args[1]).command();
                     commands.add(literal);
                     String cmd=literal.startsWith("bash -lc 'vsenv 12 && ")
-                        ?literal.substring("bash -lc 'vsenv 12 && ".length(),literal.length()-1):literal;
+                        ?literal.substring("bash -lc 'vsenv 12 && ".length(),literal.length()-1)
+                        :literal.startsWith("bash -lc '")?literal.substring("bash -lc '".length(),literal.length()-1):literal;
                     if (cmd.equals(failedCommand)) return new ExecResult.Completed("",1);
                     if (cmd.equals(unknownCommand)) return new ExecResult.Completed("unrecognized synthetic output",0);
                     boolean first=member.endsWith("11");

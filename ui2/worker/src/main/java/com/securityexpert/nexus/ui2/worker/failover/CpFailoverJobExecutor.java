@@ -220,7 +220,10 @@ public final class CpFailoverJobExecutor {
         if(attempt==null) throw new Stop("PRE_CONTACT_RECORD_FAILED",0);
         if(!attempts.markBoundaryCrossed(attempt,epoch)) throw new Stop("PRE_CONTACT_UNCERTAIN",0);
         store.command(runId,g.gateId());
-        String literal=vsId==null?command:"bash -lc 'vsenv "+vsId+" && "+command+"'";
+        // Measured 2026-09-30: on the fleet's gateways a plain exec of 'cphaprob stat' exits 0 with no output -- the
+        // exec shell lacks the Check Point environment. Inventory already falls back to a login shell; every CP command
+        // here (reads and clusterXL_admin alike) runs in one, as the vsenv-wrapped VS form always did.
+        String literal=vsId==null?"bash -lc '"+command+"'":"bash -lc 'vsenv "+vsId+" && "+command+"'";
         if(DOWN.equals(command)||UP.equals(command)) writeInFlight=true;
         ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,IF.equals(command)),Duration.ofSeconds(g.timeoutS()));
         if(!(result instanceof ExecResult.Completed completed) || completed.exitStatus()!=0) {
