@@ -1446,6 +1446,15 @@
       "priority": "P1",
       "target": "ui2/frontend/src/screens/InventoryPanels.tsx",
       "note": ""
+    },
+    {
+      "id": "BK-CP-STATUS-EMPTY",
+      "category": "backup",
+      "title": "Check Point: two gateways answer 'Creating backup package' but show backup status stays empty (even via login shell) -- inspect /var/log/CPbackup/backups on the device; also two gateways out of space in that folder",
+      "status": "deferred",
+      "priority": "P3",
+      "target": "",
+      "note": ""
     }
   ]
 }
