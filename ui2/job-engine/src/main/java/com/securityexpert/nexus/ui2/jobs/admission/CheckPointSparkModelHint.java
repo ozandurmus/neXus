@@ -5,12 +5,11 @@ import java.util.Set;
 
 /**
  * Discovery-known Check Point Quantum Spark/Gaia Embedded model tokens (ported verbatim from the
- * pre-Java product's own evidence-driven classification), shared by {@code
+ * pre-Java product's own evidence-driven classification), plus the directly observed
+ * {@code gaia_embedded} platform marker, shared by {@code
  * ConfirmCapabilityExecutor} and {@code InventoryCapabilityExecutor} -- both choose which
  * already-approved channel (exec vs. interactive shell) to try first for a device whose model is
- * already known before this device contact ever runs (e.g. a Check Point Management Server's own
- * "hardware" field, joined in by {@code JooqDeviceRepository.DEVICE_SUMMARY_SELECT} before any
- * confirm or inventory job runs), never to alter which commands are sent.
+ * already known before this device contact runs.
  */
 public final class CheckPointSparkModelHint {
 
@@ -20,9 +19,9 @@ public final class CheckPointSparkModelHint {
     private CheckPointSparkModelHint() {
     }
 
-    /** True when a discovery-sourced model hint (management-plane observation, never confirmed
-     * evidence -- see the Evidence laws) already names a Quantum Spark/Gaia Embedded appliance. */
+    /** A known model hint or a directly observed Gaia Embedded platform marker. */
     public static boolean isKnownSparkModel(Optional<String> modelHint) {
-        return modelHint.map(model -> SPARK_MODEL_TOKENS.stream().anyMatch(model::contains)).orElse(false);
+        return modelHint.map(model -> "gaia_embedded".equals(model)
+                || SPARK_MODEL_TOKENS.stream().anyMatch(model::contains)).orElse(false);
     }
 }

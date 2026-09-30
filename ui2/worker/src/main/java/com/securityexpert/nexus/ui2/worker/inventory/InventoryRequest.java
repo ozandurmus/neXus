@@ -46,8 +46,7 @@ public record InventoryRequest(
      * (e.g. a Check Point Management Server's own "hardware" field, joined in before this
      * collection ever ran) -- a hint, never confirmed evidence, mirroring {@code
      * ConfirmRequest.checkPoint}'s own modelHint parameter exactly: {@link InventoryCapabilityExecutor}
-     * uses it only to choose which already-approved channel to try first, never to skip or alter
-     * the commands themselves.
+     * uses it to select the Gaia Embedded identity reads and the interactive channel.
      */
     public static InventoryRequest checkPoint(ConnectionTarget target, String credentialRef, String trustRuleRef,
             Optional<String> modelHint) {

@@ -400,13 +400,20 @@ public final class InventoryCapabilityExecutor {
             // the version unknown for this run and never fails the inventory.
             Optional<String> gaiaVersion;
             Optional<String> gaiaHostname;
+            Optional<String> observedModel = platformFacts.platformFamily();
             try {
-                // Quantum Spark / Gaia Embedded: neither "clish -c ..." nor the bare "show hostname" / "show version all"
-                // exist there (measured 2026-09-25: "Bad parameter starting at 'hostname'"). A Spark's name, model and
-                // version come from the management server's discovery, refreshed nightly -- nothing is sent here.
                 if (preferInteractiveShell) {
-                    gaiaVersion = Optional.empty();
-                    gaiaHostname = Optional.empty();
+                    String software = identityReadOutput(session, "show software-version", true);
+                    String diag = identityReadOutput(session, "show diag", true);
+                    gaiaVersion = com.securityexpert.nexus.ui2.worker.confirm.SparkIdentityParser.version(software, diag);
+                    gaiaHostname = session.interactivePrompt().flatMap(
+                            com.securityexpert.nexus.ui2.worker.confirm.SparkIdentityParser::hostname);
+                    observedModel = com.securityexpert.nexus.ui2.worker.confirm.SparkIdentityParser.model(diag);
+                    if (observedModel.isPresent() || gaiaVersion.isPresent()) {
+                        platformFacts = new PlatformFactsRead(platformFacts.serialNumber(), platformFacts.hotfixLevel(),
+                                Optional.of("gaia_embedded"), platformFacts.contentVersions(), platformFacts.uptimeText(),
+                                "cp_spark_show_diag_software_version", platformFacts.policyInstall());
+                    }
                 } else {
                     gaiaVersion = com.securityexpert.nexus.ui2.worker.backup.BackupReadPlan.parseGaiaVersion(
                             identityReadOutput(session, InventoryReadPlan.CP_SHOW_VERSION_ALL, false));
@@ -420,7 +427,7 @@ public final class InventoryCapabilityExecutor {
             }
             // The presented SSH identity is not a hostname (a host-key fingerprint on this estate): the name is read.
             InventoryResult.ObservedIdentity observed = new InventoryResult.ObservedIdentity(gaiaHostname,
-                    platformFacts.platformFamily(), gaiaVersion);
+                    observedModel, gaiaVersion);
             return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
                     Optional.of(platformFacts), observed);
         } finally {

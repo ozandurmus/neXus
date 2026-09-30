@@ -62,6 +62,21 @@ public final class WorkerClaimLoop {
     private final JobLeaseRepository leaseRepository;
     private final JobRecordDao jobRecordDao;
     private final DeviceRepository deviceRepository;
+    private com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFactsRepository =
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.NONE;
+
+    public WorkerClaimLoop withPlatformFacts(com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository repository) {
+        this.platformFactsRepository = Objects.requireNonNull(repository);
+        return this;
+    }
+
+    private Optional<String> modelOrPlatform(String deviceId) {
+        Optional<String> platform = platformFactsRepository.find(deviceId)
+                .flatMap(com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts::platformFamily);
+        if (platform.filter("gaia_embedded"::equals).isPresent()) return platform;
+        return deviceRepository.findSummary(deviceId)
+                .flatMap(com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedModel);
+    }
     private final ConfirmJobExecutor confirmJobExecutor;
     private final InventoryJobExecutor inventoryJobExecutor;
     private final ConfigurationJobExecutor configurationJobExecutor;
@@ -381,8 +396,7 @@ public final class WorkerClaimLoop {
                 return true;
             }
             if (InventoryCapabilityIds.isInventoryCapability(job.capabilityId())) {
-                Optional<String> inventoryModelHint = deviceRepository.findSummary(job.targetDeviceId())
-                        .flatMap(com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedModel);
+                Optional<String> inventoryModelHint = modelOrPlatform(job.targetDeviceId());
                 InventoryRequest inventoryRequest = buildInventoryRequest(job.capabilityId(), endpoint.endpointId(),
                         endpoint.addressRef(), device.credentialReferenceId(), inventoryModelHint,
                         "management_server".equals(device.role()));
@@ -419,8 +433,7 @@ public final class WorkerClaimLoop {
                 return true;
             }
 
-            Optional<String> modelHint = deviceRepository.findSummary(job.targetDeviceId())
-                    .flatMap(com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedModel);
+            Optional<String> modelHint = modelOrPlatform(job.targetDeviceId());
             ConfirmRequest primaryRequest = buildRequest(job.capabilityId(), endpoint.endpointId(), endpoint.addressRef(),
                     device.credentialReferenceId(), modelHint);
             var peerRequestFactory = peerRequestFactoryFor(job.capabilityId(), device.credentialReferenceId());

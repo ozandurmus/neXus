@@ -23,4 +23,9 @@ public interface TransportSession {
     default Optional<String> presentedIdentity() {
         return Optional.empty();
     }
+
+    /** Prompt learned by an interactive shell, when available; never a trust identity. */
+    default Optional<String> interactivePrompt() {
+        return Optional.empty();
+    }
 }

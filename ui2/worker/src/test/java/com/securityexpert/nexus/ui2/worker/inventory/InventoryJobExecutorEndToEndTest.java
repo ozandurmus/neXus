@@ -337,6 +337,8 @@ class InventoryJobExecutorEndToEndTest {
                 Map.entry(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, "Cluster is not enabled\n"),
                 Map.entry(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY,
                         "1: LAN1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 192.0.2.10/24 scope global LAN1\n"),
+                Map.entry("show software-version", "This is Check Point's Synthetic Appliance R81.10.10 - Build 123"),
+                Map.entry("show diag", "Current image version: R81.10.10\nHW version : H2\nUnit model: V0"),
                 // The bare (non-VSX) batch command; its scripted output carries no BATCH_TAG, so the
                 // code falls back to the individual reads above, still over the interactive shell.
                 Map.entry(InventoryCapabilityExecutor.buildCheckPointBatchCommand(false),
@@ -372,6 +374,7 @@ class InventoryJobExecutorEndToEndTest {
         assertEquals("192.0.2.10/24", physical.interfaces().get(0).addresses().get(0).address());
         assertEquals(InventoryInterface.STATE_UP, physical.interfaces().get(0).state());
         assertEquals(1, physical.routes().size());
+        assertEquals(List.of("gw-a|V0|R81.10.10"), deviceRepository.observedFactRefreshes);
     }
 
     private static String vsenvZero(String read) {

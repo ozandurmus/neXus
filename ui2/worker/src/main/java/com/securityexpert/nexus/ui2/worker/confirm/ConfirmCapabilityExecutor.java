@@ -22,9 +22,8 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
 /**
  * The confirm's device contact (contract EC-11, EC-12): {@code connect} ->
  * identity read -> HA/peer read -> {@code disconnect}, over exactly the
- * closed command set ({@link DeviceFirstContactCommandSet}) and nothing
- * else -- every literal string sent to {@link #transport} is taken from
- * that enum, never built ad hoc. Credential resolution failure (CS-3,
+ * closed command set ({@link DeviceFirstContactCommandSet}), or the two
+ * approved Gaia Embedded identity reads. Credential resolution failure (CS-3,
  * SB-16, EC-3) refuses before any contact: for Check Point this happens
  * inside {@link DeviceTransport#connect}'s own store-backed resolver
  * (propagated here as an {@link IllegalStateException}, never a partially
@@ -96,6 +95,16 @@ public final class ConfirmCapabilityExecutor {
         boolean preferInteractiveShell =
                 com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint.isKnownSparkModel(request.modelHint());
         try {
+            if (preferInteractiveShell) {
+                String software = execInteractiveCommand(session, "show software-version");
+                String diag = execInteractiveCommand(session, "show diag");
+                Optional<String> hostname = session.interactivePrompt().flatMap(SparkIdentityParser::hostname);
+                ObservedFacts facts = new ObservedFacts(hostname, SparkIdentityParser.model(diag),
+                        SparkIdentityParser.version(software, diag), Optional.empty());
+                return new ConfirmResult.Completed(
+                        new PresentedIdentity(session.presentedIdentity().orElse(""), hostname), facts,
+                        new HaPeerClaim(false, Optional.empty(), Optional.empty()), hostname);
+            }
             String identityOutput = execOutput(session,
                     DeviceFirstContactCommandSet.forStep(Vendor.CHECK_POINT, ContactStepKind.IDENTITY_READ),
                     preferInteractiveShell);

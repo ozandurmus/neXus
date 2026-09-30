@@ -144,6 +144,8 @@ class ConfirmCapabilityExecutorTest {
                 "a discovery-known Spark model must skip the doomed exec-channel attempts entirely");
         assertTrue(transport.execInteractiveCallCount() > 0,
                 "the interactive shell must be tried first (and here, exclusively) for a known Spark model");
+        assertEquals("V0", completed.facts().model().orElse(null));
+        assertEquals("R81.10.10", completed.facts().softwareVersion().orElse(null));
     }
 
     /** The same model hint must never change WHICH commands are sent (the closed set stays

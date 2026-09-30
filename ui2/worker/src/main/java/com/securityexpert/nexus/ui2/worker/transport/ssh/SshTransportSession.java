@@ -45,6 +45,11 @@ final class SshTransportSession implements TransportSession {
         return Optional.of(hostKey.getFingerPrint(new JSch()));
     }
 
+    @Override
+    public Optional<String> interactivePrompt() {
+        return interactiveShell == null ? Optional.empty() : Optional.ofNullable(interactiveShell.prompt());
+    }
+
     Session jschSession() {
         return jschSession;
     }

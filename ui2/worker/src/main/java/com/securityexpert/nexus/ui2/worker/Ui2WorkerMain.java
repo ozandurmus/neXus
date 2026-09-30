@@ -177,16 +177,17 @@ public final class Ui2WorkerMain {
 
         ConfirmCapabilityExecutor checkPointConfirmExecutor =
                 new ConfirmCapabilityExecutor(compositeTransport, panCredentialResolver);
+        var platformFactsRepository = new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository(transactionBoundary);
         ConfirmJobExecutor confirmJobExecutor = new ConfirmJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, checkPointConfirmExecutor,
-                new PeerFollowResolver(checkPointConfirmExecutor));
+                new PeerFollowResolver(checkPointConfirmExecutor)).withPlatformFacts(platformFactsRepository);
 
         DeviceInventoryRepository deviceInventoryRepository = new JooqDeviceInventoryRepository(transactionBoundary);
         InventoryCapabilityExecutor inventoryCapabilityExecutor =
                 new InventoryCapabilityExecutor(compositeTransport, panCredentialResolver);
         InventoryJobExecutor inventoryJobExecutor = new InventoryJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, inventoryCapabilityExecutor,
-                new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository(transactionBoundary))
+                platformFactsRepository)
                 .withPolicyInstallRepository(
                         new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePolicyInstallRepository(transactionBoundary));
 
@@ -305,7 +306,8 @@ public final class Ui2WorkerMain {
                 leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceInventoryRepository,
                 jobRecordDao, fortiManagerExecutor, gateRegistry);
         var genericDiagnosticExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.DiagnosticJobExecutor(
-                leaseRepository, attemptRepository, deviceRepository, jobRecordDao, strictFailoverSsh, gateRegistry, artefactStore);
+                leaseRepository, attemptRepository, deviceRepository, jobRecordDao, strictFailoverSsh, gateRegistry, artefactStore,
+                platformFactsRepository);
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         for (int i = 0; i < 10; i++) {
@@ -325,6 +327,7 @@ public final class Ui2WorkerMain {
                     .withCpFailover(cpFailoverExecutor)
                     .withPanFailover(panFailoverExecutor)
                     .withDiagnosticReads(genericDiagnosticExecutor);
+            claimLoop.withPlatformFacts(platformFactsRepository);
             claimLoops.add(claimLoop);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));
         }

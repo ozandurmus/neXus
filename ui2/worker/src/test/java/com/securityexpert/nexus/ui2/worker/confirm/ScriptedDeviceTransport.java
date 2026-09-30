@@ -106,7 +106,10 @@ final class ScriptedDeviceTransport implements DeviceTransport {
         connectedTargets.add(target);
         String sessionId = UUID.randomUUID().toString();
         hostBySessionId.put(sessionId, target.host());
-        return new ConnectResult.Authenticated(() -> sessionId);
+        return new ConnectResult.Authenticated(new TransportSession() {
+            @Override public String sessionId() { return sessionId; }
+            @Override public java.util.Optional<String> interactivePrompt() { return java.util.Optional.of("fw-a>"); }
+        });
     }
 
     @Override
@@ -141,6 +144,12 @@ final class ScriptedDeviceTransport implements DeviceTransport {
         }
         String host = hostBySessionId.get(session.sessionId());
         String command = spec.command();
+        if ("show software-version".equals(command)) {
+            return new ExecResult.Completed("This is Check Point's Synthetic Appliance R81.10.10 - Build 123", 0);
+        }
+        if ("show diag".equals(command)) {
+            return new ExecResult.Completed("Current image version: R81.10.10\nHW version : H2\nUnit model: V0", 0);
+        }
         if (DeviceFirstContactCommandSet.CP_IDENTITY_READ.literalForms().contains(command)) {
             return new ExecResult.Completed(identityOutputByHost.getOrDefault(host, ""), 0);
         }

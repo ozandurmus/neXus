@@ -28,9 +28,7 @@ public record ConfirmRequest(
      * @param modelHint the device's already-known model, when its discovery candidate carried one
      * (e.g. a Check Point Management Server's own "hardware" field, joined in before any SSH
      * confirm ever ran) -- a hint, never confirmed evidence (management-plane observation != direct
-     * -device runtime truth); {@link ConfirmCapabilityExecutor} uses it only to choose which already
-     * -approved channel (exec vs. interactive shell) to try first for the identity read, never to
-     * skip or alter the closed command set itself.
+     * -device runtime truth); a known Spark hint selects the approved Gaia Embedded reads.
      */
     public static ConfirmRequest checkPoint(ConnectionTarget target, String credentialRef, String trustRuleRef,
             Optional<String> modelHint) {

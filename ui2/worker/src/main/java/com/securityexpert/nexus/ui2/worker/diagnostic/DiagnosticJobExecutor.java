@@ -25,14 +25,23 @@ public final class DiagnosticJobExecutor {
     private final DeviceTransport ssh;
     private final GateRegistryPort gates;
     private final ArtefactStore store;
+    private final com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts;
     public DiagnosticJobExecutor(JobLeaseRepository leases, JobStepAttemptRepository attempts, DeviceRepository devices,
             JobRecordDao jobs, DeviceTransport ssh, GateRegistryPort gates, ArtefactStore store) {
+        this(leases, attempts, devices, jobs, ssh, gates, store,
+                com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.NONE);
+    }
+    public DiagnosticJobExecutor(JobLeaseRepository leases, JobStepAttemptRepository attempts, DeviceRepository devices,
+            JobRecordDao jobs, DeviceTransport ssh, GateRegistryPort gates, ArtefactStore store,
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts) {
         this.leases=leases; this.attempts=attempts; this.devices=devices; this.jobs=jobs; this.ssh=ssh; this.gates=gates; this.store=store;
+        this.platformFacts=platformFacts;
     }
     public void execute(String jobId, long epoch, String deviceId, String host, int port, String credentialRef) {
         var device=devices.find(deviceId);
         var job=jobs.findDiagnostic(jobId);
-        String model=devices.findSummary(deviceId).flatMap(s -> s.observedModel()).orElse(null);
+        String model=platformFacts.find(deviceId).flatMap(f -> f.platformFamily()).filter("gaia_embedded"::equals)
+            .orElseGet(() -> devices.findSummary(deviceId).flatMap(s -> s.observedModel()).orElse(null));
         var read=device.flatMap(d -> job.flatMap(j -> j.gateId()==null
             ? DiagnosticRead.resolve(d.vendorHint(),d.role(),model,j.command(),gates)
             : DiagnosticRead.resolveStored(d.vendorHint(),d.role(),model,j.gateId(),j.command(),gates)));

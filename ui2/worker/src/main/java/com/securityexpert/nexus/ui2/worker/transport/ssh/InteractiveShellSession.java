@@ -76,6 +76,10 @@ final class InteractiveShellSession implements AutoCloseable {
         return channel != null && channel.isConnected();
     }
 
+    String prompt() {
+        return prompt;
+    }
+
     @Override
     public void close() {
         if (channel != null) {

@@ -56,8 +56,14 @@ public final class DeviceQueryService {
     }
 
     public static boolean backupReceiverSupported(String vendor, String role, Optional<String> observedModel) {
+        return backupReceiverSupported(vendor, role, observedModel, Optional.empty());
+    }
+
+    public static boolean backupReceiverSupported(String vendor, String role, Optional<String> observedModel,
+            Optional<String> observedPlatform) {
         return ("radware".equals(vendor) && "management_server".equals(role))
                 || ("check_point".equals(vendor) && "gateway".equals(role)
-                        && CheckPointSparkModelHint.isKnownSparkModel(observedModel));
+                        && ("gaia_embedded".equals(observedPlatform.orElse(null))
+                                || CheckPointSparkModelHint.isKnownSparkModel(observedModel)));
     }
 }

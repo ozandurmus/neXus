@@ -52,6 +52,13 @@ public final class ConfirmJobExecutor {
     private final DeviceRepository deviceRepository;
     private final ConfirmCapabilityExecutor confirmExecutor;
     private final PeerFollowResolver peerFollowResolver;
+    private com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFactsRepository =
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.NONE;
+
+    public ConfirmJobExecutor withPlatformFacts(com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository repository) {
+        this.platformFactsRepository = Objects.requireNonNull(repository);
+        return this;
+    }
 
     public ConfirmJobExecutor(JobLeaseRepository leaseRepository, JobStepAttemptRepository attemptRepository,
             DeviceEnrollmentReadPort deviceEnrollmentReadPort, DeviceRepository deviceRepository,
@@ -152,6 +159,17 @@ public final class ConfirmJobExecutor {
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
                     ACTION_FAILED, reasonWithTime);
             return new JobOutcome.Failed("device_confirm_write_conflict");
+        }
+        if (request.vendor() == Vendor.CHECK_POINT
+                && com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint.isKnownSparkModel(request.modelHint())
+                && (completed.facts().model().isPresent() || completed.facts().softwareVersion().isPresent())) {
+            try {
+                platformFactsRepository.record(new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts(
+                        targetDeviceId, Optional.empty(), Optional.empty(), Optional.of("gaia_embedded"),
+                        java.util.Map.of(), Optional.empty(), "cp_spark_show_diag_software_version", Optional.empty()));
+            } catch (RuntimeException factsWriteFailed) {
+                LOG.log(System.Logger.Level.WARNING, "[SPARK_PLATFORM_FACTS_WRITE_FAILED] {0}", factsWriteFailed.getClass().getSimpleName());
+            }
         }
 
         long elapsed = System.currentTimeMillis() - jobStart;

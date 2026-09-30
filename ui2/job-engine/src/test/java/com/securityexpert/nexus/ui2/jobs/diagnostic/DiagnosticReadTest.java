@@ -20,6 +20,7 @@ class DiagnosticReadTest {
         var cp=DiagnosticRead.commands("check_point","gateway",null,gates);
         assertTrue(cp.stream().anyMatch(c -> c.gateId().equals("cp_inventory_vsid_cphaprob_stat")));
         assertTrue(cp.stream().anyMatch(c -> c.gateId().equals("cp_spark_backup_log")));
+        assertTrue(cp.stream().noneMatch(c -> c.gateId().equals("cp_spark_show_diag")));
         assertTrue(DiagnosticRead.commands("check_point","gateway","1550",gates).stream()
             .noneMatch(c -> c.gateId().equals("cp_configuration_show_version_all")));
         assertTrue(DiagnosticRead.commands("check_point","gateway","known gaia",gates).stream()
@@ -33,6 +34,11 @@ class DiagnosticReadTest {
             .anyMatch(c -> c.gateId().equals("pan_backup_ssh_show_config_running")));
         assertTrue(DiagnosticRead.commands("check_point","gateway","1550",gates).stream()
             .anyMatch(c -> c.gateId().equals("cp_spark_backup_log")));
+        var spark=DiagnosticRead.commands("check_point","gateway","gaia_embedded",gates);
+        assertTrue(spark.stream().anyMatch(c -> c.gateId().equals("cp_spark_show_diag")));
+        assertTrue(spark.stream().anyMatch(c -> c.gateId().equals("cp_spark_show_software_version")));
+        assertTrue(DiagnosticRead.commands("check_point","gateway","known gaia",gates).stream()
+            .noneMatch(c -> c.gateId().equals("cp_spark_show_diag")));
         assertTrue(DiagnosticRead.resolve("check_point","gateway",null,"cp_inventory_vsid_cphaprob_stat","13",gates).isPresent());
         assertTrue(DiagnosticRead.resolve("check_point","gateway",null,"cp_inventory_vsid_cphaprob_stat","13;id",gates).isEmpty());
         assertTrue(DiagnosticRead.resolve("check_point","gateway",null,"unknown_gate",null,gates).isEmpty());

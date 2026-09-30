@@ -102,6 +102,8 @@ public final class DiagnosticRead {
             case "radware" -> "management_server".equals(role) ? "radware_cyber_controller" : "unsupported";
             default -> "unsupported";
         };
+        if ("unknown_cp_gateway".equals(scope) && ("cp_spark_show_diag".equals(row.gateId())
+                || "cp_spark_show_software_version".equals(row.gateId()))) return false;
         return row.platformRoleScope().equals(scope) || "unknown_cp_gateway".equals(scope)
             && ("cp_gaia_gateway".equals(row.platformRoleScope()) || "gaia_embedded".equals(row.platformRoleScope()));
     }

@@ -39,6 +39,7 @@ public final class DiagnosticService {
     }
 
     private final DeviceRepository devices;
+    private final com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts;
     private final DeviceInventoryRepository inventory;
     private final JobAdmissionService admission;
     private final JobRecordDao jobs;
@@ -48,18 +49,35 @@ public final class DiagnosticService {
     private final com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver identities;
     private final com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker ipMasker;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public DiagnosticService(DeviceRepository devices, DeviceInventoryRepository inventory,
             JobAdmissionService admission, JobRecordDao jobs, TopologyNamePseudonymizer names, GateRegistryPort gates,
             com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess store,
             com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver identities,
-            com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker ipMasker) {
+            com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker ipMasker,
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts) {
         this.devices = devices;
+        this.platformFacts = platformFacts;
         this.inventory = inventory;
         this.admission = admission;
         this.jobs = jobs;
         this.names = names;
         this.gates = gates;
         this.outputStore=store.storeOrNull(); this.identities=identities; this.ipMasker=ipMasker;
+    }
+
+    DiagnosticService(DeviceRepository devices, DeviceInventoryRepository inventory,
+            JobAdmissionService admission, JobRecordDao jobs, TopologyNamePseudonymizer names, GateRegistryPort gates,
+            com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess store,
+            com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver identities,
+            com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker ipMasker) {
+        this(devices, inventory, admission, jobs, names, gates, store, identities, ipMasker,
+                com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.NONE);
+    }
+
+    private String modelOrPlatform(String deviceId, String model) {
+        return platformFacts.find(deviceId).flatMap(f -> f.platformFamily())
+                .filter("gaia_embedded"::equals).orElse(model);
     }
 
     private boolean sshTarget(String deviceId) {
@@ -72,7 +90,7 @@ public final class DiagnosticService {
             return new AdmissionResult.Refused("DIAGNOSTIC_UNAVAILABLE", "Command or transport is not approved for this device");
         var device = devices.find(deviceId).orElseThrow();
         var read = com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.resolve(device.vendorHint(),device.role(),
-            devices.findSummary(deviceId).flatMap(s -> s.observedModel()).orElse(null),gateId,parameter,gates);
+            modelOrPlatform(deviceId, devices.findSummary(deviceId).flatMap(s -> s.observedModel()).orElse(null)),gateId,parameter,gates);
         return submitResolved(deviceId, read, requestId, actor);
     }
 
@@ -198,7 +216,7 @@ public final class DiagnosticService {
                         .map(name -> masked ? names.maskDeviceName(name, d.clusterMemberRef().orElse(null)) : name)
                         .orElse("Unknown"), d.vendorHint(),
                         com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.commands(d.vendorHint(),d.role(),
-                            d.observedModel().orElse(null),gates).stream().map(c -> java.util.Map.<String,Object>of(
+                            modelOrPlatform(d.deviceId(), d.observedModel().orElse(null)),gates).stream().map(c -> java.util.Map.<String,Object>of(
                                 "gate_id",c.gateId(),"command_template",c.commandTemplate(),"timeout_s",c.timeoutS()))
                             .toList())).toList();
     }

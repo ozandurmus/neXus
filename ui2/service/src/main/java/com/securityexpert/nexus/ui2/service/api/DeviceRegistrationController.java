@@ -265,8 +265,10 @@ public final class DeviceRegistrationController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
         }
         DeviceQueryService.DetailOutcome.Found found = (DeviceQueryService.DetailOutcome.Found) outcome;
-        Map<String, Object> body = toDetailBody(found.device(), found.facts(), found.job());
-        putPlatformFacts(body, platformFactsRepository.find(deviceId));
+        Optional<DevicePlatformFacts> platformFacts = platformFactsRepository.find(deviceId);
+        Map<String, Object> body = toDetailBody(found.device(), found.facts(), found.job(),
+                platformFacts.flatMap(DevicePlatformFacts::platformFamily));
+        putPlatformFacts(body, platformFacts);
         putPolicyInstall(body, policyInstallRepository.find(deviceId));
         body.put("onboarding", toOnboardingBody(onboardingRepository.find(deviceId).orElse(null)));
         return ResponseEntity.ok(body);
@@ -281,7 +283,8 @@ public final class DeviceRegistrationController {
         onboardingRepository.findOpen().forEach(flow -> openFlows.put(flow.deviceId(), flow));
         List<Map<String, Object>> devices = deviceQueryService.listDevices().stream()
                 .map(summary -> {
-                    Map<String, Object> body = toSummaryBody(summary);
+                    Map<String, Object> body = toSummaryBody(summary,
+                            Optional.ofNullable(platformFacts.get(summary.deviceId())).flatMap(DevicePlatformFacts::platformFamily));
                     putPlatformFacts(body, Optional.ofNullable(platformFacts.get(summary.deviceId())));
                     putPolicyInstall(body, Optional.ofNullable(policies.get(summary.deviceId())));
                     java.time.Instant inv = inventoryAt.get(summary.deviceId());
@@ -300,13 +303,13 @@ public final class DeviceRegistrationController {
     }
 
     private static Map<String, Object> toDetailBody(DeviceRecord device, DeviceConfirmFacts facts,
-            Optional<JobRow> job) {
+            Optional<JobRow> job, Optional<String> platform) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("device_id", device.deviceId());
         body.put("role", device.role());
         body.put("vendor_hint", device.vendorHint());
         body.put("backup_receiver_supported", DeviceQueryService.backupReceiverSupported(
-                device.vendorHint(), device.role(), facts.observedModel()));
+                device.vendorHint(), device.role(), facts.observedModel(), platform));
         body.put("enrollment_state", device.enrollmentState().name());
         body.put("disabled", device.disabled());
         body.put("facts", toFactsBody(facts));
@@ -357,13 +360,13 @@ public final class DeviceRegistrationController {
         body.put("platform_facts_source", facts.map(DevicePlatformFacts::sourceRead).orElse(null));
     }
 
-    private static Map<String, Object> toSummaryBody(DeviceSummaryRecord summary) {
+    private static Map<String, Object> toSummaryBody(DeviceSummaryRecord summary, Optional<String> platform) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("device_id", summary.deviceId());
         body.put("role", summary.role());
         body.put("vendor_hint", summary.vendorHint());
         body.put("backup_receiver_supported", DeviceQueryService.backupReceiverSupported(
-                summary.vendorHint(), summary.role(), summary.observedModel()));
+                summary.vendorHint(), summary.role(), summary.observedModel(), platform));
         body.put("backup_target", summary.backupTarget());
         body.put("enrollment_state", summary.enrollmentState().name());
         body.put("hostname", summary.observedHostname().orElse(null));

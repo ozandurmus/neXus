@@ -31,6 +31,33 @@ import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 
 class DiagnosticServiceTest {
     @Test
+    void storedSparkPlatformOffersIdentityReadsWithAnOpaqueModelToken() {
+        var devices = mock(DeviceRepository.class);
+        var platform = mock(com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.class);
+        var rows = GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader()
+                .getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
+        var service = new DiagnosticService(devices, mock(DeviceInventoryRepository.class), null,
+                mock(JobRecordDao.class), new TopologyNamePseudonymizer("synthetic-test-key".getBytes()),
+                key -> rows.stream().filter(row -> row.key().equals(key)).toList(),
+                new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(null),
+                null, null, platform);
+        var summary = new DeviceSummaryRecord("device-1", "gateway", "check_point", DeviceEnrollmentState.ENROLLED,
+                Optional.of("FW-TANGO-04"), Optional.of("V0"), Optional.empty(), Optional.empty(), Optional.empty());
+        when(devices.listAll()).thenReturn(List.of(summary));
+        when(devices.find("device-1")).thenReturn(Optional.of(new DeviceRecord("device-1", "gateway", "check_point",
+                "manual", Instant.now(), false, DeviceEnrollmentState.ENROLLED, false, "credential-ref")));
+        when(devices.findEndpointByDeviceId("device-1")).thenReturn(Optional.of(
+                new EndpointRecord("endpoint-1", "device-1", "ssh_exec", "192.0.2.10", Instant.now())));
+        when(platform.find("device-1")).thenReturn(Optional.of(new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts(
+                "device-1", Optional.empty(), Optional.empty(), Optional.of("gaia_embedded"),
+                java.util.Map.of(), Optional.empty(), "cp_spark_show_diag_software_version", Optional.empty())));
+
+        var commands = service.targets(false).get(0).commands();
+        assertTrue(commands.stream().anyMatch(command -> "cp_spark_show_diag".equals(command.get("gate_id"))));
+        assertTrue(commands.stream().anyMatch(command -> "cp_spark_show_software_version".equals(command.get("gate_id"))));
+    }
+
+    @Test
     void retainedOutputIsAuthorizedSeparatelyFromHistoryAndMaskedForAi() throws Exception {
         var devices=mock(DeviceRepository.class);
         var jobs=mock(JobRecordDao.class);

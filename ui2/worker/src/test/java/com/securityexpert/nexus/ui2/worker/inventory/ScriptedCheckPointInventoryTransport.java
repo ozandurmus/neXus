@@ -70,7 +70,10 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
     public ConnectResult connect(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
         String sessionId = UUID.randomUUID().toString();
         hostBySessionId.put(sessionId, target.host());
-        return new ConnectResult.Authenticated(() -> sessionId);
+        return new ConnectResult.Authenticated(new TransportSession() {
+            @Override public String sessionId() { return sessionId; }
+            @Override public java.util.Optional<String> interactivePrompt() { return java.util.Optional.of("gw-a>"); }
+        });
     }
 
     @Override
