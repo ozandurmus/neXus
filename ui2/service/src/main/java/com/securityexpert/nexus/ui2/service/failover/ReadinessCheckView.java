@@ -16,7 +16,7 @@ public final class ReadinessCheckView {
     public static Map<String,Object> fields(String vendor,int no,String member,String status,JsonNode d,Instant observedAt) {
         boolean pan="palo_alto".equals(vendor);
         return Map.of("title",title(pan,no),"member",member,"result",status,
-            "blocking",pan || no!=13,"summary",summary(pan,no,status,d,observedAt));
+            "blocking",pan || (no!=5 && no!=13),"summary",summary(pan,no,status,d,observedAt));
     }
 
     private static String title(boolean pan,int no) {
@@ -80,7 +80,7 @@ public final class ReadinessCheckView {
             case 3 -> d.path("up").isIntegralNumber() && d.path("required").isIntegralNumber()
                 ? d.path("up").asLong()+" of "+d.path("required").asLong()+" required interfaces up"
                 : "Interface counts unavailable";
-            case 5 -> count(d,"count"," ARP entries")+(pass ? "" : ", below tolerance");
+            case 5 -> count(d,"count"," ARP entries");
             case 6 -> count(d,"count"," connections")+", "+count(d,"peak"," peak")+(pass ? "" : ", below tolerance");
             case 8 -> count(d,"bytesPerSecond"," bytes/s")+(pass ? "" : ", below tolerance");
             case 9 -> (pass ? "Sync OK, 0 lost updates" : "Sync not ready")

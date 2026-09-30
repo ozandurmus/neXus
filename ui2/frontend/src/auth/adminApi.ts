@@ -1591,9 +1591,10 @@ export function getOverview(): Promise<OverviewView> {
 
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
 export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN" | "WARN";
-export interface CpFailoverUnit { unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean }
-export interface ReadinessCheck { checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean }
-export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system"> {
+export interface ReadinessMember { device_id: string; hostname: string | null; ha_role: string | null }
+export interface CpFailoverUnit { masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean }
+export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean }
+export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked"> {
   activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null; canRunReadiness: boolean;
   readiness: { status: "READY" | "NOT_READY" | "UNKNOWN"; observedAt: string; failedCheck: string; checks: Array<ReadinessCheck & { status: CpFailoverCheckStatus; derived: Record<string, unknown> }> } | null;
 }

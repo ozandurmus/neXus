@@ -22,7 +22,7 @@ import { m3 } from "../theme/m3Theme";
 import { approveCpFailover, getCpFailoverRun, listCpFailoverApprovals, listCpFailoverRuns, listCpFailoverUnits, revokeCpFailover, startCpFailover,
   runCpFailoverReadiness, type CpFailoverApproval, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
 
-import { ReadinessChecksTable } from "./ReadinessChecksTable";
+import { ReadinessCard } from "./ReadinessChecksTable";
 
 const labels = ["Preparing", "Failing over", "Switched", "Checking", "No problems found"];
 const cpChecks: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate", 9: "State synchronization", 10: "Installed policy parity", 11: "Critical devices", 12: "Bond interfaces", 13: "Last failover", 14: "Routing" };
@@ -116,17 +116,13 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
       <Box>
         <Typography variant="subtitle1">Failover</Typography>
         <Typography variant="body2">{windowNow ? `Approved until ${local(windowNow.windowUntil)}` : scheduleWindow ? `Approved from ${local(scheduleWindow.windowFrom)}` : "No approval — failover not possible"}</Typography>
-        {unit.canStart && <M3Button emphasis="outlined" disabled={!idle} onClick={() => void act(() => runCpFailoverReadiness(unit))}>Run pre-checks</M3Button>}
         {unit.canStart && <M3Button emphasis="filled" disabled={!canStart} onClick={() => void act(() => startCpFailover(unit, null))}>Failover now</M3Button>}
         {unit.canSchedule && <M3Button emphasis="outlined" disabled={!canSchedule} onClick={() => setDialog("schedule")}>Schedule</M3Button>}
       </Box>
-      {readinessRun && <Box aria-label="Readiness checks">
-        <Typography variant="subtitle1">Readiness: {activeStates.includes(readinessRun.state) ? "Running" : readinessRun.outcome ?? "UNKNOWN"}</Typography>
-        <Typography variant="body2">{readinessRun.checks.length
-          ? `Observed ${Math.max(0, Math.floor((now - Math.max(...readinessRun.checks.map(check => Date.parse(check.observedAt)))) / 60_000))} min ago`
-          : "No observations yet"}</Typography>
-        <ReadinessChecksTable checks={readinessRun.checks.filter(check => check.phase === "pre")} />
-      </Box>}
+      <ReadinessCard checks={readinessRun?.checks.filter(check => check.phase === "pre") ?? []}
+        members={unit.members} cluster={label} vendor={unit.vendor} status={readinessRun?.outcome}
+        observedAt={readinessRun?.checks.map(check => check.observedAt).sort().at(-1)} masked={unit.masked === true}
+        running={Boolean(readinessRun && activeStates.includes(readinessRun.state))} disabled={!idle} canRun={unit.canStart} onRun={() => void act(() => runCpFailoverReadiness(unit))} />
       {run && <Box aria-label="Failover run">
         <Stepper activeStep={Math.max(step, 0)} alternativeLabel>
           {labels.map((label, index) => <Step key={label} completed={run.state === "DONE" || index < step}>

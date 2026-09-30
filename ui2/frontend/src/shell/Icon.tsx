@@ -19,6 +19,8 @@ export type IconName =
   | "more"
   | "plus"
   | "download"
+  | "check-circle"
+  | "x-circle"
   | "info"
   | "clock"
   | "lock"
@@ -135,6 +137,12 @@ export function Icon({ name, size = 20 }: { readonly name: IconName; readonly si
           <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />
         </svg>
       );
+    case "check-circle":
+    case "x-circle":
+      return <svg {...props}>
+        <circle cx="12" cy="12" r="9" />
+        <path d={name === "check-circle" ? "M7 12l3 3 7-7" : "M8 8l8 8M16 8l-8 8"} />
+      </svg>;
     case "info":
       return (
         <svg {...props}>

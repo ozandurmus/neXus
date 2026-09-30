@@ -13,7 +13,7 @@ const MEMBERS = [
   { device_id: "d2", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-ROMEO-01-M2", model: null, software_version: null, ha_role: "standby", cluster_member_ref: "CLS-ROMEO-01" },
 ];
 
-const READY_SUMMARY = [{ clusterId: "opaque-cluster", unitId: "opaque-cluster", cluster_member_ref: "CLS-ROMEO-01", vendor: "check_point", activeWindow: false, lastRunState: null, lastRunOutcome: null, lastRunAt: null, canRunReadiness: true,
+const READY_SUMMARY = [{ clusterId: "opaque-cluster", unitId: "opaque-cluster", cluster_member_ref: "CLS-ROMEO-01", vendor: "check_point", members: MEMBERS, masked: true, activeWindow: false, lastRunState: null, lastRunOutcome: null, lastRunAt: null, canRunReadiness: true,
   readiness: { status: "READY", observedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), failedCheck: "", checks: [
     { checkNo: 1, title: "Cluster state", member: "Member 1", status: "PASS", result: "PASS", summary: "Active", blocking: true, derived: { role: "ACTIVE" } },
     { checkNo: 1, title: "Cluster state", member: "Member 2", status: "PASS", result: "PASS", summary: "Standby", blocking: true, derived: { role: "STANDBY" } },
@@ -77,16 +77,24 @@ describe("OperationsScreen tabs", () => {
     stubFetch(MEMBERS, READY_SUMMARY);
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    expect(await screen.findByText("Readiness: Ready · 2 h ago")).toBeInTheDocument();
+    expect(await screen.findByText("Ready")).toBeInTheDocument();
     const table = screen.getByRole("table", { name: "Readiness results" });
     expect(within(table).getByText("Active")).toBeInTheDocument();
     expect(within(table).getByText("Standby")).toBeInTheDocument();
-    expect(within(table).getByText("Member 1")).toBeInTheDocument();
-    expect(within(table).getByText("Member 2")).toBeInTheDocument();
+    expect(within(table).getByText("FW-ROMEO-01-M1")).toBeInTheDocument();
+    expect(within(table).getByText("FW-ROMEO-01-M2")).toBeInTheDocument();
     expect(table.textContent).not.toMatch(/[{}]/);
     expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("/preflight"))).toBe(false);
     fireEvent.click(screen.getByText("All clusters"));
     expect(await screen.findByText("1 clusters enrolled")).toBeInTheDocument();
+  });
+
+  it.each([true, false])("shows the AIView badge only for server-masked sessions (%s)", async (masked) => {
+    stubFetch(MEMBERS, READY_SUMMARY.map(row => ({ ...row, masked })));
+    render(withTheme(<OperationsScreen />));
+    fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
+    await screen.findByText("Ready");
+    expect(screen.queryByText("AIView Pseudonymized") !== null).toBe(masked);
   });
 
   it("submits read-only readiness from the unit row", async () => {
@@ -101,7 +109,7 @@ describe("OperationsScreen tabs", () => {
     stubFetch(MEMBERS, READY_SUMMARY);
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    await screen.findByText("Readiness: Ready · 2 h ago");
+    await screen.findByText("Ready");
     fireEvent.click(screen.getByRole("button", { name: "Authorize Failover (4-Eyes)" }));
     expect(screen.getByText(/Phase B & C: 4-Eyes Controlled Failover Gate/i)).toBeInTheDocument();
   });
@@ -122,7 +130,7 @@ describe("OperationsScreen tabs", () => {
     try {
       stubFetch(MEMBERS, READY_SUMMARY);
       render(withTheme(<OperationsScreen />));
-      expect(await screen.findByText("Readiness: Ready · 2 h ago")).toBeInTheDocument();
+      expect(await screen.findByText("Ready")).toBeInTheDocument();
     } finally {
       window.history.pushState({}, "", originalLocation);
     }
@@ -166,7 +174,7 @@ it("shows a VSX unit directly below its cluster with outcome and window", async 
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     const body = url === "/devices" ? { devices: MEMBERS }
-      : url.endsWith("/cp-failover/summary") ? [{ clusterId: "opaque-cluster", unitId: "opaque-vs", cluster_member_ref: "CLS-ROMEO-01", virtual_system: "VS-ROMEO-01-07", vendor: "check_point", activeWindow: true, lastRunState: "DONE", lastRunOutcome: "PASS", lastRunAt: from, canRunReadiness: true, readiness: null }]
+      : url.endsWith("/cp-failover/summary") ? [{ clusterId: "opaque-cluster", unitId: "opaque-vs", cluster_member_ref: "CLS-ROMEO-01", virtual_system: "VS-ROMEO-01-07", vendor: "check_point", members: MEMBERS, masked: true, activeWindow: true, lastRunState: "DONE", lastRunOutcome: "PASS", lastRunAt: from, canRunReadiness: true, readiness: null }]
       : {};
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
   }));
