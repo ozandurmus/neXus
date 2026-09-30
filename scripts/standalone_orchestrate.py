@@ -374,10 +374,12 @@ def cmd_ship(args: argparse.Namespace) -> int:
         url = existing.stdout.strip()
     if not url:
         raise SystemExit("could not open the pull request: " + (pr.stderr.strip()[-300:] or "unknown"))
-    merge = subprocess.run(["gh", "pr", "merge", url, "--rebase", "--delete-branch"],
+    # No --delete-branch: gh would delete the local branch a lane worktree still has checked out.
+    merge = subprocess.run(["gh", "pr", "merge", url, "--rebase"],
                            cwd=str(REPO_ROOT), capture_output=True, text=True)
     if merge.returncode != 0:
         raise SystemExit("pull request not merged (" + url + "): " + merge.stderr.strip()[-300:])
+    subprocess.run(["git", "push", "-q", "origin", "--delete", branch], cwd=str(REPO_ROOT), capture_output=True)
     _git("fetch", "-q", "origin")
     _git("merge", "-q", "--ff-only", "origin/main")
     _git("push", "-q", "hosta", "main")
@@ -391,7 +393,7 @@ def cmd_ship(args: argparse.Namespace) -> int:
     subprocess.run(["gh", "pr", "comment", url, "--body",
                     "Deployed to HOST-A. In-cluster e2e: **" + verdict + "** (" + (lines[-2] if len(lines) > 1 else "") + ")"],
                    cwd=str(REPO_ROOT), capture_output=True, text=True)
-    if args.task:
+    if args.task and Path(r["worktree"]).exists():
         args.force = True
         cmd_clean(args)
     return 0
