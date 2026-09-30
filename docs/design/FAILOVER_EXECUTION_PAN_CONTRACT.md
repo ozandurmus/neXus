@@ -45,3 +45,8 @@ the two `request high-availability state` op commands above, direct firewall onl
 | 6 | Sessions carried | `<show><session><info/></session></show>` (new) | pre: recorded on both; post: the new active's active-session count at least 80 % of the pre-check active's |
 | 7 | Version parity | `<show><system><info/></system></show>` (existing gate) | PAN-OS version and app / threat content versions equal on both peers |
 All three run as pre- and post-checks. New read gate rows for 5 and 6.
+
+## 7. Amendment 2026-09-30 -- pre-checks on their own: on demand and every 4 hours (PO: "yes ilerleyelim")
+Same rule as `FAILOVER_EXECUTION_CP_CONTRACT.md` §13 for the §3/§6 Palo Alto checks: a read-only "Run pre-checks"
+per HA pair, and a 4-hourly pass (one session per peer, commands in order, configurable pause); the result is shown
+with its age in Operations › HA & readiness and never replaces the fresh pre-check at the start of a run.

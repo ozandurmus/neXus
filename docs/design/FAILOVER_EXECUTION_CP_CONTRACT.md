@@ -119,3 +119,17 @@ ekleyelim."
 | 10 | Installed policy parity | `fw stat` | both members report the same installed policy name (install time recorded, not compared); a member with no policy -> FAIL |
 Both are pre-checks and post-checks (post: 9 on the new active; 10 unchanged on both). New gate rows (plain and
 `vsenv`-wrapped), read-only.
+
+## 13. Amendment 2026-09-30 -- pre-checks on their own: on demand and every 4 hours (PO: "yes ilerleyelim")
+The §2/§12 pre-check set (plain and per-VS in `vsenv`) also runs **without a failover and without an approval
+window** -- it is read-only:
+- **On demand:** a "Run pre-checks" action per unit (cluster or VS) in Operations › HA & readiness and on the
+  Failover tab; allowed to the roles that may read failover state and run collections (operator, security_admin).
+- **Every 4 hours** (the PO's cadence from `FAILOVER_READINESS_CHECKS_CP_PAN_DRAFT.md`): one SSH session per
+  member, commands one at a time in order, a configurable pause between commands (default 2 s), units processed one
+  after another (never in parallel against the same member).
+- **Result:** stored like a run's pre-check phase (a readiness record per unit with its check rows); shown as
+  "Ready" / "Not ready -- <failed check>" / "Unknown" with its age. A displayed result never replaces the fresh
+  pre-check that every failover run performs at its start (§1 step 3).
+- The Phase A `PreflightService` panel in Operations (inventory projection, no device reads) is removed from the
+  screen; this readiness replaces it.
