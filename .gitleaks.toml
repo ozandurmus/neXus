@@ -1,0 +1,25 @@
+title = "neXus security baseline (2026-09-30)"
+
+[extend]
+useDefault = true
+
+# PO-approved retired dashboard token; preserve history. No working-tree path exemption.
+[[allowlists]]
+description = "Retired local dashboard bearer token, PO 2026-09-30; review 2026-12-31"
+targetRules = ["generic-api-key"]
+commits = ["8288cb4cd61178d049d348da39d95816f5e93852"]
+
+# Exact synthetic fixture paths, scoped to this rule; all other rules remain active.
+# Configuration syntax: https://github.com/gitleaks/gitleaks#configuration
+[[allowlists]]
+description = "Seven synthetic test fixtures, PO 2026-09-30; review 2026-12-31"
+targetRules = ["generic-api-key"]
+paths = [
+    '''^ui2/job-engine/src/test/java/com/securityexpert/nexus/ui2/jobs/failover/FailoverScheduleJobEngineTest\.java$''',
+    '''^ui2/persistence/src/test/java/com/securityexpert/nexus/ui2/persistence/credential/CredentialAdministrationTest\.java$''',
+    '''^ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/api/CredentialAdministrationControllerTest\.java$''',
+    '''^ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/api/LocalIdentityAdministrationControllerTest\.java$''',
+    '''^ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/cp/StoreBackedSshCredentialResolverTest\.java$''',
+    '''^ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/pan/PanFixtures\.java$''',
+    '''^ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/pan/StoreBackedPanCredentialResolverTest\.java$''',
+]

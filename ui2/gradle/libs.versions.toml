@@ -12,9 +12,10 @@ snakeyaml = "2.2"
 # Security floor above Spring Boot 3.5.16's managed 10.1.55 (Trivy 2026-09-27: critical CVEs fixed in 10.1.58).
 tomcat = "10.1.60"
 jsch = "0.1.55"
-jackson = "2.21.4"
+jackson = "2.21.6"
 
 [libraries]
+jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson" }
 tomcat-embed-core = { module = "org.apache.tomcat.embed:tomcat-embed-core", version.ref = "tomcat" }
 tomcat-embed-el = { module = "org.apache.tomcat.embed:tomcat-embed-el", version.ref = "tomcat" }
 tomcat-embed-websocket = { module = "org.apache.tomcat.embed:tomcat-embed-websocket", version.ref = "tomcat" }
@@ -35,7 +36,7 @@ spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-star
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test", version.ref = "springboot" }
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 jsch = { module = "com.jcraft:jsch", version.ref = "jsch" }
-jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springboot" }

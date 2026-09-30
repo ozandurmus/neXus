@@ -14,6 +14,9 @@ spec:
     spec:
       restartPolicy: Never
       securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
@@ -39,6 +42,8 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /run/e2e
+            - name: tmp
+              mountPath: /tmp
             - name: results
               mountPath: /suite/e2e-results
             - name: shm
@@ -88,6 +93,9 @@ spec:
         spec:
           restartPolicy: Never
           securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
             runAsUser: 1000
             runAsGroup: 1000
             fsGroup: 1000
@@ -111,6 +119,8 @@ spec:
               volumeMounts:
                 - name: tmp
                   mountPath: /run/e2e
+                - name: tmp
+                  mountPath: /tmp
                 - name: results
                   mountPath: /suite/e2e-results
                 - name: shm

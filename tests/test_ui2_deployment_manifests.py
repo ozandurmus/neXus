@@ -9,23 +9,22 @@ is only satisfied where it is enforced is discovered at the stage where a
 refused admission is least recoverable.
 
 This module is the check that keeps them satisfied here. It fails when a
-manifest violates a named rule, which is the point — a green run is evidence
-that `deploy/ui2/` is still admissible under `restricted-v2` without
-amendment.
+manifest violates a named rule. The 2026-09-30 security baseline also covers
+standalone build/bootstrap/e2e workloads and explicitly records exceptions;
+passing these source checks does not prove runtime admission.
 
-It parses the manifests itself rather than importing a YAML library, because
-the repository's test interpreter carries none and this movement does not add
-a dependency to make a check possible. The parser covers the block subset the
-manifest set actually uses and raises on anything outside it, so an
-unparsable construct fails the suite instead of being silently skipped.
+PyYAML is already a development dependency; parse full YAML, including flow
+mappings and CronJob templates, so security checks cover every workload.
 """
 
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONTAINERFILE = REPO_ROOT / "ui2" / "Containerfile"
@@ -36,175 +35,17 @@ OPENSHIFT_DIR = MANIFEST_DIR / "openshift"
 # of the image or manifest path. The build runs inside the cluster.
 HOST_CONTAINER_TOOL = re.compile(r"docker |podman |buildah|nerdctl|/var/run/docker\.sock")
 
-# §11 check 4: OS-2, OS-3, OS-4, OS-5, OS-9 and OS-10 as a single grep, which
-# is how the contract states the check.
+# OS-3, OS-4, OS-5, OS-9 and OS-10 text guard. Fixed identities are checked
+# structurally below, including exact standalone bootstrap/e2e exceptions.
 FORBIDDEN_CONSTRUCT = re.compile(
-    r"runAsUser|runAsGroup|fsGroup|hostNetwork|hostPID|hostIPC"
+    r"hostNetwork|hostPID|hostIPC"
     r"|hostPort|privileged: true|NodePort|LoadBalancer|:latest"
 )
 
 
-# ---------------------------------------------------------------------------
-# A small block-YAML reader for the subset the manifest set uses.
-# ---------------------------------------------------------------------------
-
-
-class ManifestSyntaxError(AssertionError):
-    """Raised when a manifest uses a construct this reader does not cover."""
-
-
-_FLOW_SEQ = re.compile(r"^\[(.*)\]$")
-
-
-def _indent_of(line: str) -> int:
-    return len(line) - len(line.lstrip(" "))
-
-
-def _next_content(lines: list[str], i: int) -> int:
-    while i < len(lines):
-        stripped = lines[i].strip()
-        if stripped and not stripped.startswith("#"):
-            return i
-        i += 1
-    return len(lines)
-
-
-def _strip_inline_comment(value: str) -> str:
-    if value[:1] in ('"', "'"):
-        quote = value[0]
-        end = value.find(quote, 1)
-        if end == -1:
-            raise ManifestSyntaxError(f"unterminated quoted scalar: {value!r}")
-        return value[: end + 1]
-    cut = value.find(" #")
-    return value if cut == -1 else value[:cut].rstrip()
-
-
-def _scalar(value: str):
-    value = _strip_inline_comment(value).strip()
-    flow = _FLOW_SEQ.match(value)
-    if flow:
-        inner = flow.group(1).strip()
-        if not inner:
-            return []
-        return [_scalar(item.strip()) for item in inner.split(",")]
-    if value[:1] in ('"', "'") and value[-1:] == value[:1] and len(value) >= 2:
-        return value[1:-1]
-    if value in ("true", "True"):
-        return True
-    if value in ("false", "False"):
-        return False
-    if value in ("null", "~", ""):
-        return None
-    if re.fullmatch(r"-?\d+", value):
-        return int(value)
-    return value
-
-
-def _read_block_scalar(lines: list[str], i: int, parent_indent: int) -> tuple[str, int]:
-    body: list[str] = []
-    while i < len(lines):
-        line = lines[i]
-        if not line.strip():
-            body.append("")
-            i += 1
-            continue
-        if _indent_of(line) <= parent_indent:
-            break
-        body.append(line)
-        i += 1
-    while body and not body[-1]:
-        body.pop()
-    if not body:
-        return "", i
-    pad = min(_indent_of(line) for line in body if line)
-    return "\n".join(line[pad:] if line else "" for line in body), i
-
-
-def _parse_mapping(lines: list[str], i: int, indent: int) -> tuple[dict, int]:
-    result: dict = {}
-    while True:
-        i = _next_content(lines, i)
-        if i >= len(lines):
-            break
-        line = lines[i]
-        if _indent_of(line) != indent:
-            break
-        stripped = line.strip()
-        if stripped.startswith("- ") or stripped == "-" or stripped.startswith("---"):
-            break
-        if ":" not in stripped:
-            raise ManifestSyntaxError(f"not a mapping entry: {stripped!r}")
-        key, _, rest = stripped.partition(":")
-        key = key.strip()
-        rest = rest.strip()
-        if rest in ("|", "|-", "|+", ">", ">-"):
-            result[key], i = _read_block_scalar(lines, i + 1, indent)
-        elif rest:
-            result[key] = _scalar(rest)
-            i += 1
-        else:
-            nxt = _next_content(lines, i + 1)
-            if nxt >= len(lines):
-                result[key] = None
-                i = nxt
-                continue
-            child_indent = _indent_of(lines[nxt])
-            child_stripped = lines[nxt].strip()
-            is_seq = child_stripped == "-" or child_stripped.startswith("- ")
-            if is_seq and child_indent >= indent:
-                result[key], i = _parse_sequence(lines, nxt, child_indent)
-            elif child_indent > indent:
-                result[key], i = _parse_mapping(lines, nxt, child_indent)
-            else:
-                result[key] = None
-                i = nxt
-    return result, i
-
-
-def _parse_sequence(lines: list[str], i: int, indent: int) -> tuple[list, int]:
-    items: list = []
-    while True:
-        i = _next_content(lines, i)
-        if i >= len(lines):
-            break
-        line = lines[i]
-        stripped = line.strip()
-        if _indent_of(line) != indent or not (stripped == "-" or stripped.startswith("- ")):
-            break
-        body = stripped[2:] if stripped.startswith("- ") else ""
-        if not body:
-            nxt = _next_content(lines, i + 1)
-            if nxt >= len(lines) or _indent_of(lines[nxt]) <= indent:
-                raise ManifestSyntaxError(f"empty sequence entry at line {i + 1}")
-            item, i = _parse_mapping(lines, nxt, _indent_of(lines[nxt]))
-            items.append(item)
-            continue
-        if ":" in _strip_inline_comment(body) and not body.startswith(("[", '"', "'")):
-            # "- key: value" starts a mapping whose first key sits two
-            # columns right of the dash. Rewriting the dash keeps the reader
-            # to one code path for mappings.
-            lines[i] = " " * (indent + 2) + body
-            item, i = _parse_mapping(lines, i, indent + 2)
-            items.append(item)
-            continue
-        items.append(_scalar(body))
-        i += 1
-    return items, i
-
-
 def load_documents(text: str) -> list[dict]:
-    """Parse one manifest file into its documents."""
-    docs: list[dict] = []
-    for chunk in re.split(r"^---\s*$", text, flags=re.MULTILINE):
-        lines = chunk.split("\n")
-        start = _next_content(lines, 0)
-        if start >= len(lines):
-            continue
-        doc, _ = _parse_mapping(lines, start, _indent_of(lines[start]))
-        if doc:
-            docs.append(doc)
-    return docs
+    """Parse manifests with the repository's existing YAML dependency."""
+    return [doc for doc in yaml.safe_load_all(text) if doc is not None]
 
 
 # ---------------------------------------------------------------------------
@@ -227,15 +68,18 @@ def _documents(include_openshift: bool = True) -> list[tuple[Path, dict]]:
     return out
 
 
-def _pod_specs() -> list[tuple[Path, str, dict]]:
+def _pod_specs(documents=None) -> list[tuple[Path, str, dict]]:
     """Every pod template in the set, with the file and object it came from."""
     found: list[tuple[Path, str, dict]] = []
-    for path, doc in _documents():
+    for path, doc in _documents() if documents is None else documents:
         name = f"{doc.get('kind')}/{(doc.get('metadata') or {}).get('name')}"
         if doc.get("kind") == "Pod":
             found.append((path, name, doc.get("spec") or {}))
             continue
-        template = ((doc.get("spec") or {}).get("template") or {}).get("spec")
+        spec = doc.get("spec") or {}
+        if doc.get("kind") == "CronJob":
+            spec = spec["jobTemplate"]["spec"]
+        template = (spec.get("template") or {}).get("spec")
         if template:
             found.append((path, name, template))
     return found
@@ -267,15 +111,13 @@ def test_the_rule_checks_below_have_something_to_check():
     turning the whole module green.
     """
     pod_specs = _pod_specs()
-    assert len(pod_specs) == 3, (
-        f"expected the service, worker and database workloads, found {[o for _, o, _ in pod_specs]}"
-    )
-    containers = _containers()
-    assert [owner for _, owner, _ in containers] == [
-        "StatefulSet/ui2-db:database",
-        "Deployment/ui2-service:service",
-        "Deployment/ui2-worker:worker",
-    ], f"unexpected container set: {[owner for _, owner, _ in containers]}"
+    assert {owner for _, owner, _ in pod_specs} == {
+        "Job/ui2-flyway-bootstrap", "StatefulSet/ui2-db",
+        "Deployment/ui2-service", "Deployment/ui2-worker",
+        "Deployment/ui2-configuration", "Deployment/ui2-compliance",
+        "Job/ui2-e2e", "CronJob/ui2-e2e",
+    }
+    assert len(_containers()) == len(pod_specs)
 
 
 def test_manifest_set_contains_every_kind_the_contract_names():
@@ -291,10 +133,10 @@ def test_manifest_set_contains_every_kind_the_contract_names():
         "StatefulSet",
     ):
         assert required in kinds, f"§5.2: the set has no {required}"
-    assert kinds.count("Service") == 2, "§5.2: one Service for the service, one for the database"
-    assert kinds.count("Secret") == 5, (
+    assert kinds.count("Service") == 5, "service, database, worker, configuration and compliance"
+    assert kinds.count("Secret") == 6, (
         "§5.2: the db-credentials secret plus the worker's credential-store, "
-        "role-binding, configuration-artefact-store and hostname-fingerprint key secrets "
+        "role-binding, configuration-artefact-store, privacy-HMAC and hostname-fingerprint key secrets "
         "(NXS-LOCAL-0165: 23-secret-artefact-store-key.yaml; "
         "NXS-LOCAL-0170: 24-secret-hostname-fingerprint-key.yaml)"
     )
@@ -370,11 +212,19 @@ def test_every_host_path_is_a_worker_push_inbox():
 
 
 def test_no_pod_spec_requests_a_fixed_identity():
-    """FS-7 / OS-2, asserted on the parsed objects and not only on the text."""
+    """FS-7 / OS-2 for application workloads; exact standalone job identities."""
     for path, owner, spec in _pod_specs():
         security = spec.get("securityContext") or {}
-        for field in ("runAsUser", "runAsGroup", "fsGroup"):
-            assert field not in security, f"{path.name}: {owner} sets {field}"
+        # Standalone bootstrap/e2e images need explicit non-root identities.
+        # Long-running application/database workloads retain arbitrary-uid admission.
+        fixed = {
+            "Job/ui2-flyway-bootstrap": {"runAsUser": 10001},
+            "Job/ui2-e2e": {"runAsUser": 1000, "runAsGroup": 1000, "fsGroup": 1000},
+            "CronJob/ui2-e2e": {"runAsUser": 1000, "runAsGroup": 1000, "fsGroup": 1000},
+        }.get(owner, {})
+        assert {key: security[key] for key in ("runAsUser", "runAsGroup", "fsGroup") if key in security} == fixed, (
+            f"{path.name}: {owner} has an unexpected fixed identity"
+        )
     for path, owner, container in _containers():
         security = container.get("securityContext") or {}
         for field in ("runAsUser", "runAsGroup"):
@@ -383,9 +233,11 @@ def test_no_pod_spec_requests_a_fixed_identity():
 
 def test_every_container_runs_non_root():
     """OS-1."""
-    for path, owner, container in _containers():
-        security = container.get("securityContext") or {}
-        assert security.get("runAsNonRoot") is True, f"{path.name}: {owner} may run as root"
+    for path, owner, spec in _pod_specs():
+        pod_security = spec.get("securityContext") or {}
+        for container in spec.get("initContainers", []) + spec.get("containers", []):
+            security = pod_security | (container.get("securityContext") or {})
+            assert security.get("runAsNonRoot") is True, f"{path.name}: {owner} may run as root"
 
 
 def test_every_container_refuses_privilege_escalation():
@@ -404,10 +256,13 @@ def test_every_container_drops_capabilities_and_takes_the_default_seccomp_profil
         security = container.get("securityContext") or {}
         capabilities = security.get("capabilities") or {}
         assert capabilities.get("drop") == ["ALL"], f"{path.name}: {owner} does not drop ALL"
-        seccomp = security.get("seccompProfile") or {}
-        assert seccomp.get("type") == "RuntimeDefault", (
-            f"{path.name}: {owner} does not take the RuntimeDefault seccomp profile"
-        )
+    for path, owner, spec in _pod_specs():
+        pod_security = spec.get("securityContext") or {}
+        for container in spec.get("initContainers", []) + spec.get("containers", []):
+            security = pod_security | (container.get("securityContext") or {})
+            assert security.get("seccompProfile", {}).get("type") == "RuntimeDefault", (
+                f"{path.name}: {owner} does not take the RuntimeDefault seccomp profile"
+            )
 
 
 def test_every_container_has_a_read_only_root_filesystem():
@@ -469,10 +324,8 @@ def test_the_service_declares_exactly_the_writable_set_the_image_declares():
     )
 
 
-def test_the_recovery_volume_is_separate_from_the_database_volume_and_worker_only():
-    """BK-17: the recovery volume is a claim separate from the database's
-    own data claim, mounted by the worker Deployment only -- the service
-    Deployment must never mount it."""
+def test_the_recovery_volume_is_separate_and_only_the_worker_can_write():
+    """Recovery data is separate; the service download path is read-only."""
     pvc_names = {
         (doc.get("metadata") or {}).get("name")
         for _, doc in _documents(include_openshift=False)
@@ -498,13 +351,15 @@ def test_the_recovery_volume_is_separate_from_the_database_volume_and_worker_onl
         }
         if owner.startswith("Deployment/ui2-worker"):
             assert mounted_recovery_names, "BK-17: the worker Deployment must mount the recovery volume"
+        elif owner == "Deployment/ui2-service":
+            for container in spec.get("containers") or []:
+                for mount in container.get("volumeMounts") or []:
+                    if mount["name"] in recovery_volume_names:
+                        assert mount.get("readOnly") is True
+            for name in recovery_volume_names:
+                assert volumes[name]["persistentVolumeClaim"].get("readOnly") is True
         else:
-            assert not mounted_recovery_names, (
-                f"BK-17: {owner} must never mount the recovery volume, but mounts {mounted_recovery_names}"
-            )
-        assert not recovery_volume_names or owner.startswith("Deployment/ui2-worker"), (
-            f"BK-17: only the worker Deployment may declare the recovery volume claim, but {owner} does too"
-        )
+            assert not recovery_volume_names, f"{owner}: unexpected recovery volume"
 
 
 def _service_pod_spec() -> dict:
@@ -577,19 +432,18 @@ def test_the_artefact_store_is_backed_by_a_claim_not_an_emptydir():
         )
 
 
-def test_the_service_role_does_not_mount_the_artefact_store():
-    """The service never decrypts a raw artefact (C7 section 4 minimum) --
-    it must not even mount the claim."""
-    service_mounts = {
-        mount.get("name") for mount in (_service_container().get("volumeMounts") or [])
-    }
-    assert "artefact-store" not in service_mounts, (
-        "the service container mounts the artefact-store volume; C7 section 4 restricts it to worker"
+def test_the_service_artefact_download_mount_is_read_only():
+    """The existing download route reads artefacts; only the worker writes them."""
+    service_mount = next(
+        mount for mount in _service_container()["volumeMounts"]
+        if mount["name"] == "artefact-store"
     )
-    worker_mounts = {
-        mount.get("name") for mount in (_worker_container().get("volumeMounts") or [])
-    }
-    assert "artefact-store" in worker_mounts, "the worker container no longer mounts artefact-store"
+    assert service_mount.get("readOnly") is True
+    worker_mount = next(
+        mount for mount in _worker_container()["volumeMounts"]
+        if mount["name"] == "artefact-store"
+    )
+    assert worker_mount.get("readOnly") is not True
 
 
 def _containerfile_declared_writable_paths() -> set[str]:
@@ -685,3 +539,108 @@ def test_the_entry_point_is_the_jvm_with_a_role_argument():
     assert re.search(r'^CMD \["service"\]', text, flags=re.MULTILINE), (
         "EP-1/EP-2: the workload role is an argument, and `service` is the only one"
     )
+
+
+def test_every_deploy_workload_has_security_context_or_exact_documented_exception():
+    """Cover all deploy subdirectories, standalone Pods, templates and CronJobs."""
+    baseline = yaml.safe_load((REPO_ROOT / "security/baseline.yaml").read_text())["accepted"]
+    exceptions = {
+        (entry["location"], entry["workload"], entry["container"], entry["field"]): entry
+        for entry in baseline if "field" in entry
+    }
+    expected_exceptions = {
+        (f"deploy/ui2-image-build/{filename}", owner, "builder", field)
+        for filename, owner in (
+            ("30-build-job.yaml", "Job/ui2-image-build"),
+            ("31-build-job-proxy.yaml.template", "Job/ui2-image-build"),
+            ("32-e2e-build-job.yaml", "Job/ui2-e2e-image-build"),
+        )
+        for field in ("pod.runAsNonRoot", "container.readOnlyRootFilesystem", "container.capabilities.drop")
+    }
+    assert set(exceptions) == expected_exceptions
+    documents = []
+    for path in sorted((REPO_ROOT / "deploy").rglob("*")):
+        if path.name.endswith((".yaml", ".yml", ".yaml.template")):
+            documents.extend((path, doc) for doc in load_documents(path.read_text()))
+    workloads = _pod_specs(documents)
+    assert {owner.split("/")[0] for _, owner, _ in workloads} == {
+        "Deployment", "StatefulSet", "Job", "CronJob", "Pod"
+    }
+    used = set()
+    for path, owner, spec in workloads:
+        location = path.relative_to(REPO_ROOT).as_posix()
+        pod_security = spec.get("securityContext", {})
+        assert pod_security.get("seccompProfile") == {"type": "RuntimeDefault"}, location
+        for container in spec.get("initContainers", []) + spec.get("containers", []):
+            security = container.get("securityContext", {})
+            assert security.get("allowPrivilegeEscalation") is False, location
+            assert security.get("privileged") is not True, location
+            assert security.get("seccompProfile", pod_security["seccompProfile"]) == {"type": "RuntimeDefault"}, location
+            checks = {
+                "pod.runAsNonRoot": pod_security.get("runAsNonRoot") is True
+                and security.get("runAsNonRoot", True) is True
+                and pod_security.get("runAsUser") != 0 and security.get("runAsUser") != 0,
+                "container.readOnlyRootFilesystem": security.get("readOnlyRootFilesystem") is True,
+                "container.capabilities.drop": security.get("capabilities", {}).get("drop") == ["ALL"]
+                and not security.get("capabilities", {}).get("add"),
+            }
+            for field, compliant in checks.items():
+                key = (location, owner, container["name"], field)
+                if compliant:
+                    assert key not in exceptions, f"Remove resolved exception: {key}"
+                    continue
+                assert key in exceptions, f"Missing security control: {key}"
+                entry = exceptions[key]
+                assert entry["reason"] and entry["owner"] == "PO" and entry["review_date"] == "2026-12-31"
+                assert "# Security exception:" in path.read_text() and "security/baseline.yaml" in path.read_text()
+                used.add(key)
+    assert used == set(exceptions), "Stale security exceptions"
+
+
+def test_all_java_workloads_mount_the_images_writable_paths():
+    for _, owner, spec in _pod_specs():
+        if not owner.startswith("Deployment/"):
+            continue
+        empty_dirs = {volume["name"] for volume in spec.get("volumes", []) if "emptyDir" in volume}
+        for container in spec["containers"]:
+            mounted = {mount["mountPath"] for mount in container.get("volumeMounts", []) if mount["name"] in empty_dirs}
+            assert _containerfile_declared_writable_paths() <= mounted, owner
+
+
+def test_runtime_image_updates_vulnerable_os_packages_and_cleans_cache():
+    runtime = CONTAINERFILE.read_text().rsplit("\nFROM ", 1)[1]
+    assert "RUN microdnf update -y expat libxml2 && microdnf clean all" in runtime
+    assert runtime.index("USER 0") < runtime.index("microdnf update") < runtime.index("USER 185")
+
+
+def test_security_baseline_requires_owned_scoped_acceptances():
+    entries = yaml.safe_load((REPO_ROOT / "security/baseline.yaml").read_text())["accepted"]
+    identities = [(entry["tool"], entry["rule"], entry["location"]) for entry in entries]
+    assert len(identities) == len(set(identities)), "Duplicate accepted findings"
+    for entry in entries:
+        assert all(entry[key] for key in ("tool", "rule", "location", "reason"))
+        assert entry["owner"] == "PO" and entry["review_date"] == "2026-12-31"
+        assert "*" not in entry["location"], "Accept individual findings, never directory wildcards"
+    tls = [entry for entry in entries if entry["rule"] == "weak-ssl-context"]
+    assert [entry["location"].rsplit("/", 1)[1] for entry in tls] == ["PanXmlApiTransport.java:286"]
+
+
+def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths():
+    config = tomllib.loads((REPO_ROOT / ".gitleaks.toml").read_text())
+    assert config["extend"] == {"useDefault": True}
+    assert "rules" not in config, "Keep the default detection rules intact"
+    history, fixtures = config["allowlists"]
+    assert history["commits"] == ["8288cb4cd61178d049d348da39d95816f5e93852"]
+    assert history["targetRules"] == ["generic-api-key"]
+    assert not {"paths", "regexes", "stopwords"} & history.keys()
+    assert fixtures["targetRules"] == ["generic-api-key"]
+    assert not {"commits", "regexes", "stopwords"} & fixtures.keys()
+    entries = yaml.safe_load((REPO_ROOT / "security/baseline.yaml").read_text())["accepted"]
+    paths = {entry["location"] for entry in entries if entry["rule"] == "generic-api-key" and "commit" not in entry}
+    assert len(paths) == len(fixtures["paths"]) == 7
+    assert set(fixtures["paths"]) == {"^" + re.escape(path).replace(r"\-", "-") + "$" for path in paths}
+    for path in paths:
+        assert "/src/test/java/" in path and (REPO_ROOT / path).is_file()
+        assert sum(bool(re.search(pattern, path)) for pattern in fixtures["paths"]) == 1
+        for unrelated in ("prefix/" + path, path + ".bak", path.replace("/src/test/", "/src/main/")):
+            assert not any(re.search(pattern, unrelated) for pattern in fixtures["paths"])

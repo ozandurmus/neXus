@@ -36,6 +36,8 @@ spec:
       # Omission is what makes one manifest correct in both places.
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       priorityClassName: system-cluster-critical
       tolerations:
         - key: "node.kubernetes.io/disk-pressure"

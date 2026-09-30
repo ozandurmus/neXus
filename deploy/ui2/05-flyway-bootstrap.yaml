@@ -8,11 +8,26 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        # The upstream Flyway image defaults to root; its installation is world-readable.
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: flyway
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           image: flyway/flyway:10.17.0
           args: ["-connectRetries=10", "migrate"]
           env:
+            - name: HOME
+              value: /tmp
+            - name: JAVA_ARGS
+              value: "-Duser.home=/tmp -Djava.io.tmpdir=/tmp"
             - name: FLYWAY_URL
               value: "jdbc:postgresql://ui2-db:5432/ui2"
             - name: FLYWAY_USER
@@ -22,7 +37,10 @@ spec:
             - name: FLYWAY_LOCATIONS
               value: "filesystem:/flyway/sql"
           volumeMounts:
-            - { name: sql, mountPath: /flyway/sql }
+            - { name: sql, mountPath: /flyway/sql, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: sql
           configMap: { name: ui2-migrations }

@@ -1,0 +1,205 @@
+# Accepted findings only. No wildcard acceptance for TLS clients or test directories.
+# PostgreSQL already mounts its write paths; its read-only root needs no exception.
+# Not accepted: DirectoryTrustPolicy.java:155, SystemStatusService.java:207 and
+# HttpsDeviceClient.java:104 have no applicable PO TLS exception in the named decision.
+accepted:
+- tool: semgrep
+  rule: weak-ssl-context
+  location: ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/xmlapi/PanXmlApiTransport.java:286
+  reason: Palo Alto certificate verification disabled by the ratified PO_DECISION_RECORD_2026_09_21_PAN_TLS_VERIFICATION_DISABLED.md;
+    this acceptance is Palo Alto only.
+  owner: PO
+  review_date: '2026-12-31'
+- tool: semgrep
+  rule: unencrypted-socket
+  location: ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/notification/SmtpRelaySender.java:40
+  reason: Unauthenticated internal SMTP relay with optional STARTTLS, explicitly retained by NOTIFICATION_ROUTING_CONTRACT.md;
+    STARTTLS verifies the peer when enabled.
+  owner: PO
+  review_date: '2026-12-31'
+- tool: semgrep
+  rule: unencrypted-socket
+  location: ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/notification/SyslogSender.java:45
+  reason: Configured syslog forwarding uses TCP or UDP without TLS; accepted by the PO security-baseline brief dated
+    2026-09-30.
+  owner: PO
+  review_date: '2026-12-31'
+- tool: gitleaks
+  rule: generic-api-key
+  location: .nexus/engineer.summary.log
+  commit: 8288cb4cd61178d049d348da39d95816f5e93852
+  reason: Six history findings contain an ephemeral bearer token for the retired local Python dashboard. File is
+    no longer tracked; PO 2026-09-30 accepts this commit without rewriting history.
+  owner: PO
+  review_date: '2026-12-31'
+- tool: trivy
+  rule: CVE-2026-84782
+  location: 'ui2/Containerfile runtime image: openssl-libs'
+  reason: No fix released; re-evaluated daily (PO-provided scan baseline, 2026-09-30).
+  owner: PO
+  review_date: '2026-12-31'
+- tool: trivy
+  rule: CVE-2026-54876
+  location: 'ui2/Containerfile runtime image: openssl-libs'
+  reason: No fix released; re-evaluated daily (PO-provided scan baseline, 2026-09-30).
+  owner: PO
+  review_date: '2026-12-31'
+- tool: trivy
+  rule: CVE-2026-86145
+  location: 'ui2/Containerfile runtime image: pcre2/pcre2-syntax'
+  reason: No fix released; re-evaluated daily (PO-provided scan baseline, 2026-09-30).
+  owner: PO
+  review_date: '2026-12-31'
+- tool: trivy
+  rule: CVE-2026-89161
+  location: 'ui2/Containerfile runtime image: pcre2/pcre2-syntax'
+  reason: No fix released; re-evaluated daily (PO-provided scan baseline, 2026-09-30).
+  owner: PO
+  review_date: '2026-12-31'
+- tool: trivy
+  rule: CVE-2026-53613
+  location: 'ui2/Containerfile runtime image: util-linux libs'
+  reason: No fix released; re-evaluated daily (PO-provided scan baseline, 2026-09-30).
+  owner: PO
+  review_date: '2026-12-31'
+- tool: trivy
+  rule: KSV-0118
+  location: deploy/ui2-image-build/30-build-job.yaml
+  reason: Kaniko extracts base-image layers and runs root package-installation and ownership changes; non-root would
+    break these builds.
+  owner: PO
+  review_date: '2026-12-31'
+  workload: Job/ui2-image-build
+  container: builder
+  field: pod.runAsNonRoot
+- tool: trivy
+  rule: KSV-0014
+  location: deploy/ui2-image-build/30-build-job.yaml
+  reason: Kaniko extracts and snapshots the image filesystem outside mounted volumes; a read-only root would prevent
+    image builds.
+  owner: PO
+  review_date: '2026-12-31'
+  workload: Job/ui2-image-build
+  container: builder
+  field: container.readOnlyRootFilesystem
+- tool: trivy
+  rule: capabilities.drop
+  location: deploy/ui2-image-build/30-build-job.yaml
+  reason: Kaniko must preserve file ownership and switch build users while running Containerfile commands. Preserve
+    the runtime-default capabilities until a reduced set is validated; no privileged mode or added capabilities.
+  owner: PO
+  review_date: '2026-12-31'
+  workload: Job/ui2-image-build
+  container: builder
+  field: container.capabilities.drop
+- tool: trivy
+  rule: KSV-0118
+  location: deploy/ui2-image-build/31-build-job-proxy.yaml.template
+  reason: Kaniko extracts base-image layers and runs root package-installation and ownership changes; non-root would
+    break these builds.
+  owner: PO
+  review_date: '2026-12-31'
+  workload: Job/ui2-image-build
+  container: builder
+  field: pod.runAsNonRoot
+- tool: trivy
+  rule: KSV-0014
+  location: deploy/ui2-image-build/31-build-job-proxy.yaml.template
+  reason: Kaniko extracts and snapshots the image filesystem outside mounted volumes; a read-only root would prevent
+    image builds.
+  owner: PO
+  review_date: '2026-12-31'
+  workload: Job/ui2-image-build
+  container: builder
+  field: container.readOnlyRootFilesystem
+- tool: trivy
+  rule: capabilities.drop
+  location: deploy/ui2-image-build/31-build-job-proxy.yaml.template
+  reason: Kaniko must preserve file ownership and switch build users while running Containerfile commands. Preserve
+    the runtime-default capabilities until a reduced set is validated; no privileged mode or added capabilities.
+  owner: PO
+  review_date: '2026-12-31'
+  workload: Job/ui2-image-build
+  container: builder
+  field: container.capabilities.drop
+- tool: trivy
+  rule: KSV-0118
+  location: deploy/ui2-image-build/32-e2e-build-job.yaml
+  reason: Kaniko extracts base-image layers and runs root package-installation and ownership changes; non-root would
+    break these builds.
+  owner: PO
+  review_date: '2026-12-31'
+  workload: Job/ui2-e2e-image-build
+  container: builder
+  field: pod.runAsNonRoot
+- tool: trivy
+  rule: KSV-0014
+  location: deploy/ui2-image-build/32-e2e-build-job.yaml
+  reason: Kaniko extracts and snapshots the image filesystem outside mounted volumes; a read-only root would prevent
+    image builds.
+  owner: PO
+  review_date: '2026-12-31'
+  workload: Job/ui2-e2e-image-build
+  container: builder
+  field: container.readOnlyRootFilesystem
+- tool: trivy
+  rule: capabilities.drop
+  location: deploy/ui2-image-build/32-e2e-build-job.yaml
+  reason: Kaniko must preserve file ownership and switch build users while running Containerfile commands. Preserve
+    the runtime-default capabilities until a reduced set is validated; no privileged mode or added capabilities.
+  owner: PO
+  review_date: '2026-12-31'
+  workload: Job/ui2-e2e-image-build
+  container: builder
+  field: container.capabilities.drop
+
+# Exact synthetic test fixtures; only generic-api-key is allowlisted for these paths.
+- tool: gitleaks
+  rule: generic-api-key
+  location: ui2/job-engine/src/test/java/com/securityexpert/nexus/ui2/jobs/failover/FailoverScheduleJobEngineTest.java
+  reason: Synthetic test fixture constant used by isolated unit tests; no operational credential. Exact path and
+    rule only in .gitleaks.toml.
+  owner: PO
+  review_date: '2026-12-31'
+- tool: gitleaks
+  rule: generic-api-key
+  location: ui2/persistence/src/test/java/com/securityexpert/nexus/ui2/persistence/credential/CredentialAdministrationTest.java
+  reason: Synthetic test fixture constant used by isolated unit tests; no operational credential. Exact path and
+    rule only in .gitleaks.toml.
+  owner: PO
+  review_date: '2026-12-31'
+- tool: gitleaks
+  rule: generic-api-key
+  location: ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/api/CredentialAdministrationControllerTest.java
+  reason: Synthetic test fixture constant used by isolated unit tests; no operational credential. Exact path and
+    rule only in .gitleaks.toml.
+  owner: PO
+  review_date: '2026-12-31'
+- tool: gitleaks
+  rule: generic-api-key
+  location: ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/api/LocalIdentityAdministrationControllerTest.java
+  reason: Synthetic test fixture constant used by isolated unit tests; no operational credential. Exact path and
+    rule only in .gitleaks.toml.
+  owner: PO
+  review_date: '2026-12-31'
+- tool: gitleaks
+  rule: generic-api-key
+  location: ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/cp/StoreBackedSshCredentialResolverTest.java
+  reason: Synthetic test fixture constant used by isolated unit tests; no operational credential. Exact path and
+    rule only in .gitleaks.toml.
+  owner: PO
+  review_date: '2026-12-31'
+- tool: gitleaks
+  rule: generic-api-key
+  location: ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/pan/PanFixtures.java
+  reason: Synthetic test fixture constant used by isolated unit tests; no operational credential. Exact path and
+    rule only in .gitleaks.toml.
+  owner: PO
+  review_date: '2026-12-31'
+- tool: gitleaks
+  rule: generic-api-key
+  location: ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/pan/StoreBackedPanCredentialResolverTest.java
+  reason: Synthetic test fixture constant used by isolated unit tests; no operational credential. Exact path and
+    rule only in .gitleaks.toml.
+  owner: PO
+  review_date: '2026-12-31'

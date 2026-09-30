@@ -32,6 +32,8 @@ spec:
       # image's numeric account is what it is validated against (FS-6).
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
         # OS-3a (amendment 2026-09-24): the group of the Radware Cyber Controller push inbox (HOST-A nexuscc, gid
         # 2600), so the worker can read and delete its uploads -- a supplemental group, not a fixed uid/gid (FS-7).
         supplementalGroups: [2600]

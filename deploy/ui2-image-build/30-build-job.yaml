@@ -24,9 +24,18 @@ spec:
         app.kubernetes.io/part-of: nexus-ui2
         app.kubernetes.io/component: image-build
     spec:
+      # Security exception: Kaniko unpacks base layers and runs root package/chown steps.
+      # Keep root, writable image filesystem and runtime-default capabilities; security/baseline.yaml.
+      securityContext:
+        runAsNonRoot: false
+        seccompProfile:
+          type: RuntimeDefault
       restartPolicy: Never
       containers:
         - name: builder
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
           image: gcr.io/kaniko-project/executor@sha256:4e7a52dd1f14872430652bb3b027405b8dfd17c4538751c620ac005741ef9698
           args:
             - --context=dir:///workspace

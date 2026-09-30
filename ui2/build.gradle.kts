@@ -30,6 +30,11 @@ subprojects {
     if (name in javaProjects) {
         apply(plugin = "java-library")
 
+        // One security baseline, including modules that only use Jackson transitively.
+        dependencies {
+            add("api", platform(libs.jackson.bom))
+        }
+
         extensions.configure<JavaPluginExtension> {
             toolchain {
                 languageVersion.set(JavaLanguageVersion.of(21))

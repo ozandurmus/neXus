@@ -22,6 +22,8 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       priorityClassName: system-cluster-critical
       tolerations:
         - key: "node.kubernetes.io/disk-pressure"
@@ -39,6 +41,11 @@ spec:
             - name: http
               containerPort: 8084
               protocol: TCP
+          volumeMounts:
+            - name: tmp
+              mountPath: /app/tmp
+            - name: home
+              mountPath: /app/home
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -67,6 +74,11 @@ spec:
             initialDelaySeconds: 3
             periodSeconds: 5
             timeoutSeconds: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: home
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
