@@ -12,7 +12,7 @@ snakeyaml = "2.2"
 # Security floor above Spring Boot 3.5.16's managed 10.1.55 (Trivy 2026-09-27: critical CVEs fixed in 10.1.58).
 tomcat = "10.1.60"
 jsch = "0.1.55"
-jackson = "2.21.6"
+jackson = "2.21.7"
 
 [libraries]
 jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson" }

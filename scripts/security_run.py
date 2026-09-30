@@ -112,5 +112,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(prepare() if sys.argv[1] == "prepare" else finish())
     except (OSError, ValueError, KeyError, TypeError):
-        print('{"passed":false,"scan_errors":1,"error":"SECURITY_SCAN_INCOMPLETE"}')
+        print(json.dumps({"passed": False, "scan_errors": 1, "error": "SECURITY_SCAN_INCOMPLETE", "cause": type(sys.exc_info()[1]).__name__}))
         raise SystemExit(2)
