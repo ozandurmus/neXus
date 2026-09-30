@@ -278,10 +278,10 @@ public final class CpFailoverJobExecutor {
         boolean arp=arpA>=0 && arpB>=0 && (before==null
             ?CpFailoverChecks.ratio(active==first?arpB:arpA,baseArp,CpFailoverChecks.ARP_MIN_RATIO)
             :CpFailoverChecks.ratio(currentArp,baseArp,CpFailoverChecks.ARP_MIN_RATIO));
-        String arpStatus=arp?"PASS":arpA<0 || arpB<0?"UNKNOWN":"FAIL";
+        // Contract §15 (PO 2026-09-30): ARP is information only -- counts recorded, never blocking.
+        String arpStatus=arpA<0 || arpB<0?"UNKNOWN":"PASS";
         record(phase,first,5,arpStatus,arpA<0?"{}":"{\"count\":"+arpA+"}");
         record(phase,second,5,arpStatus,arpB<0?"{}":"{\"count\":"+arpB+"}");
-        if(!arp) throw new Stop("ARP_BELOW_TOLERANCE",5,arpStatus);
         var ca=CpFailoverChecks.connections(command(first,CONN));
         var cb=CpFailoverChecks.connections(command(second,CONN));
         long baseConn=ca==null || cb==null?-1:before==null?(active==first?ca.count():cb.count())

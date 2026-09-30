@@ -93,9 +93,9 @@ class CpFailoverJobExecutorTest {
                     }
                     if(cmd.endsWith("cphaprob -a if")) return new ExecResult.Completed(
                         "CCP mode: Automatic\nRequired interfaces: 1\neth0 UP non sync\n",0);
-                    if(cmd.endsWith("arp -an")) return new ExecResult.Completed(badPost&&down&&!first?"":
+                    if(cmd.endsWith("arp -an")) return new ExecResult.Completed(
                         "? (192.0.2.31) at 02:00:00:00:00:01 [ether] on eth0\n",0);
-                    if(cmd.endsWith("fw tab -t connections -s")) return new ExecResult.Completed(
+                    if(cmd.endsWith("fw tab -t connections -s")) return new ExecResult.Completed(badPost&&down&&!first?"":
                         "HOST NAME ID #VALS #PEAK #SLINKS\nlocalhost connections 8158 100 150 0\n",0);
                     if(cmd.endsWith("cat /proc/net/dev")) {
                         long bytes=first?(bytesA+=1000):(bytesB+=1000);
@@ -214,7 +214,7 @@ class CpFailoverJobExecutorTest {
     }
     @Test void unknownOutputFromEveryCheckStaysUnknownWithoutWrites() {
         Map<String,Integer> commands=Map.of("cphaprob stat",1,"cphaprob tablestat",2,"cphaprob -a if",3,
-            "arp -an",5,"fw tab -t connections -s",6,"cat /proc/net/dev",8,"cphaprob syncstat",9,"fw stat",10);
+            "fw tab -t connections -s",6,"cat /proc/net/dev",8,"cphaprob syncstat",9,"fw stat",10);
         commands.forEach((command,no) -> {
             Store store=new Store(); store.kind="READINESS";
             Script script=new Script(); script.unknownCommand=command; run(store,script);
@@ -259,7 +259,7 @@ class CpFailoverJobExecutorTest {
     @Test void postcheckFailStopsWithoutUp() {
         Store store=new Store(); Script script=new Script(); script.badPost=true; run(store,script);
         check(store.state.equals("STOPPED") && script.downCount==1 && script.upCount==0);
-        check(store.checks.stream().anyMatch(s -> s.equals("post:5:FAIL")));
+        check(store.checks.stream().anyMatch(s -> s.equals("post:6:UNKNOWN")));
     }
     @Test void changedPolicyAfterFailoverStopsWithoutUp() {
         Store store=new Store(); Script script=new Script(); script.changedPolicyPost=true; run(store,script);
