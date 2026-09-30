@@ -50,6 +50,11 @@ final class FakeDeviceTransport implements DeviceTransport {
 
     @Override
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
+        throw new AssertionError("management read used an exec channel");
+    }
+
+    @Override
+    public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
         commandsIssued.add(spec.command());
         return commandHandler.apply(spec.command());
     }

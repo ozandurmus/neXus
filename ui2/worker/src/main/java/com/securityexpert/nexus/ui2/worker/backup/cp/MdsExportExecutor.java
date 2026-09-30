@@ -102,6 +102,7 @@ public final class MdsExportExecutor {
         exec(session, MdsExportPlan.with(MdsExportPlan.GAIA_CONFIGURATION, dir), CONFIG);
 
         // mds_backup: started once, never retried; its exit code is the truth.
+        // TODO: log remote process count here if an approved existing read exposes it; no process-count read exists in this plan.
         ExecOutcome start = exec(session, MdsExportPlan.with(MdsExportPlan.MDS_BACKUP_START, dir), SHORT);
         if (!start.succeeded() && !start.timedOut()) {
             // an explicit refusal (non-zero exit, channel failure): nothing started, the directory is ours to remove

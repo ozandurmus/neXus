@@ -109,7 +109,10 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
             log.warning("discovery enumeration failed: " + caught.getClass().getSimpleName() + " after requests="
                     + requestCount + " message-shape=" + (shape.length() > 160 ? shape.substring(0, 160) : shape)
                     + " at=" + (caught.getStackTrace().length > 0 ? caught.getStackTrace()[0].getMethodName() : "?"));
-            return new ManagementPlaneEnumerationResult.Failed("management-plane enumeration did not complete", requestCount, disconnectOutcome);
+            return new ManagementPlaneEnumerationResult.Failed(
+                    "manager command timed out; stopped".equals(caught.getMessage())
+                            ? "manager command timed out; stopped" : "management-plane enumeration did not complete",
+                    requestCount, disconnectOutcome);
         }
         log.info(String.format("discovery enumeration completed: candidateCount=%d requestCount=%d", candidates.size(), requestCount));
         
@@ -160,7 +163,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                 domains.add("SMC User"); // Fallback for single domain / non-MDS environments
             }
         } catch (Exception e) {
-            log.warning("Failed to parse domains JSON, assuming single domain. error: " + e.getMessage());
+            log.warning("Failed to parse domains JSON, assuming single domain");
             domains.add("SMC User");
         }
         if (domains.isEmpty()) {
@@ -278,9 +281,9 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                     ));
                 }
             }
-            log.info(String.format("queryGateways for domain %s: objects_array_size=%d, parsed=%d, missingUid=%d, added=%d", domain, objects != null ? objects.size() : -1, parsed, missingStableIdentifier, results.size()));
+            log.info(String.format("queryGateways: objects_array_size=%d, parsed=%d, missingUid=%d, added=%d", objects != null ? objects.size() : -1, parsed, missingStableIdentifier, results.size()));
         } catch (Exception e) {
-            log.warning("Failed to parse show-gateways-and-servers JSON: " + e.getMessage());
+            log.warning("Failed to parse show-gateways-and-servers JSON");
             throw new ManagementPlaneQueryFailedException();
         }
         
@@ -296,12 +299,15 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
     }
 
     private String execRead(TransportSession session, String command) {
-        ExecResult result = transport.exec(session, new ExecSpec(command), EXEC_TIMEOUT);
+        ExecResult result = transport.execInteractive(session, new ExecSpec(command), EXEC_TIMEOUT);
+        if (result instanceof ExecResult.TimedOut) {
+            throw new IllegalStateException("manager command timed out; stopped");
+        }
         if (result instanceof ExecResult.Completed completed) {
             if (completed.exitStatus() == 0) {
                 return completed.output();
             }
-            log.warning(String.format("execRead command failed! exitStatus=%d command=%s", completed.exitStatus(), command));
+            log.warning("execRead command failed! exitStatus=" + completed.exitStatus());
         }
         throw new ManagementPlaneQueryFailedException();
     }

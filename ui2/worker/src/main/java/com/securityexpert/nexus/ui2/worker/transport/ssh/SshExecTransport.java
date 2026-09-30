@@ -338,6 +338,7 @@ public final class SshExecTransport implements DeviceTransport {
             long elapsedMs = System.currentTimeMillis() - startMs;
             switch (result.kind()) {
                 case TIMED_OUT -> {
+                    sshSession.closeInteractiveShell();
                     LOG.log(System.Logger.Level.WARNING, "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" TIMED OUT after {1}ms",
                             com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(spec.command()), elapsedMs);
                     return new ExecResult.TimedOut();

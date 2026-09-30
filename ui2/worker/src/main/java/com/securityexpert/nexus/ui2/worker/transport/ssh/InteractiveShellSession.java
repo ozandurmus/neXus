@@ -168,7 +168,7 @@ final class InteractiveShellSession implements AutoCloseable {
                 if (!echoSeen && raw.length() < 64 * 1024 && stripTerminalControl(raw.toString()).contains(normalized)) {
                     echoSeen = true;
                 }
-                if (prompt != null && (current.stripTrailing().endsWith(prompt) || isPromptVariant(lastLine(current)))
+                if (prompt != null && (lastLine(current).equals(prompt) || isPromptVariant(lastLine(current)))
                         && (echoSeen || System.currentTimeMillis() - started >= ECHO_GRACE_MS)) {
                     completed = true;
                     break;
@@ -176,7 +176,7 @@ final class InteractiveShellSession implements AutoCloseable {
             } else if (sawData && prompt != null && !echoSeen && System.currentTimeMillis() - started >= ECHO_GRACE_MS) {
                 // No echo and nothing new: the prompt already in the buffer ends the command after the grace period.
                 String current = strippedTail(raw);
-                if (current.stripTrailing().endsWith(prompt) || isPromptVariant(lastLine(current))) {
+                if (lastLine(current).equals(prompt) || isPromptVariant(lastLine(current))) {
                     completed = true;
                     break;
                 }

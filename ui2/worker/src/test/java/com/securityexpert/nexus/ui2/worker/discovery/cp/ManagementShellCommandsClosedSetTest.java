@@ -23,11 +23,11 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.SshCredentialResolver;
 class ManagementShellCommandsClosedSetTest {
 
     @Test
-    void managementCommandsUseTheGaiaLoginShell() {
+    void managementCommandsUseTheInteractiveLoginEnvironment() {
         assertTrue(ManagementShellCommands.domainList()
-                .startsWith("bash -l -c 'source /etc/profile.d/CP.sh; $MDSVERUTIL"));
+                .startsWith("$MDSVERUTIL"));
         assertTrue(ManagementShellCommands.contextSwitchAndObjectQuery("fixture-domain", ObjectType.GATEWAY)
-                .startsWith("bash -l -c 'source /etc/profile.d/CP.sh; mdsenv "));
+                .startsWith("mdsenv "));
     }
 
     @Test

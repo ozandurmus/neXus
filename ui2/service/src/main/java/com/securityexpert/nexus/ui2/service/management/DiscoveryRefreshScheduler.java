@@ -44,9 +44,16 @@ public class DiscoveryRefreshScheduler {
     /** @return the number of runs admitted */
     public int refreshAll() {
         List<Record> targets = tx.inTransaction(dsl -> dsl.fetch(
-                "select distinct on (r.vendor, r.management_address) r.vendor, r.management_address, r.credential_reference_id "
+                "select distinct on (r.vendor, r.management_address) r.vendor, r.management_address, r.credential_reference_id, "
+                        + "(latest.state = 'FAILED' and latest.outcome_summary @> "
+                        + "'{\"failure_reason_class:manager command timed out; stopped\":1}'::jsonb "
+                        + "and (latest.finished_at at time zone 'Europe/Istanbul')::date >= "
+                        + "((now() at time zone 'Europe/Istanbul')::date - 1)) as skip_timeout "
                         + "from discovery_run r join endpoints e on e.address_ref = r.management_address "
                         + "join devices d on d.device_id = e.device_id "
+                        + "join lateral (select x.state, x.outcome_summary, x.finished_at from discovery_run x "
+                        + "where x.vendor = r.vendor and x.management_address = r.management_address "
+                        + "and x.finished_at is not null order by x.finished_at desc limit 1) latest on true "
                         + "where d.role = 'management_server' and d.enrollment_state = 'ENROLLED' and not d.disabled "
                         + "and r.state = 'FINISHED' "
                         + "and not exists (select 1 from discovery_run x where x.management_address = r.management_address "
@@ -54,6 +61,10 @@ public class DiscoveryRefreshScheduler {
                         + "order by r.vendor, r.management_address, r.finished_at desc"));
         int started = 0;
         for (Record t : targets) {
+            if (Boolean.TRUE.equals(t.get("skip_timeout", Boolean.class))) {
+                LOG.info("[DISCOVERY_REFRESH] skipped: previous run timed out");
+                continue;
+            }
             DiscoveryRunService.StartOutcome outcome = discovery.start(ACTOR, t.get("management_address", String.class),
                     t.get("vendor", String.class), t.get("credential_reference_id", String.class));
             if (outcome instanceof DiscoveryRunService.StartOutcome.Admitted) {

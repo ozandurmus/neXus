@@ -32,6 +32,19 @@ class InteractiveShellSessionReadTest {
     }
 
     @Test
+    void promptTextInsideJsonDoesNotEndTheRead() {
+        ScriptedInput in = new ScriptedInput(true, "{\"description\":\"FGT-TANGO-04 #",
+                "\"}\n" + PROMPT);
+        ScriptedOutput out = new ScriptedOutput(in);
+
+        InteractiveShellSession.Result result = new InteractiveShellSession(in, out, PROMPT)
+                .runForResult("show", 5000);
+
+        assertEquals(InteractiveShellSession.Result.Kind.OUTPUT, result.kind());
+        assertEquals("{\"description\":\"FGT-TANGO-04 #\"}", result.text());
+    }
+
+    @Test
     void answersEachPagerOnceAndRemovesItsMarker() {
         ScriptedInput in = new ScriptedInput(false,
                 "first\n --More-- ", "second\n --More-- ", "third\n" + PROMPT);

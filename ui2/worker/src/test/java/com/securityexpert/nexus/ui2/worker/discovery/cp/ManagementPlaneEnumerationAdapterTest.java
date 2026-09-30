@@ -296,6 +296,16 @@ class ManagementPlaneEnumerationAdapterTest {
         }
     }
 
+    @Test
+    void timeoutStopsLegacyEnumerationAndDisconnects() {
+        FakeDeviceTransport transport = new FakeDeviceTransport(command -> new ExecResult.TimedOut());
+        var result = assertInstanceOf(ManagementPlaneEnumerationResult.Failed.class,
+                new ManagementPlaneEnumerationAdapter(transport, ALWAYS_RESOLVES, d -> { }).run(request()));
+        assertEquals("manager command timed out; stopped", result.reason());
+        assertEquals(List.of(ManagementShellCommands.domainList()), transport.commandsIssued());
+        assertEquals(1, transport.disconnectCount());
+    }
+
     static Function<String, ExecResult> happyPathHandler() {
         int[] tableObservationCount = {0};
         return command -> {
