@@ -25,22 +25,10 @@ import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel } from "./JobLogsPanel";
 import { DiagnosticPanel } from "./DiagnosticPanel";
 import { urlParam } from "../shell/urlParams";
-import { getJobStats, listDevices, listCpFailoverSummary, type CpFailoverSummary, type DeviceSummary } from "../auth/adminApi";
+import { getJobStats, getCpFailoverRun, listDevices, listCpFailoverSummary, runCpFailoverReadiness, type CpFailoverSummary, type DeviceSummary } from "../auth/adminApi";
 import { deriveClusterTitle } from "./InventoryPanels";
 
-interface PreflightCheckItem {
-  id: string;
-  name: string;
-  category: string;
-  enforcement: "BLOCKING" | "ADVISORY";
-  status: "PASS" | "FAIL" | "WARNING" | "INSUFFICIENT_EVIDENCE";
-  summary: string;
-  remediationCode?: string;
-}
-
-// Reference pre-flight battery datasets (used in AIView preview / offline validation mode when backend is unreachable)
-
-/** Operations screen featuring HA & readiness pre-flight checklist. */
+/** Operations screen for observed HA state, on-demand readiness and jobs. */
 export function OperationsScreen() {
   // Counted from /api/v2/jobs (the same reads the Jobs screen makes); a failed read says so, never 0.
   const [jobStats, setJobStats] = useState<{ total24h: number; completed24h: number; failed24h: number; otherTerminal24h: number; otherLabel: string; running: number } | null>(null);
@@ -83,19 +71,10 @@ export function OperationsScreen() {
     }).catch(() => { if (mounted) setCpRows({}); });
     return () => { mounted = false; };
   }, []);
-  const [selectedCheck, setSelectedCheck] = useState<PreflightCheckItem | null>(null);
-  const [filter, setFilter] = useState<"ALL" | "BLOCKING" | "ADVISORY">("ALL");
-  const [isRunning, setIsRunning] = useState(false);
-  const [apiChecks, setApiChecks] = useState<PreflightCheckItem[] | null>(null);
-  const [apiVerdict, setApiVerdict] = useState<string | null>(null);
-
-  // Which enrolled clusters have had a preflight read/run in this session, and what it said (review §3
-  // "Readiness checks" KPI and the HA table's "last evaluated" / "readiness" columns). There is no product
-  // capability that reports "evaluated" as a passive fleet-wide count -- reading a cluster's preflight is
-  // what evaluates it -- so this is exactly what this browser session has observed, never a guess at the
-  // other clusters' state.
-  const [clusterCache, setClusterCache] = useState<Record<string, { verdict: string; checksCount: number; generatedAt: string | null }>>({});
-  const evaluatedCount = Object.values(clusterCache).filter((r) => r.checksCount > 0).length;
+  const [isRunning, setIsRunning] = useState<string | null>(null);
+  const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
+  const evaluatedCount = Object.values(cpRows).flat().filter((row) => row.readiness).length;
 
   const [tab, setTab] = useState(urlParam("tab") === "diagnostics" ? 4 : urlParam("tab") === "jobs" ? 1 : 0);
 
@@ -142,39 +121,11 @@ export function OperationsScreen() {
 
   useEffect(() => {
     if (!selectedCluster) {
-      setApiChecks(null);
-      setApiVerdict(null);
       setSchedulesList([]);
       return;
     }
 
     let isMounted = true;
-    fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/preflight`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => {
-        if (!isMounted) return;
-        if (data && Array.isArray(data.checks)) {
-          const mapped: PreflightCheckItem[] = data.checks.map((c: any) => ({
-            id: c.check_id,
-            name: c.name,
-            category: c.category,
-            enforcement: c.enforcement,
-            status: c.status,
-            summary: c.summary,
-            remediationCode: c.remediation_code,
-          }));
-          setApiChecks(mapped);
-          setApiVerdict(data.overall_verdict);
-          setClusterCache((prev) => ({ ...prev, [selectedCluster]: { verdict: data.overall_verdict, checksCount: mapped.length, generatedAt: data.generated_at ?? null } }));
-        }
-      })
-      .catch(() => {
-        // Standalone/offline reference mode fallback
-      });
-
     fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/schedules`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
@@ -187,43 +138,39 @@ export function OperationsScreen() {
     };
   }, [selectedCluster]);
 
-  // Only what the preflight API returned; no demo fallback, and no verdict until one is evaluated.
-  const checks = apiChecks ?? [];
-  const overallVerdict = apiVerdict || "NOT_EVALUATED";
-
-  const filteredChecks = checks.filter((c) => {
-    if (filter === "BLOCKING") return c.enforcement === "BLOCKING";
-    if (filter === "ADVISORY") return c.enforcement === "ADVISORY";
-    return true;
-  });
-
-  const handleRunBattery = async () => {
-    if (!selectedCluster) return;
-    setIsRunning(true);
+  const handleRunReadiness = async (row: CpFailoverSummary) => {
+    setIsRunning(row.unitId);
+    setReadinessError(null);
     try {
-      const res = await fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/preflight`, { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.checks)) {
-          const mapped: PreflightCheckItem[] = data.checks.map((c: any) => ({
-            id: c.check_id,
-            name: c.name,
-            category: c.category,
-            enforcement: c.enforcement,
-            status: c.status,
-            summary: c.summary,
-            remediationCode: c.remediation_code,
-          }));
-          setApiChecks(mapped);
-          setApiVerdict(data.overall_verdict);
-          setClusterCache((prev) => ({ ...prev, [selectedCluster]: { verdict: data.overall_verdict, checksCount: mapped.length, generatedAt: data.generated_at ?? null } }));
-        }
+      const { runId } = await runCpFailoverReadiness(row);
+      let state = "PLANNED";
+      for (let attempt = 0; attempt < 40 && !["DONE", "STOPPED"].includes(state); attempt++) {
+        if (attempt > 0) await new Promise((resolve) => window.setTimeout(resolve, 3000));
+        state = (await getCpFailoverRun(runId, row.vendor)).state;
       }
+      if (!["DONE", "STOPPED"].includes(state)) throw new Error("Readiness run is still in progress.");
+      const rows = await listCpFailoverSummary();
+      const byRef: Record<string, CpFailoverSummary[]> = {};
+      for (const item of rows) (byRef[item.cluster_member_ref] ??= []).push(item);
+      setCpRows(byRef);
     } catch {
-      // Offline fallback
+      setReadinessError("Could not start or refresh the readiness run.");
     } finally {
-      setIsRunning(false);
+      setIsRunning(null);
     }
+  };
+
+  const readinessLabel = (row?: CpFailoverSummary) => {
+    if (!row?.readiness) return "Unknown";
+    const age = Math.max(0, Math.floor((Date.now() - Date.parse(row.readiness.observedAt)) / 60000));
+    const ago = age < 60 ? `${age} min ago` : `${Math.floor(age / 60)} h ago`;
+    return row.readiness.status === "READY" ? `Ready · ${ago}`
+      : row.readiness.status === "NOT_READY" ? `Not ready · ${row.readiness.failedCheck} · ${ago}` : `Unknown · ${ago}`;
+  };
+  const checkName = (vendor: string | undefined, number: number) => {
+    const cp: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate", 9: "State synchronization", 10: "Installed policy parity" };
+    const pan: Record<number, string> = { 1: "Mode and roles", 2: "Peer relationship", 3: "HA links", 4: "Configuration sync", 5: "Session synchronization", 6: "Sessions carried", 7: "Version parity" };
+    return (vendor === "palo_alto" ? pan : cp)[number] ?? `Check ${number}`;
   };
 
   const handleAuthorizeAndDryRun = async () => {
@@ -407,7 +354,7 @@ export function OperationsScreen() {
         <Box>
           <Typography variant="h4" sx={{ mb: 0.5 }}>{count} clusters enrolled</Typography>
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 2 }}>
-            Choose a cluster to read its preflight checks. Check Point failover runs and approval windows appear with their Virtual Systems below.
+            Readiness is collected directly from each enrolled unit. Failover runs always perform fresh pre-checks.
           </Typography>
           <TableContainer component={Paper} sx={{ borderRadius: "10px", border: `1px solid ${m3.outlineVar}`, boxShadow: "none" }}>
             <Table size="small">
@@ -420,6 +367,7 @@ export function OperationsScreen() {
                   <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Roles observed</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Last evaluated</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Readiness</TableCell>
+                  <TableCell>Pre-checks</TableCell>
                   <TableCell>Last run / window</TableCell>
                 </TableRow>
               </TableHead>
@@ -427,13 +375,12 @@ export function OperationsScreen() {
                 {clusters!.map((c) => {
                   const active = roleOfMembers(c.members, "active");
                   const standby = roleOfMembers(c.members, "standby") ?? roleOfMembers(c.members, "passive");
-                  const report = clusterCache[c.ref];
-                  const evaluated = report && report.checksCount > 0;
                   const cp = cpRows[c.ref] ?? [];
                   const last = [...cp].filter(row => row.lastRunAt).sort((a, b) => (b.lastRunAt ?? "").localeCompare(a.lastRunAt ?? ""))[0];
+                  const baseUnit = cp.find(row => row.unitId === row.clusterId);
                   const context = c.members[0]?.vendor_hint === "palo_alto" ? c.members.flatMap(m => (m.virtual_systems ?? "").split(",").map(v => v.trim()).filter(Boolean)) : [];
                   return (<Fragment key={c.ref}>
-                    <TableRow hover onClick={() => setSelectedCluster(c.ref)} sx={{ cursor: "pointer" }}>
+                    <TableRow hover onClick={() => { setSelectedCluster(c.ref); setExpandedUnit(baseUnit?.unitId ?? null); }} sx={{ cursor: "pointer" }}>
                       <TableCell sx={{ fontWeight: 500 }}>{c.title}{context.length > 0 && <Typography variant="caption" display="block">VSYS: {[...new Set(context)].join(", ")}</Typography>}</TableCell>
                       <TableCell><VendorBadge vendor={c.members[0]?.vendor_hint} /></TableCell>
                       <TableCell sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -448,17 +395,16 @@ export function OperationsScreen() {
                       </TableCell>
                       {/* When the roles were read (newest member inventory), separate from readiness evaluation. */}
                       <TableCell><Ts at={c.members.map((m) => m.inventory_collected_at ?? null).filter((t): t is string => Boolean(t)).sort().slice(-1)[0] ?? null} seconds={false} /></TableCell>
-                      <TableCell><Ts at={report?.generatedAt ?? null} /></TableCell>
-                      <TableCell>
-                        {evaluated
-                          ? <StatusChip tone={report!.verdict === "NO_BLOCKING_CONDITIONS_OBSERVED" ? "ok" : report!.verdict === "ADVISORY_CONDITIONS_PRESENT" ? "warn" : "bad"} label={report!.verdict} dense />
-                          : <Unknown word="NOT EVALUATED" reason="No preflight has been read for this cluster in this session." />}
-                      </TableCell>
+                      <TableCell><Ts at={baseUnit?.readiness?.observedAt ?? null} /></TableCell>
+                      <TableCell>{readinessLabel(baseUnit)}</TableCell>
+                      <TableCell>{baseUnit?.canRunReadiness && <M3Button emphasis="tonal" disabled={isRunning === baseUnit.unitId} onClick={() => { void handleRunReadiness(baseUnit); }}>{isRunning === baseUnit.unitId ? "Running…" : "Run pre-checks"}</M3Button>}</TableCell>
                       <TableCell>{cp.length > 0 && <>{last?.lastRunOutcome ?? last?.lastRunState ?? "No run"} {cp.some(row => row.activeWindow) && <StatusChip label="Active window" tone="ok" dense />}</>}</TableCell>
                     </TableRow>
-                    {cp.filter(row => row.unitId !== row.clusterId).map(row => <TableRow key={row.unitId} onClick={() => setSelectedCluster(c.ref)} sx={{ cursor: "pointer" }}>
+                    {cp.filter(row => row.unitId !== row.clusterId).map(row => <TableRow key={row.unitId} onClick={() => { setSelectedCluster(c.ref); setExpandedUnit(row.unitId); }} sx={{ cursor: "pointer" }}>
                       <TableCell sx={{ pl: 4 }}><Typography variant="caption">Virtual System</Typography> {row.virtual_system ?? row.cluster_member_ref}</TableCell>
-                      <TableCell colSpan={6} />
+                      <TableCell colSpan={5} />
+                      <TableCell>{readinessLabel(row)}</TableCell>
+                      <TableCell>{row.canRunReadiness && <M3Button emphasis="tonal" disabled={isRunning === row.unitId} onClick={() => { void handleRunReadiness(row); }}>{isRunning === row.unitId ? "Running…" : "Run pre-checks"}</M3Button>}</TableCell>
                       <TableCell>{row.lastRunOutcome ?? row.lastRunState ?? "No run"} {row.activeWindow && <StatusChip label="Active window" tone="ok" dense />}</TableCell>
                     </TableRow>)}
                   </Fragment>);
@@ -473,6 +419,11 @@ export function OperationsScreen() {
     const isPan = selected?.members[0]?.vendor_hint === "palo_alto";
     const clusterName = selected?.title ?? selectedCluster;
     const vendorLabel = isPan ? "Palo Alto Networks (Active/Passive)" : "Check Point (ClusterXL HA)";
+    const readinessRows = cpRows[selectedCluster] ?? [];
+    const detailRow = readinessRows.find((row) => row.unitId === expandedUnit) ?? readinessRows[0];
+    const checks = detailRow?.readiness?.checks ?? [];
+    const overallVerdict = detailRow?.readiness?.status === "READY" ? "NO_BLOCKING_CONDITIONS_OBSERVED"
+      : detailRow?.readiness?.status === "NOT_READY" ? "BLOCKING_CONDITIONS_PRESENT" : "NOT_EVALUATED";
     const roleOf = (role: string) => selected?.members.filter((m) => (m.ha_role ?? "").toLowerCase() === role).map((m) => m.hostname ?? m.device_id).join(", ") || "UNKNOWN";
 
     return (
@@ -489,7 +440,7 @@ export function OperationsScreen() {
                 <Chip size="small" label="AIView Pseudonymized" sx={{ bgcolor: m3.primaryContainer, color: m3.onPrimaryContainer }} />
               </Box>
               <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mt: 0.5 }}>
-                Active: {roleOf("active")} • Standby: {roleOf("standby") !== "UNKNOWN" ? roleOf("standby") : roleOf("passive")} • {apiVerdict ? "Evaluated by the preflight API" : "Not evaluated yet"}
+                Active: {roleOf("active")} • Standby: {roleOf("standby") !== "UNKNOWN" ? roleOf("standby") : roleOf("passive")}
               </Typography>
             </Box>
             <Box sx={{ display: "flex", gap: 1 }}>
@@ -524,225 +475,24 @@ export function OperationsScreen() {
           </Card>
         )}
 
-        {/* Overall Verdict Banner */}
-        {overallVerdict === "BLOCKING_CONDITIONS_PRESENT" ? (
-          <Card sx={{ bgcolor: m3.errorContainer, border: `1px solid ${m3.error}`, borderRadius: "12px", p: 2 }}>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: m3.error, color: m3.onError, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
-                  ✕
-                </Box>
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: m3.onErrorContainer }}>
-                    VERDICT: BLOCKING_CONDITIONS_PRESENT
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: m3.onErrorContainer }}>
-                    Pre-flight safety checks failed or evidence is missing. Failover is strictly blocked.
-                  </Typography>
-                </Box>
-              </Box>
-              <M3Button emphasis="tonal" onClick={handleRunBattery} disabled={isRunning}>
-                {isRunning ? "Evaluating..." : "Run Pre-Flight Battery"}
-              </M3Button>
+        <Card sx={{ bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "12px", p: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2 }}>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Readiness: {readinessLabel(detailRow)}</Typography>
+              <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Latest read-only pre-check result. Failover runs still perform fresh checks.</Typography>
             </Box>
-          </Card>
-        ) : overallVerdict === "ADVISORY_CONDITIONS_PRESENT" ? (
-          <Card sx={{ bgcolor: m3.warningContainer, border: `1px solid ${m3.warning}`, borderRadius: "12px", p: 2 }}>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: m3.warning, color: m3.onWarning, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
-                  !
-                </Box>
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: m3.onWarningContainer }}>
-                    VERDICT: ADVISORY_CONDITIONS_PRESENT
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: m3.onWarningContainer }}>
-                    Advisory conditions noted. Proceed with operational awareness.
-                  </Typography>
-                </Box>
-              </Box>
-              <M3Button emphasis="tonal" onClick={handleRunBattery} disabled={isRunning}>
-                {isRunning ? "Evaluating..." : "Run Pre-Flight Battery"}
-              </M3Button>
-            </Box>
-          </Card>
-        ) : checks.length === 0 ? (
-          <StatePanel
-            variant="not_evaluated"
-            title="The preflight API returned no checks for this cluster"
-            body="Nothing is claimed about its readiness. Run the pre-flight battery to evaluate it."
-            action={<M3Button emphasis="tonal" onClick={handleRunBattery} disabled={isRunning}>{isRunning ? "Evaluating..." : "Run Pre-Flight Battery"}</M3Button>}
-          />
-        ) : (
-          <Card sx={{ bgcolor: m3.successContainer, border: `1px solid ${m3.success}`, borderRadius: "12px", p: 2 }}>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: m3.success, color: m3.onSuccess, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>
-                  ✓
-                </Box>
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: m3.onSuccessContainer }}>
-                    VERDICT: NO_BLOCKING_CONDITIONS_OBSERVED
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: m3.onSuccessContainer }}>
-                    All {checks.length} pre-flight checks evaluated cleanly against verified evidence. Zero blocking conditions detected.
-                  </Typography>
-                </Box>
-              </Box>
-              <M3Button emphasis="tonal" onClick={handleRunBattery} disabled={isRunning}>
-                {isRunning ? "Evaluating..." : "Run Pre-Flight Battery"}
-              </M3Button>
-            </Box>
-          </Card>
-        )}
-
-        {/* Filter Bar and Pre-Flight Checklist Table -- hidden with the header when there are no rows to filter
-            (review §3 "Cluster detail shows an empty table header"); the NOT EVALUATED panel above is the
-            empty state. */}
-        {checks.length > 0 && (
-          <>
-            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-              <Typography variant="body2" sx={{ fontWeight: 500, color: m3.onSurfaceVar, mr: 1 }}>
-                Filter:
-              </Typography>
-              <Chip
-                label={`All Checks (${checks.length})`}
-                onClick={() => setFilter("ALL")}
-                color={filter === "ALL" ? "primary" : "default"}
-                variant={filter === "ALL" ? "filled" : "outlined"}
-              />
-              <Chip
-                label="Blocking Only"
-                onClick={() => setFilter("BLOCKING")}
-                color={filter === "BLOCKING" ? "primary" : "default"}
-                variant={filter === "BLOCKING" ? "filled" : "outlined"}
-              />
-              <Chip
-                label="Advisory Only"
-                onClick={() => setFilter("ADVISORY")}
-                color={filter === "ADVISORY" ? "primary" : "default"}
-                variant={filter === "ADVISORY" ? "filled" : "outlined"}
-              />
-            </Box>
-
-            <TableContainer component={Paper} sx={{ borderRadius: "12px", border: `1px solid ${m3.outlineVar}` }}>
-              <Table size="small">
-                <TableHead sx={{ bgcolor: m3.scLow }}>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 600 }}>Check Name</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Enforcement</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Summary</TableCell>
-                    <TableCell sx={{ fontWeight: 600, textAlign: "right" }}>Action</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredChecks.map((chk) => (
-                    <TableRow key={chk.id} hover>
-                      <TableCell sx={{ fontWeight: 500 }}>{chk.name}</TableCell>
-                      <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 13 }}>{chk.category}</TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={chk.enforcement}
-                          sx={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            bgcolor: chk.enforcement === "BLOCKING" ? m3.errorContainer : m3.scHighest,
-                            color: chk.enforcement === "BLOCKING" ? m3.onErrorContainer : m3.onSurfaceVar,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <StatusChip tone={chk.status === "PASS" ? "ok" : chk.status === "WARNING" ? "warn" : "bad"} label={chk.status} dense />
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 13, color: m3.onSurface }}>{chk.summary}</TableCell>
-                      <TableCell sx={{ textAlign: "right" }}>
-                        <M3Button emphasis="text" onClick={() => setSelectedCheck(chk)}>
-                          Details
-                        </M3Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </>
-        )}
-
-        {/* Phase D Scheduled Maintenance Windows Table */}
-        {schedulesList.length > 0 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: m3.onSurface }}>
-              Phase D: Scheduled Maintenance Windows ({schedulesList.length})
-            </Typography>
-            <TableContainer component={Paper} sx={{ borderRadius: "12px", border: `1px solid ${m3.outlineVar}` }}>
-              <Table size="small">
-                <TableHead sx={{ bgcolor: m3.scLow }}>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 600 }}>Schedule ID</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Window Start (UTC)</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Deadline (UTC)</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Target Member</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                    <TableCell sx={{ fontWeight: 600, textAlign: "right" }}>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {schedulesList.map((s) => (
-                    <TableRow key={s.scheduleId} hover>
-                      <TableCell sx={{ fontFamily: "monospace", fontSize: 12, fontWeight: 500 }}>
-                        {s.scheduleId}
-                      </TableCell>
-                      <TableCell>
-                        <Chip size="small" label={s.actionKind} sx={{ fontSize: 11 }} />
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12 }}>{s.windowStart}</TableCell>
-                      <TableCell sx={{ fontSize: 12 }}>{s.executionDeadline}</TableCell>
-                      <TableCell sx={{ fontSize: 12, fontWeight: 500 }}>
-                        {s.signedMutationTarget}
-                      </TableCell>
-                      <TableCell>
-                        <StatusChip
-                          tone={
-                            s.status === "COMPLETED"
-                              ? "ok"
-                              : s.status === "SCHEDULED" || s.status === "CLAIMED_VERIFYING"
-                              ? "warn"
-                              : "bad"
-                          }
-                          label={s.status}
-                          dense
-                        />
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right" }}>
-                        {s.status === "SCHEDULED" && (
-                          <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
-                            <M3Button
-                              emphasis="tonal"
-                              onClick={() => handleTriggerSchedule(s.scheduleId)}
-                            >
-                              Trigger JIT
-                            </M3Button>
-                            <M3Button
-                              emphasis="text"
-                              onClick={() => handleCancelSchedule(s.scheduleId)}
-                            >
-                              Cancel
-                            </M3Button>
-                          </Box>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            {detailRow?.canRunReadiness && <M3Button emphasis="tonal" disabled={isRunning === detailRow.unitId}
+              onClick={() => void handleRunReadiness(detailRow)}>{isRunning === detailRow.unitId ? "Running…" : "Run pre-checks"}</M3Button>}
           </Box>
-        )}
+          {readinessError && <Typography role="alert" variant="body2" sx={{ color: m3.error, mt: 1 }}>{readinessError}</Typography>}
+          {checks.length > 0 && <TableContainer sx={{ mt: 2 }}>
+            <Table size="small"><TableHead><TableRow><TableCell>Check</TableCell><TableCell>Value</TableCell><TableCell>Result</TableCell></TableRow></TableHead>
+              <TableBody>{checks.map((check, index) => <TableRow key={`${check.checkNo}-${index}`}>
+                <TableCell>{checkName(detailRow?.vendor, check.checkNo)}</TableCell><TableCell>{JSON.stringify(check.derived)}</TableCell><TableCell>{check.status}</TableCell>
+              </TableRow>)}</TableBody>
+            </Table>
+          </TableContainer>}
+        </Card>
 
         {/* Action Controls & Gate Disclosure */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 2, bgcolor: m3.scLow, borderRadius: "12px", flexWrap: "wrap", gap: 2 }}>
@@ -1111,53 +861,6 @@ export function OperationsScreen() {
           </DialogActions>
         </Dialog>
 
-        {/* Check Details Dialog */}
-        <Dialog open={selectedCheck !== null} onClose={() => setSelectedCheck(null)} maxWidth="sm" fullWidth>
-          {selectedCheck && (
-            <>
-              <DialogTitle sx={{ fontWeight: 600 }}>{selectedCheck.name}</DialogTitle>
-              <DialogContent dividers>
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                  <Box>
-                    <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                      Check Identifier:
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
-                      {selectedCheck.id}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                      Category & Enforcement:
-                    </Typography>
-                    <Typography variant="body2">
-                      {selectedCheck.category} • {selectedCheck.enforcement}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                      Evaluated Summary:
-                    </Typography>
-                    <Typography variant="body2">{selectedCheck.summary}</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                      Corroboration:
-                    </Typography>
-                    <Typography variant="body2">
-                      Two-sided observation requires a current read from both members (active: {roleOf("active")}); shown only as the preflight API reports it.
-                    </Typography>
-                  </Box>
-                </Box>
-              </DialogContent>
-              <DialogActions>
-                <M3Button emphasis="filled" onClick={() => setSelectedCheck(null)}>
-                  Close
-                </M3Button>
-              </DialogActions>
-            </>
-          )}
-        </Dialog>
       </Box>
     );
   };
@@ -1184,14 +887,11 @@ export function OperationsScreen() {
               : `completed of ${jobStats.completed24h + jobStats.failed24h} completed or failed${jobStats.otherTerminal24h ? `; ${jobStats.otherTerminal24h} other outcome${jobStats.otherTerminal24h === 1 ? "" : "s"} not counted` : ""}`
             : "read failed"}
         />
-        {/* There is no fleet-wide readiness figure -- only a per-cluster verdict once its preflight is read
-            (review §3). "Evaluated" counts the clusters this session has actually read/run a preflight for;
-            the KPI never claims a passive count the product does not have. */}
         <MetricCard
           title="Readiness checks"
           value={null}
           state="not_evaluated"
-          note={clusters ? `${clusters.length} clusters enrolled · ${evaluatedCount} evaluated` : "reading enrolled clusters"}
+          note={clusters ? `${clusters.length} clusters enrolled · ${evaluatedCount} readiness records` : "reading enrolled clusters"}
         />
         <Card sx={{ bgcolor: m3.scLowest, boxShadow: "none", border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2.25,
                     display: "flex", flexDirection: "column", gap: 1 }}>

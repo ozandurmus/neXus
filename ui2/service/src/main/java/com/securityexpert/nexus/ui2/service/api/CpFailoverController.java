@@ -41,6 +41,7 @@ public final class CpFailoverController {
         m.put("runId",r.id()); m.put("approvalId",r.approvalId()); m.put("scheduledFor",r.scheduledFor());
         m.put("state",r.state()); m.put("step",r.step()); m.put("outcome",r.outcome());
         m.put("failedCheck",r.failedCheck()); m.put("message",r.message());
+        m.put("kind",r.kind());
         m.put("steps",List.of("PRECHECK","FAILING_OVER","SWITCHED","POSTCHECK","RETURNING","DONE"));
         return m;
     }
@@ -87,6 +88,7 @@ public final class CpFailoverController {
             m.put("lastRunState", s.lastRunState());
             m.put("lastRunOutcome", s.lastRunOutcome());
             m.put("lastRunAt", s.lastRunAt());
+            m.put("canRunReadiness", s.canRunReadiness());
             if (s.readiness() != null) {
                 var readiness = s.readiness();
                 try {

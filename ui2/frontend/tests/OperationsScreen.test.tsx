@@ -13,22 +13,22 @@ const MEMBERS = [
   { device_id: "d2", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-ROMEO-01-M2", model: null, software_version: null, ha_role: "standby", cluster_member_ref: "CLS-ROMEO-01" },
 ];
 
-function stubFetch(devices: unknown[], preflight: unknown | null) {
+const READY_SUMMARY = [{ clusterId: "opaque-cluster", unitId: "opaque-cluster", cluster_member_ref: "CLS-ROMEO-01", vendor: "check_point", activeWindow: false, lastRunState: null, lastRunOutcome: null, lastRunAt: null, canRunReadiness: true,
+  readiness: { status: "READY", observedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), failedCheck: "", checks: [{ checkNo: 1, status: "PASS", derived: { role: "ACTIVE" } }] } }];
+
+function stubFetch(devices: unknown[], summary: unknown | null) {
   vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
     const url = String(input);
     const json = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status }));
     if (url === "/devices") return json(200, { devices });
-    if (url.endsWith("/preflight")) return preflight ? json(200, preflight) : json(404, { error: "NOT_FOUND" });
+    if (url === "/api/v2/cp-failover/summary") return json(200, summary ?? []);
+    if (url.includes("/readiness")) return json(200, { runId: "run-ready" });
+    if (url.endsWith("/runs/run-ready")) return json(200, { state: "DONE", outcome: "READY", checks: [] });
     if (url.endsWith("/schedules")) return json(200, []);
     if (url.startsWith("/api/v2/jobs")) return json(200, { items: [], page: 1, page_size: 50, total: 0, states: [], job_types: [], total_24h: 0, completed_24h: 0, failed_24h: 0, running: 0 });
     return json(200, {});
   }));
 }
-
-const PREFLIGHT = {
-  overall_verdict: "NO_BLOCKING_CONDITIONS_OBSERVED",
-  checks: [{ check_id: "c1", name: "Two-Sided Split-Brain Prevention", category: "HA", enforcement: "BLOCKING", status: "PASS", summary: "ok", remediation_code: null }],
-};
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -70,21 +70,30 @@ describe("OperationsScreen tabs", () => {
     expect(screen.queryByText(/CLS-TANGO-01/)).toBeNull();
   });
 
-  it("shows only the checks the preflight API returned, and NOT_EVALUATED when it returned none", async () => {
-    stubFetch(MEMBERS, PREFLIGHT);
+  it("shows readiness checks from the summary, without requesting Phase A preflight", async () => {
+    stubFetch(MEMBERS, READY_SUMMARY);
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    expect(await screen.findByText("Two-Sided Split-Brain Prevention")).toBeInTheDocument();
-    expect(screen.queryByText("Critical Problem Notifications (pnotes)")).toBeNull();
+    expect(await screen.findByText("Readiness: Ready · 2 h ago")).toBeInTheDocument();
+    expect(screen.getByText('{"role":"ACTIVE"}')).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("/preflight"))).toBe(false);
     fireEvent.click(screen.getByText("All clusters"));
     expect(await screen.findByText("1 clusters enrolled")).toBeInTheDocument();
   });
 
+  it("submits read-only readiness from the unit row", async () => {
+    stubFetch(MEMBERS, READY_SUMMARY);
+    render(withTheme(<OperationsScreen />));
+    fireEvent.click(await screen.findByRole("button", { name: "Run pre-checks" }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input, init]) =>
+      String(input).endsWith("/units/opaque-cluster/readiness") && (init as RequestInit)?.method === "POST")).toBe(true));
+  });
+
   it("opens the 4-Eyes gate and the maintenance-window dialogs for a real cluster", async () => {
-    stubFetch(MEMBERS, PREFLIGHT);
+    stubFetch(MEMBERS, READY_SUMMARY);
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    await screen.findByText("Two-Sided Split-Brain Prevention");
+    await screen.findByText("Readiness: Ready · 2 h ago");
     fireEvent.click(screen.getByRole("button", { name: "Authorize Failover (4-Eyes)" }));
     expect(screen.getByText(/Phase B & C: 4-Eyes Controlled Failover Gate/i)).toBeInTheDocument();
   });
@@ -96,26 +105,26 @@ describe("OperationsScreen tabs", () => {
     expect(screen.getByRole("table")).toBeInTheDocument();
     expect(screen.getByText("FW-ROMEO-01-M1")).toBeInTheDocument();
     expect(screen.getByText("FW-ROMEO-01-M2")).toBeInTheDocument();
-    expect(screen.getAllByText("NOT EVALUATED").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
   });
 
   it("preselects the cluster named in ?cluster_ref= (a link from another screen)", async () => {
     const originalLocation = window.location.href;
     window.history.pushState({}, "", "/?screen=operations&cluster_ref=CLS-ROMEO-01");
     try {
-      stubFetch(MEMBERS, PREFLIGHT);
+      stubFetch(MEMBERS, READY_SUMMARY);
       render(withTheme(<OperationsScreen />));
-      expect(await screen.findByText("Two-Sided Split-Brain Prevention")).toBeInTheDocument();
+      expect(await screen.findByText("Readiness: Ready · 2 h ago")).toBeInTheDocument();
     } finally {
       window.history.pushState({}, "", originalLocation);
     }
   });
 
-  it("shows the readiness KPI as NOT EVALUATED, never 0 or a dash, with the enrolled/evaluated count", async () => {
+  it("shows readiness-record count without claiming unobserved states", async () => {
     stubFetch(MEMBERS, null);
     render(withTheme(<OperationsScreen />));
-    await screen.findByText("1 clusters enrolled · 0 evaluated");
-    expect(screen.getAllByText("NOT EVALUATED").length).toBeGreaterThan(0);
+    await screen.findByText("1 clusters enrolled · 0 readiness records");
+    expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
   });
 
   it("moves the Job history action into the Failed jobs KPI card and switches to the History tab", async () => {
@@ -149,7 +158,7 @@ it("shows a VSX unit directly below its cluster with outcome and window", async 
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     const body = url === "/devices" ? { devices: MEMBERS }
-      : url.endsWith("/cp-failover/summary") ? [{ clusterId: "opaque-cluster", unitId: "opaque-vs", cluster_member_ref: "CLS-ROMEO-01", virtual_system: "VS-ROMEO-01-07", vendor: "check_point", activeWindow: true, lastRunState: "DONE", lastRunOutcome: "PASS", lastRunAt: from }]
+      : url.endsWith("/cp-failover/summary") ? [{ clusterId: "opaque-cluster", unitId: "opaque-vs", cluster_member_ref: "CLS-ROMEO-01", virtual_system: "VS-ROMEO-01-07", vendor: "check_point", activeWindow: true, lastRunState: "DONE", lastRunOutcome: "PASS", lastRunAt: from, canRunReadiness: true, readiness: null }]
       : {};
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
   }));

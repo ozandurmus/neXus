@@ -4,10 +4,10 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { CpFailoverPanel, runStep } from "../src/screens/CpFailoverPanel";
 
-const api = vi.hoisted(() => ({ units: vi.fn(), approvals: vi.fn(), runs: vi.fn(), detail: vi.fn() }));
+const api = vi.hoisted(() => ({ units: vi.fn(), approvals: vi.fn(), runs: vi.fn(), detail: vi.fn(), readiness: vi.fn() }));
 vi.mock("../src/auth/adminApi", () => ({
   listCpFailoverUnits: api.units, listCpFailoverApprovals: api.approvals,
-  listCpFailoverRuns: api.runs, getCpFailoverRun: api.detail,
+  listCpFailoverRuns: api.runs, getCpFailoverRun: api.detail, runCpFailoverReadiness: api.readiness,
 }));
 
 const cluster = { clusterId: "cluster-opaque", unitId: "cluster-opaque", cluster_member_ref: "CLS-ROMEO-01", canApprove: false, canStart: true, canSchedule: true };
@@ -19,6 +19,7 @@ beforeEach(() => {
   api.approvals.mockReset().mockResolvedValue([]);
   api.runs.mockReset().mockResolvedValue([]);
   api.detail.mockReset();
+  api.readiness.mockReset().mockResolvedValue({ runId: "readiness-run" });
 });
 
 describe("Check Point failover", () => {
@@ -56,6 +57,14 @@ describe("Check Point failover", () => {
     expect(screen.queryByRole("button", { name: "Approve a window" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Failover now" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Schedule" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Run pre-checks" })).toBeNull();
+  });
+
+  it("shows Run pre-checks only when the server allows starting collections", async () => {
+    api.units.mockResolvedValue([cluster]);
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "CLS-ROMEO-01" }));
+    expect(screen.getByRole("button", { name: "Run pre-checks" })).toBeEnabled();
   });
 
   it("allows a future approved window for scheduling while keeping immediate failover disabled", async () => {

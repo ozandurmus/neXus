@@ -20,7 +20,7 @@ import Typography from "@mui/material/Typography";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { approveCpFailover, getCpFailoverRun, listCpFailoverApprovals, listCpFailoverRuns, listCpFailoverUnits, revokeCpFailover, startCpFailover,
-  type CpFailoverApproval, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
+  runCpFailoverReadiness, type CpFailoverApproval, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
 
 const labels = ["Preparing", "Failing over", "Switched", "Checking", "No problems found"];
 const cpChecks: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate", 9: "State synchronization", 10: "Installed policy parity" };
@@ -48,6 +48,7 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
   const checks = unit.vendor === "palo_alto" ? panChecks : cpChecks;
   const [approvals, setApprovals] = useState<CpFailoverApproval[]>([]);
   const [run, setRun] = useState<CpFailoverRunDetail | null>(null);
+  const [readinessRun, setReadinessRun] = useState<CpFailoverRunDetail | null>(null);
   const [dialog, setDialog] = useState<"approve" | "schedule" | null>(null);
   const [from, setFrom] = useState("");
   const [until, setUntil] = useState("");
@@ -60,22 +61,29 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
     try {
       const [windows, runs] = await Promise.all([listCpFailoverApprovals(unit), listCpFailoverRuns(unit)]);
       setApprovals(windows);
-      setRun(runs[0] ? await getCpFailoverRun(runs[0].runId, unit.vendor) : null);
+      const failover = runs.find(item => item.kind !== "READINESS");
+      const readiness = runs.find(item => item.kind === "READINESS");
+      const [failoverDetail, readinessDetail] = await Promise.all([
+        failover ? getCpFailoverRun(failover.runId, unit.vendor) : null,
+        readiness ? getCpFailoverRun(readiness.runId, unit.vendor) : null,
+      ]);
+      setRun(failoverDetail);
+      setReadinessRun(readinessDetail);
       setError(null);
     } catch (e) { setError(errorText(e)); }
   }, [unit]);
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
-    if (!run || !activeStates.includes(run.state)) return;
+    if ((!run || !activeStates.includes(run.state)) && (!readinessRun || !activeStates.includes(readinessRun.state))) return;
     const timer = window.setInterval(() => { void refresh(); }, 3000);
     return () => window.clearInterval(timer);
-  }, [run?.state, refresh]);
+  }, [run?.state, readinessRun?.state, refresh]);
 
   const now = Date.now();
   const windowNow = approvals.find(a => !a.revokedAt && Date.parse(a.windowFrom) <= now && now < Date.parse(a.windowUntil));
   const scheduleWindow = windowNow ?? approvals.filter(a => !a.revokedAt && Date.parse(a.windowUntil) > now)
     .sort((a, b) => a.windowFrom.localeCompare(b.windowFrom))[0];
-  const idle = !busy && (!run || !activeStates.includes(run.state));
+  const idle = !busy && (!run || !activeStates.includes(run.state)) && (!readinessRun || !activeStates.includes(readinessRun.state));
   const canStart = unit.canStart && Boolean(windowNow) && idle;
   const canSchedule = unit.canSchedule && Boolean(scheduleWindow) && idle;
   const act = async (action: () => Promise<unknown>) => {
@@ -106,9 +114,18 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
       <Box>
         <Typography variant="subtitle1">Failover</Typography>
         <Typography variant="body2">{windowNow ? `Approved until ${local(windowNow.windowUntil)}` : scheduleWindow ? `Approved from ${local(scheduleWindow.windowFrom)}` : "No approval — failover not possible"}</Typography>
+        {unit.canStart && <M3Button emphasis="outlined" disabled={!idle} onClick={() => void act(() => runCpFailoverReadiness(unit))}>Run pre-checks</M3Button>}
         {unit.canStart && <M3Button emphasis="filled" disabled={!canStart} onClick={() => void act(() => startCpFailover(unit, null))}>Failover now</M3Button>}
         {unit.canSchedule && <M3Button emphasis="outlined" disabled={!canSchedule} onClick={() => setDialog("schedule")}>Schedule</M3Button>}
       </Box>
+      {readinessRun && <Box aria-label="Readiness checks">
+        <Typography variant="subtitle1">Readiness: {activeStates.includes(readinessRun.state) ? "Running" : readinessRun.outcome ?? "UNKNOWN"}</Typography>
+        <Table size="small"><TableHead><TableRow><TableCell>Check</TableCell><TableCell>Value</TableCell><TableCell>Result</TableCell></TableRow></TableHead>
+          <TableBody>{readinessRun.checks.filter(check => check.phase === "pre").map((check, index) => <TableRow key={`${check.checkNo}-${index}`}>
+            <TableCell>{checks[check.checkNo] ?? `Check ${check.checkNo}`}</TableCell><TableCell>{check.derived}</TableCell><TableCell>{check.status}</TableCell>
+          </TableRow>)}</TableBody>
+        </Table>
+      </Box>}
       {run && <Box aria-label="Failover run">
         <Stepper activeStep={Math.max(step, 0)} alternativeLabel>
           {labels.map((label, index) => <Step key={label} completed={run.state === "DONE" || index < step}>

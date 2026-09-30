@@ -141,9 +141,16 @@ public final class CpFailoverJobExecutor {
     }
     private void finishReadiness(String code,int check,String status) {
         String outcome="FAIL".equals(status)?"NOT_READY":"UNKNOWN";
-        store.state(runId,"DONE","DONE",outcome,check==0?null:String.valueOf(check),code);
+        store.state(runId,"DONE","DONE",outcome,check==0?null:checkName(check),code);
         leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
             "system:cp-failover-worker","cp_readiness_done",outcome);
+    }
+    private static String checkName(int check) {
+        return switch (check) {
+            case 1 -> "Cluster state"; case 2 -> "Cluster IP table"; case 3 -> "Cluster interfaces";
+            case 5 -> "ARP"; case 6 -> "Connections"; case 8 -> "Traffic rate";
+            case 9 -> "State synchronization"; case 10 -> "Installed policy parity"; default -> "Pre-check";
+        };
     }
     private Member connect(DeviceSummaryRecord summary) {
         var device=devices.find(summary.deviceId()).filter(d -> d.permitsReadCollection())

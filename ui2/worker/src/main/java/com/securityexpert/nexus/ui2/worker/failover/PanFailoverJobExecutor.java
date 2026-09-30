@@ -139,9 +139,16 @@ public final class PanFailoverJobExecutor {
     }
     private void finishReadiness(String code,int check,String status) {
         String outcome="FAIL".equals(status)?"NOT_READY":"UNKNOWN";
-        store.state(runId,"DONE","DONE",outcome,check==0?null:String.valueOf(check),code);
+        store.state(runId,"DONE","DONE",outcome,check==0?null:checkName(check),code);
         leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
             "system:pan-failover-worker","pan_readiness_done",outcome);
+    }
+    private static String checkName(int check) {
+        return switch (check) {
+            case 1 -> "Mode and roles"; case 2 -> "Peer relationship"; case 3 -> "HA links";
+            case 4 -> "Configuration sync"; case 5 -> "Session synchronization";
+            case 6 -> "Sessions carried"; case 7 -> "Version parity"; default -> "Pre-check";
+        };
     }
     private Peer peer(DeviceSummaryRecord summary) {
         var device=devices.find(summary.deviceId()).filter(d -> d.permitsReadCollection())

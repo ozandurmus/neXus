@@ -26,7 +26,8 @@ import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
 public final class CpFailoverService {
     public record Unit(String id, String clusterId, String label, String vsId, List<DeviceSummaryRecord> members) {}
     public record Summary(Unit unit, String vendor, boolean activeWindow, String lastRunState,
-            String lastRunOutcome, Instant lastRunAt, JooqCpFailoverRepository.ReadinessStatus readiness) {}
+            String lastRunOutcome, Instant lastRunAt, JooqCpFailoverRepository.ReadinessStatus readiness,
+            boolean canRunReadiness) {}
     public record ReadinessTarget(String clusterId, String unitId, String vendor) {}
     private record StatusKey(String clusterRef, String vsId, String vendor) {}
     public static final class Refusal extends RuntimeException {
@@ -74,9 +75,9 @@ public final class CpFailoverService {
     }
     public List<Summary> summary(String actor) {
         requireReader(actor);
-        return summaries();
+        return summaries(actor);
     }
-    private List<Summary> summaries() {
+    private List<Summary> summaries(String actor) {
         Map<String, List<JooqCpFailoverRepository.SummaryMember>> facts = store.summaryMembers().stream()
             .collect(Collectors.groupingBy(JooqCpFailoverRepository.SummaryMember::deviceId));
         Map<StatusKey, JooqCpFailoverRepository.SummaryStatus> statuses = store.summaryStatuses().stream()
@@ -116,12 +117,13 @@ public final class CpFailoverService {
                     return new Summary(u, vendor, status != null && status.activeWindow(),
                         status == null ? null : status.state(), status == null ? null : status.outcome(),
                         status == null ? null : status.scheduledFor(),
-                        readiness.get(new StatusKey(e.getKey(), u.vsId(), vendor)));
+                        readiness.get(new StatusKey(e.getKey(), u.vsId(), vendor)), mayStart(actor));
                 });
             }).toList();
     }
     public List<ReadinessTarget> readinessTargets() {
-        return summaries().stream().map(s -> new ReadinessTarget(s.unit().clusterId(),s.unit().id(),s.vendor())).toList();
+        return summaries("system:failover-readiness-scheduler").stream()
+            .map(s -> new ReadinessTarget(s.unit().clusterId(),s.unit().id(),s.vendor())).toList();
     }
     public List<Unit> unitsForRef(String clusterRef, String actor) {
         return unitsForRef(clusterRef,actor,"check_point");
