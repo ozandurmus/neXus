@@ -203,3 +203,17 @@ accepted:
     rule only in .gitleaks.toml.
   owner: PO
   review_date: '2026-12-31'
+- tool: semgrep
+  rule: weak-ssl-context
+  location: ui2/ldap-adapter/src/main/java/com/securityexpert/nexus/ui2/identity/ldap/DirectoryTrustPolicy.java:155
+  reason: SSLContext "TLS" with a trust store built from the configured directory CA and endpoint checking; the JDK 21
+    runtime disables TLS 1.0/1.1. Reviewed 2026-09-30 -- false positive on the protocol name only.
+  owner: PO
+  review_date: '2026-12-31'
+- tool: semgrep
+  rule: weak-ssl-context
+  location: ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/system/SystemStatusService.java:207
+  reason: SSLContext "TLS" trusting only the cluster CA from the service-account mount; the JDK 21 runtime disables
+    TLS 1.0/1.1. Reviewed 2026-09-30 -- false positive on the protocol name only.
+  owner: PO
+  review_date: '2026-12-31'
