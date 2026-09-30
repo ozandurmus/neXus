@@ -133,3 +133,13 @@ window** -- it is read-only:
   pre-check that every failover run performs at its start (§1 step 3).
 - The Phase A `PreflightService` panel in Operations (inventory projection, no device reads) is removed from the
   screen; this readiness replaces it.
+
+## 14. Amendment 2026-09-30 -- four more reads, and the real output shapes (PO: "son 4 komut da ok")
+Added as pre-checks (plain and `vsenv`-wrapped): `cphaprob -ia list` (blocking: any pnote in problem state),
+`cphaprob show_bond` (blocking: a bond not `UP` -- including `UP!` -- or link-up below required; "No bond interfaces
+are configured." passes), `cphaprob show_failover` (information; warning if the last failover is within 6 h), and
+`cpstat os -f routing` (post-check: the new active has a default route and the same route count as the pre-check
+active; counts and booleans only). The PO measured every check command on a real VSX cluster and a plain HA cluster
+the same day: VSX reports `Cluster Mode: Virtual System Load Sharing` on the chassis and in each VS context although
+the estate does not run VSLS -- the parser accepts that label; `fw stat` may print a single-digit hour;
+`cphaprob tablestat` has four columns (member, interface, IP, MAC).
