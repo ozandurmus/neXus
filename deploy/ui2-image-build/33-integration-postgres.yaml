@@ -1,0 +1,78 @@
+# Only synthetic test data. No Service/PVC; the host runner uses an authenticated
+# API port-forward on loopback. NetworkPolicy denies all direct pod traffic.
+# Digest source: https://hub.docker.com/layers/library/postgres/16/images/sha256-1e286991a6f340c705a8fb6f074c240de415beac179679cd75fd554f7e43b00f
+# Official postgres:16 index digest shown by Docker Hub.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: INTEGRATION_RUN
+  namespace: ui2-build
+spec:
+  podSelector:
+    matchLabels:
+      nexus-integration-run: INTEGRATION_RUN
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress: []
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: INTEGRATION_RUN
+  namespace: ui2-build
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1800
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        nexus-integration-run: INTEGRATION_RUN
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: postgres:16@sha256:1a6ab3f5345eb6dbe04a1349529caabdb0ab09293a09590fad07b2246bfa4b54
+          env:
+            - name: POSTGRES_PASSWORD_FILE
+              value: /run/test-secret/password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, postgres]
+            periodSeconds: 2
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "2", memory: 1Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: socket, mountPath: /var/run/postgresql}
+            - {name: tmp, mountPath: /tmp}
+            - {name: password, mountPath: /run/test-secret, readOnly: true}
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: socket
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: password
+          secret:
+            secretName: INTEGRATION_RUN
+            defaultMode: 0440

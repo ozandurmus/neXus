@@ -83,3 +83,42 @@ def test_start_spawns_codex_with_commit_roots_and_prompt_on_stdin(tmp_path, monk
     assert ".standalone/" in info_exclude.read_text()
     record = json.loads((tmp_path / ".state" / "small-fix.json").read_text())
     assert record["branch"] == "sa/small-fix" and record["pid"] == 4242
+
+
+@pytest.mark.parametrize("full,integration_pass", [(False, True), (True, True), (True, False)])
+def test_ship_test_modes_and_pr_results(monkeypatch, full, integration_pass):
+    import subprocess
+    calls = []
+
+    def git(*args, **kwargs):
+        if args[0] == "status":
+            return ""
+        if args[0] == "rev-list":
+            return "1"
+        return "synthetic-commit"
+
+    def run(args, **kwargs):
+        calls.append(args)
+        output = ""
+        code = 0
+        if "repository_privacy_check.py" in " ".join(args):
+            output = "Gate:                 PASS"
+        elif args[:3] == ["gh", "pr", "create"]:
+            output = "https://example.invalid/pr/1"
+        elif "scripts/hosta_e2e.sh" in args:
+            output = "23 passed\nE2E: PASS\n"
+        elif "scripts/hosta_integration.sh" in args:
+            code = 0 if integration_pass else 1
+            output = "INTEGRATION: PASS" if integration_pass else "INTEGRATION: FAIL"
+        return subprocess.CompletedProcess(args, code, output, "")
+
+    monkeypatch.setattr(sa, "_git", git)
+    monkeypatch.setattr(sa, "_deploy", lambda *_: None)
+    monkeypatch.setattr(sa.subprocess, "run", run)
+    result = sa.cmd_ship(_args(task=None, branch="feature/synthetic", notes=None, title=None, full=full))
+    assert result == (0 if integration_pass else 1)
+    e2e = next(args for args in calls if "scripts/hosta_e2e.sh" in args)
+    assert e2e[-1] == ("--full" if full else "--quick")
+    assert any("scripts/hosta_integration.sh" in args for args in calls) == full
+    comments = [args[-1] for args in calls if args[:3] == ["gh", "pr", "comment"]]
+    assert any("PostgreSQL 16" in text and ("PASS" if integration_pass else "FAIL") in text for text in comments) == full

@@ -6,6 +6,7 @@ metadata:
   namespace: ui2
 spec:
   suspend: true
+  activeDeadlineSeconds: 3600
   backoffLimit: 0
   template:
     metadata:
@@ -27,6 +28,8 @@ spec:
             requests: { cpu: 500m, memory: 1Gi }
             limits: { cpu: "2", memory: 4Gi }
           env:
+            - name: NEXUS_E2E_MODE
+              value: quick
             - name: NEXUS_E2E_BASE_URL
               value: http://ui2-service.ui2.svc.cluster.local:8080
             - name: NEXUS_E2E_MACHINE_TOKEN
@@ -83,11 +86,13 @@ metadata:
   name: ui2-e2e
   namespace: ui2
 spec:
-  schedule: "0 */4 * * *"
+  schedule: "0 2 * * *"
+  timeZone: Europe/Istanbul
   suspend: true
   concurrencyPolicy: Forbid
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 3600
       backoffLimit: 0
       template:
         metadata:
@@ -109,6 +114,10 @@ spec:
                 requests: { cpu: 500m, memory: 1Gi }
                 limits: { cpu: "2", memory: 4Gi }
               env:
+                - name: NEXUS_E2E_MODE
+                  value: full
+                - name: NEXUS_E2E_OUTPUT_DIR
+                  value: /run/e2e/out
                 - name: NEXUS_E2E_BASE_URL
                   value: http://ui2-service.ui2.svc.cluster.local:8080
                 - name: NEXUS_E2E_MACHINE_TOKEN

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, afterEach, vi } from "vitest";
-import { hasCanaryToken, isAiview, readAllowed, installReadOnlyGuard } from "../e2e/safety";
+import { hasCanaryToken, isErrorAlert, isAiview, readAllowed, installReadOnlyGuard } from "../e2e/safety";
 import { createHash } from "node:crypto";
 import { readFileSync, statSync, unlinkSync } from "node:fs";
 import { machineSetup } from "../e2e/global-setup";
@@ -109,4 +109,10 @@ describe("E2E safety boundaries", () => {
       unlinkSync(statePath());
     }
   });
+});
+
+it("accepts informational read-only notices but rejects warnings, errors and unknown alerts", () => {
+  expect(isErrorAlert("MuiAlert-root MuiAlert-standardInfo")).toBe(false);
+  expect(isErrorAlert("MuiAlert-filledSuccess")).toBe(false);
+  for (const classes of ["", "MuiAlert-standardError", "MuiAlert-outlinedWarning"]) expect(isErrorAlert(classes)).toBe(true);
 });

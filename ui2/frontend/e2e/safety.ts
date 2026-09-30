@@ -48,3 +48,8 @@ export async function installReadOnlyGuard(context: BrowserContext, origin: stri
     await route.continue();
   });
 }
+
+// Informational read-only notices are not error banners; unknown alert styles fail closed.
+export function isErrorAlert(classes: string): boolean {
+  return !/\bMuiAlert-(?:standard|outlined|filled)(?:Info|Success)\b/.test(classes);
+}
