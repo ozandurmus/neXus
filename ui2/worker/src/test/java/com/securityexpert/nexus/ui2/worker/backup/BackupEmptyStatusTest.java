@@ -54,7 +54,8 @@ class BackupEmptyStatusTest {
         assertFalse(refused.reason().contains(ARCHIVE));
         assertFalse(refused.reason().matches(".*\\d.*"), refused.reason());
         assertEquals(3, Duration.between(Instant.parse("2026-01-01T00:00:00Z"), clock.get()).toMinutes());
-        assertEquals(4, transport.statusCallCount);
+        assertEquals(5, transport.statusCallCount); // initial plain read, its retry, then three login-shell polls
+        assertEquals(1, transport.commandsIssued.stream().filter(BackupReadPlan.CP_SHOW_BACKUP_STATUS::equals).count());
         assertFalse(transport.commandsIssued.stream().anyMatch(c -> c.contains("delete backup")));
     }
 
@@ -77,4 +78,62 @@ class BackupEmptyStatusTest {
         assertEquals(3, transport.statusCallCount);
         assertTrue(transport.commandsIssued.contains(BackupReadPlan.deleteBackupCommand(ARCHIVE)));
     }
+    @Test
+    void emptyPlainStatusRetriesOnceThenKeepsLoginShellForThisRun(@TempDir Path dir) throws Exception {
+        var transport = new ScriptedBackupTransport();
+        transport.execOutputs.put(BackupReadPlan.CP_SHOW_DISKSPACE, "1000000\n");
+        transport.execOutputs.put(BackupReadPlan.CP_ADD_BACKUP_LOCAL, "Creating backup package...\n");
+        transport.execOutputs.put(BackupReadPlan.CP_SHOW_BACKUP_STATUS, "");
+        transport.statusSequence.add("in progress");
+        transport.statusSequence.add("succeeded; backup file location: /var/log/CPbackup/backups/" + ARCHIVE);
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(transport.fetchedContent.getBytes(StandardCharsets.UTF_8));
+        transport.execOutputs.put(BackupReadPlan.archiveDigestCommand("/var/log/CPbackup/backups/" + ARCHIVE),
+                java.util.HexFormat.of().formatHex(digest) + "  " + ARCHIVE);
+        var clock = new AtomicReference<>(Instant.parse("2026-01-01T00:00:00Z"));
+        var executor = executor(transport, dir, clock);
+
+        assertInstanceOf(BackupResult.Completed.class, executor.collect(request(), "device-1", "job-1"));
+        String loginPoll = "bash -lc '" + BackupReadPlan.CP_SHOW_BACKUP_STATUS + "'";
+        assertEquals(1, transport.commandsIssued.stream().filter(BackupReadPlan.CP_SHOW_BACKUP_STATUS::equals).count());
+        assertEquals(2, transport.commandsIssued.stream().filter(loginPoll::equals).count());
+        assertEquals(Duration.ofMinutes(1), Duration.between(Instant.parse("2026-01-01T00:00:00Z"), clock.get()));
+        assertTrue(transport.commandsIssued.contains(BackupReadPlan.deleteBackupCommand(ARCHIVE)));
+
+        transport.commandsIssued.clear();
+        transport.execOutputs.remove(BackupReadPlan.CP_SHOW_BACKUP_STATUS);
+        assertInstanceOf(BackupResult.Completed.class, executor.collect(request(), "device-1", "job-2"));
+        assertTrue(transport.commandsIssued.contains(BackupReadPlan.CP_SHOW_BACKUP_STATUS));
+        assertFalse(transport.commandsIssued.contains(loginPoll), "login-shell choice must not leak between runs");
+    }
+
+    @Test
+    void emptySubmitRetriesOnceAndPollsInLoginShell(@TempDir Path dir) {
+        var transport = new ScriptedBackupTransport();
+        transport.execOutputs.put(BackupReadPlan.CP_SHOW_DISKSPACE, "1000000\n");
+        String loginSubmit = "bash -lc '" + BackupReadPlan.CP_ADD_BACKUP_LOCAL + "'";
+        transport.execOutputs.put(loginSubmit, "Creating backup package...");
+        transport.statusSequence.add("failed");
+        var clock = new AtomicReference<>(Instant.parse("2026-01-01T00:00:00Z"));
+
+        var refused = assertInstanceOf(BackupResult.SubmitRefused.class,
+                executor(transport, dir, clock).collect(request(), "device-1", "job-1"));
+        assertTrue(refused.reason().contains("show backup status reported a failed backup"));
+        assertEquals(1, transport.commandsIssued.stream().filter(BackupReadPlan.CP_ADD_BACKUP_LOCAL::equals).count());
+        assertEquals(1, transport.commandsIssued.stream().filter(loginSubmit::equals).count());
+        assertFalse(transport.commandsIssued.contains(BackupReadPlan.CP_SHOW_BACKUP_STATUS));
+        assertTrue(transport.commandsIssued.contains("bash -lc '" + BackupReadPlan.CP_SHOW_BACKUP_STATUS + "'"));
+    }
+
+    @Test
+    void unsuccessfulEmptySubmitIsNotRetried(@TempDir Path dir) {
+        var transport = new ScriptedBackupTransport();
+        transport.execOutputs.put(BackupReadPlan.CP_SHOW_DISKSPACE, "1000000\n");
+        transport.execExitStatus.put(BackupReadPlan.CP_ADD_BACKUP_LOCAL, 1);
+        var clock = new AtomicReference<>(Instant.parse("2026-01-01T00:00:00Z"));
+
+        assertInstanceOf(BackupResult.SubmitRefused.class,
+                executor(transport, dir, clock).collect(request(), "device-1", "job-1"));
+        assertFalse(transport.commandsIssued.stream().anyMatch(c -> c.startsWith("bash -lc")));
+    }
+
 }

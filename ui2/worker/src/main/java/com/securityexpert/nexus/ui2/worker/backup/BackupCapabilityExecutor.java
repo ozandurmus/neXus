@@ -129,21 +129,22 @@ public final class BackupCapabilityExecutor {
         // V45 (cp_backup_stale_device_archives_cleanup): before anything else, delete the archives an
         // earlier run of ours left on this device -- exactly the names the ledger holds open, and only
         // those `show backups` still lists. Best effort: a failure here is logged, never the run's fate.
-        cleanupStaleArchives(session, deviceId);
+        RunCommands commands = new RunCommands(session);
+        cleanupStaleArchives(commands, deviceId);
         // C7 §3.3's third version source: the run's own read (2026-09-24: an MDS had no version from confirm or
         // inventory and its verified backup was refused at the store).
         Optional<String> observedVersion = BackupReadPlan.parseGaiaVersion(
-                exec(session, BackupReadPlan.CP_SHOW_VERSION_ALL, DISKSPACE_TIMEOUT).output());
+                commands.exec(BackupReadPlan.CP_SHOW_VERSION_ALL, DISKSPACE_TIMEOUT).output());
 
         // Entry 1 (BK-6): free-space precondition. Gate row cp_backup_show_diskspace, BK-7: "if the
         // Clish form fails, the Expert fallback df -P /var/log becomes primary". Measured live on the
         // first real run (2026-09-22): the Clish form answered a one-line CLI error with exit 0, and
         // the first integer of that error code was read as "329 KB free" -- so a CLI error is now
         // "the Clish form failed", never a number, and df -P /var/log is read instead.
-        ExecOutcome diskspace = exec(session, BackupReadPlan.CP_SHOW_DISKSPACE, DISKSPACE_TIMEOUT);
+        ExecOutcome diskspace = commands.exec(BackupReadPlan.CP_SHOW_DISKSPACE, DISKSPACE_TIMEOUT);
         Optional<Long> freeBytes = parseFreeSpaceBytes(diskspace.output());
         if (freeBytes.isEmpty()) {
-            ExecOutcome df = exec(session, BackupReadPlan.CP_DF_VAR_LOG, DISKSPACE_TIMEOUT);
+            ExecOutcome df = commands.exec(BackupReadPlan.CP_DF_VAR_LOG, DISKSPACE_TIMEOUT);
             freeBytes = parseDfAvailableBytes(df.output());
             if (freeBytes.isEmpty()) {
                 LOG.log(System.Logger.Level.WARNING,
@@ -164,8 +165,8 @@ public final class BackupCapabilityExecutor {
                     + "heuristic, never presented as a vendor requirement)");
         }
 
-        // Entry 2 (BK-5): submit -- never retried.
-        ExecOutcome submit = exec(session, BackupReadPlan.CP_ADD_BACKUP_LOCAL, SUBMIT_TIMEOUT);
+        // Submit is retried only for exit 0 with zero output (PO fleet fix, 2026-09-30).
+        ExecOutcome submit = commands.exec(BackupReadPlan.CP_ADD_BACKUP_LOCAL, SUBMIT_TIMEOUT);
         String submitShape = maskedShape(String.join("\n", submit.output().lines().limit(2).toList()));
         LOG.log(System.Logger.Level.INFO, "[BACKUP_SUBMIT] shape={0}", submitShape);
         if (!submit.succeeded()) {
@@ -179,7 +180,7 @@ public final class BackupCapabilityExecutor {
         Optional<String> archivePath = parseArchiveName(submit.output());
 
         // Entry 3 (BK-5): poll until terminal or the run's own deadline.
-        Poll poll = pollUntilTerminalOrDeadline(session, now.get());
+        Poll poll = pollUntilTerminalOrDeadline(commands, now.get());
         BackupStatus status = poll.status();
         if (status == BackupStatus.NOT_STARTED) {
             return new BackupResult.SubmitRefused("the device did not start a backup; add backup local said: "
@@ -251,7 +252,7 @@ public final class BackupCapabilityExecutor {
         // Entry 6 (BK-3): the digest computed on the device is compared with
         // the digest of the bytes actually received -- nothing is deleted
         // until they match.
-        ExecOutcome digest = exec(session, BackupReadPlan.archiveDigestCommand(name), digestTimeout(metadata.plaintextBytes()));
+        ExecOutcome digest = commands.exec(BackupReadPlan.archiveDigestCommand(name), digestTimeout(metadata.plaintextBytes()));
         Optional<String> deviceDigest = parseSha256sumOutput(digest.output());
         if (deviceDigest.isEmpty()) {
             LOG.log(System.Logger.Level.WARNING, "[BACKUP_DIGEST_UNPARSED] shape={0}", maskedShape(digest.output()));
@@ -262,9 +263,9 @@ public final class BackupCapabilityExecutor {
 
         // Entry 7 (BK-7): delete the exact archive name this run created --
         // may be retried once, never a pattern, never a listing.
-        ExecOutcome delete = exec(session, BackupReadPlan.deleteBackupCommand(archiveBaseName(name)), DELETE_TIMEOUT);
+        ExecOutcome delete = commands.exec(BackupReadPlan.deleteBackupCommand(archiveBaseName(name)), DELETE_TIMEOUT);
         if (!delete.succeeded()) {
-            delete = exec(session, BackupReadPlan.deleteBackupCommand(archiveBaseName(name)), DELETE_TIMEOUT);
+            delete = commands.exec(BackupReadPlan.deleteBackupCommand(archiveBaseName(name)), DELETE_TIMEOUT);
         }
         if (!delete.succeeded()) {
             return new BackupResult.CleanupFailed(metadata, name,
@@ -282,7 +283,7 @@ public final class BackupCapabilityExecutor {
         return new BackupResult.Completed(metadata, name, observedVersion, Optional.empty());
     }
 
-    private void cleanupStaleArchives(TransportSession session, String deviceId) {
+    private void cleanupStaleArchives(RunCommands commands, String deviceId) {
         if (archiveLedger == null) {
             return;
         }
@@ -296,7 +297,7 @@ public final class BackupCapabilityExecutor {
         if (pending.isEmpty()) {
             return;
         }
-        ExecOutcome listing = exec(session, BackupReadPlan.CP_SHOW_BACKUPS, POLL_TIMEOUT);
+        ExecOutcome listing = commands.exec(BackupReadPlan.CP_SHOW_BACKUPS, POLL_TIMEOUT);
         String listed = listing.output() == null ? "" : listing.output();
         int deleted = 0;
         int gone = 0;
@@ -306,7 +307,7 @@ public final class BackupCapabilityExecutor {
                 archiveLedger.markDeleted(deviceId, archive);
                 continue;
             }
-            ExecOutcome delete = exec(session, BackupReadPlan.deleteBackupCommand(archive), DELETE_TIMEOUT);
+            ExecOutcome delete = commands.exec(BackupReadPlan.deleteBackupCommand(archive), DELETE_TIMEOUT);
             if (delete.succeeded()) {
                 archiveLedger.markDeleted(deviceId, archive);
                 deleted++;
@@ -320,12 +321,12 @@ public final class BackupCapabilityExecutor {
     private record Poll(BackupStatus status, String lastOutput) {
     }
 
-    private Poll pollUntilTerminalOrDeadline(TransportSession session, Instant submittedAt) {
+    private Poll pollUntilTerminalOrDeadline(RunCommands commands, Instant submittedAt) {
         Instant deadline = submittedAt.plus(runDeadline);
         Instant noStartDeadline = submittedAt.plus(Duration.ofMinutes(3));
         boolean alwaysEmpty = true;
         while (true) {
-            ExecOutcome statusOutcome = exec(session, BackupReadPlan.CP_SHOW_BACKUP_STATUS, POLL_TIMEOUT);
+            ExecOutcome statusOutcome = commands.exec(BackupReadPlan.CP_SHOW_BACKUP_STATUS, POLL_TIMEOUT);
             BackupStatus status = classifyStatus(statusOutcome.output());
             if (status == BackupStatus.SUCCEEDED || status == BackupStatus.FAILED) {
                 return new Poll(status, statusOutcome.output());
@@ -356,6 +357,34 @@ public final class BackupCapabilityExecutor {
     static String archiveBaseName(String archivePathOrName) {
         int slash = archivePathOrName.lastIndexOf('/');
         return slash >= 0 ? archivePathOrName.substring(slash + 1) : archivePathOrName;
+    }
+
+    /** Login-environment detection belongs to one run, never to the shared executor. */
+    private final class RunCommands {
+        private final TransportSession session;
+        private boolean loginShell;
+
+        private RunCommands(TransportSession session) {
+            this.session = session;
+        }
+
+        private ExecOutcome exec(String command, Duration timeout) {
+            boolean eligible = command.startsWith("clish -c \"show ") || command.startsWith("clish -c 'show ")
+                    || command.equals(BackupReadPlan.CP_ADD_BACKUP_LOCAL);
+            boolean wrapped = eligible && loginShell;
+            ExecOutcome result = BackupCapabilityExecutor.this.exec(session,
+                    wrapped ? loginCommand(command) : command, timeout);
+            if (eligible && !wrapped && result.succeeded() && result.output().isEmpty()) {
+                loginShell = true;
+                LOG.log(System.Logger.Level.INFO, "[BACKUP] empty Clish result; using login shell for this run");
+                return BackupCapabilityExecutor.this.exec(session, loginCommand(command), timeout);
+            }
+            return result;
+        }
+    }
+
+    private static String loginCommand(String command) {
+        return "bash -lc '" + command.replace("'", "'\"'\"'") + "'";
     }
 
     private ExecOutcome exec(TransportSession session, String command, Duration timeout) {

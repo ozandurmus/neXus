@@ -51,16 +51,21 @@ final class ScriptedBackupTransport implements DeviceTransport {
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
         com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "command", spec.command());
         commandsIssued.add(spec.command());
-        if (BackupReadPlan.CP_SHOW_BACKUP_STATUS.equals(spec.command())) {
+        String command = spec.command();
+        if (command.startsWith("bash -lc '") && command.endsWith("'")) {
+            command = command.substring(10, command.length() - 1).replace("'\"'\"'", "'");
+        }
+        if (BackupReadPlan.CP_SHOW_BACKUP_STATUS.equals(command) && !execOutputs.containsKey(spec.command())) {
             String output = statusSequence.isEmpty() ? ""
                     : statusSequence.get(Math.min(statusCallCount, statusSequence.size() - 1));
             statusCallCount++;
             com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "answer", output);
             return new ExecResult.Completed(output, 0);
         }
-        String output = execOutputs.getOrDefault(spec.command(), "");
+        String output = execOutputs.getOrDefault(spec.command(), execOutputs.getOrDefault(command,
+                BackupReadPlan.CP_SHOW_VERSION_ALL.equals(command) ? "version unavailable" : ""));
         com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "answer", output);
-        int exitStatus = execExitStatus.getOrDefault(spec.command(), 0);
+        int exitStatus = execExitStatus.getOrDefault(spec.command(), execExitStatus.getOrDefault(command, 0));
         return new ExecResult.Completed(output, exitStatus);
     }
 
