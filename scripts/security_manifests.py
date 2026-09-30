@@ -43,6 +43,7 @@ def container(config, name, tool, command, mode):
                               dict(name="source", mountPath="/source", readOnly=True),
                               dict(name="source", mountPath="/rules", subPath="rules", readOnly=True),
                               dict(name="work", mountPath="/work"), dict(name="tmp", mountPath="/tmp"),
+                              dict(name="cache", mountPath="/cache"),
                               dict(name="reports", mountPath="/var/lib/nexus-security")])
 
 
@@ -82,6 +83,9 @@ def job(config, mode="daily", image=None, commit=None):
                         dict(name="source", persistentVolumeClaim={"claimName": "security-source", "readOnly": True}),
                         dict(name="work", emptyDir={"medium": "Memory", "sizeLimit": "4Gi"}),
                         dict(name="tmp", emptyDir={"medium": "Memory", "sizeLimit": "1Gi"}),
+                        # Scanner databases and image layers (no findings): disk-backed, deleted with the pod.
+                        # Measured 2026-09-30: in the 4 GiB memory-backed /work they exhausted the pod's memory.
+                        dict(name="cache", emptyDir={"sizeLimit": "20Gi"}),
                         dict(name="reports", persistentVolumeClaim={"claimName": "security-reports"})])
     if mode == "dast":
         pod["volumes"].append(dict(name="machine", secret={"secretName": "security-machine-token", "defaultMode": 288}))
