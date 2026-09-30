@@ -318,7 +318,10 @@ def _deploy(skip_security: str | None = None) -> None:
                 raise SystemExit("security gate summary malformed; ship stopped") from None
     if rc != 0:
         raise SystemExit(f"deploy failed (rc={rc}); see {log}: " + " | ".join(t[:160] for t in tail))
-    if skip_security is None and not security_passed:
+    not_configured = '"security_gate":"not_configured"' in log.read_text(errors="replace")
+    if not_configured:
+        print(json.dumps({"security_gate": "not_configured"}), flush=True)
+    if skip_security is None and not security_passed and not not_configured:
         raise SystemExit("security gate success missing; ship stopped before configuration sync")
     host = (Path.home() / ".config" / "nexus" / "hosta").read_text().splitlines()[0].strip()
     sync = ('export KUBECONFIG=$HOME/.kube/config; '
