@@ -15,12 +15,12 @@ public class JooqCpFailoverRepository {
             String reason, String approvedBy, Instant revokedAt) {}
     public record Run(String id, String clusterRef, String vsId, String approvalId, String requestedBy,
             Instant scheduledFor, String jobId, String state, String step, String outcome,
-            String failedCheck, String message, String vendor) {
+            String failedCheck, String message, String vendor, String kind) {
         public Run(String id, String clusterRef, String vsId, String approvalId, String requestedBy,
                 Instant scheduledFor, String jobId, String state, String step, String outcome,
                 String failedCheck, String message) {
             this(id, clusterRef, vsId, approvalId, requestedBy, scheduledFor, jobId, state, step,
-                outcome, failedCheck, message, "check_point");
+                outcome, failedCheck, message, "check_point", "FAILOVER");
         }
     }
     public record Check(String phase, String memberRef, String vsId, int checkNo, String status,
@@ -31,6 +31,8 @@ public class JooqCpFailoverRepository {
             boolean inventoryPresent, String context, boolean panSupported) {}
     public record SummaryStatus(String clusterRef, String vsId, String vendor, boolean activeWindow,
             String state, String outcome, Instant scheduledFor) {}
+    public record ReadinessStatus(String clusterRef, String vsId, String vendor, String outcome,
+            Instant observedAt, String failedCheck, String checks) {}
 
     private final TransactionBoundary boundary;
     private final AuditedTransactionBoundary audited;
@@ -52,7 +54,8 @@ public class JooqCpFailoverRepository {
             r.get("approval_id", String.class), r.get("requested_by", String.class),
             r.get("scheduled_for", java.time.OffsetDateTime.class).toInstant(), r.get("job_id", String.class),
             r.get("state", String.class), r.get("step", String.class), r.get("outcome", String.class),
-            r.get("failed_check", String.class), r.get("message", String.class), r.get("vendor", String.class));
+            r.get("failed_check", String.class), r.get("message", String.class), r.get("vendor", String.class),
+            r.get("run_kind", String.class));
     }
 
     /** Bulk eligibility facts; no device addresses or raw observations leave this projection. */
@@ -93,6 +96,21 @@ public class JooqCpFailoverRepository {
                 r.get("state", String.class), r.get("outcome", String.class),
                 Optional.ofNullable(r.get("scheduled_for", java.time.OffsetDateTime.class))
                     .map(java.time.OffsetDateTime::toInstant).orElse(null))));
+    }
+
+    public List<ReadinessStatus> readinessStatuses() {
+        return boundary.inTransaction(dsl -> dsl.fetch("select r.cluster_ref,r.vs_id,r.vendor,r.outcome,"
+            + "r.finished_at,r.failed_check,coalesce((select jsonb_agg(jsonb_build_object("
+            + "'checkNo',c.check_no,'status',c.status,'derived',c.derived) order by c.check_no,c.member_ref) "
+            + "from failover_check_result c where c.run_id=r.run_id and c.phase='pre'),'[]'::jsonb) checks "
+            + "from failover_run r where r.run_kind='READINESS' and r.run_id in (select distinct on "
+            + "(vendor,cluster_ref,coalesce(vs_id,'')) run_id from failover_run where run_kind='READINESS' "
+            + "and state in ('DONE','STOPPED') order by vendor,cluster_ref,coalesce(vs_id,''),finished_at desc))")
+            .map(r -> new ReadinessStatus(r.get("cluster_ref", String.class), r.get("vs_id", String.class),
+                r.get("vendor", String.class), r.get("outcome", String.class),
+                Optional.ofNullable(r.get("finished_at", java.time.OffsetDateTime.class))
+                    .map(java.time.OffsetDateTime::toInstant).orElse(null), r.get("failed_check", String.class),
+                r.get("checks", JSONB.class).data())));
     }
 
     public Approval createApproval(String cluster, String vsId, Instant from, Instant until, String reason, String actor) {
@@ -148,13 +166,36 @@ public class JooqCpFailoverRepository {
         });
     }
 
+    /** Admission without a failover approval; shares the active-unit uniqueness fence. */
+    public Decision requestReadiness(String cluster, String vsId, String actor, String targetDeviceId,
+            String vendor) {
+        return audited.inTransaction(actor, "failover_readiness_request", dsl -> {
+            Record active = dsl.fetchOne("select run_id from failover_run where cluster_ref={0} "
+                + "and vs_id is not distinct from {1} and vendor={2} and state not in ('DONE','STOPPED') limit 1",
+                cluster, vsId, vendor);
+            if (active != null) return new Decision("RUN_ALREADY_ACTIVE", null);
+            String id = UUID.randomUUID().toString();
+            dsl.execute("insert into failover_run(run_id,cluster_ref,vs_id,approval_id,requested_by,scheduled_for,state,step,vendor,run_kind) "
+                + "values({0},{1},{2},null,{3},now(),'PLANNED','PLANNED',{4},'READINESS')", id, cluster, vsId, actor, vendor);
+            admit(dsl, id, targetDeviceId, actor, vendor, "READINESS");
+            return new Decision("ADMITTED", id);
+        });
+    }
+
     private static void admit(org.jooq.DSLContext dsl, String runId, String targetDeviceId, String actor, String vendor) {
+        admit(dsl, runId, targetDeviceId, actor, vendor, "FAILOVER");
+    }
+    private static void admit(org.jooq.DSLContext dsl, String runId, String targetDeviceId, String actor,
+            String vendor, String runKind) {
         String jobId = UUID.randomUUID().toString();
-        String kind = "palo_alto".equals(vendor) ? "pan_cluster_failover" : "cp_cluster_failover";
+        String kind = "palo_alto".equals(vendor)
+            ? ("READINESS".equals(runKind) ? "pan_failover_readiness" : "pan_cluster_failover")
+            : ("READINESS".equals(runKind) ? "cp_failover_readiness" : "cp_cluster_failover");
+        String actionClass = "READINESS".equals(runKind) ? "read" : "operational-state-change";
         dsl.execute("insert into jobs(job_id,job_type,capability_id,target_device_id,target_kind,"
             + "submitted_by_actor_fingerprint,idempotency_key,action_class,state) "
-            + "values({0},{1},{1},{2},'device',{3},{4},"
-            + "'operational-state-change','REQUESTED')", jobId, kind, targetDeviceId, actor, kind + ":" + runId);
+            + "values({0},{1},{1},{2},'device',{3},{4},{5},'REQUESTED')", jobId, kind, targetDeviceId, actor,
+            kind + ":" + runId, actionClass);
         dsl.execute("update failover_run set job_id={1},started_at=now(),step='QUEUED' where run_id={0}", runId, jobId);
     }
 
@@ -188,6 +229,11 @@ public class JooqCpFailoverRepository {
     public Optional<Run> runByJob(String jobId) {
         return boundary.inTransaction(dsl -> dsl.fetch("select * from failover_run where job_id={0}", jobId)
             .stream().findFirst().map(JooqCpFailoverRepository::run));
+    }
+    public boolean finished(String runId) {
+        return boundary.inTransaction(dsl -> Boolean.TRUE.equals(dsl.fetchOne(
+            "select state in ('DONE','STOPPED') as finished from failover_run where run_id={0}", runId)
+            .get("finished", Boolean.class)));
     }
     public boolean windowValid(String runId) {
         return boundary.inTransaction(dsl -> Boolean.TRUE.equals(dsl.fetchOne(

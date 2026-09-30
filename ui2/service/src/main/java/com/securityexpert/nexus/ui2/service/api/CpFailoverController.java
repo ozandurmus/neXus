@@ -18,8 +18,10 @@ import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 @RestController
 @RequestMapping({"/api/v2/cp-failover", "/api/v2/pan-failover"})
 public final class CpFailoverController {
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
     public record ApprovalRequest(String clusterId, String unitId, Instant windowFrom, Instant windowUntil, String reason) {}
     public record RunRequest(String clusterId, String unitId, Instant scheduledFor) {}
+    public record ReadinessRequest(String clusterId, String unitId) {}
     private final CpFailoverService service;
     public CpFailoverController(CpFailoverService service) { this.service=service; }
     private static String actor(HttpServletRequest request) {
@@ -85,6 +87,16 @@ public final class CpFailoverController {
             m.put("lastRunState", s.lastRunState());
             m.put("lastRunOutcome", s.lastRunOutcome());
             m.put("lastRunAt", s.lastRunAt());
+            if (s.readiness() != null) {
+                var readiness = s.readiness();
+                try {
+                    m.put("readiness", Map.of("status", readiness.outcome(), "observedAt", readiness.observedAt(),
+                        "failedCheck", readiness.failedCheck() == null ? "" : readiness.failedCheck(),
+                        "checks", JSON.readTree(readiness.checks())));
+                } catch (java.io.IOException invalidStoredJson) {
+                    throw new IllegalStateException("Stored readiness checks are invalid", invalidStoredJson);
+                }
+            } else m.put("readiness", null);
             return m;
         }).toList());
     }
@@ -104,6 +116,14 @@ public final class CpFailoverController {
     @PostMapping("/runs")
     public ResponseEntity<?> start(@RequestBody RunRequest body,HttpServletRequest request) {
         return result(() -> Map.of("runId",service.request(body.clusterId(),body.unitId(),body.scheduledFor(),actor(request),vendor(request))));
+    }
+    @PostMapping("/units/{unitId}/readiness")
+    public ResponseEntity<?> readiness(@PathVariable String unitId, @RequestBody ReadinessRequest body,
+            HttpServletRequest request) {
+        return result(() -> {
+            if (!unitId.equals(body.unitId())) throw new IllegalArgumentException("unit mismatch");
+            return Map.of("runId", service.requestReadiness(body.clusterId(), unitId, actor(request), vendor(request)));
+        });
     }
     @GetMapping("/runs")
     public ResponseEntity<?> runs(@RequestParam String clusterId,@RequestParam String unitId,HttpServletRequest request) {

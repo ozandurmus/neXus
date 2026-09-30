@@ -40,7 +40,7 @@ import com.securityexpert.nexus.ui2.worker.inventory.InventoryRequest;
 public final class WorkerClaimLoop {
 
     private static final List<String> ELIGIBLE_CAPABILITY_IDS = List.of(
-            "cp_cluster_failover", "pan_cluster_failover",
+            "cp_cluster_failover", "pan_cluster_failover", "cp_failover_readiness", "pan_failover_readiness",
             com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
             ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
@@ -321,6 +321,13 @@ public final class WorkerClaimLoop {
                 } else cpFailoverExecutor.execute(claimed.jobId(),claimed.leaseEpoch());
                 return true;
             }
+            if ("cp_failover_readiness".equals(job.capabilityId())) {
+                if (cpFailoverExecutor == null) leaseRepository.transitionState(claimed.jobId(),claimed.leaseEpoch(),
+                    com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,
+                    "system:worker","cp_readiness_claim_check","EXECUTOR_UNAVAILABLE");
+                else cpFailoverExecutor.execute(claimed.jobId(),claimed.leaseEpoch());
+                return true;
+            }
             if ("pan_cluster_failover".equals(job.capabilityId())) {
                 if (panFailoverExecutor == null) {
                     leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(),
@@ -328,6 +335,13 @@ public final class WorkerClaimLoop {
                         com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,"system:worker",
                         "pan_failover_claim_check","EXECUTOR_UNAVAILABLE");
                 } else panFailoverExecutor.execute(claimed.jobId(),claimed.leaseEpoch());
+                return true;
+            }
+            if ("pan_failover_readiness".equals(job.capabilityId())) {
+                if (panFailoverExecutor == null) leaseRepository.transitionState(claimed.jobId(),claimed.leaseEpoch(),
+                    com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,
+                    "system:worker","pan_readiness_claim_check","EXECUTOR_UNAVAILABLE");
+                else panFailoverExecutor.execute(claimed.jobId(),claimed.leaseEpoch());
                 return true;
             }
             if (com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY.equals(job.capabilityId())) {

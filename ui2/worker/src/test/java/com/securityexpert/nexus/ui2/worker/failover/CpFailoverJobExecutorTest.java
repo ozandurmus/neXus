@@ -26,14 +26,15 @@ class CpFailoverJobExecutorTest {
     private static void check(boolean value) { if(!value) throw new AssertionError(); }
     private static final class Store extends JooqCpFailoverRepository {
         String state="PLANNED",outcome; boolean valid=true; final List<String> checks=new ArrayList<>();
-        String vsId;
+        String vsId,kind="FAILOVER";
         Store() { super(new TransactionBoundary() {
             public <T> T inTransaction(java.util.function.Function<org.jooq.DSLContext,T> ignored) {
                 throw new AssertionError("Database access in fake test");
             }
         }); }
         @Override public Optional<Run> runByJob(String id) {
-            return Optional.of(new Run("run-1",CLUSTER,vsId,"approval-1","actor-1",Instant.now(),id,state,state,outcome,null,null));
+            return Optional.of(new Run("run-1",CLUSTER,vsId,"READINESS".equals(kind)?null:"approval-1","actor-1",
+                Instant.now(),id,state,state,outcome,null,null,"check_point",kind));
         }
         @Override public boolean windowValid(String id) { return valid; }
         @Override public void state(String id,String next,String step,String result,String failed,String message) {
@@ -153,6 +154,13 @@ class CpFailoverJobExecutorTest {
         Store store=new Store(); Script script=new Script(); script.badPre=true; run(store,script);
         check(store.state.equals("STOPPED") && script.downCount==0 && script.upCount==0);
         check(store.checks.stream().anyMatch(s -> s.equals("pre:2:FAIL")));
+    }
+    @Test void readinessCompletesWithoutWriteAndWriteGateRefuses() {
+        Store store=new Store(); store.kind="READINESS"; Script script=new Script(); run(store,script);
+        check(store.state.equals("DONE") && "READY".equals(store.outcome));
+        check(script.downCount==0 && script.upCount==0);
+        check(!CpFailoverJobExecutor.writeAllowed("READINESS","clusterXL_admin down"));
+        check(!CpFailoverJobExecutor.writeAllowed("READINESS","clusterXL_admin up"));
     }
     @Test void failoverTimeoutStopsWithoutUp() {
         Store store=new Store(); Script script=new Script(); script.stuck=true; run(store,script);

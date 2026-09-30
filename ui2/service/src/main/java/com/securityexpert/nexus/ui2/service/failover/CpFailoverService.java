@@ -26,7 +26,8 @@ import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
 public final class CpFailoverService {
     public record Unit(String id, String clusterId, String label, String vsId, List<DeviceSummaryRecord> members) {}
     public record Summary(Unit unit, String vendor, boolean activeWindow, String lastRunState,
-            String lastRunOutcome, Instant lastRunAt) {}
+            String lastRunOutcome, Instant lastRunAt, JooqCpFailoverRepository.ReadinessStatus readiness) {}
+    public record ReadinessTarget(String clusterId, String unitId, String vendor) {}
     private record StatusKey(String clusterRef, String vsId, String vendor) {}
     public static final class Refusal extends RuntimeException {
         private final String code;
@@ -56,7 +57,8 @@ public final class CpFailoverService {
         if (!allowed(actor, RoleToken.SECURITY_ADMIN)) throw new Refusal("WRONG_ROLE");
     }
     private void requireReader(String actor) {
-        if (!allowed(actor, RoleToken.OPERATOR) && !allowed(actor, RoleToken.SECURITY_ADMIN)
+        if (!"system:failover-readiness-scheduler".equals(actor)
+                && !allowed(actor, RoleToken.OPERATOR) && !allowed(actor, RoleToken.SECURITY_ADMIN)
                 && !allowed(actor, RoleToken.VIEWER))
             throw new Refusal("WRONG_ROLE");
     }
@@ -72,9 +74,14 @@ public final class CpFailoverService {
     }
     public List<Summary> summary(String actor) {
         requireReader(actor);
+        return summaries();
+    }
+    private List<Summary> summaries() {
         Map<String, List<JooqCpFailoverRepository.SummaryMember>> facts = store.summaryMembers().stream()
             .collect(Collectors.groupingBy(JooqCpFailoverRepository.SummaryMember::deviceId));
         Map<StatusKey, JooqCpFailoverRepository.SummaryStatus> statuses = store.summaryStatuses().stream()
+            .collect(Collectors.toMap(s -> new StatusKey(s.clusterRef(), s.vsId(), s.vendor()), s -> s));
+        Map<StatusKey, JooqCpFailoverRepository.ReadinessStatus> readiness = store.readinessStatuses().stream()
             .collect(Collectors.toMap(s -> new StatusKey(s.clusterRef(), s.vsId(), s.vendor()), s -> s));
         Map<String, List<DeviceSummaryRecord>> clusters = devices.listAll().stream()
             .filter(d -> d.clusterMemberRef().isPresent() && ("check_point".equals(d.vendorHint())
@@ -108,9 +115,13 @@ public final class CpFailoverService {
                     var status = statuses.get(new StatusKey(e.getKey(), u.vsId(), vendor));
                     return new Summary(u, vendor, status != null && status.activeWindow(),
                         status == null ? null : status.state(), status == null ? null : status.outcome(),
-                        status == null ? null : status.scheduledFor());
+                        status == null ? null : status.scheduledFor(),
+                        readiness.get(new StatusKey(e.getKey(), u.vsId(), vendor)));
                 });
             }).toList();
+    }
+    public List<ReadinessTarget> readinessTargets() {
+        return summaries().stream().map(s -> new ReadinessTarget(s.unit().clusterId(),s.unit().id(),s.vendor())).toList();
     }
     public List<Unit> unitsForRef(String clusterRef, String actor) {
         return unitsForRef(clusterRef,actor,"check_point");
@@ -249,6 +260,29 @@ public final class CpFailoverService {
                     when,actor,u.members().get(0).deviceId(),scheduledFor==null)
                 :store.request(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
                     when,actor,u.members().get(0).deviceId(),scheduledFor==null,vendor);
+            if (!"ADMITTED".equals(decision.code())) throw new Refusal(decision.code());
+            return decision.runId();
+        } catch (org.springframework.dao.DuplicateKeyException duplicate) {
+            throw new Refusal("RUN_ALREADY_ACTIVE");
+        } catch (org.jooq.exception.DataAccessException duplicate) {
+            if ("23505".equals(duplicate.sqlState())) throw new Refusal("RUN_ALREADY_ACTIVE");
+            throw duplicate;
+        }
+    }
+
+    public String requestReadiness(String clusterId, String unitId, String actor, String vendor) {
+        requireOperator(actor);
+        return submitReadiness(clusterId, unitId, actor, vendor);
+    }
+    public String requestScheduledReadiness(ReadinessTarget target) {
+        return submitReadiness(target.clusterId(),target.unitId(),"system:failover-readiness-scheduler",target.vendor());
+    }
+    private String submitReadiness(String clusterId, String unitId, String actor, String vendor) {
+        Unit u = unit(clusterId, unitId, actor, vendor);
+        if ("check_point".equals(vendor)) for (DeviceSummaryRecord member : u.members()) requireTrusted(member);
+        try {
+            var decision = store.requestReadiness(u.members().get(0).clusterMemberRef().orElseThrow(),
+                u.vsId(), actor, u.members().get(0).deviceId(), vendor);
             if (!"ADMITTED".equals(decision.code())) throw new Refusal(decision.code());
             return decision.runId();
         } catch (org.springframework.dao.DuplicateKeyException duplicate) {

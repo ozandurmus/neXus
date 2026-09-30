@@ -313,7 +313,9 @@ public final class Ui2WorkerMain {
         for (int i = 0; i < 10; i++) {
             var cpFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.CpFailoverJobExecutor(
                     new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
-                    deviceRepository, leaseRepository, attemptRepository, strictFailoverSsh, gateRegistry);
+                    deviceRepository, leaseRepository, attemptRepository, strictFailoverSsh, gateRegistry,
+                    d -> Thread.sleep(d.toMillis()), Duration.ofSeconds(Long.parseLong(
+                        System.getenv().getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2"))));
             var panFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.PanFailoverJobExecutor(
                     new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
                     deviceRepository, leaseRepository, attemptRepository, panTransport, panCredentialResolver, gateRegistry);
