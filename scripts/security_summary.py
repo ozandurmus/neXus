@@ -121,7 +121,7 @@ def main(argv=None):
     p.add_argument("--previous", type=Path)
     p.add_argument("--output", type=Path, required=True)
     args = p.parse_args(argv)
-    failures, current, previous = [], [], []
+    failures, current, previous, causes = [], [], [], []
     try:
         accepted = load_baseline(args.baseline, date.today())
         manifest = json.loads((args.reports / "manifest.json").read_text())
@@ -140,11 +140,14 @@ def main(argv=None):
                 if rc not in allowed:
                     raise ValueError("scanner failed")
                 current.extend(project(tool, json.loads((args.reports / name).read_text()), item.get("target", "")))
-            except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
                 failures.append(tool)
+                causes.append({"file": item.get("file", "?"), "cause": str(error) if isinstance(error, ValueError) else type(error).__name__})
         if args.previous and args.previous.exists():
             previous = json.loads(args.previous.read_text())
         summary = summarize(current, previous, accepted, failures=failures)
+        if causes:
+            summary["failed"] = causes
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         summary = summarize([], [], [], failures=TOOLS)
         current = []
