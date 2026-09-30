@@ -178,6 +178,11 @@ final class NotificationMailRouter {
                             + "  SSH host key mismatch  /operations/jobs/" + r.get("job_id", String.class));
                     newestTime = max(newestTime, at(r, "finished_at"));
                 }
+                for (Record r : dsl.fetch("select job_id, finished_at from jobs where finished_at > {0} "
+                        + "and terminal_reason ilike '%certificate changed%' order by finished_at, job_id", Timestamp.from(from))) {
+                    lines.add(at(r, "finished_at") + "  HTTPS certificate changed  /operations/jobs/" + r.get("job_id", String.class));
+                    newestTime = max(newestTime, at(r, "finished_at"));
+                }
                 for (var entry : byDevice.entrySet()) {
                     List<Record> recent = entry.getValue();
                     Record latest = recent.get(0);

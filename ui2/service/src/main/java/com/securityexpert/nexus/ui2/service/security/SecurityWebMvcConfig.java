@@ -76,6 +76,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // every position, so the id at position 2 resolves the same way
             // /discovery/runs/*/import's own position-3 wildcard already does).
             Map.entry("GET /configuration", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /devices/*/https-certificate", ActionRegistry.DEVICE_READ),
+            Map.entry("POST /devices/*/https-certificate/accept", ActionRegistry.HTTPS_CERTIFICATE_ACCEPT),
+            Map.entry("PUT /devices/*/https-certificate/strict", ActionRegistry.HTTPS_CERTIFICATE_STRICT),
             Map.entry("GET /devices/*/configuration", ActionRegistry.DEVICE_READ),
             Map.entry("GET /devices/*/configuration/text", ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ),
             Map.entry("POST /devices/*/configuration/collect", ActionRegistry.DEVICE_CONFIGURATION_COLLECT),

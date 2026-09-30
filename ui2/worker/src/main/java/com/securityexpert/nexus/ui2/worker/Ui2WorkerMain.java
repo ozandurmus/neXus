@@ -245,9 +245,11 @@ public final class Ui2WorkerMain {
                 paloAltoBackupExecutor, deviationEngine, null, backupArtefactManifestRepository,
                 backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString(), contentListing);
         // V64: vendors backed up over HTTPS (Infoblox, Radware) -- credentials resolved like the PAN API password.
+        var httpsCertificateTrust = new com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateTrustRepository(transactionBoundary);
         com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor httpsVendorExecutor =
                 new com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor(
-                        new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient(), artefactStore, ref -> {
+                        new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient((target, certificate) ->
+                                httpsCertificateTrust.observe(target.host(), target.port(), certificate)), artefactStore, ref -> {
                             var m = panCredentialResolver.resolve(ref);
                             return new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials(m.username(), m.password());
                         });

@@ -108,7 +108,8 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
                         + "finished_at = case when {0} in ('COMPLETED', 'FAILED', 'REJECTED', 'CANCELLED', "
                         + "'OUTCOME_UNKNOWN', 'RECONCILED') then now() else finished_at end "
                         + "where job_id = {1} and lease_epoch = {2} and state = {3}",
-                toState, jobId, leaseEpoch, expectedFromState, terminalReason == null ? toState : terminalReason));
+                toState, jobId, leaseEpoch, expectedFromState, com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateWarnings.appendTo(
+                        terminalReason == null ? toState : terminalReason)));
         return updated == 1;
     }
 

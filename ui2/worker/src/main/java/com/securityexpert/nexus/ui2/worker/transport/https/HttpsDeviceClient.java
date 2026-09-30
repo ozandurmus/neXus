@@ -27,8 +27,7 @@ import javax.net.ssl.TrustManager;
 /**
  * The generic HTTPS client for vendors backed up over HTTPS (VENDOR_BACKUP_CONTRACTS_2026_09_22.md §0.2): basic auth
  * sent pre-emptively, form and JSON POST, streamed download into a sink with a size cap, redirects followed only on
- * the same host, TLS as the PAN decision record directs for this internal environment (validity dates checked, chain
- * and host name not). One client per call; no cookie state is kept between runs.
+ * the same host, endpoint-scoped certificate pinning. One client per call; no cookie state is kept between runs.
  */
 public final class HttpsDeviceClient implements HttpsDeviceCalls {
 
@@ -97,16 +96,45 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
     }
 
     private static final int MAX_REDIRECTS = 3;
-    private final HttpClient client;
+    @FunctionalInterface
+    public interface CertificateObserver {
+        com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateTrustRepository.Decision observe(
+                Target target, com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateTrustRepository.Certificate certificate);
+    }
+    private final CertificateObserver certificateObserver;
 
+    /** Unwired clients fail closed; production supplies the shared endpoint trust repository. */
     public HttpsDeviceClient() {
+        this((target, certificate) -> { throw new IllegalStateException("HTTPS certificate trust not configured"); });
+    }
+
+    public HttpsDeviceClient(CertificateObserver certificateObserver) {
+        this.certificateObserver = java.util.Objects.requireNonNull(certificateObserver);
+    }
+
+    CertificatePinningTrustManager trustManager(Target target) {
+        var warning = com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateWarnings.current();
+        return new CertificatePinningTrustManager(certificate -> {
+            var decision = certificateObserver.observe(target, certificate);
+            if (decision == null) throw new java.security.cert.CertificateException("HTTPS certificate trust unavailable");
+            if (decision == com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateTrustRepository.Decision.WARN
+                    || decision == com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateTrustRepository.Decision.REFUSE) {
+                if (warning != null) warning.set(true);
+                if (decision == com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateTrustRepository.Decision.REFUSE)
+                    throw new java.security.cert.CertificateException("certificate changed; strict mode refused");
+            }
+        });
+    }
+
+    private HttpClient client(Target target) {
         try {
             SSLContext ssl = SSLContext.getInstance("TLS");
-            ssl.init(null, new TrustManager[] {com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanXmlApiTransport
-                    .paloAltoDeviceTrustManager()}, new SecureRandom());
+            ssl.init(null, new TrustManager[] {trustManager(target)}, new SecureRandom());
             SSLParameters params = new SSLParameters();
+            // Appliances are addressed by IP; endpoint identification stays off. The endpoint's leaf pin is trust.
+            // X509ExtendedTrustManager handles all handshake overloads without JSSE's hostname-validation wrapper.
             params.setEndpointIdentificationAlgorithm("");
-            this.client = HttpClient.newBuilder().sslContext(ssl).sslParameters(params)
+            return HttpClient.newBuilder().sslContext(ssl).sslParameters(params)
                     .followRedirects(HttpClient.Redirect.NEVER).connectTimeout(Duration.ofSeconds(15)).build();
         } catch (java.security.GeneralSecurityException e) {
             throw new IllegalStateException("could not build the HTTPS device TLS configuration", e);
@@ -170,7 +198,7 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
             }
             b.header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8));
         }
-        HttpResponse<java.io.InputStream> r = client.send(b.build(), HttpResponse.BodyHandlers.ofInputStream());
+        HttpResponse<java.io.InputStream> r = client(target).send(b.build(), HttpResponse.BodyHandlers.ofInputStream());
         byte[] data;
         String captured = null;
         try (java.io.InputStream in = r.body()) {
@@ -193,9 +221,9 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
                 .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8)).build();
         HttpResponse<?> r;
         if (JobTranscriptScope.current() == null) {
-            r = client.send(request, HttpResponse.BodyHandlers.discarding());
+            r = client(target).send(request, HttpResponse.BodyHandlers.discarding());
         } else {
-            HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<InputStream> response = client(target).send(request, HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream in = response.body()) {
                 recordResponse(response, JobTranscript.withoutSentSecrets(
                         captureRemaining(in, new byte[0]), json, "application/json"));
@@ -326,6 +354,8 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
 
     private <T> HttpResponse<T> send(Target target, String method, String path, String contentType, String body, Credentials creds,
             Duration timeout, HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
+        // A fresh TLS context prevents connection/session reuse from skipping a changed pin or strict policy.
+        HttpClient client = client(target);
         String current = path;
         for (int hop = 0; ; hop++) {
             String sentMethod = hop == 0 ? method : "GET";

@@ -1622,3 +1622,28 @@ export const startCpFailover = (unit: CpFailoverUnit, scheduledFor: string | nul
 export const runCpFailoverReadiness = (unit: Pick<CpFailoverUnit, "clusterId" | "unitId" | "vendor">) =>
   call<{ runId: string }>(`${failoverPath(unit.vendor)}/units/${encodeURIComponent(unit.unitId)}/readiness`, "POST",
     { clusterId: unit.clusterId, unitId: unit.unitId });
+
+export interface HttpsCertificateView {
+  readonly available: boolean;
+  readonly strict?: boolean;
+  readonly certificate_changed?: boolean;
+  readonly can_accept?: boolean;
+  readonly can_set_strict?: boolean;
+  readonly certificates?: readonly {
+    trust_entry_id: string;
+    status: "ACTIVE" | "PENDING";
+    fingerprint_sha256: string;
+    subject_cn: string;
+    issuer_cn: string;
+    not_after: string;
+  }[];
+}
+export function getHttpsCertificate(deviceId: string): Promise<HttpsCertificateView> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/https-certificate`, "GET");
+}
+export function acceptHttpsCertificate(deviceId: string, trustEntryId: string): Promise<unknown> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/https-certificate/accept`, "POST", { trustEntryId });
+}
+export function setHttpsCertificateStrict(deviceId: string, strict: boolean): Promise<unknown> {
+  return call(`/devices/${encodeURIComponent(deviceId)}/https-certificate/strict`, "PUT", { strict });
+}
