@@ -143,3 +143,10 @@ active; counts and booleans only). The PO measured every check command on a real
 the same day: VSX reports `Cluster Mode: Virtual System Load Sharing` on the chassis and in each VS context although
 the estate does not run VSLS -- the parser accepts that label; `fw stat` may print a single-digit hour;
 `cphaprob tablestat` has four columns (member, interface, IP, MAC).
+
+## 15. Amendment 2026-09-30 -- ARP is information before the switch (PO)
+PO: "Aktif olan cihazla pasifin ARP'ı eşleşse ne olur, eşleşmese ne olur." A standby member carries no traffic, so its
+ARP table is naturally smaller; comparing it with the active member's is meaningless. Check 5 is therefore
+**informational in the pre-check** (both counts recorded, never FAIL/blocking). In the post-check the useful comparison
+stays: the new active's ARP count against the pre-failover active's count (§3) -- also informational unless the PO
+promotes it.
