@@ -317,39 +317,82 @@ def _deploy() -> None:
     print(json.dumps({"deploy": "ok", "summary": [t[:160] for t in tail], "configuration": r.stdout.strip()}))
 
 
+def _pr_body(branch: str, commits: str, notes: str) -> str:
+    return ("## What changed\n" + commits + "\n\n## Checks before merge\n"
+            "- Java: `:service:test :worker:test :architecture-tests:test` (reviewer, locally)\n"
+            "- Frontend: `tsc`, `vitest`, `build` where the lane touched `ui2/frontend`\n"
+            "- Repository privacy gate: PASS\n"
+            "- Migrations (if any): dry-run in BEGIN/ROLLBACK on the live database\n"
+            + (("\n## Notes\n" + notes + "\n") if notes else "")
+            + "\nMerged by the engineering session after the checks passed (PO decision 2026-09-30, option a); "
+              "deploy and the in-cluster e2e result follow as a PR comment.\n")
+
+
 def cmd_ship(args: argparse.Namespace) -> int:
+    """Ship through a pull request (PO 2026-09-30): push the lane branch, open a PR, merge it, deploy from main."""
     if _git("status", "--porcelain", "--untracked-files=no"):
         raise SystemExit("main checkout has uncommitted tracked changes; commit or set them aside first")
+    _git("fetch", "-q", "origin")
+    _git("checkout", "-q", "main")
+    _git("merge", "-q", "--ff-only", "origin/main")
     if args.task:
         r = _load(args.task)
         if _phase(r) == "running":
             raise SystemExit("task still running")
-        wt = Path(r["worktree"])
+        wt, branch = Path(r["worktree"]), r["branch"]
         if _git("status", "--porcelain", "--untracked-files=no", cwd=wt, check=False):
             raise SystemExit("lane has uncommitted changes; review and commit them first")
-        # main may have moved since the lane was cut (state or tooling commits): replay the lane onto it first.
-        if _git("merge-base", "--is-ancestor", "main", r["branch"], check=False) == "" and subprocess.run(
-                ["git", "merge-base", "--is-ancestor", "main", r["branch"]], cwd=str(REPO_ROOT)).returncode != 0:
-            rb = subprocess.run(["git", "rebase", "main"], cwd=str(wt), capture_output=True, text=True)
-            if rb.returncode != 0:
-                subprocess.run(["git", "rebase", "--abort"], cwd=str(wt), capture_output=True)
-                raise SystemExit("lane does not rebase cleanly onto main; resolve in the worktree first")
-        _git("merge", "--ff-only", r["branch"])
+        rb = subprocess.run(["git", "rebase", "origin/main"], cwd=str(wt), capture_output=True, text=True)
+        if rb.returncode != 0:
+            subprocess.run(["git", "rebase", "--abort"], cwd=str(wt), capture_output=True)
+            raise SystemExit("lane does not rebase cleanly onto origin/main; resolve in the worktree first")
+    elif args.branch:
+        branch = args.branch
+        rb = subprocess.run(["git", "rebase", "origin/main", branch], cwd=str(REPO_ROOT), capture_output=True, text=True)
+        _git("checkout", "-q", "main")
+        if rb.returncode != 0:
+            subprocess.run(["git", "rebase", "--abort"], cwd=str(REPO_ROOT), capture_output=True)
+            raise SystemExit("branch does not rebase cleanly onto origin/main")
+    else:
+        raise SystemExit("ship needs --task or --branch (nothing goes to main without a pull request)")
+    if _git("rev-list", "--count", "origin/main.." + branch) == "0":
+        raise SystemExit("nothing to ship: the branch has no commits beyond origin/main")
     gate = subprocess.run([sys.executable, "scripts/repository_privacy_check.py"], cwd=str(REPO_ROOT),
                           capture_output=True, text=True)
     if gate.returncode != 0 or "Gate:                 PASS" not in gate.stdout:
         raise SystemExit("privacy gate did not pass; nothing pushed")
-    _git("push", "-q", "origin", "main")
+    _git("push", "-q", "--force-with-lease", "origin", branch + ":" + branch)
+    commits = _git("log", "--format=- %s", "origin/main.." + branch)
+    title = args.title or _git("log", "-1", "--format=%s", branch)
+    pr = subprocess.run(["gh", "pr", "create", "--base", "main", "--head", branch, "--title", title,
+                         "--body", _pr_body(branch, commits, args.notes or "")],
+                        cwd=str(REPO_ROOT), capture_output=True, text=True)
+    url = pr.stdout.strip().splitlines()[-1] if pr.returncode == 0 else ""
+    if not url:
+        existing = subprocess.run(["gh", "pr", "view", branch, "--json", "url", "-q", ".url"],
+                                  cwd=str(REPO_ROOT), capture_output=True, text=True)
+        url = existing.stdout.strip()
+    if not url:
+        raise SystemExit("could not open the pull request: " + (pr.stderr.strip()[-300:] or "unknown"))
+    merge = subprocess.run(["gh", "pr", "merge", url, "--rebase", "--delete-branch"],
+                           cwd=str(REPO_ROOT), capture_output=True, text=True)
+    if merge.returncode != 0:
+        raise SystemExit("pull request not merged (" + url + "): " + merge.stderr.strip()[-300:])
+    _git("fetch", "-q", "origin")
+    _git("merge", "-q", "--ff-only", "origin/main")
     _git("push", "-q", "hosta", "main")
-    print(json.dumps({"pushed": _git("rev-parse", "--short", "HEAD")}))
+    print(json.dumps({"pr": url, "merged": _git("rev-parse", "--short", "HEAD")}))
     _deploy()
     # The in-cluster e2e screen suite after every deploy (PO 2026-09-27); a failure is reported, not rolled back.
     e2e = subprocess.run(["bash", "scripts/hosta_e2e.sh"], cwd=str(REPO_ROOT), capture_output=True, text=True)
     lines = [l for l in e2e.stdout.splitlines() if l.strip()]
-    print(json.dumps({"e2e": "pass" if e2e.returncode == 0 and "E2E: PASS" in e2e.stdout else "FAIL",
-                      "summary": lines[-6:]}))
+    verdict = "pass" if e2e.returncode == 0 and "E2E: PASS" in e2e.stdout else "FAIL"
+    print(json.dumps({"e2e": verdict, "summary": lines[-6:]}))
+    subprocess.run(["gh", "pr", "comment", url, "--body",
+                    "Deployed to HOST-A. In-cluster e2e: **" + verdict + "** (" + (lines[-2] if len(lines) > 1 else "") + ")"],
+                   cwd=str(REPO_ROOT), capture_output=True, text=True)
     if args.task:
-        args.force = False
+        args.force = True
         cmd_clean(args)
     return 0
 
@@ -375,6 +418,9 @@ def main(argv: list[str] | None = None) -> int:
         q.add_argument("--task", required=True)
     sh = sub.add_parser("ship")
     sh.add_argument("--task")
+    sh.add_argument("--branch", help="ship a local branch (a reviewer hotfix) through a pull request")
+    sh.add_argument("--title")
+    sh.add_argument("--notes", help="extra lines for the PR body (live validation, measurements)")
     c = sub.add_parser("clean")
     c.add_argument("--task", required=True)
     c.add_argument("--force", action="store_true")
