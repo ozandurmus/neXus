@@ -1,0 +1,15 @@
+vsid 0:
+------
+Required interfaces: 4
+Required secured interfaces: 1
+CCP mode: Automatic
+Mgmt           UP
+Sync (S)       UP
+eth2-01        UP
+bond1.3843 (LS) UP
+Mgmt           Non-Monitored
+
+Virtual cluster interfaces: 3
+Mgmt           192.0.2.90
+eth2-01        192.0.2.91
+bond1.3843      198.51.100.90

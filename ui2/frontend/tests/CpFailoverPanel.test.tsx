@@ -36,7 +36,9 @@ describe("Check Point failover", () => {
     api.detail.mockResolvedValue({ runId: "run-opaque", state: "STOPPED", step: "POSTCHECK", failedCheck: "6",
       checks: [{ checkNo: 6, phase: "post", status: "FAIL", derived: "192.0.2.19 SECRET-DEVICE" },
         { checkNo: 9, phase: "pre", status: "PASS", derived: "{}" },
-        { checkNo: 10, phase: "post", status: "PASS", derived: "{}" }] });
+        { checkNo: 10, phase: "post", status: "PASS", derived: "{}" },
+        { checkNo: 13, phase: "pre", status: "WARN", derived: "{}" },
+        { checkNo: 14, phase: "post", status: "PASS", derived: "{}" }] });
     renderPanel();
     fireEvent.click(await screen.findByRole("button", { name: /Virtual System · VS-ROMEO-01-07/ }));
     expect(screen.getByText("Stopped: Connections")).toBeInTheDocument();
@@ -46,6 +48,9 @@ describe("Check Point failover", () => {
     expect(within(screen.getByRole("table", { name: "Failover checks" })).getByText("Connections")).toBeInTheDocument();
     expect(within(screen.getByRole("table", { name: "Failover checks" })).getByText("State synchronization")).toBeInTheDocument();
     expect(within(screen.getByRole("table", { name: "Failover checks" })).getByText("Installed policy parity")).toBeInTheDocument();
+    const eventRow = screen.getByText("Last failover").closest("tr")!;
+    expect(within(eventRow).getAllByText("WARN")).toHaveLength(2);
+    expect(screen.getByText("Routing")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "CLS-ROMEO-01" }));
     expect(screen.queryByRole("table", { name: "Failover checks" })).toBeNull();
   });

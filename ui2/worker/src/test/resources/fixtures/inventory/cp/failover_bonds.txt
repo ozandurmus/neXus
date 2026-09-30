@@ -1,0 +1,6 @@
+           |                   |      |Slaves     |Slaves  |Slaves
+Bond name  |Mode               |State |configured |link up |required
+-----------+-------------------+------+-----------+--------+--------
+bond1      |Load Sharing       |UP    |2          |2       |1
+Legend:
+UP! - Bond interface state is UP, yet attention is required

@@ -1,0 +1,2 @@
+HOST POLICY DATE
+localhost Synthetic_Policy 18Sep2026  0:44:41 :  [>Mgmt] [<Mgmt]

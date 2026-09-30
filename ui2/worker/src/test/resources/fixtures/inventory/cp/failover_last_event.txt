@@ -1,0 +1,7 @@
+Last cluster failover event:
+   Transition to new ACTIVE: Member 2 -> Member 1
+   Reason: ADMIN_DOWN PNOTE
+   Event time: Wed Sep 30 12:00:00 2026
+Cluster failover count:
+   Failover counter: 1
+   Time of counter reset: Tue Sep  8 16:08:34 2026 (reboot)

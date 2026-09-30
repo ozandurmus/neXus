@@ -1,0 +1,7 @@
+Delta Sync Statistics
+Sync status: OK
+Link speed: 1000 Mbps
+Lost updates................................. 0
+Lost bulk update events...................... 0
+Sent reject notifications.................... 0
+Received reject notifications................ 0

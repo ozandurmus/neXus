@@ -1,0 +1,11 @@
+Cluster Mode:   Virtual System Load Sharing (Active Up)
+
+ID  Unique Address  Assigned Load  State  Name
+1 (local)  192.0.2.11  100%  ACTIVE  FW-ALPHA-01
+2          192.0.2.12  0%    STANDBY FW-ALPHA-02
+
+Virtual Devices Status on each Cluster Member
+ID | Weight | FW-ALPHA-01 | FW-ALPHA-02
+   |        | [local]    |
+1  | 10     | ACTIVE     | STANDBY
+2  | 10     | ACTIVE     | STANDBY

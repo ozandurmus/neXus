@@ -1,0 +1,8 @@
+Built-in Devices:
+Device Name: Interface Active Check
+Current state: problem
+Registered Devices:
+Device Name: fwd
+Registration number: 4
+Timeout: 30 sec
+Current state: problem

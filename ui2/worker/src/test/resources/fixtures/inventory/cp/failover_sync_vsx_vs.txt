@@ -1,0 +1,7 @@
+Delta Sync Statistics
+Sync status: OK
+Link speed:
+Lost updates................................. 0
+Lost bulk update events...................... 0
+Sent reject notifications.................... 4554
+Received reject notifications................ 0

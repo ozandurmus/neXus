@@ -23,7 +23,7 @@ import { approveCpFailover, getCpFailoverRun, listCpFailoverApprovals, listCpFai
   runCpFailoverReadiness, type CpFailoverApproval, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
 
 const labels = ["Preparing", "Failing over", "Switched", "Checking", "No problems found"];
-const cpChecks: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate", 9: "State synchronization", 10: "Installed policy parity" };
+const cpChecks: Record<number, string> = { 1: "Cluster state", 2: "Cluster IP table", 3: "Cluster interfaces", 5: "ARP", 6: "Connections", 8: "Traffic rate", 9: "State synchronization", 10: "Installed policy parity", 11: "Critical devices", 12: "Bond interfaces", 13: "Last failover", 14: "Routing" };
 const panChecks: Record<number, string> = { 1: "HA mode and roles", 2: "Peer relationship", 3: "HA links", 4: "Configuration sync", 5: "Session synchronization", 6: "Sessions carried", 7: "Version parity" };
 const activeStates: CpFailoverState[] = ["PLANNED", "PRECHECK", "FAILING_OVER", "SWITCHED", "POSTCHECK", "RETURNING"];
 
@@ -97,7 +97,7 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
   const checkRows = [...new Set((run?.checks ?? []).map(c => c.checkNo))].sort((a, b) => a - b);
   const phaseStatus = (no: number, phase: "pre" | "post") => {
     const statuses = run?.checks.filter(c => c.checkNo === no && c.phase === phase).map(c => c.status) ?? [];
-    return statuses.includes("FAIL") ? "FAIL" : statuses.includes("UNKNOWN") ? "UNKNOWN" : statuses.length ? "PASS" : "—";
+    return statuses.includes("FAIL") ? "FAIL" : statuses.includes("UNKNOWN") ? "UNKNOWN" : statuses.includes("WARN") ? "WARN" : statuses.length ? "PASS" : "—";
   };
   return <Card sx={{ p: 2, ml: unit.unitId === unit.clusterId ? 0 : 3, bgcolor: m3.scLow }}>
     <M3Button emphasis="text" onClick={onExpand}>{unit.unitId === unit.clusterId ? label : `Virtual System · ${label}`}</M3Button>

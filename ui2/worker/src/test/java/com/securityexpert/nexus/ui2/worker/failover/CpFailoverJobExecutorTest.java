@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
+import com.securityexpert.nexus.ui2.worker.inventory.Fixtures;
 import com.securityexpert.nexus.ui2.capability.GateRegistryFixtureLoader;
 import com.securityexpert.nexus.ui2.capability.GateRegistryPort;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
@@ -26,6 +27,7 @@ class CpFailoverJobExecutorTest {
     private static void check(boolean value) { if(!value) throw new AssertionError(); }
     private static final class Store extends JooqCpFailoverRepository {
         String state="PLANNED",outcome; boolean valid=true; final List<String> checks=new ArrayList<>();
+        final List<String> derivedValues=new ArrayList<>();
         String vsId,kind="FAILOVER";
         Store() { super(new TransactionBoundary() {
             public <T> T inTransaction(java.util.function.Function<org.jooq.DSLContext,T> ignored) {
@@ -43,12 +45,13 @@ class CpFailoverJobExecutorTest {
         @Override public void command(String id,String gateId) {}
         @Override public void check(String id,String phase,String member,String vs,int no,String status,String derived) {
             checks.add(phase+":"+no+":"+status);
+            derivedValues.add(derived);
         }
     }
     private static final class Script {
         boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
-        boolean readyMember;
-        String unknownCommand;
+        boolean readyMember,badPnotes,badBonds,badRoutes,missingDefault,recentFailover;
+        String unknownCommand, failedCommand;
         int downCount,upCount,connectCount;
         final List<String> commands=new ArrayList<>();
         long bytesA=1000,bytesB=1000;
@@ -67,6 +70,7 @@ class CpFailoverJobExecutorTest {
                     commands.add(literal);
                     String cmd=literal.startsWith("bash -lc 'vsenv 12 && ")
                         ?literal.substring("bash -lc 'vsenv 12 && ".length(),literal.length()-1):literal;
+                    if (cmd.equals(failedCommand)) return new ExecResult.Completed("",1);
                     if (cmd.equals(unknownCommand)) return new ExecResult.Completed("unrecognized synthetic output",0);
                     boolean first=member.endsWith("11");
                     if(cmd.endsWith("clusterXL_admin down")) {down=true;downCount++;return new ExecResult.Completed("ok",0);}
@@ -97,10 +101,29 @@ class CpFailoverJobExecutorTest {
                     }
                     if(cmd.endsWith("cphaprob syncstat")) return new ExecResult.Completed(
                         "Delta Sync Statistics\nSync status: OK\nDrops:\nLost updates................................. "
-                            +(badSync&&!first&&!down?"1":"0")+"\nLost bulk update events...................... 0\n",0);
+                            +(badSync&&!first&&!down?"1":"0")+"\nLost bulk update events...................... 0\nSent reject notifications.................... 4554\nReceived reject notifications................ 0\n",0);
                     if(cmd.endsWith("fw stat")) return new ExecResult.Completed(
                         "HOST POLICY DATE\nlocalhost "+((badPolicy&&!first&&!down || changedPolicyPost&&down)?"Other_Policy":"Sample_Policy")
                             +" 10Sep2018 14:01:25 : [>eth0]\n",0);
+                    if(cmd.equals("cphaprob -ia list")) return new ExecResult.Completed(
+                        Fixtures.read("cp/failover_pnotes_"+(badPnotes || down&&first?"problem":"ok")+".txt"),0);
+                    if(cmd.equals("cphaprob show_bond")) return new ExecResult.Completed(
+                        Fixtures.read("cp/failover_bonds.txt").replace("|UP    |",badBonds?"|UP!   |":"|UP    |"),0);
+                    if(cmd.equals("cphaprob show_failover")) {
+                        String output=Fixtures.read("cp/failover_last_event.txt");
+                        if(recentFailover) output="Event time: "+java.time.format.DateTimeFormatter
+                            .ofPattern("EEE MMM d HH:mm:ss uuuu",java.util.Locale.ENGLISH)
+                            .withZone(java.time.ZoneId.of("Europe/Istanbul")).format(Instant.now().minusSeconds(60));
+                        return new ExecResult.Completed(output,0);
+                    }
+                    if(cmd.equals("cpstat os -f routing")) {
+                        String routes=Fixtures.read("cp/failover_routing.txt");
+                        // Standby pre-check may differ: post-check must use the former active's baseline.
+                        if(!down&&!first || down&&!first&&badRoutes) routes=routes.replace(
+                            "|0.0.0.0|0.0.0.0|198.51.100.1|eth2-01|\n", "");
+                        if(down&&!first&&missingDefault) routes=routes.replace("|0.0.0.0|0.0.0.0|", "|192.0.2.0|255.255.255.0|");
+                        return new ExecResult.Completed(routes,0);
+                    }
                     throw new AssertionError(cmd);
                 });
         }
@@ -152,6 +175,7 @@ class CpFailoverJobExecutorTest {
         check(store.checks.stream().anyMatch(s -> s.equals("post:8:PASS")));
         check(store.checks.stream().anyMatch(s -> s.equals("post:9:PASS")));
         check(store.checks.stream().anyMatch(s -> s.equals("post:10:PASS")));
+        check(store.derivedValues.stream().anyMatch(d -> d.contains("\"sentRejectNotifications\":4554")));
     }
     @Test void precheckFailStopsBeforeWrite() {
         Store store=new Store(); Script script=new Script(); script.badPre=true; run(store,script);
@@ -235,6 +259,42 @@ class CpFailoverJobExecutorTest {
         Store store=new Store(); store.vsId="12"; Script script=new Script(); run(store,script);
         check(store.state.equals("DONE") && script.downCount==1 && script.upCount==1);
         check(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 12 && ")));
+    }
+    @Test void approvedBlockingChecksStopBeforeWrite() {
+        for(String command:List.of("cphaprob -ia list","cphaprob show_bond","cpstat os -f routing")) {
+            Store store=new Store(); store.kind="READINESS"; Script script=new Script();
+            script.unknownCommand=command; run(store,script);
+            check("UNKNOWN".equals(store.outcome) && script.downCount==0);
+        }
+        Store pnotes=new Store(); Script script=new Script(); script.badPnotes=true; run(pnotes,script);
+        check("PNOTES_NOT_READY".equals(pnotes.outcome) && script.downCount==0);
+        check(pnotes.derivedValues.stream().anyMatch(d -> d.contains("Interface Active Check")));
+        Store bonds=new Store(); script=new Script(); script.badBonds=true; run(bonds,script);
+        check("BOND_NOT_READY".equals(bonds.outcome) && script.downCount==0);
+    }
+    @Test void failoverWarningsAndUnknownAreNonBlockingAndDerivedIsSafe() {
+        for(boolean unknown:List.of(false,true)) {
+            Store store=new Store(); Script script=new Script(); script.recentFailover=true;
+            if(unknown) script.unknownCommand="cphaprob show_failover";
+            run(store,script);
+            check("SUCCEEDED".equals(store.outcome));
+            check(store.checks.contains("pre:13:"+(unknown?"UNKNOWN":"WARN")));
+            check(store.checks.contains("post:14:PASS"));
+            check(store.derivedValues.stream().noneMatch(d -> d.contains("192.0.2.") || d.contains("198.51.100.") || d.contains("eth2-01")));
+        }
+    }
+    @Test void unavailableInformationalFailoverCommandDoesNotBlock() {
+        Store store=new Store(); Script script=new Script(); script.failedCommand="cphaprob show_failover";
+        run(store,script);
+        check("SUCCEEDED".equals(store.outcome) && store.checks.contains("pre:13:UNKNOWN"));
+    }
+    @Test void routeLossOrMissingDefaultStopsAfterSwitchWithoutReturn() {
+        for(boolean missing:List.of(false,true)) {
+            Store store=new Store(); Script script=new Script();
+            script.missingDefault=missing; script.badRoutes=!missing; run(store,script);
+            check("ROUTING_NOT_READY".equals(store.outcome));
+            check(script.downCount==1 && script.upCount==0 && store.checks.contains("post:14:FAIL"));
+        }
     }
     public static void main(String[] args) {
         var t=new CpFailoverJobExecutorTest(); t.happyPath(); t.precheckFailStopsBeforeWrite();
