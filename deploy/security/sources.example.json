@@ -1,0 +1,6 @@
+{
+  "semgrep": "semgrep/semgrep@sha256:REPLACE_WITH_REVIEWED_DIGEST",
+  "gitleaks": "zricethezav/gitleaks@sha256:REPLACE_WITH_REVIEWED_DIGEST",
+  "trivy": "aquasec/trivy@sha256:REPLACE_WITH_REVIEWED_DIGEST",
+  "zap": "ghcr.io/zaproxy/zaproxy@sha256:REPLACE_WITH_REVIEWED_DIGEST"
+}

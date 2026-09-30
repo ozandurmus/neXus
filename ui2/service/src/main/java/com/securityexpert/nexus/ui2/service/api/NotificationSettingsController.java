@@ -70,7 +70,7 @@ public final class NotificationSettingsController {
         if (settings == null) return List.of("notification settings are missing");
         List<String> problems = new ArrayList<>(settings.problems());
         if (settings.routes() == null || settings.routes().isEmpty()) {
-            problems.add("all seven notification types must be provided once");
+            problems.add("all notification types must be provided once");
         }
         return problems;
     }

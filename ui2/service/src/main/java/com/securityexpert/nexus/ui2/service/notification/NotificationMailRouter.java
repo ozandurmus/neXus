@@ -19,7 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 final class NotificationMailRouter {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String[] TITLES = {"Administration changes", "Sign-in and access", "Backup failures",
-            "Other job failures", "Configuration changes", "Compliance regressions", "Device reachability"};
+            "Other job failures", "Configuration changes", "Compliance regressions", "Device reachability", "Security scans"};
     private static final String ADMIN_ACTIONS = "'local_credential_create', 'local_password_change', "
             + "'local_credential_admin_password_reset', "
             + "'local_credential_enable', 'local_credential_disable', 'role_binding_create', 'role_binding_revoke', "
@@ -88,6 +88,10 @@ final class NotificationMailRouter {
         Instant newestTime = from;
         List<Record> rows;
         switch (type) {
+            case "security_scan" -> {
+                return SecurityScanSummary.collect(java.nio.file.Path.of(System.getenv().getOrDefault(
+                        "UI2_SECURITY_SUMMARY_DIR", "/var/lib/nexus-security/notifications")), from);
+            }
             case "admin_event", "login_security" -> {
                 rows = dsl.fetch("select audit_id, action_id, row_pk, occurred_at from audit_log "
                         + "where audit_id > {0} and action_id in (" + (type.equals("admin_event") ? ADMIN_ACTIONS : LOGIN_ACTIONS)

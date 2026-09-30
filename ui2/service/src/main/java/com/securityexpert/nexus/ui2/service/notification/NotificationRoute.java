@@ -11,7 +11,7 @@ public record NotificationRoute(String type, boolean enabled, String recipients,
         @JsonProperty("last_error") String lastError) {
 
     public static final List<String> TYPES = List.of("admin_event", "login_security", "backup_failure",
-            "job_failure", "config_change", "compliance_regression", "device_health");
+            "job_failure", "config_change", "compliance_regression", "device_health", "security_scan");
 
     public List<String> effectiveRecipients(NotificationSettings settings) {
         return recipients == null || recipients.isBlank() ? settings.recipients() : split(recipients);

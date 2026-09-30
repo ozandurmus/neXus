@@ -1,0 +1,16 @@
+spec:
+  template:
+    spec:
+      securityContext:
+        supplementalGroups: [1000]
+      containers:
+        - name: service
+          volumeMounts:
+            - name: security-summary
+              mountPath: /var/lib/nexus-security/notifications
+              readOnly: true
+      volumes:
+        - name: security-summary
+          hostPath:
+            path: /var/lib/nexus-security/notifications
+            type: Directory

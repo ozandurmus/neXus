@@ -13,6 +13,12 @@ git checkout main
 git pull origin main
 
 COMMIT_SHA="$(git rev-parse HEAD)"
+if [ -n "${NEXUS_SKIP_SECURITY_REASON:-}" ]; then
+  printf 'EMERGENCY: SECURITY GATE SKIPPED: %s\n' "$NEXUS_SKIP_SECURITY_REASON"
+else
+  python3 scripts/security_host.py snapshot --config "$HOME/.config/nexus/security.json" \
+    --rules "$HOME/.config/nexus/security-rules"
+fi
 BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "Recording deploy_info.json: commit=$COMMIT_SHA built_at=$BUILT_AT"
 printf '{\n  "commit": "%s",\n  "built_at": "%s"\n}\n' "$COMMIT_SHA" "$BUILT_AT" > project/deploy_info.json
@@ -72,6 +78,12 @@ kubectl apply -f deploy/ui2-image-build/20-context-loader.yaml
 kubectl wait --for=condition=Ready pod/ui2-build-context-loader -n ui2-build --timeout=60s
 IMAGE_DIGEST="$(kubectl -n ui2-build exec ui2-build-context-loader -- cat /workspace/image-digest.txt)"
 echo "Digest is $IMAGE_DIGEST"
+
+if [ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ]; then
+  echo "Running security-gate on the freshly built digest..."
+  python3 scripts/security_host.py gate --config "$HOME/.config/nexus/security.json" \
+    --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" --commit "$COMMIT_SHA"
+fi
 
 echo "Updating deployments..."
 kubectl -n ui2 set image deployment/ui2-service service="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"

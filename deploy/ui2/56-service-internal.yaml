@@ -9,6 +9,9 @@ spec:
     app.kubernetes.io/part-of: nexus-ui2
     app.kubernetes.io/component: service
   ports:
+    - name: http
+      port: 8080
+      targetPort: http
     - name: machine
       port: 8086
       targetPort: machine
@@ -39,6 +42,16 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: e2e
+      ports:
+        - protocol: TCP
+          port: 8086
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ui2-security
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: security-scan
       ports:
         - protocol: TCP
           port: 8086
