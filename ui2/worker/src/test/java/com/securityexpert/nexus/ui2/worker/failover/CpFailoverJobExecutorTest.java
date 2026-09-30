@@ -162,6 +162,22 @@ class CpFailoverJobExecutorTest {
         check(!CpFailoverJobExecutor.writeAllowed("READINESS","clusterXL_admin down"));
         check(!CpFailoverJobExecutor.writeAllowed("READINESS","clusterXL_admin up"));
     }
+    @Test void readyReadinessNeverSkipsFreshFailoverPrecheck() {
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script(); run(store,script);
+        check("READY".equals(store.outcome));
+        check(script.downCount==0 && script.upCount==0);
+        int previousChecks=store.checks.size();
+        int previousConnections=script.connectCount;
+        store.kind="FAILOVER";
+        store.state="PLANNED";
+        script.badPre=true;
+        run(store,script);
+        check(script.connectCount==previousConnections+2);
+        check(store.state.equals("STOPPED"));
+        check(store.checks.subList(previousChecks,store.checks.size()).contains("pre:2:FAIL"));
+        check(script.downCount==0 && script.upCount==0);
+    }
     @Test void failoverTimeoutStopsWithoutUp() {
         Store store=new Store(); Script script=new Script(); script.stuck=true; run(store,script);
         check(store.state.equals("STOPPED") && "FAILOVER_TIMEOUT".equals(store.outcome));

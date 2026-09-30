@@ -7,6 +7,16 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.securityexpert.nexus.ui2.service.api.CpFailoverController;
+import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -116,6 +126,53 @@ class CpFailoverServiceTest {
         var refused=assertThrows(CpFailoverService.Refusal.class,
             () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1"));
         assertEquals("RUN_ALREADY_ACTIVE",refused.code());
+    }
+    @Test void onDemandReadinessPropagatesActiveUnitRefusal() {
+        ready("ACTIVE","STANDBY");
+        when(store.requestReadiness(CLUSTER,null,"actor-1",A,"check_point"))
+            .thenReturn(new JooqCpFailoverRepository.Decision("RUN_ALREADY_ACTIVE",null));
+        assertEquals("RUN_ALREADY_ACTIVE",assertThrows(CpFailoverService.Refusal.class,
+            () -> service.requestReadiness(CLUSTER_ID,CLUSTER_ID,"actor-1","check_point")).code());
+        verify(store).requestReadiness(CLUSTER,null,"actor-1",A,"check_point");
+    }
+    @Test void concurrentReadinessAdmissionRaceIsRefused() {
+        ready("ACTIVE","STANDBY");
+        when(store.requestReadiness(CLUSTER,null,"actor-1",A,"check_point"))
+            .thenThrow(new org.springframework.dao.DuplicateKeyException("Synthetic active-unit collision"));
+        assertEquals("RUN_ALREADY_ACTIVE",assertThrows(CpFailoverService.Refusal.class,
+            () -> service.requestReadiness(CLUSTER_ID,CLUSTER_ID,"actor-1","check_point")).code());
+    }
+    @ParameterizedTest
+    @ValueSource(strings = {"READY", "NOT_READY", "UNKNOWN"})
+    void summaryEndpointIncludesReadinessStatusFailedCheckAndObservation(String outcome) throws Exception {
+        ready("ACTIVE","STANDBY");
+        when(store.summaryMembers()).thenReturn(List.of(
+            new JooqCpFailoverRepository.SummaryMember(A,true,"ssh_exec",true,"physical",false),
+            new JooqCpFailoverRepository.SummaryMember(B,true,"ssh_exec",true,"physical",false)));
+        Instant observedAt = Instant.parse("2026-09-30T10:00:00Z");
+        String failedCheck = "READY".equals(outcome) ? null : "State synchronization";
+        String checkStatus = "READY".equals(outcome) ? "PASS" : "NOT_READY".equals(outcome) ? "FAIL" : "UNKNOWN";
+        when(store.readinessStatuses()).thenReturn(List.of(new JooqCpFailoverRepository.ReadinessStatus(
+            CLUSTER,null,"check_point",outcome,observedAt,failedCheck,
+            "[{\"checkNo\":9,\"status\":\"" + checkStatus + "\",\"observedAt\":\"2026-09-30T10:00:00Z\"}]")));
+        var json = new ObjectMapper().findAndRegisterModules().disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        var mvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service))
+            .setMessageConverters(new MappingJackson2HttpMessageConverter(json)).build();
+        mvc.perform(get("/api/v2/cp-failover/summary")
+                .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"actor-1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].unitId").value(CLUSTER_ID))
+            .andExpect(jsonPath("$[0].canRunReadiness").value(true))
+            .andExpect(jsonPath("$[0].readiness.status").value(outcome))
+            .andExpect(jsonPath("$[0].readiness.failedCheck").value(failedCheck == null ? "" : failedCheck))
+            .andExpect(jsonPath("$[0].readiness.observedAt").value(observedAt.toString()))
+            .andExpect(jsonPath("$[0].readiness.checks[0].checkNo").value(9))
+            .andExpect(jsonPath("$[0].readiness.checks[0].status").value(checkStatus));
+        when(store.readinessStatuses()).thenReturn(List.of());
+        mvc.perform(get("/api/v2/cp-failover/summary")
+                .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"actor-1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].readiness").value(org.hamcrest.Matchers.nullValue()));
     }
     @Test void incorrectMemberStateRefusedBeforeAdmission() {
         ready("ACTIVE","ACTIVE");
