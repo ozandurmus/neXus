@@ -1,0 +1,8 @@
+Virtual System 12
+Cluster mode: High Availability (Active Up)
+
+ID  Unique Address    State       Name
+01  192.0.2.10        ACTIVE      gw-a
+02  192.0.2.11        STANDBY     (local) gw-b
+
+Active PNOTEs: None

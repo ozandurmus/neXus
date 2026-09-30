@@ -42,6 +42,7 @@ public final class CpFailoverJobExecutor {
     private boolean wrote;
     private boolean writeInFlight;
     private boolean readiness;
+    private ReadinessShapeLog shapes;
 
     private record Member(String id, TransportSession session) {}
     private record Measure(CpFailoverChecks.State state, Set<String> table,
@@ -81,6 +82,7 @@ public final class CpFailoverJobExecutor {
         }
         this.jobId=jobId; this.runId=run.get().id(); this.vsId=run.get().vsId();
         this.readiness="READINESS".equals(run.get().kind());
+        this.shapes=new ReadinessShapeLog("check_point");
         this.epoch=epoch; this.commandIndex=0; this.wrote=false; this.writeInFlight=false;
         if(!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:cp-failover-worker","cp_failover_start")) return;
@@ -217,6 +219,12 @@ public final class CpFailoverJobExecutor {
         if(!attempts.writeOutcome(attempt,epoch,"MATCHED",null,true,null,null,null))
             throw new Stop("ATTEMPT_RECORD_FAILED",0);
         writeInFlight=false;
+        int check=switch(command) {
+            case STAT -> 1; case TABLE -> 2; case IF -> 3; case ARP -> 5;
+            case CONN -> 6; case TRAFFIC -> 8; case SYNC -> 9; case POLICY -> 10;
+            default -> 0;
+        };
+        if (check!=0) shapes.capture(check,completed.output());
         return completed.output();
     }
     private Pair checks(String phase,Member first,Member second,Pair before,Member oldActive) throws InterruptedException {
@@ -301,6 +309,7 @@ public final class CpFailoverJobExecutor {
             new Measure(b,tb,ib,arpB,cb,rateB,policyB.name()));
     }
     private void record(String phase,Member member,int no,String status,String derived) {
+        shapes.logUnknown(no,status);
         store.check(runId,phase,member.id(),vsId,no,status,derived);
     }
     private boolean waitFor(Member first,Member second,Member active,String activeRole,Member other,

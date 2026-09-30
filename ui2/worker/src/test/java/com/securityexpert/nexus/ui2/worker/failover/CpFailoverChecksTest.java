@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.worker.failover;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import com.securityexpert.nexus.ui2.worker.inventory.Fixtures;
 
 class CpFailoverChecksTest {
     private static final String ACTIVE = "Cluster Mode: High Availability (Active Up)\n"
@@ -53,6 +54,33 @@ class CpFailoverChecksTest {
         check(CpFailoverChecks.connections("unsupported")==null);
         check(CpFailoverChecks.bytesByInterface("unsupported").isEmpty());
         check(CpFailoverChecks.trafficBytesPerSecond(Map.of(),Map.of(),Set.of("eth0"))==-1);
+    }
+    @Test void inventoryStyleHaAndVsFixturesKeepOpaqueIdsAndCorroborate() {
+        var plain=CpFailoverChecks.state(Fixtures.read("cp/cphaprob_stat_r8120_ha.txt"));
+        var vs=CpFailoverChecks.state(Fixtures.read("cp/cphaprob_stat_vsx_vs.txt"));
+        check(plain.localId().equals("01") && plain.localRole().equals("ACTIVE"));
+        check(vs.localId().equals("02") && vs.localRole().equals("STANDBY"));
+        check(CpFailoverChecks.corroborated(plain,vs));
+        check(CpFailoverChecks.state(Fixtures.read("cp/cphaprob_stat.txt")).pair());
+        check(CpFailoverChecks.state(Fixtures.read("cp/cphaprob_stat_vsls.txt")).mode().equals("UNKNOWN"));
+    }
+    @Test void readyIsRecognizedButCannotFormAReadyPair() {
+        var ready=CpFailoverChecks.state(Fixtures.read("cp/cphaprob_stat_vsx_vs.txt").replace("STANDBY","READY"));
+        check(ready.mode().equals("HA") && ready.localRole().equals("READY"));
+        check(!ready.pair());
+    }
+    @Test void unrecognizedRowsAndAmbiguousLocalMarkersStayUnknown() {
+        String fixture=Fixtures.read("cp/cphaprob_stat_vsx_vs.txt");
+        for (String text:new String[]{null,"Cluster Mode: High Availability\nunsupported",
+                fixture.replace("STANDBY","UNRECOGNIZED"),fixture.replace("(local)",""),
+                fixture.replace("gw-a","(local) gw-a"),fixture.replace("02  ","01  ")}) {
+            check(CpFailoverChecks.state(text).mode().equals("UNKNOWN"));
+        }
+        for (String row:new String[]{"(local) 1 192.0.2.11 100% Active", "1 192.0.2.11 (local) 100% Active",
+                "1 192.0.2.11 100% Active (local)"}) {
+            check(CpFailoverChecks.state("CLUSTER MODE: HIGH AVAILABILITY\n"+row
+                +"\n2 192.0.2.12 0% STANDBY").pair());
+        }
     }
     @Test void syncAndPolicyPassFailUnknown() {
         check(CpFailoverChecks.syncStatus(SYNC).equals("PASS"));

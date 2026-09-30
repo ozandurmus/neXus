@@ -18,6 +18,31 @@ public final class PanFailoverChecks {
             String ha2, String runningSync) {}
     private PanFailoverChecks() {}
 
+    static String unknownDerived(int check,String status,boolean fieldFound) {
+        String path=fieldPath(check);
+        return "UNKNOWN".equals(status) && path!=null
+            ?"{\"reason\":\""+(fieldFound?"unrecognised field value":"field not found")
+                +"\",\"looked_for\":\""+path+"\"}":"{}";
+    }
+
+    static boolean fieldFound(int check,String xml) {
+        String path=fieldPath(check);
+        if (path==null) return false;
+        Element element=result(xml);
+        String[] elements=path.split("/");
+        for (int i=3;i<elements.length;i++) element=child(element,elements[i]);
+        return element!=null;
+    }
+
+    private static String fieldPath(int check) {
+        return switch(check) {
+            case 4 -> "/response/result/group/running-sync";
+            case 5 -> "/response/result/session-sync";
+            case 6 -> "/response/result/active-sessions";
+            default -> null;
+        };
+    }
+
     private static Element child(Element parent, String name) {
         if (parent == null) return null;
         for (Node n=parent.getFirstChild(); n!=null; n=n.getNextSibling())

@@ -56,6 +56,8 @@ public final class PanFailoverJobExecutor {
     private int commandIndex;
     private boolean wrote,writeInFlight;
     private boolean readiness;
+    private ReadinessShapeLog shapes;
+    private final Map<Integer,Boolean> fieldsFound=new java.util.HashMap<>();
 
     public PanFailoverJobExecutor(JooqCpFailoverRepository store,DeviceRepository devices,
             JobLeaseRepository leases,JobStepAttemptRepository attempts,DeviceTransport transport,
@@ -83,6 +85,8 @@ public final class PanFailoverJobExecutor {
         }
         this.jobId=jobId; this.runId=run.get().id(); this.epoch=epoch;
         this.readiness=READINESS_KIND.equals(run.get().kind());
+        this.shapes=new ReadinessShapeLog("palo_alto");
+        this.fieldsFound.clear();
         this.commandIndex=0; this.wrote=false; this.writeInFlight=false;
         if (!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:pan-failover-worker","pan_failover_start")) return;
@@ -210,6 +214,15 @@ public final class PanFailoverJobExecutor {
         if (!attempts.writeOutcome(attempt,epoch,"MATCHED",null,true,null,null,null))
             throw new Stop("ATTEMPT_RECORD_FAILED",0);
         writeInFlight=false;
+        int fieldCheck=STATE.equals(command)?4:SESSION_SYNC.equals(command)?5:SESSIONS.equals(command)?6:0;
+        if (fieldCheck!=0) fieldsFound.merge(fieldCheck,PanFailoverChecks.fieldFound(fieldCheck,completed.body()),
+            (a,b) -> a && b);
+        if (STATE.equals(command)) {
+            for (int check=1;check<=4;check++) shapes.capture(check,completed.body());
+        } else {
+            int check=SESSION_SYNC.equals(command)?5:SESSIONS.equals(command)?6:SYSTEM.equals(command)?7:0;
+            if (check!=0) shapes.capture(check,completed.body());
+        }
         return completed.body();
     }
     private PanFailoverChecks.State read(Peer peer) throws InterruptedException {
@@ -238,9 +251,11 @@ public final class PanFailoverJobExecutor {
                 "FAIL".equals(syncA)||"FAIL".equals(syncB)?"FAIL":"UNKNOWN",carried,versions};
         for (int i=0;i<statuses.length;i++) {
             int no=i+1;
-            String derived=no==1?"{\"role\":\""+a.role()+"\"}":"{}";
+            shapes.logUnknown(no,statuses[i]);
+            String reason=PanFailoverChecks.unknownDerived(no,statuses[i],fieldsFound.getOrDefault(no,false));
+            String derived=no==1?"{\"role\":\""+a.role()+"\"}":reason;
             store.check(runId,phase,first.id(),null,no,statuses[i],derived);
-            derived=no==1?"{\"role\":\""+b.role()+"\"}":"{}";
+            derived=no==1?"{\"role\":\""+b.role()+"\"}":reason;
             store.check(runId,phase,second.id(),null,no,statuses[i],derived);
         }
         for (int i=0;i<statuses.length;i++) if (!"PASS".equals(statuses[i]))

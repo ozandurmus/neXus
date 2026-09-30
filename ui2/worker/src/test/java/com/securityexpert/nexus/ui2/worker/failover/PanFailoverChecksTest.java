@@ -55,6 +55,21 @@ class PanFailoverChecksTest {
         assertEquals("FAIL",PanFailoverChecks.versions(version,version.replace("<threat-version>3", "<threat-version>4")));
         assertEquals("UNKNOWN",PanFailoverChecks.versions(version,result("<system/>")));
     }
+    @Test void unknownReasonsNameExistingLookupPathsWithoutGuessingFields() {
+        String[] paths={"group/running-sync","session-sync","active-sessions"};
+        for (int check=4;check<=6;check++) {
+            assertEquals(false,PanFailoverChecks.fieldFound(check,result("<other/>")));
+            assertEquals("{\"reason\":\"field not found\",\"looked_for\":\"/response/result/"+paths[check-4]+"\"}",
+                PanFailoverChecks.unknownDerived(check,"UNKNOWN",false));
+            assertEquals("{}",PanFailoverChecks.unknownDerived(check,"PASS",true));
+            assertEquals("{}",PanFailoverChecks.unknownDerived(check,"FAIL",true));
+        }
+        assertEquals(true,PanFailoverChecks.fieldFound(4,result("<group><running-sync>other</running-sync></group>")));
+        assertEquals(true,PanFailoverChecks.fieldFound(5,result("<session-sync/>")));
+        assertEquals(true,PanFailoverChecks.fieldFound(6,result("<active-sessions>invalid</active-sessions>")));
+        assertEquals("{\"reason\":\"unrecognised field value\",\"looked_for\":\"/response/result/active-sessions\"}",
+            PanFailoverChecks.unknownDerived(6,"UNKNOWN",true));
+    }
     public static void main(String[] args) {
         var test=new PanFailoverChecksTest(); test.pairPassFailAndUnknown(); test.activeActiveRefused(); test.addedChecksPassFailUnknown();
     }

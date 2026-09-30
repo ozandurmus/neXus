@@ -48,7 +48,8 @@ public final class CheckPointHaStateParser {
         return new HaState(role, clusterModeOf(output), perVsidLocalRoleOf(output));
     }
 
-    private static Optional<String> clusterModeOf(String output) {
+    public static Optional<String> clusterModeOf(String output) {
+        if (output == null) return Optional.empty();
         Matcher matcher = CLUSTER_MODE_LINE.matcher(output);
         if (!matcher.find()) {
             return Optional.empty();
@@ -71,6 +72,12 @@ public final class CheckPointHaStateParser {
             return Optional.of("High Availability");
         }
         return Optional.of(text);
+    }
+
+    /** A complete state token, shared with readiness's member-table projection. */
+    public static Optional<String> memberStateOf(String token) {
+        Matcher state = STATE_TOKEN.matcher(token);
+        return state.matches() ? Optional.of(token.toUpperCase(Locale.ROOT)) : Optional.empty();
     }
 
     /**

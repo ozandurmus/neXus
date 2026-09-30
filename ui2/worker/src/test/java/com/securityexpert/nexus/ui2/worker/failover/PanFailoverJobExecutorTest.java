@@ -27,6 +27,7 @@ class PanFailoverJobExecutorTest {
     private static final String CLUSTER="CLS-TEST-01", A="FW-TEST-01", B="FW-TEST-02";
     private static final class Script {
         boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,badVersion,lowPostSessions;
+        boolean missingFields;
         int suspendCount,functionalCount;
         DeviceTransport transport() {
             return (DeviceTransport) Proxy.newProxyInstance(DeviceTransport.class.getClassLoader(),
@@ -45,6 +46,10 @@ class PanFailoverJobExecutorTest {
                         return new XmlApiResult.Completed(200,"<response status=\"success\"/>");
                     }
                     boolean first=A.equals(((ApiTarget)args[0]).endpointId());
+                    if (missingFields && !first && (command.contains("<state-synchronization/>")
+                            || command.contains("<session><info/>")))
+                        return new XmlApiResult.Completed(200,"<response status=\"success\"><result><other/>"
+                            +"</result></response>");
                     if (command.contains("<state-synchronization/>"))
                         return new XmlApiResult.Completed(200,"<response status=\"success\"><result><session-sync>"
                             +(badSync&&!first?"disabled":"in-sync")+"</session-sync></result></response>");
@@ -68,7 +73,8 @@ class PanFailoverJobExecutorTest {
                         +"</serial-num><conn-status>up</conn-status><conn-ha1><conn-status>up</conn-status>"
                         +"</conn-ha1><conn-ha2><conn-status>"+ha2+"</conn-status></conn-ha2>"
                         +"</peer-info></group></result></response>";
-                    return new XmlApiResult.Completed(200,body);
+                    return new XmlApiResult.Completed(200,missingFields && !first
+                        ?body.replace("<running-sync>synchronized</running-sync>",""):body);
                 });
         }
     }
@@ -117,21 +123,22 @@ class PanFailoverJobExecutorTest {
     private static Result run(Script script,boolean readiness) {
         JooqCpFailoverRepository store=mock(JooqCpFailoverRepository.class);
         AtomicReference<String> state=new AtomicReference<>("PLANNED"),outcome=new AtomicReference<>();
-        List<String> checks=new ArrayList<>();
+        List<String> checks=new ArrayList<>(),derived=new ArrayList<>();
         when(store.runByJob("job-1")).thenAnswer(inv -> Optional.of(new JooqCpFailoverRepository.Run(
             "run-1",CLUSTER,null,readiness?null:"approval-1","actor-1",Instant.now(),"job-1",
             state.get(),state.get(),outcome.get(),null,null,"palo_alto",readiness?"READINESS":"FAILOVER")));
         when(store.windowValid("run-1")).thenReturn(true);
         doAnswer(inv -> {state.set(inv.getArgument(1)); outcome.set(inv.getArgument(3)); return null;})
             .when(store).state(anyString(),anyString(),anyString(),nullable(String.class),nullable(String.class),nullable(String.class));
-        doAnswer(inv -> {checks.add(inv.getArgument(1)+":"+inv.getArgument(4)+":"+inv.getArgument(5)); return null;})
+        doAnswer(inv -> {checks.add(inv.getArgument(1)+":"+inv.getArgument(4)+":"+inv.getArgument(5));
+            derived.add(inv.getArgument(6)); return null;})
             .when(store).check(anyString(),anyString(),anyString(),nullable(String.class),anyInt(),anyString(),anyString());
         new PanFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),
             ref -> new PanCredentialMaterial("synthetic-user","synthetic-password".toCharArray()),gates(),d -> {})
             .execute("job-1",1);
-        return new Result(state.get(),outcome.get(),checks);
+        return new Result(state.get(),outcome.get(),checks,derived);
     }
-    private record Result(String state,String outcome,List<String> checks) {}
+    private record Result(String state,String outcome,List<String> checks,List<String> derived) {}
     @Test void happyPath() {
         Script script=new Script(); Result result=run(script);
         assertEquals("DONE",result.state());
@@ -182,6 +189,18 @@ class PanFailoverJobExecutorTest {
             "<request><high-availability><state><suspend/></state></high-availability></request>"));
         assertFalse(PanFailoverJobExecutor.writeAllowed("READINESS",
             "<request><high-availability><state><functional/></state></high-availability></request>"));
+    }
+    @Test void missingFieldsOnOnePeerKeepChecksUnknownAndExplainTheLookup() {
+        Script script=new Script(); script.missingFields=true;
+        Result result=run(script,true);
+        assertEquals("UNKNOWN",result.outcome());
+        assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount);
+        for (int check=4;check<=6;check++) {
+            assertTrue(result.checks().contains("pre:"+check+":UNKNOWN"));
+            String expected=PanFailoverChecks.unknownDerived(check,"UNKNOWN",false);
+            assertEquals(expected,result.derived().get((check-1)*2));
+            assertEquals(expected,result.derived().get((check-1)*2+1));
+        }
     }
     public static void main(String[] args) {
         var test=new PanFailoverJobExecutorTest(); test.happyPath(); test.precheckFailNeverWrites();

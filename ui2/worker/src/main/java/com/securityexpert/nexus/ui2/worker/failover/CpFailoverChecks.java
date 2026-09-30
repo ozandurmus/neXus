@@ -7,12 +7,14 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointHaStateParser;
+
 /** Strict, in-memory projections of the approved Check Point checks. */
 public final class CpFailoverChecks {
     public static final double ARP_MIN_RATIO = 0.80;
     public static final double CONNECTION_MIN_RATIO = 0.80;
     public static final double TRAFFIC_MIN_RATIO = 0.50;
-    private static final Pattern MEMBER = Pattern.compile("(?im)^\\s*([^\\s()]+)\\s*(\\(local\\))?\\s+\\S+\\s+\\S+\\s+(Active|Standby|Down)\\b.*$");
+    private static final Pattern LOCAL = Pattern.compile("(?i)\\(local\\)");
     private static final Pattern IP_ROW = Pattern.compile("(?m)^\\s*([^\\s()]+)\\s+(\\d+)\\s+([0-9a-fA-F:.]+)\\s*$");
     private static final Pattern INTERFACE = Pattern.compile("(?m)^\\s*([A-Za-z][A-Za-z0-9_.:-]{0,63})\\s+(UP|DOWN|Non-Monitored)\\b(.*)$");
     private static final Pattern CONNECTION = Pattern.compile("(?im)^\\s*\\S+\\s+connections\\s+\\d+\\s+(\\d+)\\s+(\\d+)\\s+\\d+\\s*$");
@@ -26,16 +28,25 @@ public final class CpFailoverChecks {
             && members.values().stream().filter("STANDBY"::equals).count()==1 && localId!=null; }
     }
     public static State state(String output) {
-        if (output==null || !output.matches("(?s).*Cluster [Mm]ode:\\s*High Availability.*"))
-            return new State("UNKNOWN",Map.of(),null,"UNKNOWN");
+        State unknown=new State("UNKNOWN",Map.of(),null,"UNKNOWN");
+        if (!CheckPointHaStateParser.clusterModeOf(output).filter("High Availability"::equals).isPresent())
+            return unknown;
         Map<String,String> roles=new HashMap<>(); String local=null;
-        Matcher m=MEMBER.matcher(output);
-        while(m.find()) {
-            if (roles.putIfAbsent(m.group(1),m.group(3).toUpperCase(java.util.Locale.ROOT))!=null)
-                return new State("UNKNOWN",Map.of(),null,"UNKNOWN");
-            if (m.group(2)!=null) local=m.group(1);
+        for (String line:output.split("\\R")) {
+            Matcher marker=LOCAL.matcher(line);
+            boolean isLocal=marker.find();
+            String[] columns=marker.replaceAll(" ").strip().split("\\s+");
+            if (columns.length<3 || !columns[1].matches("[0-9a-fA-F:.]+")) continue;
+            int stateColumn=columns[2].endsWith("%")?3:2;
+            if (columns.length<=stateColumn) return unknown;
+            String role=CheckPointHaStateParser.memberStateOf(columns[stateColumn]).orElse(null);
+            if (role==null || roles.putIfAbsent(columns[0],role)!=null) return unknown;
+            if (isLocal) {
+                if (local!=null) return unknown;
+                local=columns[0];
+            }
         }
-        return new State("HA",Map.copyOf(roles),local,local==null?"UNKNOWN":roles.get(local));
+        return roles.size()<2 || local==null?unknown:new State("HA",Map.copyOf(roles),local,roles.get(local));
     }
     public static boolean corroborated(State a,State b) {
         return a.pair() && b.pair() && a.members().equals(b.members()) && !a.localId().equals(b.localId());

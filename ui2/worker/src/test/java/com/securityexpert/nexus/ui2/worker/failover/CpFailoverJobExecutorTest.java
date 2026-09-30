@@ -47,6 +47,8 @@ class CpFailoverJobExecutorTest {
     }
     private static final class Script {
         boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
+        boolean readyMember;
+        String unknownCommand;
         int downCount,upCount,connectCount;
         final List<String> commands=new ArrayList<>();
         long bytesA=1000,bytesB=1000;
@@ -65,12 +67,13 @@ class CpFailoverJobExecutorTest {
                     commands.add(literal);
                     String cmd=literal.startsWith("bash -lc 'vsenv 12 && ")
                         ?literal.substring("bash -lc 'vsenv 12 && ".length(),literal.length()-1):literal;
+                    if (cmd.equals(unknownCommand)) return new ExecResult.Completed("unrecognized synthetic output",0);
                     boolean first=member.endsWith("11");
                     if(cmd.endsWith("clusterXL_admin down")) {down=true;downCount++;return new ExecResult.Completed("ok",0);}
                     if(cmd.endsWith("clusterXL_admin up")) {up=true;upCount++;return new ExecResult.Completed("ok",0);}
                     if(cmd.endsWith("cphaprob stat")) {
                         String roleA=up?"Standby":down&&!stuck?"Down":"Active";
-                        String roleB=down&&!stuck?"Active":"Standby";
+                        String roleB=readyMember?"READY":down&&!stuck?"Active":"Standby";
                         String text="Cluster Mode: High Availability (Active Up)\nNumber Unique Address Assigned Load State\n"
                             +"1 "+(first?"(local) ":"")+"192.0.2.11 100% "+roleA+"\n"
                             +"2 "+(!first?"(local) ":"")+"192.0.2.12 0% "+roleB+"\n";
@@ -161,6 +164,24 @@ class CpFailoverJobExecutorTest {
         check(script.downCount==0 && script.upCount==0);
         check(!CpFailoverJobExecutor.writeAllowed("READINESS","clusterXL_admin down"));
         check(!CpFailoverJobExecutor.writeAllowed("READINESS","clusterXL_admin up"));
+    }
+    @Test void readyMemberFailsReadinessRatherThanReturningUnknown() {
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script(); script.readyMember=true; run(store,script);
+        check("NOT_READY".equals(store.outcome));
+        check(store.checks.contains("pre:1:FAIL"));
+        check(script.downCount==0 && script.upCount==0);
+    }
+    @Test void unknownOutputFromEveryCheckStaysUnknownWithoutWrites() {
+        Map<String,Integer> commands=Map.of("cphaprob stat",1,"cphaprob tablestat",2,"cphaprob -a if",3,
+            "arp -an",5,"fw tab -t connections -s",6,"cat /proc/net/dev",8,"cphaprob syncstat",9,"fw stat",10);
+        commands.forEach((command,no) -> {
+            Store store=new Store(); store.kind="READINESS";
+            Script script=new Script(); script.unknownCommand=command; run(store,script);
+            check("UNKNOWN".equals(store.outcome));
+            check(store.checks.contains("pre:"+no+":UNKNOWN"));
+            check(script.downCount==0 && script.upCount==0);
+        });
     }
     @Test void readyReadinessNeverSkipsFreshFailoverPrecheck() {
         Store store=new Store(); store.kind="READINESS";
