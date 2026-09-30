@@ -18,6 +18,7 @@ import { useListSearch } from "../shell/listSearch";
 import { requestBulkInventoryCollect, requestBulkConfigurationCollect, listConfigurations, getOverview, listDevices, getManagementTree, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode } from "../auth/adminApi";
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
+import { HttpsCertificatePanel } from "./HttpsCertificatePanel";
 import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar, deriveClusterTitle } from "./InventoryPanels";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
 
@@ -1205,6 +1206,7 @@ export function InventoryScreen() {
                     }}
                   />
                 )}
+                <HttpsCertificatePanel key={`certificate-${selectedDevice.device_id}`} deviceId={selectedDevice.device_id} />
                 <DeviceInventoryPanels
                   key={selectedDevice.device_id}
                   device={selectedDevice}

@@ -76,6 +76,22 @@ class NotificationMailRouterTest {
     }
 
     @Test
+    void certificateChangesRaiseDeviceHealthForSuccessfulAndDiscoveryJobs() throws Exception {
+        DSLContext create = DSL.using(SQLDialect.POSTGRES);
+        DSLContext dsl = DSL.using(new MockConnection(ctx -> {
+            Result<Record> result = ctx.sql().contains("certificate changed")
+                    ? rows(create, new String[]{"job_id", "finished_at"}, new String[]{"discovery-job", AT})
+                    : rows(create, new String[]{"empty"});
+            if (ctx.sql().contains("certificate changed")) assertFalse(ctx.sql().contains("state = 'FAILED'"));
+            return new MockResult[]{new MockResult(result.size(), result)};
+        }), SQLDialect.POSTGRES);
+        var batch = NotificationMailRouter.collect(dsl, "device_health", 0, FROM);
+        assertEquals(1, batch.lines().size());
+        assertTrue(batch.lines().getFirst().contains("HTTPS certificate changed"));
+        assertTrue(batch.lines().getFirst().contains("/operations/jobs/discovery-job"));
+    }
+
+    @Test
     void everyTypeQueriesItsSyntheticEventSource() throws Exception {
         DSLContext dsl = fixture();
         for (String type : NotificationRoute.TYPES) {

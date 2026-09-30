@@ -127,6 +127,9 @@ public final class ActionRegistry {
     public static final String CP_FAILOVER_START = "cp_failover_start";
     public static final String CP_FAILOVER_READ = "cp_failover_read";
 
+    public static final String HTTPS_CERTIFICATE_ACCEPT = "https_certificate_accept";
+    public static final String HTTPS_CERTIFICATE_STRICT = "https_certificate_strict";
+
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
     public ActionRegistry() {
@@ -134,6 +137,8 @@ public final class ActionRegistry {
     }
 
     private void seedActions() {
+        register(new ActionDescriptor(HTTPS_CERTIFICATE_ACCEPT, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(HTTPS_CERTIFICATE_STRICT, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(ROLE_BINDING_CREATE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(ROLE_BINDING_REVOKE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SESSION_REVOKE, true, Optional.of(RoleToken.SECURITY_ADMIN)));

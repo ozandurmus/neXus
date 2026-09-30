@@ -38,6 +38,16 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void masksCertificateCommonNamesInNestedEvidence() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        var cert = Map.of("subject_cn", "synthetic-appliance.example.invalid", "issuer_cn", "synthetic-issuer.example.invalid",
+                "fingerprint_sha256", "a".repeat(64), "not_after", "2030-01-01T00:00:00Z");
+        Object masked = advice.beforeBodyWrite(Map.of("certificates", List.of(cert)), null, null, null, serverRequest, null);
+        assertThat(masked.toString()).doesNotContain("synthetic-appliance.example.invalid", "synthetic-issuer.example.invalid");
+        assertThat(masked.toString()).contains("a".repeat(64), "2030-01-01T00:00:00Z");
+    }
+
+    @Test
     void masksControlDetailTextAndHostnameButPreservesDeviceId() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
         @SuppressWarnings("unchecked")

@@ -176,7 +176,7 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         result.put(key, value);
                     }
                 }
-                case "hostname" -> {
+                case "hostname", "subject_cn", "issuer_cn" -> {
                     if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskDeviceName(s, clusterRef));
                     } else {

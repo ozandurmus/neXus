@@ -266,6 +266,12 @@ public final class WorkerClaimLoop {
     }
 
     private boolean executeClaimed(ClaimedJob claimed) {
+        try (var warnings = com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateWarnings.open()) {
+            return executeWithCertificateWarnings(claimed);
+        }
+    }
+
+    private boolean executeWithCertificateWarnings(ClaimedJob claimed) {
         long claimMs = System.currentTimeMillis();
         Optional<JobRow> jobOpt = jobRecordDao.find(claimed.jobId());
         if (jobOpt.isEmpty()) {

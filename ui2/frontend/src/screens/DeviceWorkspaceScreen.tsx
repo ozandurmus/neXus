@@ -9,6 +9,7 @@ import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { deleteDevice, getDeviceWorkspace, type DeviceWorkspaceView, type ActionAffordance, type TransportSummary, type ApiError } from "../auth/adminApi";
 import { enrollmentStateLabel } from "../shell/deviceCopy";
+import { HttpsCertificatePanel } from "./HttpsCertificatePanel";
 import { Ts } from "../shell/States";
 
 function describeApiError(err: unknown): string {
@@ -128,6 +129,8 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
                 </Typography>
               </Stack>
             </Box>
+
+            <HttpsCertificatePanel key={deviceId} deviceId={deviceId} />
 
             <Box sx={{ bgcolor: m3.scHigh, p: 2, borderRadius: 2 }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "medium" }}>Enrollment State</Typography>
