@@ -64,12 +64,12 @@ inflight=$(q "select count(*) from jobs where state in ('CLAIMED','EXECUTING')")
 if [ "$inflight" != "0" ]; then echo "STOP: $inflight job(s) in flight; deploy not started"; exit 4; fi
 for f in $APPLY_NAMES; do kubectl apply -f "$f" | sed 's/^/applied: /'; done
 before=$(kubectl -n ui2 get pods --no-headers -o custom-columns=N:.metadata.name | tr '\n' ' ')
-lastbuild=$(kubectl -n ui2-build get pods --no-headers --sort-by=.metadata.creationTimestamp 2>/dev/null | grep image-build | tail -1 | awk '{print $1}')
+lastbuild=$(kubectl -n ui2-build get pods --no-headers --sort-by=.metadata.creationTimestamp 2>/dev/null | grep -E '^ui2-image-build-' | tail -1 | awk '{print $1}')
 nohup bash ~/run_build.sh > /tmp/nexus_build.log 2>&1 &
 start=$(date +%s)
 while true; do
   sleep 15; t=$(( $(date +%s) - start ))
-  b=$(kubectl -n ui2-build get pods --no-headers --sort-by=.metadata.creationTimestamp 2>/dev/null | grep image-build | tail -1)
+  b=$(kubectl -n ui2-build get pods --no-headers --sort-by=.metadata.creationTimestamp 2>/dev/null | grep -E '^ui2-image-build-' | tail -1)
   bname=$(echo "$b" | awk '{print $1}'); bstate=$(echo "$b" | awk '{print $3}')
   [ "$bname" = "$lastbuild" ] && bstate="(waiting for the new build pod)"
   new=$(kubectl -n ui2 get pods --no-headers 2>/dev/null | grep -E 'ui2-(service|worker)' | while read n r s rs rest; do case " $before " in *" $n "*) ;; *) echo "$n $r $s $rs";; esac; done)
@@ -96,6 +96,7 @@ while true; do
 done
 # Already validated counts from security_host.py (or the not_configured marker); preserve it for the ship caller.
 grep -E '^\{"(passed|security_gate)":' /tmp/nexus_build.log || true
+grep -E '^TIMING [a-z_]+ [0-9]+$' /tmp/nexus_build.log || true
 # HTTPS since 2026-09-27 (HTTP answers 301); -k: the local CA is not in the host's trust store.
 echo "site $(curl -sk --noproxy '*' -o /dev/null -w '%{http_code}' https://127.0.0.1/)"
 echo "schema $(q "select version || ' ' || success from flyway_schema_history order by installed_rank desc limit 1")"

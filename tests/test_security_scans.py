@@ -289,3 +289,126 @@ def test_orchestrator_stops_before_configuration_sync_on_gate_failure(tmp_path, 
     assert len(calls) == 1
     if not missing:
         assert json.loads(capsys.readouterr().out)["counts"] == result["counts"]
+
+
+def test_split_gate_keeps_source_before_digest_and_one_summary():
+    name = "security-gate-" + "a" * 12
+    pod = manifests.job(config(), "gate", commit="b" * 40, gate_name=name)["spec"]["template"]["spec"]
+    assert [c["name"] for c in pod["initContainers"]] == [
+        "prepare", "semgrep", "gitleaks", "history", "trivy", "await-image", "trivy-image"]
+    assert pod["initContainers"][4]["command"][-1] == "trivy-source"
+    assert [c["name"] for c in pod["containers"]] == ["summary"]
+    assert pod["automountServiceAccountToken"] is False
+    for c in pod["initContainers"] + pod["containers"]:
+        scripts = next(m for m in c["volumeMounts"] if m["name"] == "scripts")
+        assert scripts["subPath"] == "b" * 40 + "/scripts" and scripts["readOnly"]
+
+
+@pytest.mark.parametrize("failure", [None, "semgrep.json", "gitleaks-tree.json", "gitleaks-history.json",
+                                    "trivy-fs.json", "trivy-config.json", "trivy-image-0.json", "sbom-0.json"])
+def test_split_gate_combines_same_reports_and_fails_closed(tmp_path, monkeypatch, capsys, failure):
+    from datetime import datetime, timezone
+    import security_run as runner
+    root, work, source = (tmp_path / n for n in ("reports", "work", "source"))
+    for path in (root, work, source):
+        path.mkdir()
+    monkeypatch.setattr(runner, "ROOT", root)
+    monkeypatch.setattr(runner, "WORK", work)
+    monkeypatch.setattr(runner, "SOURCE", source)
+    monkeypatch.setattr(runner.os, "umask", lambda mask: None)
+    monkeypatch.setenv("SCAN_MODE", "gate")
+    monkeypatch.setenv("EXPECTED_COMMIT", "a" * 40)
+    monkeypatch.setenv("GATE_IMAGE", manifests.REGISTRY + "/app@sha256:" + "b" * 64)
+    (source / "current").write_text("a" * 40)
+    (source / ("a" * 40) / ".git").mkdir(parents=True)
+    baseline = source / ("a" * 40) / "security/baseline.yaml"
+    baseline.parent.mkdir()
+    baseline.write_text('{"accepted":[]}')
+    image = manifests.REGISTRY + "/app@sha256:" + "b" * 64
+    (source / "images.json").write_text(json.dumps(dict(generated_at=datetime.now(timezone.utc).isoformat(), images=[image])))
+    runner.prepare()
+    original_manifest = (work / "manifest.json").read_text()
+    monkeypatch.setenv("WAIT_FOR_IMAGE", "1")
+    runner.prepare()
+    assert "trivy-image" not in (work / "manifest.json").read_text()
+    request = tmp_path / "request"
+    request.write_text(json.dumps(dict(commit="a" * 40, image=image)))
+    runner.await_image(image_file=request)
+    assert (work / "manifest.json").read_text() == original_manifest
+    for item in json.loads(original_manifest):
+        payload = {"results": []} if item["tool"] == "semgrep" else [] if item["tool"] == "gitleaks" else {"SchemaVersion": 2, "Results": []}
+        (work / item["file"]).write_text(json.dumps(payload))
+        (work / (item["file"] + ".exit")).write_text("0")
+    (work / "sbom-0.json").write_text('{"bomFormat":"CycloneDX","components":[]}')
+    (work / "sbom-0.json.exit").write_text("0")
+    if failure:
+        (work / failure).unlink()
+    assert runner.finish() == bool(failure)
+    result = json.loads(capsys.readouterr().out.splitlines()[-1])
+    monkeypatch.delenv("WAIT_FOR_IMAGE")
+    runner.prepare()
+    assert runner.finish() == bool(failure)
+    unsplit = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert set(result) == set(unsplit)
+    assert {k: v for k, v in result.items() if k != "generated_at"} == {k: v for k, v in unsplit.items() if k != "generated_at"}
+    assert result["passed"] is (failure is None)
+    assert not (root / "notifications").exists()
+    if failure:
+        with pytest.raises(RuntimeError, match="refused"):
+            host.wait_gate(lambda: {"status": {"conditions": [{"type": "Failed", "status": "True"}]}}, lambda: json.dumps(result))
+
+
+def test_split_gate_wait_timeout_and_mismatched_digest_refuse(tmp_path, monkeypatch):
+    import security_run as runner
+    monkeypatch.setattr(runner, "WORK", tmp_path)
+    (tmp_path / "source-start").write_text("0")
+    (tmp_path / "source-commit").write_text("a" * 40)
+    with pytest.raises(ValueError, match="timed out"):
+        runner.await_image(timeout=0, image_file=tmp_path / "missing")
+    path = tmp_path / "request"
+    path.write_text(json.dumps(dict(commit="b" * 40, image=manifests.REGISTRY + "/app@sha256:" + "c" * 64)))
+    with pytest.raises(ValueError, match="mismatch"):
+        runner.await_image(image_file=path)
+
+
+def test_gate_rejects_other_commit_before_publishing_digest(monkeypatch):
+    calls = []
+    def fake(*args, **kwargs):
+        calls.append(args)
+        return json.dumps({"metadata": {"annotations": {"nexus/commit": "b" * 40}}})
+    monkeypatch.setattr(host, "kubectl", fake)
+    with pytest.raises(ValueError, match="mismatch"):
+        host.gate(config(), manifests.REGISTRY + "/app@sha256:" + "c" * 64, "a" * 40, "security-gate-" + "d" * 12)
+    assert len(calls) == 1 and calls[0][0] == "get"
+
+
+def test_split_gate_start_and_publish_are_unique_and_digest_is_immutable(monkeypatch, capsys):
+    jobs, requests = {}, {}
+    def fake(*args, **kwargs):
+        if args[0] == "create":
+            doc = json.loads(kwargs["input"])
+            name = doc["metadata"]["name"]
+            if doc["kind"] == "Job":
+                doc["metadata"]["uid"] = "synthetic-uid"
+                doc["status"] = {"conditions": [{"type": "Complete", "status": "True"}]}
+                jobs[name] = doc
+            else:
+                requests[name] = doc
+        elif args[:2] == ("get", "job"):
+            return json.dumps(jobs[args[2]])
+        elif args[0] == "patch":
+            patch = json.loads(args[-1])
+            requests[args[2]].update(patch)
+        elif args[0] == "logs":
+            return json.dumps(summary.summarize([], [], [])) if args[-1] == "summary" else "TIMING security_source 1\nprivate detail\n"
+        return ""
+    monkeypatch.setattr(host, "kubectl", fake)
+    name = host.start_gate(config(), "a" * 40)
+    other = host.start_gate(config(), "a" * 40)
+    assert name != other
+    assert requests[name]["metadata"]["ownerReferences"][0]["uid"] == "synthetic-uid"
+    image = manifests.REGISTRY + "/app@sha256:" + "b" * 64
+    host.gate(config(), image, "a" * 40, name)
+    assert requests[name]["immutable"] is True
+    assert json.loads(requests[name]["data"]["request"]) == dict(image=image, commit="a" * 40)
+    assert "private detail" not in capsys.readouterr().out

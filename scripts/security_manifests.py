@@ -47,15 +47,21 @@ def container(config, name, tool, command, mode):
                               dict(name="reports", mountPath="/var/lib/nexus-security")])
 
 
-def job(config, mode="daily", image=None, commit=None):
+def job(config, mode="daily", image=None, commit=None, gate_name=None):
     settings(config)
     prepare = container(config, "prepare", "semgrep", ["python3", "/scripts/security_run.py", "prepare"], mode)
     if mode == "gate":
-        if not image or not re.fullmatch(re.escape(REGISTRY) + r"/[a-z0-9/_-]+@sha256:[a-f0-9]{64}", image):
+        if not gate_name and (not image or not re.fullmatch(re.escape(REGISTRY) + r"/[a-z0-9/_-]+@sha256:[a-f0-9]{64}", image)):
             raise ValueError("gate requires the freshly built digest")
         if not commit or not re.fullmatch(r"[a-f0-9]{40}", commit):
             raise ValueError("gate requires the built commit")
-        prepare["env"] += [dict(name="GATE_IMAGE", value=image), dict(name="EXPECTED_COMMIT", value=commit)]
+        prepare["env"] += [dict(name="EXPECTED_COMMIT", value=commit)]
+        if gate_name:
+            if not re.fullmatch(r"security-gate-[a-f0-9]{12}", gate_name):
+                raise ValueError("invalid gate name")
+            prepare["env"].append(dict(name="WAIT_FOR_IMAGE", value="1"))
+        else:
+            prepare["env"].append(dict(name="GATE_IMAGE", value=image))
     stages = [prepare]
     if mode == "dast":
         zap = container(config, "zap", "zap", ["python3", "/scripts/security_dast.py"], mode)
@@ -65,10 +71,18 @@ def job(config, mode="daily", image=None, commit=None):
         stages.append(zap)
     else:
         for name, tool in (("semgrep", "semgrep"), ("gitleaks", "gitleaks"), ("history", "gitleaks"), ("trivy", "trivy")):
-            stage = container(config, name, tool, ["sh", "/scripts/security_scan.sh", name], mode)
+            scan = "trivy-source" if gate_name and name == "trivy" else name
+            stage = container(config, name, tool, ["sh", "/scripts/security_scan.sh", scan], mode)
             # Reports are normalized by the summary, not retained raw by scanner stages.
             stage["volumeMounts"] = [m for m in stage["volumeMounts"] if m["name"] != "reports"]
             stages.append(stage)
+    if gate_name:
+        waiting = container(config, "await-image", "semgrep", ["python3", "/scripts/security_run.py", "await-image"], mode)
+        waiting["volumeMounts"].append(dict(name="gate-image", mountPath="/gate-image", readOnly=True))
+        stages.append(waiting)
+        image_scan = container(config, "trivy-image", "trivy", ["sh", "/scripts/security_scan.sh", "trivy-image"], mode)
+        image_scan["volumeMounts"] = [m for m in image_scan["volumeMounts"] if m["name"] != "reports"]
+        stages.append(image_scan)
     pod = dict(serviceAccountName="security-scanner", automountServiceAccountToken=False,
                nodeSelector={"kubernetes.io/hostname": config["node_name"]}, restartPolicy="Never",
                securityContext={"runAsNonRoot": True, "runAsUser": 1000, "runAsGroup": 1000, "fsGroup": 1000,
@@ -87,6 +101,14 @@ def job(config, mode="daily", image=None, commit=None):
                         # Measured 2026-09-30: in the 4 GiB memory-backed /work they exhausted the pod's memory.
                         dict(name="cache", emptyDir={"sizeLimit": "20Gi"}),
                         dict(name="reports", persistentVolumeClaim={"claimName": "security-reports"})])
+    if gate_name:
+        # Use the deployed source snapshot's scripts, not a possibly older installed ConfigMap.
+        pod["volumes"][0] = dict(name="scripts", persistentVolumeClaim={"claimName": "security-source", "readOnly": True})
+        for c in pod["initContainers"] + pod["containers"]:
+            for mount in c["volumeMounts"]:
+                if mount["name"] == "scripts":
+                    mount["subPath"] = commit + "/scripts"
+        pod["volumes"].append(dict(name="gate-image", configMap={"name": gate_name}))
     if mode == "dast":
         pod["volumes"].append(dict(name="machine", secret={"secretName": "security-machine-token", "defaultMode": 288}))
     return dict(apiVersion="batch/v1", kind="Job", metadata={"name": "security-" + mode, "namespace": NS},

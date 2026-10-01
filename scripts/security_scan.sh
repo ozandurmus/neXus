@@ -26,12 +26,16 @@ case "$1" in
     gitleaks git --redact=100 --report-format=json --report-path=/work/gitleaks-history.json --log-opts=--all . >/dev/null 2>&1
     printf '%s\n' "$?" >/work/gitleaks-history.json.exit
     ;;
-  trivy)
+  trivy|trivy-source|trivy-image)
+    started=$(date +%s)
     export TRIVY_CACHE_DIR=/cache/trivy
     # Image layers are extracted under TMPDIR: keep them on the disk-backed cache, not the 1 GiB memory /tmp.
     mkdir -p /cache/tmp && export TMPDIR=/cache/tmp
-    run trivy-fs trivy fs --scanners vuln --format json --no-progress .
-    run trivy-config trivy config --format json deploy/
+    if [ "$1" != trivy-image ]; then
+      run trivy-fs trivy fs --scanners vuln --format json --no-progress .
+      run trivy-config trivy config --format json deploy/
+    fi
+    [ "$1" != trivy-source ] || exit 0
     # Prepared from Deployments by the host, never guessed from a tag or pod name.
     [ -f /work/images ] || exit 2
     i=0
@@ -41,6 +45,7 @@ case "$1" in
       printf '%s\n' "$?" >"/work/sbom-$i.json.exit"
       i=$((i + 1))
     done </work/images
+    [ "$1" != trivy-image ] || printf "TIMING security_image %s\n" "$(( $(date +%s) - started ))"
     ;;
   *) exit 2 ;;
 esac

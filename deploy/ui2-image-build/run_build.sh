@@ -13,6 +13,8 @@ git checkout main
 git pull origin main
 
 COMMIT_SHA="$(git rev-parse HEAD)"
+phase_start=$SECONDS
+timing() { printf "TIMING %s %s\n" "$1" "$((SECONDS - $2))"; }
 SECURITY_CONFIGURED=0
 [ -f "$HOME/.config/nexus/security.json" ] && SECURITY_CONFIGURED=1
 if [ -n "${NEXUS_SKIP_SECURITY_REASON:-}" ]; then
@@ -22,7 +24,10 @@ elif [ "$SECURITY_CONFIGURED" = 0 ]; then
 else
   python3 scripts/security_host.py snapshot --config "$HOME/.config/nexus/security.json" \
     --rules "$HOME/.config/nexus/security-rules"
+  SECURITY_JOB=$(python3 scripts/security_host.py start --config "$HOME/.config/nexus/security.json" --commit "$COMMIT_SHA")
 fi
+timing source_snapshot "$phase_start"
+phase_start=$SECONDS
 BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "Recording deploy_info.json: commit=$COMMIT_SHA built_at=$BUILT_AT"
 printf '{\n  "commit": "%s",\n  "built_at": "%s"\n}\n' "$COMMIT_SHA" "$BUILT_AT" > project/deploy_info.json
@@ -41,9 +46,14 @@ echo "Deleting loader to free PVC..."
 kubectl delete -f deploy/ui2-image-build/20-context-loader.yaml
 
 echo "Starting build job..."
-kubectl -n ui2-build create configmap ui2-build-config --from-literal=image_tag="$(git rev-parse --short=12 HEAD)" --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n ui2-build create configmap ui2-build-config --from-literal=image_tag="$(git rev-parse --short=12 HEAD)" --from-literal=commit="$COMMIT_SHA" --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n ui2-build delete job ui2-image-build --ignore-not-found
+timing build_context "$phase_start"
+image_start=$SECONDS
 kubectl apply -f ~/build-job-proxy.yaml
+# Start from the same immutable context while the service image is building.
+e2e_start=$SECONDS
+python3 scripts/hosta_e2e_image.py start --commit "$COMMIT_SHA"
 
 echo "Waiting for build pod to be scheduled..."
 for i in {1..30}; do
@@ -76,6 +86,7 @@ if ! kubectl -n ui2-build get job ui2-image-build -o jsonpath='{.status.conditio
   exit 1
 fi
 
+timing image_build "$image_start"
 echo "Starting loader again to read digest..."
 kubectl delete pod ui2-build-context-loader -n ui2-build --ignore-not-found --force --grace-period=0 || true
 kubectl apply -f deploy/ui2-image-build/20-context-loader.yaml
@@ -84,11 +95,14 @@ IMAGE_DIGEST="$(kubectl -n ui2-build exec ui2-build-context-loader -- cat /works
 echo "Digest is $IMAGE_DIGEST"
 
 if [ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ] && [ "$SECURITY_CONFIGURED" = 1 ]; then
+  gate_start=$SECONDS
   echo "Running security-gate on the freshly built digest..."
   python3 scripts/security_host.py gate --config "$HOME/.config/nexus/security.json" \
-    --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" --commit "$COMMIT_SHA"
+    --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" --commit "$COMMIT_SHA" --job-name "$SECURITY_JOB"
+  timing security_gate_wait "$gate_start"
 fi
 
+rollout_start=$SECONDS
 echo "Updating deployments..."
 kubectl -n ui2 set image deployment/ui2-service service="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
 kubectl -n ui2 set image deployment/ui2-compliance compliance="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
@@ -120,4 +134,7 @@ kubectl -n ui2 rollout status deployment/ui2-worker --timeout=600s
 kubectl -n ui2 rollout status deployment/ui2-compliance --timeout=600s
 kubectl -n ui2 rollout status deployment/ui2-configuration --timeout=600s
 
+timing rollout "$rollout_start"
+python3 scripts/hosta_e2e_image.py ensure --commit "$COMMIT_SHA" >/dev/null
+timing e2e_image_ready "$e2e_start"
 echo "Done. Deployed commit: $COMMIT_SHA (built_at $BUILT_AT)"
