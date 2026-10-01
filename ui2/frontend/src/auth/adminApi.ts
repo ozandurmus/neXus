@@ -1056,6 +1056,7 @@ export interface DeviceConfiguration {
   readonly change_deviation_summary?: ConfigurationDeviationSummary | null;
   readonly withheld_line_count: number;
   readonly sanitized_text_available: boolean;
+  readonly text_readable: boolean;
   readonly index: ConfigurationIndexEntry[];
   readonly overrides: ConfigurationOverride[];
   readonly supplementary_runs: ConfigurationSupplementaryRun[];

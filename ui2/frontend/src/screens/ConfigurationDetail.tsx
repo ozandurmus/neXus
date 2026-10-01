@@ -85,7 +85,7 @@ interface Loaded {
   readonly configuration: DeviceConfiguration | null;
   readonly projection: Projection | null;
   readonly error: string | null;
-  /** The configuration was read but this session's roles do not include reading its text (HTTP 403). */
+  /** The current caller may not read configuration text. */
   readonly textForbidden?: boolean;
 }
 
@@ -110,8 +110,8 @@ function useProjection(device: DeviceSummary | null, revision = 0): Loaded & { l
       try {
         const configuration = await getDeviceConfiguration(device.device_id);
         let projection: Projection | null = null;
-        let textForbidden = false;
-        if (configuration.sanitized_text_available) {
+        let textForbidden = configuration.text_readable !== true;
+        if (configuration.text_readable === true && configuration.sanitized_text_available) {
           try {
             const text = await getDeviceConfigurationText(device.device_id);
             projection = projectFor(configuration, device.vendor_hint, text);
@@ -400,7 +400,7 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
       {!error && loading && <EmptyPanel title="Configuration" body="Reading the device's configuration…" />}
       {!error && !loading && !projection && textForbidden && (
         <EmptyPanel title="Configuration settings not shown for your role"
-          body="A configuration was read for this device, but your role does not include viewing its settings. A security administrator can grant it." />
+          body="The configuration text is visible to onboarding administrators." />
       )}
       {!error && !loading && !projection && !textForbidden && (
         <EmptyPanel title="No configuration read yet" body="Use Collect now to read this device's configuration." />
@@ -507,7 +507,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
 }) {
   // Review §3: members always M1, M2 (by name) -- in the header, the identity table and the setting columns.
   const members = useMemo(() => orderMembers(unorderedMembers), [unorderedMembers]);
-  const [state, setState] = useState<{ cluster: ClusterProjection | null; missing: string[]; error: string | null; loading: boolean }>({ cluster: null, missing: [], error: null, loading: true });
+  const [state, setState] = useState<{ cluster: ClusterProjection | null; missing: string[]; error: string | null; loading: boolean; textForbidden: boolean }>({ cluster: null, missing: [], error: null, loading: true, textForbidden: false });
   const [query, setQuery] = useState("");
   // Review §3: "Differences only" is ON by default when the cluster has differences (set once per load).
   const [diffOnly, setDiffOnly] = useState(false);
@@ -517,15 +517,20 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
 
   useEffect(() => {
     let cancelled = false;
-    setState({ cluster: null, missing: [], error: null, loading: true });
+    setState({ cluster: null, missing: [], error: null, loading: true, textForbidden: false });
     setQuery("");
     setOpen(null);
     (async () => {
       const loaded: Array<{ id: string; projection: Projection }> = [];
       const missing: string[] = [];
+      let textForbidden = false;
       for (const member of members) {
         try {
           const configuration = await getDeviceConfiguration(member.device_id);
+          if (configuration.text_readable !== true) {
+            textForbidden = true;
+            continue;
+          }
           if (!configuration.sanitized_text_available) {
             missing.push(member.hostname ?? member.device_id);
             continue;
@@ -539,7 +544,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
           missing.push(member.hostname ?? member.device_id);
         }
       }
-      if (!cancelled) setState({ cluster: loaded.length > 0 ? projectCluster(loaded) : null, missing, error: null, loading: false });
+      if (!cancelled) setState({ cluster: loaded.length > 0 ? projectCluster(loaded) : null, missing, error: null, loading: false, textForbidden });
     })();
     return () => {
       cancelled = true;
@@ -646,7 +651,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
             })()}
             {cluster && (cluster.diffCount > 0
               ? <StatusChip tone="bad" label={cluster.diffCount === 1 ? "1 setting differs" : `${cluster.diffCount} settings differ`} dense />
-              : state.missing.length === 0 ? <StatusChip tone="ok" label="Members agree" dense /> : <StatusChip tone="warn" label="UNKNOWN" dense />)}
+              : state.missing.length === 0 && !state.textForbidden ? <StatusChip tone="ok" label="Members agree" dense /> : <StatusChip tone="warn" label="UNKNOWN" dense />)}
           </>
         }
       >
@@ -669,6 +674,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
         </Stack>
       </Box>
       {!embedded && <ClusterMembersCard members={members} />}
+      {state.textForbidden && <EmptyPanel title="Configuration text" body="The configuration text is visible to onboarding administrators." />}
       {state.missing.length > 0 && (
         <EmptyPanel
           title={cluster ? "One side has no configuration read" : "No member has a configuration read"}

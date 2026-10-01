@@ -36,11 +36,11 @@ const MEMBERS = [
   member("m1", { hostname: "FW-TANGO-01", ha_role: "PASSIVE", virtual_systems: "vs-a, vs-b" }),
 ];
 
-function stubConfigs() {
+function stubConfigs(affordance: { text_readable?: boolean } = { text_readable: true }) {
   vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
     const url = String(input);
     const cfg = { collected_at: "2026-09-22T22:57:54Z", vendor: "check_point", read_kind: "show_configuration", canonical_hash: "h",
-      change_state: "unchanged", withheld_line_count: 0, sanitized_text_available: true, index: [], overrides: [], supplementary_runs: [] };
+      change_state: "unchanged", withheld_line_count: 0, ...affordance, sanitized_text_available: true, index: [], overrides: [], supplementary_runs: [] };
     if (url === "/devices/m1/configuration") return Promise.resolve(jsonResponse(200, { ...cfg, device_id: "m1" }));
     if (url === "/devices/m2/configuration") return Promise.resolve(jsonResponse(200, { ...cfg, device_id: "m2" }));
     if (url === "/devices/m1/configuration/text") return Promise.resolve(new Response(CP_A, { status: 200 }));
@@ -52,6 +52,22 @@ function stubConfigs() {
 describe("Configuration cluster detail after the Fable review", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it.each([false, undefined])("does not request standalone text without a true affordance (%s)", async (textReadable) => {
+    stubConfigs({ text_readable: textReadable });
+    render(withTheme(<DeviceConfigurationDetail device={member("m1", { cluster_member_ref: null })} />));
+    expect(await screen.findByText("The configuration text is visible to onboarding administrators.")).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/configuration/text"))).toBe(false);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("does not request cluster member text when the affordance is false", async () => {
+    stubConfigs({ text_readable: false });
+    render(withTheme(<ClusterConfigurationDetail clusterRef="CLS-ROMEO-01" members={MEMBERS} />));
+    expect(await screen.findByText("The configuration text is visible to onboarding administrators.")).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/configuration/text"))).toBe(false);
+    expect(screen.queryByText("Members agree")).not.toBeInTheDocument();
   });
 
   it("orders members M1, M2 with neutral role chips and links the cluster across screens", async () => {
@@ -167,7 +183,7 @@ describe("Configuration device detail", () => {
 
   it("shows only Cisco ASA identity fields and uses the configuration run time", async () => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, {
-      collected_at: "2026-09-22T22:57:54Z", vendor: "cisco_asa", sanitized_text_available: false,
+      collected_at: "2026-09-22T22:57:54Z", vendor: "cisco_asa", text_readable: true, sanitized_text_available: false,
       index: [], overrides: [], supplementary_runs: [],
     }))));
     render(withTheme(<DeviceConfigurationDetail device={{
