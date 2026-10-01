@@ -25,6 +25,7 @@ public final class ActionRegistry {
     public static final String DEVICE_DELETE = "device_delete";
     /** WORKER.md "Routes": {@code GET /devices} and {@code GET /devices/{id}} -- any authenticated session. */
     public static final String DEVICE_READ = "device_read";
+    public static final String POLICY_COLLECT = "policy_collect";
     public static final String POLICY_READ = "policy_read";
     /**
      * NXS-LOCAL-0160 "Routes": {@code POST /devices/{id}/inventory/collect}
@@ -138,6 +139,8 @@ public final class ActionRegistry {
     }
 
     private void seedActions() {
+        register(new ActionDescriptor(POLICY_COLLECT, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(POLICY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(HTTPS_CERTIFICATE_ACCEPT, true, Optional.of(RoleToken.SECURITY_ADMIN)));

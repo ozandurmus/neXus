@@ -20,6 +20,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public final class SecurityWebMvcConfig implements WebMvcConfigurer {
 
     static final Map<String, String> ACTION_ID_BY_ROUTE = Map.ofEntries(
+            Map.entry("GET /api/v2/policy/sources", ActionRegistry.POLICY_READ),
+            Map.entry("POST /api/v2/policy/sources/*/collect", ActionRegistry.POLICY_COLLECT),
             Map.entry("GET /api/v2/policy/devices", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/devices/*", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/policies/*", ActionRegistry.POLICY_READ),

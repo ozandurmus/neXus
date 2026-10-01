@@ -190,6 +190,7 @@ public class DeviceCompositionConfiguration {
                 confirmCapability(InventoryCapabilityIds.FGT_INVENTORY_COLLECT, "fortinet", "fortigate", TransportKind.SSH_EXEC),
                 confirmCapability(BackupCapabilityIds.FGT_CONFIG_BACKUP, "fortinet", "fortigate", TransportKind.SSH_EXEC),
                 confirmCapability(ConfigurationCapabilityIds.FGT_CONFIGURATION_COLLECT, "fortinet", "fortigate", TransportKind.SSH_EXEC),
+                com.securityexpert.nexus.ui2.jobs.policy.CpPolicyGates.capability(gateRegistryPort),
                 fortiManagerDiagnosticCapability(gateRegistryPort),
                 confirmCapability(com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
                         "diagnostic", "reviewed_read", TransportKind.SSH_EXEC),

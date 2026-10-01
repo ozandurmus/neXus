@@ -166,6 +166,7 @@ public final class Ui2WorkerMain {
         capabilities.addAll(ConfigurationCapabilities.all(gateRegistry));
         capabilities.addAll(BackupCapabilities.all(gateRegistry));
         capabilities.addAll(com.securityexpert.nexus.ui2.worker.discovery.DiscoveryCapabilities.all());
+        capabilities.add(com.securityexpert.nexus.ui2.jobs.policy.CpPolicyGates.capability(gateRegistry));
         CapabilityRegistry capabilityRegistry = CapabilityRegistry.of(capabilities);
         TransportRegistry transportRegistry = WorkerBootstrap.buildTransportRegistry(sshTransport, panTransport);
         WorkerBootstrap.boot(capabilityRegistry, transportRegistry);
@@ -294,12 +295,17 @@ public final class Ui2WorkerMain {
                 Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS", "14400")))));
 
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
+        var policyCollectionRepository = new com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository(transactionBoundary);
+        var policyCollector = new com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollector(compositeTransport, gateRegistry, policyCollectionRepository);
+        var policyCollectionExecutor = new com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor(
+                leaseRepository, attemptRepository, discoveryRunRepository, policyCollectionRepository, policyCollector, gateRegistry);
         MgmtCliEnumerationAdapter checkPointDiscoveryAdapter =
                 new MgmtCliEnumerationAdapter(compositeTransport, sshCredentialResolver);
         PanoramaEnumerationAdapter paloAltoDiscoveryAdapter =
                 new PanoramaEnumerationAdapter(compositeTransport, panCredentialResolver, panTrustRuleResolver);
         DiscoveryJobExecutor discoveryJobExecutor = new DiscoveryJobExecutor(leaseRepository, attemptRepository,
                 discoveryRunRepository, checkPointDiscoveryAdapter, paloAltoDiscoveryAdapter)
+                .withPolicyCollection(policyCollectionExecutor::afterDiscovery)
                 .withRadwareCyberController(httpsVendorExecutor)
                 .withFortiManager(fortiManagerExecutor);
 
@@ -333,7 +339,8 @@ public final class Ui2WorkerMain {
                     .withFortiManagerDiagnostic(diagnosticJobExecutor)
                     .withCpFailover(cpFailoverExecutor)
                     .withPanFailover(panFailoverExecutor)
-                    .withDiagnosticReads(genericDiagnosticExecutor);
+                    .withDiagnosticReads(genericDiagnosticExecutor)
+                    .withPolicyCollection(policyCollectionExecutor);
             claimLoop.withPlatformFacts(platformFactsRepository);
             claimLoops.add(claimLoop);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));

@@ -1688,3 +1688,8 @@ export interface PolicyPage { metadata: PolicyMetadata; sections: PolicySection[
 export const listPolicies = () => call<{ policies: PolicyMetadata[]; devices: PolicyTarget[] }>("/api/v2/policy/devices", "GET");
 export const getPolicy = (id: string, page: number, q: string) => call<PolicyPage>(`/api/v2/policy/policies/${encodeURIComponent(id)}?page=${page}&q=${encodeURIComponent(q)}`, "GET");
 export const getPolicyObject = (id: string, policy: string) => call<{ object: PolicyObject }>(`/api/v2/policy/objects/${encodeURIComponent(id)}?policy=${encodeURIComponent(policy)}`, "GET");
+
+export type PolicyCollectionSource = { sourceId: string; sourceName: string; vendor: string };
+export const listPolicySources = () => call<{ sources: PolicyCollectionSource[]; canCollect: boolean }>("/api/v2/policy/sources", "GET");
+export const collectPolicies = (sourceId: string, domainRef = "") => call<{ jobId: string }>(
+  `/api/v2/policy/sources/${encodeURIComponent(sourceId)}/collect`, "POST", { domainRef });

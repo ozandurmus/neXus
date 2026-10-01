@@ -16,7 +16,7 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
             String artefactRef, List<Target> targets) {
         public Metadata { targets = List.copyOf(targets); }
     }
-    /** IDs are enrolled opaque references supplied by the collector, never serial-derived joins. */
+    /** Enrolled device IDs when matched; otherwise scoped opaque management-target references, never serial-derived joins. */
     public record Target(String deviceId, String name, String context, String syncStatus) {}
     public record Section(String id, String name, String source, String parentRuleId, List<Rule> rules) {
         public Section { rules = List.copyOf(rules); }

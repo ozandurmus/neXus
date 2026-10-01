@@ -83,3 +83,41 @@ it("shows empty and failed reads distinctly", async () => {
   mount(); expect(await screen.findByText("Policy unavailable")).toBeInTheDocument();
   expect(screen.queryByText("No policy snapshot")).toBeNull();
 });
+
+it("offers first collection on an empty MDS and sends only opaque scope with CSRF", async () => {
+  const fetch = vi.fn(async (input: string, init?: RequestInit) => {
+    const body = input === "/session/status" ? { csrf_token: "synthetic-csrf" }
+      : input === "/api/v2/policy/sources" ? { sources: [{ sourceId: "mds-1", sourceName: "MGR-BRAVO-01", vendor: "CP" }], canCollect: true }
+      : input.endsWith("/collect") ? { jobId: "job-1" } : { policies: [], devices: [] };
+    return new Response(JSON.stringify(body), { status: init?.method === "POST" ? 202 : 200 });
+  });
+  vi.stubGlobal("fetch", fetch); mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Collect policies" }));
+  await screen.findByText(/Policy collection queued/);
+  const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
+  expect(call?.[0]).toBe("/api/v2/policy/sources/mds-1/collect");
+  expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "" });
+  expect(new Headers(call?.[1]?.headers).get("X-CSRF-Token")).toBe("synthetic-csrf");
+  expect(screen.getByRole("button", { name: "Refresh snapshots" })).toBeInTheDocument();
+});
+it("uses server authorization and exposes no collection action to AIView", async () => {
+  mockFetch(); mount();
+  await screen.findByRole("table");
+  expect(screen.queryByRole("button", { name: "Collect policies" })).toBeNull();
+});
+it("offers domain collection with its opaque reference and reports queue refusal", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
+    if (init?.method === "POST") return new Response("{}", { status: 409 });
+    const body = input === "/api/v2/policy/sources" ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "CP" }], canCollect: true }
+      : input === "/api/v2/policy/devices" ? { policies: [metadata], devices: metadata.targets } : page;
+    return new Response(JSON.stringify(body), { status: 200 });
+  }));
+  mount();
+  await screen.findByRole("table");
+  const actions = screen.getAllByRole("button", { name: "Collect policies" });
+  expect(actions).toHaveLength(2);
+  fireEvent.click(actions[1]);
+  await screen.findByText(/could not be queued/);
+  const fetch = vi.mocked(window.fetch);
+  expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith("/collect") && JSON.parse(init?.body as string).domainRef === metadata.containerId)).toBe(true);
+});

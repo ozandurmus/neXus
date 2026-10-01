@@ -17,18 +17,22 @@ import java.time.Instant;
 import java.util.*;
 
 class PolicyApiTest {
-    @Test void policyRoutesAllowOnlyAdminsAndReplayAndExposeNoWriteAction() {
+    @Test void policyRoutesKeepReadsSeparateFromAdminCollection() {
         var action = new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER), action.requiredRoleTokens());
         for (String route : List.of("GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/objects/*"))
             assertEquals(ActionRegistry.POLICY_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(route));
-        assertTrue(SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.keySet().stream().filter(s -> s.contains("/policy/")).allMatch(s -> s.startsWith("GET ")));
+        assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN),
+                new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens());
+        assertEquals(ActionRegistry.POLICY_COLLECT, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/policy/sources/*/collect"));
     }
     @Test void mvcEnforcesSessionRbacMaskingAndNoStoreForEachPersona() throws Exception {
         var sessions = mock(SessionRepository.class);
         var rbac = mock(RbacEvaluator.class);
         var audit = mock(AuthzDecisionRepository.class);
         var query = mock(PolicyQueryService.class);
+        var collections = mock(PolicyCollectionService.class);
+        when(collections.collect(eq("mds-1"), eq(""), anyString())).thenReturn(Optional.of("job-1"));
         var meta = new PolicySnapshot.Metadata("policy-1", "manager-1", "Synthetic manager", "PAN", "domain-1", "Synthetic domain",
                 "Synthetic policy", "2026-10-01T12:00:00Z", "artifact-1", List.of());
         var snapshot = new PolicySnapshot(meta, List.of(), Map.of());
@@ -41,7 +45,7 @@ class PolicyApiTest {
         var names = new TopologyNamePseudonymizer(new byte[32]);
         var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(new byte[32]), names);
         var gate = new GateChain(sessions, new ActionRegistry(), rbac, audit);
-        var mvc = MockMvcBuilders.standaloneSetup(new PolicyController(query)).setControllerAdvice(advice)
+        var mvc = MockMvcBuilders.standaloneSetup(new PolicyController(query), new com.securityexpert.nexus.ui2.service.api.PolicyCollectionController(collections, rbac)).setControllerAdvice(advice)
                 .addInterceptors(new GateChainInterceptor(gate, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE)).build();
         mvc.perform(get("/api/v2/policy/policies/policy-1").servletPath("/api/v2/policy/policies/policy-1")).andExpect(status().isUnauthorized());
         for (String role : List.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER, RoleToken.VIEWER)) {
@@ -57,6 +61,16 @@ class PolicyApiTest {
             when(rbac.evaluateAny(eq(actor), eq(new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow().requiredRoleTokens()), any())).thenReturn(decision);
             when(rbac.evaluate(eq(actor), eq(Optional.of(RoleToken.REPLAY_VIEWER)), any())).thenReturn(
                     new RbacEvaluator.Decision(role.equals(RoleToken.REPLAY_VIEWER) ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
+            boolean admin = role.equals(RoleToken.SECURITY_ADMIN) || role.equals(RoleToken.ONBOARDING_ADMIN);
+            when(rbac.evaluateAny(eq(actor), eq(new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens()), any())).thenReturn(
+                    new RbacEvaluator.Decision(admin ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
+            String collectPath = "/api/v2/policy/sources/mds-1/collect";
+            mvc.perform(post(collectPath).servletPath(collectPath).cookie(new Cookie("ui2_session", cookie))
+                    .contentType("application/json").content("{\"domainRef\":\"\"}"))
+                    .andExpect(status().isUnauthorized());
+            mvc.perform(post(collectPath).servletPath(collectPath).cookie(new Cookie("ui2_session", cookie))
+                    .header("X-CSRF-Token", "synthetic-csrf").header("Origin", "https://example.invalid").contentType("application/json").content("{\"domainRef\":\"\"}"))
+                    .andExpect(status().is(admin ? 202 : 403));
             // Use the repository's session-cookie name, the same boundary used by every controller.
             var response = mvc.perform(get("/api/v2/policy/policies/policy-1").servletPath("/api/v2/policy/policies/policy-1").cookie(new Cookie("ui2_session", cookie)));
             if (!allowed) { response.andExpect(status().isForbidden()); continue; }
