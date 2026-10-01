@@ -153,3 +153,66 @@ def test_junit_summary_is_bounded_and_sanitized(tmp_path, kind, expected):
     assert result.stdout.count("INTEGRATION:") == 1
     assert "private detail" not in result.stdout
     assert sum(line.startswith("FAILED ") for line in result.stdout.splitlines()) == (20 if kind == "failure" else 0)
+
+
+@pytest.fixture(scope="module")
+def synthetic_ca_store(tmp_path_factory):
+    directory = tmp_path_factory.mktemp("synthetic-ca")
+    for name in ("existing", "added"):
+        subprocess.run([
+            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+            "-keyout", str(directory / f"{name}.key"),
+            "-out", str(directory / f"{name}.pem"), "-days", "1",
+            "-subj", f"/CN=synthetic-{name}.invalid",
+        ], check=True, capture_output=True)
+    subprocess.run([
+        "keytool", "-importcert", "-noprompt", "-storetype", "JKS",
+        "-keystore", str(directory / "cacerts"), "-storepass", "changeit",
+        "-alias", "existing", "-file", str(directory / "existing.pem"),
+    ], check=True, capture_output=True)
+    return directory
+
+
+@pytest.mark.parametrize("failure", ["", "unreadable", "empty", "malformed"])
+def test_runner_ca_import_skips_duplicates_and_validates_store(tmp_path, synthetic_ca_store, failure):
+    java_home = tmp_path / "jdk"
+    store = java_home / "lib/security/cacerts"
+    store.parent.mkdir(parents=True)
+    shutil.copyfile(synthetic_ca_store / "cacerts", store)
+    bundles = tmp_path / "corp-ca"
+    bundles.mkdir()
+    # A duplicate is first, with a new anchor later in a 150-certificate bundle.
+    existing = (synthetic_ca_store / "existing.pem").read_text()
+    added = (synthetic_ca_store / "added.pem").read_text()
+    bundle = bundles / "bundle.crt"
+    bundle.write_text(existing * 149 + added)
+    if failure == "unreadable":
+        store.write_text("invalid store")
+    elif failure == "empty":
+        subprocess.run([
+            "keytool", "-delete", "-keystore", str(store), "-storepass", "changeit",
+            "-alias", "existing",
+        ], check=True, capture_output=True)
+        bundle.unlink()
+    elif failure == "malformed":
+        bundle.write_text("-----BEGIN CERTIFICATE-----\ninvalid\n-----END CERTIFICATE-----\n")
+    # Execute the real setup under its set -e/ERR trap, without reaching Gradle.
+    setup = (ROOT / "scripts/integration_runner.sh").read_text().split("export JAVA_TOOL_OPTIONS=", 1)[0]
+    setup = setup.replace("cd /workspace/ui2", f'cd "{tmp_path}"')
+    setup = setup.replace("/tmp/", f"{tmp_path}/").replace("/run/corp-ca", str(bundles))
+    setup += ":\n"  # Keep bash from exec-optimizing the final command past the ERR trap.
+    env = {**os.environ, "JAVA_HOME": str(java_home), "GRADLE_USER_HOME": str(tmp_path / "gradle")}
+    result = subprocess.run(["bash", "-c", setup], env=env, capture_output=True, text=True, timeout=60)
+    assert result.stderr == ""
+    if failure:
+        assert result.returncode == 2
+        assert result.stdout == "INTEGRATION: ERROR (runner/setup failed; raw output withheld)\n"
+    else:
+        assert result.returncode == 0
+        assert result.stdout == "CA import: imported=1; skipped=149\n"
+        # Reuse the output as input: both original and added roots survive, all skip.
+        shutil.copyfile(tmp_path / "cacerts", store)
+        result = subprocess.run(["bash", "-c", setup], env=env, capture_output=True, text=True, timeout=60)
+        assert result.returncode == 0
+        assert result.stdout == "CA import: imported=0; skipped=150\n"
+        assert result.stderr == ""
