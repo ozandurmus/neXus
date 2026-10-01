@@ -38,6 +38,15 @@ public final class BackupCollectService {
         }
     }
 
+    private com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts =
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.NONE;
+
+    public BackupCollectService withPlatformFacts(
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository repository) {
+        platformFacts = Objects.requireNonNull(repository);
+        return this;
+    }
+
     private static final int MIN_REASON_LENGTH = 8;
 
     private final DeviceRepository deviceRepository;
@@ -123,6 +132,16 @@ public final class BackupCollectService {
                             + "collection credential)");
         }
 
+        Optional<String> model = "check_point".equals(vendorHint) && !checkPointManagement
+                ? deviceRepository.findSummary(deviceId).flatMap(
+                        com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedModel) : Optional.empty();
+        boolean spark = "check_point".equals(vendorHint) && !checkPointManagement
+                && (platformFacts.find(deviceId).flatMap(f -> f.platformFamily()).filter("gaia_embedded"::equals).isPresent()
+                    || com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint.isKnownSparkModel(model));
+        if (!spark && "check_point".equals(vendorHint) && !checkPointManagement
+                && model.filter(value -> value.matches("[VH][0-9]+")).isPresent()) {
+            return new Outcome.AdmissionRefused("SPARK_MODEL_UNRESOLVED", "Spark model unresolved");
+        }
         String capabilityId;
         if (cyberController) {
             capabilityId = BackupCapabilityIds.RDW_CC_CONFIG_BACKUP;
@@ -142,10 +161,7 @@ public final class BackupCollectService {
             capabilityId = BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP;
         } else if ("snapshot".equalsIgnoreCase(backupType)) {
             capabilityId = BackupCapabilityIds.CP_GAIA_SNAPSHOT;
-        } else if ("check_point".equals(vendorHint) && !checkPointManagement
-                && com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint.isKnownSparkModel(
-                        deviceRepository.findSummary(deviceId).flatMap(
-                                com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedModel))) {
+        } else if (spark) {
             capabilityId = BackupCapabilityIds.CP_SPARK_SFTP_BACKUP;
         } else {
             capabilityId = BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL;

@@ -7,7 +7,6 @@ import java.util.regex.Pattern;
 /** Bounded Gaia Embedded identity projection; raw diagnostic output is discarded. */
 public final class SparkIdentityParser {
     private static final Pattern UNIT_MODEL = Pattern.compile("(?im)^\\s*Unit model\\s*:\\s*([A-Za-z0-9_.-]{1,64})\\s*$");
-    private static final Pattern HW_VERSION = Pattern.compile("(?im)^\\s*HW version\\s*:\\s*([A-Za-z0-9_.-]{1,64})\\s*$");
     private static final Pattern IMAGE_VERSION = Pattern.compile("(?im)^\\s*Current image version\\s*:\\s*([A-Za-z0-9_.-]{1,64})\\s*$");
     private static final Pattern IMAGE_NAME = Pattern.compile("(?im)^\\s*Current image name\\s*:\\s*([A-Za-z0-9_.-]{1,128})\\s*$");
     private static final Pattern SOFTWARE_VERSION = Pattern.compile("(?im)^\\s*This is Check Point's .+ Appliance (R[0-9]+(?:\\.[0-9]+)+(?:\\.[0-9]+)?)\\s*-\\s*Build [0-9]+\\s*$");
@@ -22,7 +21,10 @@ public final class SparkIdentityParser {
     }
 
     public static Optional<String> model(String diag) {
-        return field(UNIT_MODEL, diag).or(() -> field(HW_VERSION, diag));
+        // Unit model may be an internal revision (V1); HW version is not a model.
+        return field(UNIT_MODEL, diag).filter(model ->
+                com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint
+                        .isKnownSparkModel(Optional.of(model)));
     }
 
     public static Optional<String> version(String softwareVersion, String diag) {

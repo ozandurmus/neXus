@@ -60,6 +60,6 @@ for option in ${GRADLE_OPTS:-}; do
 done
 status=0
 ./gradlew --no-daemon --console=plain -PfrontendPrebuilt=true :integration-tests:test --rerun-tasks >/tmp/gradle.log 2>&1 || status=$?
-# A separate JVM parses only counters and safe identifiers, never diagnostic text.
+# A separate JVM emits counters, safe identifiers and bounded, sanitized failure messages.
 trap - ERR
 java /workspace/scripts/IntegrationSummary.java "$status" integration-tests/build/test-results/test

@@ -1,4 +1,4 @@
-# Only synthetic test data. Source and Gradle caches are per-run emptyDirs.
+# Only synthetic test data. Source is per-run; dependency caches use a dedicated PVC.
 # The build has no NetworkPolicy; the orchestrator installs DNS/proxy-only egress
 # before this Job, resolving the host-local build proxy without recording its values.
 apiVersion: batch/v1
@@ -8,7 +8,7 @@ metadata:
   namespace: ui2-build
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: 1800
+  activeDeadlineSeconds: 3600
   ttlSecondsAfterFinished: 300
   template:
     metadata:
@@ -37,6 +37,9 @@ spec:
           defaultMode: 0440
       - name: workspace
         emptyDir: {}
+      - name: gradle-cache
+        persistentVolumeClaim:
+          claimName: ui2-integration-gradle-cache
       - name: home
         emptyDir: {}
       - name: runner-tmp
@@ -132,6 +135,8 @@ spec:
         volumeMounts:
         - name: workspace
           mountPath: /workspace
+        - name: gradle-cache
+          mountPath: /workspace/ui2/.gradle-home/caches
         - name: home
           mountPath: /home/runner
         - name: runner-tmp
