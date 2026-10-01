@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standalone orchestration -- one small Codex development task at a time, without the relay.
+"""Standalone orchestration -- bounded parallel Codex development tasks, without the relay.
 
 Product Owner, 2026-09-26: "Relay kaydı işini bırakalım ... tek küçük geliştirmeler için daha agile çalışsın. Var olan
 relay yapısını da bozmayalım." This is an ADDITIONAL, lighter path next to `scripts/orchestrator.py`; it does not
@@ -11,8 +11,8 @@ roots a commit on the lane needs, the linked frontend dependencies and the engin
 What it drops: SESSION_START/SESSION_CLOSE packets, the FROZEN-authority preflight, relay turn ownership.
 
 Rules it enforces:
-- **One task at a time** (PO 2026-09-26: no parallel work): `start` refuses while another standalone task or an
-  orchestrator movement with a live process is running.
+- Up to four parallel tasks by default (`start --max-parallel 1..6`); live relay movements count toward the limit.
+- Ships are serialized under a state-directory lock, with a 45-minute wait limit.
 - The worker commits on its own lane only; never pushes, deploys, touches HOST-A or contacts a device (stated in the
   prompt). Review, merge, deploy and live validation stay with the engineering session.
 
@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import json
 import os
 import re
@@ -71,6 +72,15 @@ Hard rules:
 - Run the validation the brief lists (frontend: `cd ui2/frontend && npx tsc --noEmit -p . && npx vitest run && npm run
   build`, with `--cacheDir` / cache paths inside the worktree if node_modules is read-only; Java: the named
   `./gradlew` tasks) and `python3 scripts/repository_privacy_check.py`. Fix what fails.
+
+Standing HOST-A facts (context only; no worker access authorization):
+- No SSH forwarding on HOST-A: AllowTcpForwarding no; never a jump server.
+- Java/Gradle run only inside container images: kaniko build Jobs in ui2-build and the integration Job.
+  Workers cannot run Gradle in the sandbox.
+- Non-interactive SSH kubectl needs `export KUBECONFIG=$HOME/.kube/config`.
+- Corporate CA is provided via ConfigMap `corp-ca`.
+- In-cluster e2e runs as the masked aiview persona after every deploy; any 4xx on page/API requests fails it.
+- Check Point gateway reads run via `bash -lc`, never on management servers (R82 login-profile fork loop).
 
 Final message (plain text): files changed, tests added, the validation commands you ran with their pass/fail summary,
 and anything you could not do or are unsure about.
@@ -141,6 +151,14 @@ def _live_orchestrator_movements() -> list[str]:
 
 
 def cmd_start(args: argparse.Namespace) -> int:
+    # Keep concurrent standalone starts from admitting more than the configured limit.
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    with (STATE_DIR / "start.lock").open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return _start(args)
+
+
+def _start(args: argparse.Namespace) -> int:
     task = args.task
     if not SLUG.match(task):
         raise SystemExit("task must be a lowercase slug (letters, digits, dashes)")
@@ -149,8 +167,11 @@ def cmd_start(args: argparse.Namespace) -> int:
     if _state_path(task).exists() and _phase(json.loads(_state_path(task).read_text())) != "cleaned":
         raise SystemExit(f"task {task!r} already exists; use status/result/clean")
     busy = _live_standalone() + _live_orchestrator_movements()
-    if busy:
-        raise SystemExit(f"refused: one task at a time -- still running: {', '.join(busy)}")
+    limit = getattr(args, "max_parallel", 4)
+    if not 1 <= limit <= 6:
+        raise SystemExit("--max-parallel must be between 1 and 6")
+    if len(busy) >= limit:
+        raise SystemExit(f"refused: parallel limit {limit} reached -- still running: {', '.join(busy)}")
     brief = sys.stdin.read() if args.brief == "-" else Path(args.brief).read_text()
     if not brief.strip():
         raise SystemExit("empty brief")
@@ -177,7 +198,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     prompt_path = run_dir / "prompt.txt"
     prompt_path.write_text(PREAMBLE.format(model=args.model) + brief, encoding="utf-8")
     log_path, exit_file = run_dir / "run.jsonl", run_dir / "exit_code"
-    # ~/.gradle: the Gradle wrapper and daemon lock files live there; without it every Java test run is refused.
+    # Preserve the existing writable roots; worker prompts prohibit sandbox Gradle execution.
     extra_dirs = [orch._worktree_git_dir(worktree), orch._git_object_dir(worktree), Path.home() / ".gradle"]
     argv = CodexAdapter().build_argv(
         prompt_path=prompt_path, worktree=worktree, model=args.model, effort=args.effort,
@@ -185,7 +206,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     )
     # No network for the worker unless asked (2026-09-26: a relay-path worker pushed its lane, opened a PR and ran
     # npm install): without network it cannot push, open PRs or install packages; the frontend dependencies are
-    # linked and Gradle runs from its local cache.
+    # linked; Java/Gradle validation belongs in container images.
     if not args.network:
         argv = [("sandbox_workspace_write.network_access=false" if a == "sandbox_workspace_write.network_access=true" else a)
                 for a in argv]
@@ -230,9 +251,19 @@ def cmd_status(args: argparse.Namespace) -> int:
     rows = []
     for t in tasks:
         r = _load(t)
-        rows.append({"task": t, "phase": _phase(r), "model": r["model"], "branch": r["branch"],
+        phase = _phase(r)
+        if not args.task:
+            if phase == "cleaned":
+                continue
+            started = dt.datetime.fromisoformat(r["started_at"].replace("Z", "+00:00"))
+            minutes = max(0, int((dt.datetime.now(dt.timezone.utc) - started).total_seconds() // 60))
+            activity = " ".join((_last_activity(r) or "-").split())[:80]
+            print(f"{t} {phase} {minutes}m {activity}")
+            continue
+        rows.append({"task": t, "phase": phase, "model": r["model"], "branch": r["branch"],
                      "started_at": r["started_at"], "last_activity": _last_activity(r)})
-    print(json.dumps(rows, indent=1))
+    if args.task:
+        print(json.dumps(rows, indent=1))
     return 0
 
 
@@ -347,6 +378,29 @@ def _pr_body(branch: str, commits: str, notes: str) -> str:
 
 
 def cmd_ship(args: argparse.Namespace) -> int:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    with (STATE_DIR / "ship.lock").open("a+") as lock:
+        deadline = time.monotonic() + 45 * 60
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return 3
+                lock.seek(0)
+                owner = lock.read().strip() or "another task"
+                print(f"waiting for {owner} ship", flush=True)
+                time.sleep(min(60, remaining))
+        lock.seek(0)
+        lock.truncate()
+        lock.write(args.task or args.branch or "unknown task")
+        lock.flush()
+        return _ship(args)
+
+
+def _ship(args: argparse.Namespace) -> int:
     """Ship through a pull request (PO 2026-09-30): push the lane branch, open a PR, merge it, deploy from main."""
     skip_security = getattr(args, "skip_security", None)
     if skip_security is not None:
@@ -440,6 +494,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--model", required=True)
     s.add_argument("--effort", default="medium", choices=["minimal", "low", "medium", "high"])
     s.add_argument("--brief", required=True, help="brief file, or - for stdin")
+    s.add_argument("--max-parallel", type=int, choices=range(1, 7), default=4)
     s.add_argument("--base", default=None, help="base commit-ish (default origin/main)")
     s.add_argument("--network", action="store_true", help="allow the worker's commands network access (default off)")
     for name in ("status",):
