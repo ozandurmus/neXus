@@ -3,10 +3,14 @@ import { Box, Button, Chip, Drawer, FormControl, InputLabel, MenuItem, Select, S
   TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
 import { m3 } from "../theme/m3Theme";
-import { listPolicies, getPolicy, getPolicyObject, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage } from "../auth/adminApi";
+import { listPolicySources, collectPolicies, type PolicyCollectionSource, listPolicies, getPolicy, getPolicyObject, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage } from "../auth/adminApi";
 
 export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [catalog, setCatalog] = useState<PolicyMetadata[] | null>(preview ? [] : null);
+  const [sources, setSources] = useState<PolicyCollectionSource[]>([]);
+  const [canCollect, setCanCollect] = useState(false);
+  const [collecting, setCollecting] = useState(false);
+  const [collectionStatus, setCollectionStatus] = useState("");
   const [selected, setSelected] = useState("");
   const [device, setDevice] = useState(() => new URLSearchParams(window.location.search).get("device_id") ?? "");
   const [page, setPage] = useState(0);
@@ -22,6 +26,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     if (preview) return;
     let active = true;
     setError("");
+    listPolicySources().then(result => { if (active) { setSources(result.sources ?? []); setCanCollect(result.canCollect === true); } })
+      .catch(() => { if (active) setCollectionStatus("Policy collection sources could not be loaded."); });
     listPolicies().then(result => { if (active) setCatalog(result.policies); })
       .catch(() => { if (active) setError("Policy snapshots could not be loaded."); });
     return () => { active = false; };
@@ -70,10 +76,25 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     if (!containers.has(policy.containerId)) containers.set(policy.containerId, []);
     containers.get(policy.containerId)!.push(policy);
   }
+  const collect = async (source: string, domain = "") => {
+    setCollecting(true); setCollectionStatus("");
+    try {
+      await collectPolicies(source, domain);
+      setCollectionStatus("Policy collection queued. Refresh snapshots after the job completes.");
+    } catch { setCollectionStatus("Policy collection could not be queued. The source may be busy or unavailable."); }
+    finally { setCollecting(false); }
+  };
+  const collectButton = (source: string, domain = "") => canCollect && sources.some(s => s.sourceId === source)
+    ? <Button size="small" disabled={collecting} onClick={() => void collect(source, domain)}>Collect policies</Button> : null;
   const close = () => { drawerRequest.current++; setDrawer(null); };
   return <ScreenRoot>
     <ScreenHeader title="Policy" subtitle="Management policy · configured intent" />
     <Box sx={{ px: 3, pb: 3 }}>
+      {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
+      {!preview && <Button onClick={() => setRevision(n => n + 1)}>Refresh snapshots</Button>}
+      {sources.filter(s => !tree.has(s.sourceId)).map(source => <Box key={source.sourceId} component="nav" aria-label="MDS policy source" sx={{ my: 1 }}>
+        <Typography variant="subtitle2">{source.sourceName}</Typography>{collectButton(source.sourceId)}
+      </Box>)}
       {error && <EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel>}
       {catalog === null && !error && <Typography role="status">Loading policies…</Typography>}
       {catalog?.length === 0 && <EmptyPanel title="No policy snapshot" body="No management policy has been collected yet." />}
@@ -91,8 +112,10 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           <Box component="nav" aria-label="Management policies" sx={{ bgcolor: m3.scLow, borderRadius: 2, p: 1.5 }}>
             {[...tree.entries()].map(([source, containers]) => <Box key={source}>
               <Typography variant="subtitle2">{[...containers.values()][0][0].sourceName}</Typography>
+              {collectButton(source)}
               {[...containers.entries()].map(([container, policies]) => <Box key={container} sx={{ pl: 1 }}>
                 <Typography variant="caption">{policies[0].containerName}</Typography>
+                {collectButton(source, container)}
                 {policies.map(policy => <Button key={policy.id} fullWidth variant={selected === policy.id ? "contained" : "text"}
                   aria-current={selected === policy.id ? "page" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none" }}
                   onClick={() => { setSelected(policy.id); setPage(0); setCollapsed(new Set()); }}>{policy.name}</Button>)}

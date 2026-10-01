@@ -2918,3 +2918,52 @@ gates:
     secret_output_risk: none
     safe_telemetry_fields: [routeCount, defaultRoute]
     source_document_pointer: "ui2/service/src/main/resources/db/migration/V111__cp_failover_measured_checks.sql (PO approved 2026-09-30)"
+
+  - gate_id: "cp_policy_packages"
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-packages limit 500 details-level full"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "manual admin request; automatic at most once per domain per 6 hours"
+    session_reuse_rule: "one interactive SSH session per job; serial"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "sensitive policy data; parse in memory"
+    safe_telemetry_fields: ["outcome", "packageCount", "ruleCount"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_CP_POLICY_READS.md"
+  - gate_id: "cp_policy_access_rulebase"
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-access-rulebase name '<LAYER>' limit 500 offset '<N>' details-level full use-object-dictionary true"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "manual admin request; automatic at most once per domain per 6 hours"
+    session_reuse_rule: "one interactive SSH session per job; serial"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "sensitive policy data; parse in memory"
+    safe_telemetry_fields: ["outcome", "packageCount", "ruleCount"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_CP_POLICY_READS.md"
+  - gate_id: "cp_policy_nat_rulebase"
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-nat-rulebase package '<PKG>' limit 500 offset '<N>' details-level standard use-object-dictionary true"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "manual admin request; automatic at most once per domain per 6 hours"
+    session_reuse_rule: "one interactive SSH session per job; serial"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "sensitive policy data; parse in memory"
+    safe_telemetry_fields: ["outcome", "packageCount", "ruleCount"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_CP_POLICY_READS.md"

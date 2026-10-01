@@ -8,8 +8,11 @@ import java.util.*;
 /** Offline mapper. Callers supply ordered access-layer pages and dictionaries; no transport or command creation. */
 public final class CheckPointPolicyMapper {
     public PolicySnapshot map(Metadata metadata, List<JsonNode> pages) {
+        return map(metadata, pages, List.of());
+    }
+    public PolicySnapshot map(Metadata metadata, List<JsonNode> pages, List<JsonNode> natPages) {
         Map<String, JsonNode> dictionary = new LinkedHashMap<>();
-        for (JsonNode page : pages) for (JsonNode object : page.path("objects-dictionary")) {
+        for (JsonNode page : java.util.stream.Stream.concat(pages.stream(), natPages.stream()).toList()) for (JsonNode object : page.path("objects-dictionary")) {
             String uid = object.path("uid").asText();
             if (!uid.isEmpty()) dictionary.put(uid, object);
         }
@@ -39,7 +42,39 @@ public final class CheckPointPolicyMapper {
         for (String layer : layers.keySet()) if (!inline.contains(layer))
             layer(metadata, layer, null, layers, dictionary, objects, sections, new HashSet<>());
         if (!layers.isEmpty() && sections.isEmpty()) throw new IllegalArgumentException("Cyclic inline layers");
+        for (JsonNode page : natPages) nat(metadata, page.path("rulebase"), ref(metadata.id(), "nat"),
+                "NAT", dictionary, objects, sections, 0);
         return new PolicySnapshot(metadata, sections, objects);
+    }
+    private void nat(Metadata meta, JsonNode nodes, String section, String name, Map<String, JsonNode> dict,
+            Map<String, PolicyObject> objects, List<Section> sections, int depth) {
+        if (depth > 32 || !nodes.isArray()) throw new IllegalArgumentException("Invalid NAT rulebase");
+        List<Rule> rules = new ArrayList<>();
+        for (JsonNode node : nodes) {
+            if (node.path("type").asText().equals("nat-section")) {
+                if (!rules.isEmpty()) {
+                    sections.add(new Section(ref(section, rules.get(0).uuid()), name, "CP NAT rulebase", null, rules));
+                    rules.clear();
+                }
+                nat(meta, node.path("rulebase"), ref(section, node.path("uid").asText()), node.path("name").asText("NAT section"),
+                        dict, objects, sections, depth + 1);
+                continue;
+            }
+            String uid = node.path("uid").asText();
+            if (!node.path("type").asText().equals("nat-rule") || uid.isEmpty())
+                throw new IllegalArgumentException("Unsupported NAT entry");
+            Map<String, List<String>> extras = new LinkedHashMap<>();
+            for (String field : List.of("translated-source", "translated-destination", "translated-service", "install-on"))
+                extras.put(field, texts(node.path(field)).stream().map(value -> object(meta, value, dict, objects)).toList());
+            if (node.path("auto-generated").isBoolean()) extras.put("auto-generated", List.of(node.path("auto-generated").asText()));
+            rules.add(new Rule(ref(section, uid), uid, node.path("rule-number").asInt(), node.path("name").asText(""),
+                    node.path("enabled").isBoolean() ? node.path("enabled").asBoolean() : null,
+                    cell(meta, node, "original-source", dict, objects), cell(meta, node, "original-destination", dict, objects),
+                    cell(meta, node, "original-service", dict, objects), new Cell(List.of(), false),
+                    node.path("method").asText("UNKNOWN"), "UNKNOWN", node.path("comments").asText(""), extras));
+        }
+        if (!rules.isEmpty()) sections.add(new Section(ref(section, rules.get(0).uuid()), name, "CP NAT rulebase", null, rules));
+        if (nodes.isEmpty()) sections.add(new Section(section, name, "CP NAT rulebase", null, List.of()));
     }
     private static void inlineLayers(JsonNode nodes, Set<String> inline, int depth) {
         if (depth > 32) throw new IllegalArgumentException("Policy nesting limit exceeded");

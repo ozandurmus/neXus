@@ -75,6 +75,13 @@ public final class DiscoveryJobExecutor {
     /** FortiManager discovery (2026-09-25): its ADOMs and their FortiGates over JSON-RPC. */
     private com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor fortiManager;
 
+    private java.util.function.Consumer<DiscoveryRun> policyCollection = run -> {};
+
+    public DiscoveryJobExecutor withPolicyCollection(java.util.function.Consumer<DiscoveryRun> trigger) {
+        this.policyCollection = Objects.requireNonNull(trigger);
+        return this;
+    }
+
     public DiscoveryJobExecutor withFortiManager(com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor executor) {
         this.fortiManager = executor;
         return this;
@@ -148,8 +155,9 @@ public final class DiscoveryJobExecutor {
             return new JobOutcome.Failed("discovery_candidates_write_failed: " + persistFailed.getMessage());
         }
 
-        leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR,
-                ACTION_COMPLETED);
+        if (!leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR,
+                ACTION_COMPLETED)) return new JobOutcome.ZombieStopped();
+        policyCollection.accept(run.get());
         return new JobOutcome.Completed();
     }
 

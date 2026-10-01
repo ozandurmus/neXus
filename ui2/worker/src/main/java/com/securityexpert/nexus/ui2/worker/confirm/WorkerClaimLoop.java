@@ -40,6 +40,7 @@ import com.securityexpert.nexus.ui2.worker.inventory.InventoryRequest;
 public final class WorkerClaimLoop {
 
     private static final List<String> ELIGIBLE_CAPABILITY_IDS = List.of(
+            "cp_policy_collect",
             "cp_cluster_failover", "pan_cluster_failover", "cp_failover_readiness", "pan_failover_readiness",
             com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
@@ -81,6 +82,11 @@ public final class WorkerClaimLoop {
     private final InventoryJobExecutor inventoryJobExecutor;
     private final ConfigurationJobExecutor configurationJobExecutor;
     private final DiscoveryJobExecutor discoveryJobExecutor;
+    private com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor policyCollection;
+    public WorkerClaimLoop withPolicyCollection(com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor executor) {
+        this.policyCollection = executor;
+        return this;
+    }
     private final BackupJobExecutor backupJobExecutor;
     private com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorConfirmJobExecutor httpsConfirmJobExecutor;
 
@@ -282,6 +288,14 @@ public final class WorkerClaimLoop {
         LOGGER.log(System.Logger.Level.INFO,
                 "[WORKER_CLAIM] Worker {0} claimed job {1} ({2}) for device {3} leaseEpoch={4}",
                 workerId, claimed.jobId(), job.capabilityId(), job.targetDeviceId(), claimed.leaseEpoch());
+
+        if ("cp_policy_collect".equals(job.capabilityId())) {
+            if (policyCollection == null || !"discovery_run".equals(job.targetKind()))
+                leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                    com.securityexpert.nexus.ui2.jobs.JobState.REJECTED, "system:worker", "policy_collect_rejected");
+            else policyCollection.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetRef());
+            return true;
+        }
 
         // 14F DR-1: a discovery job's target is a discovery_run row, not a device -- dispatched before any
         // device/endpoint resolution below, which would otherwise crash on a job with no target_device_id.

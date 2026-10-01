@@ -8,7 +8,7 @@ import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
 public final class PolicyPrivacy {
     private PolicyPrivacy() {}
     private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId");
-    private static final Set<String> ENUMS = Set.of("CP", "PAN", "any", "address", "group", "service", "service-group", "address-group",
+    private static final Set<String> ENUMS = Set.of("CP", "PAN", "static", "hide", "any", "address", "group", "service", "service-group", "address-group",
             "application-group", "tag", "unresolved", "UNRESOLVED", "UNSUPPORTED", "RESOLVED", "DYNAMIC", "CYCLE", "LIMIT", "UNKNOWN",
             "MATCH", "MISMATCH", "IN_SYNC", "OUT_OF_SYNC", "PENDING", "Accept", "Drop", "Reject", "allow", "deny", "drop", "reject", "reset-client", "reset-server", "reset-both", "Apply Layer", "Log", "None", "Alert");
     public static Object mask(Object value, String key, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
@@ -32,7 +32,7 @@ public final class PolicyPrivacy {
         if (key.equals("comment")) return "Withheld in AIView";
         if (key.equals("sourceName")) return names.maskDeviceName(text, null);
         if (key.equals("containerName")) return names.maskDomainName(text);
-        if (key.equals("source")) return Set.of("Shared", "CP access layer").contains(text) ? text : names.maskDomainName(text);
+        if (key.equals("source")) return Set.of("Shared", "CP access layer", "CP NAT rulebase").contains(text) ? text : names.maskDomainName(text);
         if (key.equals("type") || key.equals("status") || key.equals("vendor") || key.equals("action") || key.equals("syncStatus"))
             return ENUMS.contains(text) ? text : "UNKNOWN";
         if (key.equals("log")) return ENUMS.contains(text) || text.matches("start=(yes|no|UNKNOWN), end=(yes|no|UNKNOWN)") ? text : "UNKNOWN";
