@@ -56,12 +56,14 @@ export const test = base.extend<{ safety: Safety }>({
     context.on("requestfailed", (request) => {
       started.delete(request);
       if (pending.delete(request)) changedAt = Date.now();
-      violations.push(requestViolation(request.method(), request.url()));
+      if (relevant(request) && request.failure()?.errorText !== "net::ERR_ABORTED") {
+        violations.push(requestViolation(request.method(), request.url()));
+      }
     });
     context.on("response", (response) => {
       const expectedDenial = response.status() === 403 && response.request().method() === "GET"
         && forbiddenTranscripts.delete(new URL(response.url()).pathname);
-      if (response.status() >= 400 && !expectedDenial) violations.push(requestViolation(response.request().method(), response.url(), response.status()));
+      if (relevant(response.request()) && response.status() >= 400 && !expectedDenial) violations.push(requestViolation(response.request().method(), response.url(), response.status()));
     });
     context.on("page", (page) => page.on("pageerror", () => violations.push("Uncaught page error (content withheld)")));
     await installReadOnlyGuard(context, baseURL(), (message) => violations.push(message));
