@@ -72,6 +72,33 @@ describe("InventoryScreen device selection and panels", () => {
     vi.unstubAllGlobals();
   });
 
+  it.each(["check_point", "palo_alto", "fortinet", "cisco_asa"])(
+    "opens an uncollected standalone %s gateway without requesting cluster inventory", async (vendor) => {
+      const device = { ...STANDALONE_DEVICE, role: "gateway", vendor_hint: vendor, hostname: "FW-TANGO-04" };
+      const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        const bodies: Record<string, unknown> = {
+          "/devices": { devices: [device] },
+          "/devices/dev-1": { ...device, job: null },
+          "/devices/dev-1/https-certificate": { available: false },
+          "/devices/dev-1/inventory": { device_id: "dev-1", collected_at: null, contexts: [] },
+        };
+        return Promise.resolve(jsonResponse(url in bodies ? 200 : 404, bodies[url] ?? { error: "NOT_FOUND" }));
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      render(withTheme(<InventoryScreen />));
+      fireEvent.click(await screen.findByText("FW-TANGO-04"));
+      await screen.findByRole("tablist", { name: "Device detail" });
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+      expect(fetchMock.mock.calls.map(([url]) => url).sort()).toEqual([
+        "/devices", "/devices/dev-1", "/devices/dev-1/https-certificate", "/devices/dev-1/inventory",
+      ]);
+      expect(screen.getByText("This device has not been collected yet. Use Collect now to read its interfaces.")).toBeInTheDocument();
+      expect(screen.queryByText("Inventory unavailable")).toBeNull();
+      expect(screen.queryByRole("alert")).toBeNull();
+    },
+  );
+
   it("fetches and renders a selected standalone device's interfaces and routes", async () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);

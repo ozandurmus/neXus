@@ -1,6 +1,21 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { fullMode, latencyViolation, pathTemplate, validateAllowlist } from "../e2e/latency";
+import { requestViolation, sanitizedPath } from "../e2e/requestPath";
 afterEach(() => vi.unstubAllEnvs());
+
+it("reports methods and static path words while masking every unknown segment", () => {
+  for (const identity of ["synthetic-id", "192.0.2.10", "FW-TANGO-04", "SYNTHETIC-SERIAL-01", "%64evices", "a%2Fb"]) {
+    const url = `https://example.invalid/api/v2/devices/${identity}/backups?name=FW-TANGO-04#192.0.2.10`;
+    expect(sanitizedPath(url)).toBe("/api/v2/devices/{id}/backups");
+    expect(requestViolation("GET", url, 404)).toBe("API GET /api/v2/devices/{id}/backups returned HTTP 404");
+    expect(requestViolation("HEAD", url)).toBe("API HEAD /api/v2/devices/{id}/backups request failed");
+  }
+  expect(sanitizedPath("https://example.invalid/clusters/null/inventory")).toBe("/clusters/{id}/inventory");
+  expect(sanitizedPath("https://example.invalid/unknown/192.0.2.10/other")).toBe("/{id}/{id}/{id}");
+  expect(sanitizedPath("https://example.invalid/api/v2/jobs/export.csv?token=synthetic#secret")).toBe("/api/v2/jobs/export.csv");
+  expect(sanitizedPath("https://example.invalid/?device=synthetic")).toBe("/");
+  expect(requestViolation("synthetic-secret", "invalid", 500)).toBe("API {method} /{id} returned HTTP 500");
+});
 
 it("enforces a strict 3 second boundary and withholds identities and queries", () => {
   const url = "https://example.invalid/api/v2/jobs/synthetic-id?address=192.0.2.10";
