@@ -162,16 +162,30 @@ public final class CyberControllerBackupExecutor {
             return new BackupResult.CleanupFailed(metadata, archive, (!uploadRemoved ? "the upload on HOST-A was not removed; " : "")
                     + (!controllerRemoved ? "the backup " + name + " was not removed from the Cyber Controller" : ""));
         }
+        List<String> leftovers = CyberControllerBackupPlan.leftovers(listing, name);
+        int removed = 0;
+        for (String leftover : leftovers.subList(0, Math.min(20, leftovers.size()))) {
+            try {
+                if (!deleteOnController(session, leftover)) {
+                    break;
+                }
+                removed++;
+            } catch (RuntimeException e) {
+                // Opportunistic cleanup must not invalidate the already stored and cleaned backup.
+                break;
+            }
+        }
+        LOG.log(System.Logger.Level.INFO, "[CC_BACKUP] leftovers found={0} removed={1}", leftovers.size(), removed);
         return new BackupResult.Completed(metadata, archive, Optional.empty(), Optional.empty());
     }
 
-    /** Deletes this run's backup, by exact name, answering the measured "(Y/N)?" with "y". */
+    /** Deletes a neXus backup, by exact name, answering the measured "(Y/N)?" with "y". */
     private boolean deleteOnController(TransportSession session, String name) {
         ExecResult r = transport.execInteractiveAnswering(session,
                 new ExecSpec(CyberControllerBackupPlan.with(CyberControllerBackupPlan.DELETE, name)),
                 List.of(new PromptAnswer(CyberControllerBackupPlan.DELETE_CONFIRM_PROMPT, new char[] {'y'})), DELETE);
         boolean done = text(r).contains(CyberControllerBackupPlan.DELETE_DONE);
-        LOG.log(System.Logger.Level.INFO, "[CC_BACKUP] delete {0} ended {1}; completed={2}", name, r.getClass().getSimpleName(), done);
+        LOG.log(System.Logger.Level.INFO, "[CC_BACKUP] delete ended {0}; completed={1}", r.getClass().getSimpleName(), done);
         return done;
     }
 

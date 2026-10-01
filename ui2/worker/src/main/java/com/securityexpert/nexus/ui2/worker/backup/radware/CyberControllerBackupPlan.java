@@ -50,6 +50,17 @@ public final class CyberControllerBackupPlan {
         return "sftp://" + receiverUser + "@" + receiverHost + ":/in/" + token + ".tgz";
     }
 
+    /** Only complete whitespace-delimited names in the listing's first column are eligible. */
+    public static List<String> leftovers(String listing, String ownName) {
+        if (listing == null) {
+            return List.of();
+        }
+        return listing.lines().map(String::strip).filter(line -> !line.isEmpty())
+                .map(line -> line.split("\\s+", 2)[0])
+                .filter(token -> NAME.matcher(token).matches() && !token.equals(ownName))
+                .distinct().toList();
+    }
+
     /** The {@code Size(K)} column of our backup's row in {@code system backup config list}, if present. */
     public static Optional<Long> listedSizeKb(String listing, String name) {
         if (listing == null) {
