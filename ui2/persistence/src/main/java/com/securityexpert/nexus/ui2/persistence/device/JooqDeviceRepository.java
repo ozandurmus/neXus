@@ -385,6 +385,13 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public Optional<DeviceSummaryRecord> findSummary(String deviceId) {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(
+                DEVICE_SUMMARY_SELECT + "where d.device_id = {0}", deviceId)
+                .stream().findFirst().map(JooqDeviceRepository::toSummaryRecord));
+    }
+
+    @Override
     public List<DeviceSummaryRecord> findMembersByClusterRef(String clusterMemberRef) {
         if (clusterMemberRef == null || clusterMemberRef.isBlank()) {
             return List.of();

@@ -197,6 +197,13 @@ class BackupControllerTest {
             return Optional.ofNullable(devices.get(deviceId));
         }
 
+        @Override
+        public Optional<DeviceSummaryRecord> findSummary(String deviceId) {
+            return find(deviceId).map(d -> new DeviceSummaryRecord(d.deviceId(), d.role(), d.vendorHint(),
+                    d.enrollmentState(), Optional.empty(), Optional.empty(), Optional.empty(),
+                    Optional.empty(), Optional.empty()));
+        }
+
         @Override public Optional<EndpointRecord> findEndpoint(String endpointId) { throw new UnsupportedOperationException(); }
         @Override public Optional<EndpointRecord> findEndpointByDeviceId(String deviceId) { throw new UnsupportedOperationException(); }
         @Override public String registerDraft(DeviceDraft draft, String actorFingerprint, String actionId) { throw new UnsupportedOperationException(); }
