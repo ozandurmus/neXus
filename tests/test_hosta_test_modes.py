@@ -43,7 +43,7 @@ def test_nightly_full_and_ephemeral_isolation_manifests():
     assert all("persistentVolumeClaim" not in volume for volume in spec["volumes"])
 
 
-@pytest.mark.parametrize("failure", ["", "setup", "gradle", "skipped"])
+@pytest.mark.parametrize("failure", ["", "setup", "apply", "ready", "tunnel", "gradle", "skipped", "missing", "signal", "cleanup"])
 def test_integration_cleanup_and_fail_closed_result(tmp_path, failure):
     checkout = tmp_path / "checkout"
     for directory in ("scripts", "deploy/ui2-image-build", "ui2", "bin"):
@@ -51,38 +51,96 @@ def test_integration_cleanup_and_fail_closed_result(tmp_path, failure):
     for relative in ("scripts/hosta_integration.sh", "deploy/ui2-image-build/33-integration-postgres.yaml"):
         shutil.copyfile(ROOT / relative, checkout / relative)
     calls = tmp_path / "calls"
-    kubectl = checkout / "bin/kubectl"
-    kubectl.write_text('''#!/usr/bin/env python3
-import os,sys,time
+    config = tmp_path / "home/.config/nexus"
+    config.mkdir(parents=True)
+    (config / "hosta").write_text("synthetic-host\n")
+    ssh = checkout / "bin/ssh"
+    ssh.write_text('''#!/usr/bin/env python3
+import os,sys
 from pathlib import Path
 args=sys.argv[1:]
+assert 'synthetic-host' in args
+command=args[-1]
+assert 'gradlew' not in command and 'git archive' not in command
+if '-L' in args:
+    binding=args[args.index('-L')+1].split(':')
+    assert binding[0] == binding[2] == '127.0.0.1'
+    assert 'ExitOnForwardFailure=yes' in args
+    Path(os.environ['TEST_PORT']).write_text(binding[1])
+    if os.environ['TEST_FAILURE']=='tunnel': sys.exit(1)
+os.execve('/bin/sh', ['sh', '-c', command], {**os.environ, 'TEST_REMOTE': '1'})
+''')
+    ssh.chmod(0o755)
+    kubectl = checkout / "bin/kubectl"
+    kubectl.write_text('''#!/usr/bin/env python3
+import os,sys,time,signal
+from pathlib import Path
+assert os.environ['TEST_REMOTE']=='1'
+args=sys.argv[1:]
 with open(os.environ['TEST_CALLS'], 'a') as f: f.write(' '.join(args)+'\\n')
-if 'create' in args and os.environ['TEST_FAILURE']=='setup': sys.exit(1)
+if 'create' in args:
+    assert '--from-file=' + 'password' + '=/dev/stdin' in args
+    secret_value=sys.stdin.read()
+    assert len(secret_value)==48 and secret_value not in ' '.join(args)
+    if os.environ['TEST_FAILURE']=='setup': sys.exit(1)
+if 'apply' in args:
+    assert sys.stdin.read().startswith('# Only synthetic test data.')
+    if os.environ['TEST_FAILURE']=='apply': sys.exit(1)
+if 'wait' in args and os.environ['TEST_FAILURE']=='ready': sys.exit(1)
+if 'delete' in args and os.environ['TEST_FAILURE']=='cleanup': sys.exit(1)
 if 'get' in args: print('synthetic-pod')
 if 'port-forward' in args:
-    print('Forwarding from 127.0.0.1:15432 -> 5432', flush=True)
+    assert '--address=127.0.0.1' in args
+    port=args[-1].split(':')[0]
+    def stopped(*_):
+        with open(os.environ['TEST_CALLS'], 'a') as f: f.write('forward-stopped\\n')
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, stopped)
+    print(f'Forwarding from 127.0.0.1:{port} -> 5432', flush=True)
     time.sleep(120)
 ''')
     kubectl.chmod(0o755)
     gradle = checkout / "ui2/gradlew"
     gradle.write_text('''#!/usr/bin/env python3
-import os,sys
+import os,sys,signal
 from pathlib import Path
 assert ':integration-tests:test' in sys.argv
-assert os.environ['UI2_TEST_JDBC_URL']=='jdbc:postgresql://127.0.0.1:15432/postgres'
-assert Path(os.environ['UI2_TEST_DB_PASSWORD_FILE']).is_file()
+assert 'TEST_REMOTE' not in os.environ
+port=Path(os.environ['TEST_PORT']).read_text()
+assert os.environ['UI2_TEST_JDBC_URL']==f'jdbc:postgresql://127.0.0.1:{port}/postgres'
+secret_file=Path(os.environ['UI2_TEST_DB_PASSWORD_FILE'])
+assert secret_file.stat().st_mode & 0o777 == 0o600
+assert len(secret_file.read_text())==48
+Path(os.environ['TEST_PASSWORD_PATH']).write_text(str(secret_file))
 if os.environ['TEST_FAILURE']=='gradle': sys.exit(1)
+if os.environ['TEST_FAILURE']=='missing': sys.exit(0)
+if os.environ['TEST_FAILURE']=='signal':
+    os.kill(os.getppid(), signal.SIGTERM)
+    sys.exit(0)
 p=Path('integration-tests/build/test-results/test'); p.mkdir(parents=True)
 skipped=int(os.environ['TEST_FAILURE']=='skipped')
 (p/'TEST-synthetic.xml').write_text(f'<testsuite tests="1" failures="0" errors="0" skipped="{skipped}"/>')
 ''')
     gradle.chmod(0o755)
     env = {**os.environ, "PATH": f"{checkout / 'bin'}:{os.environ['PATH']}",
-           "TEST_CALLS": str(calls), "TEST_FAILURE": failure}
-    result = subprocess.run(["bash", str(checkout / "scripts/hosta_integration.sh"), "--on-host"],
+           "TEST_CALLS": str(calls), "TEST_FAILURE": failure, "HOME": str(tmp_path / "home"),
+           "TEST_PORT": str(tmp_path / "port"), "TEST_PASSWORD_PATH": str(tmp_path / "password_path")}
+    result = subprocess.run(["bash", str(checkout / "scripts/hosta_integration.sh")],
                             env=env, capture_output=True, text=True, timeout=20)
-    assert (result.returncode == 0) == (failure == "")
+    assert result.returncode == (0 if not failure else 1 if failure == "gradle" else 2), result.stdout + result.stderr
     assert ("INTEGRATION: PASS" in result.stdout) == (failure == "")
+    assert result.stderr == ""
     commands = calls.read_text().splitlines()
     assert any("delete job,networkpolicy,secret ui2-integration-" in command for command in commands)
     assert not any("ui2-database" in command for command in commands)
+    if failure in ("", "gradle", "skipped", "missing", "signal", "cleanup"):
+        assert "forward-stopped" in commands
+        assert not Path((tmp_path / "password_path").read_text()).parent.exists()
+
+
+def test_integration_runner_has_cleanup_and_no_remote_build_mode():
+    source = (ROOT / "scripts/hosta_integration.sh").read_text()
+    assert "trap cleanup EXIT" in source
+    assert "trap cleanup_forward EXIT" in source
+    assert "--on-host" not in source
+    assert "git archive" not in source
