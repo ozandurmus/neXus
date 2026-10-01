@@ -52,7 +52,7 @@ export function DiagnosticPanel() {
   const device = devices.find(d => d.deviceId === deviceId);
   const selected = device?.commands.find(c => c.gate_id === gateId);
   const needsParameter = selected?.command_template.includes("<") ?? false;
-  const needsVs = selected?.command_template.includes("vsenv <VSID>") ?? false;
+  const needsVs = selected?.command_template.includes("<VSID>") ?? false;
   const validParameter = !needsParameter || (needsVs ? device?.virtualSystems?.includes(parameter)
     : /^[A-Za-z0-9_.-]{1,31}$/.test(parameter));
   const visibleDevices = devices.filter(d => (!vendor || d.vendor === vendor)
@@ -98,7 +98,7 @@ export function DiagnosticPanel() {
   function selectDevice(id: string, vs = "") {
     setDeviceId(id); setGateId(""); setParameter(vs); setPage(0); setHistory([]); requestId.current = null;
     if (!busy) { setResult(null); setJobId(""); }
-    if (vs) setGateId(devices.find(d => d.deviceId === id)?.commands.find(c => c.command_template.includes("vsenv <VSID>"))?.gate_id ?? "");
+    if (vs) setGateId(devices.find(d => d.deviceId === id)?.commands.find(c => c.command_template.includes("<VSID>"))?.gate_id ?? "");
   }
   async function run() {
     if (!canExecute || !deviceId || !selected || !validParameter || busy) return;
@@ -167,7 +167,8 @@ export function DiagnosticPanel() {
             {!canExecute && <Alert severity="info" sx={{ mt: 1 }}>This session can inspect history and masked output.</Alert>}
             {device && <>
               <List aria-label="Approved commands" sx={{ maxHeight: 320, overflow: "auto" }}>
-                {[...device.commands].sort((a, b) => (a.description ?? a.command_template).localeCompare(b.description ?? b.command_template)).map(c =>
+                {[...device.commands].sort((a, b) => Number(a.command_template.includes("<VSID>")) - Number(b.command_template.includes("<VSID>"))
+                  || (a.description ?? a.command_template).localeCompare(b.description ?? b.command_template)).map(c =>
                   <ListItemButton key={c.gate_id} selected={gateId === c.gate_id} disabled={busy} aria-pressed={gateId === c.gate_id}
                     onClick={() => { setGateId(c.gate_id); setParameter(""); requestId.current = null; }} sx={{ borderRadius: 1, mb: 0.5 }}>
                     <ListItemText primary={c.description ?? c.command_template} secondary={c.command_template}

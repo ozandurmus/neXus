@@ -65,7 +65,10 @@ public final class DiagnosticJobExecutor {
             session=authenticated.session();
             boolean interactive=!"check_point".equals(device.get().vendorHint())
                 || "gaia_embedded".equals(read.get().platformRoleScope());
-            var spec=new ExecSpec(read.get().command(),true);
+            String command=read.get().command();
+            if (!interactive && !command.startsWith("bash -lc "))
+                command="bash -lc '"+command.replace("'", "'\"'\"'")+"'";
+            var spec=new ExecSpec(command,true);
             var result=interactive ? ssh.execInteractive(session,spec,Duration.ofSeconds(read.get().timeoutSeconds()))
                 : ssh.exec(session,spec,Duration.ofSeconds(read.get().timeoutSeconds()));
             if (!(result instanceof ExecResult.Completed completed)) { finish(jobId,epoch,JobState.OUTCOME_UNKNOWN,"OUTPUT_UNAVAILABLE"); return; }

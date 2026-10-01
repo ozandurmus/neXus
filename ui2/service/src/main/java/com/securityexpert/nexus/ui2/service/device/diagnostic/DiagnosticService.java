@@ -262,11 +262,14 @@ public final class DiagnosticService {
                                     model, cachedGates).stream().map(c -> java.util.Map.<String, Object>of(
                                     "gate_id", c.gateId(), "command_template", c.commandTemplate(), "description", description(c.gateId(), c.commandTemplate()), "timeout_s", c.timeoutS()))
                                     .toList());
+                    List<String> virtualSystems = virtualSystems(d.deviceId());
+                    if (virtualSystems.isEmpty()) commands = commands.stream()
+                            .filter(c -> !((String) c.get("command_template")).contains("<VSID>")).toList();
                     return new TargetOption(d.deviceId(), d.observedHostname()
                             .map(name -> masked ? names.maskDeviceName(name, d.clusterMemberRef().orElse(null)) : name)
                             .orElse("Unknown"), d.vendorHint(),
                             d.clusterMemberRef().map(ref -> masked ? names.maskClusterName(ref) : ref).orElse(null),
-                            virtualSystems(d.deviceId()), commands);
+                            virtualSystems, commands);
                 }).toList();
     }
 

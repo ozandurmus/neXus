@@ -83,7 +83,7 @@ public final class ReadinessCheckView {
             case 5 -> count(d,"count"," ARP entries");
             case 6 -> count(d,"count"," connections")+", "+count(d,"peak"," peak")+(pass ? "" : ", below tolerance");
             case 8 -> count(d,"bytesPerSecond"," bytes/s")+(pass ? "" : ", below tolerance");
-            case 9 -> (pass ? "Sync OK, 0 lost updates" : "Sync not ready")
+            case 9 -> (pass ? "Sync OK, 0 lost updates" : syncFailure(d))
                 +(d.path("sentRejectNotifications").isIntegralNumber()
                     ? " ("+d.path("sentRejectNotifications").asLong()+" sent rejects)" : "");
             case 10 -> pass ? "Same policy on both members" : "Policy missing, changed or different between members";
@@ -95,6 +95,21 @@ public final class ReadinessCheckView {
                 +", "+count(d,"routeCount"," routes")+(pass ? "" : "; routing not ready");
             default -> "Check result unavailable";
         };
+    }
+
+    private static String syncFailure(JsonNode d) {
+        String state=d.path("syncStatus").asText();
+        var reasons=new java.util.ArrayList<String>();
+        if(!state.isEmpty() && !"OK".equals(state)) reasons.add("Sync status: "+state);
+        String[] keys={"lostUpdates", "lostBulkUpdateEvents", "unsynchronizedUpdates"};
+        String[] labels={"lost updates", "lost bulk update events", "unsynchronized updates"};
+        for(int i=0;i<keys.length;i++) {
+            JsonNode value=d.path(keys[i]);
+            if(value.isIntegralNumber() && value.bigIntegerValue().signum()>0)
+                reasons.add(value.bigIntegerValue()+" "+labels[i]+" (counter since boot)");
+        }
+        if(reasons.isEmpty()) return "Sync not ready";
+        return ("OK".equals(state) ? "Sync OK but " : "")+String.join("; ",reasons);
     }
 
     private static String count(JsonNode d,String key,String suffix) {

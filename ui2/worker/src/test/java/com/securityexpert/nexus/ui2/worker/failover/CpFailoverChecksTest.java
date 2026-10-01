@@ -96,6 +96,29 @@ class CpFailoverChecksTest {
         check(CpFailoverChecks.policy("HOST POLICY DATE\n").status().equals("FAIL"));
         check(CpFailoverChecks.policy("unsupported").status().equals("UNKNOWN"));
     }
+    @Test void syncDetailsPreserveVerdictsAndOmitMissingCounters() {
+        for(String state:new String[]{"OK","Off - Full-sync failure","Fullsync in progress"}) {
+            String output=SYNC.replace("Sync status: OK","Sync status: "+state);
+            var derived=CpFailoverChecks.syncInformation(output);
+            check(state.equals(derived.get("syncStatus")));
+            check(((Number)derived.get("lostUpdates")).longValue()==0);
+            check(((Number)derived.get("lostBulkUpdateEvents")).longValue()==0);
+            check(!derived.containsKey("unsynchronizedUpdates"));
+            check(CpFailoverChecks.syncStatus(output).equals(state.equals("OK")?"PASS":"FAIL"));
+        }
+        String bulk=SYNC.replace("Lost bulk update events...................... 0",
+            "Lost bulk update events...................... 12");
+        check(CpFailoverChecks.syncStatus(bulk).equals("FAIL"));
+        check(((Number)CpFailoverChecks.syncInformation(bulk).get("lostBulkUpdateEvents")).longValue()==12);
+        check(((Number)CpFailoverChecks.syncInformation(SYNC+"Unsynchronized updates.... 3\n")
+            .get("unsynchronizedUpdates")).longValue()==3);
+        check(CpFailoverChecks.syncInformation("Sync status: Off - Full-sync failure\n")
+            .equals(Map.of("syncStatus","Off - Full-sync failure")));
+        check(CpFailoverChecks.syncInformation(null).isEmpty());
+        check(!CpFailoverChecks.syncInformation(SYNC+"Sync status: OK\n").containsKey("syncStatus"));
+        check(!CpFailoverChecks.syncInformation(SYNC+"Lost updates.... 2\n").containsKey("lostUpdates"));
+    }
+
     @Test void measuredHaChassisAndVsShapes() {
         for(String shape:new String[]{"ha","vsx_chassis","vsx_vs"}) {
             String output=Fixtures.read("cp/failover_stat_"+shape+".txt");
@@ -111,7 +134,7 @@ class CpFailoverChecksTest {
             check(!CpFailoverChecks.interfaces(interfaces.replace("(LS) UP","(LS) DOWN")).healthy());
             String sync=Fixtures.read("cp/failover_sync_"+shape+".txt");
             check(CpFailoverChecks.syncStatus(sync).equals("PASS"));
-            check(CpFailoverChecks.syncInformation(sync).get("sentRejectNotifications")== (shape.equals("vsx_vs")?4554:0));
+            check(((Number)CpFailoverChecks.syncInformation(sync).get("sentRejectNotifications")).longValue()== (shape.equals("vsx_vs")?4554:0));
         }
         check(CpFailoverChecks.policy(Fixtures.read("cp/failover_policy_vsx_chassis.txt")).installedAt()
             .equals("18Sep2026 0:44:41"));

@@ -31,6 +31,41 @@ import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 
 class DiagnosticServiceTest {
     @Test
+    void virtualSystemFilteringIsPerDeviceAndPreservesProfileMemo() {
+        var devices=mock(DeviceRepository.class);
+        var inventory=mock(DeviceInventoryRepository.class);
+        var rows=GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader()
+            .getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
+        var lookups=new java.util.HashMap<com.securityexpert.nexus.ui2.capability.CanonicalCommandKey,Integer>();
+        var service=new DiagnosticService(devices,inventory,null,mock(JobRecordDao.class),
+            new TopologyNamePseudonymizer("synthetic-test-key".getBytes()),key -> {
+                lookups.merge(key,1,Integer::sum);
+                return rows.stream().filter(r -> r.key().equals(key)).toList();
+            },new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(null),null,null);
+        var summaries=new java.util.ArrayList<DeviceSummaryRecord>();
+        for(String id:List.of("plain-first","vs-middle","plain-last")) {
+            summaries.add(new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
+                Optional.of("FW-TANGO-04"),Optional.of("synthetic-gaia"),Optional.empty(),Optional.empty(),Optional.empty()));
+            when(devices.find(id)).thenReturn(Optional.of(new DeviceRecord(id,"gateway","check_point","manual",
+                Instant.now(),false,DeviceEnrollmentState.ENROLLED,false,"credential-ref")));
+            when(devices.findEndpointByDeviceId(id)).thenReturn(Optional.of(
+                new EndpointRecord("endpoint-"+id,id,"ssh_exec","192.0.2.10",Instant.now())));
+            when(inventory.findLatestContextIds(id)).thenReturn(id.equals("vs-middle")
+                ?List.of("physical","001"):List.of("physical"));
+        }
+        when(devices.listAll()).thenReturn(summaries);
+        var targets=service.targets(true);
+        for(var target:targets) {
+            assertTrue(target.commands().stream().anyMatch(c -> "cp_failover_syncstat".equals(c.get("gate_id"))));
+            assertEquals(target.deviceId().equals("vs-middle"),target.commands().stream()
+                .anyMatch(c -> ((String)c.get("command_template")).contains("<VSID>")));
+        }
+        assertEquals(List.of("001"),targets.get(1).virtualSystems());
+        assertFalse(lookups.isEmpty());
+        assertTrue(lookups.values().stream().allMatch(count -> count==1));
+    }
+
+    @Test
     void storedSparkPlatformOffersIdentityReadsWithAnOpaqueModelToken() {
         var devices = mock(DeviceRepository.class);
         var platform = mock(com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.class);
