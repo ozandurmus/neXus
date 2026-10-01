@@ -1,0 +1,13 @@
+# PO paste 2026-10-01, CLI form of `show high-availability state-synchronization` (names masked).
+# ACTIVE member:
+State Synchronization Status: Complete
+state synchronization to peer device enabled: yes
+session setup                    yes      14       185994742230     35430177
+session update                   yes      14       2968302861186    604386000
+# PASSIVE member:
+State Synchronization Status: Complete
+state synchronization to peer device enabled: no (device not in active state)
+session setup                    yes      14       52647982         185999390295
+session update                   yes      14       717113028        2968345675083
+# Semantics: "Complete" on both members is healthy. On the passive member "enabled: no (device not in active
+# state)" is NORMAL and must not fail. Sent counters on the active roughly equal received counters on the passive.

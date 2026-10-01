@@ -179,6 +179,37 @@ public final class CpFailoverChecks {
         }
         return lost?"FAIL":"PASS";
     }
+    public record SyncAssessment(String status,Map<String,Object> derived) {}
+    /** Readiness compares cumulative counters only within the same member and VS. */
+    public static SyncAssessment readinessSync(String output,Map<String,Object> previous,Instant observedAt) {
+        var derived=new HashMap<>(syncInformation(output));
+        String state=(String)derived.get("syncStatus");
+        if(state==null || "UNKNOWN".equals(syncStatus(output))) return new SyncAssessment("UNKNOWN",Map.copyOf(derived));
+        if(!"OK".equals(state)) return new SyncAssessment("FAIL",Map.copyOf(derived));
+        if(!derived.containsKey("lostUpdates") || !derived.containsKey("lostBulkUpdateEvents"))
+            return new SyncAssessment("UNKNOWN",Map.copyOf(derived));
+        boolean baseline=observedAt!=null && previous.containsKey("lostUpdates")
+            && previous.containsKey("lostBulkUpdateEvents");
+        boolean increased=false,reset=false;
+        for(String key:List.of("lostUpdates","lostBulkUpdateEvents","unsynchronizedUpdates")) {
+            if(!derived.containsKey(key)) continue;
+            if(!baseline || !previous.containsKey(key)) continue;
+            try {
+                var delta=new java.math.BigInteger(derived.get(key).toString())
+                    .subtract(new java.math.BigInteger(previous.get(key).toString()));
+                derived.put(key+"Increase",delta.max(java.math.BigInteger.ZERO));
+                increased |= delta.signum()>0;
+                reset |= delta.signum()<0;
+            } catch(NumberFormatException invalid) {
+                return new SyncAssessment("UNKNOWN",Map.copyOf(derived));
+            }
+        }
+        derived.put("baselineRecorded",!baseline);
+        derived.put("counterReset",reset);
+        if(baseline) derived.put("baselineAt",observedAt.toString());
+        return new SyncAssessment(increased?"FAIL":"PASS",Map.copyOf(derived));
+    }
+
     public static Map<String,Object> syncInformation(String output) {
         Map<String,Object> result=new HashMap<>();
         if(output==null) return Map.of();
@@ -231,6 +262,7 @@ public final class CpFailoverChecks {
             if(line.strip().startsWith("Legend:")) break;
             if(!line.contains("|")) continue;
             String[] c=line.strip().split("\\|",-1);
+            if(!header && !line.contains("Bond name")) continue;
             if(c.length!=6) return "UNKNOWN";
             for(int i=0;i<c.length;i++) c[i]=c[i].strip();
             if(c[2].equals("State") && c[5].equals("required")) { header=true; continue; }
@@ -288,9 +320,9 @@ public final class CpFailoverChecks {
     }
     public record Policy(String status,String name,String installedAt) {}
     public static Policy policy(String output) {
-        if(output==null || !output.matches("(?s)^HOST POLICY DATE\\s*.*")) return new Policy("UNKNOWN",null,null);
+        if(output==null || !output.stripLeading().matches("(?s)^HOST[ \t]+POLICY[ \t]+DATE[ \t]*(?:\\R.*|$)")) return new Policy("UNKNOWN",null,null);
         Matcher row=POLICY_ROW.matcher(output);
-        if(!row.find()) return output.trim().equals("HOST POLICY DATE")
+        if(!row.find()) return output.strip().matches("HOST[ \t]+POLICY[ \t]+DATE")
             ?new Policy("FAIL",null,null):new Policy("UNKNOWN",null,null);
         String name=row.group(1), installedAt=row.group(2)+" "+row.group(3);
         if(row.find()) return new Policy("UNKNOWN",null,null);

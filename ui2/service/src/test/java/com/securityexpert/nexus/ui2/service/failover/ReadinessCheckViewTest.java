@@ -56,6 +56,15 @@ class ReadinessCheckViewTest {
         }
         assertEquals("Interface table not recognised",row(false,3,"UNKNOWN","{\"up\":0}").get("summary"));
     }
+    @Test void readinessSyncReportsBaselineAndIncrementInsteadOfLifetimeLoss() throws Exception {
+        assertEquals("Sync OK, baseline recorded",row(false,9,"PASS",
+            "{\"lostUpdates\":853745,\"baselineRecorded\":true}").get("summary"));
+        assertEquals("Sync OK, no lost-counter increase",row(false,9,"PASS",
+            "{\"lostUpdates\":853745,\"baselineAt\":\"2026-09-30T12:00:00Z\"}").get("summary"));
+        assertEquals("Sync OK but +2 lost updates since 2026-09-30T12:00:00Z",row(false,9,"FAIL",
+            "{\"syncStatus\":\"OK\",\"lostUpdates\":853747,\"lostUpdatesIncrease\":2,"
+            +"\"baselineAt\":\"2026-09-30T12:00:00Z\"}").get("summary"));
+    }
     @Test void sensitiveDerivedStringsNeverEnterSummaries() throws Exception {
         String derived="{\"role\":\"SYNTHETIC-PRIVATE-NAME\",\"reason\":\"SYNTHETIC-PRIVATE-NAME\","
             +"\"policy\":\"SYNTHETIC-PRIVATE-NAME\",\"up\":\"SYNTHETIC-PRIVATE-NAME\"}";

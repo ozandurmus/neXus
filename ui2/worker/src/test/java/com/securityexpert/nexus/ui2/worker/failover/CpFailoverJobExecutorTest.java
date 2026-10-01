@@ -29,6 +29,11 @@ class CpFailoverJobExecutorTest {
         String state="PLANNED",outcome; boolean valid=true; final List<String> checks=new ArrayList<>();
         final List<String> derivedValues=new ArrayList<>();
         String vsId,kind="FAILOVER";
+        Optional<Check> previous=Optional.empty();
+        @Override public Optional<Check> previousReadinessSync(String run,String member,String vs) {
+            CpFailoverJobExecutorTest.check(java.util.Objects.equals(vsId,vs));
+            return previous;
+        }
         Store() { super(new TransactionBoundary() {
             public <T> T inTransaction(java.util.function.Function<org.jooq.DSLContext,T> ignored) {
                 throw new AssertionError("Database access in fake test");
@@ -52,11 +57,39 @@ class CpFailoverJobExecutorTest {
         boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
         boolean readyMember,badPnotes,badBonds,badRoutes,missingDefault,recentFailover;
         String unknownCommand, failedCommand;
-        boolean extraTableRows;
+        boolean extraTableRows,reverseActive,policyTimeMismatch;
+        String prefix="";
+        Map<String,String> measured=Map.of();
         int downCount,upCount,connectCount;
         final List<String> commands=new ArrayList<>();
         long bytesA=1000,bytesB=1000;
         DeviceTransport transport() {
+            var base=baseTransport();
+            return (DeviceTransport)Proxy.newProxyInstance(DeviceTransport.class.getClassLoader(),
+                new Class<?>[]{DeviceTransport.class},(proxy,method,args) -> {
+                    Object result=method.invoke(base,args);
+                    if(!method.getName().equals("exec") || !(result instanceof ExecResult.Completed c)) return result;
+                    String literal=((ExecSpec)args[1]).command();
+                    String output=c.output();
+                    for(var entry:measured.entrySet()) if(literal.endsWith(entry.getKey()+"'")) {
+                        output=entry.getValue();
+                        if(entry.getKey().equals("cphaprob stat") && !((TransportSession)args[0]).sessionId().endsWith("11"))
+                            output=output.replace("1 (local)","1        ").replace("2          ","2 (local)  ");
+                    }
+                    if(measured.containsKey("cphaprob -a if") && !measured.containsKey("cat /proc/net/dev")
+                            && literal.endsWith("cat /proc/net/dev'")) output=output.replace("eth0:","bond1.3843:");
+                    if(policyTimeMismatch && literal.endsWith("fw stat'") && !((TransportSession)args[0]).sessionId().endsWith("11"))
+                        output=output.replace("14:01:25","14:01:26");
+                    if(reverseActive && literal.endsWith("cphaprob stat'")) output=output
+                        .replace("Active","TEMP").replace("Standby","Active").replace("TEMP","Standby");
+                    if(reverseActive && literal.endsWith("fw tab -t connections -s'")) {
+                        boolean first=((TransportSession)args[0]).sessionId().endsWith("11");
+                        output=output.replace("8158 100 150",first?"8158 1168 1500":"8158 47 1500");
+                    }
+                    return new ExecResult.Completed(prefix+output,c.exitStatus());
+                });
+        }
+        DeviceTransport baseTransport() {
             return (DeviceTransport)Proxy.newProxyInstance(DeviceTransport.class.getClassLoader(),
                 new Class<?>[]{DeviceTransport.class},(proxy,method,args) -> {
                     if(method.getName().equals("connect")) {
@@ -172,6 +205,51 @@ class CpFailoverJobExecutorTest {
         new CpFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),gates(),d -> {})
             .execute("job-1",1);
     }
+    @Test void measuredOutputsThroughReadStepAndVsUsesOwnActiveMember() throws Exception {
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        for(String shape:List.of("vs0","vs1","gateway")) for(boolean banner:List.of(false,true)) {
+            Store store=new Store(); store.kind="READINESS";
+            if(!shape.equals("gateway")) store.vsId="12";
+            Script script=new Script();
+            script.measured=json.readValue(Fixtures.read("cp/readiness_measured_"+shape+".json"),
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String,String>>() {});
+            script.prefix=(store.vsId==null?"":"Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n")
+                +(banner?"Warning! Synthetic login notice.\n":"");
+            run(store,script);
+            org.junit.jupiter.api.Assertions.assertEquals("READY",store.outcome,shape+" banner="+banner+" "+store.checks);
+            check(store.checks.size()==24 && script.downCount==0 && script.upCount==0);
+        }
+        Store store=new Store(); store.kind="READINESS"; store.vsId="12";
+        Script script=new Script(); script.reverseActive=true;
+        run(store,script);
+        check(store.checks.contains("pre:6:PASS"));
+        check("READY".equals(store.outcome));
+    }
+    @Test void policyInstallTimeMismatchFailsParity() {
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script(); script.policyTimeMismatch=true;
+        run(store,script);
+        check(store.checks.contains("pre:10:FAIL") && "NOT_READY".equals(store.outcome));
+    }
+    @Test void readinessUsesStoredCounterBaselineAndRecordsIncrease() {
+        Store store=new Store(); store.kind="READINESS";
+        store.previous=Optional.of(new JooqCpFailoverRepository.Check("pre",A,null,9,"PASS",
+            "{\"lostUpdates\":0,\"lostBulkUpdateEvents\":0}",Instant.parse("2026-09-30T12:00:00Z")));
+        Script script=new Script(); script.badSync=true;
+        run(store,script);
+        check(store.checks.contains("pre:9:FAIL"));
+        check(store.derivedValues.stream().anyMatch(d -> d.contains("\"lostUpdatesIncrease\":1")));
+        check("NOT_READY".equals(store.outcome));
+    }
+    @Test void readNormalizationRejectsUnprovedBannerAndWrongContext() {
+        var shapes=new ReadinessShapeLog("check_point");
+        String bad="Warning! Synthetic notice.\nunsupported";
+        check(CpFailoverJobExecutor.normalizeRead("fw stat",bad,null,shapes).equals(bad));
+        String empty="Warning! Synthetic notice.\n";
+        check(CpFailoverJobExecutor.normalizeRead("arp -an",empty,null,shapes).equals(empty));
+        String wrong="Context is set to Virtual Device VS-SYNTHETIC (ID 01).\nbody";
+        check(CpFailoverJobExecutor.normalizeRead("fw stat",wrong,"1",shapes).equals(wrong));
+    }
     @Test void happyPath() {
         Store store=new Store(); Script script=new Script(); run(store,script);
         check(store.state.equals("DONE") && script.downCount==1 && script.upCount==1);
@@ -274,7 +352,10 @@ class CpFailoverJobExecutorTest {
         check(script.downCount==1 && script.upCount==0);
     }
     @Test void syncFailureStopsBeforeWrite() {
-        Store store=new Store(); Script script=new Script(); script.badSync=true; run(store,script);
+        Store store=new Store();
+        store.previous=Optional.of(new JooqCpFailoverRepository.Check("pre",A,null,9,"PASS",
+            "{\"lostUpdates\":0,\"lostBulkUpdateEvents\":0}",Instant.parse("2026-09-30T12:00:00Z")));
+        Script script=new Script(); script.badSync=true; run(store,script);
         check(store.state.equals("STOPPED") && "STATE_SYNC_NOT_READY".equals(store.outcome));
         check(script.downCount==0 && script.upCount==0);
         check(store.checks.stream().anyMatch(s -> s.equals("pre:9:FAIL")));

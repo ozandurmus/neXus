@@ -12,6 +12,27 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.*;
 
 class JooqCpFailoverRepositoryTest {
+    @org.junit.jupiter.api.Test
+    void syncBaselineIsScopedToPreviousReadinessUnitMemberAndOpaqueVs() {
+        var dsl=DSL.using(new MockConnection(query -> {
+            String sql=query.sql();
+            assertTrue(sql.contains("r.vendor=current.vendor and r.cluster_ref=current.cluster_ref"));
+            assertTrue(sql.contains("r.vs_id is not distinct from current.vs_id"));
+            assertTrue(sql.contains("r.run_kind='READINESS'"));
+            assertTrue(sql.contains("r.finished_at<=current.started_at"));
+            assertTrue(sql.contains("r.run_id<>current.run_id"));
+            assertTrue(sql.contains("c.member_ref=? and c.vs_id is not distinct from ?"));
+            assertTrue(sql.contains("c.check_no=9 and c.phase='pre'"));
+            assertTrue(sql.contains("jsonb_typeof(c.derived->'lostUpdates')='number'"));
+            assertTrue(sql.contains("jsonb_typeof(c.derived->'lostBulkUpdateEvents')='number'"));
+            assertArrayEquals(new Object[]{"run-current","member-opaque","01"},query.bindings());
+            return new MockResult[]{new MockResult(0,DSL.using(SQLDialect.POSTGRES).newResult(DSL.field("phase",String.class)))};
+        }),SQLDialect.POSTGRES);
+        var repository=new JooqCpFailoverRepository(new TransactionBoundary() {
+            @Override public <T> T inTransaction(Function<DSLContext,T> work) { return work.apply(dsl); }
+        });
+        assertTrue(repository.previousReadinessSync("run-current","member-opaque","01").isEmpty());
+    }
     @ParameterizedTest
     @ValueSource(strings = {"READINESS", "FAILOVER"})
     void readinessRefusesEitherActiveRunKindBeforeAnyInsert(String activeKind) {

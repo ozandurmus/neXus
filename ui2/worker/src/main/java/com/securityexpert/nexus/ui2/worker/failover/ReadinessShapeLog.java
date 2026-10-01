@@ -24,6 +24,14 @@ final class ReadinessShapeLog {
 
     ReadinessShapeLog(String vendor) { this.vendor=vendor; }
 
+    private boolean bannerLogged;
+
+    void logBannerStripped() {
+        if(bannerLogged) return;
+        bannerLogged=true;
+        LOG.log(System.Logger.Level.INFO,"[READINESS_SHAPE] vendor="+vendor+" bannerStripped=true");
+    }
+
     void capture(int check,String output) {
         if (logged.contains(check)) return;
         String shape="palo_alto".equals(vendor)?xmlShape(output):textShape(output);

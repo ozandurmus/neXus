@@ -70,6 +70,19 @@ class PanFailoverChecksTest {
         assertEquals("{\"reason\":\"unrecognised field value\",\"looked_for\":\"/response/result/active-sessions\"}",
             PanFailoverChecks.unknownDerived(6,"UNKNOWN",true));
     }
+    @Test void measuredActivePassiveCliDoesNotProveXmlFieldMapping() {
+        String cli=com.securityexpert.nexus.ui2.worker.inventory.Fixtures.read("pan/readiness_state_sync_cli.txt");
+        org.junit.jupiter.api.Assertions.assertTrue(cli.contains("State Synchronization Status: Complete"));
+        org.junit.jupiter.api.Assertions.assertTrue(cli.contains("no (device not in active state)"));
+        // Synthetic shapes use only the field names supplied by the PO. The status/count paths are unproved.
+        for(String enabled:new String[]{"yes","no (device not in active state)"}) {
+            String shape=result("<dp><enabled>"+enabled+"</enabled><aa_enabled>no</aa_enabled></dp>");
+            assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(shape));
+            assertEquals(null,PanFailoverChecks.sessions(shape));
+            assertEquals(false,PanFailoverChecks.fieldFound(5,shape));
+            assertEquals(false,PanFailoverChecks.fieldFound(6,shape));
+        }
+    }
     public static void main(String[] args) {
         var test=new PanFailoverChecksTest(); test.pairPassFailAndUnknown(); test.activeActiveRefused(); test.addedChecksPassFailUnknown();
     }

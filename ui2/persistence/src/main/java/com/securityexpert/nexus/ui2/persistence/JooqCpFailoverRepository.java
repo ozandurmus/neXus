@@ -119,6 +119,23 @@ public class JooqCpFailoverRepository {
                 r.get("checks", JSONB.class).data())));
     }
 
+    /** Last stored readiness counters; never borrow another member, unit or VS baseline. */
+    public Optional<Check> previousReadinessSync(String currentRun,String member,String vsId) {
+        return boundary.inTransaction(dsl -> dsl.fetch(
+            "select c.* from failover_check_result c join failover_run r on r.run_id=c.run_id "
+            + "join failover_run current on current.run_id={0} where r.run_id<>current.run_id "
+            + "and r.vendor=current.vendor and r.cluster_ref=current.cluster_ref "
+            + "and r.vs_id is not distinct from current.vs_id and r.run_kind='READINESS' "
+            + "and r.state in ('DONE','STOPPED') and r.finished_at<=current.started_at "
+            + "and c.member_ref={1} and c.vs_id is not distinct from {2} and c.check_no=9 and c.phase='pre' "
+            + "and jsonb_typeof(c.derived->'lostUpdates')='number' "
+            + "and jsonb_typeof(c.derived->'lostBulkUpdateEvents')='number' "
+            + "order by c.observed_at desc,c.result_id desc limit 1",currentRun,member,vsId)
+            .stream().findFirst().map(c -> new Check(c.get("phase",String.class),c.get("member_ref",String.class),
+                c.get("vs_id",String.class),c.get("check_no",Integer.class),c.get("status",String.class),
+                c.get("derived",JSONB.class).data(),c.get("observed_at",java.time.OffsetDateTime.class).toInstant())));
+    }
+
     public Approval createApproval(String cluster, String vsId, Instant from, Instant until, String reason, String actor) {
         return createApproval(cluster,vsId,from,until,reason,actor,"check_point");
     }

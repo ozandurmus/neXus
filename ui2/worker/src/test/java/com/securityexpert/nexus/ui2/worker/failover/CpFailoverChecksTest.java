@@ -212,6 +212,32 @@ class CpFailoverChecksTest {
         check(CpFailoverChecks.routing(routes.replace("192.0.2.1", "999.0.2.1"))==null);
         check(CpFailoverChecks.routing(routes+"truncated route row")==null);
     }
+    @Test void readinessCounterDeltasDoNotFailOnCumulativeLosses() {
+        String measured=SYNC.replace("Lost updates................................. 0","Lost updates................................. 853745");
+        var first=CpFailoverChecks.readinessSync(measured,Map.of(),null);
+        check(first.status().equals("PASS") && Boolean.TRUE.equals(first.derived().get("baselineRecorded")));
+        var at=java.time.Instant.parse("2026-09-30T12:00:00Z");
+        check(CpFailoverChecks.readinessSync(measured,first.derived(),at).status().equals("PASS"));
+        var increased=CpFailoverChecks.readinessSync(measured.replace("853745","853747"),first.derived(),at);
+        check(increased.status().equals("FAIL") && increased.derived().get("lostUpdatesIncrease").toString().equals("2"));
+        var reset=CpFailoverChecks.readinessSync(SYNC,first.derived(),at);
+        check(reset.status().equals("PASS") && Boolean.TRUE.equals(reset.derived().get("counterReset")));
+        check(CpFailoverChecks.readinessSync("unsupported",first.derived(),at).status().equals("UNKNOWN"));
+        check(CpFailoverChecks.readinessSync(measured.replace("Sync status: OK","Sync status: Off - disabled"),
+            first.derived(),at).status().equals("FAIL"));
+    }
+    @Test void measuredTableOrderingAndLocalMarkerDoNotChangeEquality() throws Exception {
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        for(String shape:java.util.List.of("vs0","vs1","gateway")) {
+            String table=json.readTree(Fixtures.read("cp/readiness_measured_"+shape+".json"))
+                .path("cphaprob tablestat").asText();
+            var rows=new java.util.ArrayList<>(table.lines().filter(l -> l.strip().matches("[01]\\s+.*")).toList());
+            java.util.Collections.reverse(rows);
+            String peer="---- Unique IP's Table ----\n"+String.join("\n",rows)+"\n(Local)\n";
+            check(CpFailoverChecks.twoTableMembers(CpFailoverChecks.ipTable(table)));
+            check(CpFailoverChecks.ipTable(table).equals(CpFailoverChecks.ipTable(peer)));
+        }
+    }
     public static void main(String[] args) {
         var t=new CpFailoverChecksTest(); t.approvedChecksAndVsContext(); t.unrecognisedMeansUnknown(); t.syncAndPolicyPassFailUnknown();
     }
