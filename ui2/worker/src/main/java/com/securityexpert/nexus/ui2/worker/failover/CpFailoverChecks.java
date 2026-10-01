@@ -179,9 +179,23 @@ public final class CpFailoverChecks {
         }
         return lost?"FAIL":"PASS";
     }
-    public static Map<String,Long> syncInformation(String output) {
-        Map<String,Long> result=new HashMap<>();
+    public static Map<String,Object> syncInformation(String output) {
+        Map<String,Object> result=new HashMap<>();
         if(output==null) return Map.of();
+        Matcher status=SYNC_STATUS.matcher(output);
+        if(status.find()) {
+            String state=status.group(1).strip();
+            if(!status.find()) result.put("syncStatus",state);
+        }
+        String[] labels={"Lost updates", "Lost bulk update events", "Unsynchronized updates"};
+        String[] keys={"lostUpdates", "lostBulkUpdateEvents", "unsynchronizedUpdates"};
+        for(int i=0;i<labels.length;i++) {
+            Matcher counter=Pattern.compile("(?m)^"+labels[i]+"\\.{2,}\\s*(\\d+)\\s*$").matcher(output);
+            if(counter.find()) {
+                var value=new java.math.BigInteger(counter.group(1));
+                if(!counter.find()) result.put(keys[i],value);
+            }
+        }
         for(String direction:List.of("Sent", "Received")) {
             Matcher counter=Pattern.compile("(?m)^[ \\t]*"+direction
                 +" reject notifications\\.{2,}[ \\t]*(\\d+)[ \\t]*$").matcher(output);

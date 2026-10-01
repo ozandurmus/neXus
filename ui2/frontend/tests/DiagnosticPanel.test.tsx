@@ -19,7 +19,9 @@ function setup({ canExecute = true, queued = false } = {}) {
     if (url === "/api/v2/diagnostics/targets") return reply({ targets: [
       { deviceId: "device-2", target: "FW-BRAVO-02", vendor: "check_point", cluster: "CLS-ROMEO-01", virtualSystems: ["001", "13"],
         commands: [{ gate_id: "cp_inventory_vsid_cphaprob_stat", description: "Virtual system cluster status",
-          command_template: "bash -lc 'vsenv <VSID> && cphaprob stat'", timeout_s: 30 }] },
+          command_template: "bash -lc 'vsenv <VSID> && cphaprob stat'", timeout_s: 30 },
+          { gate_id: "cp_inventory_cphaprob_stat", description: "ZZ Plain cluster status",
+            command_template: "cphaprob stat", timeout_s: 30 }] },
       { deviceId: "device-1", target: "FW-TANGO-04", vendor: "fortinet", virtualSystems: [], commands: [
         { gate_id: "fgt_get_system_status", description: "System status", command_template: "get system status", timeout_s: 30 },
         { gate_id: "fgt_read_parameter", description: "Interface details", command_template: "show interface <name>", timeout_s: 30 },
@@ -97,4 +99,21 @@ it("honors server canExecute while retaining masked history and has no client ro
   expect(await screen.findByText("Masked")).toBeInTheDocument();
   const source = readFileSync("src/screens/DiagnosticPanel.tsx", "utf8");
   expect(source).not.toMatch(/security_admin|replay_viewer|role:/);
+});
+
+it("orders plain reads before VS reads and only shows the selector for a VS command", async () => {
+  setup();
+  fireEvent.click(await screen.findByRole("button", { name: "FW-BRAVO-02" }));
+  const commands = within(screen.getByRole("list", { name: "Approved commands" })).getAllByRole("button");
+  expect(commands[0]).toHaveTextContent("ZZ Plain cluster status");
+  expect(screen.queryByLabelText("Virtual system")).not.toBeInTheDocument();
+  fireEvent.click(commands[1]);
+  expect(screen.getByLabelText("Virtual system")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Run read" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Virtual system"), { target: { value: "001" } });
+  expect(screen.getByRole("button", { name: "Run read" })).toBeEnabled();
+  fireEvent.click(commands[0]);
+  expect(screen.queryByLabelText("Virtual system")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Parameter")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Run read" })).toBeEnabled();
 });

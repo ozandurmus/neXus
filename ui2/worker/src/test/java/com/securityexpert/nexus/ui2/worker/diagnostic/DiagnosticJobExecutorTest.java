@@ -17,12 +17,15 @@ import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
 import com.securityexpert.nexus.ui2.capability.GateRegistryFixtureLoader;
 class DiagnosticJobExecutorTest {
     @Test void checkPointGateScopeChoosesShell() {
-        assertShell(null,"cp_configuration_show_version_all","clish -c 'show version all'",true);
-        assertShell(null,"cp_spark_backup_log","show backup-settings-log",false);
-        assertShell("1550","cp_spark_backup_log","show backup-settings-log",false);
+        assertShell(null,"cp_configuration_show_version_all","clish -c 'show version all'",true,"bash -lc 'clish -c '\"'\"'show version all'\"'\"''");
+        assertShell(null,"cp_failover_syncstat","cphaprob syncstat",true,"bash -lc 'cphaprob syncstat'");
+        assertShell(null,"cp_failover_syncstat_vsid","bash -lc 'vsenv 001 && cphaprob syncstat'",true,
+            "bash -lc 'vsenv 001 && cphaprob syncstat'");
+        assertShell(null,"cp_spark_backup_log","show backup-settings-log",false,"show backup-settings-log");
+        assertShell("1550","cp_spark_backup_log","show backup-settings-log",false,"show backup-settings-log");
     }
 
-    private void assertShell(String model,String gateId,String command,boolean expert) {
+    private void assertShell(String model,String gateId,String command,boolean expert,String expectedCommand) {
         var leases=stub(JobLeaseRepository.class,(method,args)->true);
         var attempts=stub(JobStepAttemptRepository.class,(method,args)->switch(method) {
             case "findByJobAndStep" -> List.of();
@@ -52,10 +55,10 @@ class DiagnosticJobExecutorTest {
             key -> rows.stream().filter(r -> r.key().equals(key)).toList(),mock(ArtefactStore.class))
             .execute("job-1",1,"device-1","192.0.2.10",22,"credential-ref");
         if (expert) {
-            verify(transport).exec(any(),eq(new ExecSpec(command,true)),any());
+            verify(transport).exec(any(),eq(new ExecSpec(expectedCommand,true)),any());
             verify(transport,never()).execInteractive(any(),any(),any());
         } else {
-            verify(transport).execInteractive(any(),eq(new ExecSpec(command,true)),any());
+            verify(transport).execInteractive(any(),eq(new ExecSpec(expectedCommand,true)),any());
             verify(transport,never()).exec(any(),any(),any());
         }
     }

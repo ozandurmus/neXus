@@ -35,6 +35,16 @@ class ReadinessCheckViewTest {
             assertEquals("PASS",view.get("result"));
         }
     }
+    @Test void syncFailureExplainsStatusAndEveryNonzeroCounter() throws Exception {
+        for(String state:new String[]{"Off - Full-sync failure","Fullsync in progress"})
+            assertEquals("Sync status: "+state,row(false,9,"FAIL","{\"syncStatus\":\""+state+"\"}").get("summary"));
+        assertEquals("Sync OK but 12 lost bulk update events (counter since boot)",
+            row(false,9,"FAIL","{\"syncStatus\":\"OK\",\"lostUpdates\":0,\"lostBulkUpdateEvents\":12}").get("summary"));
+        assertEquals("Sync OK but 2 lost updates (counter since boot); 3 unsynchronized updates (counter since boot)",
+            row(false,9,"FAIL","{\"syncStatus\":\"OK\",\"lostUpdates\":2,\"unsynchronizedUpdates\":3}").get("summary"));
+        assertEquals("Sync not ready",row(false,9,"FAIL","{}").get("summary"));
+    }
+
     @Test void panChecksAndUnknownReasonsAreReadable() throws Exception {
         String[] summaries={"Active","Reciprocal peer relationship verified","Required HA links up on both members",
             "Running configuration synchronized on both members","Sessions synchronized on both members",
