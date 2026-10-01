@@ -100,7 +100,7 @@ public final class ConfirmCapabilityExecutor {
                 String diag = execInteractiveCommand(session, "show diag");
                 Optional<String> hostname = session.interactivePrompt().flatMap(SparkIdentityParser::hostname);
                 ObservedFacts facts = new ObservedFacts(hostname, SparkIdentityParser.model(diag),
-                        SparkIdentityParser.version(software, diag), Optional.empty());
+                        SparkIdentityParser.version(software, diag), Optional.empty(), SparkIdentityParser.sparkRevision(diag));
                 return new ConfirmResult.Completed(
                         new PresentedIdentity(session.presentedIdentity().orElse(""), hostname), facts,
                         new HaPeerClaim(false, Optional.empty(), Optional.empty()), hostname);
@@ -303,7 +303,7 @@ public final class ConfirmCapabilityExecutor {
     }
 
     private static ObservedFacts withHaRole(ObservedFacts facts, Optional<String> haRole) {
-        return new ObservedFacts(facts.hostname(), facts.model(), facts.softwareVersion(), haRole);
+        return new ObservedFacts(facts.hostname(), facts.model(), facts.softwareVersion(), haRole, facts.sparkRevision());
     }
 
     private static String describeConnect(ConnectResult result) {

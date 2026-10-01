@@ -321,8 +321,9 @@ class InventoryJobExecutorEndToEndTest {
      * JooqDeviceRepository.DEVICE_SUMMARY_SELECT} join confirm's own model-hint routing uses),
      * inventory collection must try the interactive shell FIRST and skip the exec attempts
      * entirely, rather than discovering the same rejection the slow way on every single command. */
-    @Test
-    void aDiscoveryKnownSparkModelTriesTheInteractiveShellFirstSkippingExecEntirely() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void aDiscoveryKnownSparkModelTriesTheInteractiveShellFirstSkippingExecEntirely(boolean versionAvailable) {
         // A Spark/Gaia Embedded appliance is never VSX (measured live, 2026-09-22: its Clish answers
         // "vsx stat -v" with a CLI error), so the executor skips that probe outright for a known
         // Spark model and issues every physical read bare -- no vsenv wrap, no per-VSID pass. Every
@@ -337,8 +338,10 @@ class InventoryJobExecutorEndToEndTest {
                 Map.entry(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF, "Cluster is not enabled\n"),
                 Map.entry(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY,
                         "1: LAN1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 192.0.2.10/24 scope global LAN1\n"),
-                Map.entry("show software-version", "This is Check Point's Synthetic Appliance R81.10.10 - Build 123"),
-                Map.entry("show diag", "Current image version: R81.10.10\nHW version : H2\nUnit model: V0"),
+                Map.entry("show software-version", versionAvailable
+                        ? "This is Check Point's Synthetic Appliance R81.10.10 - Build 123" : "unrecognized"),
+                Map.entry("show diag", (versionAvailable ? "Current image version: R81.10.10\n" : "")
+                        + "HW version : H2\nUnit model: V0"),
                 // The bare (non-VSX) batch command; its scripted output carries no BATCH_TAG, so the
                 // code falls back to the individual reads above, still over the interactive shell.
                 Map.entry(InventoryCapabilityExecutor.buildCheckPointBatchCommand(false),
@@ -356,11 +359,13 @@ class InventoryJobExecutorEndToEndTest {
 
         InventoryCapabilityExecutor capabilityExecutor =
                 new InventoryCapabilityExecutor(transport, ref -> { throw new IllegalStateException("not used"); });
+        var platformFacts = org.mockito.Mockito.mock(
+                com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.class);
         InventoryJobExecutor executor = new InventoryJobExecutor(leaseRepo, attemptRepo, devicePort, deviceRepository,
-                inventoryRepository, capabilityExecutor);
+                inventoryRepository, capabilityExecutor, platformFacts);
 
         InventoryRequest request = InventoryRequest.checkPoint(new ConnectionTarget("ep-1", "gw-a-host", 22), "cred-1",
-                "trust-1", Optional.of("Check Point 1570/1590 Appliances"));
+                "trust-1", Optional.of(versionAvailable ? "Check Point 1570/1590 Appliances" : "gaia_embedded"));
 
         JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request, false);
 
@@ -374,7 +379,9 @@ class InventoryJobExecutorEndToEndTest {
         assertEquals("192.0.2.10/24", physical.interfaces().get(0).addresses().get(0).address());
         assertEquals(InventoryInterface.STATE_UP, physical.interfaces().get(0).state());
         assertEquals(1, physical.routes().size());
-        assertEquals(List.of("gw-a|V0|R81.10.10"), deviceRepository.observedFactRefreshes);
+        assertEquals(List.of("gw-a||" + (versionAvailable ? "R81.10.10" : "")), deviceRepository.observedFactRefreshes);
+        org.mockito.Mockito.verify(platformFacts).record(org.mockito.ArgumentMatchers.argThat(
+                facts -> facts.platformFamily().filter("gaia_embedded"::equals).isPresent()));
     }
 
     private static String vsenvZero(String read) {

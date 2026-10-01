@@ -409,7 +409,8 @@ public final class InventoryCapabilityExecutor {
                     gaiaHostname = session.interactivePrompt().flatMap(
                             com.securityexpert.nexus.ui2.worker.confirm.SparkIdentityParser::hostname);
                     observedModel = com.securityexpert.nexus.ui2.worker.confirm.SparkIdentityParser.model(diag);
-                    if (observedModel.isPresent() || gaiaVersion.isPresent()) {
+                    if (com.securityexpert.nexus.ui2.worker.confirm.SparkIdentityParser.sparkRevision(diag).isPresent()
+                            || observedModel.isPresent() || gaiaVersion.isPresent()) {
                         platformFacts = new PlatformFactsRead(platformFacts.serialNumber(), platformFacts.hotfixLevel(),
                                 Optional.of("gaia_embedded"), platformFacts.contentVersions(), platformFacts.uptimeText(),
                                 "cp_spark_show_diag_software_version", platformFacts.policyInstall());

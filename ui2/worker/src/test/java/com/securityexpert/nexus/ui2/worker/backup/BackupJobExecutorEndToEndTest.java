@@ -75,6 +75,34 @@ class BackupJobExecutorEndToEndTest {
         }
     }
 
+    @Test
+    void revisionOnlyDeviceWithPersistedSparkPlatformRoutesToSparkBackup(@TempDir Path dir) throws Exception {
+        var transport = new ScriptedBackupTransport();
+        var harness = new Harness(transport, newArtefactStore(dir), Duration.ofMillis(5), Duration.ofSeconds(5), dir);
+        harness.deviceRepo.deviceRecord = Optional.of(new com.securityexpert.nexus.ui2.persistence.device.DeviceRecord(
+                DEVICE_ID, "gateway", "check_point", "synthetic", Instant.EPOCH, true,
+                com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.ENROLLED, false, "credential-1"));
+        var model = com.securityexpert.nexus.ui2.worker.confirm.SparkIdentityParser.model("Unit model: V1");
+        assertTrue(model.isEmpty());
+        harness.deviceRepo.confirmFacts = Optional.of(new com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts(
+                Optional.empty(), model, Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.empty(), "NONE", Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                "NONE", Optional.empty()));
+        var platform = org.mockito.Mockito.mock(
+                com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.class);
+        org.mockito.Mockito.when(platform.find(DEVICE_ID)).thenReturn(Optional.of(
+                new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts(DEVICE_ID,
+                        Optional.empty(), Optional.empty(), Optional.of("gaia_embedded"), java.util.Map.of(),
+                        Optional.empty(), "cp_spark_show_diag_software_version", Optional.empty())));
+        harness.executor.withPlatformFacts(platform);
+
+        var failed = org.junit.jupiter.api.Assertions.assertInstanceOf(JobOutcome.Failed.class,
+                harness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request()));
+        assertTrue(failed.terminalReason().contains("Spark backup executor is not configured"),
+                "the Spark path must be selected even without a model or software version");
+        assertTrue(transport.commandsIssued.isEmpty(), "the Gaia precheck must never run");
+    }
+
     @Test void storesTranscriptRefAndPreservesOutcomeOnStoreFailure(@TempDir Path tempDir) throws Exception {
         ScriptedBackupTransport transport = happyPathTransportUpTo("succeeded");
         transport.fetchedContent = "archive-bytes-content";

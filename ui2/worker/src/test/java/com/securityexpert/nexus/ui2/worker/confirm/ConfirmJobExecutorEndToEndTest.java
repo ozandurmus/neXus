@@ -69,4 +69,34 @@ class ConfirmJobExecutorEndToEndTest {
         assertEquals("NONE", facts.peerFollowOutcome());
         assertEquals("NONE", facts.identityMismatchState());
     }
+
+    @Test
+    void revisionAlonePersistsSparkPlatformWithoutAModelOrVersion() {
+        var leaseRepo = new ConfirmJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
+        var attemptRepo = new ConfirmJobExecutorFakes.FakeStepAttemptRepository();
+        var devicePort = new ConfirmJobExecutorFakes.FakeDeviceEnrollmentReadPort();
+        devicePort.state = DeviceEnrollmentState.DRAFT;
+        var devices = new ConfirmJobExecutorFakes.FakeDeviceRepository();
+        devices.put(DEVICE_ID, DeviceEnrollmentState.DRAFT);
+        var capability = org.mockito.Mockito.mock(ConfirmCapabilityExecutor.class);
+        var platform = org.mockito.Mockito.mock(
+                com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.class);
+        var empty = java.util.Optional.<String>empty();
+        var request = ConfirmRequest.checkPoint(new ConnectionTarget("ep-spark", "192.0.2.10", 22),
+                "synthetic-credential", "synthetic-trust", java.util.Optional.of("gaia_embedded"));
+        var facts = new ObservedFacts(empty, SparkIdentityParser.model("Unit model: V1"), empty, empty,
+                SparkIdentityParser.sparkRevision("Unit model: V1"));
+        org.mockito.Mockito.when(capability.confirm(request)).thenReturn(new ConfirmResult.Completed(
+                new PresentedIdentity("synthetic-identity", empty), facts,
+                new HaPeerClaim(false, empty, empty), empty));
+        var executor = new ConfirmJobExecutor(leaseRepo, attemptRepo, devicePort, devices,
+                capability, new PeerFollowResolver(capability)).withPlatformFacts(platform);
+
+        assertTrue(executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request,
+                address -> { throw new AssertionError("no peer expected"); }, false) instanceof JobOutcome.Completed);
+        assertTrue(devices.lastRecordedFacts.observedModel().isEmpty());
+        assertTrue(devices.lastRecordedFacts.observedSoftwareVersion().isEmpty());
+        org.mockito.Mockito.verify(platform).record(org.mockito.ArgumentMatchers.argThat(
+                value -> value.platformFamily().filter("gaia_embedded"::equals).isPresent()));
+    }
 }

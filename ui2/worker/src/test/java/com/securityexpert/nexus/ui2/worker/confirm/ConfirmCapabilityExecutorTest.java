@@ -126,8 +126,9 @@ class ConfirmCapabilityExecutorTest {
      * skip the four exec-channel attempts that are doomed on that hardware (measured live,
      * 2026-09-21: ~120s burned there before the interactive shell -- which always answered -- ever
      * ran), rather than discovering the same fact the slow way on every single confirm. */
-    @Test
-    void aDiscoveryKnownSparkModelTriesTheInteractiveShellFirstSkippingTheDoomedExecAttempts() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"Check Point 1570/1590 Appliances", "gaia_embedded"})
+    void aDiscoveryKnownSparkModelTriesTheInteractiveShellFirstSkippingTheDoomedExecAttempts(String sparkHint) {
         ScriptedDeviceTransport transport = new ScriptedDeviceTransport(
                 Map.of("fw-a-host", "Host Name: fw-a\nProduct version Check Point Gaia R81.10\n"),
                 Map.of("fw-a-host", "Standalone"));
@@ -136,7 +137,7 @@ class ConfirmCapabilityExecutorTest {
 
         ConfirmResult result = executor.confirm(
                 ConfirmRequest.checkPoint(new ConnectionTarget("ep-a", "fw-a-host", 22), CRED, TRUST,
-                        Optional.of("Check Point 1570/1590 Appliances")));
+                        Optional.of(sparkHint)));
 
         ConfirmResult.Completed completed = assertInstanceOf(ConfirmResult.Completed.class, result);
         assertEquals("fw-a", completed.facts().hostname().orElse(null));
@@ -144,7 +145,8 @@ class ConfirmCapabilityExecutorTest {
                 "a discovery-known Spark model must skip the doomed exec-channel attempts entirely");
         assertTrue(transport.execInteractiveCallCount() > 0,
                 "the interactive shell must be tried first (and here, exclusively) for a known Spark model");
-        assertEquals("V0", completed.facts().model().orElse(null));
+        assertTrue(completed.facts().model().isEmpty());
+        assertEquals("V0", completed.facts().sparkRevision().orElseThrow());
         assertEquals("R81.10.10", completed.facts().softwareVersion().orElse(null));
     }
 

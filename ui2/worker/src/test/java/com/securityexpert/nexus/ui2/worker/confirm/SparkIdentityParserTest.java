@@ -24,6 +24,19 @@ class SparkIdentityParserTest {
     }
 
     @Test
+    void revisionIsSeparateFromModelIncludingHardwareVersionFallback() {
+        for (String diag : java.util.List.of("Unit model: V0", "Unit model: V1", "HW version: V1",
+                "Unit model: V1590")) {
+            assertTrue(SparkIdentityParser.model(diag).isEmpty());
+            assertTrue(SparkIdentityParser.sparkRevision(diag).isPresent());
+        }
+        assertEquals("V1", SparkIdentityParser.sparkRevision("Unit model: V1\nHW version: H2").orElseThrow());
+        assertTrue(SparkIdentityParser.sparkRevision("HW version: H2").isEmpty());
+        assertTrue(SparkIdentityParser.sparkRevision("Unit model: 1590").isEmpty());
+        assertTrue(SparkIdentityParser.sparkRevision(null).isEmpty());
+    }
+
+    @Test
     void unknownOutputLeavesAllFieldsEmpty() {
         assertTrue(SparkIdentityParser.model("Serial number: SYNTHETIC-REDACTED").isEmpty());
         assertTrue(SparkIdentityParser.version("Bad parameter", "Previous image version: R80.20").isEmpty());

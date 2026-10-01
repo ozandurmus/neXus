@@ -162,7 +162,8 @@ public final class ConfirmJobExecutor {
         }
         if (request.vendor() == Vendor.CHECK_POINT
                 && com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint.isKnownSparkModel(request.modelHint())
-                && (completed.facts().model().isPresent() || completed.facts().softwareVersion().isPresent())) {
+                && (completed.facts().sparkRevision().isPresent() || completed.facts().model().isPresent()
+                    || completed.facts().softwareVersion().isPresent())) {
             try {
                 platformFactsRepository.record(new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts(
                         targetDeviceId, Optional.empty(), Optional.empty(), Optional.of("gaia_embedded"),
