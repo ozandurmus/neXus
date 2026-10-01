@@ -239,6 +239,36 @@ class JooqDeviceRepositoryTest {
     }
 
     @Test
+    void findSummaryUsesBoundDeviceLookupAndReturnsEmptyWhenAbsent() {
+        DSLContext create = DSL.using(SQLDialect.POSTGRES);
+        Result<Record> rows = create.fetchFromStringData(
+                new String[] { "device_id", "role", "vendor_hint", "enrollment_state", "observed_hostname",
+                        "observed_model", "observed_software_version", "observed_ha_role", "cluster_member_ref",
+                        "virtual_systems", "latest_job_state", "latest_job_type", "latest_job_terminal_reason",
+                        "management_ip", "ip_addresses", "backup_target", "ha_peer_unconfirmed" },
+                new String[] { "device-1", "gateway", "check_point", "DRAFT", null, "Quantum",
+                        null, null, null, null, null, null, null, null, null, "true", "false" });
+        List<Object> lookups = new ArrayList<>();
+        var repository = new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
+                new MockConnection(context -> {
+                    assertTrue(context.sql().endsWith("where d.device_id = ?"));
+                    assertTrue(context.sql().contains("coalesce(d.observed_model, dc.model, c_parent.model)"));
+                    assertEquals(1, context.bindings().length);
+                    lookups.add(context.bindings()[0]);
+                    return new MockResult[] { new MockResult(rows.size(), rows) };
+                }), SQLDialect.POSTGRES)));
+
+        DeviceSummaryRecord result = repository.findSummary("device-1").orElseThrow();
+        assertEquals("device-1", result.deviceId());
+        assertEquals("Quantum", result.observedModel().orElseThrow());
+        assertTrue(result.backupTarget());
+
+        rows.clear();
+        assertTrue(repository.findSummary("device-missing").isEmpty());
+        assertEquals(List.of("device-1", "device-missing"), lookups);
+    }
+
+    @Test
     void summaryNeverSubstitutesManagementAddressForMissingHostname() {
         AtomicReference<String> sql = new AtomicReference<>();
         DSLContext create = DSL.using(SQLDialect.POSTGRES);
