@@ -278,13 +278,13 @@ export function DeviceConfigurationPanels({
   useEffect(() => {
     setSanitizedText(null);
     setTextError(null);
-    if (configuration?.sanitized_text_available) {
+    if (configuration?.text_readable === true && configuration.sanitized_text_available) {
       getDeviceConfigurationText(deviceId)
         .then(setSanitizedText)
         .catch((err) => setTextError(describeApiError(err)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deviceId, configuration?.sanitized_text_available, configuration?.collected_at]);
+  }, [deviceId, configuration?.text_readable, configuration?.sanitized_text_available, configuration?.collected_at]);
 
   if (configurationFetch.error) {
     return (
@@ -374,7 +374,9 @@ export function DeviceConfigurationPanels({
           },
           {
             label: isPaloAlto ? "XML Configuration" : "Sanitized text",
-            panel: isPaloAlto ? (
+            panel: configuration && configuration.text_readable !== true ? (
+              <EmptyPanel title="Configuration text" body="The configuration text is visible to onboarding administrators." />
+            ) : isPaloAlto ? (
               <EmptyPanel
                 title="PAN-OS XML Configuration Artefact"
                 body={

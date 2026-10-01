@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.service.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.*;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -48,6 +49,10 @@ import com.securityexpert.nexus.ui2.service.device.configuration.ConfigurationCo
 import com.securityexpert.nexus.ui2.service.device.configuration.ConfigurationQueryService;
 import com.securityexpert.nexus.ui2.service.device.configuration.FakeDeviceConfigurationRepository;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
+import com.securityexpert.nexus.ui2.service.security.*;
+import com.securityexpert.nexus.ui2.persistence.identity.*;
+import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
+import com.securityexpert.nexus.ui2.platform.RoleToken;
 
 /**
  * AC-2: {@code GET /devices/{id}/configuration}, {@code GET /devices/{id}/
@@ -183,7 +188,53 @@ class ConfigurationControllerTest {
                 new JobAdmissionService(registry, enrollmentReadPort, new InMemoryAdmissionRepository());
         ConfigurationCollectService collectService = new ConfigurationCollectService(devices, admissionService);
         ConfigurationQueryService queryService = new ConfigurationQueryService(devices, new FakeDeviceConfigurationRepository());
-        return new ConfigurationController(queryService, collectService);
+        return controller(queryService, collectService);
+    }
+
+    private static MockHttpServletRequest request() {
+        var request = new MockHttpServletRequest();
+        request.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "synthetic-actor");
+        request.setAttribute(GateChainInterceptor.SESSION_ID_ATTRIBUTE, "synthetic-session");
+        return request;
+    }
+
+    private static ConfigurationController controller(ConfigurationQueryService query, ConfigurationCollectService collect) {
+        var rbac = mock(RbacEvaluator.class);
+        when(rbac.evaluate(any(), any(), any())).thenReturn(new RbacEvaluator.Decision(
+                AuthzOutcome.DENIED, Optional.empty(), Optional.empty(), Optional.empty()));
+        return new ConfigurationController(query, collect, new ActionRegistry(), rbac, mock(AuthzDecisionRepository.class));
+    }
+
+    @Test
+    void textReadableUsesTheCallersRoleAndRecordsTheAffordanceDecision() {
+        var devices = new FakeDeviceRepository();
+        devices.byId.put("device-1", device("device-1", "check_point"));
+        var query = new ConfigurationQueryService(devices, new FakeDeviceConfigurationRepository());
+        var identities = mock(LocalIdentityResolver.class);
+        var roles = mock(LocalRoleTokenResolver.class);
+        var identity = mock(LocalCredentialRecord.class);
+        when(identity.localIdentityId()).thenReturn("synthetic-identity");
+        when(identities.resolve("synthetic-actor")).thenReturn(Optional.of(identity));
+        var rbac = new RbacEvaluator(mock(RoleBindingRepository.class), mock(ActorAuthzStateRepository.class),
+                null, identities, roles, null);
+        var decisions = mock(AuthzDecisionRepository.class);
+        var controller = new ConfigurationController(query, unusedCollectService(), new ActionRegistry(), rbac, decisions);
+        assertEquals(ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ,
+                SecurityWebMvcConfigTestAccess.actionIdFor("GET /devices/*/configuration/text"));
+        for (String role : List.of(RoleToken.REPLAY_VIEWER, RoleToken.ONBOARDING_ADMIN)) {
+            var binding = mock(RoleBindingRecord.class);
+            when(binding.bindingId()).thenReturn("synthetic-binding");
+            when(roles.resolveBinding(eq("synthetic-identity"), anyString()))
+                    .thenAnswer(call -> role.equals(call.getArgument(1)) ? Optional.of(binding) : Optional.empty());
+            boolean permitted = RoleToken.ONBOARDING_ADMIN.equals(role);
+            var response = controller.getDeviceConfiguration("device-1", request());
+            assertEquals(HttpStatus.OK, response.getStatusCode());
+            assertEquals(permitted, response.getBody().get("text_readable"));
+            assertEquals("no-store", response.getHeaders().getCacheControl());
+            verify(decisions).insert(eq("synthetic-session"), eq("synthetic-actor"),
+                    eq(ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ), eq(Optional.of("device-1")),
+                    eq(permitted ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED), any(), any(), any());
+        }
     }
 
     // -- GET /devices/{id}/configuration -------------------------------------
@@ -192,9 +243,9 @@ class ConfigurationControllerTest {
     void getDeviceConfigurationReturns404ForAnUnknownDevice() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         ConfigurationQueryService queryService = new ConfigurationQueryService(devices, new FakeDeviceConfigurationRepository());
-        ConfigurationController controller = new ConfigurationController(queryService, unusedCollectService());
+        ConfigurationController controller = controller(queryService, unusedCollectService());
 
-        ResponseEntity<Map<String, Object>> response = controller.getDeviceConfiguration("no-such-device");
+        ResponseEntity<Map<String, Object>> response = controller.getDeviceConfiguration("no-such-device", request());
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         assertEquals("NOT_FOUND", response.getBody().get("error"));
@@ -205,9 +256,9 @@ class ConfigurationControllerTest {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.byId.put("device-1", device("device-1", "check_point"));
         ConfigurationQueryService queryService = new ConfigurationQueryService(devices, new FakeDeviceConfigurationRepository());
-        ConfigurationController controller = new ConfigurationController(queryService, unusedCollectService());
+        ConfigurationController controller = controller(queryService, unusedCollectService());
 
-        ResponseEntity<Map<String, Object>> response = controller.getDeviceConfiguration("device-1");
+        ResponseEntity<Map<String, Object>> response = controller.getDeviceConfiguration("device-1", request());
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         Map<String, Object> body = response.getBody();
@@ -229,9 +280,9 @@ class ConfigurationControllerTest {
                         "none", "v1", new byte[] {1, 2, 3}),
                 "actor", "action-1");
         ConfigurationQueryService queryService = new ConfigurationQueryService(devices, configRepository);
-        ConfigurationController controller = new ConfigurationController(queryService, unusedCollectService());
+        ConfigurationController controller = controller(queryService, unusedCollectService());
 
-        ResponseEntity<Map<String, Object>> response = controller.getDeviceConfiguration("device-1");
+        ResponseEntity<Map<String, Object>> response = controller.getDeviceConfiguration("device-1", request());
 
         Map<String, Object> body = response.getBody();
         assertEquals("2026-09-14T12:00:00Z", body.get("collected_at"));
@@ -270,9 +321,9 @@ class ConfigurationControllerTest {
                         "none", "v1", new byte[] {1, 2, 3}),
                 "actor", "action-2");
         ConfigurationQueryService queryService = new ConfigurationQueryService(devices, configRepository);
-        ConfigurationController controller = new ConfigurationController(queryService, unusedCollectService());
+        ConfigurationController controller = controller(queryService, unusedCollectService());
 
-        ResponseEntity<Map<String, Object>> response = controller.getDeviceConfiguration("device-1");
+        ResponseEntity<Map<String, Object>> response = controller.getDeviceConfiguration("device-1", request());
 
         Map<String, Object> body = response.getBody();
         assertEquals("changed", body.get("change_state"));
@@ -296,7 +347,7 @@ class ConfigurationControllerTest {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.byId.put("device-1", device("device-1", "check_point"));
         ConfigurationQueryService queryService = new ConfigurationQueryService(devices, new FakeDeviceConfigurationRepository());
-        ConfigurationController controller = new ConfigurationController(queryService, unusedCollectService());
+        ConfigurationController controller = controller(queryService, unusedCollectService());
 
         ResponseEntity<String> response = controller.getDeviceConfigurationText("device-1");
 
@@ -313,7 +364,7 @@ class ConfigurationControllerTest {
                         "none", "v1", new byte[] {1, 2, 3}),
                 "actor", "action-1");
         ConfigurationQueryService queryService = new ConfigurationQueryService(devices, configRepository);
-        ConfigurationController controller = new ConfigurationController(queryService, unusedCollectService());
+        ConfigurationController controller = controller(queryService, unusedCollectService());
 
         ResponseEntity<String> response = controller.getDeviceConfigurationText("device-1");
 
@@ -360,7 +411,7 @@ class ConfigurationControllerTest {
         devices.summaries = List.of(new DeviceSummaryRecord("device-1", "gateway", "check_point", DeviceEnrollmentState.ENROLLED,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
         ConfigurationQueryService queryService = new ConfigurationQueryService(devices, new FakeDeviceConfigurationRepository());
-        ConfigurationController controller = new ConfigurationController(queryService, unusedCollectService());
+        ConfigurationController controller = controller(queryService, unusedCollectService());
 
         ResponseEntity<Map<String, Object>> response = controller.listConfigurations();
 

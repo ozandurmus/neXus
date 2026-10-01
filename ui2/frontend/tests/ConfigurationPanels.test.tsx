@@ -29,6 +29,26 @@ describe("ConfigurationScreen device selection and panels", () => {
     vi.unstubAllGlobals();
   });
 
+  it("shows the role explanation without requesting text in the legacy panel", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/configuration") return jsonResponse(200, { devices: [CP_DEVICE] });
+      if (url === "/devices/dev-1/configuration") return jsonResponse(200, {
+        device_id: "dev-1", vendor: "check_point", collected_at: "2026-09-14T12:00:00Z",
+        text_readable: false, sanitized_text_available: true, index: [], overrides: [], supplementary_runs: [],
+      });
+      return jsonResponse(404, { error: "NOT_FOUND" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(withTheme(<ConfigurationScreen />));
+    fireEvent.click(await screen.findByText(CP_DEVICE.hostname));
+    fireEvent.click(await screen.findByRole("tab", { name: "Details" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Sanitized text" }));
+    expect(await screen.findByText("The configuration text is visible to onboarding administrators.")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/configuration/text"))).toBe(false);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("fetches and renders a selected Check Point device's index, withheld count and sanitized text", async () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
@@ -45,7 +65,7 @@ describe("ConfigurationScreen device selection and panels", () => {
             canonical_hash: "abcdef0123456789",
             change_state: "unchanged",
             withheld_line_count: 3,
-            sanitized_text_available: true,
+            text_readable: true, sanitized_text_available: true,
             index: [{ context: "physical", section: "interface", source: null, entry_count: 5, has_override: false }],
             overrides: [],
             supplementary_runs: [],
@@ -78,7 +98,7 @@ describe("ConfigurationScreen device selection and panels", () => {
       if (url === "/configuration") return Promise.resolve(jsonResponse(200, { devices: [device] }));
       if (url === "/devices/dev-1/configuration") return Promise.resolve(jsonResponse(200, {
         device_id: "dev-1", vendor: "fortinet", read_kind: "show_configuration", collected_at: "2026-09-26T12:00:00Z",
-        sanitized_text_available: true, index: [
+        text_readable: true, sanitized_text_available: true, index: [
           { context: "root", section: "system interface", source: null, entry_count: 1 },
           { context: "root", section: "firewall policy", source: null, entry_count: 1 },
         ], overrides: [], supplementary_runs: [],
@@ -110,7 +130,7 @@ describe("ConfigurationScreen device selection and panels", () => {
             canonical_hash: "abcdef0123456789",
             change_state: "first_run",
             withheld_line_count: 0,
-            sanitized_text_available: false,
+            text_readable: true, sanitized_text_available: false,
             index: [{ context: "vsys1", section: "address", source: "local", entry_count: 2, has_override: true }],
             overrides: [{ context: "vsys1", category: "address", element_path: "address/addr-2", panorama_source: null }],
             supplementary_runs: [{ read_kind: "active", collected_at: "2026-09-14T12:00:00Z", canonical_hash: "x", change_state: "first_run" }],
@@ -151,7 +171,7 @@ describe("ConfigurationScreen device selection and panels", () => {
             canonical_hash: null,
             change_state: null,
             withheld_line_count: 0,
-            sanitized_text_available: false,
+            text_readable: true, sanitized_text_available: false,
             index: [],
             overrides: [],
             supplementary_runs: [],

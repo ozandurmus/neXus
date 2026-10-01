@@ -14,7 +14,7 @@ it('reloads the projected configuration after Collect now finishes',async()=>{
   if(url==='/devices/dev-1')return reply({job:{job_id:'job-1',state:'COMPLETED'}});
   if(url.endsWith('/configuration/text')){reads++;return new Response('set hostname FW-TANGO-04');}
   if(url.endsWith('/configuration'))return reply({device_id:'dev-1',vendor:'check_point',collected_at:collected?'2026-09-26T10:00:00Z':null,
-    sanitized_text_available:collected,index:[],overrides:[],withheld_line_count:0});
+    text_readable: true, sanitized_text_available:collected,index:[],overrides:[],withheld_line_count:0});
   return reply({});
  }));
  const device={device_id:'dev-1',hostname:'FW-TANGO-04',vendor_hint:'check_point',role:'gateway',cluster_member_ref:null,
