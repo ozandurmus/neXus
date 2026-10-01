@@ -651,3 +651,27 @@ def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths
         assert sum(bool(re.search(pattern, path)) for pattern in fixtures["paths"]) == 1
         for unrelated in ("prefix/" + path, path + ".bak", path.replace("/src/test/", "/src/main/")):
             assert not any(re.search(pattern, unrelated) for pattern in fixtures["paths"])
+
+
+def test_integration_job_uses_native_sidecar_and_build_jdk():
+    path = REPO_ROOT / "deploy/ui2-image-build/33-integration-postgres.yaml"
+    job = yaml.safe_load(path.read_text())
+    assert job["kind"] == "Job" and job["metadata"]["namespace"] == "ui2-build"
+    assert job["spec"]["activeDeadlineSeconds"] == 1800
+    assert job["spec"]["ttlSecondsAfterFinished"] == 300
+    assert job["spec"]["backoffLimit"] == 0
+    spec = job["spec"]["template"]["spec"]
+    postgres, = spec["initContainers"]
+    runner, = spec["containers"]
+    assert postgres["restartPolicy"] == "Always"
+    assert postgres["args"] == ["-c", "listen_addresses=127.0.0.1"]
+    assert postgres["startupProbe"]["exec"]["command"] == ["pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+    assert f'FROM {runner["image"]} AS build' in CONTAINERFILE.read_text()
+    assert "@sha256:" in postgres["image"]
+    env = {e["name"]: e["value"] for e in runner["env"]}
+    assert env["UI2_TEST_JDBC_URL"] == "jdbc:postgresql://127.0.0.1:5432/postgres"
+    assert env["GRADLE_USER_HOME"] == "/workspace/ui2/.gradle-home"
+    assert spec["automountServiceAccountToken"] is False
+    assert any(v.get("configMap") == {"name": "corp-ca"} for v in spec["volumes"])
+    for container in (postgres, runner):
+        assert container["resources"]["requests"] and container["resources"]["limits"]

@@ -35,123 +35,121 @@ def test_nightly_full_and_ephemeral_isolation_manifests():
     assert env(job["spec"]["template"]["spec"])["NEXUS_E2E_MODE"] == "quick"
     assert env(cron["spec"]["jobTemplate"]["spec"]["template"]["spec"])["NEXUS_E2E_MODE"] == "full"
     assert cron["spec"]["schedule"] == "0 2 * * *"
-    policy, database = list(yaml.safe_load_all((ROOT / "deploy/ui2-image-build/33-integration-postgres.yaml").read_text()))
-    assert policy["spec"]["ingress"] == policy["spec"]["egress"] == []
+    database = yaml.safe_load((ROOT / "deploy/ui2-image-build/33-integration-postgres.yaml").read_text())
     spec = database["spec"]["template"]["spec"]
-    assert "postgres:16@sha256:" in spec["containers"][0]["image"]
+    assert "postgres:16@sha256:" in spec["initContainers"][0]["image"]
     assert not spec["automountServiceAccountToken"]
     assert all("persistentVolumeClaim" not in volume for volume in spec["volumes"])
 
 
-@pytest.mark.parametrize("failure", ["", "setup", "apply", "ready", "tunnel", "gradle", "skipped", "missing", "signal", "cleanup"])
+@pytest.mark.parametrize("failure", ["", "setup", "apply", "archive", "gradle", "skipped", "missing", "duplicate", "inconsistent", "cleanup"])
 def test_integration_cleanup_and_fail_closed_result(tmp_path, failure):
     checkout = tmp_path / "checkout"
-    for directory in ("scripts", "deploy/ui2-image-build", "ui2", "bin"):
-        (checkout / directory).mkdir(parents=True)
-    for relative in ("scripts/hosta_integration.sh", "deploy/ui2-image-build/33-integration-postgres.yaml"):
-        shutil.copyfile(ROOT / relative, checkout / relative)
-    calls = tmp_path / "calls"
+    (checkout / "scripts").mkdir(parents=True)
+    for name in ("hosta_integration.sh", "hosta_integration_remote.py"):
+        shutil.copyfile(ROOT / "scripts" / name, checkout / "scripts" / name)
     config = tmp_path / "home/.config/nexus"
     config.mkdir(parents=True)
     (config / "hosta").write_text("synthetic-host\n")
-    ssh = checkout / "bin/ssh"
-    ssh.write_text('''#!/usr/bin/env python3
+    remote = tmp_path / "remote home"
+    (remote / "nexus/project").mkdir(parents=True)
+    (remote / "nexus/project/deploy_info.json").write_text('{"commit":"synthetic-commit"}')
+    build = {"spec": {"template": {"spec": {"containers": [{"env": [
+        {"name": "HTTP_PROXY", "value": "http://192.0.2.10:8080"},
+        {"name": "HTTPS_PROXY", "value": "http://192.0.2.10:8080"},
+        {"name": "GRADLE_OPTS", "value": "-Dhttp.proxyHost=192.0.2.10 -Dhttp.proxyPort=8080"}]}]}}}}
+    (remote / "build-job-proxy.yaml").write_text(yaml.safe_dump(build))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stubs = {
+        "ssh": r'''#!/usr/bin/env python3
+import os,sys
+assert '-L' not in sys.argv and 'synthetic-host' in sys.argv
+assert 'export KUBECONFIG=$HOME/.kube/config;' in sys.argv[-1]
+os.execve('/bin/sh', ['sh','-c',sys.argv[-1]], {**os.environ, 'HOME':os.environ['TEST_REMOTE_HOME']})
+''',
+        "git": r'''#!/usr/bin/env python3
 import os,sys
 from pathlib import Path
-args=sys.argv[1:]
-assert 'synthetic-host' in args
-command=args[-1]
-assert 'gradlew' not in command and 'git archive' not in command
-if '-L' in args:
-    binding=args[args.index('-L')+1].split(':')
-    assert binding[0] == binding[2] == '127.0.0.1'
-    assert 'ExitOnForwardFailure=yes' in args
-    Path(os.environ['TEST_PORT']).write_text(binding[1])
-    if os.environ['TEST_FAILURE']=='tunnel': sys.exit(1)
-os.execve('/bin/sh', ['sh', '-c', command], {**os.environ, 'TEST_REMOTE': '1', 'HOME': os.environ['TEST_REMOTE_HOME'], 'KUBECONFIG': '/synthetic/inherited-config'})
-''')
-    ssh.chmod(0o755)
-    kubectl = checkout / "bin/kubectl"
-    kubectl.write_text('''#!/usr/bin/env python3
-import os,sys,time,signal
+if sys.argv[1]=='rev-parse': print('synthetic-commit')
+elif sys.argv[1]=='show': print(Path(os.environ['TEST_MANIFEST']).read_text())
+elif sys.argv[1]=='archive':
+    assert sys.argv[2:] == ['synthetic-commit','ui2','scripts/integration_runner.sh','scripts/IntegrationSummary.java']
+    if os.environ['TEST_FAILURE']=='archive': sys.exit(1)
+    print('synthetic archive')
+else: sys.exit(99)
+''',
+        "kubectl": r'''#!/usr/bin/env python3
+import json,os,sys
 from pathlib import Path
-assert os.environ['TEST_REMOTE']=='1'
-assert os.environ.get('KUBECONFIG') == str(Path(os.environ['HOME']) / '.kube/config')
-args=sys.argv[1:]
-with open(os.environ['TEST_CALLS'], 'a') as f: f.write(' '.join(args)+'\\n')
-if 'create' in args:
-    assert '--from-file=' + 'password' + '=/dev/stdin' in args
-    secret_value=sys.stdin.read()
-    assert len(secret_value)==48 and secret_value not in ' '.join(args)
-    if os.environ['TEST_FAILURE']=='setup': sys.exit(1)
-if 'apply' in args:
-    assert sys.stdin.read().startswith('# Only synthetic test data.')
-    if os.environ['TEST_FAILURE']=='apply': sys.exit(1)
-if 'wait' in args and os.environ['TEST_FAILURE']=='ready': sys.exit(1)
-if 'delete' in args and os.environ['TEST_FAILURE']=='cleanup': sys.exit(1)
-if 'get' in args: print('synthetic-pod')
-if 'port-forward' in args:
-    assert '--address=127.0.0.1' in args
-    port=args[-1].split(':')[0]
-    def stopped(*_):
-        with open(os.environ['TEST_CALLS'], 'a') as f: f.write('forward-stopped\\n')
-        sys.exit(0)
-    signal.signal(signal.SIGTERM, stopped)
-    print(f'Forwarding from 127.0.0.1:{port} -> 5432', flush=True)
-    time.sleep(120)
-''')
-    kubectl.chmod(0o755)
-    gradle = checkout / "ui2/gradlew"
-    gradle.write_text('''#!/usr/bin/env python3
-import os,sys,signal
-from pathlib import Path
-assert ':integration-tests:test' in sys.argv
-assert 'TEST_REMOTE' not in os.environ
-port=Path(os.environ['TEST_PORT']).read_text()
-assert os.environ['UI2_TEST_JDBC_URL']==f'jdbc:postgresql://127.0.0.1:{port}/postgres'
-secret_file=Path(os.environ['UI2_TEST_DB_PASSWORD_FILE'])
-assert secret_file.stat().st_mode & 0o777 == 0o600
-assert len(secret_file.read_text())==48
-Path(os.environ['TEST_PASSWORD_PATH']).write_text(str(secret_file))
-if os.environ['TEST_FAILURE']=='gradle': sys.exit(1)
-if os.environ['TEST_FAILURE']=='missing': sys.exit(0)
-if os.environ['TEST_FAILURE']=='signal':
-    os.kill(os.getppid(), signal.SIGTERM)
-    sys.exit(0)
-p=Path('integration-tests/build/test-results/test'); p.mkdir(parents=True)
-skipped=int(os.environ['TEST_FAILURE']=='skipped')
-(p/'TEST-synthetic.xml').write_text(f'<testsuite tests="1" failures="0" errors="0" skipped="{skipped}"/>')
-''')
-    gradle.chmod(0o755)
-    env = {**os.environ, "PATH": f"{checkout / 'bin'}:{os.environ['PATH']}",
-           "TEST_REMOTE_HOME": str(tmp_path / "remote home"),
-           "TEST_CALLS": str(calls), "TEST_FAILURE": failure, "HOME": str(tmp_path / "home"),
-           "TEST_PORT": str(tmp_path / "port"), "TEST_PASSWORD_PATH": str(tmp_path / "password_path")}
-    result = subprocess.run(["bash", str(checkout / "scripts/hosta_integration.sh")],
-                            env=env, capture_output=True, text=True, timeout=20)
-    assert result.returncode == (0 if not failure else 1 if failure == "gradle" else 2), result.stdout + result.stderr
+import yaml
+args=sys.argv[1:]; failure=os.environ['TEST_FAILURE']
+assert os.environ['KUBECONFIG']==str(Path.home()/'.kube/config')
+assert 'port-forward' not in args
+with open(os.environ['TEST_CALLS'],'a') as f: f.write(' '.join(args)+'\n')
+if 'create' in args and 'secret' in args:
+    value=sys.stdin.read(); assert len(value)==48 and value not in ' '.join(args)
+    if failure=='setup': sys.exit(1)
+elif '--dry-run=client' in args:
+    src=args[args.index('-f')+1]
+    print(json.dumps(yaml.safe_load(sys.stdin.read() if src=='-' else Path(src).read_text())))
+elif 'apply' in args:
+    doc=json.load(sys.stdin)
+    if doc['kind']=='NetworkPolicy':
+        assert doc['spec']['ingress']==[]
+        assert doc['spec']['egress'][0]['to']==[{'ipBlock':{'cidr':'192.0.2.10/32'}}]
+        assert doc['spec']['egress'][-1]['ports']==[{'protocol':p,'port':53} for p in ('UDP','TCP')]
+    else:
+        assert any(e['name']=='GRADLE_OPTS' for e in doc['spec']['template']['spec']['containers'][0]['env'])
+    if failure=='apply': sys.exit(1)
+elif 'get' in args:
+    if 'pods' in args: print(json.dumps({'items':[{'metadata':{'name':'synthetic-pod'},'status':{'containerStatuses':[{'name':'runner','state':{'running':{}}}]}}]}))
+    else: print(json.dumps({'status':{'conditions':[{'type':'Failed' if failure in ('gradle','skipped','missing','inconsistent') else 'Complete','status':'True'}]}}))
+elif 'exec' in args:
+    if '-i' in args: assert sys.stdin.read()=='synthetic archive\n'
+elif 'logs' in args:
+    if failure=='missing': print('INTEGRATION: ERROR (missing reports)')
+    elif failure in ('gradle','skipped'): print('INTEGRATION: FAIL (tests=3; failures=1; errors=0; skipped=0)\nFAILED SyntheticTest.example')
+    else: print('INTEGRATION: PASS (tests=3; skipped=0)')
+    if failure=='duplicate': print('INTEGRATION: PASS (tests=3; skipped=0)')
+    print('raw diagnostics must never be shown')
+elif 'delete' in args and failure=='cleanup': sys.exit(1)
+'''}
+    for name, text in stubs.items():
+        path = bin_dir / name
+        path.write_text(text)
+        path.chmod(0o755)
+    calls = tmp_path / "calls"
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "HOME": str(tmp_path / "home"),
+           "TEST_REMOTE_HOME": str(remote), "TEST_CALLS": str(calls), "TEST_FAILURE": failure,
+           "TEST_MANIFEST": str(ROOT / "deploy/ui2-image-build/33-integration-postgres.yaml")}
+    result = subprocess.run(["bash", str(checkout / "scripts/hosta_integration.sh")], env=env,
+                            capture_output=True, text=True, timeout=20)
+    assert result.returncode == (0 if not failure else 1 if failure in ("gradle", "skipped") else 2), result.stdout
     assert ("INTEGRATION: PASS" in result.stdout) == (failure == "")
+    assert "raw diagnostics" not in result.stdout
     assert result.stderr == ""
-    commands = calls.read_text().splitlines()
-    assert any("delete job,networkpolicy,secret ui2-integration-" in command for command in commands)
-    assert not any("ui2-database" in command for command in commands)
-    if failure in ("", "gradle", "skipped", "missing", "signal", "cleanup"):
-        assert "forward-stopped" in commands
-        assert not Path((tmp_path / "password_path").read_text()).parent.exists()
+    assert "delete job,networkpolicy,secret ui2-integration-" in calls.read_text()
 
 
-def test_integration_runner_has_cleanup_and_no_remote_build_mode():
+def test_integration_runner_has_no_forwarding_or_local_gradle():
     source = (ROOT / "scripts/hosta_integration.sh").read_text()
     assert "trap cleanup EXIT" in source
-    assert "trap cleanup_forward EXIT" in source
-    assert "--on-host" not in source
-    assert "git archive" not in source
+    for forbidden in ("-L", "port-forward", "mkfifo", "./gradlew"):
+        assert forbidden not in source
+    for line in source.splitlines():
+        if " kubectl " in line or "python3 - $run" in line:
+            assert "export KUBECONFIG=\\$HOME/.kube/config;" in line
 
 
-def test_integration_remote_kubectl_exports_kubeconfig():
-    source = (ROOT / "scripts/hosta_integration.sh").read_text()
-    kubectl_lines = [line.strip() for line in source.splitlines() if " kubectl " in line]
-    assert len(kubectl_lines) == 2  # Shared SSH helper and the tunnel shell.
-    assert 'export KUBECONFIG=\\$HOME/.kube/config; kubectl $1' in kubectl_lines[0]
-    tunnel = source.split('"bash -c', 1)[1]
-    assert tunnel.index('export KUBECONFIG=\\$HOME/.kube/config') < tunnel.index('kubectl ')
+@pytest.mark.parametrize("kind,expected", [("pass",0),("failure",1),("skipped",1),("missing",2),("malformed",2),("gradle",1)])
+def test_junit_summary_is_bounded_and_sanitized(tmp_path, kind, expected):
+    if kind != "missing":
+        cases = ''.join(f'<testcase classname="example.SyntheticTest" name="test{i}()"><failure message="private detail"/></testcase>' for i in range(25)) if kind == "failure" else ''
+        xml = f'<testsuite tests="25" failures="{25 if kind == "failure" else 0}" errors="0" skipped="{1 if kind == "skipped" else 0}">{cases}</testsuite>'
+        (tmp_path / "TEST-synthetic.xml").write_text('invalid' if kind == "malformed" else xml)
+    result = subprocess.run(["java", str(ROOT / "scripts/IntegrationSummary.java"), "1" if kind == "gradle" else "0", str(tmp_path)], capture_output=True, text=True)
+    assert result.returncode == expected, result.stderr
+    assert result.stdout.count("INTEGRATION:") == 1
+    assert "private detail" not in result.stdout
+    assert sum(line.startswith("FAILED ") for line in result.stdout.splitlines()) == (20 if kind == "failure" else 0)
