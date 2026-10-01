@@ -94,8 +94,8 @@ while true; do
   if [ "$up" -ge 2 ] && grep -q '^Done\.' /tmp/nexus_build.log; then echo "UP after ${t}s"; break; fi
   if [ $t -gt "$LIMIT" ]; then echo "STOP: over ${LIMIT}s"; tail -3 /tmp/nexus_build.log; exit 3; fi
 done
-# Already validated counts from security_host.py; preserve the whole summary for the ship caller.
-grep '^{"passed":' /tmp/nexus_build.log || true
+# Already validated counts from security_host.py (or the not_configured marker); preserve it for the ship caller.
+grep -E '^\{"(passed|security_gate)":' /tmp/nexus_build.log || true
 # HTTPS since 2026-09-27 (HTTP answers 301); -k: the local CA is not in the host's trust store.
 echo "site $(curl -sk --noproxy '*' -o /dev/null -w '%{http_code}' https://127.0.0.1/)"
 echo "schema $(q "select version || ' ' || success from flyway_schema_history order by installed_rank desc limit 1")"
