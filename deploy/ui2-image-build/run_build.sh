@@ -102,7 +102,7 @@ inflight() {
 waited=0
 while n="$(inflight)" && [ "$n" != "0" ]; do
   if [ "$waited" -ge "${WORKER_WAIT_LIMIT_S:-14400}" ]; then
-    echo "Worker NOT updated: $n job(s) still in flight after ${waited}s; service and compliance are on the new image."
+    echo "Worker NOT updated: $n job(s) still in flight after ${waited}s; service and compliance are on the new image, worker and configuration are not."
     exit 5
   fi
   echo "Worker waiting: $n job(s) in flight; checking again in 30 s (waited ${waited}s)"
@@ -110,10 +110,14 @@ while n="$(inflight)" && [ "$n" != "0" ]; do
   waited=$((waited + 30))
 done
 kubectl -n ui2 set image deployment/ui2-worker worker="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
+# ui2-configuration is the second worker (args: worker configuration); it was left on a 2026-09-24 image until the
+# 2026-10-01 security scan found it, so it follows the worker under the same in-flight check.
+kubectl -n ui2 set image deployment/ui2-configuration configuration="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
 
 echo "Waiting for rollout..."
 kubectl -n ui2 rollout status deployment/ui2-service --timeout=600s
 kubectl -n ui2 rollout status deployment/ui2-worker --timeout=600s
 kubectl -n ui2 rollout status deployment/ui2-compliance --timeout=600s
+kubectl -n ui2 rollout status deployment/ui2-configuration --timeout=600s
 
 echo "Done. Deployed commit: $COMMIT_SHA (built_at $BUILT_AT)"

@@ -23,6 +23,9 @@ spec:
       containers:
         - name: playwright
           image: registry.kube-system.svc.cluster.local/nexus-ui2-e2e:SET_AT_DEPLOY
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { cpu: "2", memory: 4Gi }
           env:
             - name: NEXUS_E2E_BASE_URL
               value: http://ui2-service.ui2.svc.cluster.local:8080
@@ -102,6 +105,9 @@ spec:
           containers:
             - name: playwright
               image: registry.kube-system.svc.cluster.local/nexus-ui2-e2e:SET_AT_DEPLOY
+              resources:
+                requests: { cpu: 500m, memory: 1Gi }
+                limits: { cpu: "2", memory: 4Gi }
               env:
                 - name: NEXUS_E2E_BASE_URL
                   value: http://ui2-service.ui2.svc.cluster.local:8080

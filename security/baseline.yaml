@@ -259,6 +259,134 @@
       "reason": "Kaniko image builds run as root by design (documented exception, same as the KSV-0014/KSV-0118 acceptances for these Jobs).",
       "owner": "PO",
       "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-66046",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-76641",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-93990",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-53613",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libblkid",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-53613",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libmount",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-53613",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libsmartcols",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-53613",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libuuid",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-54876",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: openssl-libs",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-75804",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: openssl-libs",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-84782",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: openssl-libs",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-103111",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-86145",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-89161",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-103111",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2-syntax",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-86145",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2-syntax",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-89161",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2-syntax",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
     }
   ]
 }
