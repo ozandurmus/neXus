@@ -1755,8 +1755,8 @@ export function DeviceInventoryPanels({
     () => getDeviceInventory(device.device_id),
     describeApiError,
   );
-  const clusterInventoryFetch = useFetchOnMount<ClusterInventory>(
-    () => getClusterInventory(device.cluster_member_ref as string),
+  const clusterInventoryFetch = useFetchOnMount<ClusterInventory | null>(
+    () => device.cluster_member_ref === null ? Promise.resolve(null) : getClusterInventory(device.cluster_member_ref),
     describeApiError,
   );
 

@@ -170,6 +170,14 @@ class InventoryControllerTest {
         assertEquals(null, body.get("collected_at"));
         assertEquals(null, body.get("job"));
         assertEquals(List.of(), body.get("contexts"));
+        assertEquals(List.of(), body.get("grid_members"));
+        assertEquals(null, body.get("grid_summary"));
+
+        // A standalone device has no cluster reference. The UI must skip this request,
+        // rather than turn a genuine unknown-cluster response into empty evidence.
+        ResponseEntity<Map<String, Object>> absentCluster = controller.getClusterInventory("null");
+        assertEquals(HttpStatus.NOT_FOUND, absentCluster.getStatusCode());
+        assertEquals("NOT_FOUND", absentCluster.getBody().get("error"));
     }
 
     @Test
