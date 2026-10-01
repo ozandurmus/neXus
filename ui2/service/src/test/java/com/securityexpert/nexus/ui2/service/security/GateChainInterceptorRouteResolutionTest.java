@@ -273,4 +273,15 @@ class GateChainInterceptorSecurityTest {
             assertEquals(entry.getValue(), method.invoke(interceptor, parts[0], parts[1]), entry.getKey());
         }
     }
+
+    @Test
+    void credentialRoutesUseSecurityAdminActions() {
+        for (String route : java.util.List.of("GET /credentials", "POST /credentials",
+                "POST /credentials/replace-secret", "POST /credentials/delete")) {
+            String action = SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(route);
+            assertEquals(java.util.Optional.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN),
+                    new ActionRegistry().find(action).orElseThrow().requiredRoleToken());
+        }
+    }
+
 }

@@ -391,11 +391,21 @@ export function revokeRoleBinding(bindingId: string): Promise<{ binding_id: stri
  * `secret`/`passphrase` are write-only on every call below -- no function
  * here, and no server response it reads, ever returns one back.
  */
+export interface SnmpSettings {
+  readonly securityLevel: "noAuthNoPriv" | "authNoPriv" | "authPriv";
+  readonly authProtocol: string | null;
+  readonly privProtocol: string | null;
+}
+
 export interface CredentialView {
   readonly credential_id: string;
   readonly credential_reference_id: string;
   readonly display_name: string;
-  readonly kind: "ssh_password" | "ssh_private_key" | "api_password";
+  readonly kind: "ssh_password" | "ssh_private_key" | "api_password" | "snmp_v1_v2c" | "snmp_v3";
+  readonly snmp?: SnmpSettings;
+  readonly community?: "set" | "not set";
+  readonly auth_secret?: "set" | "not set";
+  readonly priv_secret?: "set" | "not set";
   readonly username: string;
   readonly allows_check_point: boolean;
   readonly allows_palo_alto: boolean;
@@ -415,6 +425,7 @@ export function createCredential(
   allowsPaloAlto: boolean,
   secret: string,
   passphrase: string,
+  snmp?: SnmpSettings,
 ): Promise<CredentialView> {
   return call("/credentials", "POST", {
     display_name: displayName,
@@ -424,6 +435,7 @@ export function createCredential(
     allows_palo_alto: allowsPaloAlto,
     secret,
     passphrase: passphrase || undefined,
+    snmp,
   });
 }
 
@@ -431,11 +443,15 @@ export function replaceCredentialSecret(
   credentialId: string,
   secret: string,
   passphrase: string,
+  snmp?: SnmpSettings,
+  usernameOverride?: string,
 ): Promise<CredentialView> {
   return call("/credentials/replace-secret", "POST", {
     credential_id: credentialId,
+    username: usernameOverride,
     secret,
     passphrase: passphrase || undefined,
+    snmp,
   });
 }
 

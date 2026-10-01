@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.persistence.credential;
 import java.time.Instant;
 
 import com.securityexpert.nexus.ui2.platform.CredentialStorePort.CredentialKind;
+import com.securityexpert.nexus.ui2.platform.CredentialStorePort.SnmpSettings;
 
 /**
  * A full {@code credentials} row (CS-1), including the two encrypted
@@ -23,5 +24,12 @@ public record CredentialRecord(
         boolean allowsPaloAlto,
         String createdByActorFingerprint,
         Instant createdAt,
-        Instant secretSetAt) {
+        Instant secretSetAt,
+        SnmpSettings snmp) {
+    public CredentialRecord(String credentialId, String displayName, CredentialKind kind, String username,
+            byte[] encryptedSecret, byte[] encryptedPassphrase, String envelopeKeyId, boolean allowsCheckPoint,
+            boolean allowsPaloAlto, String createdByActorFingerprint, Instant createdAt, Instant secretSetAt) {
+        this(credentialId, displayName, kind, username, encryptedSecret, encryptedPassphrase, envelopeKeyId,
+                allowsCheckPoint, allowsPaloAlto, createdByActorFingerprint, createdAt, secretSetAt, null);
+    }
 }

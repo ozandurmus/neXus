@@ -32,7 +32,7 @@ public final class CredentialStoreComposition {
         return new CredentialAdministration(credentialRepository, cipher, credentialStoreKeyId);
     }
 
-    /** SB-16: the read-only components {@code StoreBackedSshCredentialResolver}/{@code StoreBackedPanCredentialResolver} need. */
+    /** SB-16: read-only components for worker-side SSH, API and SNMP credential resolution. */
     public static ResolverComponents resolverComponents(String jdbcUrl, String user, String password,
             String credentialStoreKeyBase64) {
         TransactionBoundary transactionBoundary = transactionBoundary(jdbcUrl, user, password);

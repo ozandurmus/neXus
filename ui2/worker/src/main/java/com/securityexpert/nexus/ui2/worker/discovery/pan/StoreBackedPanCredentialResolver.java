@@ -42,7 +42,7 @@ public final class StoreBackedPanCredentialResolver implements PanCredentialReso
                 .orElseThrow(() -> unresolvable(credentialRef));
         CredentialRecord credential = credentialRepository.findById(reference.backendPointer())
                 .orElseThrow(() -> unresolvable(credentialRef));
-        if (credential.kind() == CredentialKind.SSH_PRIVATE_KEY) {
+        if (credential.kind() != CredentialKind.SSH_PASSWORD && credential.kind() != CredentialKind.API_PASSWORD) {
             throw unresolvable(credentialRef);
         }
 

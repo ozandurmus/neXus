@@ -44,11 +44,11 @@ class CredentialAdministrationControllerTest {
         @Override
         public CredentialView create(String actingAdminActorFingerprint, String displayName, CredentialKind kind,
                 String username, boolean allowsCheckPoint, boolean allowsPaloAlto, char[] secret,
-                Optional<char[]> passphrase) {
+                Optional<char[]> passphrase, SnmpSettings snmp) {
             lastSeenSecret = new String(secret);
             passphrase.ifPresent(p -> lastSeenPassphrase = new String(p));
             CredentialView view = new CredentialView("cred-1", "ref-1", displayName, kind, username,
-                    allowsCheckPoint, allowsPaloAlto, Instant.now(), Instant.now());
+                    allowsCheckPoint, allowsPaloAlto, Instant.now(), Instant.now(), snmp);
             views.clear();
             views.add(view);
             return view;
@@ -61,7 +61,7 @@ class CredentialAdministrationControllerTest {
 
         @Override
         public ReplaceSecretResult replaceSecret(String actingAdminActorFingerprint, String credentialId,
-                char[] secret, Optional<char[]> passphrase) {
+                char[] secret, Optional<char[]> passphrase, String username, SnmpSettings snmp) {
             if (rejectPassphrase) {
                 return new ReplaceSecretResult.PassphraseNotAllowed();
             }
@@ -70,7 +70,7 @@ class CredentialAdministrationControllerTest {
             CredentialView existing = views.get(0);
             CredentialView updated = new CredentialView(existing.credentialId(), existing.credentialReferenceId(),
                     existing.displayName(), existing.kind(), existing.username(), existing.allowsCheckPoint(),
-                    existing.allowsPaloAlto(), existing.createdAt(), Instant.now());
+                    existing.allowsPaloAlto(), existing.createdAt(), Instant.now(), snmp == null ? existing.snmp() : snmp);
             views.set(0, updated);
             return new ReplaceSecretResult.Ok(updated);
         }
@@ -161,4 +161,37 @@ class CredentialAdministrationControllerTest {
         assertEquals(400, response.getStatusCode().value());
         assertEquals("PASSPHRASE_NOT_ALLOWED_FOR_CREDENTIAL_KIND", response.getBody().get("error"));
     }
+
+    @Test
+    void snmpResponsesExposeOnlySettingsAndSecretPresence() throws Exception {
+        for (String level : List.of("noAuthNoPriv", "authNoPriv", "authPriv")) {
+            var controller = new CredentialAdministrationController(new FakePort());
+            var settings = new CredentialStorePort.SnmpSettings(level,
+                    level.equals("noAuthNoPriv") ? null : "SHA-256", level.equals("authPriv") ? "AES-128" : null);
+            var response = controller.create(new CredentialAdministrationController.CreateRequest(
+                    "Synthetic SNMP", "snmp_v3", "synthetic-user", false, false,
+                    (level.equals("noAuthNoPriv") ? "" : "synthetic-auth").toCharArray(),
+                    (level.equals("authPriv") ? "synthetic-privacy" : "").toCharArray(), settings), fakeRequest());
+            assertEquals(200, response.getStatusCode().value());
+            assertEquals(level.equals("noAuthNoPriv") ? "not set" : "set", response.getBody().get("auth_secret"));
+            assertEquals(level.equals("authPriv") ? "set" : "not set", response.getBody().get("priv_secret"));
+            var replaced = controller.replaceSecret(new CredentialAdministrationController.ReplaceSecretRequest(
+                    "cred-1", (level.equals("noAuthNoPriv") ? "" : "synthetic-auth").toCharArray(),
+                    (level.equals("authPriv") ? "synthetic-privacy" : "").toCharArray(), "synthetic-user", settings),
+                    fakeRequest());
+            assertEquals(200, replaced.getStatusCode().value());
+            String json = OBJECT_MAPPER.writeValueAsString(List.of(response.getBody(), replaced.getBody(),
+                    controller.list().getBody()));
+            assertFalse(json.contains("synthetic-auth"));
+            assertFalse(json.contains("synthetic-privacy"));
+            assertFalse(json.contains("encrypted_"));
+        }
+        var controller = new CredentialAdministrationController(new FakePort());
+        var response = controller.create(new CredentialAdministrationController.CreateRequest(
+                "Synthetic SNMP", "snmp_v1_v2c", "", false, false,
+                "synthetic-community".toCharArray(), null), fakeRequest());
+        assertEquals("set", response.getBody().get("community"));
+        assertFalse(OBJECT_MAPPER.writeValueAsString(response.getBody()).contains("synthetic-community"));
+    }
+
 }

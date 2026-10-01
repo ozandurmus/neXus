@@ -21,12 +21,15 @@ import {
   replaceCredentialSecret,
   type ApiError,
   type CredentialView,
+  type SnmpSettings,
 } from "../auth/adminApi";
 
 const KIND_LABEL: Record<CredentialView["kind"], string> = {
   ssh_password: "SSH password",
   ssh_private_key: "SSH private key",
   api_password: "API password",
+  snmp_v1_v2c: "SNMP v1/v2c",
+  snmp_v3: "SNMP v3",
 };
 
 /**
@@ -114,6 +117,8 @@ export function CredentialsPanel() {
               <Typography variant="body1">{credential.display_name}</Typography>
               <Typography variant="caption" color="text.secondary" component="div">
                 {KIND_LABEL[credential.kind]} · {credential.username} · secret set <Ts at={credential.secret_set_at} />
+                {credential.community && ` · community: ${credential.community}`}
+                {credential.snmp && ` · ${credential.snmp.securityLevel} · auth secret: ${credential.auth_secret} · privacy secret: ${credential.priv_secret}`}
               </Typography>
               {deleteError[credential.credential_id] && (
                 <Typography variant="caption" color="error" sx={{ display: "block" }}>
@@ -123,7 +128,7 @@ export function CredentialsPanel() {
             </Box>
             <Stack direction="row" spacing={1} alignItems="center">
               <Button size="small" onClick={() => setReplaceSecretFor(credential)}>
-                Replace secret
+                {credential.kind.startsWith("snmp_") ? "Edit" : "Replace secret"}
               </Button>
               <Button size="small" color="error" onClick={() => handleDelete(credential.credential_id)}>
                 Delete
@@ -133,7 +138,9 @@ export function CredentialsPanel() {
         ))}
       </Stack>
       {createOpen && <CreateCredentialDialog onClose={() => setCreateOpen(false)} onCreated={() => refresh()} />}
-      {replaceSecretFor && (
+      {replaceSecretFor?.kind.startsWith("snmp_") ? (
+        <CreateCredentialDialog credential={replaceSecretFor} onClose={() => setReplaceSecretFor(null)} onCreated={refresh} />
+      ) : replaceSecretFor && (
         <ReplaceSecretDialog
           credentialId={replaceSecretFor.credential_id}
           kind={replaceSecretFor.kind}
@@ -157,43 +164,83 @@ function describeError(err: ApiError): string {
   return serverError ?? `request failed (status ${err.status})`;
 }
 
-export function CreateCredentialDialog({ onClose, onCreated, onActionRefused }: {
+export function CreateCredentialDialog({ onClose, onCreated, onActionRefused, credential }: {
+  readonly credential?: CredentialView;
   readonly onClose: () => void;
   readonly onCreated: (credential: CredentialView) => void;
   readonly onActionRefused?: () => void;
   /** Kept for callers; a credential is no longer tied to a vendor (PO, 2026-09-24). */
   readonly initialVendor?: string;
 }) {
-  const [displayName, setDisplayName] = useState("");
-  const [kind, setKind] = useState<CredentialView["kind"]>("ssh_password");
-  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState(credential?.display_name ?? "");
+  const [kind, setKind] = useState<CredentialView["kind"]>(credential?.kind ?? "ssh_password");
+  const [username, setUsername] = useState(credential?.username ?? "");
   const [secret, setSecret] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const [level, setLevel] = useState<SnmpSettings["securityLevel"]>(credential?.snmp?.securityLevel ?? "authPriv");
+  const [authProtocol, setAuthProtocol] = useState(credential?.snmp?.authProtocol ?? "SHA-256");
+  const [privProtocol, setPrivProtocol] = useState(credential?.snmp?.privProtocol ?? "AES-128");
+  const v3 = kind === "snmp_v3";
+  const community = kind === "snmp_v1_v2c";
+  const needsAuth = v3 && level !== "noAuthNoPriv";
+  const needsPrivacy = v3 && level === "authPriv";
+  const snmp: SnmpSettings | undefined = v3 ? {
+    securityLevel: level, authProtocol: needsAuth ? authProtocol : null, privProtocol: needsPrivacy ? privProtocol : null,
+  } : undefined;
+  const submit = () => {
+    const primary = v3 && !needsAuth ? "" : secret;
+    const secondary = needsPrivacy || kind === "ssh_private_key" ? passphrase : "";
+    return credential
+      ? replaceCredentialSecret(credential.credential_id, primary, secondary, snmp, v3 ? username : undefined)
+      : createCredential(displayName, kind, community ? "" : username, false, false, primary, secondary, snmp);
+  };
+
   return (
     <Dialog open onClose={onClose}>
-      <DialogTitle>Add credential</DialogTitle>
+      <DialogTitle>{credential ? "Edit SNMP credential" : "Add credential"}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1, minWidth: 360 }}>
-          <TextField label="Display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus />
-          <TextField label="Kind" select value={kind} onChange={(e) => setKind(e.target.value as CredentialView["kind"])}>
+          <TextField label="Display name" disabled={!!credential} value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus />
+          <TextField label="Kind" select disabled={!!credential} value={kind} onChange={(e) => { setKind(e.target.value as CredentialView["kind"]); setSecret(""); setPassphrase(""); }}>
             <MenuItem value="ssh_password">SSH password</MenuItem>
             <MenuItem value="ssh_private_key">SSH private key</MenuItem>
             <MenuItem value="api_password">API password</MenuItem>
+            <MenuItem value="snmp_v1_v2c">SNMP v1/v2c</MenuItem>
+            <MenuItem value="snmp_v3">SNMP v3</MenuItem>
           </TextField>
-          <TextField label="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+          {!community && <TextField label="Username" value={username} onChange={(e) => setUsername(e.target.value)} />}
+          {community && <Typography color="warning.main">Community sent in clear text.</Typography>}
+          {v3 && <>
+            <TextField select label="Security level" value={level} onChange={(e) => {
+              setLevel(e.target.value as SnmpSettings["securityLevel"]); setSecret(""); setPassphrase("");
+            }}>
+              {["noAuthNoPriv", "authNoPriv", "authPriv"].map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
+            </TextField>
+            {level !== "authPriv" && <Typography color="warning.main">No privacy, data exposed.</Typography>}
+            {needsAuth && <TextField select label="Authentication protocol" value={authProtocol} onChange={(e) => setAuthProtocol(e.target.value)}>
+              {["SHA-256", "SHA-384", "SHA-512", "SHA-224", "SHA1", "MD5"].map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
+            </TextField>}
+            {needsPrivacy && <TextField select label="Privacy protocol" value={privProtocol} onChange={(e) => setPrivProtocol(e.target.value)}>
+              {["AES-128", "AES-192", "AES-256", "DES"].map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
+            </TextField>}
+            {((needsAuth && authProtocol === "MD5") || (needsPrivacy && privProtocol === "DES")) &&
+              <Typography color="warning.main">MD5/DES are weak.</Typography>}
+            {credential && <Typography variant="caption">Enter new secrets for the selected security level. Stored values are never displayed.</Typography>}
+          </>}
+          {(!v3 || needsAuth) &&
           <TextField
-            label={kind === "ssh_private_key" ? "Private key (PEM)" : "Secret"}
+            label={community ? "Community" : v3 ? "Authentication secret" : kind === "ssh_private_key" ? "Private key (PEM)" : "Secret"}
             type={kind === "ssh_private_key" ? "text" : "password"}
             multiline={kind === "ssh_private_key"}
             minRows={kind === "ssh_private_key" ? 4 : undefined}
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
-          />
-          {kind === "ssh_private_key" && (
+          />}
+          {(kind === "ssh_private_key" || needsPrivacy) && (
             <TextField
-              label="Passphrase (optional)"
+              label={v3 ? "Privacy secret" : "Passphrase (optional)"}
               type="password"
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
@@ -206,9 +253,9 @@ export function CreateCredentialDialog({ onClose, onCreated, onActionRefused }: 
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="contained"
-          disabled={!displayName.trim() || !username.trim() || !secret}
+          disabled={!displayName.trim() || (!community && !username.trim()) || ((!v3 || needsAuth) && !secret) || (needsPrivacy && !passphrase)}
           onClick={() =>
-            createCredential(displayName, kind, username, false, false, secret, passphrase)
+            submit()
               .then((credential) => {
                 onCreated(credential);
                 onClose();
@@ -219,7 +266,7 @@ export function CreateCredentialDialog({ onClose, onCreated, onActionRefused }: 
               })
           }
         >
-          Add
+          {credential ? "Save" : "Add"}
         </Button>
       </DialogActions>
     </Dialog>

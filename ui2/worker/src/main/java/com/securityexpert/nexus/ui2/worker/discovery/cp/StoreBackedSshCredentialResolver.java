@@ -52,6 +52,9 @@ public final class StoreBackedSshCredentialResolver implements SshCredentialReso
         CredentialRecord credential = credentialRepository.findById(reference.backendPointer())
                 .orElseThrow(() -> unresolvable(credentialRef));
 
+        if (credential.kind() == CredentialKind.SNMP_V1_V2C || credential.kind() == CredentialKind.SNMP_V3) {
+            throw unresolvable(credentialRef);
+        }
         char[] secret = cipher.decrypt(credential.encryptedSecret()).toCharArray();
         if (credential.kind() == CredentialKind.SSH_PRIVATE_KEY) {
             // The PEM travels onward as its own byte[] copy -- the char[] that

@@ -288,7 +288,9 @@ class GateChainTest {
             var chain = new GateChain(sessions, new ActionRegistry(), evaluator, new FakeAuthzDecisionRepository());
             for (String action : List.of(ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL,
                     ActionRegistry.DISCOVERY_SSH_TRUST_RE_ENROLL, ActionRegistry.DISCOVERY_PAN_TRUST_ENROLL,
-                    ActionRegistry.DISCOVERY_PAN_TRUST_RE_ENROLL)) {
+                    ActionRegistry.DISCOVERY_PAN_TRUST_RE_ENROLL,
+                    ActionRegistry.CREDENTIAL_CREATE, ActionRegistry.CREDENTIAL_LIST,
+                    ActionRegistry.CREDENTIAL_REPLACE_SECRET, ActionRegistry.CREDENTIAL_DELETE)) {
                 var outcome = chain.evaluate(new GateRequest("POST", Optional.of("fixture-role-cookie"), Optional.of("csrf-secret"),
                         Optional.of("https://ui2.example.com"), action, Optional.empty()), NOW);
                 if (group.equals("fixture-security-group")) {

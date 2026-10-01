@@ -12,6 +12,7 @@ import org.jooq.Result;
 import com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.platform.CredentialStorePort.CredentialKind;
+import com.securityexpert.nexus.ui2.platform.CredentialStorePort.SnmpSettings;
 
 /**
  * jOOQ-backed {@link CredentialRepository}. Every mutation runs through
@@ -24,7 +25,7 @@ public final class JooqCredentialRepository implements CredentialRepository {
 
     private static final String COLUMNS = "credential_id, display_name, kind, username, encrypted_secret, "
             + "encrypted_passphrase, envelope_key_id, allows_check_point, allows_palo_alto, "
-            + "created_by_actor_fingerprint, created_at, secret_set_at";
+            + "created_by_actor_fingerprint, created_at, secret_set_at, snmp_security_level, snmp_auth_protocol, snmp_priv_protocol";
 
     private final TransactionBoundary transactionBoundary;
     private final AuditedTransactionBoundary auditedTransactionBoundary;
@@ -37,13 +38,16 @@ public final class JooqCredentialRepository implements CredentialRepository {
     @Override
     public String create(String credentialId, String credentialReferenceId, String displayName, CredentialKind kind,
             String username, byte[] encryptedSecret, byte[] encryptedPassphrase, String envelopeKeyId,
-            boolean allowsCheckPoint, boolean allowsPaloAlto, String createdByActorFingerprint) {
+            boolean allowsCheckPoint, boolean allowsPaloAlto, String createdByActorFingerprint, SnmpSettings snmp) {
         return auditedTransactionBoundary.inTransaction(createdByActorFingerprint, ACTION_CREDENTIAL_CREATE, dsl -> {
             dsl.execute("insert into credentials(credential_id, display_name, kind, username, encrypted_secret, "
                     + "encrypted_passphrase, envelope_key_id, allows_check_point, allows_palo_alto, "
-                    + "created_by_actor_fingerprint) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9})",
+                    + "created_by_actor_fingerprint, snmp_security_level, snmp_auth_protocol, snmp_priv_protocol) "
+                    + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12})",
                     credentialId, displayName, kind.wireValue(), username, encryptedSecret, encryptedPassphrase,
-                    envelopeKeyId, allowsCheckPoint, allowsPaloAlto, createdByActorFingerprint);
+                    envelopeKeyId, allowsCheckPoint, allowsPaloAlto, createdByActorFingerprint,
+                    snmp == null ? null : snmp.securityLevel(), snmp == null ? null : snmp.authProtocol(),
+                    snmp == null ? null : snmp.privProtocol());
             // CS-1: one credential_references row per stored credential, so
             // B1_04B section 6 and every existing consumer of the reference
             // model (device registration, in particular) keep working.
@@ -82,12 +86,16 @@ public final class JooqCredentialRepository implements CredentialRepository {
 
     @Override
     public void replaceSecret(String credentialId, byte[] encryptedSecret, byte[] encryptedPassphrase,
-            String envelopeKeyId, String actingAdminActorFingerprint) {
+            String envelopeKeyId, String actingAdminActorFingerprint, String username,
+            SnmpSettings snmp) {
         auditedTransactionBoundary.inTransaction(actingAdminActorFingerprint, ACTION_CREDENTIAL_REPLACE_SECRET,
                 dsl -> dsl.execute("update credentials set encrypted_secret = {0}, encrypted_passphrase = {1}, "
-                                + "envelope_key_id = {2}, secret_set_at = {3} where credential_id = {4}",
+                                + "envelope_key_id = {2}, secret_set_at = {3}, username = coalesce({5}, username), "
+                                + "snmp_security_level = {6}, snmp_auth_protocol = {7}, snmp_priv_protocol = {8} "
+                                + "where credential_id = {4}",
                         encryptedSecret, encryptedPassphrase, envelopeKeyId, Timestamp.from(Instant.now()),
-                        credentialId));
+                        credentialId, username, snmp == null ? null : snmp.securityLevel(),
+                        snmp == null ? null : snmp.authProtocol(), snmp == null ? null : snmp.privProtocol()));
     }
 
     @Override
@@ -120,6 +128,10 @@ public final class JooqCredentialRepository implements CredentialRepository {
                 Boolean.TRUE.equals(row.get("allows_palo_alto", Boolean.class)),
                 row.get("created_by_actor_fingerprint", String.class),
                 row.get("created_at", Timestamp.class).toInstant(),
-                row.get("secret_set_at", Timestamp.class).toInstant());
+                row.get("secret_set_at", Timestamp.class).toInstant(),
+                row.get("snmp_security_level", String.class) == null ? null
+                        : new SnmpSettings(
+                                row.get("snmp_security_level", String.class),
+                                row.get("snmp_auth_protocol", String.class), row.get("snmp_priv_protocol", String.class)));
     }
 }
