@@ -245,7 +245,55 @@ public final class CpFailoverJobExecutor {
             default -> 0;
         };
         if (check!=0) shapes.capture(check,completed.output());
-        return completed.output();
+        return check==0?completed.output():normalizeRead(command,completed.output(),vsId,shapes);
+    }
+    /** Remove only the documented transport preamble; never mask command errors. */
+    static String normalizeRead(String command,String output,String vsId,ReadinessShapeLog shapes) {
+        if(output==null) return null;
+        String normalized=output;
+        if(vsId!=null) normalized=normalized.replaceFirst(
+            "\\AContext is set to Virtual Device [^\\r\\n]+ \\(ID "+java.util.regex.Pattern.quote(vsId)+"\\)\\.(?:\\r?\\n|$)", "");
+        int end=normalized.indexOf('\n');
+        if(end>=0 && normalized.substring(0,end).stripTrailing().matches("Warning! [^\\r\\n]*\\.")) {
+            String remaining=normalized.substring(end+1);
+            if(readable(command,remaining)) {
+                shapes.logBannerStripped();
+                normalized=remaining;
+            }
+        }
+        return normalized;
+    }
+    private static boolean readable(String command,String output) {
+        return switch(command) {
+            case STAT -> !"UNKNOWN".equals(CpFailoverChecks.state(output).mode());
+            case TABLE -> !CpFailoverChecks.ipTable(output).isEmpty();
+            case IF -> CpFailoverChecks.interfaces(output).ccpPresent();
+            case ARP -> !output.isBlank() && CpFailoverChecks.arpCount(output)>=0;
+            case CONN -> CpFailoverChecks.connections(output)!=null;
+            case TRAFFIC -> !CpFailoverChecks.bytesByInterface(output).isEmpty();
+            case SYNC -> !"UNKNOWN".equals(CpFailoverChecks.syncStatus(output));
+            case POLICY -> !"UNKNOWN".equals(CpFailoverChecks.policy(output).status());
+            case PNOTES -> !"UNKNOWN".equals(CpFailoverChecks.pnotes(output).status());
+            case BONDS -> !"UNKNOWN".equals(CpFailoverChecks.bonds(output));
+            case FAILOVER -> CpFailoverChecks.lastFailover(output,Instant.now()).lastFailoverAt()!=null;
+            case ROUTING -> CpFailoverChecks.routing(output)!=null;
+            default -> false;
+        };
+    }
+    private String recordSync(String phase,Member member,String output) {
+        if(output==null) return null;
+        var previous=store.previousReadinessSync(runId,member.id(),vsId);
+        Map<String,Object> counters=Map.of();
+        if(previous.isPresent()) try {
+            counters=JSON.readValue(previous.get().derived(),new com.fasterxml.jackson.core.type.TypeReference<Map<String,Object>>() {});
+        } catch(JsonProcessingException invalid) {
+            record(phase,member,9,"UNKNOWN",json(CpFailoverChecks.syncInformation(output)));
+            return "UNKNOWN";
+        }
+        var assessment=CpFailoverChecks.readinessSync(output,counters,
+            previous.map(JooqCpFailoverRepository.Check::observedAt).orElse(null));
+        record(phase,member,9,assessment.status(),json(assessment.derived()));
+        return assessment.status();
     }
     private Pair checks(String phase,Member first,Member second,Pair before,Member oldActive) throws InterruptedException {
         var a=CpFailoverChecks.state(command(first,STAT));
@@ -315,17 +363,15 @@ public final class CpFailoverJobExecutor {
         if(!traffic) checkFailed("TRAFFIC_BELOW_TOLERANCE",8,trafficStatus);
         String syncOutputA=before==null || active==first?command(first,SYNC):null;
         String syncOutputB=before==null || active==second?command(second,SYNC):null;
-        String syncA=syncOutputA==null?null:CpFailoverChecks.syncStatus(syncOutputA);
-        String syncB=syncOutputB==null?null:CpFailoverChecks.syncStatus(syncOutputB);
-        if(syncA!=null) record(phase,first,9,syncA,json(CpFailoverChecks.syncInformation(syncOutputA)));
-        if(syncB!=null) record(phase,second,9,syncB,json(CpFailoverChecks.syncInformation(syncOutputB)));
+        String syncA=recordSync(phase,first,syncOutputA);
+        String syncB=recordSync(phase,second,syncOutputB);
         if("FAIL".equals(syncA) || "FAIL".equals(syncB) || "UNKNOWN".equals(syncA) || "UNKNOWN".equals(syncB))
             checkFailed("STATE_SYNC_NOT_READY",9,"FAIL".equals(syncA) || "FAIL".equals(syncB)?"FAIL":"UNKNOWN");
         var policyA=CpFailoverChecks.policy(command(first,POLICY));
         var policyB=CpFailoverChecks.policy(command(second,POLICY));
         String policyStatus="FAIL".equals(policyA.status()) || "FAIL".equals(policyB.status())?"FAIL"
             :"UNKNOWN".equals(policyA.status()) || "UNKNOWN".equals(policyB.status())?"UNKNOWN"
-            :!policyA.name().equals(policyB.name()) || before!=null &&
+            :!policyA.name().equals(policyB.name()) || !policyA.installedAt().equals(policyB.installedAt()) || before!=null &&
                 (!policyA.name().equals(before.a().policyName()) || !policyB.name().equals(before.b().policyName()))?"FAIL":"PASS";
         record(phase,first,10,policyStatus,policyA.installedAt()==null?"{}":"{\"installedAt\":\""+policyA.installedAt()+"\"}");
         record(phase,second,10,policyStatus,policyB.installedAt()==null?"{}":"{\"installedAt\":\""+policyB.installedAt()+"\"}");

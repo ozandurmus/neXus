@@ -44,7 +44,7 @@ describe("Check Point failover", () => {
         { checkNo: 14, phase: "post", status: "PASS", derived: "{}" }] });
     renderPanel();
     fireEvent.click(await screen.findByRole("button", { name: /Virtual System · VS-ROMEO-01-07/ }));
-    expect(screen.getByText("Stopped: Connections")).toBeInTheDocument();
+    expect(await screen.findByText("Stopped: Connections")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Failover now" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Schedule" })).toBeDisabled();
     expect(screen.queryByText(/SECRET-DEVICE/)).toBeNull();

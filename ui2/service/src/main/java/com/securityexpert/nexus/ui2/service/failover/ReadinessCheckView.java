@@ -42,8 +42,8 @@ public final class ReadinessCheckView {
                 case 2 -> "Peer relationship could not be verified";
                 case 3 -> "HA link state not recognised";
                 case 4 -> "Configuration sync field missing or not recognised";
-                case 5 -> "Session sync field missing or not recognised";
-                case 6 -> "Session count missing or not recognised";
+                case 5 -> "Session sync field missing or not recognised: /response/result/session-sync; Complete status XML mapping unverified";
+                case 6 -> "Session count missing or not recognised: /response/result/active-sessions";
                 case 7 -> "Version fields missing or not recognised";
                 default -> "Check evidence unavailable";
             };
@@ -83,7 +83,10 @@ public final class ReadinessCheckView {
             case 5 -> count(d,"count"," ARP entries");
             case 6 -> count(d,"count"," connections")+", "+count(d,"peak"," peak")+(pass ? "" : ", below tolerance");
             case 8 -> count(d,"bytesPerSecond"," bytes/s")+(pass ? "" : ", below tolerance");
-            case 9 -> (pass ? "Sync OK, 0 lost updates" : syncFailure(d))
+            case 9 -> (pass ? d.path("baselineRecorded").asBoolean(false) ? "Sync OK, baseline recorded"
+                : d.has("baselineAt") ? "Sync OK, no lost-counter increase"
+                    +(d.path("counterReset").asBoolean(false) ? "; counter reset, baseline recorded" : "")
+                : "Sync OK, 0 lost updates" : syncFailure(d))
                 +(d.path("sentRejectNotifications").isIntegralNumber()
                     ? " ("+d.path("sentRejectNotifications").asLong()+" sent rejects)" : "");
             case 10 -> pass ? "Same policy on both members" : "Policy missing, changed or different between members";
@@ -104,8 +107,15 @@ public final class ReadinessCheckView {
         String[] keys={"lostUpdates", "lostBulkUpdateEvents", "unsynchronizedUpdates"};
         String[] labels={"lost updates", "lost bulk update events", "unsynchronized updates"};
         for(int i=0;i<keys.length;i++) {
+            JsonNode increase=d.path(keys[i]+"Increase");
+            if(increase.isIntegralNumber() && increase.bigIntegerValue().signum()>0) {
+                try {
+                    reasons.add("+"+increase.bigIntegerValue()+" "+labels[i]+" since "+Instant.parse(d.path("baselineAt").asText()));
+                } catch(java.time.DateTimeException invalid) { reasons.add("Lost-counter increase; baseline time unavailable"); }
+                continue;
+            }
             JsonNode value=d.path(keys[i]);
-            if(value.isIntegralNumber() && value.bigIntegerValue().signum()>0)
+            if(!d.has("baselineAt") && value.isIntegralNumber() && value.bigIntegerValue().signum()>0)
                 reasons.add(value.bigIntegerValue()+" "+labels[i]+" (counter since boot)");
         }
         if(reasons.isEmpty()) return "Sync not ready";
